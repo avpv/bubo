@@ -117,9 +117,13 @@ jobs:
           body: |
             ## Installation
 
+            One command in Terminal:
+            ```
+            curl -fsSL https://raw.githubusercontent.com/avpv/owlenda/master/scripts/install.sh | bash
+            ```
+
+            Or manually:
             1. Download **Owlenda.dmg**
             2. Open the DMG and drag **Owlenda** to **Applications**
-            3. On first launch macOS will block the unsigned app:
-               - Go to **System Settings → Privacy & Security** → scroll down → click **Open Anyway**
-               - Or run: `xattr -cr /Applications/Owlenda.app`
+            3. Run `xattr -cr /Applications/Owlenda.app` and launch
           files: Owlenda.dmg

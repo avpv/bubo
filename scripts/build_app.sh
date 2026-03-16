@@ -75,10 +75,12 @@ cat > "$APP/Info.plist" <<'PLIST'
 </plist>
 PLIST
 
+# Ad-hoc sign so the app runs locally without xattr workaround
+codesign --force --deep --sign - "$PROJECT_DIR/Owlenda.app"
+
 echo ""
 echo "Built: $PROJECT_DIR/Owlenda.app"
 echo ""
 echo "To install:"
 echo "  cp -R Owlenda.app /Applications/"
-echo "  xattr -cr /Applications/Owlenda.app"
 echo "  open /Applications/Owlenda.app"
