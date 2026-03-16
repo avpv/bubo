@@ -17,6 +17,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        return false
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         if let observer = alertObserver {
             NotificationCenter.default.removeObserver(observer)
