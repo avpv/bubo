@@ -26,7 +26,7 @@ A native macOS menu bar app for meeting reminders with full-screen notifications
 ```bash
 git clone https://github.com/avpv/CalendarReminder.git
 cd CalendarReminder/CalendarReminder
-open Package.swift
+open -a Xcode Package.swift
 # Press Cmd+R in Xcode to build and run
 ```
 
