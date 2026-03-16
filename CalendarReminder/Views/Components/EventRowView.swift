@@ -37,10 +37,18 @@ struct EventRowView: View {
 
             // Event details
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                Text(event.title)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .lineLimit(2)
+                HStack(spacing: DS.Spacing.xs) {
+                    Text(event.title)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .lineLimit(2)
+
+                    if event.isRecurring {
+                        Image(systemName: "repeat")
+                            .font(.system(size: DS.Size.iconSmall))
+                            .foregroundColor(.secondary)
+                    }
+                }
 
                 HStack(spacing: DS.Spacing.md) {
                     if let location = event.location, !location.isEmpty {

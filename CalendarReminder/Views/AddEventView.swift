@@ -15,25 +15,48 @@ struct AddEventView: View {
     @State private var useCustomReminders = false
     @State private var reminderMinutes: [Int] = [5]
     @State private var newReminderValue = 10
-    @State private var enableRecurrence = false
-    @State private var recurrenceIntervalMinutes = 30
-    @State private var recurrenceRepeatCount = 4
+
+    // Recurrence state
+    @State private var frequency: RecurrenceFrequency? = nil
+    @State private var interval: Int = 1
+    @State private var endType: EndType = .never
+    @State private var endCount: Int = 10
+    @State private var endDate_: Date = Calendar.current.date(byAdding: .month, value: 1, to: Date()) ?? Date()
+    @State private var selectedWeekdays: Set<Weekday> = []
+
     @FocusState private var isTitleFocused: Bool
 
     private static let presetReminders = [1, 2, 3, 5, 10, 15, 20, 30, 45, 60]
 
     private var isEditing: Bool { editingEvent != nil }
 
+    private enum EndType: String, CaseIterable {
+        case never = "Never"
+        case afterCount = "After"
+        case onDate = "On date"
+    }
+
     private var currentRecurrenceRule: RecurrenceRule? {
-        guard enableRecurrence else { return nil }
-        return RecurrenceRule(intervalMinutes: recurrenceIntervalMinutes, repeatCount: recurrenceRepeatCount)
+        guard let freq = frequency else { return nil }
+        let end: RecurrenceEnd
+        switch endType {
+        case .never: end = .never
+        case .afterCount: end = .afterCount(endCount)
+        case .onDate: end = .untilDate(endDate_)
+        }
+        return RecurrenceRule(
+            frequency: freq,
+            interval: interval,
+            end: end,
+            weekdays: freq == .weekly ? selectedWeekdays : []
+        )
     }
 
     private var isTitleValid: Bool {
         !title.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
-    private var endDate: Date {
+    private var eventEndDate: Date {
         date.addingTimeInterval(duration * 60)
     }
 
@@ -80,7 +103,7 @@ struct AddEventView: View {
                     }
 
                     LabeledContent("Ends at") {
-                        Text(DS.timeFormatter.string(from: endDate))
+                        Text(DS.timeFormatter.string(from: eventEndDate))
                             .foregroundColor(.secondary)
                     }
                 }
@@ -93,29 +116,7 @@ struct AddEventView: View {
                         .textFieldStyle(.roundedBorder)
                 }
 
-                Section("Repeat") {
-                    Toggle("Repeat event", isOn: $enableRecurrence)
-
-                    if enableRecurrence {
-                        Stepper("Interval: \(DS.formatMinutes(recurrenceIntervalMinutes))",
-                                value: $recurrenceIntervalMinutes, in: 5...180, step: 5)
-                        Stepper("Repeats: \(recurrenceRepeatCount)x",
-                                value: $recurrenceRepeatCount, in: 2...20)
-
-                        if let rule = currentRecurrenceRule {
-                            HStack(spacing: DS.Spacing.xs) {
-                                Image(systemName: "repeat")
-                                    .foregroundColor(.secondary)
-                                Text(rule.displayText)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                Text("(\(DS.formatMinutes(rule.totalSpanMinutes)) total)")
-                                    .font(.caption)
-                                    .foregroundColor(.tertiary)
-                            }
-                        }
-                    }
-                }
+                recurrenceSection
 
                 Section("Reminders") {
                     Toggle("Custom reminders", isOn: $useCustomReminders)
@@ -205,9 +206,19 @@ struct AddEventView: View {
                     reminderMinutes = custom
                 }
                 if let rule = event.recurrenceRule {
-                    enableRecurrence = true
-                    recurrenceIntervalMinutes = rule.intervalMinutes
-                    recurrenceRepeatCount = rule.repeatCount
+                    frequency = rule.frequency
+                    interval = rule.interval
+                    selectedWeekdays = rule.weekdays
+                    switch rule.end {
+                    case .never:
+                        endType = .never
+                    case .afterCount(let count):
+                        endType = .afterCount
+                        endCount = count
+                    case .untilDate(let d):
+                        endType = .onDate
+                        endDate_ = d
+                    }
                 }
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -216,12 +227,90 @@ struct AddEventView: View {
         }
     }
 
+    // MARK: - Recurrence Section
+
+    @ViewBuilder
+    private var recurrenceSection: some View {
+        Section("Repeat") {
+            // Frequency picker — None means no recurrence
+            Picker("Frequency", selection: $frequency) {
+                Text("Never").tag(RecurrenceFrequency?.none)
+                ForEach(RecurrenceFrequency.allCases, id: \.self) { freq in
+                    Text("Every \(freq.label)").tag(Optional(freq))
+                }
+            }
+
+            if let freq = frequency {
+                // Interval
+                Stepper("Every \(interval) \(interval == 1 ? freq.singularUnit : freq.pluralUnit)",
+                        value: $interval, in: 1...99)
+
+                // Weekday selector for weekly
+                if freq == .weekly {
+                    weekdayPicker
+                }
+
+                // End condition
+                Picker("Ends", selection: $endType) {
+                    ForEach(EndType.allCases, id: \.self) { type in
+                        Text(type.rawValue).tag(type)
+                    }
+                }
+
+                switch endType {
+                case .never:
+                    EmptyView()
+                case .afterCount:
+                    Stepper("After \(endCount) occurrences", value: $endCount, in: 2...100)
+                case .onDate:
+                    DatePicker("Until", selection: $endDate_, displayedComponents: .date)
+                }
+
+                // Summary
+                if let rule = currentRecurrenceRule {
+                    Label(rule.displayText, systemImage: "repeat")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+    }
+
+    private var weekdayPicker: some View {
+        HStack(spacing: DS.Spacing.xs) {
+            ForEach(Weekday.allCases, id: \.self) { day in
+                Button {
+                    if selectedWeekdays.contains(day) {
+                        selectedWeekdays.remove(day)
+                    } else {
+                        selectedWeekdays.insert(day)
+                    }
+                } label: {
+                    Text(day.initial)
+                        .font(.caption2)
+                        .fontWeight(.medium)
+                        .frame(width: 28, height: 28)
+                        .background(
+                            selectedWeekdays.contains(day)
+                                ? Color.accentColor
+                                : Color.secondary.opacity(0.12)
+                        )
+                        .foregroundColor(selectedWeekdays.contains(day) ? .white : .primary)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    // MARK: - Save
+
     private func saveEvent() {
         let event = CalendarEvent(
             id: editingEvent?.id ?? UUID().uuidString,
             title: title,
             startDate: date,
-            endDate: endDate,
+            endDate: eventEndDate,
             location: location.isEmpty ? nil : location,
             description: description.isEmpty ? nil : description,
             calendarName: "Local",

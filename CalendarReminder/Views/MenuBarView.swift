@@ -38,12 +38,23 @@ struct MenuBarView: View {
                         event: event,
                         onBack: { navigation = .list },
                         onEdit: { event in
-                            navigation = .addEvent(editing: event)
+                            // For occurrence, edit the series base event
+                            if let seriesEvent = reminderService.seriesEvent(for: event) {
+                                navigation = .addEvent(editing: seriesEvent)
+                            } else {
+                                navigation = .addEvent(editing: event)
+                            }
                         },
                         onDelete: { event in
                             reminderService.removeLocalEvent(id: event.id)
                             navigation = .list
                             toastState.showSuccess("Event deleted", icon: "trash.fill")
+                        },
+                        onDeleteSeries: { event in
+                            let seriesId = event.seriesId ?? event.id
+                            reminderService.removeLocalEvent(id: seriesId)
+                            navigation = .list
+                            toastState.showSuccess("All occurrences deleted", icon: "trash.fill")
                         }
                     )
                     .transition(.move(edge: .trailing).combined(with: .opacity))
@@ -188,10 +199,15 @@ struct MenuBarView: View {
                             event: event,
                             reminderService: reminderService,
                             onEdit: { event in
-                                navigation = .addEvent(editing: event)
+                                if let seriesEvent = reminderService.seriesEvent(for: event) {
+                                    navigation = .addEvent(editing: seriesEvent)
+                                } else {
+                                    navigation = .addEvent(editing: event)
+                                }
                             },
                             onDelete: { event in
-                                reminderService.removeLocalEvent(id: event.id)
+                                let deleteId = event.seriesId ?? event.id
+                                reminderService.removeLocalEvent(id: deleteId)
                                 toastState.showSuccess("Event deleted", icon: "trash.fill")
                             },
                             onTap: { event in

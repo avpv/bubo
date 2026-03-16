@@ -5,8 +5,10 @@ struct EventDetailView: View {
     var onBack: () -> Void
     var onEdit: ((CalendarEvent) -> Void)? = nil
     var onDelete: ((CalendarEvent) -> Void)? = nil
+    var onDeleteSeries: ((CalendarEvent) -> Void)? = nil
 
     @State private var showDeleteConfirmation = false
+    @State private var showSeriesDeleteChoice = false
 
     private var isLocal: Bool {
         event.calendarName == "Local"
@@ -23,10 +25,18 @@ struct EventDetailView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: DS.Spacing.xl) {
                     // Title
-                    Text(event.title)
-                        .font(.title3)
-                        .fontWeight(.semibold)
-                        .accessibilityAddTraits(.isHeader)
+                    HStack(spacing: DS.Spacing.sm) {
+                        Text(event.title)
+                            .font(.title3)
+                            .fontWeight(.semibold)
+                            .accessibilityAddTraits(.isHeader)
+
+                        if event.isRecurring {
+                            Image(systemName: "repeat")
+                                .font(.system(size: DS.Size.iconMedium))
+                                .foregroundColor(.secondary)
+                        }
+                    }
 
                     // Date & Time group
                     VStack(alignment: .leading, spacing: DS.Spacing.md) {
@@ -71,9 +81,30 @@ struct EventDetailView: View {
 
                     // Recurrence
                     if let rule = event.recurrenceRule {
-                        Label(rule.displayText, systemImage: "repeat")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                            Label("Repeats", systemImage: "repeat")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .foregroundColor(.tertiary)
+
+                            Text(rule.displayText)
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+
+                            // Weekday chips for weekly
+                            if rule.frequency == .weekly && !rule.weekdays.isEmpty {
+                                HStack(spacing: DS.Spacing.xs) {
+                                    ForEach(Weekday.allCases.filter { rule.weekdays.contains($0) }, id: \.self) { day in
+                                        Text(day.shortName)
+                                            .font(.caption2)
+                                            .padding(.horizontal, DS.Spacing.sm)
+                                            .padding(.vertical, DS.Spacing.xxs)
+                                            .background(Color.accentColor.opacity(0.15))
+                                            .clipShape(RoundedRectangle(cornerRadius: DS.Size.badgeCornerRadius))
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     // Custom reminders
@@ -110,17 +141,31 @@ struct EventDetailView: View {
 
                 HStack {
                     Button(role: .destructive) {
-                        showDeleteConfirmation = true
+                        if event.isRecurring {
+                            showSeriesDeleteChoice = true
+                        } else {
+                            showDeleteConfirmation = true
+                        }
                     } label: {
                         Label("Delete", systemImage: "trash")
                     }
+                    // Single event delete confirmation
                     .alert("Delete Event", isPresented: $showDeleteConfirmation) {
                         Button("Cancel", role: .cancel) { }
                         Button("Delete", role: .destructive) {
                             onDelete?(event)
                         }
                     } message: {
-                        Text("Are you sure you want to delete \"\(event.title)\"? This action cannot be undone.")
+                        Text("Are you sure you want to delete \"\(event.title)\"?")
+                    }
+                    // Recurring event scope-of-delete
+                    .alert("Delete Recurring Event", isPresented: $showSeriesDeleteChoice) {
+                        Button("Cancel", role: .cancel) { }
+                        Button("Delete All Events", role: .destructive) {
+                            onDeleteSeries?(event)
+                        }
+                    } message: {
+                        Text("This is a recurring event. All occurrences of \"\(event.title)\" will be deleted.")
                     }
 
                     Spacer()
