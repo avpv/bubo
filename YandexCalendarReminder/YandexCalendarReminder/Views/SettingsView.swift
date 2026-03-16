@@ -11,6 +11,12 @@ struct SettingsView: View {
     @State private var availableCalendars: [CalDAVXMLParser.CalendarInfo] = []
     @State private var isLoadingCalendars = false
     @State private var calendarLoadError: String?
+    // Google
+    @State private var googleOAuthCode = ""
+    @State private var googleOAuthStatus: OAuthStatus = .idle
+    @State private var availableGoogleCalendars: [GoogleCalendarService.CalendarListEntry] = []
+    @State private var isLoadingGoogleCalendars = false
+    @State private var googleCalendarLoadError: String?
 
     enum ConnectionStatus {
         case unknown, checking, success, failed(String)
@@ -40,35 +46,44 @@ struct SettingsView: View {
     // MARK: - Account Tab
 
     private var accountTab: some View {
-        Form {
-            Section("Способ авторизации") {
-                Picker("", selection: $settings.authMethod) {
-                    Text("Пароль приложения").tag(AuthMethod.appPassword)
-                    Text("OAuth 2.0").tag(AuthMethod.oauth)
-                }
-                .pickerStyle(.segmented)
-                .onChange(of: settings.authMethod) { _ in saveSettings() }
-            }
+        ScrollView {
+            Form {
+                // Yandex
+                Section("Яндекс Календарь") {
+                    Picker("Авторизация", selection: $settings.authMethod) {
+                        Text("Пароль приложения").tag(AuthMethod.appPassword)
+                        Text("OAuth 2.0").tag(AuthMethod.oauth)
+                    }
+                    .pickerStyle(.segmented)
+                    .onChange(of: settings.authMethod) { _ in saveSettings() }
 
-            if settings.authMethod == .appPassword {
-                appPasswordSection
-            } else {
-                oauthSection
-            }
-
-            Section {
-                HStack {
-                    Button("Проверить подключение") {
-                        checkConnection()
+                    if settings.authMethod == .appPassword {
+                        appPasswordSection
+                    } else {
+                        oauthSection
                     }
 
-                    Spacer()
+                    HStack {
+                        Button("Проверить Яндекс") { checkConnection() }
+                        Spacer()
+                        connectionStatusView
+                    }
+                }
 
-                    connectionStatusView
+                Divider()
+
+                // Google
+                Section("Google Календарь") {
+                    Toggle("Включить Google Календарь", isOn: $settings.googleEnabled)
+                        .onChange(of: settings.googleEnabled) { _ in saveSettings() }
+
+                    if settings.googleEnabled {
+                        googleAccountSection
+                    }
                 }
             }
+            .padding()
         }
-        .padding()
     }
 
     private var appPasswordSection: some View {
@@ -177,91 +192,160 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Calendars Tab
-
-    private var calendarsTab: some View {
-        Form {
-            Section {
+    private var googleAccountSection: some View {
+        Group {
+            if GoogleOAuthService.isAuthenticated {
                 HStack {
-                    Button("Загрузить список календарей") {
-                        loadCalendars()
-                    }
-                    .disabled(isLoadingCalendars)
-
-                    if isLoadingCalendars {
-                        ProgressView().scaleEffect(0.7)
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                    Text("Google аккаунт подключён")
+                    Spacer()
+                    Button("Отключить") {
+                        GoogleOAuthService.logout()
+                        settings.googleEnabled = false
+                        googleOAuthStatus = .idle
+                        saveSettings()
                     }
                 }
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    Button("Авторизоваться через Google") {
+                        GoogleOAuthService.startAuthFlow()
+                    }
 
-                if let error = calendarLoadError {
-                    Label(error, systemImage: "xmark.circle.fill")
-                        .foregroundColor(.red)
+                    Text("После авторизации скопируйте код и вставьте ниже:")
                         .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    HStack {
+                        TextField("Код авторизации", text: $googleOAuthCode)
+                            .textFieldStyle(.roundedBorder)
+
+                        Button("Подтвердить") {
+                            exchangeGoogleOAuthCode()
+                        }
+                        .disabled(googleOAuthCode.isEmpty)
+                    }
+
+                    switch googleOAuthStatus {
+                    case .idle: EmptyView()
+                    case .exchanging: ProgressView().scaleEffect(0.7)
+                    case .success:
+                        Label("Google подключён!", systemImage: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                    case .failed(let error):
+                        Label(error, systemImage: "xmark.circle.fill")
+                            .foregroundColor(.red)
+                            .font(.caption)
+                    }
                 }
             }
 
-            if !availableCalendars.isEmpty {
-                Section("Выберите календари для синхронизации") {
-                    Toggle("Все календари", isOn: Binding(
-                        get: { settings.selectedCalendarHrefs.isEmpty },
-                        set: { isAll in
-                            if isAll {
-                                settings.selectedCalendarHrefs = []
-                            } else {
-                                settings.selectedCalendarHrefs = availableCalendars.map { $0.href }
-                            }
-                            saveSettings()
-                        }
-                    ))
-                    .fontWeight(.medium)
+            Text("Требуется проект в Google Cloud Console с Calendar API")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+    }
 
-                    if !settings.selectedCalendarHrefs.isEmpty {
-                        ForEach(availableCalendars, id: \.href) { calendar in
-                            Toggle(
-                                calendar.displayName,
-                                isOn: Binding(
-                                    get: {
-                                        settings.selectedCalendarHrefs.contains(calendar.href)
-                                    },
-                                    set: { isOn in
-                                        if isOn {
-                                            if !settings.selectedCalendarHrefs.contains(calendar.href) {
-                                                settings.selectedCalendarHrefs.append(calendar.href)
-                                            }
-                                        } else {
-                                            settings.selectedCalendarHrefs.removeAll { $0 == calendar.href }
-                                        }
-                                        // If all are selected, switch back to "all" mode
-                                        if settings.selectedCalendarHrefs.count == availableCalendars.count {
-                                            settings.selectedCalendarHrefs = []
-                                        }
-                                        saveSettings()
-                                    }
-                                )
+    // MARK: - Calendars Tab
+
+    private var calendarsTab: some View {
+        ScrollView {
+            Form {
+                // Yandex calendars
+                Section("Яндекс Календарь") {
+                    HStack {
+                        Button("Загрузить") { loadYandexCalendars() }
+                            .disabled(isLoadingCalendars)
+                        if isLoadingCalendars { ProgressView().scaleEffect(0.7) }
+                    }
+
+                    if let error = calendarLoadError {
+                        Label(error, systemImage: "xmark.circle.fill")
+                            .foregroundColor(.red).font(.caption)
+                    }
+
+                    if !availableCalendars.isEmpty {
+                        calendarToggles(
+                            calendars: availableCalendars.map { ($0.href, $0.displayName) },
+                            selected: $settings.selectedCalendarHrefs
+                        )
+                    }
+                }
+
+                // Google calendars
+                if settings.googleEnabled && GoogleOAuthService.isAuthenticated {
+                    Divider()
+
+                    Section("Google Календарь") {
+                        HStack {
+                            Button("Загрузить") { loadGoogleCalendars() }
+                                .disabled(isLoadingGoogleCalendars)
+                            if isLoadingGoogleCalendars { ProgressView().scaleEffect(0.7) }
+                        }
+
+                        if let error = googleCalendarLoadError {
+                            Label(error, systemImage: "xmark.circle.fill")
+                                .foregroundColor(.red).font(.caption)
+                        }
+
+                        if !availableGoogleCalendars.isEmpty {
+                            calendarToggles(
+                                calendars: availableGoogleCalendars.map { ($0.id, $0.summary) },
+                                selected: $settings.selectedGoogleCalendarIds
                             )
                         }
                     }
                 }
-
-                Section {
-                    Text(settings.selectedCalendarHrefs.isEmpty
-                        ? "Синхронизируются все календари"
-                        : "Выбрано: \(settings.selectedCalendarHrefs.count) из \(availableCalendars.count)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            } else if !isLoadingCalendars && calendarLoadError == nil {
-                Section {
-                    Text("Нажмите «Загрузить» для получения списка календарей.\nУбедитесь, что аккаунт настроен во вкладке «Аккаунт».")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
             }
+            .padding()
         }
-        .padding()
     }
 
-    private func loadCalendars() {
+    /// Reusable calendar toggle list for any provider
+    @ViewBuilder
+    private func calendarToggles(
+        calendars: [(id: String, name: String)],
+        selected: Binding<[String]>
+    ) -> some View {
+        Toggle("Все календари", isOn: Binding(
+            get: { selected.wrappedValue.isEmpty },
+            set: { isAll in
+                selected.wrappedValue = isAll ? [] : calendars.map { $0.id }
+                saveSettings()
+            }
+        ))
+        .fontWeight(.medium)
+
+        if !selected.wrappedValue.isEmpty {
+            ForEach(calendars, id: \.id) { cal in
+                Toggle(cal.name, isOn: Binding(
+                    get: { selected.wrappedValue.contains(cal.id) },
+                    set: { isOn in
+                        if isOn {
+                            if !selected.wrappedValue.contains(cal.id) {
+                                selected.wrappedValue.append(cal.id)
+                            }
+                        } else {
+                            selected.wrappedValue.removeAll { $0 == cal.id }
+                        }
+                        if selected.wrappedValue.count == calendars.count {
+                            selected.wrappedValue = []
+                        }
+                        saveSettings()
+                    }
+                ))
+            }
+        }
+
+        Text(selected.wrappedValue.isEmpty
+            ? "Синхронизируются все"
+            : "Выбрано: \(selected.wrappedValue.count) из \(calendars.count)")
+            .font(.caption)
+            .foregroundColor(.secondary)
+    }
+
+    private func loadYandexCalendars() {
         isLoadingCalendars = true
         calendarLoadError = nil
 
@@ -283,6 +367,22 @@ struct SettingsView: View {
             } catch {
                 calendarLoadError = error.localizedDescription
                 isLoadingCalendars = false
+            }
+        }
+    }
+
+    private func loadGoogleCalendars() {
+        isLoadingGoogleCalendars = true
+        googleCalendarLoadError = nil
+
+        let service = GoogleCalendarService()
+        Task {
+            do {
+                availableGoogleCalendars = try await service.listCalendars()
+                isLoadingGoogleCalendars = false
+            } catch {
+                googleCalendarLoadError = error.localizedDescription
+                isLoadingGoogleCalendars = false
             }
         }
     }
@@ -451,6 +551,20 @@ struct SettingsView: View {
                 oauthCode = ""
             } catch {
                 oauthStatus = .failed(error.localizedDescription)
+            }
+        }
+    }
+
+    private func exchangeGoogleOAuthCode() {
+        googleOAuthStatus = .exchanging
+        Task {
+            do {
+                _ = try await GoogleOAuthService.exchangeCode(googleOAuthCode)
+                googleOAuthStatus = .success
+                googleOAuthCode = ""
+                saveSettings()
+            } catch {
+                googleOAuthStatus = .failed(error.localizedDescription)
             }
         }
     }

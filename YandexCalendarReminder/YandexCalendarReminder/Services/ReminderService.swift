@@ -12,6 +12,7 @@ class ReminderService: ObservableObject {
     @Published var isUsingCache = false
 
     private var calDAVService: YandexCalDAVService?
+    private var googleService: GoogleCalendarService?
     private var syncTimer: Timer?
     private var reminderTimers: [String: [Timer]] = [:]
     private var settings: ReminderSettings
@@ -66,6 +67,7 @@ class ReminderService: ObservableObject {
     }
 
     func setupCalDAVService() {
+        // Yandex
         let login = settings.yandexLogin
         let password = settings.yandexAppPassword
 
@@ -73,15 +75,22 @@ class ReminderService: ObservableObject {
         case .appPassword:
             guard !login.isEmpty, !password.isEmpty else {
                 calDAVService = nil
-                return
+                break
             }
             calDAVService = YandexCalDAVService(authMode: .appPassword(login: login, password: password))
         case .oauth:
             guard YandexOAuthService.isAuthenticated else {
                 calDAVService = nil
-                return
+                break
             }
             calDAVService = YandexCalDAVService(authMode: .oauth)
+        }
+
+        // Google
+        if settings.googleEnabled && GoogleOAuthService.isAuthenticated {
+            googleService = GoogleCalendarService()
+        } else {
+            googleService = nil
         }
     }
 
@@ -119,32 +128,61 @@ class ReminderService: ObservableObject {
             return
         }
 
-        guard let service = calDAVService else { return }
+        let hasAnyProvider = calDAVService != nil || googleService != nil
+        guard hasAnyProvider else { return }
+
         isSyncing = true
         syncError = nil
 
         Task {
-            do {
-                let now = Date()
-                let endDate = Calendar.current.date(byAdding: .day, value: 7, to: now)!
-                let events = try await service.fetchEvents(
-                    from: now,
-                    to: endDate,
-                    onlyCalendars: self.settings.selectedCalendarHrefs
-                )
+            let now = Date()
+            let endDate = Calendar.current.date(byAdding: .day, value: 7, to: now)!
+            var allEvents: [CalendarEvent] = []
+            var errors: [String] = []
 
-                self.upcomingEvents = events
-                self.lastSyncDate = Date()
-                self.isSyncing = false
-                self.isUsingCache = false
-                self.syncError = nil
-                self.scheduleReminders(for: events)
+            // Yandex
+            if let yandexService = calDAVService {
+                do {
+                    let events = try await yandexService.fetchEvents(
+                        from: now,
+                        to: endDate,
+                        onlyCalendars: self.settings.selectedCalendarHrefs
+                    )
+                    allEvents.append(contentsOf: events)
+                } catch {
+                    errors.append("Яндекс: \(error.localizedDescription)")
+                }
+            }
 
-                // Cache for offline use
-                await eventCache.save(events: events)
-            } catch {
-                self.syncError = error.localizedDescription
-                self.isSyncing = false
+            // Google
+            if let googleSvc = googleService {
+                do {
+                    let events = try await RetryHelper.withRetry {
+                        try await googleSvc.fetchEvents(
+                            from: now,
+                            to: endDate,
+                            onlyCalendarIds: self.settings.selectedGoogleCalendarIds
+                        )
+                    }
+                    allEvents.append(contentsOf: events)
+                } catch {
+                    errors.append("Google: \(error.localizedDescription)")
+                }
+            }
+
+            allEvents.sort { $0.startDate < $1.startDate }
+
+            self.upcomingEvents = allEvents
+            self.lastSyncDate = Date()
+            self.isSyncing = false
+            self.syncError = errors.isEmpty ? nil : errors.joined(separator: "\n")
+            self.isUsingCache = false
+            self.scheduleReminders(for: allEvents)
+
+            await eventCache.save(events: allEvents)
+
+            // If all providers failed, fall back to cache
+            if allEvents.isEmpty && !errors.isEmpty {
                 self.loadCachedEvents()
             }
         }

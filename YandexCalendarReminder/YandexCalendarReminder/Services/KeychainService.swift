@@ -10,6 +10,10 @@ enum KeychainService {
         case oauthAccessToken = "oauth_access_token"
         case oauthRefreshToken = "oauth_refresh_token"
         case oauthTokenExpiry = "oauth_token_expiry"
+        // Google
+        case googleAccessToken = "google_access_token"
+        case googleRefreshToken = "google_refresh_token"
+        case googleTokenExpiry = "google_token_expiry"
     }
 
     static func save(_ value: String, for key: Key) throws {
