@@ -20,7 +20,7 @@ struct FullScreenAlertView: View {
             Color.black.opacity(0.6)
                 .ignoresSafeArea()
 
-            VStack(spacing: 30) {
+            VStack(spacing: DS.Spacing.xxxl) {
                 Spacer()
 
                 bellIcon
@@ -32,8 +32,8 @@ struct FullScreenAlertView: View {
                 // Live countdown timer
                 Text(countdownText)
                     .font(.system(size: 72, weight: .heavy, design: .monospaced))
-                    .foregroundColor(countdownColor)
-                    .shadow(color: countdownColor.opacity(0.5), radius: 10)
+                    .foregroundColor(DS.countdownColor(secondsRemaining: secondsRemaining))
+                    .shadow(color: DS.countdownColor(secondsRemaining: secondsRemaining).opacity(0.5), radius: 10)
                     .contentTransition(.numericText())
                     .animation(.linear(duration: 0.3), value: secondsRemaining)
 
@@ -60,9 +60,9 @@ struct FullScreenAlertView: View {
                 // Action buttons
                 HStack(spacing: 20) {
                     Menu {
-                        Button("In 5 minutes") { cleanup(); onSnooze(5) }
-                        Button("In 10 minutes") { cleanup(); onSnooze(10) }
-                        Button("In 15 minutes") { cleanup(); onSnooze(15) }
+                        ForEach(DS.snoozeOptions) { option in
+                            Button("In \(option.label)") { cleanup(); onSnooze(option.minutes) }
+                        }
                     } label: {
                         Text("Snooze")
                             .font(.title3)
@@ -111,7 +111,7 @@ struct FullScreenAlertView: View {
         .scaleEffect(isVisible ? 1 : 0.95)
         .onAppear {
             startCountdown()
-            withAnimation(.easeOut(duration: 0.3)) {
+            withAnimation(DS.Animation.entrance) {
                 isVisible = true
             }
         }
@@ -162,12 +162,6 @@ struct FullScreenAlertView: View {
             return String(format: "%d:%02d:%02d", hours, mins, seconds)
         }
         return String(format: "%02d:%02d", minutes, seconds)
-    }
-
-    private var countdownColor: Color {
-        if secondsRemaining <= 120 { return .red }
-        if secondsRemaining <= 300 { return .orange }
-        return .white
     }
 
     private var headerText: String {

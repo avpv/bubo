@@ -2,8 +2,9 @@ import SwiftUI
 
 struct AddEventView: View {
     @ObservedObject var reminderService: ReminderService
-    @Binding var isPresented: Bool
     var editingEvent: CalendarEvent? = nil
+    var onDismiss: () -> Void
+    var onSave: (_ isEdit: Bool) -> Void
 
     @State private var title = ""
     @State private var date = Date()
@@ -28,42 +29,13 @@ struct AddEventView: View {
         date.addingTimeInterval(duration * 60)
     }
 
-    private static let timeFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "HH:mm"
-        return f
-    }()
-
     var body: some View {
         VStack(spacing: 0) {
-            // Header with back button
-            HStack(spacing: 4) {
-                Button {
-                    isPresented = false
-                } label: {
-                    HStack(spacing: 2) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 13, weight: .semibold))
-                        Text("Back")
-                            .font(.subheadline)
-                    }
-                }
-                .buttonStyle(.borderless)
-
-                Spacer()
-
-                Text(isEditing ? "Edit Event" : "New Event")
-                    .font(.headline)
-
-                Spacer()
-
-                OwlIcon(size: 18)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(.bar)
-
-            Divider()
+            PopoverHeader(
+                title: isEditing ? "Edit Event" : "New Event",
+                showBack: true,
+                onBack: onDismiss
+            )
 
             // Form
             Form {
@@ -100,7 +72,7 @@ struct AddEventView: View {
                     }
 
                     LabeledContent("Ends at") {
-                        Text(Self.timeFormatter.string(from: endDate))
+                        Text(DS.timeFormatter.string(from: endDate))
                             .foregroundColor(.secondary)
                     }
                 }
@@ -119,7 +91,7 @@ struct AddEventView: View {
                     if useCustomReminders {
                         ForEach(reminderMinutes.sorted(), id: \.self) { minutes in
                             HStack {
-                                Label("\(Self.formatMinutes(minutes)) before", systemImage: "bell.fill")
+                                Label("\(DS.formatMinutes(minutes)) before", systemImage: "bell.fill")
                                 Spacer()
                                 Button(role: .destructive) {
                                     reminderMinutes.removeAll { $0 == minutes }
@@ -131,7 +103,7 @@ struct AddEventView: View {
                         }
 
                         HStack {
-                            Stepper("\(Self.formatMinutes(newReminderValue))", value: $newReminderValue, in: 1...120)
+                            Stepper("\(DS.formatMinutes(newReminderValue))", value: $newReminderValue, in: 1...120)
 
                             Button("Add") {
                                 if !reminderMinutes.contains(newReminderValue) {
@@ -143,9 +115,9 @@ struct AddEventView: View {
                         // Quick presets
                         let available = Self.presetReminders.filter { !reminderMinutes.contains($0) }
                         if !available.isEmpty {
-                            HStack(spacing: 4) {
+                            HStack(spacing: DS.Spacing.xs) {
                                 ForEach(available.prefix(5), id: \.self) { preset in
-                                    Button(Self.formatMinutes(preset)) {
+                                    Button(DS.formatMinutes(preset)) {
                                         reminderMinutes.append(preset)
                                     }
                                     .buttonStyle(.bordered)
@@ -162,7 +134,7 @@ struct AddEventView: View {
             }
             .formStyle(.grouped)
             .scrollContentBackground(.hidden)
-            .frame(maxHeight: 340)
+            .frame(maxHeight: DS.Popover.formMaxHeight)
 
             Divider()
 
@@ -170,7 +142,7 @@ struct AddEventView: View {
             HStack {
                 Spacer()
                 Button("Cancel") {
-                    isPresented = false
+                    onDismiss()
                 }
                 .keyboardShortcut(.cancelAction)
 
@@ -184,11 +156,11 @@ struct AddEventView: View {
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.vertical, DS.Spacing.md)
             .background(.bar)
         }
-        .frame(width: 340)
+        .frame(width: DS.Popover.width)
         .onAppear {
             if let event = editingEvent {
                 title = event.title
@@ -223,15 +195,6 @@ struct AddEventView: View {
         } else {
             reminderService.addLocalEvent(event)
         }
-        isPresented = false
-    }
-
-    private static func formatMinutes(_ minutes: Int) -> String {
-        if minutes >= 60 {
-            let h = minutes / 60
-            let m = minutes % 60
-            return m == 0 ? "\(h) h" : "\(h) h \(m) min"
-        }
-        return "\(minutes) min"
+        onSave(isEditing)
     }
 }

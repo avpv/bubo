@@ -6,7 +6,7 @@ struct StatusBanner: View {
     let color: Color
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: DS.Spacing.sm) {
             Image(systemName: icon)
                 .font(.caption)
                 .symbolRenderingMode(.hierarchical)
@@ -15,8 +15,8 @@ struct StatusBanner: View {
         }
         .foregroundColor(color)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.vertical, DS.Spacing.sm)
         .background(color.opacity(0.08))
         .accessibilityElement(children: .combine)
         .transition(.move(edge: .top).combined(with: .opacity))

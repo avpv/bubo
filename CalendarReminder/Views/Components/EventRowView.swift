@@ -17,32 +17,32 @@ struct EventRowView: View {
         HStack(alignment: .center, spacing: 0) {
             // Urgency accent bar
             RoundedRectangle(cornerRadius: 1.5)
-                .fill(urgencyColor)
-                .frame(width: 3, height: 28)
-                .padding(.trailing, 8)
+                .fill(DS.urgencyColor(minutesUntil: event.minutesUntilStart))
+                .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
+                .padding(.trailing, DS.Spacing.md)
 
             // Time indicator
-            VStack(spacing: 2) {
+            VStack(spacing: DS.Spacing.xxs) {
                 Text(event.formattedTime)
                     .font(.system(.caption, design: .monospaced))
                     .fontWeight(.bold)
-                    .foregroundColor(urgencyColor)
+                    .foregroundColor(DS.urgencyColor(minutesUntil: event.minutesUntilStart))
 
                 Text(timeUntilText)
                     .font(.system(.caption2, design: .monospaced))
-                    .foregroundColor(urgencyColor.opacity(0.8))
+                    .foregroundColor(DS.urgencyColor(minutesUntil: event.minutesUntilStart).opacity(0.8))
             }
-            .frame(width: 50)
-            .padding(.trailing, 4)
+            .frame(width: DS.Size.timeColumnWidth)
+            .padding(.trailing, DS.Spacing.xs)
 
             // Event details
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(event.title)
                     .font(.subheadline)
                     .fontWeight(.medium)
                     .lineLimit(2)
 
-                HStack(spacing: 8) {
+                HStack(spacing: DS.Spacing.md) {
                     if let location = event.location, !location.isEmpty {
                         Label(location, systemImage: "location.fill")
                             .font(.caption2)
@@ -58,25 +58,21 @@ struct EventRowView: View {
                 }
             }
 
-            Spacer(minLength: 8)
+            Spacer(minLength: DS.Spacing.md)
 
             // Actions on hover
             if isHovered {
-                HStack(spacing: 4) {
+                HStack(spacing: DS.Spacing.xs) {
                     if event.isUpcoming {
                         Menu {
-                            Button("5 minutes") {
-                                reminderService.snoozeReminder(for: event, minutes: 5)
-                            }
-                            Button("10 minutes") {
-                                reminderService.snoozeReminder(for: event, minutes: 10)
-                            }
-                            Button("15 minutes") {
-                                reminderService.snoozeReminder(for: event, minutes: 15)
+                            ForEach(DS.snoozeOptions) { option in
+                                Button(option.label) {
+                                    reminderService.snoozeReminder(for: event, minutes: option.minutes)
+                                }
                             }
                         } label: {
                             Image(systemName: "bell.badge")
-                                .font(.system(size: 13))
+                                .font(.system(size: DS.Size.iconMedium))
                                 .foregroundStyle(.secondary)
                         }
                         .buttonStyle(.borderless)
@@ -90,7 +86,7 @@ struct EventRowView: View {
                             onDelete?(event)
                         } label: {
                             Image(systemName: "minus.circle.fill")
-                                .font(.system(size: 14))
+                                .font(.system(size: DS.Size.iconLarge))
                                 .symbolRenderingMode(.hierarchical)
                                 .foregroundStyle(.red)
                         }
@@ -98,13 +94,13 @@ struct EventRowView: View {
                         .help("Delete event")
                     }
                 }
-                .transition(.opacity.animation(.easeInOut(duration: 0.15)))
+                .transition(.opacity.animation(DS.Animation.quick))
             }
         }
         .padding(.vertical, 3)
-        .padding(.horizontal, 4)
+        .padding(.horizontal, DS.Spacing.xs)
         .background(
-            RoundedRectangle(cornerRadius: 6)
+            RoundedRectangle(cornerRadius: DS.Size.cornerRadius)
                 .fill(isHovered ? Color.primary.opacity(0.06) : Color.clear)
         )
         .contentShape(Rectangle())
@@ -112,7 +108,7 @@ struct EventRowView: View {
             onTap?(event)
         }
         .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.15)) {
+            withAnimation(DS.Animation.quick) {
                 isHovered = hovering
             }
         }
@@ -122,14 +118,10 @@ struct EventRowView: View {
         .accessibilityAddTraits(.isButton)
         .contextMenu {
             Section("Snooze") {
-                Button("5 minutes") {
-                    reminderService.snoozeReminder(for: event, minutes: 5)
-                }
-                Button("10 minutes") {
-                    reminderService.snoozeReminder(for: event, minutes: 10)
-                }
-                Button("15 minutes") {
-                    reminderService.snoozeReminder(for: event, minutes: 15)
+                ForEach(DS.snoozeOptions) { option in
+                    Button(option.label) {
+                        reminderService.snoozeReminder(for: event, minutes: option.minutes)
+                    }
                 }
             }
             if isLocal {
@@ -138,13 +130,6 @@ struct EventRowView: View {
                 Button("Delete", role: .destructive) { onDelete?(event) }
             }
         }
-    }
-
-    private var urgencyColor: Color {
-        let minutes = event.minutesUntilStart
-        if minutes <= 5 { return .red }
-        if minutes <= 15 { return .orange }
-        return .green
     }
 
     private var timeUntilText: String {

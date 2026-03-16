@@ -2,7 +2,7 @@ import SwiftUI
 
 struct EventDetailView: View {
     let event: CalendarEvent
-    @Binding var isPresented: Bool
+    var onBack: () -> Void
     var onEdit: ((CalendarEvent) -> Void)? = nil
     var onDelete: ((CalendarEvent) -> Void)? = nil
 
@@ -14,40 +14,21 @@ struct EventDetailView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header with back button
-            HStack(spacing: 4) {
-                Button {
-                    isPresented = false
-                } label: {
-                    HStack(spacing: 2) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 13, weight: .semibold))
-                        Text("Back")
-                            .font(.subheadline)
-                    }
-                }
-                .buttonStyle(.borderless)
-                .keyboardShortcut(.escape, modifiers: [])
-
-                Spacer()
-
-                OwlIcon(size: 18)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(.bar)
-
-            Divider()
+            PopoverHeader(
+                title: isLocal ? "Event" : nil,
+                showBack: true,
+                onBack: onBack
+            )
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xl) {
                     // Title
                     Text(event.title)
                         .font(.title3)
                         .fontWeight(.semibold)
 
                     // Date & Time group
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: DS.Spacing.md) {
                         Label(event.formattedDate, systemImage: "calendar")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
@@ -66,7 +47,7 @@ struct EventDetailView: View {
 
                     // Description
                     if let description = event.description, !description.isEmpty {
-                        VStack(alignment: .leading, spacing: 4) {
+                        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                             Label("Notes", systemImage: "note.text")
                                 .font(.caption)
                                 .fontWeight(.medium)
@@ -87,29 +68,29 @@ struct EventDetailView: View {
 
                     // Custom reminders
                     if let reminders = event.customReminderMinutes, !reminders.isEmpty {
-                        VStack(alignment: .leading, spacing: 6) {
+                        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                             Label("Reminders", systemImage: "bell.fill")
                                 .font(.caption)
                                 .fontWeight(.medium)
                                 .foregroundColor(.tertiary)
 
-                            HStack(spacing: 4) {
+                            HStack(spacing: DS.Spacing.xs) {
                                 ForEach(reminders.sorted(), id: \.self) { min in
-                                    Text(formatMinutes(min))
+                                    Text(DS.formatMinutes(min))
                                         .font(.caption)
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 2)
+                                        .padding(.horizontal, DS.Spacing.sm)
+                                        .padding(.vertical, DS.Spacing.xxs)
                                         .background(.secondary.opacity(0.12))
-                                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                                        .clipShape(RoundedRectangle(cornerRadius: DS.Size.badgeCornerRadius))
                                 }
                             }
                         }
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(16)
+                .padding(DS.Spacing.xl)
             }
-            .frame(maxHeight: 300)
+            .frame(maxHeight: DS.Popover.detailMaxHeight)
 
             Spacer(minLength: 0)
 
@@ -127,7 +108,6 @@ struct EventDetailView: View {
                         Button("Cancel", role: .cancel) { }
                         Button("Delete", role: .destructive) {
                             onDelete?(event)
-                            isPresented = false
                         }
                     } message: {
                         Text("Are you sure you want to delete \"\(event.title)\"? This action cannot be undone.")
@@ -142,21 +122,12 @@ struct EventDetailView: View {
                     }
                     .buttonStyle(.borderedProminent)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.vertical, DS.Spacing.md)
                 .background(.bar)
             }
         }
-        .frame(width: 340)
+        .frame(width: DS.Popover.width)
         .frame(minHeight: 200)
-    }
-
-    private func formatMinutes(_ minutes: Int) -> String {
-        if minutes >= 60 {
-            let h = minutes / 60
-            let m = minutes % 60
-            return m == 0 ? "\(h) h" : "\(h) h \(m) min"
-        }
-        return "\(minutes) min"
     }
 }

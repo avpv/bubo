@@ -5,43 +5,66 @@ struct MenuBarView: View {
     @ObservedObject var reminderService: ReminderService
     @ObservedObject var networkMonitor: NetworkMonitor
 
-    @State private var showingAddEvent = false
-    @State private var editingEvent: CalendarEvent? = nil
-    @State private var showingDetail = false
-    @State private var detailEvent: CalendarEvent? = nil
+    @State private var navigation: Navigation = .list
     @State private var hasStartedSync = false
+    @StateObject private var toastState = ToastState()
 
-    var body: some View {
-        Group {
-            if showingAddEvent {
-                AddEventView(
-                    reminderService: reminderService,
-                    isPresented: $showingAddEvent,
-                    editingEvent: editingEvent
-                )
-                .transition(.move(edge: .trailing).combined(with: .opacity))
-            } else if showingDetail, let event = detailEvent {
-                EventDetailView(
-                    event: event,
-                    isPresented: $showingDetail,
-                    onEdit: { event in
-                        showingDetail = false
-                        editingEvent = event
-                        showingAddEvent = true
-                    },
-                    onDelete: { event in
-                        reminderService.removeLocalEvent(id: event.id)
-                        showingDetail = false
-                    }
-                )
-                .transition(.move(edge: .trailing).combined(with: .opacity))
-            } else {
-                mainContent
-                    .transition(.move(edge: .leading).combined(with: .opacity))
+    /// Enum-based navigation state machine replaces fragile boolean flags.
+    enum Navigation: Equatable {
+        case list
+        case detail(CalendarEvent)
+        case addEvent(editing: CalendarEvent? = nil)
+
+        static func == (lhs: Navigation, rhs: Navigation) -> Bool {
+            switch (lhs, rhs) {
+            case (.list, .list): return true
+            case (.detail(let a), .detail(let b)): return a.id == b.id
+            case (.addEvent(let a), .addEvent(let b)): return a?.id == b?.id
+            default: return false
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: showingAddEvent)
-        .animation(.easeInOut(duration: 0.2), value: showingDetail)
+    }
+
+    var body: some View {
+        ZStack {
+            Group {
+                switch navigation {
+                case .list:
+                    mainContent
+                        .transition(.move(edge: .leading).combined(with: .opacity))
+
+                case .detail(let event):
+                    EventDetailView(
+                        event: event,
+                        onBack: { navigation = .list },
+                        onEdit: { event in
+                            navigation = .addEvent(editing: event)
+                        },
+                        onDelete: { event in
+                            reminderService.removeLocalEvent(id: event.id)
+                            navigation = .list
+                            toastState.showSuccess("Event deleted", icon: "trash.fill")
+                        }
+                    )
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+
+                case .addEvent(let editing):
+                    AddEventView(
+                        reminderService: reminderService,
+                        editingEvent: editing,
+                        onDismiss: { navigation = .list },
+                        onSave: { isEdit in
+                            navigation = .list
+                            toastState.showSuccess(isEdit ? "Event updated" : "Event added")
+                        }
+                    )
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
+            }
+            .animation(DS.Animation.standard, value: navigation)
+
+            ToastOverlay(toastState: toastState)
+        }
         .onAppear {
             guard !hasStartedSync else { return }
             hasStartedSync = true
@@ -54,41 +77,10 @@ struct MenuBarView: View {
     private var mainContent: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header
-            HStack {
-                OwlIcon(size: 18)
-                Text("Reminder")
-                    .font(.headline)
-                Spacer()
-
-                HStack(spacing: 6) {
-                    if !networkMonitor.isConnected {
-                        Image(systemName: "wifi.slash")
-                            .foregroundColor(.red)
-                            .font(.system(size: 12))
-                            .help("No internet connection")
-                            .accessibilityLabel("No internet connection")
-                    }
-
-                    if settings.isDoNotDisturbActive {
-                        Image(systemName: "moon.fill")
-                            .foregroundColor(.indigo)
-                            .font(.system(size: 12))
-                            .help("Do Not Disturb")
-                            .accessibilityLabel("Do Not Disturb is active")
-                    }
-
-                    if reminderService.isSyncing {
-                        ProgressView()
-                            .scaleEffect(0.5)
-                            .frame(width: 14, height: 14)
-                    }
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(.bar)
-
-            Divider()
+            PopoverHeader(
+                title: "Reminder",
+                trailing: AnyView(statusIndicators)
+            )
 
             // Status messages
             if !networkMonitor.isConnected {
@@ -111,120 +103,160 @@ struct MenuBarView: View {
 
             // Events
             if reminderService.eventsByDay.isEmpty {
-                VStack(spacing: 10) {
-                    Image(systemName: "calendar.badge.checkmark")
-                        .font(.system(size: 36))
-                        .foregroundStyle(.secondary)
-                        .symbolRenderingMode(.hierarchical)
-                    Text("No upcoming meetings")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                        .foregroundColor(.secondary)
-                    Text("Your schedule is clear")
-                        .font(.caption)
-                        .foregroundColor(.tertiary)
-                    Button {
-                        editingEvent = nil
-                        showingAddEvent = true
-                    } label: {
-                        Label("Add Event", systemImage: "plus")
-                            .font(.caption)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 24)
+                emptyState
             } else {
-                List {
-                    ForEach(reminderService.eventsByDay, id: \.date) { dayGroup in
-                        Section {
-                            ForEach(dayGroup.events) { event in
-                                EventRowView(
-                                    event: event,
-                                    reminderService: reminderService,
-                                    onEdit: { event in
-                                        editingEvent = event
-                                        showingAddEvent = true
-                                    },
-                                    onDelete: { event in
-                                        reminderService.removeLocalEvent(id: event.id)
-                                    },
-                                    onTap: { event in
-                                        detailEvent = event
-                                        showingDetail = true
-                                    }
-                                )
-                            }
-                        } header: {
-                            DaySectionHeader(date: dayGroup.date, count: dayGroup.events.count)
-                        }
-                    }
-                }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
-                .frame(maxHeight: 360)
+                eventList
             }
 
             Divider()
 
-            // Actions
+            // Footer
             if let lastSync = reminderService.lastSyncDate {
                 Text(lastSync, style: .relative)
                     .font(.caption2)
                     .foregroundColor(.tertiary)
                     .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.top, 4)
-                    .padding(.bottom, -4)
+                    .padding(.top, DS.Spacing.xs)
+                    .padding(.bottom, -DS.Spacing.xs)
             }
 
-            HStack(spacing: 6) {
-                Button(action: {
-                    editingEvent = nil
-                    showingAddEvent = true
-                }) {
-                    Label("Add", systemImage: "plus")
-                }
-                .help("Add a new event (⌘N)")
-                .keyboardShortcut("n", modifiers: .command)
-
-                Button(action: { reminderService.syncNow() }) {
-                    Label("Refresh", systemImage: "arrow.clockwise")
-                }
-                .disabled(!networkMonitor.isConnected)
-                .help("Sync calendars now (⌘R)")
-                .keyboardShortcut("r", modifiers: .command)
-
-                Spacer()
-
-                Button(action: {
-                    if let window = NSApp.keyWindow {
-                        window.close()
-                    }
-                    DispatchQueue.main.async {
-                        NSApp.activate(ignoringOtherApps: true)
-                        if #available(macOS 14.0, *) {
-                            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-                        } else {
-                            NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
-                        }
-                    }
-                }) {
-                    Label("Settings", systemImage: "gear")
-                }
-                .help("Open settings")
-
-                Button(action: { NSApplication.shared.terminate(nil) }) {
-                    Label("Quit", systemImage: "power")
-                }
-                .help("Quit Reminder (⌘Q)")
-                .keyboardShortcut("q", modifiers: .command)
-            }
-            .buttonStyle(.borderless)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(.bar)
+            footerActions
         }
-        .frame(width: 340)
+        .frame(width: DS.Popover.width)
+    }
+
+    // MARK: - Subviews
+
+    private var statusIndicators: some View {
+        HStack(spacing: DS.Spacing.sm) {
+            if !networkMonitor.isConnected {
+                Image(systemName: "wifi.slash")
+                    .foregroundColor(.red)
+                    .font(.system(size: DS.Size.iconSmall))
+                    .help("No internet connection")
+                    .accessibilityLabel("No internet connection")
+            }
+
+            if settings.isDoNotDisturbActive {
+                Image(systemName: "moon.fill")
+                    .foregroundColor(.indigo)
+                    .font(.system(size: DS.Size.iconSmall))
+                    .help("Do Not Disturb")
+                    .accessibilityLabel("Do Not Disturb is active")
+            }
+
+            if reminderService.isSyncing {
+                ProgressView()
+                    .scaleEffect(0.5)
+                    .frame(width: DS.Size.syncIndicatorSize, height: DS.Size.syncIndicatorSize)
+            }
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "calendar.badge.checkmark")
+                .font(.system(size: 36))
+                .foregroundStyle(.secondary)
+                .symbolRenderingMode(.hierarchical)
+            Text("No upcoming meetings")
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundColor(.secondary)
+            Text("Your schedule is clear")
+                .font(.caption)
+                .foregroundColor(.tertiary)
+            Button {
+                navigation = .addEvent()
+            } label: {
+                Label("Add Event", systemImage: "plus")
+                    .font(.caption)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, DS.Spacing.xxl)
+    }
+
+    private var eventList: some View {
+        List {
+            ForEach(reminderService.eventsByDay, id: \.date) { dayGroup in
+                Section {
+                    ForEach(dayGroup.events) { event in
+                        EventRowView(
+                            event: event,
+                            reminderService: reminderService,
+                            onEdit: { event in
+                                navigation = .addEvent(editing: event)
+                            },
+                            onDelete: { event in
+                                reminderService.removeLocalEvent(id: event.id)
+                                toastState.showSuccess("Event deleted", icon: "trash.fill")
+                            },
+                            onTap: { event in
+                                navigation = .detail(event)
+                            }
+                        )
+                    }
+                } header: {
+                    DaySectionHeader(date: dayGroup.date, count: dayGroup.events.count)
+                }
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .frame(maxHeight: DS.Popover.listMaxHeight)
+    }
+
+    private var footerActions: some View {
+        HStack(spacing: DS.Spacing.sm) {
+            Button(action: {
+                navigation = .addEvent()
+            }) {
+                Label("Add", systemImage: "plus")
+            }
+            .help("Add a new event (⌘N)")
+            .keyboardShortcut("n", modifiers: .command)
+
+            Button(action: {
+                reminderService.syncNow()
+                toastState.showInfo("Syncing calendars…", icon: "arrow.clockwise")
+            }) {
+                Label("Refresh", systemImage: "arrow.clockwise")
+            }
+            .disabled(!networkMonitor.isConnected)
+            .help("Sync calendars now (⌘R)")
+            .keyboardShortcut("r", modifiers: .command)
+
+            Spacer()
+
+            Button(action: {
+                if let window = NSApp.keyWindow {
+                    window.close()
+                }
+                DispatchQueue.main.async {
+                    NSApp.activate(ignoringOtherApps: true)
+                    if #available(macOS 14.0, *) {
+                        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                    } else {
+                        NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
+                    }
+                }
+            }) {
+                Label("Settings", systemImage: "gear")
+            }
+            .help("Open settings")
+
+            Button(action: { NSApplication.shared.terminate(nil) }) {
+                Label("Quit", systemImage: "power")
+            }
+            .help("Quit Reminder (⌘Q)")
+            .keyboardShortcut("q", modifiers: .command)
+        }
+        .buttonStyle(.borderless)
+        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.vertical, DS.Spacing.md)
+        .background(.bar)
     }
 }
