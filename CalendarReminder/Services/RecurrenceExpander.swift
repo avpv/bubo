@@ -67,7 +67,7 @@ enum RecurrenceExpander {
                         description: event.description,
                         calendarName: event.calendarName,
                         customReminderMinutes: event.customReminderMinutes,
-                        recurrenceRule: emitted == 0 ? event.recurrenceRule : nil,
+                        recurrenceRule: event.recurrenceRule,
                         seriesId: event.id
                     )
                     occurrences.append(occurrence)
