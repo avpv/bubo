@@ -165,11 +165,17 @@ struct MenuBarView: View {
                 Spacer()
 
                 Button(action: {
-                    NSApp.activate(ignoringOtherApps: true)
-                    if #available(macOS 14.0, *) {
-                        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-                    } else {
-                        NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
+                    // Dismiss the MenuBarExtra popover first, then open Settings
+                    if let window = NSApp.keyWindow {
+                        window.close()
+                    }
+                    DispatchQueue.main.async {
+                        NSApp.activate(ignoringOtherApps: true)
+                        if #available(macOS 14.0, *) {
+                            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                        } else {
+                            NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
+                        }
                     }
                 }) {
                     Label("Settings", systemImage: "gear")
