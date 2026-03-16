@@ -14,7 +14,13 @@ struct EventRowView: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .center, spacing: 0) {
+            // Urgency accent bar
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(urgencyColor)
+                .frame(width: 3, height: 28)
+                .padding(.trailing, 8)
+
             // Time indicator
             VStack(spacing: 2) {
                 Text(event.formattedTime)
@@ -27,6 +33,7 @@ struct EventRowView: View {
                     .foregroundColor(urgencyColor.opacity(0.8))
             }
             .frame(width: 50)
+            .padding(.trailing, 4)
 
             // Event details
             VStack(alignment: .leading, spacing: 2) {
@@ -63,8 +70,10 @@ struct EventRowView: View {
                 }
                 .buttonStyle(.borderless)
                 .help("Delete")
+                .transition(.opacity)
             }
         }
+        .padding(.vertical, 2)
         .contentShape(Rectangle())
         .onTapGesture {
             onTap?(event)
@@ -72,6 +81,10 @@ struct EventRowView: View {
         .onHover { hovering in
             isHovered = hovering
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(event.title), \(event.formattedTimeRange)\(event.location.map { ", \($0)" } ?? "")")
+        .accessibilityHint("Click to view details. Right-click to snooze.")
+        .accessibilityAddTraits(.isButton)
         .contextMenu {
             Section("Snooze") {
                 Button("5 minutes") {

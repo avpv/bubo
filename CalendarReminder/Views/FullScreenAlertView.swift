@@ -8,6 +8,7 @@ struct FullScreenAlertView: View {
 
     @State private var secondsRemaining: Int = 0
     @State private var countdownTimer: Timer?
+    @State private var isVisible = false
 
     var body: some View {
         ZStack {
@@ -22,10 +23,7 @@ struct FullScreenAlertView: View {
             VStack(spacing: 30) {
                 Spacer()
 
-                Image(systemName: "bell.fill")
-                    .font(.system(size: 60))
-                    .foregroundColor(.yellow)
-                    .shadow(color: .yellow.opacity(0.5), radius: 20)
+                bellIcon
 
                 Text(headerText)
                     .font(.system(size: 48, weight: .bold))
@@ -88,18 +86,41 @@ struct FullScreenAlertView: View {
                     }
                     .buttonStyle(.plain)
                     .keyboardShortcut(.return, modifiers: [])
+                    .accessibilityLabel("Dismiss alert")
+                    .accessibilityHint("Press Enter or click to dismiss")
                 }
 
                 Text("Press Enter or click a button to dismiss")
                     .font(.caption)
                     .foregroundColor(.white.opacity(0.4))
+                    .accessibilityHidden(true)
 
                 Spacer().frame(height: 60)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onAppear { startCountdown() }
+        .opacity(isVisible ? 1 : 0)
+        .scaleEffect(isVisible ? 1 : 0.95)
+        .onAppear {
+            startCountdown()
+            withAnimation(.easeOut(duration: 0.3)) {
+                isVisible = true
+            }
+        }
         .onDisappear { cleanup() }
+    }
+
+    @ViewBuilder
+    private var bellIcon: some View {
+        let base = Image(systemName: "bell.fill")
+            .font(.system(size: 60))
+            .foregroundColor(.yellow)
+            .shadow(color: .yellow.opacity(0.5), radius: 20)
+        if #available(macOS 14.0, *) {
+            base.symbolEffect(.pulse, options: .repeating)
+        } else {
+            base
+        }
     }
 
     // MARK: - Countdown

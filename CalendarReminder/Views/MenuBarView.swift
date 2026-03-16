@@ -19,6 +19,7 @@ struct MenuBarView: View {
                     isPresented: $showingAddEvent,
                     editingEvent: editingEvent
                 )
+                .transition(.move(edge: .trailing).combined(with: .opacity))
             } else if showingDetail, let event = detailEvent {
                 EventDetailView(
                     event: event,
@@ -33,10 +34,14 @@ struct MenuBarView: View {
                         showingDetail = false
                     }
                 )
+                .transition(.move(edge: .trailing).combined(with: .opacity))
             } else {
                 mainContent
+                    .transition(.move(edge: .leading).combined(with: .opacity))
             }
         }
+        .animation(.easeInOut(duration: 0.2), value: showingAddEvent)
+        .animation(.easeInOut(duration: 0.2), value: showingDetail)
         .onAppear {
             guard !hasStartedSync else { return }
             hasStartedSync = true
@@ -59,12 +64,14 @@ struct MenuBarView: View {
                     Image(systemName: "wifi.slash")
                         .foregroundColor(.red)
                         .help("No internet connection")
+                        .accessibilityLabel("No internet connection")
                 }
 
                 if settings.isDoNotDisturbActive {
                     Image(systemName: "moon.fill")
                         .foregroundColor(.indigo)
                         .help("Do Not Disturb")
+                        .accessibilityLabel("Do Not Disturb is active")
                 }
 
                 if reminderService.isSyncing {
@@ -106,15 +113,30 @@ struct MenuBarView: View {
 
             // Events
             if reminderService.eventsByDay.isEmpty {
-                VStack(spacing: 8) {
-                    Image(systemName: "calendar")
-                        .font(.largeTitle)
-                        .foregroundColor(.secondary)
+                VStack(spacing: 10) {
+                    Image(systemName: "calendar.badge.checkmark")
+                        .font(.system(size: 36))
+                        .foregroundStyle(.secondary)
+                        .symbolRenderingMode(.hierarchical)
                     Text("No upcoming meetings")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
                         .foregroundColor(.secondary)
+                    Text("Your schedule is clear")
+                        .font(.caption)
+                        .foregroundColor(.tertiary)
+                    Button {
+                        editingEvent = nil
+                        showingAddEvent = true
+                    } label: {
+                        Label("Add Event", systemImage: "plus")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 20)
+                .padding(.vertical, 24)
             } else {
                 List {
                     ForEach(reminderService.eventsByDay, id: \.date) { dayGroup in
@@ -149,23 +171,24 @@ struct MenuBarView: View {
             Divider()
 
             // Actions
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 Button(action: {
                     editingEvent = nil
                     showingAddEvent = true
                 }) {
                     Label("Add", systemImage: "plus")
                 }
+                .help("Add a new event")
 
                 Button(action: { reminderService.syncNow() }) {
                     Label("Refresh", systemImage: "arrow.clockwise")
                 }
                 .disabled(!networkMonitor.isConnected)
+                .help("Sync calendars now")
 
                 Spacer()
 
                 Button(action: {
-                    // Dismiss the MenuBarExtra popover first, then open Settings
                     if let window = NSApp.keyWindow {
                         window.close()
                     }
@@ -180,10 +203,12 @@ struct MenuBarView: View {
                 }) {
                     Label("Settings", systemImage: "gear")
                 }
+                .help("Open settings")
 
                 Button(action: { NSApplication.shared.terminate(nil) }) {
                     Label("Quit", systemImage: "power")
                 }
+                .help("Quit Reminder")
             }
             .buttonStyle(.borderless)
             .padding(.horizontal, 12)

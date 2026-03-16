@@ -48,6 +48,16 @@ struct GeneralTabView: View {
                         .font(.caption)
                 }
             }
+
+            Section {
+                HStack {
+                    Spacer()
+                    Text("Reminder v1.0")
+                        .font(.caption2)
+                        .foregroundColor(.tertiary)
+                    Spacer()
+                }
+            }
         }
         .formStyle(.grouped)
     }

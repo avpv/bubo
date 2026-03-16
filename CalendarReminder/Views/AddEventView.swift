@@ -14,9 +14,6 @@ struct AddEventView: View {
     @State private var useCustomReminders = false
     @State private var reminderMinutes: [Int] = [5]
     @State private var newReminderValue = 10
-    @State private var isTitleHovered = false
-    @State private var isLocationHovered = false
-    @State private var isNotesHovered = false
     @FocusState private var isTitleFocused: Bool
     @FocusState private var isLocationFocused: Bool
     @FocusState private var isNotesFocused: Bool
@@ -66,12 +63,7 @@ struct AddEventView: View {
                 Section {
                     TextField("Event title", text: $title)
                         .focused($isTitleFocused)
-                        .padding(6)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(isTitleFocused || isTitleHovered ? Color.white : Color.clear)
-                        )
-                        .onHover { isTitleHovered = $0 }
+                        .textFieldStyle(.roundedBorder)
 
                     if showValidation && !isTitleValid {
                         Label("Title is required", systemImage: "exclamationmark.triangle.fill")
@@ -109,21 +101,11 @@ struct AddEventView: View {
                 Section("Details") {
                     TextField("Location (optional)", text: $location)
                         .focused($isLocationFocused)
-                        .padding(6)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(isLocationFocused || isLocationHovered ? Color.white : Color.clear)
-                        )
-                        .onHover { isLocationHovered = $0 }
+                        .textFieldStyle(.roundedBorder)
 
                     TextField("Notes (optional)", text: $description)
                         .focused($isNotesFocused)
-                        .padding(6)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(isNotesFocused || isNotesHovered ? Color.white : Color.clear)
-                        )
-                        .onHover { isNotesHovered = $0 }
+                        .textFieldStyle(.roundedBorder)
                 }
 
                 Section("Reminders") {
