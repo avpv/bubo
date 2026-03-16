@@ -76,7 +76,7 @@ struct ToastOverlay: View {
                 .padding(.bottom, DS.Spacing.md)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .accessibilityElement(children: .combine)
-                .accessibilityAddTraits(.isStatusElement)
+                .accessibilityLabel("Status: \(toast.text)")
             }
         }
         .animation(DS.Animation.standard, value: toastState.current?.id)

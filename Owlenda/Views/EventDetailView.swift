@@ -66,7 +66,7 @@ struct EventDetailView: View {
                             Label("Notes", systemImage: "note.text")
                                 .font(.caption)
                                 .fontWeight(.medium)
-                                .foregroundColor(.tertiary)
+                                .foregroundStyle(.tertiary)
                             Text(description)
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
@@ -87,7 +87,7 @@ struct EventDetailView: View {
                             Label("Repeats", systemImage: "repeat")
                                 .font(.caption)
                                 .fontWeight(.medium)
-                                .foregroundColor(.tertiary)
+                                .foregroundStyle(.tertiary)
 
                             Text(rule.displayText)
                                 .font(.subheadline)
@@ -115,7 +115,7 @@ struct EventDetailView: View {
                             Label("Reminders", systemImage: "bell.fill")
                                 .font(.caption)
                                 .fontWeight(.medium)
-                                .foregroundColor(.tertiary)
+                                .foregroundStyle(.tertiary)
 
                             HStack(spacing: DS.Spacing.xs) {
                                 ForEach(reminders.sorted(), id: \.self) { min in
