@@ -4,8 +4,9 @@ struct OwlIcon: View {
     var size: CGFloat = 20
 
     var body: some View {
-        if let url = Bundle.module.url(forResource: "MenuBarIcon", withExtension: "png"),
-           let nsImage = NSImage(contentsOf: url) {
+        let url = Bundle.module.url(forResource: "MenuBarIcon", withExtension: "png")
+            ?? Bundle.main.url(forResource: "MenuBarIcon", withExtension: "png")
+        if let url, let nsImage = NSImage(contentsOf: url) {
             Image(nsImage: nsImage)
                 .resizable()
                 .interpolation(.high)

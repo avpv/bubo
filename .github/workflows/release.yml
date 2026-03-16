@@ -55,6 +55,8 @@ jobs:
           mkdir -p "$APP/MacOS" "$APP/Resources"
           cp "${BIN_PATH}/CalendarReminder" "$APP/MacOS/"
           cp CalendarReminder/Resources/AppIcon.icns "$APP/Resources/"
+          # Copy SPM resource bundle so Bundle.module works at runtime
+          cp -R "${BIN_PATH}/CalendarReminder_CalendarReminder.bundle" "$APP/Resources/"
 
           cat > "$APP/Info.plist" <<'PLIST'
           <?xml version="1.0" encoding="UTF-8"?>
