@@ -9,6 +9,23 @@ struct MenuBarView: View {
     @State private var hasStartedSync = false
 
     var body: some View {
+        Group {
+            if showingAddEvent {
+                AddEventView(reminderService: reminderService, isPresented: $showingAddEvent)
+            } else {
+                mainContent
+            }
+        }
+        .onAppear {
+            guard !hasStartedSync else { return }
+            hasStartedSync = true
+            reminderService.setNetworkMonitor(networkMonitor)
+            reminderService.updateSettings(settings)
+            reminderService.startSync()
+        }
+    }
+
+    private var mainContent: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Header
             HStack {
@@ -131,15 +148,5 @@ struct MenuBarView: View {
             .padding(.bottom, 8)
         }
         .frame(width: 340)
-        .sheet(isPresented: $showingAddEvent) {
-            AddEventView(reminderService: reminderService, isPresented: $showingAddEvent)
-        }
-        .onAppear {
-            guard !hasStartedSync else { return }
-            hasStartedSync = true
-            reminderService.setNetworkMonitor(networkMonitor)
-            reminderService.updateSettings(settings)
-            reminderService.startSync()
-        }
     }
 }
