@@ -11,7 +11,12 @@ struct FullScreenAlertView: View {
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.85)
+            // Native material background
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .ignoresSafeArea()
+
+            Color.black.opacity(0.6)
                 .ignoresSafeArea()
 
             VStack(spacing: 30) {

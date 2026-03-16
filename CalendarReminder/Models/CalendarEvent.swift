@@ -8,6 +8,7 @@ struct CalendarEvent: Identifiable, Codable, Hashable {
     let location: String?
     let description: String?
     let calendarName: String?
+    var customReminderMinutes: [Int]?
 
     var isUpcoming: Bool {
         startDate > Date()

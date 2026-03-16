@@ -4,16 +4,18 @@ struct EventRowView: View {
     let event: CalendarEvent
     let reminderService: ReminderService
 
-    @State private var showSnoozeMenu = false
-
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             // Time indicator
-            VStack {
+            VStack(spacing: 2) {
                 Text(event.formattedTime)
                     .font(.system(.caption, design: .monospaced))
                     .fontWeight(.bold)
                     .foregroundColor(urgencyColor)
+
+                Text(timeUntilText)
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundColor(urgencyColor.opacity(0.8))
             }
             .frame(width: 50)
 
@@ -25,13 +27,10 @@ struct EventRowView: View {
                     .lineLimit(2)
 
                 if let location = event.location, !location.isEmpty {
-                    HStack(spacing: 2) {
-                        Image(systemName: "location.fill")
-                            .font(.caption2)
-                        Text(location)
-                            .font(.caption)
-                    }
-                    .foregroundColor(.secondary)
+                    Label(location, systemImage: "location.fill")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
                 }
 
                 if let calName = event.calendarName {
@@ -39,30 +38,21 @@ struct EventRowView: View {
                         .font(.caption2)
                         .foregroundColor(.blue)
                 }
-
-                Text(timeUntilText)
-                    .font(.caption2)
-                    .foregroundColor(urgencyColor)
             }
 
             Spacer()
         }
-        .padding(.horizontal)
-        .padding(.vertical, 4)
-        .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(urgencyColor.opacity(0.05))
-        )
-        .padding(.horizontal, 4)
         .contextMenu {
-            Button("Remind in 5 min") {
-                reminderService.snoozeReminder(for: event, minutes: 5)
-            }
-            Button("Remind in 10 min") {
-                reminderService.snoozeReminder(for: event, minutes: 10)
-            }
-            Button("Remind in 15 min") {
-                reminderService.snoozeReminder(for: event, minutes: 15)
+            Section("Snooze") {
+                Button("5 minutes") {
+                    reminderService.snoozeReminder(for: event, minutes: 5)
+                }
+                Button("10 minutes") {
+                    reminderService.snoozeReminder(for: event, minutes: 10)
+                }
+                Button("15 minutes") {
+                    reminderService.snoozeReminder(for: event, minutes: 15)
+                }
             }
         }
     }
@@ -76,11 +66,11 @@ struct EventRowView: View {
 
     private var timeUntilText: String {
         let minutes = event.minutesUntilStart
-        if minutes < 1 { return "Now!" }
-        if minutes < 60 { return "in \(minutes) min" }
+        if minutes < 1 { return "now" }
+        if minutes < 60 { return "in \(minutes)m" }
         let hours = minutes / 60
         let mins = minutes % 60
-        if mins == 0 { return "in \(hours) h" }
-        return "in \(hours) h \(mins) min"
+        if mins == 0 { return "in \(hours)h" }
+        return "in \(hours)h \(mins)m"
     }
 }

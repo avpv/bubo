@@ -1,22 +1,16 @@
 import SwiftUI
 
-struct DaySectionView: View {
+/// Section header used inside the MenuBarView List
+struct DaySectionHeader: View {
     let date: Date
-    let events: [CalendarEvent]
-    let reminderService: ReminderService
+    let count: Int
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        HStack {
             Text(dayTitle)
-                .font(.caption)
-                .fontWeight(.semibold)
+            Spacer()
+            Text("\(count)")
                 .foregroundColor(.secondary)
-                .textCase(.uppercase)
-                .padding(.horizontal)
-
-            ForEach(events) { event in
-                EventRowView(event: event, reminderService: reminderService)
-            }
         }
     }
 
@@ -28,8 +22,7 @@ struct DaySectionView: View {
             return "Tomorrow"
         } else {
             let formatter = DateFormatter()
-            formatter.locale = Locale(identifier: "en_US")
-            formatter.dateFormat = "MMMM d, EEEE"
+            formatter.dateFormat = "EEEE, MMM d"
             return formatter.string(from: date)
         }
     }

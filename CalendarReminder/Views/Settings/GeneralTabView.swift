@@ -34,7 +34,7 @@ struct GeneralTabView: View {
                     }
                 }
 
-                LabeledContent("Yandex events") {
+                LabeledContent("Synced events") {
                     Text("\(reminderService.upcomingEvents.count)")
                 }
 
@@ -49,7 +49,7 @@ struct GeneralTabView: View {
                 }
             }
         }
-        .padding()
+        .formStyle(.grouped)
     }
 
     private func save() {

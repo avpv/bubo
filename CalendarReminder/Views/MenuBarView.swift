@@ -9,10 +9,27 @@ struct MenuBarView: View {
     @State private var hasStartedSync = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        Group {
+            if showingAddEvent {
+                AddEventView(reminderService: reminderService, isPresented: $showingAddEvent)
+            } else {
+                mainContent
+            }
+        }
+        .onAppear {
+            guard !hasStartedSync else { return }
+            hasStartedSync = true
+            reminderService.setNetworkMonitor(networkMonitor)
+            reminderService.updateSettings(settings)
+            reminderService.startSync()
+        }
+    }
+
+    private var mainContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
             // Header
             HStack {
-                OwlIcon(size: 20)
+                OwlIcon(size: 18)
                 Text("Reminder")
                     .font(.headline)
                 Spacer()
@@ -34,8 +51,8 @@ struct MenuBarView: View {
                         .scaleEffect(0.6)
                 }
             }
-            .padding(.horizontal)
-            .padding(.top, 8)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
 
             Divider()
 
@@ -62,10 +79,11 @@ struct MenuBarView: View {
                 Text("Updated: \(lastSync.formatted(date: .omitted, time: .shortened))")
                     .font(.caption2)
                     .foregroundColor(.secondary)
-                    .padding(.horizontal)
+                    .padding(.horizontal, 12)
+                    .padding(.top, 2)
             }
 
-            // Events grouped by day
+            // Events
             if reminderService.eventsByDay.isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: "calendar")
@@ -77,33 +95,33 @@ struct MenuBarView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 20)
             } else {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 8) {
-                        ForEach(reminderService.eventsByDay, id: \.date) { dayGroup in
-                            DaySectionView(
-                                date: dayGroup.date,
-                                events: dayGroup.events,
-                                reminderService: reminderService
-                            )
+                List {
+                    ForEach(reminderService.eventsByDay, id: \.date) { dayGroup in
+                        Section {
+                            ForEach(dayGroup.events) { event in
+                                EventRowView(event: event, reminderService: reminderService)
+                            }
+                        } header: {
+                            DaySectionHeader(date: dayGroup.date, count: dayGroup.events.count)
                         }
                     }
                 }
-                .frame(maxHeight: 350)
+                .listStyle(.inset)
+                .scrollContentBackground(.hidden)
+                .frame(maxHeight: 360)
             }
 
             Divider()
 
             // Actions
-            HStack(spacing: 12) {
+            HStack(spacing: 8) {
                 Button(action: { showingAddEvent = true }) {
-                    Label("Add", systemImage: "plus.circle")
+                    Label("Add", systemImage: "plus")
                 }
-                .buttonStyle(.plain)
 
                 Button(action: { reminderService.syncNow() }) {
                     Label("Refresh", systemImage: "arrow.clockwise")
                 }
-                .buttonStyle(.plain)
                 .disabled(!networkMonitor.isConnected)
 
                 Spacer()
@@ -112,34 +130,22 @@ struct MenuBarView: View {
                     SettingsLink {
                         Label("Settings", systemImage: "gear")
                     }
-                    .buttonStyle(.plain)
                 } else {
                     Button(action: {
                         NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
                     }) {
                         Label("Settings", systemImage: "gear")
                     }
-                    .buttonStyle(.plain)
+                }
+
+                Button(action: { NSApplication.shared.terminate(nil) }) {
+                    Label("Quit", systemImage: "power")
                 }
             }
-            .padding(.horizontal)
-
-            Button("Quit") {
-                NSApplication.shared.terminate(nil)
-            }
-            .padding(.horizontal)
-            .padding(.bottom, 8)
+            .buttonStyle(.borderless)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
         }
         .frame(width: 340)
-        .sheet(isPresented: $showingAddEvent) {
-            AddEventView(reminderService: reminderService, isPresented: $showingAddEvent)
-        }
-        .onAppear {
-            guard !hasStartedSync else { return }
-            hasStartedSync = true
-            reminderService.setNetworkMonitor(networkMonitor)
-            reminderService.updateSettings(settings)
-            reminderService.startSync()
-        }
     }
 }

@@ -6,54 +6,50 @@ struct CalendarsTabView: View {
     @ObservedObject var viewModel: SettingsViewModel
 
     var body: some View {
-        ScrollView {
-            Form {
-                Section("Yandex Calendar") {
+        Form {
+            Section("Yandex Calendar") {
+                HStack {
+                    Button("Load") { viewModel.loadYandexCalendars(settings: settings) }
+                        .disabled(viewModel.isLoadingCalendars)
+                    if viewModel.isLoadingCalendars { ProgressView().scaleEffect(0.7) }
+                }
+
+                if let error = viewModel.calendarLoadError {
+                    Label(error, systemImage: "xmark.circle.fill")
+                        .foregroundColor(.red).font(.caption)
+                }
+
+                if !viewModel.availableCalendars.isEmpty {
+                    calendarToggles(
+                        calendars: viewModel.availableCalendars.map { ($0.href, $0.displayName) },
+                        selected: $settings.selectedCalendarHrefs
+                    )
+                }
+            }
+
+            if settings.googleEnabled && GoogleOAuthService.isAuthenticated {
+                Section("Google Calendar") {
                     HStack {
-                        Button("Load") { viewModel.loadYandexCalendars(settings: settings) }
-                            .disabled(viewModel.isLoadingCalendars)
-                        if viewModel.isLoadingCalendars { ProgressView().scaleEffect(0.7) }
+                        Button("Load") { viewModel.loadGoogleCalendars() }
+                            .disabled(viewModel.isLoadingGoogleCalendars)
+                        if viewModel.isLoadingGoogleCalendars { ProgressView().scaleEffect(0.7) }
                     }
 
-                    if let error = viewModel.calendarLoadError {
+                    if let error = viewModel.googleCalendarLoadError {
                         Label(error, systemImage: "xmark.circle.fill")
                             .foregroundColor(.red).font(.caption)
                     }
 
-                    if !viewModel.availableCalendars.isEmpty {
+                    if !viewModel.availableGoogleCalendars.isEmpty {
                         calendarToggles(
-                            calendars: viewModel.availableCalendars.map { ($0.href, $0.displayName) },
-                            selected: $settings.selectedCalendarHrefs
+                            calendars: viewModel.availableGoogleCalendars.map { ($0.id, $0.summary) },
+                            selected: $settings.selectedGoogleCalendarIds
                         )
                     }
                 }
-
-                if settings.googleEnabled && GoogleOAuthService.isAuthenticated {
-                    Divider()
-
-                    Section("Google Calendar") {
-                        HStack {
-                            Button("Load") { viewModel.loadGoogleCalendars() }
-                                .disabled(viewModel.isLoadingGoogleCalendars)
-                            if viewModel.isLoadingGoogleCalendars { ProgressView().scaleEffect(0.7) }
-                        }
-
-                        if let error = viewModel.googleCalendarLoadError {
-                            Label(error, systemImage: "xmark.circle.fill")
-                                .foregroundColor(.red).font(.caption)
-                        }
-
-                        if !viewModel.availableGoogleCalendars.isEmpty {
-                            calendarToggles(
-                                calendars: viewModel.availableGoogleCalendars.map { ($0.id, $0.summary) },
-                                selected: $settings.selectedGoogleCalendarIds
-                            )
-                        }
-                    }
-                }
             }
-            .padding()
         }
+        .formStyle(.grouped)
     }
 
     @ViewBuilder

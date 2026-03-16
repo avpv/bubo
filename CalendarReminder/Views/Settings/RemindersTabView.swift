@@ -17,28 +17,23 @@ struct RemindersTabView: View {
 
                         Spacer()
 
-                        Button(action: {
+                        Button(role: .destructive) {
                             settings.intervals.removeAll { $0.id == interval.id }
                             save()
-                        }) {
-                            Image(systemName: "minus.circle.fill")
-                                .foregroundColor(.red)
+                        } label: {
+                            Image(systemName: "trash")
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.borderless)
                     }
                 }
 
                 HStack {
                     Stepper("Add: \(viewModel.newIntervalMinutes) min", value: $viewModel.newIntervalMinutes, in: 1...120)
 
-                    Button(action: {
+                    Button("Add") {
                         settings.intervals.append(ReminderInterval(minutes: viewModel.newIntervalMinutes))
                         save()
-                    }) {
-                        Image(systemName: "plus.circle.fill")
-                            .foregroundColor(.green)
                     }
-                    .buttonStyle(.plain)
                 }
             }
 
@@ -69,7 +64,7 @@ struct RemindersTabView: View {
                 }
             }
         }
-        .padding()
+        .formStyle(.grouped)
     }
 
     private func save() {

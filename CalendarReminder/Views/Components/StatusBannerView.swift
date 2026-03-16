@@ -13,6 +13,7 @@ struct StatusBanner: View {
                 .font(.caption)
         }
         .foregroundColor(color)
-        .padding(.horizontal)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 4)
     }
 }

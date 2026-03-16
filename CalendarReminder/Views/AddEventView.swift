@@ -10,6 +10,11 @@ struct AddEventView: View {
     @State private var location = ""
     @State private var description = ""
     @State private var showValidation = false
+    @State private var useCustomReminders = false
+    @State private var reminderMinutes: [Int] = [5]
+    @State private var newReminderValue = 10
+
+    private static let presetReminders = [1, 2, 3, 5, 10, 15, 20, 30, 45, 60]
 
     private var isTitleValid: Bool {
         !title.trimmingCharacters(in: .whitespaces).isEmpty
@@ -26,48 +31,43 @@ struct AddEventView: View {
     }()
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(spacing: 0) {
             // Header
             HStack {
-                OwlIcon(size: 20)
+                Button {
+                    isPresented = false
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.body)
+                }
+                .buttonStyle(.borderless)
+
+                OwlIcon(size: 18)
                 Text("New Event")
                     .font(.headline)
                 Spacer()
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
 
-            // Title
-            VStack(alignment: .leading, spacing: 4) {
-                TextField("Event title", text: $title)
-                    .textFieldStyle(.plain)
-                    .font(.title3)
-                    .padding(8)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color(nsColor: .controlBackgroundColor))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(showValidation && !isTitleValid ? Color.red.opacity(0.5) : .clear, lineWidth: 1)
-                    )
+            Divider()
 
-                if showValidation && !isTitleValid {
-                    Text("Title is required")
-                        .font(.caption)
-                        .foregroundColor(.red)
+            // Form
+            Form {
+                Section {
+                    TextField("Event title", text: $title)
+
+                    if showValidation && !isTitleValid {
+                        Label("Title is required", systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption)
+                            .foregroundColor(.red)
+                    }
                 }
-            }
 
-            // Date & Time
-            VStack(alignment: .leading, spacing: 8) {
-                Label("Date & Time", systemImage: "clock")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                Section("Date & Time") {
+                    DatePicker("Start", selection: $date, displayedComponents: [.date, .hourAndMinute])
 
-                DatePicker("Start", selection: $date, displayedComponents: [.date, .hourAndMinute])
-
-                HStack {
-                    Text("Duration")
-                    Picker("", selection: $duration) {
+                    Picker("Duration", selection: $duration) {
                         Text("15 min").tag(15.0)
                         Text("30 min").tag(30.0)
                         Text("45 min").tag(45.0)
@@ -76,37 +76,68 @@ struct AddEventView: View {
                         Text("2 hours").tag(120.0)
                         Text("3 hours").tag(180.0)
                     }
-                    .labelsHidden()
+
+                    LabeledContent("Ends at") {
+                        Text(Self.timeFormatter.string(from: endDate))
+                            .foregroundColor(.secondary)
+                    }
                 }
 
-                HStack(spacing: 4) {
-                    Image(systemName: "arrow.right")
-                        .font(.caption2)
-                    Text("Ends at \(Self.timeFormatter.string(from: endDate))")
-                        .font(.caption)
+                Section("Details") {
+                    TextField("Location (optional)", text: $location)
+                    TextField("Notes (optional)", text: $description)
                 }
-                .foregroundColor(.secondary)
+
+                Section("Reminders") {
+                    Toggle("Custom reminders", isOn: $useCustomReminders)
+
+                    if useCustomReminders {
+                        ForEach(reminderMinutes.sorted(), id: \.self) { minutes in
+                            HStack {
+                                Label("\(Self.formatMinutes(minutes)) before", systemImage: "bell.fill")
+                                Spacer()
+                                Button(role: .destructive) {
+                                    reminderMinutes.removeAll { $0 == minutes }
+                                } label: {
+                                    Image(systemName: "trash")
+                                }
+                                .buttonStyle(.borderless)
+                            }
+                        }
+
+                        HStack {
+                            Stepper("\(Self.formatMinutes(newReminderValue))", value: $newReminderValue, in: 1...120)
+
+                            Button("Add") {
+                                if !reminderMinutes.contains(newReminderValue) {
+                                    reminderMinutes.append(newReminderValue)
+                                }
+                            }
+                        }
+
+                        // Quick presets
+                        let available = Self.presetReminders.filter { !reminderMinutes.contains($0) }
+                        if !available.isEmpty {
+                            HStack(spacing: 4) {
+                                ForEach(available.prefix(5), id: \.self) { preset in
+                                    Button(Self.formatMinutes(preset)) {
+                                        reminderMinutes.append(preset)
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .controlSize(.mini)
+                                }
+                            }
+                        }
+                    } else {
+                        Text("Default: 5 min before")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
             }
-
-            // Location
-            VStack(alignment: .leading, spacing: 4) {
-                Label("Location", systemImage: "location")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-
-                TextField("Add location (optional)", text: $location)
-                    .textFieldStyle(.roundedBorder)
-            }
-
-            // Notes
-            VStack(alignment: .leading, spacing: 4) {
-                Label("Notes", systemImage: "text.alignleft")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-
-                TextField("Add notes (optional)", text: $description)
-                    .textFieldStyle(.roundedBorder)
-            }
+            .formStyle(.grouped)
+            .scrollContentBackground(.hidden)
+            .frame(maxHeight: 340)
 
             Divider()
 
@@ -116,7 +147,6 @@ struct AddEventView: View {
                 Button("Cancel") {
                     isPresented = false
                 }
-                .keyboardShortcut(.cancelAction)
 
                 Button("Add Event") {
                     if isTitleValid {
@@ -128,8 +158,9 @@ struct AddEventView: View {
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
         }
-        .padding()
         .frame(width: 340)
     }
 
@@ -141,9 +172,19 @@ struct AddEventView: View {
             endDate: endDate,
             location: location.isEmpty ? nil : location,
             description: description.isEmpty ? nil : description,
-            calendarName: "Local"
+            calendarName: "Local",
+            customReminderMinutes: useCustomReminders ? reminderMinutes.sorted() : nil
         )
         reminderService.addLocalEvent(event)
         isPresented = false
+    }
+
+    private static func formatMinutes(_ minutes: Int) -> String {
+        if minutes >= 60 {
+            let h = minutes / 60
+            let m = minutes % 60
+            return m == 0 ? "\(h) h" : "\(h) h \(m) min"
+        }
+        return "\(minutes) min"
     }
 }

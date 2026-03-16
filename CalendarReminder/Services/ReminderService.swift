@@ -267,6 +267,8 @@ class ReminderService: ObservableObject {
 
     // MARK: - Reminders
 
+    private static let defaultReminderMinutes = [5]
+
     private func scheduleReminders(for events: [CalendarEvent]) {
         let enabledIntervals = settings.intervals.filter { $0.isEnabled }
 
@@ -274,16 +276,26 @@ class ReminderService: ObservableObject {
             cancelReminders(for: event.id)
             var timers: [Timer] = []
 
-            for interval in enabledIntervals {
-                let reminderKey = "\(event.id)_\(interval.minutes)"
+            // Per-event custom reminders take priority, then global settings, then default 5 min
+            let minutesList: [Int]
+            if let custom = event.customReminderMinutes, !custom.isEmpty {
+                minutesList = custom
+            } else if !enabledIntervals.isEmpty {
+                minutesList = enabledIntervals.map { $0.minutes }
+            } else {
+                minutesList = Self.defaultReminderMinutes
+            }
+
+            for minutes in minutesList {
+                let reminderKey = "\(event.id)_\(minutes)"
                 guard !firedReminders.contains(reminderKey) else { continue }
 
-                let fireDate = event.startDate.addingTimeInterval(-TimeInterval(interval.minutes * 60))
+                let fireDate = event.startDate.addingTimeInterval(-TimeInterval(minutes * 60))
                 guard fireDate > Date() else { continue }
 
                 let timer = Timer(fire: fireDate, interval: 0, repeats: false) { [weak self] _ in
                     Task { @MainActor in
-                        self?.fireReminder(for: event, minutesBefore: interval.minutes, isSnooze: false)
+                        self?.fireReminder(for: event, minutesBefore: minutes, isSnooze: false)
                         self?.firedReminders.insert(reminderKey)
                     }
                 }
