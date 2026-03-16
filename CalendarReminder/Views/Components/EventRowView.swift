@@ -3,6 +3,15 @@ import SwiftUI
 struct EventRowView: View {
     let event: CalendarEvent
     let reminderService: ReminderService
+    var onEdit: ((CalendarEvent) -> Void)? = nil
+    var onDelete: ((CalendarEvent) -> Void)? = nil
+    var onTap: ((CalendarEvent) -> Void)? = nil
+
+    @State private var isHovered = false
+
+    private var isLocal: Bool {
+        event.calendarName == "Local"
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -41,6 +50,38 @@ struct EventRowView: View {
             }
 
             Spacer()
+
+            // Hover action buttons (local events only)
+            if isLocal && isHovered {
+                HStack(spacing: 4) {
+                    Button {
+                        onEdit?(event)
+                    } label: {
+                        Image(systemName: "pencil")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Edit")
+
+                    Button {
+                        onDelete?(event)
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.caption)
+                            .foregroundColor(.red.opacity(0.8))
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Delete")
+                }
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onTap?(event)
+        }
+        .onHover { hovering in
+            isHovered = hovering
         }
         .contextMenu {
             Section("Snooze") {

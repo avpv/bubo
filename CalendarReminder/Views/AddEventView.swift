@@ -3,6 +3,7 @@ import SwiftUI
 struct AddEventView: View {
     @ObservedObject var reminderService: ReminderService
     @Binding var isPresented: Bool
+    var editingEvent: CalendarEvent? = nil
 
     @State private var title = ""
     @State private var date = Date()
@@ -15,6 +16,8 @@ struct AddEventView: View {
     @State private var newReminderValue = 10
 
     private static let presetReminders = [1, 2, 3, 5, 10, 15, 20, 30, 45, 60]
+
+    private var isEditing: Bool { editingEvent != nil }
 
     private var isTitleValid: Bool {
         !title.trimmingCharacters(in: .whitespaces).isEmpty
@@ -43,7 +46,7 @@ struct AddEventView: View {
                 .buttonStyle(.borderless)
 
                 OwlIcon(size: 18)
-                Text("New Event")
+                Text(isEditing ? "Edit Event" : "New Event")
                     .font(.headline)
                 Spacer()
             }
@@ -148,9 +151,9 @@ struct AddEventView: View {
                     isPresented = false
                 }
 
-                Button("Add Event") {
+                Button(isEditing ? "Save" : "Add Event") {
                     if isTitleValid {
-                        addEvent()
+                        saveEvent()
                     } else {
                         showValidation = true
                     }
@@ -162,11 +165,24 @@ struct AddEventView: View {
             .padding(.vertical, 8)
         }
         .frame(width: 340)
+        .onAppear {
+            if let event = editingEvent {
+                title = event.title
+                date = event.startDate
+                duration = event.endDate.timeIntervalSince(event.startDate) / 60
+                location = event.location ?? ""
+                description = event.description ?? ""
+                if let custom = event.customReminderMinutes, !custom.isEmpty {
+                    useCustomReminders = true
+                    reminderMinutes = custom
+                }
+            }
+        }
     }
 
-    private func addEvent() {
+    private func saveEvent() {
         let event = CalendarEvent(
-            id: UUID().uuidString,
+            id: editingEvent?.id ?? UUID().uuidString,
             title: title,
             startDate: date,
             endDate: endDate,
@@ -175,7 +191,11 @@ struct AddEventView: View {
             calendarName: "Local",
             customReminderMinutes: useCustomReminders ? reminderMinutes.sorted() : nil
         )
-        reminderService.addLocalEvent(event)
+        if isEditing {
+            reminderService.updateLocalEvent(event)
+        } else {
+            reminderService.addLocalEvent(event)
+        }
         isPresented = false
     }
 
