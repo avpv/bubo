@@ -5,9 +5,11 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>ru</string>
     <key>CFBundleExecutable</key>
-    <string>$(EXECUTABLE_NAME)</string>
+    <string>CalendarReminder</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
-    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <string>com.avpv.CalendarReminder</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
@@ -22,6 +24,8 @@
     <string>13.0</string>
     <key>LSUIElement</key>
     <true/>
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
     <key>NSAppTransportSecurity</key>
     <dict>
         <key>NSAllowsArbitraryLoads</key>
