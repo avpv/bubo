@@ -90,9 +90,12 @@ struct AccountTabView: View {
                 }
             }
         } else {
-            Button("Open authorization in browser") {
+            Button {
                 YandexOAuthService.startAuthFlow()
+            } label: {
+                Label("Open Authorization in Browser", systemImage: "safari")
             }
+            .buttonStyle(.borderedProminent)
 
             Text("After authorization, copy the code and paste it below:")
                 .font(.caption)
@@ -132,9 +135,12 @@ struct AccountTabView: View {
                 }
             }
         } else {
-            Button("Sign in with Google") {
+            Button {
                 GoogleOAuthService.startAuthFlow()
+            } label: {
+                Label("Sign in with Google", systemImage: "safari")
             }
+            .buttonStyle(.borderedProminent)
 
             Text("After authorization, copy the code and paste it below:")
                 .font(.caption)

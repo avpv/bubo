@@ -2,8 +2,9 @@ import SwiftUI
 
 struct AddEventView: View {
     @ObservedObject var reminderService: ReminderService
-    @Binding var isPresented: Bool
     var editingEvent: CalendarEvent? = nil
+    var onDismiss: () -> Void
+    var onSave: (_ isEdit: Bool) -> Void
 
     @State private var title = ""
     @State private var date = Date()
@@ -14,12 +15,7 @@ struct AddEventView: View {
     @State private var useCustomReminders = false
     @State private var reminderMinutes: [Int] = [5]
     @State private var newReminderValue = 10
-    @State private var isTitleHovered = false
-    @State private var isLocationHovered = false
-    @State private var isNotesHovered = false
     @FocusState private var isTitleFocused: Bool
-    @FocusState private var isLocationFocused: Bool
-    @FocusState private var isNotesFocused: Bool
 
     private static let presetReminders = [1, 2, 3, 5, 10, 15, 20, 30, 45, 60]
 
@@ -33,45 +29,20 @@ struct AddEventView: View {
         date.addingTimeInterval(duration * 60)
     }
 
-    private static let timeFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "HH:mm"
-        return f
-    }()
-
     var body: some View {
         VStack(spacing: 0) {
-            // Header
-            HStack {
-                Button {
-                    isPresented = false
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.body)
-                }
-                .buttonStyle(.borderless)
-
-                OwlIcon(size: 18)
-                Text(isEditing ? "Edit Event" : "New Event")
-                    .font(.headline)
-                Spacer()
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-
-            Divider()
+            PopoverHeader(
+                title: isEditing ? "Edit Event" : "New Event",
+                showBack: true,
+                onBack: onDismiss
+            )
 
             // Form
             Form {
                 Section {
                     TextField("Event title", text: $title)
                         .focused($isTitleFocused)
-                        .padding(6)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(isTitleFocused || isTitleHovered ? Color.white : Color.clear)
-                        )
-                        .onHover { isTitleHovered = $0 }
+                        .textFieldStyle(.roundedBorder)
 
                     if showValidation && !isTitleValid {
                         Label("Title is required", systemImage: "exclamationmark.triangle.fill")
@@ -101,29 +72,17 @@ struct AddEventView: View {
                     }
 
                     LabeledContent("Ends at") {
-                        Text(Self.timeFormatter.string(from: endDate))
+                        Text(DS.timeFormatter.string(from: endDate))
                             .foregroundColor(.secondary)
                     }
                 }
 
                 Section("Details") {
                     TextField("Location (optional)", text: $location)
-                        .focused($isLocationFocused)
-                        .padding(6)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(isLocationFocused || isLocationHovered ? Color.white : Color.clear)
-                        )
-                        .onHover { isLocationHovered = $0 }
+                        .textFieldStyle(.roundedBorder)
 
                     TextField("Notes (optional)", text: $description)
-                        .focused($isNotesFocused)
-                        .padding(6)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(isNotesFocused || isNotesHovered ? Color.white : Color.clear)
-                        )
-                        .onHover { isNotesHovered = $0 }
+                        .textFieldStyle(.roundedBorder)
                 }
 
                 Section("Reminders") {
@@ -132,7 +91,7 @@ struct AddEventView: View {
                     if useCustomReminders {
                         ForEach(reminderMinutes.sorted(), id: \.self) { minutes in
                             HStack {
-                                Label("\(Self.formatMinutes(minutes)) before", systemImage: "bell.fill")
+                                Label("\(DS.formatMinutes(minutes)) before", systemImage: "bell.fill")
                                 Spacer()
                                 Button(role: .destructive) {
                                     reminderMinutes.removeAll { $0 == minutes }
@@ -144,7 +103,7 @@ struct AddEventView: View {
                         }
 
                         HStack {
-                            Stepper("\(Self.formatMinutes(newReminderValue))", value: $newReminderValue, in: 1...120)
+                            Stepper("\(DS.formatMinutes(newReminderValue))", value: $newReminderValue, in: 1...120)
 
                             Button("Add") {
                                 if !reminderMinutes.contains(newReminderValue) {
@@ -156,9 +115,9 @@ struct AddEventView: View {
                         // Quick presets
                         let available = Self.presetReminders.filter { !reminderMinutes.contains($0) }
                         if !available.isEmpty {
-                            HStack(spacing: 4) {
+                            HStack(spacing: DS.Spacing.xs) {
                                 ForEach(available.prefix(5), id: \.self) { preset in
-                                    Button(Self.formatMinutes(preset)) {
+                                    Button(DS.formatMinutes(preset)) {
                                         reminderMinutes.append(preset)
                                     }
                                     .buttonStyle(.bordered)
@@ -175,7 +134,7 @@ struct AddEventView: View {
             }
             .formStyle(.grouped)
             .scrollContentBackground(.hidden)
-            .frame(maxHeight: 340)
+            .frame(maxHeight: DS.Popover.formMaxHeight)
 
             Divider()
 
@@ -183,8 +142,9 @@ struct AddEventView: View {
             HStack {
                 Spacer()
                 Button("Cancel") {
-                    isPresented = false
+                    onDismiss()
                 }
+                .keyboardShortcut(.cancelAction)
 
                 Button(isEditing ? "Save" : "Add Event") {
                     if isTitleValid {
@@ -196,10 +156,11 @@ struct AddEventView: View {
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.vertical, DS.Spacing.md)
+            .background(.bar)
         }
-        .frame(width: 340)
+        .frame(width: DS.Popover.width)
         .onAppear {
             if let event = editingEvent {
                 title = event.title
@@ -211,6 +172,9 @@ struct AddEventView: View {
                     useCustomReminders = true
                     reminderMinutes = custom
                 }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                isTitleFocused = true
             }
         }
     }
@@ -231,15 +195,6 @@ struct AddEventView: View {
         } else {
             reminderService.addLocalEvent(event)
         }
-        isPresented = false
-    }
-
-    private static func formatMinutes(_ minutes: Int) -> String {
-        if minutes >= 60 {
-            let h = minutes / 60
-            let m = minutes % 60
-            return m == 0 ? "\(h) h" : "\(h) h \(m) min"
-        }
-        return "\(minutes) min"
+        onSave(isEditing)
     }
 }

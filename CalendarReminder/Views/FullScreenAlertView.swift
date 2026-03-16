@@ -8,6 +8,7 @@ struct FullScreenAlertView: View {
 
     @State private var secondsRemaining: Int = 0
     @State private var countdownTimer: Timer?
+    @State private var isVisible = false
 
     var body: some View {
         ZStack {
@@ -19,13 +20,10 @@ struct FullScreenAlertView: View {
             Color.black.opacity(0.6)
                 .ignoresSafeArea()
 
-            VStack(spacing: 30) {
+            VStack(spacing: DS.Spacing.xxxl) {
                 Spacer()
 
-                Image(systemName: "bell.fill")
-                    .font(.system(size: 60))
-                    .foregroundColor(.yellow)
-                    .shadow(color: .yellow.opacity(0.5), radius: 20)
+                bellIcon
 
                 Text(headerText)
                     .font(.system(size: 48, weight: .bold))
@@ -34,8 +32,10 @@ struct FullScreenAlertView: View {
                 // Live countdown timer
                 Text(countdownText)
                     .font(.system(size: 72, weight: .heavy, design: .monospaced))
-                    .foregroundColor(countdownColor)
-                    .shadow(color: countdownColor.opacity(0.5), radius: 10)
+                    .foregroundColor(DS.countdownColor(secondsRemaining: secondsRemaining))
+                    .shadow(color: DS.countdownColor(secondsRemaining: secondsRemaining).opacity(0.5), radius: 10)
+                    .contentTransition(.numericText())
+                    .animation(.linear(duration: 0.3), value: secondsRemaining)
 
                 Text(event.title)
                     .font(.system(size: 36, weight: .semibold))
@@ -60,9 +60,9 @@ struct FullScreenAlertView: View {
                 // Action buttons
                 HStack(spacing: 20) {
                     Menu {
-                        Button("In 5 minutes") { cleanup(); onSnooze(5) }
-                        Button("In 10 minutes") { cleanup(); onSnooze(10) }
-                        Button("In 15 minutes") { cleanup(); onSnooze(15) }
+                        ForEach(DS.snoozeOptions) { option in
+                            Button("In \(option.label)") { cleanup(); onSnooze(option.minutes) }
+                        }
                     } label: {
                         Text("Snooze")
                             .font(.title3)
@@ -88,18 +88,47 @@ struct FullScreenAlertView: View {
                     }
                     .buttonStyle(.plain)
                     .keyboardShortcut(.return, modifiers: [])
+                    .accessibilityLabel("Dismiss alert")
+                    .accessibilityHint("Press Enter or click to dismiss")
                 }
 
-                Text("Press Enter or click a button to dismiss")
+                // Hidden Escape key handler
+                Button("") { cleanup(); onDismiss() }
+                    .keyboardShortcut(.escape, modifiers: [])
+                    .frame(width: 0, height: 0)
+                    .opacity(0)
+
+                Text("Press Enter or Esc to dismiss")
                     .font(.caption)
                     .foregroundColor(.white.opacity(0.4))
+                    .accessibilityHidden(true)
 
                 Spacer().frame(height: 60)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onAppear { startCountdown() }
+        .opacity(isVisible ? 1 : 0)
+        .scaleEffect(isVisible ? 1 : 0.95)
+        .onAppear {
+            startCountdown()
+            withAnimation(DS.Animation.entrance) {
+                isVisible = true
+            }
+        }
         .onDisappear { cleanup() }
+    }
+
+    @ViewBuilder
+    private var bellIcon: some View {
+        let base = Image(systemName: "bell.fill")
+            .font(.system(size: 60))
+            .foregroundColor(.yellow)
+            .shadow(color: .yellow.opacity(0.5), radius: 20)
+        if #available(macOS 14.0, *) {
+            base.symbolEffect(.pulse, options: .repeating)
+        } else {
+            base
+        }
     }
 
     // MARK: - Countdown
@@ -133,13 +162,6 @@ struct FullScreenAlertView: View {
             return String(format: "%d:%02d:%02d", hours, mins, seconds)
         }
         return String(format: "%02d:%02d", minutes, seconds)
-    }
-
-    private var countdownColor: Color {
-        if secondsRemaining <= 0 { return .red }
-        if secondsRemaining <= 120 { return .red }
-        if secondsRemaining <= 300 { return .orange }
-        return .white
     }
 
     private var headerText: String {

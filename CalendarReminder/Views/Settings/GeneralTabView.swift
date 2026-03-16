@@ -22,7 +22,7 @@ struct GeneralTabView: View {
                 }
             }
 
-            Section {
+            Section("Startup") {
                 Toggle("Launch at login", isOn: $settings.launchAtLogin)
                     .onChange(of: settings.launchAtLogin) { _ in save() }
             }
@@ -46,6 +46,16 @@ struct GeneralTabView: View {
                     Label("Using cached data", systemImage: "internaldrive")
                         .foregroundColor(.orange)
                         .font(.caption)
+                }
+            }
+
+            Section {
+                HStack {
+                    Spacer()
+                    Text("Reminder \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0")")
+                        .font(.caption2)
+                        .foregroundColor(.tertiary)
+                    Spacer()
                 }
             }
         }

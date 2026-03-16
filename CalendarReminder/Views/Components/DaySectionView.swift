@@ -6,12 +6,29 @@ struct DaySectionHeader: View {
     let count: Int
 
     var body: some View {
-        HStack {
+        HStack(spacing: DS.Spacing.sm) {
             Text(dayTitle)
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundColor(isToday ? .accentColor : .primary)
+            if isToday {
+                Circle()
+                    .fill(.accentColor)
+                    .frame(width: DS.Size.todayDotSize, height: DS.Size.todayDotSize)
+            }
             Spacer()
             Text("\(count)")
+                .font(.caption)
                 .foregroundColor(.secondary)
+                .padding(.horizontal, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xxs)
+                .background(.secondary.opacity(0.12))
+                .clipShape(Capsule())
         }
+    }
+
+    private var isToday: Bool {
+        Calendar.current.isDateInToday(date)
     }
 
     private var dayTitle: String {
@@ -21,9 +38,7 @@ struct DaySectionHeader: View {
         } else if calendar.isDateInTomorrow(date) {
             return "Tomorrow"
         } else {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "EEEE, MMM d"
-            return formatter.string(from: date)
+            return DS.daySectionFormatter.string(from: date)
         }
     }
 }
