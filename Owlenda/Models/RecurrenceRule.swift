@@ -249,8 +249,7 @@ enum RecurrenceFrequency: String, Codable, Hashable, CaseIterable {
     case yearly
 
     /// Frequencies appropriate for the calendar event UI picker.
-    /// Minutely is used internally for Pomodoro but not shown as a raw frequency.
-    static let userVisible: [RecurrenceFrequency] = [.daily, .weekly, .monthly, .yearly]
+    static let userVisible: [RecurrenceFrequency] = [.minutely, .daily, .weekly, .monthly, .yearly]
 
     var label: String {
         switch self {
