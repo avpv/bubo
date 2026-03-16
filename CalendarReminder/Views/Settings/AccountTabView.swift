@@ -7,71 +7,90 @@ struct AccountTabView: View {
 
     var body: some View {
         ScrollView {
-            Form {
-                Section("Yandex Calendar") {
-                    Picker("Authorization", selection: $settings.authMethod) {
-                        Text("App Password").tag(AuthMethod.appPassword)
-                        Text("OAuth 2.0").tag(AuthMethod.oauth)
-                    }
-                    .pickerStyle(.segmented)
-                    .onChange(of: settings.authMethod) { _ in save() }
-
-                    if settings.authMethod == .appPassword {
-                        appPasswordSection
-                    } else {
-                        oauthSection
-                    }
-
-                    HStack {
-                        Button("Test Yandex") {
-                            viewModel.checkConnection(settings: settings, reminderService: reminderService)
+            VStack(alignment: .leading, spacing: 20) {
+                // Yandex Calendar
+                SettingsCard(icon: "calendar.circle.fill", title: "Yandex Calendar", description: "Connect your Yandex account") {
+                    VStack(spacing: 10) {
+                        Picker("Authorization", selection: $settings.authMethod) {
+                            Text("App Password").tag(AuthMethod.appPassword)
+                            Text("OAuth 2.0").tag(AuthMethod.oauth)
                         }
-                        Spacer()
-                        connectionStatusView
+                        .pickerStyle(.segmented)
+                        .onChange(of: settings.authMethod) { _ in save() }
+
+                        if settings.authMethod == .appPassword {
+                            appPasswordSection
+                        } else {
+                            oauthSection
+                        }
+
+                        Divider()
+
+                        HStack {
+                            Button {
+                                viewModel.checkConnection(settings: settings, reminderService: reminderService)
+                            } label: {
+                                Label("Test Connection", systemImage: "antenna.radiowaves.left.and.right")
+                                    .font(.system(.caption, design: .rounded).weight(.medium))
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+
+                            Spacer()
+                            connectionStatusView
+                        }
                     }
                 }
 
-                Divider()
-
-                Section("Google Calendar") {
-                    Toggle("Enable Google Calendar", isOn: $settings.googleEnabled)
+                // Google Calendar
+                SettingsCard(icon: "g.circle.fill", title: "Google Calendar", description: "Connect your Google account") {
+                    VStack(spacing: 10) {
+                        Toggle(isOn: $settings.googleEnabled) {
+                            Text("Enable Google Calendar")
+                                .font(.system(.subheadline, design: .rounded))
+                        }
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
                         .onChange(of: settings.googleEnabled) { _ in save() }
 
-                    if settings.googleEnabled {
-                        googleAccountSection
+                        if settings.googleEnabled {
+                            googleAccountSection
+                        }
                     }
                 }
             }
-            .padding()
+            .padding(20)
         }
     }
 
     // MARK: - Yandex App Password
 
     private var appPasswordSection: some View {
-        Section("Yandex Account") {
+        VStack(alignment: .leading, spacing: 8) {
             TextField("Login", text: Binding(
                 get: { settings.yandexLogin },
                 set: { settings.yandexLogin = $0 }
             ))
             .textFieldStyle(.roundedBorder)
+            .font(.system(.subheadline, design: .rounded))
 
             SecureField("App Password", text: Binding(
                 get: { settings.yandexAppPassword },
                 set: { settings.yandexAppPassword = $0 }
             ))
             .textFieldStyle(.roundedBorder)
+            .font(.system(.subheadline, design: .rounded))
 
             Text("Create an app password: id.yandex.ru \u{2192} Security \u{2192} App Passwords")
-                .font(.caption)
+                .font(.caption2)
                 .foregroundColor(.secondary)
 
             HStack(spacing: 4) {
                 Image(systemName: "lock.shield.fill")
                     .foregroundColor(.green)
-                    .font(.caption)
+                    .font(.caption2)
                 Text("Password is stored in Keychain")
-                    .font(.caption)
+                    .font(.caption2)
                     .foregroundColor(.secondary)
             }
         }
@@ -80,63 +99,84 @@ struct AccountTabView: View {
     // MARK: - Yandex OAuth
 
     private var oauthSection: some View {
-        Section("OAuth 2.0") {
+        VStack(alignment: .leading, spacing: 8) {
             TextField("Yandex Login", text: Binding(
                 get: { settings.yandexLogin },
                 set: { settings.yandexLogin = $0 }
             ))
             .textFieldStyle(.roundedBorder)
+            .font(.system(.subheadline, design: .rounded))
 
             if YandexOAuthService.isAuthenticated {
-                HStack {
-                    Image(systemName: "checkmark.circle.fill")
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.seal.fill")
                         .foregroundColor(.green)
                     Text("Authenticated via OAuth")
+                        .font(.system(.subheadline, design: .rounded))
                     Spacer()
                     Button("Log Out") {
                         YandexOAuthService.logout()
                         viewModel.oauthStatus = .idle
                     }
+                    .font(.system(.caption, design: .rounded))
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
                 }
+                .padding(8)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.green.opacity(0.06))
+                )
             } else {
-                VStack(alignment: .leading, spacing: 8) {
-                    Button("Open authorization in browser") {
-                        YandexOAuthService.startAuthFlow()
-                    }
-
-                    Text("After authorization, copy the code and paste it below:")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-
-                    HStack {
-                        TextField("Authorization code", text: $viewModel.oauthCode)
-                            .textFieldStyle(.roundedBorder)
-
-                        Button("Confirm") {
-                            viewModel.exchangeOAuthCode()
-                        }
-                        .disabled(viewModel.oauthCode.isEmpty)
-                    }
-
-                    oauthStatusView(viewModel.oauthStatus)
+                Button {
+                    YandexOAuthService.startAuthFlow()
+                } label: {
+                    Label("Open authorization in browser", systemImage: "safari")
+                        .font(.system(.subheadline, design: .rounded))
                 }
+                .buttonStyle(.bordered)
+
+                Text("After authorization, copy the code and paste it below:")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+
+                HStack(spacing: 8) {
+                    TextField("Authorization code", text: $viewModel.oauthCode)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(.subheadline, design: .rounded))
+
+                    Button("Confirm") {
+                        viewModel.exchangeOAuthCode()
+                    }
+                    .disabled(viewModel.oauthCode.isEmpty)
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                }
+
+                oauthStatusView(viewModel.oauthStatus)
             }
 
-            Text("OAuth is more secure: the app does not store your password")
-                .font(.caption)
-                .foregroundColor(.secondary)
+            HStack(spacing: 4) {
+                Image(systemName: "shield.checkered")
+                    .font(.caption2)
+                    .foregroundColor(.accentColor)
+                Text("OAuth is more secure: the app does not store your password")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
         }
     }
 
     // MARK: - Google Account
 
     private var googleAccountSection: some View {
-        Group {
+        VStack(alignment: .leading, spacing: 8) {
             if GoogleOAuthService.isAuthenticated {
-                HStack {
-                    Image(systemName: "checkmark.circle.fill")
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.seal.fill")
                         .foregroundColor(.green)
                     Text("Google account connected")
+                        .font(.system(.subheadline, design: .rounded))
                     Spacer()
                     Button("Disconnect") {
                         GoogleOAuthService.logout()
@@ -144,33 +184,46 @@ struct AccountTabView: View {
                         viewModel.googleOAuthStatus = .idle
                         save()
                     }
+                    .font(.system(.caption, design: .rounded))
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
                 }
+                .padding(8)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.green.opacity(0.06))
+                )
             } else {
-                VStack(alignment: .leading, spacing: 8) {
-                    Button("Sign in with Google") {
-                        GoogleOAuthService.startAuthFlow()
-                    }
-
-                    Text("After authorization, copy the code and paste it below:")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-
-                    HStack {
-                        TextField("Authorization code", text: $viewModel.googleOAuthCode)
-                            .textFieldStyle(.roundedBorder)
-
-                        Button("Confirm") {
-                            viewModel.exchangeGoogleOAuthCode(settings: settings, reminderService: reminderService)
-                        }
-                        .disabled(viewModel.googleOAuthCode.isEmpty)
-                    }
-
-                    oauthStatusView(viewModel.googleOAuthStatus)
+                Button {
+                    GoogleOAuthService.startAuthFlow()
+                } label: {
+                    Label("Sign in with Google", systemImage: "safari")
+                        .font(.system(.subheadline, design: .rounded))
                 }
+                .buttonStyle(.bordered)
+
+                Text("After authorization, copy the code and paste it below:")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+
+                HStack(spacing: 8) {
+                    TextField("Authorization code", text: $viewModel.googleOAuthCode)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(.subheadline, design: .rounded))
+
+                    Button("Confirm") {
+                        viewModel.exchangeGoogleOAuthCode(settings: settings, reminderService: reminderService)
+                    }
+                    .disabled(viewModel.googleOAuthCode.isEmpty)
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                }
+
+                oauthStatusView(viewModel.googleOAuthStatus)
             }
 
             Text("Requires a Google Cloud Console project with Calendar API enabled")
-                .font(.caption)
+                .font(.caption2)
                 .foregroundColor(.secondary)
         }
     }
@@ -183,14 +236,16 @@ struct AccountTabView: View {
         case .unknown:
             EmptyView()
         case .checking:
-            ProgressView().scaleEffect(0.7)
+            ProgressView()
+                .scaleEffect(0.6)
         case .success:
             Label("Connected", systemImage: "checkmark.circle.fill")
+                .font(.system(.caption, design: .rounded).weight(.medium))
                 .foregroundColor(.green)
         case .failed(let error):
             Label(error, systemImage: "xmark.circle.fill")
+                .font(.caption2)
                 .foregroundColor(.red)
-                .font(.caption)
         }
     }
 
@@ -198,14 +253,17 @@ struct AccountTabView: View {
     private func oauthStatusView(_ status: SettingsViewModel.OAuthStatus) -> some View {
         switch status {
         case .idle: EmptyView()
-        case .exchanging: ProgressView().scaleEffect(0.7)
+        case .exchanging:
+            ProgressView()
+                .scaleEffect(0.6)
         case .success:
             Label("Authorization successful!", systemImage: "checkmark.circle.fill")
+                .font(.system(.caption, design: .rounded).weight(.medium))
                 .foregroundColor(.green)
         case .failed(let error):
             Label(error, systemImage: "xmark.circle.fill")
+                .font(.caption2)
                 .foregroundColor(.red)
-                .font(.caption)
         }
     }
 

@@ -8,17 +8,17 @@ struct SettingsView: View {
     var body: some View {
         TabView {
             AccountTabView(settings: settings, reminderService: reminderService, viewModel: viewModel)
-                .tabItem { Label("Account", systemImage: "person.circle") }
+                .tabItem { Label("Account", systemImage: "person.circle.fill") }
 
             CalendarsTabView(settings: settings, reminderService: reminderService, viewModel: viewModel)
                 .tabItem { Label("Calendars", systemImage: "calendar") }
 
             RemindersTabView(settings: settings, reminderService: reminderService, viewModel: viewModel)
-                .tabItem { Label("Reminders", systemImage: "bell") }
+                .tabItem { Label("Reminders", systemImage: "bell.badge") }
 
             GeneralTabView(settings: settings, reminderService: reminderService, viewModel: viewModel)
-                .tabItem { Label("General", systemImage: "gear") }
+                .tabItem { Label("General", systemImage: "gearshape") }
         }
-        .frame(width: 480, height: 460)
+        .frame(width: 500, height: 480)
     }
 }
