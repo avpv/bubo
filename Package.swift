@@ -10,7 +10,7 @@ let package = Package(
         .executableTarget(
             name: "Owlenda",
             path: "Owlenda",
-            exclude: ["Info.plist"],
+            exclude: ["Info.plist", "Resources/owl.svg"],
             resources: [
                 .copy("Resources/AppIcon.icns"),
                 .copy("Resources/MenuBarIcon.png"),

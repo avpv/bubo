@@ -10,10 +10,10 @@ struct DaySectionHeader: View {
             Text(dayTitle)
                 .font(.subheadline)
                 .fontWeight(.semibold)
-                .foregroundColor(isToday ? .accentColor : .primary)
+                .foregroundColor(isToday ? Color.accentColor : .primary)
             if isToday {
                 Circle()
-                    .fill(.accentColor)
+                    .fill(Color.accentColor)
                     .frame(width: DS.Size.todayDotSize, height: DS.Size.todayDotSize)
             }
             Spacer()

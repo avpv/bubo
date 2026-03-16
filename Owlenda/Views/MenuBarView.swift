@@ -166,7 +166,7 @@ struct MenuBarView: View {
             if let lastSync = reminderService.lastSyncDate {
                 Text(lastSync, style: .relative)
                     .font(.caption2)
-                    .foregroundColor(.tertiary)
+                    .foregroundStyle(.tertiary)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.top, DS.Spacing.xs)
                     .padding(.bottom, -DS.Spacing.xs)
@@ -217,7 +217,7 @@ struct MenuBarView: View {
                 .foregroundColor(.secondary)
             Text("Your schedule is clear")
                 .font(.caption)
-                .foregroundColor(.tertiary)
+                .foregroundStyle(.tertiary)
             Button {
                 navigation = .addEvent()
             } label: {

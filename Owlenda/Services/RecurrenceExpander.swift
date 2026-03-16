@@ -190,7 +190,7 @@ enum RecurrenceExpander {
         switch mode {
         case .dayOfMonth(let targetDay):
             // Advance by interval months, then set day (clamping to month length)
-            guard var next = calendar.date(byAdding: .month, value: interval, to: date) else { return date }
+            guard let next = calendar.date(byAdding: .month, value: interval, to: date) else { return date }
             var comps = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: next)
             let daysInMonth = calendar.range(of: .day, in: .month, for: next)?.count ?? 31
             comps.day = min(targetDay, daysInMonth)

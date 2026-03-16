@@ -31,6 +31,15 @@ struct RecurrenceRule: Codable, Hashable {
         case intervalMinutes, repeatCount
     }
 
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(frequency, forKey: .frequency)
+        try container.encode(interval, forKey: .interval)
+        try container.encode(end, forKey: .end)
+        try container.encode(weekdays, forKey: .weekdays)
+        try container.encodeIfPresent(monthlyMode, forKey: .monthlyMode)
+    }
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
