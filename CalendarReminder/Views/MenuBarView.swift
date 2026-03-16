@@ -109,10 +109,19 @@ struct MenuBarView: View {
 
                 Spacer()
 
-                SettingsLink {
-                    Label("Settings", systemImage: "gear")
+                if #available(macOS 14.0, *) {
+                    SettingsLink {
+                        Label("Settings", systemImage: "gear")
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Button(action: {
+                        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                    }) {
+                        Label("Settings", systemImage: "gear")
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
             .padding(.horizontal)
 
