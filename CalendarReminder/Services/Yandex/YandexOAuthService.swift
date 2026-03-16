@@ -134,6 +134,8 @@ actor YandexOAuthService {
         KeychainService.delete(.oauthAccessToken)
         KeychainService.delete(.oauthRefreshToken)
         KeychainService.delete(.oauthTokenExpiry)
+        KeychainService.delete(.yandexLogin)
+        KeychainService.delete(.yandexAppPassword)
     }
 }
 

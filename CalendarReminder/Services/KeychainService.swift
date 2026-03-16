@@ -70,7 +70,7 @@ enum KeychainService {
     }
 
     static func deleteAll() {
-        for key in [Key.yandexLogin, .yandexAppPassword, .oauthAccessToken, .oauthRefreshToken, .oauthTokenExpiry] {
+        for key in [Key.yandexLogin, .yandexAppPassword, .oauthAccessToken, .oauthRefreshToken, .oauthTokenExpiry, .googleAccessToken, .googleRefreshToken, .googleTokenExpiry] {
             delete(key)
         }
     }

@@ -75,6 +75,13 @@ struct ICalParser {
                     if baseName == "DTSTART" || baseName == "DTEND" {
                         properties[key] = value
                         properties[baseName] = trimmed // full line for timezone extraction
+                    } else if baseName == "EXDATE" {
+                        // Accumulate multiple EXDATE lines (RFC 5545 allows repeated properties)
+                        if let existing = properties["EXDATE"] {
+                            properties["EXDATE"] = existing + "," + value
+                        } else {
+                            properties["EXDATE"] = value
+                        }
                     } else {
                         properties[baseName] = value
                     }
@@ -348,8 +355,6 @@ struct ICalParser {
         _ props: [String: String],
         vtimezones: [String: TimeZone]
     ) -> Set<Date> {
-        // EXDATE can appear multiple times; we stored only the last one
-        // In a full implementation, we'd collect all EXDATE properties
         guard let exdateStr = props["EXDATE"] else { return [] }
 
         var dates = Set<Date>()

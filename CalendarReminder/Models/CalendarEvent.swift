@@ -23,14 +23,12 @@ struct CalendarEvent: Identifiable, Codable, Hashable {
 
     var formattedTime: String {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "ru_RU")
         formatter.dateFormat = "HH:mm"
         return formatter.string(from: startDate)
     }
 
     var formattedDate: String {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "ru_RU")
         formatter.dateFormat = "d MMMM, EEEE"
         return formatter.string(from: startDate)
     }

@@ -177,6 +177,14 @@ class ReminderService: ObservableObject {
             self.isSyncing = false
             self.syncError = errors.isEmpty ? nil : errors.joined(separator: "\n")
             self.isUsingCache = false
+
+            // Clean up firedReminders for events no longer in the window
+            let currentEventIds = Set(allEvents.map { $0.id })
+            self.firedReminders = self.firedReminders.filter { key in
+                let eventId = key.components(separatedBy: "_").dropLast().joined(separator: "_")
+                return currentEventIds.contains(eventId)
+            }
+
             self.scheduleReminders(for: allEvents)
 
             await eventCache.save(events: allEvents)

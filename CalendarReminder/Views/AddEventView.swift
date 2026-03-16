@@ -50,7 +50,7 @@ struct AddEventView: View {
                     addEvent()
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(title.isEmpty)
+                .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         }
         .padding()
