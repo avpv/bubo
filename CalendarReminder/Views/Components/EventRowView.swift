@@ -5,6 +5,9 @@ struct EventRowView: View {
     let reminderService: ReminderService
     var onEdit: ((CalendarEvent) -> Void)? = nil
     var onDelete: ((CalendarEvent) -> Void)? = nil
+    var onTap: ((CalendarEvent) -> Void)? = nil
+
+    @State private var isHovered = false
 
     private var isLocal: Bool {
         event.calendarName == "Local"
@@ -47,24 +50,40 @@ struct EventRowView: View {
             }
 
             Spacer()
+
+            // Hover action buttons (local events only)
+            if isLocal && isHovered {
+                HStack(spacing: 4) {
+                    Button {
+                        onEdit?(event)
+                    } label: {
+                        Image(systemName: "pencil")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Edit")
+
+                    Button {
+                        onDelete?(event)
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.caption)
+                            .foregroundColor(.red.opacity(0.8))
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Delete")
+                }
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onTap?(event)
+        }
+        .onHover { hovering in
+            isHovered = hovering
         }
         .contextMenu {
-            if isLocal {
-                Button {
-                    onEdit?(event)
-                } label: {
-                    Label("Edit", systemImage: "pencil")
-                }
-
-                Button(role: .destructive) {
-                    onDelete?(event)
-                } label: {
-                    Label("Delete", systemImage: "trash")
-                }
-
-                Divider()
-            }
-
             Section("Snooze") {
                 Button("5 minutes") {
                     reminderService.snoozeReminder(for: event, minutes: 5)

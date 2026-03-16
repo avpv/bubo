@@ -7,6 +7,8 @@ struct MenuBarView: View {
 
     @State private var showingAddEvent = false
     @State private var editingEvent: CalendarEvent? = nil
+    @State private var showingDetail = false
+    @State private var detailEvent: CalendarEvent? = nil
     @State private var hasStartedSync = false
 
     var body: some View {
@@ -16,6 +18,20 @@ struct MenuBarView: View {
                     reminderService: reminderService,
                     isPresented: $showingAddEvent,
                     editingEvent: editingEvent
+                )
+            } else if showingDetail, let event = detailEvent {
+                EventDetailView(
+                    event: event,
+                    isPresented: $showingDetail,
+                    onEdit: { event in
+                        showingDetail = false
+                        editingEvent = event
+                        showingAddEvent = true
+                    },
+                    onDelete: { event in
+                        reminderService.removeLocalEvent(id: event.id)
+                        showingDetail = false
+                    }
                 )
             } else {
                 mainContent
@@ -113,6 +129,10 @@ struct MenuBarView: View {
                                     },
                                     onDelete: { event in
                                         reminderService.removeLocalEvent(id: event.id)
+                                    },
+                                    onTap: { event in
+                                        detailEvent = event
+                                        showingDetail = true
                                     }
                                 )
                             }
