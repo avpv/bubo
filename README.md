@@ -22,30 +22,34 @@ A native macOS menu bar app for meeting reminders with full-screen notifications
 
 ## Installation
 
-### Option A: Download ready-made app (easiest)
+### Option A: One command install (easiest)
 
-1. Go to [Releases](https://github.com/avpv/Owlenda/releases/latest)
+```bash
+curl -fsSL https://raw.githubusercontent.com/avpv/owlenda/master/scripts/install.sh | bash
+```
+
+### Option B: Download DMG manually
+
+1. Go to [Releases](https://github.com/avpv/owlenda/releases/latest)
 2. Download **Owlenda.dmg**
 3. Open the DMG and drag **Owlenda** to **Applications**
-4. On first launch macOS Gatekeeper will block the unsigned app. To allow it:
-   - Go to **System Settings → Privacy & Security** → scroll down → click **"Open Anyway"**
-   - Or run in Terminal: `xattr -cr /Applications/Owlenda.app` then launch normally
+4. Run `xattr -cr /Applications/Owlenda.app` and launch
 
-### Option B: Using Xcode
+### Option C: Using Xcode
 
 1. Install **Xcode** from the [Mac App Store](https://apps.apple.com/app/xcode/id497799835)
 2. Launch Xcode once to accept the license and install components
 3. Clone and open the project:
 
 ```bash
-git clone https://github.com/avpv/Owlenda.git
+git clone https://github.com/avpv/owlenda.git
 cd Owlenda
 open -a Xcode Package.swift
 ```
 
 4. Press **Cmd+R** to build and run
 
-### Option C: Using Command Line Tools only (without Xcode)
+### Option D: Using Command Line Tools only (without Xcode)
 
 1. Install Command Line Tools (if not already installed):
 
@@ -56,7 +60,7 @@ xcode-select --install
 2. Clone, build, and run:
 
 ```bash
-git clone https://github.com/avpv/Owlenda.git
+git clone https://github.com/avpv/owlenda.git
 cd Owlenda
 swift build -c release
 .build/release/Owlenda
