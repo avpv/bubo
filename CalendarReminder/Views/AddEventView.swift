@@ -147,7 +147,6 @@ struct AddEventView: View {
                 Button("Cancel") {
                     isPresented = false
                 }
-                .keyboardShortcut(.cancelAction)
 
                 Button("Add Event") {
                     if isTitleValid {
