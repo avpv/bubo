@@ -169,15 +169,14 @@ class ReminderService: ObservableObject {
     }
 
     private func fireReminder(for event: CalendarEvent, minutesBefore: Int) {
-        // System notification
-        sendNotification(for: event, minutesBefore: minutesBefore)
+        if settings.showSystemNotification {
+            sendNotification(for: event, minutesBefore: minutesBefore)
+        }
 
-        // Full-screen alert
         if settings.showFullScreenAlert {
             showFullScreenAlert(for: event, minutesBefore: minutesBefore)
         }
 
-        // Sound
         if settings.playSound {
             NSSound.beep()
         }

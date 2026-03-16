@@ -28,13 +28,14 @@ class ReminderSettings: ObservableObject, Codable {
     @Published var intervals: [ReminderInterval]
     @Published var syncIntervalMinutes: Int
     @Published var showFullScreenAlert: Bool
+    @Published var showSystemNotification: Bool
     @Published var playSound: Bool
     @Published var yandexLogin: String
     @Published var yandexAppPassword: String
     @Published var launchAtLogin: Bool
 
     enum CodingKeys: String, CodingKey {
-        case intervals, syncIntervalMinutes, showFullScreenAlert, playSound
+        case intervals, syncIntervalMinutes, showFullScreenAlert, showSystemNotification, playSound
         case yandexLogin, yandexAppPassword, launchAtLogin
     }
 
@@ -45,6 +46,7 @@ class ReminderSettings: ObservableObject, Codable {
         ]
         self.syncIntervalMinutes = 5
         self.showFullScreenAlert = true
+        self.showSystemNotification = true
         self.playSound = true
         self.yandexLogin = ""
         self.yandexAppPassword = ""
@@ -56,6 +58,7 @@ class ReminderSettings: ObservableObject, Codable {
         intervals = try container.decode([ReminderInterval].self, forKey: .intervals)
         syncIntervalMinutes = try container.decode(Int.self, forKey: .syncIntervalMinutes)
         showFullScreenAlert = try container.decode(Bool.self, forKey: .showFullScreenAlert)
+        showSystemNotification = try container.decodeIfPresent(Bool.self, forKey: .showSystemNotification) ?? true
         playSound = try container.decode(Bool.self, forKey: .playSound)
         yandexLogin = try container.decode(String.self, forKey: .yandexLogin)
         yandexAppPassword = try container.decode(String.self, forKey: .yandexAppPassword)
@@ -67,6 +70,7 @@ class ReminderSettings: ObservableObject, Codable {
         try container.encode(intervals, forKey: .intervals)
         try container.encode(syncIntervalMinutes, forKey: .syncIntervalMinutes)
         try container.encode(showFullScreenAlert, forKey: .showFullScreenAlert)
+        try container.encode(showSystemNotification, forKey: .showSystemNotification)
         try container.encode(playSound, forKey: .playSound)
         try container.encode(yandexLogin, forKey: .yandexLogin)
         try container.encode(yandexAppPassword, forKey: .yandexAppPassword)

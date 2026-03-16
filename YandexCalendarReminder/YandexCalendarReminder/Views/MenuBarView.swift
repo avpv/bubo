@@ -12,7 +12,7 @@ struct MenuBarView: View {
             HStack {
                 Image(systemName: "calendar.badge.clock")
                     .foregroundColor(.blue)
-                Text("Яндекс Календарь")
+                Text("Reminder")
                     .font(.headline)
                 Spacer()
                 if reminderService.isSyncing {

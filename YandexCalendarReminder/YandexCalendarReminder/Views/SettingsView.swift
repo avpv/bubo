@@ -116,9 +116,12 @@ struct SettingsView: View {
                 }
             }
 
-            Section {
+            Section("Типы уведомлений") {
                 Toggle("Полноэкранное уведомление", isOn: $settings.showFullScreenAlert)
                     .onChange(of: settings.showFullScreenAlert) { _ in saveSettings() }
+
+                Toggle("Системное уведомление", isOn: $settings.showSystemNotification)
+                    .onChange(of: settings.showSystemNotification) { _ in saveSettings() }
 
                 Toggle("Звуковое уведомление", isOn: $settings.playSound)
                     .onChange(of: settings.playSound) { _ in saveSettings() }
