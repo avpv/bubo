@@ -9,7 +9,8 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "CalendarReminder",
-            path: "CalendarReminder"
+            path: "CalendarReminder",
+            resources: [.copy("Resources/AppIcon.icns")]
         )
     ]
 )
