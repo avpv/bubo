@@ -36,6 +36,7 @@ struct EventDetailView: View {
                             Image(systemName: "repeat")
                                 .font(.system(size: DS.Size.iconMedium))
                                 .foregroundColor(.secondary)
+                                .accessibilityLabel("Recurring event")
                         }
                     }
 
@@ -101,6 +102,7 @@ struct EventDetailView: View {
                                             .padding(.vertical, DS.Spacing.xxs)
                                             .background(Color.accentColor.opacity(0.15))
                                             .clipShape(RoundedRectangle(cornerRadius: DS.Size.badgeCornerRadius))
+                                            .accessibilityLabel(day.fullName)
                                     }
                                 }
                             }

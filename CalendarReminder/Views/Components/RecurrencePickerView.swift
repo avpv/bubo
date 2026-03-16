@@ -127,6 +127,8 @@ struct RecurrencePickerView: View {
                         .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(day.fullName)
+                .accessibilityAddTraits(selectedWeekdays.contains(day) ? .isSelected : [])
             }
         }
     }

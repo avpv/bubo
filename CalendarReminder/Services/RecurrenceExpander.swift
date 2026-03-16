@@ -29,8 +29,17 @@ enum RecurrenceExpander {
         let maxCount: Int? = { if case .afterCount(let n) = rule.end { return n } else { return nil } }()
         let untilDate: Date? = { if case .untilDate(let d) = rule.end { return d } else { return nil } }()
 
-        // Safety limit to prevent runaway expansion
-        let hardLimit = 500
+        // Safety limit scaled by frequency to prevent runaway expansion
+        let hardLimit: Int = {
+            switch rule.frequency {
+            case .minutely: return 10_080  // 7 days × 24h × 60min
+            case .hourly:   return 168     // 7 days × 24h
+            case .daily:    return 365
+            case .weekly:   return 520     // 10 years
+            case .monthly:  return 120     // 10 years
+            case .yearly:   return 50
+            }
+        }()
         var iterations = 0
 
         while current <= end && iterations < hardLimit {
@@ -46,7 +55,7 @@ enum RecurrenceExpander {
                     ? event.id
                     : "\(event.id)_r\(Int(current.timeIntervalSince1970))"
 
-                let isDateExcluded = !excludedDates.isEmpty && excludedDates.contains { calendar.isDate(current, inSameDayAs: $0) }
+                let isDateExcluded = !excludedDates.isEmpty && excludedDates.contains { abs($0.timeIntervalSince(current)) < 1 }
 
                 if !excludedIds.contains(occurrenceId) && !isDateExcluded {
                     let occurrence = CalendarEvent(
@@ -105,6 +114,9 @@ enum RecurrenceExpander {
         case .minutely:
             return date.addingTimeInterval(TimeInterval(rule.interval * 60))
 
+        case .hourly:
+            return date.addingTimeInterval(TimeInterval(rule.interval * 3600))
+
         case .daily:
             return calendar.date(byAdding: .day, value: rule.interval, to: date) ?? date
 
@@ -112,16 +124,30 @@ enum RecurrenceExpander {
             if rule.weekdays.isEmpty {
                 return calendar.date(byAdding: .weekOfYear, value: rule.interval, to: date) ?? date
             }
-            // Advance day-by-day; skip weeks when crossing a week boundary for interval > 1
-            var next = calendar.date(byAdding: .day, value: 1, to: date) ?? date
-            if rule.interval > 1 {
-                let startWeek = calendar.component(.weekOfYear, from: date)
-                let nextWeek = calendar.component(.weekOfYear, from: next)
-                if nextWeek != startWeek {
-                    next = calendar.date(byAdding: .weekOfYear, value: rule.interval - 1, to: next) ?? next
+            // Find next matching weekday in current week first
+            var candidate = calendar.date(byAdding: .day, value: 1, to: date) ?? date
+            let currentWeekOfYear = calendar.component(.weekOfYear, from: date)
+            for _ in 0..<6 {
+                let candidateWeek = calendar.component(.weekOfYear, from: candidate)
+                if candidateWeek != currentWeekOfYear { break }
+                let wd = calendar.component(.weekday, from: candidate)
+                if rule.weekdays.contains(where: { $0.calendarWeekday == wd }) {
+                    return candidate
+                }
+                candidate = calendar.date(byAdding: .day, value: 1, to: candidate) ?? candidate
+            }
+            // No more matching days this week — jump to first matching day of next interval week
+            let weekStartComps = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: date)
+            let thisWeekStart = calendar.date(from: weekStartComps) ?? date
+            let nextWeekStart = calendar.date(byAdding: .weekOfYear, value: rule.interval, to: thisWeekStart) ?? date
+            for dayOffset in 0..<7 {
+                let day = calendar.date(byAdding: .day, value: dayOffset, to: nextWeekStart) ?? nextWeekStart
+                let wd = calendar.component(.weekday, from: day)
+                if rule.weekdays.contains(where: { $0.calendarWeekday == wd }) {
+                    return day
                 }
             }
-            return next
+            return calendar.date(byAdding: .weekOfYear, value: rule.interval, to: date) ?? date
 
         case .monthly:
             if let mode = rule.monthlyMode {

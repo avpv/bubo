@@ -146,74 +146,18 @@ struct ICalParser {
         return parseICalDate(dateStr, tzId: tzId, vtimezones: vtimezones)
     }
 
+    /// Parse an iCalendar date string. Delegates to shared ICalDateParser.
     static func parseICalDate(
         _ dateStr: String,
         tzId: String? = nil,
         vtimezones: [String: TimeZone] = [:]
     ) -> Date? {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-
-        if dateStr.hasSuffix("Z") {
-            formatter.dateFormat = "yyyyMMdd'T'HHmmss'Z'"
-            formatter.timeZone = TimeZone(identifier: "UTC")
-        } else if dateStr.count == 8 {
-            // All-day event: VALUE=DATE
-            formatter.dateFormat = "yyyyMMdd"
-            formatter.timeZone = resolveTimeZoneForParsing(tzId: tzId, vtimezones: vtimezones)
-        } else {
-            formatter.dateFormat = "yyyyMMdd'T'HHmmss"
-            formatter.timeZone = resolveTimeZoneForParsing(tzId: tzId, vtimezones: vtimezones)
-        }
-
-        return formatter.date(from: dateStr)
+        ICalDateParser.parse(dateStr, tzId: tzId, vtimezones: vtimezones)
     }
 
-    private static func resolveTimeZoneForParsing(
-        tzId: String?,
-        vtimezones: [String: TimeZone]
-    ) -> TimeZone {
-        if let tzId = tzId {
-            return vtimezones[tzId] ?? resolveTimeZone(tzId) ?? .current
-        }
-        return .current
-    }
-
-    /// Resolve timezone identifier, handling common Yandex/Outlook variations
+    /// Resolve timezone identifier. Delegates to shared ICalDateParser.
     static func resolveTimeZone(_ identifier: String) -> TimeZone? {
-        // Direct match
-        if let tz = TimeZone(identifier: identifier) { return tz }
-
-        // Common aliases
-        let aliases: [String: String] = [
-            "Moscow Standard Time": "Europe/Moscow",
-            "Russian Standard Time": "Europe/Moscow",
-            "E. Europe Standard Time": "Europe/Minsk",
-            "FLE Standard Time": "Europe/Kiev",
-            "GTB Standard Time": "Europe/Bucharest",
-            "Ekaterinburg Standard Time": "Asia/Yekaterinburg",
-            "N. Central Asia Standard Time": "Asia/Novosibirsk",
-            "North Asia Standard Time": "Asia/Krasnoyarsk",
-            "North Asia East Standard Time": "Asia/Irkutsk",
-            "Yakutsk Standard Time": "Asia/Yakutsk",
-            "Vladivostok Standard Time": "Asia/Vladivostok",
-            "W. Europe Standard Time": "Europe/Berlin",
-            "Central European Standard Time": "Europe/Warsaw",
-            "Romance Standard Time": "Europe/Paris",
-            "US Eastern Standard Time": "America/New_York",
-            "Pacific Standard Time": "America/Los_Angeles",
-        ]
-
-        if let mapped = aliases[identifier] {
-            return TimeZone(identifier: mapped)
-        }
-
-        // Try removing spaces and common suffixes
-        let cleaned = identifier
-            .replacingOccurrences(of: " Standard Time", with: "")
-            .replacingOccurrences(of: " ", with: "_")
-
-        return TimeZone(identifier: cleaned)
+        ICalDateParser.resolveTimezone(identifier)
     }
 
     // MARK: - EXDATE Handling

@@ -104,6 +104,7 @@ struct RecurrenceRule: Codable, Hashable {
     var expansionWindowDays: Int {
         switch frequency {
         case .minutely: return 7
+        case .hourly:   return 7
         case .daily:    return 7
         case .weekly:   return 60
         case .monthly:  return 365
@@ -125,7 +126,7 @@ struct RecurrenceRule: Codable, Hashable {
         var freq: RecurrenceFrequency?
         var interval = 1
         var end: RecurrenceEnd = .never
-        var weekdays: Set<Weekday> = []
+        var rawByDay: [String] = []
         var monthlyMode: MonthlyMode? = nil
 
         let parts = rruleString.components(separatedBy: ";")
@@ -143,9 +144,9 @@ struct RecurrenceRule: Codable, Hashable {
             case "COUNT":
                 if let count = Int(value) { end = .afterCount(count) }
             case "UNTIL":
-                if let date = ICalParser.parseICalDate(value) { end = .untilDate(date) }
+                if let date = ICalDateParser.parse(value) { end = .untilDate(date) }
             case "BYDAY":
-                weekdays = Set(value.components(separatedBy: ",").compactMap { rruleWeekday(from: $0) })
+                rawByDay = value.components(separatedBy: ",")
             case "BYMONTHDAY":
                 if let day = value.components(separatedBy: ",").first.flatMap({ Int($0) }) {
                     monthlyMode = .dayOfMonth(day)
@@ -157,13 +158,14 @@ struct RecurrenceRule: Codable, Hashable {
 
         guard let frequency = freq else { return nil }
 
-        // Infer monthly mode from BYDAY with ordinal (e.g. "2TU" = 2nd Tuesday)
-        if frequency == .monthly && monthlyMode == nil {
-            for dayStr in rruleString.components(separatedBy: ";")
-                .first(where: { $0.hasPrefix("BYDAY=") })?
-                .dropFirst(6)
-                .components(separatedBy: ",") ?? []
-            {
+        // Interpret BYDAY based on frequency context
+        var weekdays: Set<Weekday> = []
+        if frequency == .weekly {
+            // Weekly: BYDAY=MO,WE,FR → plain weekday set
+            weekdays = Set(rawByDay.compactMap { rruleWeekday(from: $0) })
+        } else if frequency == .monthly && monthlyMode == nil && !rawByDay.isEmpty {
+            // Monthly: BYDAY=2TU → weekday position (ordinal + weekday)
+            for dayStr in rawByDay {
                 let letters = dayStr.filter { $0.isLetter }
                 let digits = dayStr.filter { $0.isNumber || $0 == "-" }
                 if let ordinal = Int(digits), let wd = rruleWeekday(from: letters) {
@@ -171,6 +173,7 @@ struct RecurrenceRule: Codable, Hashable {
                     break
                 }
             }
+            // Don't populate weekdays for monthly — monthlyMode handles it
         }
 
         return RecurrenceRule(
@@ -185,6 +188,7 @@ struct RecurrenceRule: Codable, Hashable {
     private static func rruleFrequency(from value: String) -> RecurrenceFrequency? {
         switch value {
         case "MINUTELY": return .minutely
+        case "HOURLY":   return .hourly
         case "DAILY":    return .daily
         case "WEEKLY":   return .weekly
         case "MONTHLY":  return .monthly
@@ -212,6 +216,7 @@ struct RecurrenceRule: Codable, Hashable {
 
 enum RecurrenceFrequency: String, Codable, Hashable, CaseIterable {
     case minutely
+    case hourly
     case daily
     case weekly
     case monthly
@@ -220,6 +225,7 @@ enum RecurrenceFrequency: String, Codable, Hashable, CaseIterable {
     var label: String {
         switch self {
         case .minutely: return "Minute"
+        case .hourly:   return "Hour"
         case .daily:    return "Day"
         case .weekly:   return "Week"
         case .monthly:  return "Month"
@@ -230,6 +236,7 @@ enum RecurrenceFrequency: String, Codable, Hashable, CaseIterable {
     var singularUnit: String {
         switch self {
         case .minutely: return "minute"
+        case .hourly:   return "hour"
         case .daily:    return "day"
         case .weekly:   return "week"
         case .monthly:  return "month"
@@ -240,6 +247,7 @@ enum RecurrenceFrequency: String, Codable, Hashable, CaseIterable {
     var pluralUnit: String {
         switch self {
         case .minutely: return "minutes"
+        case .hourly:   return "hours"
         case .daily:    return "days"
         case .weekly:   return "weeks"
         case .monthly:  return "months"
@@ -279,6 +287,18 @@ enum Weekday: String, Codable, Hashable, CaseIterable {
         case .friday:    return "Fri"
         case .saturday:  return "Sat"
         case .sunday:    return "Sun"
+        }
+    }
+
+    var fullName: String {
+        switch self {
+        case .monday:    return "Monday"
+        case .tuesday:   return "Tuesday"
+        case .wednesday: return "Wednesday"
+        case .thursday:  return "Thursday"
+        case .friday:    return "Friday"
+        case .saturday:  return "Saturday"
+        case .sunday:    return "Sunday"
         }
     }
 

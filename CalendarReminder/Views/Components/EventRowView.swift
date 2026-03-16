@@ -47,6 +47,7 @@ struct EventRowView: View {
                         Image(systemName: "repeat")
                             .font(.system(size: DS.Size.iconSmall))
                             .foregroundColor(.secondary)
+                            .accessibilityLabel("Recurring")
                     }
                 }
 
@@ -87,6 +88,7 @@ struct EventRowView: View {
                         .menuStyle(.borderlessButton)
                         .fixedSize()
                         .help("Snooze reminder")
+                        .accessibilityLabel("Snooze reminder")
                     }
 
                     if isLocal {
@@ -121,7 +123,7 @@ struct EventRowView: View {
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(event.title), \(event.formattedTimeRange)\(event.location.map { ", \($0)" } ?? "")")
+        .accessibilityLabel("\(event.title)\(event.isRecurring ? ", recurring" : ""), \(event.formattedTimeRange)\(event.location.map { ", \($0)" } ?? "")")
         .accessibilityHint("Click to view details. Right-click to snooze.")
         .accessibilityAddTraits(.isButton)
         .contextMenu {
