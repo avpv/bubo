@@ -197,17 +197,17 @@ enum CalDAVError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .invalidURL: return "Неверный URL"
-        case .invalidResponse: return "Некорректный ответ сервера"
+        case .invalidURL: return "Invalid URL"
+        case .invalidResponse: return "Invalid server response"
         case .httpError(let code):
             switch code {
-            case 401: return "Ошибка авторизации. Проверьте учётные данные"
-            case 403: return "Доступ запрещён"
-            case 404: return "Календарь не найден"
-            case 500...599: return "Ошибка сервера Яндекса (\(code))"
-            default: return "Ошибка HTTP: \(code)"
+            case 401: return "Authorization error. Check your credentials"
+            case 403: return "Access denied"
+            case 404: return "Calendar not found"
+            case 500...599: return "Yandex server error (\(code))"
+            default: return "HTTP error: \(code)"
             }
-        case .parseError: return "Ошибка разбора данных"
+        case .parseError: return "Data parsing error"
         }
     }
 }

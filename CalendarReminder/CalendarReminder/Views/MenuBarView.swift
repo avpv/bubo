@@ -20,13 +20,13 @@ struct MenuBarView: View {
                 if !networkMonitor.isConnected {
                     Image(systemName: "wifi.slash")
                         .foregroundColor(.red)
-                        .help("Нет подключения к интернету")
+                        .help("No internet connection")
                 }
 
                 if settings.isDoNotDisturbActive {
                     Image(systemName: "moon.fill")
                         .foregroundColor(.indigo)
-                        .help("Не беспокоить")
+                        .help("Do Not Disturb")
                 }
 
                 if reminderService.isSyncing {
@@ -43,13 +43,13 @@ struct MenuBarView: View {
             if !networkMonitor.isConnected {
                 StatusBanner(
                     icon: "wifi.slash",
-                    text: "Нет подключения. Показаны кэшированные данные",
+                    text: "No connection. Showing cached data",
                     color: .orange
                 )
             } else if reminderService.isUsingCache {
                 StatusBanner(
                     icon: "arrow.triangle.2.circlepath",
-                    text: "Показаны кэшированные данные",
+                    text: "Showing cached data",
                     color: .yellow
                 )
             }
@@ -59,7 +59,7 @@ struct MenuBarView: View {
             }
 
             if let lastSync = reminderService.lastSyncDate {
-                Text("Обновлено: \(lastSync.formatted(date: .omitted, time: .shortened))")
+                Text("Updated: \(lastSync.formatted(date: .omitted, time: .shortened))")
                     .font(.caption2)
                     .foregroundColor(.secondary)
                     .padding(.horizontal)
@@ -71,7 +71,7 @@ struct MenuBarView: View {
                     Image(systemName: "calendar")
                         .font(.largeTitle)
                         .foregroundColor(.secondary)
-                    Text("Нет предстоящих встреч")
+                    Text("No upcoming meetings")
                         .foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity)
@@ -96,12 +96,12 @@ struct MenuBarView: View {
             // Actions
             HStack(spacing: 12) {
                 Button(action: { showingAddEvent = true }) {
-                    Label("Добавить", systemImage: "plus.circle")
+                    Label("Add", systemImage: "plus.circle")
                 }
                 .buttonStyle(.plain)
 
                 Button(action: { reminderService.syncNow() }) {
-                    Label("Обновить", systemImage: "arrow.clockwise")
+                    Label("Refresh", systemImage: "arrow.clockwise")
                 }
                 .buttonStyle(.plain)
                 .disabled(!networkMonitor.isConnected)
@@ -109,13 +109,13 @@ struct MenuBarView: View {
                 Spacer()
 
                 SettingsLink {
-                    Label("Настройки", systemImage: "gear")
+                    Label("Settings", systemImage: "gear")
                 }
                 .buttonStyle(.plain)
             }
             .padding(.horizontal)
 
-            Button("Выход") {
+            Button("Quit") {
                 NSApplication.shared.terminate(nil)
             }
             .padding(.horizontal)
@@ -175,13 +175,13 @@ struct DaySectionView: View {
     private var dayTitle: String {
         let calendar = Calendar.current
         if calendar.isDateInToday(date) {
-            return "Сегодня"
+            return "Today"
         } else if calendar.isDateInTomorrow(date) {
-            return "Завтра"
+            return "Tomorrow"
         } else {
             let formatter = DateFormatter()
-            formatter.locale = Locale(identifier: "ru_RU")
-            formatter.dateFormat = "d MMMM, EEEE"
+            formatter.locale = Locale(identifier: "en_US")
+            formatter.dateFormat = "MMMM d, EEEE"
             return formatter.string(from: date)
         }
     }
@@ -242,13 +242,13 @@ struct EventRowView: View {
         )
         .padding(.horizontal, 4)
         .contextMenu {
-            Button("Напомнить через 5 мин") {
+            Button("Remind in 5 min") {
                 reminderService.snoozeReminder(for: event, minutes: 5)
             }
-            Button("Напомнить через 10 мин") {
+            Button("Remind in 10 min") {
                 reminderService.snoozeReminder(for: event, minutes: 10)
             }
-            Button("Напомнить через 15 мин") {
+            Button("Remind in 15 min") {
                 reminderService.snoozeReminder(for: event, minutes: 15)
             }
         }
@@ -263,11 +263,11 @@ struct EventRowView: View {
 
     private var timeUntilText: String {
         let minutes = event.minutesUntilStart
-        if minutes < 1 { return "Сейчас!" }
-        if minutes < 60 { return "через \(minutes) мин" }
+        if minutes < 1 { return "Now!" }
+        if minutes < 60 { return "in \(minutes) min" }
         let hours = minutes / 60
         let mins = minutes % 60
-        if mins == 0 { return "через \(hours) ч" }
-        return "через \(hours) ч \(mins) мин"
+        if mins == 0 { return "in \(hours) h" }
+        return "in \(hours) h \(mins) min"
     }
 }

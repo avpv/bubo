@@ -12,41 +12,41 @@ struct AddEventView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Новое событие")
+            Text("New Event")
                 .font(.headline)
 
-            TextField("Название встречи", text: $title)
+            TextField("Meeting title", text: $title)
                 .textFieldStyle(.roundedBorder)
 
-            DatePicker("Начало", selection: $date, displayedComponents: [.date, .hourAndMinute])
+            DatePicker("Start", selection: $date, displayedComponents: [.date, .hourAndMinute])
 
             HStack {
-                Text("Длительность")
+                Text("Duration")
                 Picker("", selection: $duration) {
-                    Text("15 мин").tag(15.0)
-                    Text("30 мин").tag(30.0)
-                    Text("45 мин").tag(45.0)
-                    Text("1 час").tag(60.0)
-                    Text("1.5 часа").tag(90.0)
-                    Text("2 часа").tag(120.0)
+                    Text("15 min").tag(15.0)
+                    Text("30 min").tag(30.0)
+                    Text("45 min").tag(45.0)
+                    Text("1 hour").tag(60.0)
+                    Text("1.5 hours").tag(90.0)
+                    Text("2 hours").tag(120.0)
                 }
                 .labelsHidden()
             }
 
-            TextField("Место (необязательно)", text: $location)
+            TextField("Location (optional)", text: $location)
                 .textFieldStyle(.roundedBorder)
 
-            TextField("Описание (необязательно)", text: $description)
+            TextField("Description (optional)", text: $description)
                 .textFieldStyle(.roundedBorder)
 
             HStack {
                 Spacer()
-                Button("Отмена") {
+                Button("Cancel") {
                     isPresented = false
                 }
                 .keyboardShortcut(.cancelAction)
 
-                Button("Добавить") {
+                Button("Add") {
                     addEvent()
                 }
                 .keyboardShortcut(.defaultAction)
@@ -65,7 +65,7 @@ struct AddEventView: View {
             endDate: date.addingTimeInterval(duration * 60),
             location: location.isEmpty ? nil : location,
             description: description.isEmpty ? nil : description,
-            calendarName: "Локальное"
+            calendarName: "Local"
         )
         reminderService.addLocalEvent(event)
         isPresented = false

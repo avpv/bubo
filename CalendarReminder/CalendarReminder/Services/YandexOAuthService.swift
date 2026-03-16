@@ -147,10 +147,10 @@ enum OAuthError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .tokenExchangeFailed: return "Не удалось получить токен"
-        case .refreshFailed: return "Не удалось обновить токен"
-        case .noRefreshToken: return "Отсутствует refresh token"
-        case .notAuthenticated: return "Необходима авторизация"
+        case .tokenExchangeFailed: return "Failed to obtain token"
+        case .refreshFailed: return "Failed to refresh token"
+        case .noRefreshToken: return "Missing refresh token"
+        case .notAuthenticated: return "Authorization required"
         }
     }
 }

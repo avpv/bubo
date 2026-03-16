@@ -16,11 +16,11 @@ struct ReminderInterval: Identifiable, Codable, Hashable {
             let hours = minutes / 60
             let remainingMinutes = minutes % 60
             if remainingMinutes == 0 {
-                return "\(hours) ч"
+                return "\(hours) h"
             }
-            return "\(hours) ч \(remainingMinutes) мин"
+            return "\(hours) h \(remainingMinutes) min"
         }
-        return "\(minutes) мин"
+        return "\(minutes) min"
     }
 }
 

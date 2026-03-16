@@ -183,14 +183,14 @@ enum GoogleCalendarError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .invalidURL: return "Неверный URL Google Calendar"
-        case .invalidResponse: return "Некорректный ответ Google"
+        case .invalidURL: return "Invalid Google Calendar URL"
+        case .invalidResponse: return "Invalid Google response"
         case .httpError(let code):
             switch code {
-            case 401: return "Ошибка авторизации Google. Переавторизуйтесь"
-            case 403: return "Доступ к Google Calendar запрещён"
-            case 429: return "Слишком много запросов к Google"
-            default: return "Ошибка Google API: \(code)"
+            case 401: return "Google authorization error. Please re-authenticate"
+            case 403: return "Google Calendar access denied"
+            case 429: return "Too many requests to Google"
+            default: return "Google API error: \(code)"
             }
         }
     }

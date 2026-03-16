@@ -2,14 +2,14 @@
 import PackageDescription
 
 let package = Package(
-    name: "YandexCalendarReminder",
+    name: "CalendarReminder",
     platforms: [
         .macOS(.v13)
     ],
     targets: [
         .executableTarget(
-            name: "YandexCalendarReminder",
-            path: "YandexCalendarReminder"
+            name: "CalendarReminder",
+            path: "CalendarReminder"
         )
     ]
 )

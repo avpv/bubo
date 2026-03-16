@@ -144,10 +144,10 @@ enum GoogleAuthError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .tokenExchangeFailed: return "Не удалось получить токен Google"
-        case .refreshFailed: return "Не удалось обновить токен Google"
-        case .noRefreshToken: return "Отсутствует refresh token Google"
-        case .notAuthenticated: return "Необходима авторизация Google"
+        case .tokenExchangeFailed: return "Failed to obtain Google token"
+        case .refreshFailed: return "Failed to refresh Google token"
+        case .noRefreshToken: return "Missing Google refresh token"
+        case .notAuthenticated: return "Google authorization required"
         }
     }
 }
