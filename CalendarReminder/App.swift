@@ -14,8 +14,10 @@ struct CalendarReminderApp: App {
     }
 
     private var menuBarIcon: NSImage {
-        if let url = Bundle.module.url(forResource: "MenuBarIcon", withExtension: "png"),
-           let img = NSImage(contentsOf: url) {
+        // Try SPM resource bundle first, then fall back to main bundle
+        let url = Bundle.module.url(forResource: "MenuBarIcon", withExtension: "png")
+            ?? Bundle.main.url(forResource: "MenuBarIcon", withExtension: "png")
+        if let url, let img = NSImage(contentsOf: url) {
             img.isTemplate = false
             img.size = NSSize(width: 18, height: 18)
             return img
