@@ -2,14 +2,14 @@
 import PackageDescription
 
 let package = Package(
-    name: "CalendarReminder",
+    name: "Owlenda",
     platforms: [
         .macOS(.v13)
     ],
     targets: [
         .executableTarget(
-            name: "CalendarReminder",
-            path: "CalendarReminder",
+            name: "Owlenda",
+            path: "Owlenda",
             exclude: ["Info.plist"],
             resources: [
                 .copy("Resources/AppIcon.icns"),

@@ -5,15 +5,15 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>ru</string>
     <key>CFBundleExecutable</key>
-    <string>CalendarReminder</string>
+    <string>Owlenda</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
-    <string>com.avpv.CalendarReminder</string>
+    <string>com.avpv.Owlenda</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>Reminder</string>
+    <string>Owlenda</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>

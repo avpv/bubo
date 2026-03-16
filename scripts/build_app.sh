@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build CalendarReminder.app from SPM sources
+# Build Owlenda.app from SPM sources
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -7,27 +7,27 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 cd "$PROJECT_DIR"
 
 CONFIG="${1:-release}"
-echo "Building CalendarReminder ($CONFIG)..."
+echo "Building Owlenda ($CONFIG)..."
 
 swift build -c "$CONFIG"
 BIN_PATH=$(swift build -c "$CONFIG" --show-bin-path)
 
-APP="$PROJECT_DIR/CalendarReminder.app/Contents"
+APP="$PROJECT_DIR/Owlenda.app/Contents"
 
 # Clean previous build
-rm -rf "$PROJECT_DIR/CalendarReminder.app"
+rm -rf "$PROJECT_DIR/Owlenda.app"
 
 # Create bundle structure
 mkdir -p "$APP/MacOS" "$APP/Resources"
 
 # Copy binary
-cp "$BIN_PATH/CalendarReminder" "$APP/MacOS/"
+cp "$BIN_PATH/Owlenda" "$APP/MacOS/"
 
 # Copy resources
-cp "$PROJECT_DIR/CalendarReminder/Resources/AppIcon.icns" "$APP/Resources/"
+cp "$PROJECT_DIR/Owlenda/Resources/AppIcon.icns" "$APP/Resources/"
 
 # Copy SPM resource bundle (needed for Bundle.module / Bundle.safeModule)
-BUNDLE_NAME="CalendarReminder_CalendarReminder.bundle"
+BUNDLE_NAME="Owlenda_Owlenda.bundle"
 if [ -d "$BIN_PATH/$BUNDLE_NAME" ]; then
     cp -R "$BIN_PATH/$BUNDLE_NAME" "$APP/Resources/"
     echo "Copied SPM resource bundle"
@@ -45,17 +45,17 @@ cat > "$APP/Info.plist" <<'PLIST'
   <key>CFBundleDevelopmentRegion</key>
   <string>ru</string>
   <key>CFBundleExecutable</key>
-  <string>CalendarReminder</string>
+  <string>Owlenda</string>
   <key>CFBundleIconFile</key>
   <string>AppIcon</string>
   <key>NSPrincipalClass</key>
   <string>NSApplication</string>
   <key>CFBundleIdentifier</key>
-  <string>com.avpv.CalendarReminder</string>
+  <string>com.avpv.Owlenda</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>
-  <string>CalendarReminder</string>
+  <string>Owlenda</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
@@ -76,9 +76,9 @@ cat > "$APP/Info.plist" <<'PLIST'
 PLIST
 
 echo ""
-echo "Built: $PROJECT_DIR/CalendarReminder.app"
+echo "Built: $PROJECT_DIR/Owlenda.app"
 echo ""
 echo "To install:"
-echo "  cp -R CalendarReminder.app /Applications/"
-echo "  xattr -cr /Applications/CalendarReminder.app"
-echo "  open /Applications/CalendarReminder.app"
+echo "  cp -R Owlenda.app /Applications/"
+echo "  xattr -cr /Applications/Owlenda.app"
+echo "  open /Applications/Owlenda.app"
