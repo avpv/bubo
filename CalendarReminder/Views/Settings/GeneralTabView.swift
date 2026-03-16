@@ -52,7 +52,7 @@ struct GeneralTabView: View {
             Section {
                 HStack {
                     Spacer()
-                    Text("Reminder v1.0")
+                    Text("Reminder \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0")")
                         .font(.caption2)
                         .foregroundColor(.tertiary)
                     Spacer()

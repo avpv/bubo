@@ -21,7 +21,7 @@ struct DaySectionHeader: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .padding(.horizontal, DS.Spacing.sm)
-                .padding(.vertical, 1)
+                .padding(.vertical, DS.Spacing.xxs)
                 .background(.secondary.opacity(0.12))
                 .clipShape(Capsule())
         }

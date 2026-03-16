@@ -97,7 +97,7 @@ struct EventRowView: View {
                 .transition(.opacity.animation(DS.Animation.quick))
             }
         }
-        .padding(.vertical, 3)
+        .padding(.vertical, DS.Spacing.xs)
         .padding(.horizontal, DS.Spacing.xs)
         .background(
             RoundedRectangle(cornerRadius: DS.Size.cornerRadius)

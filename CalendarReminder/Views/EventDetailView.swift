@@ -26,16 +26,19 @@ struct EventDetailView: View {
                     Text(event.title)
                         .font(.title3)
                         .fontWeight(.semibold)
+                        .accessibilityAddTraits(.isHeader)
 
                     // Date & Time group
                     VStack(alignment: .leading, spacing: DS.Spacing.md) {
                         Label(event.formattedDate, systemImage: "calendar")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
+                            .accessibilityLabel("Date: \(event.formattedDate)")
 
                         Label(event.formattedTimeRange, systemImage: "clock")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
+                            .accessibilityLabel("Time: \(event.formattedTimeRange)")
                     }
 
                     // Location
@@ -128,6 +131,6 @@ struct EventDetailView: View {
             }
         }
         .frame(width: DS.Popover.width)
-        .frame(minHeight: 200)
+        .frame(minHeight: DS.Popover.detailMinHeight)
     }
 }

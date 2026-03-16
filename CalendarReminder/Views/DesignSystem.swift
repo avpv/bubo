@@ -25,6 +25,22 @@ enum DS {
         static let listMaxHeight: CGFloat = 360
         static let detailMaxHeight: CGFloat = 300
         static let formMaxHeight: CGFloat = 340
+        static let detailMinHeight: CGFloat = 200
+    }
+
+    // MARK: Settings Window
+
+    enum Settings {
+        static let width: CGFloat = 480
+        static let minHeight: CGFloat = 400
+        static let idealHeight: CGFloat = 460
+    }
+
+    // MARK: Empty State
+
+    enum EmptyState {
+        static let iconSize: CGFloat = 36
+        static let spacing: CGFloat = 10
     }
 
     // MARK: Component Sizes
@@ -137,6 +153,7 @@ struct PopoverHeader: View {
                         }
                     }
                     .buttonStyle(.borderless)
+                    .keyboardShortcut(.escape, modifiers: [])
                 }
 
                 if !showBack {

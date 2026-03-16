@@ -154,9 +154,9 @@ struct MenuBarView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: DS.EmptyState.spacing) {
             Image(systemName: "calendar.badge.checkmark")
-                .font(.system(size: 36))
+                .font(.system(size: DS.EmptyState.iconSize))
                 .foregroundStyle(.secondary)
                 .symbolRenderingMode(.hierarchical)
             Text("No upcoming meetings")

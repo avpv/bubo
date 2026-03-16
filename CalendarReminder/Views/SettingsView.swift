@@ -19,6 +19,6 @@ struct SettingsView: View {
             GeneralTabView(settings: settings, reminderService: reminderService, viewModel: viewModel)
                 .tabItem { Label("General", systemImage: "gear") }
         }
-        .frame(width: 480, minHeight: 400, idealHeight: 460)
+        .frame(width: DS.Settings.width, minHeight: DS.Settings.minHeight, idealHeight: DS.Settings.idealHeight)
     }
 }
