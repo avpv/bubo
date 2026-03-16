@@ -6,12 +6,17 @@ struct MenuBarView: View {
     @ObservedObject var networkMonitor: NetworkMonitor
 
     @State private var showingAddEvent = false
+    @State private var editingEvent: CalendarEvent? = nil
     @State private var hasStartedSync = false
 
     var body: some View {
         Group {
             if showingAddEvent {
-                AddEventView(reminderService: reminderService, isPresented: $showingAddEvent)
+                AddEventView(
+                    reminderService: reminderService,
+                    isPresented: $showingAddEvent,
+                    editingEvent: editingEvent
+                )
             } else {
                 mainContent
             }
@@ -99,7 +104,17 @@ struct MenuBarView: View {
                     ForEach(reminderService.eventsByDay, id: \.date) { dayGroup in
                         Section {
                             ForEach(dayGroup.events) { event in
-                                EventRowView(event: event, reminderService: reminderService)
+                                EventRowView(
+                                    event: event,
+                                    reminderService: reminderService,
+                                    onEdit: { event in
+                                        editingEvent = event
+                                        showingAddEvent = true
+                                    },
+                                    onDelete: { event in
+                                        reminderService.removeLocalEvent(id: event.id)
+                                    }
+                                )
                             }
                         } header: {
                             DaySectionHeader(date: dayGroup.date, count: dayGroup.events.count)
@@ -115,7 +130,10 @@ struct MenuBarView: View {
 
             // Actions
             HStack(spacing: 8) {
-                Button(action: { showingAddEvent = true }) {
+                Button(action: {
+                    editingEvent = nil
+                    showingAddEvent = true
+                }) {
                     Label("Add", systemImage: "plus")
                 }
 

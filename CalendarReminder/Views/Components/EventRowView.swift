@@ -3,6 +3,12 @@ import SwiftUI
 struct EventRowView: View {
     let event: CalendarEvent
     let reminderService: ReminderService
+    var onEdit: ((CalendarEvent) -> Void)? = nil
+    var onDelete: ((CalendarEvent) -> Void)? = nil
+
+    private var isLocal: Bool {
+        event.calendarName == "Local"
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -43,6 +49,22 @@ struct EventRowView: View {
             Spacer()
         }
         .contextMenu {
+            if isLocal {
+                Button {
+                    onEdit?(event)
+                } label: {
+                    Label("Edit", systemImage: "pencil")
+                }
+
+                Button(role: .destructive) {
+                    onDelete?(event)
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+
+                Divider()
+            }
+
             Section("Snooze") {
                 Button("5 minutes") {
                     reminderService.snoozeReminder(for: event, minutes: 5)

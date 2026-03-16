@@ -236,6 +236,14 @@ class ReminderService: ObservableObject {
         saveLocalEvents()
     }
 
+    func updateLocalEvent(_ event: CalendarEvent) {
+        guard let index = localEvents.firstIndex(where: { $0.id == event.id }) else { return }
+        cancelReminders(for: event.id)
+        localEvents[index] = event
+        saveLocalEvents()
+        scheduleReminders(for: [event])
+    }
+
     private func saveLocalEvents() {
         if let data = try? JSONEncoder().encode(localEvents) {
             UserDefaults.standard.set(data, forKey: "LocalEvents")
