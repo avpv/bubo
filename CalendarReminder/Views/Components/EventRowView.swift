@@ -42,44 +42,79 @@ struct EventRowView: View {
                     .fontWeight(.medium)
                     .lineLimit(2)
 
-                if let location = event.location, !location.isEmpty {
-                    Label(location, systemImage: "location.fill")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-                }
+                HStack(spacing: 8) {
+                    if let location = event.location, !location.isEmpty {
+                        Label(location, systemImage: "location.fill")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                    }
 
-                if let calName = event.calendarName {
-                    Text(calName)
-                        .font(.caption2)
-                        .foregroundColor(.blue)
+                    if let calName = event.calendarName {
+                        Text(calName)
+                            .font(.caption2)
+                            .foregroundColor(.blue)
+                    }
                 }
             }
 
-            Spacer()
+            Spacer(minLength: 8)
 
-            // Delete button (local events only, shown on hover)
-            if isLocal && isHovered {
-                Button {
-                    onDelete?(event)
-                } label: {
-                    Image(systemName: "minus.circle.fill")
-                        .font(.system(size: 16))
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(.red)
+            // Actions on hover
+            if isHovered {
+                HStack(spacing: 4) {
+                    if event.isUpcoming {
+                        Menu {
+                            Button("5 minutes") {
+                                reminderService.snoozeReminder(for: event, minutes: 5)
+                            }
+                            Button("10 minutes") {
+                                reminderService.snoozeReminder(for: event, minutes: 10)
+                            }
+                            Button("15 minutes") {
+                                reminderService.snoozeReminder(for: event, minutes: 15)
+                            }
+                        } label: {
+                            Image(systemName: "bell.badge")
+                                .font(.system(size: 13))
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.borderless)
+                        .menuStyle(.borderlessButton)
+                        .fixedSize()
+                        .help("Snooze reminder")
+                    }
+
+                    if isLocal {
+                        Button {
+                            onDelete?(event)
+                        } label: {
+                            Image(systemName: "minus.circle.fill")
+                                .font(.system(size: 14))
+                                .symbolRenderingMode(.hierarchical)
+                                .foregroundStyle(.red)
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Delete event")
+                    }
                 }
-                .buttonStyle(.borderless)
-                .help("Delete")
-                .transition(.opacity)
+                .transition(.opacity.animation(.easeInOut(duration: 0.15)))
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 3)
+        .padding(.horizontal, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(isHovered ? Color.primary.opacity(0.06) : Color.clear)
+        )
         .contentShape(Rectangle())
         .onTapGesture {
             onTap?(event)
         }
         .onHover { hovering in
-            isHovered = hovering
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovered = hovering
+            }
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(event.title), \(event.formattedTimeRange)\(event.location.map { ", \($0)" } ?? "")")
@@ -97,11 +132,17 @@ struct EventRowView: View {
                     reminderService.snoozeReminder(for: event, minutes: 15)
                 }
             }
+            if isLocal {
+                Divider()
+                Button("Edit") { onEdit?(event) }
+                Button("Delete", role: .destructive) { onDelete?(event) }
+            }
         }
     }
 
     private var urgencyColor: Color {
         let minutes = event.minutesUntilStart
+        if minutes <= 0 { return .red }
         if minutes <= 5 { return .red }
         if minutes <= 15 { return .orange }
         return .green
@@ -109,7 +150,7 @@ struct EventRowView: View {
 
     private var timeUntilText: String {
         let minutes = event.minutesUntilStart
-        if minutes < 1 { return "now" }
+        if minutes <= 0 { return "now" }
         if minutes < 60 { return "in \(minutes)m" }
         let hours = minutes / 60
         let mins = minutes % 60

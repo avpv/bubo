@@ -38,20 +38,29 @@ struct AddEventView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
-            HStack {
+            // Header with back button
+            HStack(spacing: 4) {
                 Button {
                     isPresented = false
                 } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.body)
+                    HStack(spacing: 2) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text("Back")
+                            .font(.subheadline)
+                    }
                 }
                 .buttonStyle(.borderless)
+                .keyboardShortcut(.escape, modifiers: [])
 
-                OwlIcon(size: 18)
+                Spacer()
+
                 Text(isEditing ? "Edit Event" : "New Event")
                     .font(.headline)
+
                 Spacer()
+
+                OwlIcon(size: 18)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)

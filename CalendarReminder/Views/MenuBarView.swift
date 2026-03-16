@@ -60,27 +60,33 @@ struct MenuBarView: View {
                     .font(.headline)
                 Spacer()
 
-                if !networkMonitor.isConnected {
-                    Image(systemName: "wifi.slash")
-                        .foregroundColor(.red)
-                        .help("No internet connection")
-                        .accessibilityLabel("No internet connection")
-                }
+                HStack(spacing: 6) {
+                    if !networkMonitor.isConnected {
+                        Image(systemName: "wifi.slash")
+                            .foregroundColor(.red)
+                            .font(.system(size: 12))
+                            .help("No internet connection")
+                            .accessibilityLabel("No internet connection")
+                    }
 
-                if settings.isDoNotDisturbActive {
-                    Image(systemName: "moon.fill")
-                        .foregroundColor(.indigo)
-                        .help("Do Not Disturb")
-                        .accessibilityLabel("Do Not Disturb is active")
-                }
+                    if settings.isDoNotDisturbActive {
+                        Image(systemName: "moon.fill")
+                            .foregroundColor(.indigo)
+                            .font(.system(size: 12))
+                            .help("Do Not Disturb")
+                            .accessibilityLabel("Do Not Disturb is active")
+                    }
 
-                if reminderService.isSyncing {
-                    ProgressView()
-                        .scaleEffect(0.6)
+                    if reminderService.isSyncing {
+                        ProgressView()
+                            .scaleEffect(0.5)
+                            .frame(width: 14, height: 14)
+                    }
                 }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
+            .background(.bar)
 
             Divider()
 
@@ -178,13 +184,15 @@ struct MenuBarView: View {
                 }) {
                     Label("Add", systemImage: "plus")
                 }
-                .help("Add a new event")
+                .help("Add a new event (⌘N)")
+                .keyboardShortcut("n", modifiers: .command)
 
                 Button(action: { reminderService.syncNow() }) {
                     Label("Refresh", systemImage: "arrow.clockwise")
                 }
                 .disabled(!networkMonitor.isConnected)
-                .help("Sync calendars now")
+                .help("Sync calendars now (⌘R)")
+                .keyboardShortcut("r", modifiers: .command)
 
                 Spacer()
 
@@ -213,6 +221,7 @@ struct MenuBarView: View {
             .buttonStyle(.borderless)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
+            .background(.bar)
         }
         .frame(width: 340)
     }

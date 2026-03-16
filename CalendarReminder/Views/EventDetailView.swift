@@ -6,85 +6,110 @@ struct EventDetailView: View {
     var onEdit: ((CalendarEvent) -> Void)? = nil
     var onDelete: ((CalendarEvent) -> Void)? = nil
 
+    @State private var showDeleteConfirmation = false
+
     private var isLocal: Bool {
         event.calendarName == "Local"
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
-            HStack {
+            // Header with back button
+            HStack(spacing: 4) {
                 Button {
                     isPresented = false
                 } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.body)
+                    HStack(spacing: 2) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text("Back")
+                            .font(.subheadline)
+                    }
                 }
                 .buttonStyle(.borderless)
 
-                OwlIcon(size: 18)
-                Text("Event Details")
-                    .font(.headline)
                 Spacer()
+
+                OwlIcon(size: 18)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
 
             Divider()
 
-            // Event info
-            VStack(alignment: .leading, spacing: 12) {
-                Text(event.title)
-                    .font(.title3)
-                    .fontWeight(.semibold)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    // Title
+                    Text(event.title)
+                        .font(.title3)
+                        .fontWeight(.semibold)
 
-                Label(event.formattedDate, systemImage: "calendar")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-
-                Label(event.formattedTimeRange, systemImage: "clock")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-
-                if let location = event.location, !location.isEmpty {
-                    Label(location, systemImage: "location.fill")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                }
-
-                if let description = event.description, !description.isEmpty {
-                    Label(description, systemImage: "note.text")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .lineLimit(4)
-                }
-
-                if let calName = event.calendarName {
-                    Label(calName, systemImage: "tray.full")
-                        .font(.caption)
-                        .foregroundColor(.blue)
-                }
-
-                if let reminders = event.customReminderMinutes, !reminders.isEmpty {
-                    HStack(spacing: 4) {
-                        Image(systemName: "bell.fill")
-                            .font(.caption)
+                    // Date & Time group
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label(event.formattedDate, systemImage: "calendar")
+                            .font(.subheadline)
                             .foregroundColor(.secondary)
-                        ForEach(reminders.sorted(), id: \.self) { min in
-                            Text(formatMinutes(min))
+
+                        Label(event.formattedTimeRange, systemImage: "clock")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+
+                    // Location
+                    if let location = event.location, !location.isEmpty {
+                        Label(location, systemImage: "location.fill")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+
+                    // Description
+                    if let description = event.description, !description.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label("Notes", systemImage: "note.text")
                                 .font(.caption)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(.secondary.opacity(0.15))
-                                .cornerRadius(4)
+                                .fontWeight(.medium)
+                                .foregroundColor(.tertiary)
+                            Text(description)
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .lineLimit(6)
+                        }
+                    }
+
+                    // Calendar name
+                    if let calName = event.calendarName {
+                        Label(calName, systemImage: "tray.full")
+                            .font(.caption)
+                            .foregroundColor(.blue)
+                    }
+
+                    // Custom reminders
+                    if let reminders = event.customReminderMinutes, !reminders.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Label("Reminders", systemImage: "bell.fill")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .foregroundColor(.tertiary)
+
+                            HStack(spacing: 4) {
+                                ForEach(reminders.sorted(), id: \.self) { min in
+                                    Text(formatMinutes(min))
+                                        .font(.caption)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(.secondary.opacity(0.12))
+                                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                                }
+                            }
                         }
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(16)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(16)
+            .frame(maxHeight: 300)
 
-            Spacer()
+            Spacer(minLength: 0)
 
             // Actions (only for local events)
             if isLocal {
@@ -92,10 +117,18 @@ struct EventDetailView: View {
 
                 HStack {
                     Button(role: .destructive) {
-                        onDelete?(event)
-                        isPresented = false
+                        showDeleteConfirmation = true
                     } label: {
                         Label("Delete", systemImage: "trash")
+                    }
+                    .alert("Delete Event", isPresented: $showDeleteConfirmation) {
+                        Button("Cancel", role: .cancel) { }
+                        Button("Delete", role: .destructive) {
+                            onDelete?(event)
+                            isPresented = false
+                        }
+                    } message: {
+                        Text("Are you sure you want to delete \"\(event.title)\"? This action cannot be undone.")
                     }
 
                     Spacer()

@@ -34,6 +34,8 @@ struct FullScreenAlertView: View {
                     .font(.system(size: 72, weight: .heavy, design: .monospaced))
                     .foregroundColor(countdownColor)
                     .shadow(color: countdownColor.opacity(0.5), radius: 10)
+                    .contentTransition(.numericText())
+                    .animation(.linear(duration: 0.3), value: secondsRemaining)
 
                 Text(event.title)
                     .font(.system(size: 36, weight: .semibold))
@@ -157,7 +159,6 @@ struct FullScreenAlertView: View {
     }
 
     private var countdownColor: Color {
-        if secondsRemaining <= 0 { return .red }
         if secondsRemaining <= 120 { return .red }
         if secondsRemaining <= 300 { return .orange }
         return .white
