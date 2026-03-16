@@ -27,7 +27,9 @@ A native macOS menu bar app for meeting reminders with full-screen notifications
 1. Go to [Releases](https://github.com/avpv/CalendarReminder/releases/latest)
 2. Download **CalendarReminder.dmg**
 3. Open the DMG and drag **CalendarReminder** to **Applications**
-4. Launch from Applications (on first launch: right-click → Open → Open)
+4. On first launch macOS Gatekeeper will block the unsigned app. To allow it:
+   - Go to **System Settings → Privacy & Security** → scroll down → click **"Open Anyway"**
+   - Or run in Terminal: `xattr -cr /Applications/CalendarReminder.app` then launch normally
 
 ### Option B: Using Xcode
 
