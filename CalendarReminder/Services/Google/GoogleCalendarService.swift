@@ -83,15 +83,16 @@ actor GoogleCalendarService {
         let encodedId = calendarId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? calendarId
         let path = "/calendars/\(encodedId)/events"
 
-        let queryItems = [
-            "timeMin=\(isoFormatter.string(from: startDate))",
-            "timeMax=\(isoFormatter.string(from: endDate))",
-            "singleEvents=true",     // Expand recurring events
-            "orderBy=startTime",
-            "maxResults=250"
-        ].joined(separator: "&")
+        var queryComponents = URLComponents()
+        queryComponents.queryItems = [
+            URLQueryItem(name: "timeMin", value: isoFormatter.string(from: startDate)),
+            URLQueryItem(name: "timeMax", value: isoFormatter.string(from: endDate)),
+            URLQueryItem(name: "singleEvents", value: "true"),
+            URLQueryItem(name: "orderBy", value: "startTime"),
+            URLQueryItem(name: "maxResults", value: "250")
+        ]
 
-        let data = try await authenticatedRequest(path: path, query: queryItems)
+        let data = try await authenticatedRequest(path: path, query: queryComponents.percentEncodedQuery)
         let response = try JSONDecoder().decode(EventsResponse.self, from: data)
 
         return (response.items ?? []).compactMap { event in

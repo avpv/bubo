@@ -24,7 +24,7 @@ actor YandexOAuthService {
 
     /// Opens browser for OAuth authorization
     static func startAuthFlow() {
-        var components = URLComponents(string: authURL)!
+        guard var components = URLComponents(string: authURL) else { return }
         components.queryItems = [
             URLQueryItem(name: "response_type", value: "code"),
             URLQueryItem(name: "client_id", value: clientId),
@@ -40,17 +40,21 @@ actor YandexOAuthService {
 
     /// Exchange authorization code for tokens
     static func exchangeCode(_ code: String) async throws -> TokenResponse {
-        var request = URLRequest(url: URL(string: tokenURL)!)
+        guard let url = URL(string: tokenURL) else {
+            throw OAuthError.tokenExchangeFailed
+        }
+        var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
 
-        let body = [
-            "grant_type=authorization_code",
-            "code=\(code)",
-            "client_id=\(clientId)",
-            "client_secret=\(clientSecret)"
-        ].joined(separator: "&")
-        request.httpBody = body.data(using: .utf8)
+        var components = URLComponents()
+        components.queryItems = [
+            URLQueryItem(name: "grant_type", value: "authorization_code"),
+            URLQueryItem(name: "code", value: code),
+            URLQueryItem(name: "client_id", value: clientId),
+            URLQueryItem(name: "client_secret", value: clientSecret)
+        ]
+        request.httpBody = components.percentEncodedQuery?.data(using: .utf8)
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
@@ -78,17 +82,21 @@ actor YandexOAuthService {
             throw OAuthError.noRefreshToken
         }
 
-        var request = URLRequest(url: URL(string: tokenURL)!)
+        guard let url = URL(string: tokenURL) else {
+            throw OAuthError.refreshFailed
+        }
+        var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
 
-        let body = [
-            "grant_type=refresh_token",
-            "refresh_token=\(refreshToken)",
-            "client_id=\(clientId)",
-            "client_secret=\(clientSecret)"
-        ].joined(separator: "&")
-        request.httpBody = body.data(using: .utf8)
+        var components = URLComponents()
+        components.queryItems = [
+            URLQueryItem(name: "grant_type", value: "refresh_token"),
+            URLQueryItem(name: "refresh_token", value: refreshToken),
+            URLQueryItem(name: "client_id", value: clientId),
+            URLQueryItem(name: "client_secret", value: clientSecret)
+        ]
+        request.httpBody = components.percentEncodedQuery?.data(using: .utf8)
 
         let (data, response) = try await URLSession.shared.data(for: request)
 

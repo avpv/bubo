@@ -181,7 +181,10 @@ class ReminderService: ObservableObject {
             // Clean up firedReminders for events no longer in the window
             let currentEventIds = Set(allEvents.map { $0.id })
             self.firedReminders = self.firedReminders.filter { key in
-                let eventId = key.components(separatedBy: "_").dropLast().joined(separator: "_")
+                // reminderKey format: "\(event.id)_\(interval.minutes)"
+                // Find the last underscore to split id from minutes suffix
+                guard let lastUnderscore = key.lastIndex(of: "_") else { return false }
+                let eventId = String(key[..<lastUnderscore])
                 return currentEventIds.contains(eventId)
             }
 

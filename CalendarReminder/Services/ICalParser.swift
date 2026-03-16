@@ -328,7 +328,10 @@ struct ICalParser {
                     if targetDays.contains(weekday) {
                         return candidate
                     }
-                    candidate = calendar.date(byAdding: .day, value: 1, to: candidate)!
+                    guard let next = calendar.date(byAdding: .day, value: 1, to: candidate) else {
+                        return nextDate
+                    }
+                    candidate = next
                 }
             }
         }

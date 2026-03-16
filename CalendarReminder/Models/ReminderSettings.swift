@@ -86,9 +86,9 @@ class ReminderSettings: ObservableObject, Codable {
 
         let calendar = Calendar.current
         doNotDisturbFrom = try container.decodeIfPresent(Date.self, forKey: .doNotDisturbFrom)
-            ?? calendar.date(from: DateComponents(hour: 22, minute: 0))!
+            ?? calendar.date(from: DateComponents(hour: 22, minute: 0)) ?? Date()
         doNotDisturbTo = try container.decodeIfPresent(Date.self, forKey: .doNotDisturbTo)
-            ?? calendar.date(from: DateComponents(hour: 8, minute: 0))!
+            ?? calendar.date(from: DateComponents(hour: 8, minute: 0)) ?? Date()
         selectedCalendarHrefs = try container.decodeIfPresent([String].self, forKey: .selectedCalendarHrefs) ?? []
         googleEnabled = try container.decodeIfPresent(Bool.self, forKey: .googleEnabled) ?? false
         selectedGoogleCalendarIds = try container.decodeIfPresent([String].self, forKey: .selectedGoogleCalendarIds) ?? []
@@ -121,7 +121,10 @@ class ReminderSettings: ObservableObject, Codable {
         let fromMinutes = calendar.component(.hour, from: doNotDisturbFrom) * 60 + calendar.component(.minute, from: doNotDisturbFrom)
         let toMinutes = calendar.component(.hour, from: doNotDisturbTo) * 60 + calendar.component(.minute, from: doNotDisturbTo)
 
-        if fromMinutes <= toMinutes {
+        if fromMinutes == toMinutes {
+            // Same start and end time — DND effectively disabled
+            return false
+        } else if fromMinutes < toMinutes {
             // Same day: e.g. 13:00 - 15:00
             return currentMinutes >= fromMinutes && currentMinutes < toMinutes
         } else {
