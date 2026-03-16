@@ -16,148 +16,31 @@ jobs:
 
       - name: Extract version from tag
         id: version
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
       - name: Build release binary
         run: swift build -c release
 
-      - name: Generate app icon
+      - name: Generate icon if missing
         run: |
-          # Create a simple calendar icon using sips and iconutil
-          ICONSET="AppIcon.iconset"
-          mkdir -p "$ICONSET"
-
-          # Generate icon with system Python + Pillow fallback to sips
-          python3 - << 'PYEOF'
-          import subprocess, os
-
-          iconset = "AppIcon.iconset"
-          sizes = [16, 32, 64, 128, 256, 512]
-
-          for size in sizes:
-              # Create a simple colored square with rounded corners using sips-compatible approach
-              svg = f'''<?xml version="1.0" encoding="UTF-8"?>
-              <svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" viewBox="0 0 512 512">
-                <rect width="512" height="512" rx="80" fill="#1a73e8"/>
-                <rect x="56" y="140" width="400" height="316" rx="32" fill="white"/>
-                <rect x="56" y="56" width="400" height="120" rx="32" fill="#1557b0"/>
-                <rect x="140" y="36" width="24" height="64" rx="12" fill="white"/>
-                <rect x="348" y="36" width="24" height="64" rx="12" fill="white"/>
-                <text x="256" y="360" font-family="SF Pro,Helvetica" font-size="180" font-weight="bold" fill="#1a73e8" text-anchor="middle" dominant-baseline="central">C</text>
-              </svg>'''
-
-              svg_path = f"/tmp/icon_{size}.svg"
-              png_path = f"{iconset}/icon_{size}x{size}.png"
-              png_path_2x = f"{iconset}/icon_{int(size//2)}x{int(size//2)}@2x.png" if size > 16 else None
-
-              with open(svg_path, "w") as f:
-                  f.write(svg)
-
-              # Use rsvg-convert if available, otherwise try sips
-              try:
-                  subprocess.run(["rsvg-convert", "-w", str(size), "-h", str(size), svg_path, "-o", png_path], check=True)
-              except FileNotFoundError:
-                  # Fallback: use sips to create a basic PNG from a temp file
-                  subprocess.run(["sips", "-s", "format", "png", "--resampleWidth", str(size), svg_path, "--out", png_path], check=False)
-
-              if png_path_2x and size >= 32:
-                  try:
-                      subprocess.run(["cp", png_path, png_path_2x], check=True)
-                  except:
-                      pass
-          PYEOF
-
-          # Try to create .icns from iconset (may fail if PNGs weren't created)
-          iconutil -c icns "$ICONSET" -o AppIcon.icns 2>/dev/null || true
-
-          # Fallback: if iconutil failed, create icon from a simple approach
-          if [ ! -f AppIcon.icns ]; then
-            # Use Swift to generate a minimal icon
-            swift - << 'SWIFTEOF'
-            import AppKit
-
-            let sizes: [(Int, String)] = [
-              (16, "icon_16x16.png"),
-              (32, "icon_16x16@2x.png"),
-              (32, "icon_32x32.png"),
-              (64, "icon_32x32@2x.png"),
-              (128, "icon_128x128.png"),
-              (256, "icon_128x128@2x.png"),
-              (256, "icon_256x256.png"),
-              (512, "icon_256x256@2x.png"),
-              (512, "icon_512x512.png"),
-              (1024, "icon_512x512@2x.png"),
-            ]
-
-            let iconsetPath = "AppIcon.iconset"
-
-            for (size, name) in sizes {
-              let img = NSImage(size: NSSize(width: size, height: size))
-              img.lockFocus()
-
-              // Background
-              let bgRect = NSRect(x: 0, y: 0, width: size, height: size)
-              let bgPath = NSBezierPath(roundedRect: bgRect, xRadius: CGFloat(size) * 0.16, yRadius: CGFloat(size) * 0.16)
-              NSColor(red: 0.1, green: 0.45, blue: 0.91, alpha: 1).setFill()
-              bgPath.fill()
-
-              // Calendar body
-              let s = CGFloat(size)
-              let bodyRect = NSRect(x: s*0.11, y: s*0.07, width: s*0.78, height: s*0.62)
-              let bodyPath = NSBezierPath(roundedRect: bodyRect, xRadius: s*0.06, yRadius: s*0.06)
-              NSColor.white.setFill()
-              bodyPath.fill()
-
-              // Calendar header
-              let headerRect = NSRect(x: s*0.11, y: s*0.55, width: s*0.78, height: s*0.23)
-              let headerPath = NSBezierPath(roundedRect: headerRect, xRadius: s*0.06, yRadius: s*0.06)
-              NSColor(red: 0.08, green: 0.34, blue: 0.69, alpha: 1).setFill()
-              headerPath.fill()
-
-              // Letter "C"
-              let font = NSFont.boldSystemFont(ofSize: s * 0.35)
-              let attrs: [NSAttributedString.Key: Any] = [
-                .font: font,
-                .foregroundColor: NSColor(red: 0.1, green: 0.45, blue: 0.91, alpha: 1)
-              ]
-              let str = NSAttributedString(string: "C", attributes: attrs)
-              let strSize = str.size()
-              let strPoint = NSPoint(x: (s - strSize.width) / 2, y: s * 0.12)
-              str.draw(at: strPoint)
-
-              img.unlockFocus()
-
-              if let tiff = img.tiffRepresentation,
-                 let rep = NSBitmapImageRep(data: tiff),
-                 let png = rep.representation(using: .png, properties: [:]) {
-                let url = URL(fileURLWithPath: "\(iconsetPath)/\(name)")
-                try? png.write(to: url)
-              }
-            }
-          SWIFTEOF
-
-            iconutil -c icns "AppIcon.iconset" -o AppIcon.icns
+          if [ ! -f CalendarReminder/Resources/AppIcon.icns ]; then
+            echo "No icon found, generating..."
+            swift scripts/generate_icon.swift
           fi
 
       - name: Create .app bundle
         run: |
           VERSION="${{ steps.version.outputs.version }}"
+          APP="CalendarReminder.app/Contents"
 
-          APP_DIR="CalendarReminder.app/Contents"
-          mkdir -p "$APP_DIR/MacOS"
-          mkdir -p "$APP_DIR/Resources"
+          mkdir -p "$APP/MacOS" "$APP/Resources"
+          cp .build/release/CalendarReminder "$APP/MacOS/"
 
-          cp .build/release/CalendarReminder "$APP_DIR/MacOS/"
-
-          # Copy icon if generated
-          if [ -f AppIcon.icns ]; then
-            cp AppIcon.icns "$APP_DIR/Resources/"
+          if [ -f CalendarReminder/Resources/AppIcon.icns ]; then
+            cp CalendarReminder/Resources/AppIcon.icns "$APP/Resources/"
           fi
 
-          # Create proper Info.plist with actual values
-          cat > "$APP_DIR/Info.plist" << PLIST
+          cat > "$APP/Info.plist" << PLIST
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
@@ -211,9 +94,9 @@ jobs:
           body: |
             ## Installation
 
-            1. Download **CalendarReminder.dmg** below
+            1. Download **CalendarReminder.dmg**
             2. Open the DMG and drag **CalendarReminder** to **Applications**
-            3. On first launch, the app may be blocked by macOS Gatekeeper (since it is not signed with an Apple Developer certificate). To open it:
-               - **macOS Ventura+:** Go to System Settings → Privacy & Security → scroll down → click "Open Anyway"
-               - **Or via Terminal:** `xattr -cr /Applications/CalendarReminder.app` then launch normally
+            3. On first launch macOS will block the unsigned app:
+               - Go to **System Settings → Privacy & Security** → scroll down → click **Open Anyway**
+               - Or run: `xattr -cr /Applications/CalendarReminder.app`
           files: CalendarReminder.dmg
