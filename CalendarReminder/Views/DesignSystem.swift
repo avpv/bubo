@@ -24,7 +24,7 @@ enum DS {
         static let width: CGFloat = 340
         static let listMaxHeight: CGFloat = 360
         static let detailMaxHeight: CGFloat = 300
-        static let formMaxHeight: CGFloat = 420
+        static let formMaxHeight: CGFloat = 480
         static let detailMinHeight: CGFloat = 200
     }
 
@@ -102,6 +102,14 @@ enum DS {
         SnoozeOption(10),
         SnoozeOption(15),
     ]
+
+    // MARK: Ordinal Formatting
+
+    static func formatOrdinal(_ n: Int) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .ordinal
+        return formatter.string(from: NSNumber(value: n)) ?? "\(n)"
+    }
 
     // MARK: Time Formatting
 

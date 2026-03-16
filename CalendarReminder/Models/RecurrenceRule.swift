@@ -7,20 +7,54 @@ struct RecurrenceRule: Codable, Hashable {
     let interval: Int
     let end: RecurrenceEnd
     let weekdays: Set<Weekday>
+    let monthlyMode: MonthlyMode?
 
     init(
         frequency: RecurrenceFrequency,
         interval: Int = 1,
         end: RecurrenceEnd = .never,
-        weekdays: Set<Weekday> = []
+        weekdays: Set<Weekday> = [],
+        monthlyMode: MonthlyMode? = nil
     ) {
         self.frequency = frequency
         self.interval = interval
         self.end = end
         self.weekdays = weekdays
+        self.monthlyMode = monthlyMode
     }
 
-    /// Human-readable summary like "Every day", "Every 2 weeks on Mon, Wed", "Every 30 min, 4 times"
+    // MARK: - Codable migration from old format (intervalMinutes + repeatCount)
+
+    private enum CodingKeys: String, CodingKey {
+        case frequency, interval, end, weekdays, monthlyMode
+        // Legacy keys
+        case intervalMinutes, repeatCount
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        // Try new format first
+        if let freq = try? container.decode(RecurrenceFrequency.self, forKey: .frequency) {
+            self.frequency = freq
+            self.interval = try container.decodeIfPresent(Int.self, forKey: .interval) ?? 1
+            self.end = try container.decodeIfPresent(RecurrenceEnd.self, forKey: .end) ?? .never
+            self.weekdays = try container.decodeIfPresent(Set<Weekday>.self, forKey: .weekdays) ?? []
+            self.monthlyMode = try container.decodeIfPresent(MonthlyMode.self, forKey: .monthlyMode)
+            return
+        }
+
+        // Legacy format: { intervalMinutes: 30, repeatCount: 4 }
+        let intervalMinutes = try container.decode(Int.self, forKey: .intervalMinutes)
+        let repeatCount = try container.decode(Int.self, forKey: .repeatCount)
+        self.frequency = .minutely
+        self.interval = intervalMinutes
+        self.end = .afterCount(repeatCount)
+        self.weekdays = []
+        self.monthlyMode = nil
+    }
+
+    /// Human-readable summary
     var displayText: String {
         var parts: [String] = []
 
@@ -33,9 +67,24 @@ struct RecurrenceRule: Codable, Hashable {
 
         // Weekdays (for weekly)
         if frequency == .weekly && !weekdays.isEmpty {
-            let sorted = weekdays.sorted { $0.sortOrder < $1.sortOrder }
-            let dayNames = sorted.map(\.shortName)
-            parts.append("on \(dayNames.joined(separator: ", "))")
+            let weekdaySet = Set(weekdays.map(\.calendarWeekday))
+            let weekdayNumbers = Set([2, 3, 4, 5, 6]) // Mon-Fri
+            if weekdaySet == weekdayNumbers {
+                parts = ["Every weekday"]
+            } else {
+                let sorted = weekdays.sorted { $0.sortOrder < $1.sortOrder }
+                parts.append("on \(sorted.map(\.shortName).joined(separator: ", "))")
+            }
+        }
+
+        // Monthly mode
+        if frequency == .monthly, let mode = monthlyMode {
+            switch mode {
+            case .dayOfMonth(let day):
+                parts.append("on the \(DS.formatOrdinal(day))")
+            case .weekdayPosition(let ordinal, let weekday):
+                parts.append("on the \(DS.formatOrdinal(ordinal)) \(weekday.shortName)")
+            }
         }
 
         // End condition
@@ -49,6 +98,17 @@ struct RecurrenceRule: Codable, Hashable {
         }
 
         return parts.joined(separator: ", ")
+    }
+
+    /// Maximum expansion window per frequency type.
+    var expansionWindowDays: Int {
+        switch frequency {
+        case .minutely: return 7
+        case .daily:    return 7
+        case .weekly:   return 60
+        case .monthly:  return 365
+        case .yearly:   return 730
+        }
     }
 
     private static let endDateFormatter: DateFormatter = {
@@ -104,14 +164,15 @@ enum RecurrenceEnd: Codable, Hashable {
     case never
     case afterCount(Int)
     case untilDate(Date)
+}
 
-    var label: String {
-        switch self {
-        case .never: return "Never"
-        case .afterCount: return "After"
-        case .untilDate: return "On date"
-        }
-    }
+// MARK: - Monthly Mode
+
+enum MonthlyMode: Codable, Hashable {
+    /// Repeat on a specific day of the month (e.g. the 15th).
+    case dayOfMonth(Int)
+    /// Repeat on the Nth weekday of the month (e.g. the 2nd Tuesday).
+    case weekdayPosition(ordinal: Int, weekday: Weekday)
 }
 
 // MARK: - Weekday
@@ -157,5 +218,9 @@ enum Weekday: String, Codable, Hashable, CaseIterable {
         case .friday: return 6
         case .saturday: return 7
         }
+    }
+
+    static func from(calendarWeekday: Int) -> Weekday? {
+        allCases.first { $0.calendarWeekday == calendarWeekday }
     }
 }

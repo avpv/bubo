@@ -19,98 +19,15 @@ class ReminderService: ObservableObject {
     private var firedReminders: Set<String> = []
     private let eventCache = EventCache()
     private var networkMonitor: NetworkMonitor?
+    private var excludedOccurrences: Set<String> = []
 
     var allEvents: [CalendarEvent] {
-        let expandedLocal = localEvents.flatMap { Self.expandRecurringEvent($0) }
+        let expandedLocal = localEvents.flatMap {
+            RecurrenceExpander.expand($0, excludedIds: excludedOccurrences)
+        }
         return (upcomingEvents + expandedLocal)
             .filter { $0.isUpcoming }
             .sorted { $0.startDate < $1.startDate }
-    }
-
-    /// Expands a recurring local event into individual occurrences within a 7-day window.
-    static func expandRecurringEvent(_ event: CalendarEvent) -> [CalendarEvent] {
-        guard let rule = event.recurrenceRule else { return [event] }
-
-        let calendar = Calendar.current
-        let eventDuration = event.endDate.timeIntervalSince(event.startDate)
-        let windowEnd = calendar.date(byAdding: .day, value: 7, to: Date()) ?? Date()
-
-        var occurrences: [CalendarEvent] = []
-        var current = event.startDate
-        var count = 0
-        let maxCount: Int? = {
-            if case .afterCount(let n) = rule.end { return n }
-            return nil
-        }()
-        let untilDate: Date? = {
-            if case .untilDate(let d) = rule.end { return d }
-            return nil
-        }()
-
-        while current <= windowEnd {
-            // Check end conditions
-            if let until = untilDate, current > until { break }
-            if let max = maxCount, count >= max { break }
-
-            // For weekly with specific weekdays, check if current day matches
-            let shouldInclude: Bool
-            if rule.frequency == .weekly && !rule.weekdays.isEmpty {
-                let weekday = calendar.component(.weekday, from: current)
-                shouldInclude = rule.weekdays.contains { $0.calendarWeekday == weekday }
-            } else {
-                shouldInclude = true
-            }
-
-            if shouldInclude && current >= event.startDate {
-                let end = current.addingTimeInterval(eventDuration)
-                let occurrence = CalendarEvent(
-                    id: count == 0 ? event.id : "\(event.id)_r\(Int(current.timeIntervalSince1970))",
-                    title: event.title,
-                    startDate: current,
-                    endDate: end,
-                    location: event.location,
-                    description: event.description,
-                    calendarName: event.calendarName,
-                    customReminderMinutes: event.customReminderMinutes,
-                    recurrenceRule: count == 0 ? event.recurrenceRule : nil,
-                    seriesId: event.id
-                )
-                occurrences.append(occurrence)
-                count += 1
-            }
-
-            // Advance to next candidate date
-            current = Self.nextOccurrence(after: current, rule: rule, calendar: calendar)
-        }
-
-        return occurrences.isEmpty ? [event] : occurrences
-    }
-
-    private static func nextOccurrence(after date: Date, rule: RecurrenceRule, calendar: Calendar) -> Date {
-        switch rule.frequency {
-        case .minutely:
-            return date.addingTimeInterval(TimeInterval(rule.interval * 60))
-        case .daily:
-            return calendar.date(byAdding: .day, value: rule.interval, to: date) ?? date
-        case .weekly:
-            if rule.weekdays.isEmpty {
-                return calendar.date(byAdding: .weekOfYear, value: rule.interval, to: date) ?? date
-            }
-            // For weekly with specific weekdays, advance one day at a time
-            // and check if we crossed a week boundary for interval > 1
-            var next = calendar.date(byAdding: .day, value: 1, to: date) ?? date
-            let startWeek = calendar.component(.weekOfYear, from: date)
-            let nextWeek = calendar.component(.weekOfYear, from: next)
-            if nextWeek != startWeek && rule.interval > 1 {
-                // Jumped to new week — skip (interval - 1) weeks
-                next = calendar.date(byAdding: .weekOfYear, value: rule.interval - 1, to: next) ?? next
-            }
-            return next
-        case .monthly:
-            return calendar.date(byAdding: .month, value: rule.interval, to: date) ?? date
-        case .yearly:
-            return calendar.date(byAdding: .year, value: rule.interval, to: date) ?? date
-        }
     }
 
     /// Events grouped by day for display
@@ -317,19 +234,27 @@ class ReminderService: ObservableObject {
     func addLocalEvent(_ event: CalendarEvent) {
         localEvents.append(event)
         saveLocalEvents()
-        scheduleReminders(for: Self.expandRecurringEvent(event))
+        scheduleReminders(for: RecurrenceExpander.expand(event, excludedIds: excludedOccurrences))
     }
 
     /// Remove the entire recurring series (by the base event id).
     func removeLocalEvent(id: String) {
         if let event = localEvents.first(where: { $0.id == id }) {
-            let expanded = Self.expandRecurringEvent(event)
-            for occurrence in expanded {
-                cancelReminders(for: occurrence.id)
-            }
+            let expanded = RecurrenceExpander.expand(event, excludedIds: excludedOccurrences)
+            for occurrence in expanded { cancelReminders(for: occurrence.id) }
         }
+        // Clean up any exclusions for this series
+        excludedOccurrences = excludedOccurrences.filter { !$0.hasPrefix(id) }
+        saveExcludedOccurrences()
         localEvents.removeAll { $0.id == id }
         saveLocalEvents()
+    }
+
+    /// Exclude a single occurrence of a recurring event (EXDATE equivalent).
+    func excludeOccurrence(occurrenceId: String) {
+        excludedOccurrences.insert(occurrenceId)
+        saveExcludedOccurrences()
+        cancelReminders(for: occurrenceId)
     }
 
     /// Find the base series event for an expanded occurrence.
@@ -340,14 +265,11 @@ class ReminderService: ObservableObject {
 
     func updateLocalEvent(_ event: CalendarEvent) {
         guard let index = localEvents.firstIndex(where: { $0.id == event.id }) else { return }
-        // Cancel reminders for all occurrences of the old event
-        let oldExpanded = Self.expandRecurringEvent(localEvents[index])
-        for occurrence in oldExpanded {
-            cancelReminders(for: occurrence.id)
-        }
+        let oldExpanded = RecurrenceExpander.expand(localEvents[index], excludedIds: excludedOccurrences)
+        for occurrence in oldExpanded { cancelReminders(for: occurrence.id) }
         localEvents[index] = event
         saveLocalEvents()
-        scheduleReminders(for: Self.expandRecurringEvent(event))
+        scheduleReminders(for: RecurrenceExpander.expand(event, excludedIds: excludedOccurrences))
     }
 
     private func saveLocalEvents() {
@@ -360,6 +282,19 @@ class ReminderService: ObservableObject {
         guard let data = UserDefaults.standard.data(forKey: "LocalEvents"),
               let events = try? JSONDecoder().decode([CalendarEvent].self, from: data) else { return }
         localEvents = events.filter { $0.isUpcoming || $0.recurrenceRule != nil }
+        loadExcludedOccurrences()
+    }
+
+    private func saveExcludedOccurrences() {
+        if let data = try? JSONEncoder().encode(Array(excludedOccurrences)) {
+            UserDefaults.standard.set(data, forKey: "ExcludedOccurrences")
+        }
+    }
+
+    private func loadExcludedOccurrences() {
+        guard let data = UserDefaults.standard.data(forKey: "ExcludedOccurrences"),
+              let ids = try? JSONDecoder().decode([String].self, from: data) else { return }
+        excludedOccurrences = Set(ids)
     }
 
     // MARK: - Snooze

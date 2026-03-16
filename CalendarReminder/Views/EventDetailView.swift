@@ -6,6 +6,7 @@ struct EventDetailView: View {
     var onEdit: ((CalendarEvent) -> Void)? = nil
     var onDelete: ((CalendarEvent) -> Void)? = nil
     var onDeleteSeries: ((CalendarEvent) -> Void)? = nil
+    var onDeleteOccurrence: ((CalendarEvent) -> Void)? = nil
 
     @State private var showDeleteConfirmation = false
     @State private var showSeriesDeleteChoice = false
@@ -91,7 +92,6 @@ struct EventDetailView: View {
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
 
-                            // Weekday chips for weekly
                             if rule.frequency == .weekly && !rule.weekdays.isEmpty {
                                 HStack(spacing: DS.Spacing.xs) {
                                     ForEach(Weekday.allCases.filter { rule.weekdays.contains($0) }, id: \.self) { day in
@@ -149,23 +149,32 @@ struct EventDetailView: View {
                     } label: {
                         Label("Delete", systemImage: "trash")
                     }
-                    // Single event delete confirmation
-                    .alert("Delete Event", isPresented: $showDeleteConfirmation) {
+                    // Single (non-recurring) event
+                    .confirmationDialog(
+                        "Delete Event",
+                        isPresented: $showDeleteConfirmation,
+                        titleVisibility: .visible
+                    ) {
+                        Button("Delete", role: .destructive) { onDelete?(event) }
                         Button("Cancel", role: .cancel) { }
-                        Button("Delete", role: .destructive) {
-                            onDelete?(event)
-                        }
                     } message: {
                         Text("Are you sure you want to delete \"\(event.title)\"?")
                     }
-                    // Recurring event scope-of-delete
-                    .alert("Delete Recurring Event", isPresented: $showSeriesDeleteChoice) {
-                        Button("Cancel", role: .cancel) { }
+                    // Recurring event — scope-of-delete
+                    .confirmationDialog(
+                        "Delete Recurring Event",
+                        isPresented: $showSeriesDeleteChoice,
+                        titleVisibility: .visible
+                    ) {
+                        Button("Delete This Event Only") {
+                            onDeleteOccurrence?(event)
+                        }
                         Button("Delete All Events", role: .destructive) {
                             onDeleteSeries?(event)
                         }
+                        Button("Cancel", role: .cancel) { }
                     } message: {
-                        Text("This is a recurring event. All occurrences of \"\(event.title)\" will be deleted.")
+                        Text("\"\(event.title)\" is a recurring event.")
                     }
 
                     Spacer()
