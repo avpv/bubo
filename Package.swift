@@ -10,6 +10,7 @@ let package = Package(
         .executableTarget(
             name: "CalendarReminder",
             path: "CalendarReminder",
+            exclude: ["Info.plist"],
             resources: [.copy("Resources/AppIcon.icns")]
         )
     ]
