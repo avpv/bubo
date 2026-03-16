@@ -40,11 +40,13 @@ class ReminderSettings: ObservableObject, Codable {
     @Published var doNotDisturbEnabled: Bool
     @Published var doNotDisturbFrom: Date  // time only
     @Published var doNotDisturbTo: Date    // time only
+    @Published var selectedCalendarHrefs: [String]  // empty = all calendars
 
     enum CodingKeys: String, CodingKey {
         case intervals, syncIntervalMinutes, showFullScreenAlert, showSystemNotification
         case playSound, launchAtLogin, authMethod
         case doNotDisturbEnabled, doNotDisturbFrom, doNotDisturbTo
+        case selectedCalendarHrefs
     }
 
     init() {
@@ -63,6 +65,7 @@ class ReminderSettings: ObservableObject, Codable {
         let calendar = Calendar.current
         self.doNotDisturbFrom = calendar.date(from: DateComponents(hour: 22, minute: 0)) ?? Date()
         self.doNotDisturbTo = calendar.date(from: DateComponents(hour: 8, minute: 0)) ?? Date()
+        self.selectedCalendarHrefs = [] // empty = sync all
     }
 
     required init(from decoder: Decoder) throws {
@@ -81,6 +84,7 @@ class ReminderSettings: ObservableObject, Codable {
             ?? calendar.date(from: DateComponents(hour: 22, minute: 0))!
         doNotDisturbTo = try container.decodeIfPresent(Date.self, forKey: .doNotDisturbTo)
             ?? calendar.date(from: DateComponents(hour: 8, minute: 0))!
+        selectedCalendarHrefs = try container.decodeIfPresent([String].self, forKey: .selectedCalendarHrefs) ?? []
     }
 
     func encode(to encoder: Encoder) throws {
@@ -95,6 +99,7 @@ class ReminderSettings: ObservableObject, Codable {
         try container.encode(doNotDisturbEnabled, forKey: .doNotDisturbEnabled)
         try container.encode(doNotDisturbFrom, forKey: .doNotDisturbFrom)
         try container.encode(doNotDisturbTo, forKey: .doNotDisturbTo)
+        try container.encode(selectedCalendarHrefs, forKey: .selectedCalendarHrefs)
     }
 
     /// Check if current time is within Do Not Disturb period

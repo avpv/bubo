@@ -18,7 +18,11 @@ actor YandexCalDAVService {
         self.authMode = mode
     }
 
-    func fetchEvents(from startDate: Date, to endDate: Date) async throws -> [CalendarEvent] {
+    func fetchEvents(
+        from startDate: Date,
+        to endDate: Date,
+        onlyCalendars: [String] = []
+    ) async throws -> [CalendarEvent] {
         let login = try await resolveLogin()
         let calendarsPath = "/calendars/\(login)/"
 
@@ -28,6 +32,11 @@ actor YandexCalDAVService {
 
         var allEvents: [CalendarEvent] = []
         for info in calendarInfos where info.isCalendar {
+            // Filter by selected calendars (empty = all)
+            if !onlyCalendars.isEmpty && !onlyCalendars.contains(info.href) {
+                continue
+            }
+
             let events = try await RetryHelper.withRetry {
                 try await self.fetchEventsFromCalendar(
                     path: info.href,
@@ -40,6 +49,15 @@ actor YandexCalDAVService {
         }
 
         return allEvents.sorted { $0.startDate < $1.startDate }
+    }
+
+    /// Discover available calendars (public for settings UI)
+    func listCalendars() async throws -> [CalDAVXMLParser.CalendarInfo] {
+        let login = try await resolveLogin()
+        let calendarsPath = "/calendars/\(login)/"
+        return try await RetryHelper.withRetry {
+            try await self.discoverCalendars(path: calendarsPath)
+        }
     }
 
     // MARK: - Private

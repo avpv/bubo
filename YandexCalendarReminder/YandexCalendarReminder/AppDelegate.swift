@@ -89,6 +89,9 @@ struct FullScreenAlertContentView: View {
     let onDismiss: () -> Void
     let onSnooze: (Int) -> Void
 
+    @State private var secondsRemaining: Int = 0
+    @State private var countdownTimer: Timer?
+
     var body: some View {
         ZStack {
             Color.black.opacity(0.85)
@@ -105,6 +108,12 @@ struct FullScreenAlertContentView: View {
                 Text(headerText)
                     .font(.system(size: 48, weight: .bold))
                     .foregroundColor(.white)
+
+                // Live countdown timer
+                Text(countdownText)
+                    .font(.system(size: 72, weight: .heavy, design: .monospaced))
+                    .foregroundColor(countdownColor)
+                    .shadow(color: countdownColor.opacity(0.5), radius: 10)
 
                 Text(event.title)
                     .font(.system(size: 36, weight: .semibold))
@@ -128,11 +137,10 @@ struct FullScreenAlertContentView: View {
 
                 // Action buttons
                 HStack(spacing: 20) {
-                    // Snooze options
                     Menu {
-                        Button("Через 5 минут") { onSnooze(5) }
-                        Button("Через 10 минут") { onSnooze(10) }
-                        Button("Через 15 минут") { onSnooze(15) }
+                        Button("Через 5 минут") { cleanup(); onSnooze(5) }
+                        Button("Через 10 минут") { cleanup(); onSnooze(10) }
+                        Button("Через 15 минут") { cleanup(); onSnooze(15) }
                     } label: {
                         Text("Отложить")
                             .font(.title3)
@@ -147,7 +155,7 @@ struct FullScreenAlertContentView: View {
                     }
                     .buttonStyle(.plain)
 
-                    Button(action: onDismiss) {
+                    Button(action: { cleanup(); onDismiss() }) {
                         Text("Понятно")
                             .font(.title2)
                             .fontWeight(.semibold)
@@ -168,12 +176,54 @@ struct FullScreenAlertContentView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear { startCountdown() }
+        .onDisappear { cleanup() }
+    }
+
+    // MARK: - Countdown
+
+    private func startCountdown() {
+        updateSecondsRemaining()
+        countdownTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+            updateSecondsRemaining()
+        }
+    }
+
+    private func updateSecondsRemaining() {
+        let remaining = Int(event.startDate.timeIntervalSinceNow)
+        secondsRemaining = max(remaining, 0)
+    }
+
+    private func cleanup() {
+        countdownTimer?.invalidate()
+        countdownTimer = nil
+    }
+
+    private var countdownText: String {
+        if secondsRemaining <= 0 {
+            return "00:00"
+        }
+        let minutes = secondsRemaining / 60
+        let seconds = secondsRemaining % 60
+        if minutes >= 60 {
+            let hours = minutes / 60
+            let mins = minutes % 60
+            return String(format: "%d:%02d:%02d", hours, mins, seconds)
+        }
+        return String(format: "%02d:%02d", minutes, seconds)
+    }
+
+    private var countdownColor: Color {
+        if secondsRemaining <= 0 { return .red }
+        if secondsRemaining <= 120 { return .red }
+        if secondsRemaining <= 300 { return .orange }
+        return .white
     }
 
     private var headerText: String {
-        if minutesBefore <= 0 {
-            return "Встреча начинается!"
+        if secondsRemaining <= 0 {
+            return "Встреча началась!"
         }
-        return "Встреча через \(minutesBefore) мин!"
+        return "Встреча через"
     }
 }

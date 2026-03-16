@@ -8,6 +8,9 @@ struct SettingsView: View {
     @State private var connectionStatus: ConnectionStatus = .unknown
     @State private var oauthCode = ""
     @State private var oauthStatus: OAuthStatus = .idle
+    @State private var availableCalendars: [CalDAVXMLParser.CalendarInfo] = []
+    @State private var isLoadingCalendars = false
+    @State private var calendarLoadError: String?
 
     enum ConnectionStatus {
         case unknown, checking, success, failed(String)
@@ -22,13 +25,16 @@ struct SettingsView: View {
             accountTab
                 .tabItem { Label("Аккаунт", systemImage: "person.circle") }
 
+            calendarsTab
+                .tabItem { Label("Календари", systemImage: "calendar") }
+
             remindersTab
                 .tabItem { Label("Напоминания", systemImage: "bell") }
 
             generalTab
                 .tabItem { Label("Основные", systemImage: "gear") }
         }
-        .frame(width: 480, height: 420)
+        .frame(width: 480, height: 460)
     }
 
     // MARK: - Account Tab
@@ -168,6 +174,116 @@ struct SettingsView: View {
             Label(error, systemImage: "xmark.circle.fill")
                 .foregroundColor(.red)
                 .font(.caption)
+        }
+    }
+
+    // MARK: - Calendars Tab
+
+    private var calendarsTab: some View {
+        Form {
+            Section {
+                HStack {
+                    Button("Загрузить список календарей") {
+                        loadCalendars()
+                    }
+                    .disabled(isLoadingCalendars)
+
+                    if isLoadingCalendars {
+                        ProgressView().scaleEffect(0.7)
+                    }
+                }
+
+                if let error = calendarLoadError {
+                    Label(error, systemImage: "xmark.circle.fill")
+                        .foregroundColor(.red)
+                        .font(.caption)
+                }
+            }
+
+            if !availableCalendars.isEmpty {
+                Section("Выберите календари для синхронизации") {
+                    Toggle("Все календари", isOn: Binding(
+                        get: { settings.selectedCalendarHrefs.isEmpty },
+                        set: { isAll in
+                            if isAll {
+                                settings.selectedCalendarHrefs = []
+                            } else {
+                                settings.selectedCalendarHrefs = availableCalendars.map { $0.href }
+                            }
+                            saveSettings()
+                        }
+                    ))
+                    .fontWeight(.medium)
+
+                    if !settings.selectedCalendarHrefs.isEmpty {
+                        ForEach(availableCalendars, id: \.href) { calendar in
+                            Toggle(
+                                calendar.displayName,
+                                isOn: Binding(
+                                    get: {
+                                        settings.selectedCalendarHrefs.contains(calendar.href)
+                                    },
+                                    set: { isOn in
+                                        if isOn {
+                                            if !settings.selectedCalendarHrefs.contains(calendar.href) {
+                                                settings.selectedCalendarHrefs.append(calendar.href)
+                                            }
+                                        } else {
+                                            settings.selectedCalendarHrefs.removeAll { $0 == calendar.href }
+                                        }
+                                        // If all are selected, switch back to "all" mode
+                                        if settings.selectedCalendarHrefs.count == availableCalendars.count {
+                                            settings.selectedCalendarHrefs = []
+                                        }
+                                        saveSettings()
+                                    }
+                                )
+                            )
+                        }
+                    }
+                }
+
+                Section {
+                    Text(settings.selectedCalendarHrefs.isEmpty
+                        ? "Синхронизируются все календари"
+                        : "Выбрано: \(settings.selectedCalendarHrefs.count) из \(availableCalendars.count)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            } else if !isLoadingCalendars && calendarLoadError == nil {
+                Section {
+                    Text("Нажмите «Загрузить» для получения списка календарей.\nУбедитесь, что аккаунт настроен во вкладке «Аккаунт».")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .padding()
+    }
+
+    private func loadCalendars() {
+        isLoadingCalendars = true
+        calendarLoadError = nil
+
+        let authMode: YandexCalDAVService.AuthMode
+        switch settings.authMethod {
+        case .appPassword:
+            authMode = .appPassword(login: settings.yandexLogin, password: settings.yandexAppPassword)
+        case .oauth:
+            authMode = .oauth
+        }
+
+        let service = YandexCalDAVService(authMode: authMode)
+
+        Task {
+            do {
+                let calendars = try await service.listCalendars()
+                availableCalendars = calendars.filter { $0.isCalendar }
+                isLoadingCalendars = false
+            } catch {
+                calendarLoadError = error.localizedDescription
+                isLoadingCalendars = false
+            }
         }
     }
 

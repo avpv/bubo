@@ -127,7 +127,11 @@ class ReminderService: ObservableObject {
             do {
                 let now = Date()
                 let endDate = Calendar.current.date(byAdding: .day, value: 7, to: now)!
-                let events = try await service.fetchEvents(from: now, to: endDate)
+                let events = try await service.fetchEvents(
+                    from: now,
+                    to: endDate,
+                    onlyCalendars: self.settings.selectedCalendarHrefs
+                )
 
                 self.upcomingEvents = events
                 self.lastSyncDate = Date()
