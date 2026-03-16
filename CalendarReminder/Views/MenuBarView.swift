@@ -164,16 +164,15 @@ struct MenuBarView: View {
 
                 Spacer()
 
-                if #available(macOS 14.0, *) {
-                    SettingsLink {
-                        Label("Settings", systemImage: "gear")
-                    }
-                } else {
-                    Button(action: {
+                Button(action: {
+                    NSApp.activate(ignoringOtherApps: true)
+                    if #available(macOS 14.0, *) {
                         NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-                    }) {
-                        Label("Settings", systemImage: "gear")
+                    } else {
+                        NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
                     }
+                }) {
+                    Label("Settings", systemImage: "gear")
                 }
 
                 Button(action: { NSApplication.shared.terminate(nil) }) {
