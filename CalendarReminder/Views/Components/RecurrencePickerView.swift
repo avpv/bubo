@@ -44,7 +44,7 @@ struct RecurrencePickerView: View {
         Section("Repeat") {
             Picker("Frequency", selection: $frequency) {
                 Text("Never").tag(RecurrenceFrequency?.none)
-                ForEach(RecurrenceFrequency.allCases, id: \.self) { freq in
+                ForEach(RecurrenceFrequency.userVisible, id: \.self) { freq in
                     Text("Every \(freq.label)").tag(Optional(freq))
                 }
             }
@@ -92,7 +92,10 @@ struct RecurrencePickerView: View {
                 }
             }
         }
-        .onChange(of: frequency) { _ in syncToBinding() }
+        .onChange(of: frequency) { newFreq in
+            if newFreq != .weekly { selectedWeekdays.removeAll() }
+            syncToBinding()
+        }
         .onChange(of: interval) { _ in syncToBinding() }
         .onChange(of: endChoice) { _ in syncToBinding() }
         .onChange(of: endCount) { _ in syncToBinding() }

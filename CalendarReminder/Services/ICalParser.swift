@@ -71,7 +71,14 @@ struct ICalParser {
                         properties[key] = value
                         properties[baseName] = trimmed // full line for timezone extraction
                     } else if baseName == "EXDATE" {
-                        // Accumulate multiple EXDATE lines (RFC 5545 allows repeated properties)
+                        // Store full line to preserve TZID params for timezone-aware parsing
+                        let fullEntry = trimmed
+                        if let existing = properties["EXDATE_FULL"] {
+                            properties["EXDATE_FULL"] = existing + "\n" + fullEntry
+                        } else {
+                            properties["EXDATE_FULL"] = fullEntry
+                        }
+                        // Also store raw values for backward compatibility
                         if let existing = properties["EXDATE"] {
                             properties["EXDATE"] = existing + "," + value
                         } else {
@@ -166,15 +173,37 @@ struct ICalParser {
         _ props: [String: String],
         vtimezones: [String: TimeZone]
     ) -> Set<Date> {
-        guard let exdateStr = props["EXDATE"] else { return [] }
-
         var dates = Set<Date>()
-        let values = exdateStr.components(separatedBy: ",")
-        for value in values {
-            if let date = parseICalDate(value.trimmingCharacters(in: .whitespaces)) {
-                dates.insert(date)
+
+        // Prefer full lines with TZID parameters
+        if let fullLines = props["EXDATE_FULL"] {
+            for line in fullLines.components(separatedBy: "\n") {
+                // Extract TZID from line like "EXDATE;TZID=Europe/Moscow:20260316T100000,20260317T100000"
+                var tzId: String?
+                if let tzRange = line.range(of: "TZID=") {
+                    let after = line[tzRange.upperBound...]
+                    if let end = after.firstIndex(of: ":") ?? after.firstIndex(of: ";") {
+                        tzId = String(after[..<end])
+                    }
+                }
+                // Extract values after the last colon
+                let parts = line.components(separatedBy: ":")
+                guard let valuesStr = parts.last else { continue }
+                for value in valuesStr.components(separatedBy: ",") {
+                    if let date = parseICalDate(value.trimmingCharacters(in: .whitespaces), tzId: tzId, vtimezones: vtimezones) {
+                        dates.insert(date)
+                    }
+                }
+            }
+        } else if let exdateStr = props["EXDATE"] {
+            // Fallback: raw values without timezone
+            for value in exdateStr.components(separatedBy: ",") {
+                if let date = parseICalDate(value.trimmingCharacters(in: .whitespaces)) {
+                    dates.insert(date)
+                }
             }
         }
+
         return dates
     }
 
