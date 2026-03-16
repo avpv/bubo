@@ -316,7 +316,7 @@ struct ICalParser {
         default: return nil
         }
 
-        var nextDate = calendar.date(byAdding: component, value: rule.interval, to: date)
+        let nextDate = calendar.date(byAdding: component, value: rule.interval, to: date)
 
         // Handle BYDAY for weekly recurrence
         if rule.freq == "WEEKLY" && !rule.byDay.isEmpty {
