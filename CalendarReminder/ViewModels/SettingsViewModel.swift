@@ -57,7 +57,7 @@ class SettingsViewModel: ObservableObject {
         Task {
             do {
                 let now = Date()
-                let end = Calendar.current.date(byAdding: .day, value: 1, to: now)!
+                let end = Calendar.current.date(byAdding: .day, value: 1, to: now) ?? now
                 _ = try await service.fetchEvents(from: now, to: end)
                 connectionStatus = .success
             } catch {

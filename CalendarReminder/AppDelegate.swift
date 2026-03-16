@@ -71,8 +71,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 60) { [weak self] in
             self?.dismissAlert()
         }
-
-        NSSound.beep()
     }
 }
 

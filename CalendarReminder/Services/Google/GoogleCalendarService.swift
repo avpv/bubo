@@ -83,19 +83,29 @@ actor GoogleCalendarService {
         let encodedId = calendarId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? calendarId
         let path = "/calendars/\(encodedId)/events"
 
-        var queryComponents = URLComponents()
-        queryComponents.queryItems = [
-            URLQueryItem(name: "timeMin", value: isoFormatter.string(from: startDate)),
-            URLQueryItem(name: "timeMax", value: isoFormatter.string(from: endDate)),
-            URLQueryItem(name: "singleEvents", value: "true"),
-            URLQueryItem(name: "orderBy", value: "startTime"),
-            URLQueryItem(name: "maxResults", value: "250")
-        ]
+        var allItems: [GoogleEvent] = []
+        var pageToken: String? = nil
 
-        let data = try await authenticatedRequest(path: path, query: queryComponents.percentEncodedQuery)
-        let response = try JSONDecoder().decode(EventsResponse.self, from: data)
+        repeat {
+            var pageQueryComponents = URLComponents()
+            pageQueryComponents.queryItems = [
+                URLQueryItem(name: "timeMin", value: isoFormatter.string(from: startDate)),
+                URLQueryItem(name: "timeMax", value: isoFormatter.string(from: endDate)),
+                URLQueryItem(name: "singleEvents", value: "true"),
+                URLQueryItem(name: "orderBy", value: "startTime"),
+                URLQueryItem(name: "maxResults", value: "250")
+            ]
+            if let token = pageToken {
+                pageQueryComponents.queryItems?.append(URLQueryItem(name: "pageToken", value: token))
+            }
 
-        return (response.items ?? []).compactMap { event in
+            let data = try await authenticatedRequest(path: path, query: pageQueryComponents.percentEncodedQuery)
+            let response = try JSONDecoder().decode(EventsResponse.self, from: data)
+            allItems.append(contentsOf: response.items ?? [])
+            pageToken = response.nextPageToken
+        } while pageToken != nil
+
+        return allItems.compactMap { event in
             convertToCalendarEvent(event, calendarName: calendarName)
         }
     }
