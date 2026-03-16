@@ -83,7 +83,11 @@ struct RecurrenceRule: Codable, Hashable {
             case .dayOfMonth(let day):
                 parts.append("on the \(DS.formatOrdinal(day))")
             case .weekdayPosition(let ordinal, let weekday):
-                parts.append("on the \(DS.formatOrdinal(ordinal)) \(weekday.shortName)")
+                if ordinal < 0 {
+                    parts.append("on the last \(weekday.shortName)")
+                } else {
+                    parts.append("on the \(DS.formatOrdinal(ordinal)) \(weekday.shortName)")
+                }
             }
         }
 

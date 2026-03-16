@@ -99,8 +99,16 @@ enum RecurrenceExpander {
                 return day == min(targetDay, daysInMonth)
             case .weekdayPosition(let ordinal, let weekday):
                 let currentWeekday = calendar.component(.weekday, from: date)
-                let currentOrdinal = calendar.component(.weekdayOrdinal, from: date)
-                return currentWeekday == weekday.calendarWeekday && currentOrdinal == ordinal
+                guard currentWeekday == weekday.calendarWeekday else { return false }
+                if ordinal > 0 {
+                    return calendar.component(.weekdayOrdinal, from: date) == ordinal
+                } else {
+                    // Negative ordinal: -1 = last, -2 = second-to-last
+                    // Check by counting forward: if adding 7 days crosses into next month, it's the last
+                    let daysForward = abs(ordinal) * 7
+                    guard let future = calendar.date(byAdding: .day, value: daysForward, to: date) else { return false }
+                    return calendar.component(.month, from: future) != calendar.component(.month, from: date)
+                }
             }
         }
 
@@ -136,18 +144,25 @@ enum RecurrenceExpander {
                 }
                 candidate = calendar.date(byAdding: .day, value: 1, to: candidate) ?? candidate
             }
-            // No more matching days this week — jump to first matching day of next interval week
-            let weekStartComps = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: date)
-            let thisWeekStart = calendar.date(from: weekStartComps) ?? date
-            let nextWeekStart = calendar.date(byAdding: .weekOfYear, value: rule.interval, to: thisWeekStart) ?? date
+            // No more matching days this week — jump to next interval week, preserving time
+            // Use the original date (which has correct time) and advance by interval weeks
+            let advancedDate = calendar.date(byAdding: .weekOfYear, value: rule.interval, to: date) ?? date
+            // Go back to the start of that week (preserving time via hour/minute/second from date)
+            let timeComps = calendar.dateComponents([.hour, .minute, .second], from: date)
+            let targetWeekComps = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: advancedDate)
             for dayOffset in 0..<7 {
-                let day = calendar.date(byAdding: .day, value: dayOffset, to: nextWeekStart) ?? nextWeekStart
+                var comps = targetWeekComps
+                comps.hour = timeComps.hour
+                comps.minute = timeComps.minute
+                comps.second = timeComps.second
+                guard let weekStart = calendar.date(from: comps) else { continue }
+                let day = calendar.date(byAdding: .day, value: dayOffset, to: weekStart) ?? weekStart
                 let wd = calendar.component(.weekday, from: day)
                 if rule.weekdays.contains(where: { $0.calendarWeekday == wd }) {
                     return day
                 }
             }
-            return calendar.date(byAdding: .weekOfYear, value: rule.interval, to: date) ?? date
+            return advancedDate
 
         case .monthly:
             if let mode = rule.monthlyMode {
@@ -176,12 +191,44 @@ enum RecurrenceExpander {
             return calendar.date(from: comps) ?? next
 
         case .weekdayPosition(let ordinal, let weekday):
-            // Find the Nth weekday in the target month
             guard let baseNext = calendar.date(byAdding: .month, value: interval, to: date) else { return date }
-            var comps = calendar.dateComponents([.year, .month, .hour, .minute, .second], from: baseNext)
-            comps.weekday = weekday.calendarWeekday
-            comps.weekdayOrdinal = ordinal
-            return calendar.date(from: comps) ?? baseNext
+            let timeComps = calendar.dateComponents([.hour, .minute, .second], from: date)
+
+            if ordinal > 0 {
+                // Positive ordinal: Nth weekday of the month
+                var comps = calendar.dateComponents([.year, .month], from: baseNext)
+                comps.weekday = weekday.calendarWeekday
+                comps.weekdayOrdinal = ordinal
+                comps.hour = timeComps.hour
+                comps.minute = timeComps.minute
+                comps.second = timeComps.second
+                return calendar.date(from: comps) ?? baseNext
+            } else {
+                // Negative ordinal: count from end of month (-1 = last, -2 = second-to-last)
+                // Find last day of month, then scan backwards for matching weekday
+                var endComps = calendar.dateComponents([.year, .month], from: baseNext)
+                endComps.month! += 1
+                endComps.day = 0 // last day of previous month = last day of target month
+                guard let lastDay = calendar.date(from: endComps) else { return baseNext }
+
+                var count = 0
+                var candidate = lastDay
+                for _ in 0..<35 {
+                    if calendar.component(.weekday, from: candidate) == weekday.calendarWeekday {
+                        count += 1
+                        if count == abs(ordinal) {
+                            var result = calendar.dateComponents([.year, .month, .day], from: candidate)
+                            result.hour = timeComps.hour
+                            result.minute = timeComps.minute
+                            result.second = timeComps.second
+                            return calendar.date(from: result) ?? baseNext
+                        }
+                    }
+                    guard let prev = calendar.date(byAdding: .day, value: -1, to: candidate) else { break }
+                    candidate = prev
+                }
+                return baseNext
+            }
         }
     }
 }

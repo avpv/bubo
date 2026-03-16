@@ -22,6 +22,7 @@ struct RecurrencePickerView: View {
     private enum MonthlyModeChoice: String, CaseIterable {
         case dayOfMonth = "Day of month"
         case weekdayPosition = "Weekday position"
+        case lastWeekday = "Last weekday"
     }
 
     /// Computed day of month from event start date.
@@ -141,6 +142,8 @@ struct RecurrencePickerView: View {
             if let wd = startWeekday {
                 Text("On the \(DS.formatOrdinal(startWeekdayOrdinal)) \(wd.shortName)")
                     .tag(MonthlyModeChoice.weekdayPosition)
+                Text("On the last \(wd.shortName)")
+                    .tag(MonthlyModeChoice.lastWeekday)
             }
         }
         .pickerStyle(.menu)
@@ -164,6 +167,12 @@ struct RecurrencePickerView: View {
             case .weekdayPosition:
                 if let wd = startWeekday {
                     monthly = .weekdayPosition(ordinal: startWeekdayOrdinal, weekday: wd)
+                } else {
+                    monthly = .dayOfMonth(startDayOfMonth)
+                }
+            case .lastWeekday:
+                if let wd = startWeekday {
+                    monthly = .weekdayPosition(ordinal: -1, weekday: wd)
                 } else {
                     monthly = .dayOfMonth(startDayOfMonth)
                 }
@@ -197,7 +206,8 @@ struct RecurrencePickerView: View {
         if let mode = r.monthlyMode {
             switch mode {
             case .dayOfMonth: monthlyMode = .dayOfMonth
-            case .weekdayPosition: monthlyMode = .weekdayPosition
+            case .weekdayPosition(let ordinal, _):
+                monthlyMode = ordinal < 0 ? .lastWeekday : .weekdayPosition
             }
         }
     }
