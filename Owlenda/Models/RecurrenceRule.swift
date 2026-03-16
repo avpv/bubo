@@ -8,25 +8,34 @@ struct RecurrenceRule: Codable, Hashable {
     let end: RecurrenceEnd
     let weekdays: Set<Weekday>
     let monthlyMode: MonthlyMode?
+    /// Explicit flag: this rule was created via the Pomodoro picker.
+    let pomodoroMode: Bool
+    /// Minutes of long break after all Pomodoro rounds (0 = no long break).
+    let pomodoroLongBreak: Int
 
     init(
         frequency: RecurrenceFrequency,
         interval: Int = 1,
         end: RecurrenceEnd = .never,
         weekdays: Set<Weekday> = [],
-        monthlyMode: MonthlyMode? = nil
+        monthlyMode: MonthlyMode? = nil,
+        pomodoroMode: Bool = false,
+        pomodoroLongBreak: Int = 0
     ) {
         self.frequency = frequency
         self.interval = interval
         self.end = end
         self.weekdays = weekdays
         self.monthlyMode = monthlyMode
+        self.pomodoroMode = pomodoroMode
+        self.pomodoroLongBreak = pomodoroLongBreak
     }
 
     // MARK: - Codable migration from old format (intervalMinutes + repeatCount)
 
     private enum CodingKeys: String, CodingKey {
         case frequency, interval, end, weekdays, monthlyMode
+        case pomodoroMode, pomodoroLongBreak
         // Legacy keys
         case intervalMinutes, repeatCount
     }
@@ -38,6 +47,12 @@ struct RecurrenceRule: Codable, Hashable {
         try container.encode(end, forKey: .end)
         try container.encode(weekdays, forKey: .weekdays)
         try container.encodeIfPresent(monthlyMode, forKey: .monthlyMode)
+        if pomodoroMode {
+            try container.encode(pomodoroMode, forKey: .pomodoroMode)
+        }
+        if pomodoroLongBreak > 0 {
+            try container.encode(pomodoroLongBreak, forKey: .pomodoroLongBreak)
+        }
     }
 
     init(from decoder: Decoder) throws {
@@ -50,6 +65,8 @@ struct RecurrenceRule: Codable, Hashable {
             self.end = try container.decodeIfPresent(RecurrenceEnd.self, forKey: .end) ?? .never
             self.weekdays = try container.decodeIfPresent(Set<Weekday>.self, forKey: .weekdays) ?? []
             self.monthlyMode = try container.decodeIfPresent(MonthlyMode.self, forKey: .monthlyMode)
+            self.pomodoroMode = try container.decodeIfPresent(Bool.self, forKey: .pomodoroMode) ?? false
+            self.pomodoroLongBreak = try container.decodeIfPresent(Int.self, forKey: .pomodoroLongBreak) ?? 0
             return
         }
 
@@ -61,21 +78,22 @@ struct RecurrenceRule: Codable, Hashable {
         self.end = .afterCount(repeatCount)
         self.weekdays = []
         self.monthlyMode = nil
+        self.pomodoroMode = true  // Legacy minutely rules were Pomodoro presets
+        self.pomodoroLongBreak = 0
     }
 
     /// Whether this rule represents a Pomodoro Technique session.
-    var isPomodoro: Bool {
-        if case .afterCount = end {
-            return frequency == .minutely
-        }
-        return false
-    }
+    var isPomodoro: Bool { pomodoroMode }
 
     /// Human-readable summary
     var displayText: String {
-        // Pomodoro-specific display (interval = cycle, count = rounds)
+        // Pomodoro-specific display
         if isPomodoro, case .afterCount(let rounds) = end {
-            return "Pomodoro: \(rounds) rounds, every \(interval) min"
+            var text = "Pomodoro: \(rounds) rounds, every \(interval) min"
+            if pomodoroLongBreak > 0 {
+                text += ", then \(pomodoroLongBreak) min break"
+            }
+            return text
         }
 
         var parts: [String] = []

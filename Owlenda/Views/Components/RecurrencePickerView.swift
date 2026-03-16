@@ -32,6 +32,8 @@ struct RecurrencePickerView: View {
     @State private var pomodoroWork: Int = 25
     @State private var pomodoroBreak: Int = 5
     @State private var pomodoroRounds: Int = 4
+    @State private var pomodoroLongBreak: Int = 15
+    @State private var pomodoroLongBreakEnabled: Bool = false
 
     // MARK: - Enums
 
@@ -67,7 +69,10 @@ struct RecurrencePickerView: View {
     }
 
     private var pomodoroTotalMinutes: Int {
-        pomodoroWork * pomodoroRounds + pomodoroBreak * (pomodoroRounds - 1)
+        let workTotal = pomodoroWork * pomodoroRounds
+        let shortBreakTotal = pomodoroBreak * (pomodoroRounds - 1)
+        let longBreak = pomodoroLongBreakEnabled ? pomodoroLongBreak : 0
+        return workTotal + shortBreakTotal + longBreak
     }
 
     // MARK: - Body
@@ -95,6 +100,8 @@ struct RecurrencePickerView: View {
         .onChange(of: pomodoroWork) { _ in syncToBinding() }
         .onChange(of: pomodoroBreak) { _ in syncToBinding() }
         .onChange(of: pomodoroRounds) { _ in syncToBinding() }
+        .onChange(of: pomodoroLongBreak) { _ in syncToBinding() }
+        .onChange(of: pomodoroLongBreakEnabled) { _ in syncToBinding() }
         .onAppear { loadFromBinding() }
     }
 
@@ -134,8 +141,26 @@ struct RecurrencePickerView: View {
                     .foregroundColor(.primary)
             }
 
+            // Long break toggle + stepper
+            Toggle(isOn: $pomodoroLongBreakEnabled) {
+                Label("Long break", systemImage: "moon.zzz")
+                    .foregroundColor(.primary)
+            }
+
+            if pomodoroLongBreakEnabled {
+                Stepper(value: $pomodoroLongBreak, in: 5...60, step: 5) {
+                    Label("Long break: \(pomodoroLongBreak) min", systemImage: "moon.zzz")
+                        .foregroundColor(.primary)
+                }
+            }
+
             // Visual timeline
             pomodoroTimeline
+                .animation(DS.Animation.standard, value: pomodoroWork)
+                .animation(DS.Animation.standard, value: pomodoroBreak)
+                .animation(DS.Animation.standard, value: pomodoroRounds)
+                .animation(DS.Animation.standard, value: pomodoroLongBreakEnabled)
+                .animation(DS.Animation.standard, value: pomodoroLongBreak)
 
             // Total summary
             Label(
@@ -174,29 +199,51 @@ struct RecurrencePickerView: View {
                             }
 
                         if round < pomodoroRounds - 1 {
-                            // Break block
+                            // Short break block
                             RoundedRectangle(cornerRadius: 3)
                                 .fill(Color.green.opacity(0.5))
                                 .frame(width: max(breakWidth - 1, 3))
                         }
                     }
+
+                    // Long break block at the end
+                    if pomodoroLongBreakEnabled && pomodoroLongBreak > 0 {
+                        let longBreakWidth = totalWidth * CGFloat(pomodoroLongBreak) / totalDuration
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(Color.indigo.opacity(0.5))
+                            .frame(width: max(longBreakWidth - 1, 6))
+                            .overlay {
+                                if longBreakWidth > 20 {
+                                    Text("\(pomodoroLongBreak)")
+                                        .font(.system(size: 9, weight: .medium, design: .rounded))
+                                        .foregroundColor(.white)
+                                }
+                            }
+                    }
                 }
             }
             .frame(height: 20)
             .accessibilityElement()
-            .accessibilityLabel("Pomodoro timeline: \(pomodoroRounds) rounds of \(pomodoroWork) min work and \(pomodoroBreak) min break")
+            .accessibilityLabel(
+                "Pomodoro timeline: \(pomodoroRounds) rounds of \(pomodoroWork) min work and \(pomodoroBreak) min break"
+                + (pomodoroLongBreakEnabled ? ", then \(pomodoroLongBreak) min long break" : "")
+            )
 
             // Legend
             HStack(spacing: DS.Spacing.lg) {
-                HStack(spacing: DS.Spacing.xs) {
-                    Circle().fill(Color.accentColor).frame(width: 6, height: 6)
-                    Text("Work").font(.caption2).foregroundColor(.secondary)
-                }
-                HStack(spacing: DS.Spacing.xs) {
-                    Circle().fill(Color.green.opacity(0.5)).frame(width: 6, height: 6)
-                    Text("Break").font(.caption2).foregroundColor(.secondary)
+                legendItem(color: Color.accentColor, label: "Work")
+                legendItem(color: Color.green.opacity(0.5), label: "Break")
+                if pomodoroLongBreakEnabled {
+                    legendItem(color: Color.indigo.opacity(0.5), label: "Long")
                 }
             }
+        }
+    }
+
+    private func legendItem(color: Color, label: String) -> some View {
+        HStack(spacing: DS.Spacing.xs) {
+            Circle().fill(color).frame(width: 6, height: 6)
+            Text(label).font(.caption2).foregroundColor(.secondary)
         }
     }
 
@@ -298,7 +345,9 @@ struct RecurrencePickerView: View {
         RecurrenceRule(
             frequency: .minutely,
             interval: pomodoroCycleMinutes,
-            end: .afterCount(pomodoroRounds)
+            end: .afterCount(pomodoroRounds),
+            pomodoroMode: true,
+            pomodoroLongBreak: pomodoroLongBreakEnabled ? pomodoroLongBreak : 0
         )
     }
 
@@ -360,14 +409,20 @@ struct RecurrencePickerView: View {
             return
         }
 
-        // Detect Pomodoro: minutely frequency with afterCount end
-        if r.frequency == .minutely, case .afterCount(let rounds) = r.end {
+        // Detect Pomodoro: explicit flag
+        if r.pomodoroMode {
             mode = .pomodoro
-            pomodoroRounds = rounds
+            if case .afterCount(let rounds) = r.end {
+                pomodoroRounds = rounds
+            }
             let workMin = Int(eventDuration)
             let cycleMin = r.interval
             pomodoroWork = max(workMin, 5)
             pomodoroBreak = max(cycleMin - workMin, 1)
+            if r.pomodoroLongBreak > 0 {
+                pomodoroLongBreakEnabled = true
+                pomodoroLongBreak = r.pomodoroLongBreak
+            }
             return
         }
 

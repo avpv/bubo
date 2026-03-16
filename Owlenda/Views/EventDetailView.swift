@@ -11,6 +11,15 @@ struct EventDetailView: View {
     @State private var showDeleteConfirmation = false
     @State private var showSeriesDeleteChoice = false
 
+    private func pomodoroBadge(_ text: String, icon: String, color: Color) -> some View {
+        Label(text, systemImage: icon)
+            .font(.caption2)
+            .padding(.horizontal, DS.Spacing.sm)
+            .padding(.vertical, DS.Spacing.xxs)
+            .background(color.opacity(0.15))
+            .clipShape(RoundedRectangle(cornerRadius: DS.Size.badgeCornerRadius))
+    }
+
     private var isLocal: Bool {
         event.calendarName == "Local"
     }
@@ -99,19 +108,12 @@ struct EventDetailView: View {
                             if rule.isPomodoro {
                                 let workMin = Int(event.endDate.timeIntervalSince(event.startDate) / 60)
                                 let breakMin = max(rule.interval - workMin, 0)
-                                HStack(spacing: DS.Spacing.md) {
-                                    Label("\(workMin) min work", systemImage: "brain.head.profile")
-                                        .font(.caption2)
-                                        .padding(.horizontal, DS.Spacing.sm)
-                                        .padding(.vertical, DS.Spacing.xxs)
-                                        .background(Color.accentColor.opacity(0.15))
-                                        .clipShape(RoundedRectangle(cornerRadius: DS.Size.badgeCornerRadius))
-                                    Label("\(breakMin) min break", systemImage: "cup.and.saucer")
-                                        .font(.caption2)
-                                        .padding(.horizontal, DS.Spacing.sm)
-                                        .padding(.vertical, DS.Spacing.xxs)
-                                        .background(Color.green.opacity(0.15))
-                                        .clipShape(RoundedRectangle(cornerRadius: DS.Size.badgeCornerRadius))
+                                FlowLayout(spacing: DS.Spacing.xs) {
+                                    pomodoroBadge("\(workMin) min work", icon: "brain.head.profile", color: .accentColor)
+                                    pomodoroBadge("\(breakMin) min break", icon: "cup.and.saucer", color: .green)
+                                    if rule.pomodoroLongBreak > 0 {
+                                        pomodoroBadge("\(rule.pomodoroLongBreak) min long break", icon: "moon.zzz", color: .indigo)
+                                    }
                                 }
                             }
 
