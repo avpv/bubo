@@ -13,6 +13,23 @@ struct RecurrencePickerView: View {
     @State private var selectedWeekdays: Set<Weekday> = []
     @State private var monthlyMode: MonthlyModeChoice = .dayOfMonth
 
+    /// Pomodoro Technique presets
+    private struct PomodoroPreset: Identifiable {
+        let id: String
+        let name: String
+        let intervalMinutes: Int
+        let rounds: Int
+        var description: String {
+            "\(intervalMinutes) min × \(rounds)"
+        }
+    }
+
+    private let pomodoroPresets: [PomodoroPreset] = [
+        PomodoroPreset(id: "classic", name: "Classic", intervalMinutes: 25, rounds: 4),
+        PomodoroPreset(id: "short", name: "Short", intervalMinutes: 15, rounds: 4),
+        PomodoroPreset(id: "long", name: "Long", intervalMinutes: 50, rounds: 3),
+    ]
+
     private enum EndChoice: String, CaseIterable {
         case never = "Never"
         case afterCount = "After"
@@ -49,6 +66,46 @@ struct RecurrencePickerView: View {
                 }
             }
             .pickerStyle(.menu)
+
+            // Pomodoro quick presets (shown when no frequency is selected or minutely is selected)
+            if frequency == nil || frequency == .minutely {
+                HStack(spacing: DS.Spacing.sm) {
+                    ForEach(pomodoroPresets) { preset in
+                        Button {
+                            applyPomodoroPreset(preset)
+                        } label: {
+                            VStack(spacing: 2) {
+                                Image(systemName: "timer")
+                                    .font(.caption)
+                                Text(preset.name)
+                                    .font(.caption2)
+                                    .fontWeight(.medium)
+                                Text(preset.description)
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, DS.Spacing.sm)
+                            .background(
+                                isPomodoroPresetActive(preset)
+                                    ? Color.accentColor.opacity(0.15)
+                                    : Color.secondary.opacity(0.08)
+                            )
+                            .cornerRadius(8)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(
+                                        isPomodoroPresetActive(preset)
+                                            ? Color.accentColor
+                                            : Color.clear,
+                                        lineWidth: 1.5
+                                    )
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
 
             if let freq = frequency {
                 // Interval
@@ -150,6 +207,23 @@ struct RecurrencePickerView: View {
             }
         }
         .pickerStyle(.menu)
+    }
+
+    // MARK: - Pomodoro Helpers
+
+    private func applyPomodoroPreset(_ preset: PomodoroPreset) {
+        frequency = .minutely
+        interval = preset.intervalMinutes
+        endChoice = .afterCount
+        endCount = preset.rounds
+        syncToBinding()
+    }
+
+    private func isPomodoroPresetActive(_ preset: PomodoroPreset) -> Bool {
+        frequency == .minutely
+            && interval == preset.intervalMinutes
+            && endChoice == .afterCount
+            && endCount == preset.rounds
     }
 
     // MARK: - Build / Sync

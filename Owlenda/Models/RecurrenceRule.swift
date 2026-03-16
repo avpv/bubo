@@ -236,8 +236,7 @@ enum RecurrenceFrequency: String, Codable, Hashable, CaseIterable {
     case yearly
 
     /// Frequencies appropriate for the calendar event UI picker.
-    /// Minutely and hourly are supported by the parser/expander but not shown to users.
-    static let userVisible: [RecurrenceFrequency] = [.daily, .weekly, .monthly, .yearly]
+    static let userVisible: [RecurrenceFrequency] = [.minutely, .hourly, .daily, .weekly, .monthly, .yearly]
 
     var label: String {
         switch self {
