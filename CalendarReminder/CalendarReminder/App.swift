@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct YandexCalendarReminderApp: App {
+struct CalendarReminderApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var settings: ReminderSettings
     @StateObject private var reminderService: ReminderService

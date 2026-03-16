@@ -138,11 +138,11 @@ struct FullScreenAlertContentView: View {
                 // Action buttons
                 HStack(spacing: 20) {
                     Menu {
-                        Button("Через 5 минут") { cleanup(); onSnooze(5) }
-                        Button("Через 10 минут") { cleanup(); onSnooze(10) }
-                        Button("Через 15 минут") { cleanup(); onSnooze(15) }
+                        Button("In 5 minutes") { cleanup(); onSnooze(5) }
+                        Button("In 10 minutes") { cleanup(); onSnooze(10) }
+                        Button("In 15 minutes") { cleanup(); onSnooze(15) }
                     } label: {
-                        Text("Отложить")
+                        Text("Snooze")
                             .font(.title3)
                             .fontWeight(.medium)
                             .foregroundColor(.white)
@@ -156,7 +156,7 @@ struct FullScreenAlertContentView: View {
                     .buttonStyle(.plain)
 
                     Button(action: { cleanup(); onDismiss() }) {
-                        Text("Понятно")
+                        Text("Dismiss")
                             .font(.title2)
                             .fontWeight(.semibold)
                             .foregroundColor(.black)
@@ -168,7 +168,7 @@ struct FullScreenAlertContentView: View {
                     .keyboardShortcut(.return, modifiers: [])
                 }
 
-                Text("Нажмите Enter или кнопку для закрытия")
+                Text("Press Enter or click a button to dismiss")
                     .font(.caption)
                     .foregroundColor(.white.opacity(0.4))
 
@@ -222,8 +222,8 @@ struct FullScreenAlertContentView: View {
 
     private var headerText: String {
         if secondsRemaining <= 0 {
-            return "Встреча началась!"
+            return "Meeting started!"
         }
-        return "Встреча через"
+        return "Meeting in"
     }
 }

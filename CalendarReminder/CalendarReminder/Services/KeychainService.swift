@@ -82,7 +82,7 @@ enum KeychainError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .saveFailed(let status):
-            return "Ошибка сохранения в Keychain: \(status)"
+            return "Keychain save error: \(status)"
         }
     }
 }

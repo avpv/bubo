@@ -1,70 +1,90 @@
-# Reminder — macOS-приложение для Яндекс Календаря
+# CalendarReminder — macOS Menu Bar App for Yandex & Google Calendar
 
-Нативное macOS-приложение в менюбаре для напоминаний о встречах с полноэкранными уведомлениями.
+A native macOS menu bar app for meeting reminders with full-screen notifications.
 
-## Возможности
+## Features
 
-- **Синхронизация с Яндекс Календарём** через CalDAV с поддержкой OAuth 2.0
-- **Настраиваемые интервалы** напоминаний (добавляйте/удаляйте любые)
-- **Полноэкранные уведомления** — точно не пропустите встречу
-- **Откладывание** напоминаний (через 5, 10, 15 мин)
-- **Ручное добавление** событий
-- **Повторяющиеся события** (RRULE) — ежедневные, еженедельные, ежемесячные
-- **Не беспокоить** — настройте часы тишины
-- **Оффлайн-режим** — кэшированные события показываются без интернета
-- **Безопасность** — пароли/токены хранятся в macOS Keychain
-- **Группировка по дням** — Сегодня, Завтра и далее
+- **Yandex Calendar sync** via CalDAV with OAuth 2.0 support
+- **Google Calendar sync** via Google Calendar API
+- **Customizable reminder intervals** (add/remove any)
+- **Full-screen notifications** — never miss a meeting
+- **Snooze** reminders (5, 10, 15 min)
+- **Manual event creation**
+- **Recurring events** (RRULE) — daily, weekly, monthly
+- **Do Not Disturb** — set quiet hours
+- **Offline mode** — cached events shown without internet
+- **Security** — passwords/tokens stored in macOS Keychain
+- **Grouped by day** — Today, Tomorrow, and beyond
 
-## Требования
+## Requirements
 
-- macOS 13.0 (Ventura) или новее
+- macOS 13.0 (Ventura) or later
 - Xcode 15+
 
-## Быстрый старт
+## Installation from GitHub
 
 ```bash
-cd YandexCalendarReminder
+git clone https://github.com/avpv/M.git
+cd M/CalendarReminder
 open Package.swift
-# Нажмите Cmd+R в Xcode
+# Press Cmd+R in Xcode to build and run
 ```
 
-## Настройка авторизации
+## Quick Start
 
-### Вариант 1: Пароль приложения (проще)
+```bash
+cd CalendarReminder
+open Package.swift
+# Press Cmd+R in Xcode
+```
 
-1. Перейдите на [id.yandex.ru](https://id.yandex.ru)
-2. Безопасность → Пароли приложений → Создать
-3. В приложении: Настройки → Аккаунт → введите логин и пароль
+## Authorization Setup
 
-### Вариант 2: OAuth 2.0 (безопаснее)
+### Option 1: App Password (simpler)
 
-1. Зарегистрируйте приложение на [oauth.yandex.ru](https://oauth.yandex.ru/)
-2. Укажите `clientId` и `clientSecret` в `YandexOAuthService.swift`
-3. В приложении: Настройки → Аккаунт → OAuth → авторизуйтесь через браузер
+1. Go to [id.yandex.ru](https://id.yandex.ru)
+2. Security → App Passwords → Create
+3. In the app: Settings → Account → enter login and password
 
-## Структура проекта
+### Option 2: OAuth 2.0 (more secure)
+
+1. Register an app at [oauth.yandex.ru](https://oauth.yandex.ru/)
+2. Set `clientId` and `clientSecret` in `YandexOAuthService.swift`
+3. In the app: Settings → Account → OAuth → authorize via browser
+
+### Option 3: Google Calendar
+
+1. Create a project in [Google Cloud Console](https://console.cloud.google.com/)
+2. Enable Google Calendar API
+3. Create OAuth 2.0 credentials (Desktop app)
+4. Set `clientId` and `clientSecret` in `GoogleOAuthService.swift`
+5. In the app: Settings → Account → Enable Google Calendar → authorize
+
+## Project Structure
 
 ```
-YandexCalendarReminder/
+CalendarReminder/
 ├── Package.swift
-└── YandexCalendarReminder/
-    ├── App.swift                        # Точка входа
-    ├── AppDelegate.swift                # Полноэкранные уведомления + snooze
+└── CalendarReminder/
+    ├── App.swift                        # Entry point
+    ├── AppDelegate.swift                # Full-screen notifications + snooze
     ├── Info.plist
     ├── Models/
-    │   ├── CalendarEvent.swift          # Модель события
-    │   └── ReminderSettings.swift       # Настройки (DND, auth, Keychain)
+    │   ├── CalendarEvent.swift          # Event model
+    │   └── ReminderSettings.swift       # Settings (DND, auth, Keychain)
     ├── Services/
-    │   ├── KeychainService.swift        # Безопасное хранение паролей
-    │   ├── YandexOAuthService.swift     # OAuth 2.0 авторизация
-    │   ├── YandexCalDAVService.swift    # CalDAV синхронизация + retry
-    │   ├── CalDAVXMLParser.swift        # XML парсер (XMLParser)
-    │   ├── ICalParser.swift             # iCal парсер с RRULE и таймзонами
-    │   ├── ReminderService.swift        # Напоминания, snooze, DND, кэш
-    │   ├── NetworkMonitor.swift         # Мониторинг сети + retry
-    │   └── EventCache.swift            # Оффлайн кэш событий
+    │   ├── KeychainService.swift        # Secure password storage
+    │   ├── YandexOAuthService.swift     # Yandex OAuth 2.0
+    │   ├── GoogleOAuthService.swift     # Google OAuth 2.0
+    │   ├── YandexCalDAVService.swift    # CalDAV sync + retry
+    │   ├── GoogleCalendarService.swift  # Google Calendar API
+    │   ├── CalDAVXMLParser.swift        # XML parser
+    │   ├── ICalParser.swift             # iCal parser with RRULE and timezones
+    │   ├── ReminderService.swift        # Reminders, snooze, DND, cache
+    │   ├── NetworkMonitor.swift         # Network monitoring + retry
+    │   └── EventCache.swift             # Offline event cache
     └── Views/
-        ├── MenuBarView.swift            # Менюбар с группировкой по дням
-        ├── SettingsView.swift           # Настройки (OAuth, DND, интервалы)
-        └── AddEventView.swift           # Ручное добавление событий
+        ├── MenuBarView.swift            # Menu bar with day grouping
+        ├── SettingsView.swift           # Settings (OAuth, DND, intervals)
+        └── AddEventView.swift           # Manual event creation
 ```

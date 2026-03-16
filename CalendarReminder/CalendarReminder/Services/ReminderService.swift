@@ -123,7 +123,7 @@ class ReminderService: ObservableObject {
     func syncNow() {
         // Check network
         if let monitor = networkMonitor, !monitor.isConnected {
-            syncError = "Нет подключения к интернету"
+            syncError = "No internet connection"
             loadCachedEvents()
             return
         }
@@ -150,7 +150,7 @@ class ReminderService: ObservableObject {
                     )
                     allEvents.append(contentsOf: events)
                 } catch {
-                    errors.append("Яндекс: \(error.localizedDescription)")
+                    errors.append("Yandex: \(error.localizedDescription)")
                 }
             }
 
@@ -313,11 +313,11 @@ class ReminderService: ObservableObject {
         let content = UNMutableNotificationContent()
 
         if isSnooze {
-            content.title = "Напоминание (отложено)"
+            content.title = "Reminder (snoozed)"
         } else if minutesBefore <= 0 {
-            content.title = "Встреча начинается!"
+            content.title = "Meeting starting!"
         } else {
-            content.title = "Встреча через \(minutesBefore) мин"
+            content.title = "Meeting in \(minutesBefore) min"
         }
 
         content.body = "\(event.title)\n\(event.formattedTime)"

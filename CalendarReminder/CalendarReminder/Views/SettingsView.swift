@@ -29,16 +29,16 @@ struct SettingsView: View {
     var body: some View {
         TabView {
             accountTab
-                .tabItem { Label("Аккаунт", systemImage: "person.circle") }
+                .tabItem { Label("Account", systemImage: "person.circle") }
 
             calendarsTab
-                .tabItem { Label("Календари", systemImage: "calendar") }
+                .tabItem { Label("Calendars", systemImage: "calendar") }
 
             remindersTab
-                .tabItem { Label("Напоминания", systemImage: "bell") }
+                .tabItem { Label("Reminders", systemImage: "bell") }
 
             generalTab
-                .tabItem { Label("Основные", systemImage: "gear") }
+                .tabItem { Label("General", systemImage: "gear") }
         }
         .frame(width: 480, height: 460)
     }
@@ -49,9 +49,9 @@ struct SettingsView: View {
         ScrollView {
             Form {
                 // Yandex
-                Section("Яндекс Календарь") {
-                    Picker("Авторизация", selection: $settings.authMethod) {
-                        Text("Пароль приложения").tag(AuthMethod.appPassword)
+                Section("Yandex Calendar") {
+                    Picker("Authorization", selection: $settings.authMethod) {
+                        Text("App Password").tag(AuthMethod.appPassword)
                         Text("OAuth 2.0").tag(AuthMethod.oauth)
                     }
                     .pickerStyle(.segmented)
@@ -64,7 +64,7 @@ struct SettingsView: View {
                     }
 
                     HStack {
-                        Button("Проверить Яндекс") { checkConnection() }
+                        Button("Test Yandex") { checkConnection() }
                         Spacer()
                         connectionStatusView
                     }
@@ -73,8 +73,8 @@ struct SettingsView: View {
                 Divider()
 
                 // Google
-                Section("Google Календарь") {
-                    Toggle("Включить Google Календарь", isOn: $settings.googleEnabled)
+                Section("Google Calendar") {
+                    Toggle("Enable Google Calendar", isOn: $settings.googleEnabled)
                         .onChange(of: settings.googleEnabled) { _ in saveSettings() }
 
                     if settings.googleEnabled {
@@ -87,20 +87,20 @@ struct SettingsView: View {
     }
 
     private var appPasswordSection: some View {
-        Section("Яндекс аккаунт") {
-            TextField("Логин", text: Binding(
+        Section("Yandex Account") {
+            TextField("Login", text: Binding(
                 get: { settings.yandexLogin },
                 set: { settings.yandexLogin = $0 }
             ))
             .textFieldStyle(.roundedBorder)
 
-            SecureField("Пароль приложения", text: Binding(
+            SecureField("App Password", text: Binding(
                 get: { settings.yandexAppPassword },
                 set: { settings.yandexAppPassword = $0 }
             ))
             .textFieldStyle(.roundedBorder)
 
-            Text("Создайте пароль приложения: id.yandex.ru → Безопасность → Пароли приложений")
+            Text("Create an app password: id.yandex.ru → Security → App Passwords")
                 .font(.caption)
                 .foregroundColor(.secondary)
 
@@ -108,7 +108,7 @@ struct SettingsView: View {
                 Image(systemName: "lock.shield.fill")
                     .foregroundColor(.green)
                     .font(.caption)
-                Text("Пароль хранится в Keychain")
+                Text("Password is stored in Keychain")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -118,7 +118,7 @@ struct SettingsView: View {
     private var oauthSection: some View {
         Section("OAuth 2.0") {
             // Login is still needed for CalDAV path
-            TextField("Логин Яндекса", text: Binding(
+            TextField("Yandex Login", text: Binding(
                 get: { settings.yandexLogin },
                 set: { settings.yandexLogin = $0 }
             ))
@@ -128,28 +128,28 @@ struct SettingsView: View {
                 HStack {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundColor(.green)
-                    Text("Авторизовано через OAuth")
+                    Text("Authenticated via OAuth")
                     Spacer()
-                    Button("Выйти") {
+                    Button("Log Out") {
                         YandexOAuthService.logout()
                         oauthStatus = .idle
                     }
                 }
             } else {
                 VStack(alignment: .leading, spacing: 8) {
-                    Button("Открыть авторизацию в браузере") {
+                    Button("Open authorization in browser") {
                         YandexOAuthService.startAuthFlow()
                     }
 
-                    Text("После авторизации скопируйте код и вставьте ниже:")
+                    Text("After authorization, copy the code and paste it below:")
                         .font(.caption)
                         .foregroundColor(.secondary)
 
                     HStack {
-                        TextField("Код авторизации", text: $oauthCode)
+                        TextField("Authorization code", text: $oauthCode)
                             .textFieldStyle(.roundedBorder)
 
-                        Button("Подтвердить") {
+                        Button("Confirm") {
                             exchangeOAuthCode()
                         }
                         .disabled(oauthCode.isEmpty)
@@ -159,7 +159,7 @@ struct SettingsView: View {
                     case .idle: EmptyView()
                     case .exchanging: ProgressView().scaleEffect(0.7)
                     case .success:
-                        Label("Авторизация успешна!", systemImage: "checkmark.circle.fill")
+                        Label("Authorization successful!", systemImage: "checkmark.circle.fill")
                             .foregroundColor(.green)
                     case .failed(let error):
                         Label(error, systemImage: "xmark.circle.fill")
@@ -169,7 +169,7 @@ struct SettingsView: View {
                 }
             }
 
-            Text("OAuth безопаснее: приложение не хранит ваш пароль")
+            Text("OAuth is more secure: the app does not store your password")
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
@@ -183,7 +183,7 @@ struct SettingsView: View {
         case .checking:
             ProgressView().scaleEffect(0.7)
         case .success:
-            Label("Подключено", systemImage: "checkmark.circle.fill")
+            Label("Connected", systemImage: "checkmark.circle.fill")
                 .foregroundColor(.green)
         case .failed(let error):
             Label(error, systemImage: "xmark.circle.fill")
@@ -198,9 +198,9 @@ struct SettingsView: View {
                 HStack {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundColor(.green)
-                    Text("Google аккаунт подключён")
+                    Text("Google account connected")
                     Spacer()
-                    Button("Отключить") {
+                    Button("Disconnect") {
                         GoogleOAuthService.logout()
                         settings.googleEnabled = false
                         googleOAuthStatus = .idle
@@ -209,19 +209,19 @@ struct SettingsView: View {
                 }
             } else {
                 VStack(alignment: .leading, spacing: 8) {
-                    Button("Авторизоваться через Google") {
+                    Button("Sign in with Google") {
                         GoogleOAuthService.startAuthFlow()
                     }
 
-                    Text("После авторизации скопируйте код и вставьте ниже:")
+                    Text("After authorization, copy the code and paste it below:")
                         .font(.caption)
                         .foregroundColor(.secondary)
 
                     HStack {
-                        TextField("Код авторизации", text: $googleOAuthCode)
+                        TextField("Authorization code", text: $googleOAuthCode)
                             .textFieldStyle(.roundedBorder)
 
-                        Button("Подтвердить") {
+                        Button("Confirm") {
                             exchangeGoogleOAuthCode()
                         }
                         .disabled(googleOAuthCode.isEmpty)
@@ -231,7 +231,7 @@ struct SettingsView: View {
                     case .idle: EmptyView()
                     case .exchanging: ProgressView().scaleEffect(0.7)
                     case .success:
-                        Label("Google подключён!", systemImage: "checkmark.circle.fill")
+                        Label("Google connected!", systemImage: "checkmark.circle.fill")
                             .foregroundColor(.green)
                     case .failed(let error):
                         Label(error, systemImage: "xmark.circle.fill")
@@ -241,7 +241,7 @@ struct SettingsView: View {
                 }
             }
 
-            Text("Требуется проект в Google Cloud Console с Calendar API")
+            Text("Requires a Google Cloud Console project with Calendar API enabled")
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
@@ -253,9 +253,9 @@ struct SettingsView: View {
         ScrollView {
             Form {
                 // Yandex calendars
-                Section("Яндекс Календарь") {
+                Section("Yandex Calendar") {
                     HStack {
-                        Button("Загрузить") { loadYandexCalendars() }
+                        Button("Load") { loadYandexCalendars() }
                             .disabled(isLoadingCalendars)
                         if isLoadingCalendars { ProgressView().scaleEffect(0.7) }
                     }
@@ -277,9 +277,9 @@ struct SettingsView: View {
                 if settings.googleEnabled && GoogleOAuthService.isAuthenticated {
                     Divider()
 
-                    Section("Google Календарь") {
+                    Section("Google Calendar") {
                         HStack {
-                            Button("Загрузить") { loadGoogleCalendars() }
+                            Button("Load") { loadGoogleCalendars() }
                                 .disabled(isLoadingGoogleCalendars)
                             if isLoadingGoogleCalendars { ProgressView().scaleEffect(0.7) }
                         }
@@ -308,7 +308,7 @@ struct SettingsView: View {
         calendars: [(id: String, name: String)],
         selected: Binding<[String]>
     ) -> some View {
-        Toggle("Все календари", isOn: Binding(
+        Toggle("All calendars", isOn: Binding(
             get: { selected.wrappedValue.isEmpty },
             set: { isAll in
                 selected.wrappedValue = isAll ? [] : calendars.map { $0.id }
@@ -339,8 +339,8 @@ struct SettingsView: View {
         }
 
         Text(selected.wrappedValue.isEmpty
-            ? "Синхронизируются все"
-            : "Выбрано: \(selected.wrappedValue.count) из \(calendars.count)")
+            ? "Syncing all"
+            : "Selected: \(selected.wrappedValue.count) of \(calendars.count)")
             .font(.caption)
             .foregroundColor(.secondary)
     }
@@ -391,11 +391,11 @@ struct SettingsView: View {
 
     private var remindersTab: some View {
         Form {
-            Section("Интервалы напоминаний") {
+            Section("Reminder Intervals") {
                 ForEach($settings.intervals) { $interval in
                     HStack {
                         Toggle(isOn: $interval.isEnabled) {
-                            Text("За \(interval.displayText) до встречи")
+                            Text("\(interval.displayText) before meeting")
                         }
                         .onChange(of: interval.isEnabled) { _ in saveSettings() }
 
@@ -413,7 +413,7 @@ struct SettingsView: View {
                 }
 
                 HStack {
-                    Stepper("Добавить: \(newIntervalMinutes) мин", value: $newIntervalMinutes, in: 1...120)
+                    Stepper("Add: \(newIntervalMinutes) min", value: $newIntervalMinutes, in: 1...120)
 
                     Button(action: {
                         settings.intervals.append(ReminderInterval(minutes: newIntervalMinutes))
@@ -426,30 +426,30 @@ struct SettingsView: View {
                 }
             }
 
-            Section("Типы уведомлений") {
-                Toggle("Полноэкранное уведомление", isOn: $settings.showFullScreenAlert)
+            Section("Notification Types") {
+                Toggle("Full-screen notification", isOn: $settings.showFullScreenAlert)
                     .onChange(of: settings.showFullScreenAlert) { _ in saveSettings() }
 
-                Toggle("Системное уведомление", isOn: $settings.showSystemNotification)
+                Toggle("System notification", isOn: $settings.showSystemNotification)
                     .onChange(of: settings.showSystemNotification) { _ in saveSettings() }
 
-                Toggle("Звуковое уведомление", isOn: $settings.playSound)
+                Toggle("Sound notification", isOn: $settings.playSound)
                     .onChange(of: settings.playSound) { _ in saveSettings() }
             }
 
-            Section("Не беспокоить") {
-                Toggle("Включить режим «Не беспокоить»", isOn: $settings.doNotDisturbEnabled)
+            Section("Do Not Disturb") {
+                Toggle("Enable Do Not Disturb", isOn: $settings.doNotDisturbEnabled)
                     .onChange(of: settings.doNotDisturbEnabled) { _ in saveSettings() }
 
                 if settings.doNotDisturbEnabled {
-                    DatePicker("С", selection: $settings.doNotDisturbFrom, displayedComponents: .hourAndMinute)
+                    DatePicker("From", selection: $settings.doNotDisturbFrom, displayedComponents: .hourAndMinute)
                         .onChange(of: settings.doNotDisturbFrom) { _ in saveSettings() }
 
-                    DatePicker("До", selection: $settings.doNotDisturbTo, displayedComponents: .hourAndMinute)
+                    DatePicker("To", selection: $settings.doNotDisturbTo, displayedComponents: .hourAndMinute)
                         .onChange(of: settings.doNotDisturbTo) { _ in saveSettings() }
 
                     if settings.isDoNotDisturbActive {
-                        Label("Сейчас активен", systemImage: "moon.fill")
+                        Label("Currently active", systemImage: "moon.fill")
                             .foregroundColor(.indigo)
                             .font(.caption)
                     }
@@ -463,14 +463,14 @@ struct SettingsView: View {
 
     private var generalTab: some View {
         Form {
-            Section("Синхронизация") {
-                Picker("Интервал синхронизации", selection: $settings.syncIntervalMinutes) {
-                    Text("1 минута").tag(1)
-                    Text("3 минуты").tag(3)
-                    Text("5 минут").tag(5)
-                    Text("10 минут").tag(10)
-                    Text("15 минут").tag(15)
-                    Text("30 минут").tag(30)
+            Section("Sync") {
+                Picker("Sync interval", selection: $settings.syncIntervalMinutes) {
+                    Text("1 minute").tag(1)
+                    Text("3 minutes").tag(3)
+                    Text("5 minutes").tag(5)
+                    Text("10 minutes").tag(10)
+                    Text("15 minutes").tag(15)
+                    Text("30 minutes").tag(30)
                 }
                 .onChange(of: settings.syncIntervalMinutes) { _ in
                     saveSettings()
@@ -479,27 +479,27 @@ struct SettingsView: View {
             }
 
             Section {
-                Toggle("Запускать при входе в систему", isOn: $settings.launchAtLogin)
+                Toggle("Launch at login", isOn: $settings.launchAtLogin)
                     .onChange(of: settings.launchAtLogin) { _ in saveSettings() }
             }
 
-            Section("Статус") {
+            Section("Status") {
                 if let lastSync = reminderService.lastSyncDate {
-                    LabeledContent("Последняя синхронизация") {
+                    LabeledContent("Last sync") {
                         Text(lastSync.formatted())
                     }
                 }
 
-                LabeledContent("Событий из Яндекса") {
+                LabeledContent("Yandex events") {
                     Text("\(reminderService.upcomingEvents.count)")
                 }
 
-                LabeledContent("Локальных событий") {
+                LabeledContent("Local events") {
                     Text("\(reminderService.localEvents.count)")
                 }
 
                 if reminderService.isUsingCache {
-                    Label("Данные из кэша", systemImage: "internaldrive")
+                    Label("Using cached data", systemImage: "internaldrive")
                         .foregroundColor(.orange)
                         .font(.caption)
                 }
