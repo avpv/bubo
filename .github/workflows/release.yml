@@ -119,7 +119,7 @@ jobs:
 
             One command in Terminal:
             ```
-            curl -fsSL https://raw.githubusercontent.com/avpv/Owlenda/master/scripts/install.sh | bash
+            curl -fsSL https://raw.githubusercontent.com/avpv/owlenda/master/scripts/install.sh | bash
             ```
 
             Or manually:

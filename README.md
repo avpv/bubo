@@ -25,12 +25,12 @@ A native macOS menu bar app for meeting reminders with full-screen notifications
 ### Option A: One command install (easiest)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/avpv/Owlenda/master/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/avpv/owlenda/master/scripts/install.sh | bash
 ```
 
 ### Option B: Download DMG manually
 
-1. Go to [Releases](https://github.com/avpv/Owlenda/releases/latest)
+1. Go to [Releases](https://github.com/avpv/owlenda/releases/latest)
 2. Download **Owlenda.dmg**
 3. Open the DMG and drag **Owlenda** to **Applications**
 4. Run `xattr -cr /Applications/Owlenda.app` and launch
@@ -42,7 +42,7 @@ curl -fsSL https://raw.githubusercontent.com/avpv/Owlenda/master/scripts/install
 3. Clone and open the project:
 
 ```bash
-git clone https://github.com/avpv/Owlenda.git
+git clone https://github.com/avpv/owlenda.git
 cd Owlenda
 open -a Xcode Package.swift
 ```
@@ -60,7 +60,7 @@ xcode-select --install
 2. Clone, build, and run:
 
 ```bash
-git clone https://github.com/avpv/Owlenda.git
+git clone https://github.com/avpv/owlenda.git
 cd Owlenda
 swift build -c release
 .build/release/Owlenda

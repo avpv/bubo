@@ -3,7 +3,7 @@
 set -euo pipefail
 
 APP_NAME="Owlenda"
-REPO="avpv/Owlenda"
+REPO="avpv/owlenda"
 INSTALL_DIR="/Applications"
 
 echo "Installing $APP_NAME..."
