@@ -11,7 +11,11 @@ let package = Package(
             name: "CalendarReminder",
             path: "CalendarReminder",
             exclude: ["Info.plist"],
-            resources: [.copy("Resources/AppIcon.icns")]
+            resources: [
+                .copy("Resources/AppIcon.icns"),
+                .copy("Resources/MenuBarIcon.png"),
+                .copy("Resources/MenuBarIcon@2x.png"),
+            ]
         )
     ]
 )

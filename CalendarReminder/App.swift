@@ -13,6 +13,16 @@ struct CalendarReminderApp: App {
         _reminderService = StateObject(wrappedValue: ReminderService(settings: s))
     }
 
+    private var menuBarIcon: NSImage {
+        if let url = Bundle.module.url(forResource: "MenuBarIcon", withExtension: "png"),
+           let img = NSImage(contentsOf: url) {
+            img.isTemplate = false
+            img.size = NSSize(width: 18, height: 18)
+            return img
+        }
+        return NSImage(systemSymbolName: "calendar.badge.clock", accessibilityDescription: "Reminder")!
+    }
+
     var body: some Scene {
         MenuBarExtra {
             MenuBarView(
@@ -21,7 +31,7 @@ struct CalendarReminderApp: App {
                 networkMonitor: networkMonitor
             )
         } label: {
-            Label("Reminder", systemImage: "calendar.badge.clock")
+            Image(nsImage: menuBarIcon)
         }
         .menuBarExtraStyle(.window)
 
