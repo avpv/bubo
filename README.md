@@ -19,15 +19,47 @@ A native macOS menu bar app for meeting reminders with full-screen notifications
 ## Requirements
 
 - macOS 13.0 (Ventura) or later
-- Xcode 15+
 
 ## Installation
+
+### Option A: Download ready-made app (easiest)
+
+1. Go to [Releases](https://github.com/avpv/CalendarReminder/releases/latest)
+2. Download **CalendarReminder.dmg**
+3. Open the DMG and drag **CalendarReminder** to **Applications**
+4. On first launch macOS Gatekeeper will block the unsigned app. To allow it:
+   - Go to **System Settings → Privacy & Security** → scroll down → click **"Open Anyway"**
+   - Or run in Terminal: `xattr -cr /Applications/CalendarReminder.app` then launch normally
+
+### Option B: Using Xcode
+
+1. Install **Xcode** from the [Mac App Store](https://apps.apple.com/app/xcode/id497799835)
+2. Launch Xcode once to accept the license and install components
+3. Clone and open the project:
 
 ```bash
 git clone https://github.com/avpv/CalendarReminder.git
 cd CalendarReminder
 open -a Xcode Package.swift
-# Press Cmd+R in Xcode to build and run
+```
+
+4. Press **Cmd+R** to build and run
+
+### Option C: Using Command Line Tools only (without Xcode)
+
+1. Install Command Line Tools (if not already installed):
+
+```bash
+xcode-select --install
+```
+
+2. Clone, build, and run:
+
+```bash
+git clone https://github.com/avpv/CalendarReminder.git
+cd CalendarReminder
+swift build -c release
+.build/release/CalendarReminder
 ```
 
 ## Authorization Setup
@@ -107,4 +139,5 @@ CalendarReminder/
     │       └── GoogleOAuthService.swift           # Google OAuth 2.0
     │
     └── Resources/
+        └── AppIcon.icns                       # App icon
 ```

@@ -24,7 +24,7 @@ actor GoogleOAuthService {
     }
 
     static func startAuthFlow() {
-        var components = URLComponents(string: authURL)!
+        guard var components = URLComponents(string: authURL) else { return }
         components.queryItems = [
             URLQueryItem(name: "client_id", value: clientId),
             URLQueryItem(name: "redirect_uri", value: redirectURI),
@@ -40,18 +40,22 @@ actor GoogleOAuthService {
     }
 
     static func exchangeCode(_ code: String) async throws -> TokenResponse {
-        var request = URLRequest(url: URL(string: tokenURL)!)
+        guard let url = URL(string: tokenURL) else {
+            throw GoogleAuthError.tokenExchangeFailed
+        }
+        var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
 
-        let body = [
-            "code=\(code)",
-            "client_id=\(clientId)",
-            "client_secret=\(clientSecret)",
-            "redirect_uri=\(redirectURI)",
-            "grant_type=authorization_code"
-        ].joined(separator: "&")
-        request.httpBody = body.data(using: .utf8)
+        var components = URLComponents()
+        components.queryItems = [
+            URLQueryItem(name: "code", value: code),
+            URLQueryItem(name: "client_id", value: clientId),
+            URLQueryItem(name: "client_secret", value: clientSecret),
+            URLQueryItem(name: "redirect_uri", value: redirectURI),
+            URLQueryItem(name: "grant_type", value: "authorization_code")
+        ]
+        request.httpBody = components.percentEncodedQuery?.data(using: .utf8)
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
@@ -77,17 +81,21 @@ actor GoogleOAuthService {
             throw GoogleAuthError.noRefreshToken
         }
 
-        var request = URLRequest(url: URL(string: tokenURL)!)
+        guard let url = URL(string: tokenURL) else {
+            throw GoogleAuthError.refreshFailed
+        }
+        var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
 
-        let body = [
-            "refresh_token=\(refreshToken)",
-            "client_id=\(clientId)",
-            "client_secret=\(clientSecret)",
-            "grant_type=refresh_token"
-        ].joined(separator: "&")
-        request.httpBody = body.data(using: .utf8)
+        var components = URLComponents()
+        components.queryItems = [
+            URLQueryItem(name: "refresh_token", value: refreshToken),
+            URLQueryItem(name: "client_id", value: clientId),
+            URLQueryItem(name: "client_secret", value: clientSecret),
+            URLQueryItem(name: "grant_type", value: "refresh_token")
+        ]
+        request.httpBody = components.percentEncodedQuery?.data(using: .utf8)
 
         let (data, response) = try await URLSession.shared.data(for: request)
 

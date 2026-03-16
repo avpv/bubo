@@ -6,6 +6,7 @@ struct MenuBarView: View {
     @ObservedObject var networkMonitor: NetworkMonitor
 
     @State private var showingAddEvent = false
+    @State private var hasStartedSync = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -126,6 +127,8 @@ struct MenuBarView: View {
             AddEventView(reminderService: reminderService, isPresented: $showingAddEvent)
         }
         .onAppear {
+            guard !hasStartedSync else { return }
+            hasStartedSync = true
             reminderService.setNetworkMonitor(networkMonitor)
             reminderService.updateSettings(settings)
             reminderService.startSync()

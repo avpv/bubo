@@ -48,9 +48,6 @@ struct RemindersTabView: View {
 
                 Toggle("System notification", isOn: $settings.showSystemNotification)
                     .onChange(of: settings.showSystemNotification) { _ in save() }
-
-                Toggle("Sound notification", isOn: $settings.playSound)
-                    .onChange(of: settings.playSound) { _ in save() }
             }
 
             Section("Do Not Disturb") {

@@ -64,6 +64,14 @@ enum RetryHelper {
                    code == 401 || code == 403 {
                     throw error
                 }
+                if let googleError = error as? GoogleCalendarError,
+                   case .httpError(let code) = googleError,
+                   code == 401 || code == 403 {
+                    throw error
+                }
+                if error is GoogleAuthError || error is OAuthError {
+                    throw error
+                }
 
                 if attempt < maxAttempts {
                     try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))

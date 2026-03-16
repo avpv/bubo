@@ -56,6 +56,16 @@ class ReminderService: ObservableObject {
         }
     }
 
+    deinit {
+        if let observer = snoozeObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        for timers in reminderTimers.values {
+            timers.forEach { $0.invalidate() }
+        }
+        syncTimer?.invalidate()
+    }
+
     func setNetworkMonitor(_ monitor: NetworkMonitor) {
         self.networkMonitor = monitor
     }
@@ -136,7 +146,7 @@ class ReminderService: ObservableObject {
 
         Task {
             let now = Date()
-            let endDate = Calendar.current.date(byAdding: .day, value: 7, to: now)!
+            let endDate = Calendar.current.date(byAdding: .day, value: 7, to: now) ?? now
             var allEvents: [CalendarEvent] = []
             var errors: [String] = []
 
@@ -177,6 +187,17 @@ class ReminderService: ObservableObject {
             self.isSyncing = false
             self.syncError = errors.isEmpty ? nil : errors.joined(separator: "\n")
             self.isUsingCache = false
+
+            // Clean up firedReminders for events no longer in the window
+            let currentEventIds = Set(allEvents.map { $0.id })
+            self.firedReminders = self.firedReminders.filter { key in
+                // reminderKey format: "\(event.id)_\(interval.minutes)"
+                // Find the last underscore to split id from minutes suffix
+                guard let lastUnderscore = key.lastIndex(of: "_") else { return false }
+                let eventId = String(key[..<lastUnderscore])
+                return currentEventIds.contains(eventId)
+            }
+
             self.scheduleReminders(for: allEvents)
 
             await eventCache.save(events: allEvents)
@@ -304,9 +325,6 @@ class ReminderService: ObservableObject {
             showFullScreenAlert(for: event, minutesBefore: minutesBefore)
         }
 
-        if settings.playSound {
-            NSSound.beep()
-        }
     }
 
     private func sendNotification(for event: CalendarEvent, minutesBefore: Int, isSnooze: Bool) {
@@ -324,8 +342,6 @@ class ReminderService: ObservableObject {
         if let location = event.location {
             content.body += "\n\(location)"
         }
-        content.sound = .default
-
         let request = UNNotificationRequest(
             identifier: "\(event.id)_\(minutesBefore)_\(Date().timeIntervalSince1970)",
             content: content,
@@ -347,7 +363,7 @@ class ReminderService: ObservableObject {
     }
 
     private func requestNotificationPermission() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge]) { _, _ in }
     }
 }
 
