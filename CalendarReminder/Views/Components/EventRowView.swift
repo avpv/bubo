@@ -142,7 +142,6 @@ struct EventRowView: View {
 
     private var urgencyColor: Color {
         let minutes = event.minutesUntilStart
-        if minutes <= 0 { return .red }
         if minutes <= 5 { return .red }
         if minutes <= 15 { return .orange }
         return .green

@@ -19,5 +19,6 @@ struct StatusBanner: View {
         .padding(.vertical, 6)
         .background(color.opacity(0.08))
         .accessibilityElement(children: .combine)
+        .transition(.move(edge: .top).combined(with: .opacity))
     }
 }

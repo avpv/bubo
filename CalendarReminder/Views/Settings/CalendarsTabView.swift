@@ -9,9 +9,17 @@ struct CalendarsTabView: View {
         Form {
             Section("Yandex Calendar") {
                 HStack {
-                    Button("Load") { viewModel.loadYandexCalendars(settings: settings) }
-                        .disabled(viewModel.isLoadingCalendars)
-                    if viewModel.isLoadingCalendars { ProgressView().scaleEffect(0.7) }
+                    Button {
+                        viewModel.loadYandexCalendars(settings: settings)
+                    } label: {
+                        Label("Load Calendars", systemImage: "arrow.clockwise")
+                    }
+                    .disabled(viewModel.isLoadingCalendars)
+
+                    if viewModel.isLoadingCalendars {
+                        ProgressView()
+                            .scaleEffect(0.7)
+                    }
                 }
 
                 if let error = viewModel.calendarLoadError {
@@ -30,9 +38,17 @@ struct CalendarsTabView: View {
             if settings.googleEnabled && GoogleOAuthService.isAuthenticated {
                 Section("Google Calendar") {
                     HStack {
-                        Button("Load") { viewModel.loadGoogleCalendars() }
-                            .disabled(viewModel.isLoadingGoogleCalendars)
-                        if viewModel.isLoadingGoogleCalendars { ProgressView().scaleEffect(0.7) }
+                        Button {
+                            viewModel.loadGoogleCalendars()
+                        } label: {
+                            Label("Load Calendars", systemImage: "arrow.clockwise")
+                        }
+                        .disabled(viewModel.isLoadingGoogleCalendars)
+
+                        if viewModel.isLoadingGoogleCalendars {
+                            ProgressView()
+                                .scaleEffect(0.7)
+                        }
                     }
 
                     if let error = viewModel.googleCalendarLoadError {

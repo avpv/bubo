@@ -51,7 +51,6 @@ struct AddEventView: View {
                     }
                 }
                 .buttonStyle(.borderless)
-                .keyboardShortcut(.escape, modifiers: [])
 
                 Spacer()
 
@@ -61,9 +60,11 @@ struct AddEventView: View {
                 Spacer()
 
                 OwlIcon(size: 18)
+                    .accessibilityHidden(true)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
+            .background(.bar)
 
             Divider()
 
@@ -176,6 +177,7 @@ struct AddEventView: View {
                 Button("Cancel") {
                     isPresented = false
                 }
+                .keyboardShortcut(.cancelAction)
 
                 Button(isEditing ? "Save" : "Add Event") {
                     if isTitleValid {
@@ -189,6 +191,7 @@ struct AddEventView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
+            .background(.bar)
         }
         .frame(width: 340)
         .onAppear {
@@ -202,6 +205,9 @@ struct AddEventView: View {
                     useCustomReminders = true
                     reminderMinutes = custom
                 }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                isTitleFocused = true
             }
         }
     }

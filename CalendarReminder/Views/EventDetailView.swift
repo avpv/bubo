@@ -27,13 +27,16 @@ struct EventDetailView: View {
                     }
                 }
                 .buttonStyle(.borderless)
+                .keyboardShortcut(.escape, modifiers: [])
 
                 Spacer()
 
                 OwlIcon(size: 18)
+                    .accessibilityHidden(true)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
+            .background(.bar)
 
             Divider()
 
@@ -142,6 +145,7 @@ struct EventDetailView: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
+                .background(.bar)
             }
         }
         .frame(width: 340)

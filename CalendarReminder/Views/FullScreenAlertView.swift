@@ -92,7 +92,13 @@ struct FullScreenAlertView: View {
                     .accessibilityHint("Press Enter or click to dismiss")
                 }
 
-                Text("Press Enter or click a button to dismiss")
+                // Hidden Escape key handler
+                Button("") { cleanup(); onDismiss() }
+                    .keyboardShortcut(.escape, modifiers: [])
+                    .frame(width: 0, height: 0)
+                    .opacity(0)
+
+                Text("Press Enter or Esc to dismiss")
                     .font(.caption)
                     .foregroundColor(.white.opacity(0.4))
                     .accessibilityHidden(true)

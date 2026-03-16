@@ -22,7 +22,7 @@ struct GeneralTabView: View {
                 }
             }
 
-            Section {
+            Section("Startup") {
                 Toggle("Launch at login", isOn: $settings.launchAtLogin)
                     .onChange(of: settings.launchAtLogin) { _ in save() }
             }

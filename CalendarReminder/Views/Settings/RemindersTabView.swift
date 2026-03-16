@@ -37,12 +37,17 @@ struct RemindersTabView: View {
                 }
             }
 
-            Section("Notification Types") {
+            Section {
                 Toggle("Full-screen notification", isOn: $settings.showFullScreenAlert)
                     .onChange(of: settings.showFullScreenAlert) { _ in save() }
 
                 Toggle("System notification", isOn: $settings.showSystemNotification)
                     .onChange(of: settings.showSystemNotification) { _ in save() }
+            } header: {
+                Text("Notification Types")
+            } footer: {
+                Text("At least one notification type should be enabled to receive meeting alerts.")
+                    .foregroundColor(.secondary)
             }
 
             Section("Do Not Disturb") {

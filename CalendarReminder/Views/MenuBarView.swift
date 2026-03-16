@@ -56,6 +56,7 @@ struct MenuBarView: View {
             // Header
             HStack {
                 OwlIcon(size: 18)
+                    .accessibilityHidden(true)
                 Text("Reminder")
                     .font(.headline)
                 Spacer()
@@ -169,7 +170,7 @@ struct MenuBarView: View {
                         }
                     }
                 }
-                .listStyle(.inset)
+                .listStyle(.plain)
                 .scrollContentBackground(.hidden)
                 .frame(maxHeight: 360)
             }

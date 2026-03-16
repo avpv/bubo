@@ -10,6 +10,22 @@ struct CalendarEvent: Identifiable, Codable, Hashable {
     let calendarName: String?
     var customReminderMinutes: [Int]?
 
+    // MARK: - Static formatters (avoid re-creation per call)
+
+    private static let timeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        return f
+    }()
+
+    private static let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "d MMMM, EEEE"
+        return f
+    }()
+
+    // MARK: - Computed properties
+
     var isUpcoming: Bool {
         startDate > Date()
     }
@@ -23,20 +39,14 @@ struct CalendarEvent: Identifiable, Codable, Hashable {
     }
 
     var formattedTime: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
-        return formatter.string(from: startDate)
+        Self.timeFormatter.string(from: startDate)
     }
 
     var formattedDate: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "d MMMM, EEEE"
-        return formatter.string(from: startDate)
+        Self.dateFormatter.string(from: startDate)
     }
 
     var formattedTimeRange: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
-        return "\(formatter.string(from: startDate)) – \(formatter.string(from: endDate))"
+        "\(Self.timeFormatter.string(from: startDate)) – \(Self.timeFormatter.string(from: endDate))"
     }
 }
