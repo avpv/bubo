@@ -21,13 +21,6 @@ jobs:
       - name: Build release binary
         run: swift build -c release
 
-      - name: Generate icon if missing
-        run: |
-          if [ ! -f CalendarReminder/Resources/AppIcon.icns ]; then
-            echo "No icon found, generating..."
-            swift scripts/generate_icon.swift
-          fi
-
       - name: Create .app bundle
         run: |
           VERSION="${{ steps.version.outputs.version }}"
@@ -35,10 +28,7 @@ jobs:
 
           mkdir -p "$APP/MacOS" "$APP/Resources"
           cp .build/release/CalendarReminder "$APP/MacOS/"
-
-          if [ -f CalendarReminder/Resources/AppIcon.icns ]; then
-            cp CalendarReminder/Resources/AppIcon.icns "$APP/Resources/"
-          fi
+          cp CalendarReminder/Resources/AppIcon.icns "$APP/Resources/"
 
           cat > "$APP/Info.plist" << PLIST
           <?xml version="1.0" encoding="UTF-8"?>
