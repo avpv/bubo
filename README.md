@@ -19,11 +19,13 @@ A native macOS menu bar app for meeting reminders with full-screen notifications
 ## Requirements
 
 - macOS 13.0 (Ventura) or later
-- Xcode 15+
+- Xcode 15+ or Xcode Command Line Tools
 
 ## Installation
 
-1. Install **Xcode** from the [Mac App Store](https://apps.apple.com/app/xcode/id497799835) (free, requires macOS 13+)
+### Option A: Using Xcode (recommended)
+
+1. Install **Xcode** from the [Mac App Store](https://apps.apple.com/app/xcode/id497799835)
 2. Launch Xcode once to accept the license and install components
 3. Clone and open the project:
 
@@ -33,7 +35,24 @@ cd CalendarReminder
 open -a Xcode Package.swift
 ```
 
-4. Press **Cmd+R** in Xcode to build and run
+4. Press **Cmd+R** to build and run
+
+### Option B: Using Command Line Tools only (without Xcode)
+
+1. Install Command Line Tools (if not already installed):
+
+```bash
+xcode-select --install
+```
+
+2. Clone, build, and run:
+
+```bash
+git clone https://github.com/avpv/CalendarReminder.git
+cd CalendarReminder
+swift build -c release
+.build/release/CalendarReminder
+```
 
 ## Authorization Setup
 
