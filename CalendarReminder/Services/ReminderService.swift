@@ -56,6 +56,16 @@ class ReminderService: ObservableObject {
         }
     }
 
+    deinit {
+        if let observer = snoozeObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        for timers in reminderTimers.values {
+            timers.forEach { $0.invalidate() }
+        }
+        syncTimer?.invalidate()
+    }
+
     func setNetworkMonitor(_ monitor: NetworkMonitor) {
         self.networkMonitor = monitor
     }
@@ -136,7 +146,7 @@ class ReminderService: ObservableObject {
 
         Task {
             let now = Date()
-            let endDate = Calendar.current.date(byAdding: .day, value: 7, to: now)!
+            let endDate = Calendar.current.date(byAdding: .day, value: 7, to: now) ?? now
             var allEvents: [CalendarEvent] = []
             var errors: [String] = []
 
