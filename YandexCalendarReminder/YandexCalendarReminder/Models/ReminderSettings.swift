@@ -24,19 +24,27 @@ struct ReminderInterval: Identifiable, Codable, Hashable {
     }
 }
 
+enum AuthMethod: String, Codable {
+    case appPassword
+    case oauth
+}
+
 class ReminderSettings: ObservableObject, Codable {
     @Published var intervals: [ReminderInterval]
     @Published var syncIntervalMinutes: Int
     @Published var showFullScreenAlert: Bool
     @Published var showSystemNotification: Bool
     @Published var playSound: Bool
-    @Published var yandexLogin: String
-    @Published var yandexAppPassword: String
     @Published var launchAtLogin: Bool
+    @Published var authMethod: AuthMethod
+    @Published var doNotDisturbEnabled: Bool
+    @Published var doNotDisturbFrom: Date  // time only
+    @Published var doNotDisturbTo: Date    // time only
 
     enum CodingKeys: String, CodingKey {
-        case intervals, syncIntervalMinutes, showFullScreenAlert, showSystemNotification, playSound
-        case yandexLogin, yandexAppPassword, launchAtLogin
+        case intervals, syncIntervalMinutes, showFullScreenAlert, showSystemNotification
+        case playSound, launchAtLogin, authMethod
+        case doNotDisturbEnabled, doNotDisturbFrom, doNotDisturbTo
     }
 
     init() {
@@ -48,9 +56,13 @@ class ReminderSettings: ObservableObject, Codable {
         self.showFullScreenAlert = true
         self.showSystemNotification = true
         self.playSound = true
-        self.yandexLogin = ""
-        self.yandexAppPassword = ""
         self.launchAtLogin = false
+        self.authMethod = .appPassword
+        self.doNotDisturbEnabled = false
+        // Default DND: 22:00 - 08:00
+        let calendar = Calendar.current
+        self.doNotDisturbFrom = calendar.date(from: DateComponents(hour: 22, minute: 0)) ?? Date()
+        self.doNotDisturbTo = calendar.date(from: DateComponents(hour: 8, minute: 0)) ?? Date()
     }
 
     required init(from decoder: Decoder) throws {
@@ -60,9 +72,15 @@ class ReminderSettings: ObservableObject, Codable {
         showFullScreenAlert = try container.decode(Bool.self, forKey: .showFullScreenAlert)
         showSystemNotification = try container.decodeIfPresent(Bool.self, forKey: .showSystemNotification) ?? true
         playSound = try container.decode(Bool.self, forKey: .playSound)
-        yandexLogin = try container.decode(String.self, forKey: .yandexLogin)
-        yandexAppPassword = try container.decode(String.self, forKey: .yandexAppPassword)
         launchAtLogin = try container.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? false
+        authMethod = try container.decodeIfPresent(AuthMethod.self, forKey: .authMethod) ?? .appPassword
+        doNotDisturbEnabled = try container.decodeIfPresent(Bool.self, forKey: .doNotDisturbEnabled) ?? false
+
+        let calendar = Calendar.current
+        doNotDisturbFrom = try container.decodeIfPresent(Date.self, forKey: .doNotDisturbFrom)
+            ?? calendar.date(from: DateComponents(hour: 22, minute: 0))!
+        doNotDisturbTo = try container.decodeIfPresent(Date.self, forKey: .doNotDisturbTo)
+            ?? calendar.date(from: DateComponents(hour: 8, minute: 0))!
     }
 
     func encode(to encoder: Encoder) throws {
@@ -72,9 +90,48 @@ class ReminderSettings: ObservableObject, Codable {
         try container.encode(showFullScreenAlert, forKey: .showFullScreenAlert)
         try container.encode(showSystemNotification, forKey: .showSystemNotification)
         try container.encode(playSound, forKey: .playSound)
-        try container.encode(yandexLogin, forKey: .yandexLogin)
-        try container.encode(yandexAppPassword, forKey: .yandexAppPassword)
         try container.encode(launchAtLogin, forKey: .launchAtLogin)
+        try container.encode(authMethod, forKey: .authMethod)
+        try container.encode(doNotDisturbEnabled, forKey: .doNotDisturbEnabled)
+        try container.encode(doNotDisturbFrom, forKey: .doNotDisturbFrom)
+        try container.encode(doNotDisturbTo, forKey: .doNotDisturbTo)
+    }
+
+    /// Check if current time is within Do Not Disturb period
+    var isDoNotDisturbActive: Bool {
+        guard doNotDisturbEnabled else { return false }
+
+        let calendar = Calendar.current
+        let now = Date()
+        let currentMinutes = calendar.component(.hour, from: now) * 60 + calendar.component(.minute, from: now)
+        let fromMinutes = calendar.component(.hour, from: doNotDisturbFrom) * 60 + calendar.component(.minute, from: doNotDisturbFrom)
+        let toMinutes = calendar.component(.hour, from: doNotDisturbTo) * 60 + calendar.component(.minute, from: doNotDisturbTo)
+
+        if fromMinutes <= toMinutes {
+            // Same day: e.g. 13:00 - 15:00
+            return currentMinutes >= fromMinutes && currentMinutes < toMinutes
+        } else {
+            // Overnight: e.g. 22:00 - 08:00
+            return currentMinutes >= fromMinutes || currentMinutes < toMinutes
+        }
+    }
+
+    // MARK: - Credentials via Keychain
+
+    var yandexLogin: String {
+        get { KeychainService.load(.yandexLogin) ?? "" }
+        set {
+            try? KeychainService.save(newValue, for: .yandexLogin)
+            objectWillChange.send()
+        }
+    }
+
+    var yandexAppPassword: String {
+        get { KeychainService.load(.yandexAppPassword) ?? "" }
+        set {
+            try? KeychainService.save(newValue, for: .yandexAppPassword)
+            objectWillChange.send()
+        }
     }
 
     func save() {

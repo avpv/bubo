@@ -9,12 +9,15 @@ class ReminderService: ObservableObject {
     @Published var lastSyncDate: Date?
     @Published var syncError: String?
     @Published var isSyncing = false
+    @Published var isUsingCache = false
 
     private var calDAVService: YandexCalDAVService?
     private var syncTimer: Timer?
     private var reminderTimers: [String: [Timer]] = [:]
     private var settings: ReminderSettings
     private var firedReminders: Set<String> = []
+    private let eventCache = EventCache()
+    private var networkMonitor: NetworkMonitor?
 
     var allEvents: [CalendarEvent] {
         (upcomingEvents + localEvents)
@@ -22,10 +25,38 @@ class ReminderService: ObservableObject {
             .sorted { $0.startDate < $1.startDate }
     }
 
+    /// Events grouped by day for display
+    var eventsByDay: [(date: Date, events: [CalendarEvent])] {
+        let calendar = Calendar.current
+        let grouped = Dictionary(grouping: allEvents) { event in
+            calendar.startOfDay(for: event.startDate)
+        }
+        return grouped
+            .sorted { $0.key < $1.key }
+            .map { (date: $0.key, events: $0.value) }
+    }
+
+    private var snoozeObserver: Any?
+
     init(settings: ReminderSettings) {
         self.settings = settings
         requestNotificationPermission()
         loadLocalEvents()
+
+        // Listen for snooze from full-screen alert
+        snoozeObserver = NotificationCenter.default.addObserver(
+            forName: .snoozeReminder,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let event = notification.userInfo?["event"] as? CalendarEvent,
+                  let minutes = notification.userInfo?["minutes"] as? Int else { return }
+            self?.snoozeReminder(for: event, minutes: minutes)
+        }
+    }
+
+    func setNetworkMonitor(_ monitor: NetworkMonitor) {
+        self.networkMonitor = monitor
     }
 
     func updateSettings(_ settings: ReminderSettings) {
@@ -35,18 +66,28 @@ class ReminderService: ObservableObject {
     }
 
     func setupCalDAVService() {
-        guard !settings.yandexLogin.isEmpty, !settings.yandexAppPassword.isEmpty else {
-            calDAVService = nil
-            return
+        let login = settings.yandexLogin
+        let password = settings.yandexAppPassword
+
+        switch settings.authMethod {
+        case .appPassword:
+            guard !login.isEmpty, !password.isEmpty else {
+                calDAVService = nil
+                return
+            }
+            calDAVService = YandexCalDAVService(authMode: .appPassword(login: login, password: password))
+        case .oauth:
+            guard YandexOAuthService.isAuthenticated else {
+                calDAVService = nil
+                return
+            }
+            calDAVService = YandexCalDAVService(authMode: .oauth)
         }
-        calDAVService = YandexCalDAVService(
-            login: settings.yandexLogin,
-            appPassword: settings.yandexAppPassword
-        )
     }
 
     func startSync() {
         setupCalDAVService()
+        loadCachedEvents()
         syncNow()
         startSyncTimer()
     }
@@ -71,6 +112,13 @@ class ReminderService: ObservableObject {
     }
 
     func syncNow() {
+        // Check network
+        if let monitor = networkMonitor, !monitor.isConnected {
+            syncError = "Нет подключения к интернету"
+            loadCachedEvents()
+            return
+        }
+
         guard let service = calDAVService else { return }
         isSyncing = true
         syncError = nil
@@ -81,17 +129,32 @@ class ReminderService: ObservableObject {
                 let endDate = Calendar.current.date(byAdding: .day, value: 7, to: now)!
                 let events = try await service.fetchEvents(from: now, to: endDate)
 
-                await MainActor.run {
-                    self.upcomingEvents = events
-                    self.lastSyncDate = Date()
-                    self.isSyncing = false
-                    self.scheduleReminders(for: events)
-                }
+                self.upcomingEvents = events
+                self.lastSyncDate = Date()
+                self.isSyncing = false
+                self.isUsingCache = false
+                self.syncError = nil
+                self.scheduleReminders(for: events)
+
+                // Cache for offline use
+                await eventCache.save(events: events)
             } catch {
-                await MainActor.run {
-                    self.syncError = error.localizedDescription
-                    self.isSyncing = false
-                }
+                self.syncError = error.localizedDescription
+                self.isSyncing = false
+                self.loadCachedEvents()
+            }
+        }
+    }
+
+    // MARK: - Cache
+
+    private func loadCachedEvents() {
+        Task {
+            let cached = await eventCache.loadEvents()
+            if !cached.isEmpty && self.upcomingEvents.isEmpty {
+                self.upcomingEvents = cached
+                self.isUsingCache = true
+                self.scheduleReminders(for: cached)
             }
         }
     }
@@ -122,6 +185,23 @@ class ReminderService: ObservableObject {
         localEvents = events.filter { $0.isUpcoming }
     }
 
+    // MARK: - Snooze
+
+    func snoozeReminder(for event: CalendarEvent, minutes: Int) {
+        let snoozeDate = Date().addingTimeInterval(TimeInterval(minutes * 60))
+        let timer = Timer(fire: snoozeDate, interval: 0, repeats: false) { [weak self] _ in
+            Task { @MainActor in
+                self?.fireReminder(for: event, minutesBefore: 0, isSnooze: true)
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+
+        // Store timer
+        var timers = reminderTimers[event.id] ?? []
+        timers.append(timer)
+        reminderTimers[event.id] = timers
+    }
+
     // MARK: - Reminders
 
     private func scheduleReminders(for events: [CalendarEvent]) {
@@ -140,7 +220,7 @@ class ReminderService: ObservableObject {
 
                 let timer = Timer(fire: fireDate, interval: 0, repeats: false) { [weak self] _ in
                     Task { @MainActor in
-                        self?.fireReminder(for: event, minutesBefore: interval.minutes)
+                        self?.fireReminder(for: event, minutesBefore: interval.minutes, isSnooze: false)
                         self?.firedReminders.insert(reminderKey)
                     }
                 }
@@ -168,9 +248,14 @@ class ReminderService: ObservableObject {
         scheduleReminders(for: allEvents)
     }
 
-    private func fireReminder(for event: CalendarEvent, minutesBefore: Int) {
+    private func fireReminder(for event: CalendarEvent, minutesBefore: Int, isSnooze: Bool) {
+        // Check Do Not Disturb (but always fire snooze — user explicitly asked)
+        if !isSnooze && settings.isDoNotDisturbActive {
+            return
+        }
+
         if settings.showSystemNotification {
-            sendNotification(for: event, minutesBefore: minutesBefore)
+            sendNotification(for: event, minutesBefore: minutesBefore, isSnooze: isSnooze)
         }
 
         if settings.showFullScreenAlert {
@@ -182,9 +267,17 @@ class ReminderService: ObservableObject {
         }
     }
 
-    private func sendNotification(for event: CalendarEvent, minutesBefore: Int) {
+    private func sendNotification(for event: CalendarEvent, minutesBefore: Int, isSnooze: Bool) {
         let content = UNMutableNotificationContent()
-        content.title = "Встреча через \(minutesBefore) мин"
+
+        if isSnooze {
+            content.title = "Напоминание (отложено)"
+        } else if minutesBefore <= 0 {
+            content.title = "Встреча начинается!"
+        } else {
+            content.title = "Встреча через \(minutesBefore) мин"
+        }
+
         content.body = "\(event.title)\n\(event.formattedTime)"
         if let location = event.location {
             content.body += "\n\(location)"
@@ -192,7 +285,7 @@ class ReminderService: ObservableObject {
         content.sound = .default
 
         let request = UNNotificationRequest(
-            identifier: "\(event.id)_\(minutesBefore)",
+            identifier: "\(event.id)_\(minutesBefore)_\(Date().timeIntervalSince1970)",
             content: content,
             trigger: nil
         )

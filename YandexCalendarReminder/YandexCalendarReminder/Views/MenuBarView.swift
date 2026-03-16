@@ -3,6 +3,7 @@ import SwiftUI
 struct MenuBarView: View {
     @ObservedObject var settings: ReminderSettings
     @ObservedObject var reminderService: ReminderService
+    @ObservedObject var networkMonitor: NetworkMonitor
 
     @State private var showingAddEvent = false
 
@@ -15,6 +16,19 @@ struct MenuBarView: View {
                 Text("Reminder")
                     .font(.headline)
                 Spacer()
+
+                if !networkMonitor.isConnected {
+                    Image(systemName: "wifi.slash")
+                        .foregroundColor(.red)
+                        .help("Нет подключения к интернету")
+                }
+
+                if settings.isDoNotDisturbActive {
+                    Image(systemName: "moon.fill")
+                        .foregroundColor(.indigo)
+                        .help("Не беспокоить")
+                }
+
                 if reminderService.isSyncing {
                     ProgressView()
                         .scaleEffect(0.6)
@@ -25,16 +39,23 @@ struct MenuBarView: View {
 
             Divider()
 
-            // Sync status
-            if let error = reminderService.syncError {
-                HStack {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundColor(.orange)
-                    Text(error)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                .padding(.horizontal)
+            // Status messages
+            if !networkMonitor.isConnected {
+                StatusBanner(
+                    icon: "wifi.slash",
+                    text: "Нет подключения. Показаны кэшированные данные",
+                    color: .orange
+                )
+            } else if reminderService.isUsingCache {
+                StatusBanner(
+                    icon: "arrow.triangle.2.circlepath",
+                    text: "Показаны кэшированные данные",
+                    color: .yellow
+                )
+            }
+
+            if let error = reminderService.syncError, networkMonitor.isConnected {
+                StatusBanner(icon: "exclamationmark.triangle.fill", text: error, color: .orange)
             }
 
             if let lastSync = reminderService.lastSyncDate {
@@ -44,8 +65,8 @@ struct MenuBarView: View {
                     .padding(.horizontal)
             }
 
-            // Events list
-            if reminderService.allEvents.isEmpty {
+            // Events grouped by day
+            if reminderService.eventsByDay.isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: "calendar")
                         .font(.largeTitle)
@@ -57,13 +78,17 @@ struct MenuBarView: View {
                 .padding(.vertical, 20)
             } else {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 4) {
-                        ForEach(reminderService.allEvents) { event in
-                            EventRowView(event: event)
+                    LazyVStack(alignment: .leading, spacing: 8) {
+                        ForEach(reminderService.eventsByDay, id: \.date) { dayGroup in
+                            DaySectionView(
+                                date: dayGroup.date,
+                                events: dayGroup.events,
+                                reminderService: reminderService
+                            )
                         }
                     }
                 }
-                .frame(maxHeight: 300)
+                .frame(maxHeight: 350)
             }
 
             Divider()
@@ -79,6 +104,7 @@ struct MenuBarView: View {
                     Label("Обновить", systemImage: "arrow.clockwise")
                 }
                 .buttonStyle(.plain)
+                .disabled(!networkMonitor.isConnected)
 
                 Spacer()
 
@@ -95,19 +121,77 @@ struct MenuBarView: View {
             .padding(.horizontal)
             .padding(.bottom, 8)
         }
-        .frame(width: 320)
+        .frame(width: 340)
         .sheet(isPresented: $showingAddEvent) {
             AddEventView(reminderService: reminderService, isPresented: $showingAddEvent)
         }
         .onAppear {
+            reminderService.setNetworkMonitor(networkMonitor)
             reminderService.updateSettings(settings)
             reminderService.startSync()
         }
     }
 }
 
+// MARK: - Supporting Views
+
+struct StatusBanner: View {
+    let icon: String
+    let text: String
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.caption)
+            Text(text)
+                .font(.caption)
+        }
+        .foregroundColor(color)
+        .padding(.horizontal)
+    }
+}
+
+struct DaySectionView: View {
+    let date: Date
+    let events: [CalendarEvent]
+    let reminderService: ReminderService
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(dayTitle)
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundColor(.secondary)
+                .textCase(.uppercase)
+                .padding(.horizontal)
+
+            ForEach(events) { event in
+                EventRowView(event: event, reminderService: reminderService)
+            }
+        }
+    }
+
+    private var dayTitle: String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) {
+            return "Сегодня"
+        } else if calendar.isDateInTomorrow(date) {
+            return "Завтра"
+        } else {
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "ru_RU")
+            formatter.dateFormat = "d MMMM, EEEE"
+            return formatter.string(from: date)
+        }
+    }
+}
+
 struct EventRowView: View {
     let event: CalendarEvent
+    let reminderService: ReminderService
+
+    @State private var showSnoozeMenu = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -143,7 +227,6 @@ struct EventRowView: View {
                         .foregroundColor(.blue)
                 }
 
-                // Time until
                 Text(timeUntilText)
                     .font(.caption2)
                     .foregroundColor(urgencyColor)
@@ -158,6 +241,17 @@ struct EventRowView: View {
                 .fill(urgencyColor.opacity(0.05))
         )
         .padding(.horizontal, 4)
+        .contextMenu {
+            Button("Напомнить через 5 мин") {
+                reminderService.snoozeReminder(for: event, minutes: 5)
+            }
+            Button("Напомнить через 10 мин") {
+                reminderService.snoozeReminder(for: event, minutes: 10)
+            }
+            Button("Напомнить через 15 мин") {
+                reminderService.snoozeReminder(for: event, minutes: 15)
+            }
+        }
     }
 
     private var urgencyColor: Color {

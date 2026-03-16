@@ -38,6 +38,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             minutesBefore: minutesBefore,
             onDismiss: { [weak self] in
                 self?.dismissAlert()
+            },
+            onSnooze: { [weak self] minutes in
+                self?.dismissAlert()
+                // Post snooze notification
+                NotificationCenter.default.post(
+                    name: .snoozeReminder,
+                    object: nil,
+                    userInfo: ["event": event, "minutes": minutes]
+                )
             }
         )
 
@@ -68,11 +77,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-/// Standalone view for the full-screen alert (used by AppDelegate)
+extension Notification.Name {
+    static let snoozeReminder = Notification.Name("snoozeReminder")
+}
+
+// MARK: - Full Screen Alert View
+
 struct FullScreenAlertContentView: View {
     let event: CalendarEvent
     let minutesBefore: Int
     let onDismiss: () -> Void
+    let onSnooze: (Int) -> Void
 
     var body: some View {
         ZStack {
@@ -111,17 +126,39 @@ struct FullScreenAlertContentView: View {
 
                 Spacer()
 
-                Button(action: onDismiss) {
-                    Text("Понятно")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.black)
-                        .padding(.horizontal, 60)
-                        .padding(.vertical, 16)
-                        .background(Capsule().fill(.white))
+                // Action buttons
+                HStack(spacing: 20) {
+                    // Snooze options
+                    Menu {
+                        Button("Через 5 минут") { onSnooze(5) }
+                        Button("Через 10 минут") { onSnooze(10) }
+                        Button("Через 15 минут") { onSnooze(15) }
+                    } label: {
+                        Text("Отложить")
+                            .font(.title3)
+                            .fontWeight(.medium)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 40)
+                            .padding(.vertical, 14)
+                            .background(
+                                Capsule()
+                                    .stroke(.white.opacity(0.5), lineWidth: 2)
+                            )
+                    }
+                    .buttonStyle(.plain)
+
+                    Button(action: onDismiss) {
+                        Text("Понятно")
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.black)
+                            .padding(.horizontal, 60)
+                            .padding(.vertical, 16)
+                            .background(Capsule().fill(.white))
+                    }
+                    .buttonStyle(.plain)
+                    .keyboardShortcut(.return, modifiers: [])
                 }
-                .buttonStyle(.plain)
-                .keyboardShortcut(.return, modifiers: [])
 
                 Text("Нажмите Enter или кнопку для закрытия")
                     .font(.caption)
