@@ -14,6 +14,8 @@ struct AddEventView: View {
     @State private var useCustomReminders = false
     @State private var reminderMinutes: [Int] = [5]
     @State private var newReminderValue = 10
+    @State private var isTitleHovered = false
+    @FocusState private var isTitleFocused: Bool
 
     private static let presetReminders = [1, 2, 3, 5, 10, 15, 20, 30, 45, 60]
 
@@ -59,6 +61,13 @@ struct AddEventView: View {
             Form {
                 Section {
                     TextField("Event title", text: $title)
+                        .focused($isTitleFocused)
+                        .padding(6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(isTitleFocused || isTitleHovered ? Color.white : Color.clear)
+                        )
+                        .onHover { isTitleHovered = $0 }
 
                     if showValidation && !isTitleValid {
                         Label("Title is required", systemImage: "exclamationmark.triangle.fill")
