@@ -19,9 +19,13 @@ class ReminderService: ObservableObject {
     private var firedReminders: Set<String> = []
     private let eventCache = EventCache()
     private var networkMonitor: NetworkMonitor?
+    private var excludedOccurrences: Set<String> = []
 
     var allEvents: [CalendarEvent] {
-        (upcomingEvents + localEvents)
+        let expandedLocal = localEvents.flatMap {
+            RecurrenceExpander.expand($0, excludedIds: excludedOccurrences)
+        }
+        return (upcomingEvents + expandedLocal)
             .filter { $0.isUpcoming }
             .sorted { $0.startDate < $1.startDate }
     }
@@ -230,21 +234,42 @@ class ReminderService: ObservableObject {
     func addLocalEvent(_ event: CalendarEvent) {
         localEvents.append(event)
         saveLocalEvents()
-        scheduleReminders(for: [event])
+        scheduleReminders(for: RecurrenceExpander.expand(event, excludedIds: excludedOccurrences))
     }
 
+    /// Remove the entire recurring series (by the base event id).
     func removeLocalEvent(id: String) {
+        if let event = localEvents.first(where: { $0.id == id }) {
+            let expanded = RecurrenceExpander.expand(event, excludedIds: excludedOccurrences)
+            for occurrence in expanded { cancelReminders(for: occurrence.id) }
+        }
+        // Clean up any exclusions for this series
+        excludedOccurrences = excludedOccurrences.filter { !$0.hasPrefix(id) }
+        saveExcludedOccurrences()
         localEvents.removeAll { $0.id == id }
-        cancelReminders(for: id)
         saveLocalEvents()
+    }
+
+    /// Exclude a single occurrence of a recurring event (EXDATE equivalent).
+    func excludeOccurrence(occurrenceId: String) {
+        excludedOccurrences.insert(occurrenceId)
+        saveExcludedOccurrences()
+        cancelReminders(for: occurrenceId)
+    }
+
+    /// Find the base series event for an expanded occurrence.
+    func seriesEvent(for event: CalendarEvent) -> CalendarEvent? {
+        guard let sid = event.seriesId else { return nil }
+        return localEvents.first { $0.id == sid }
     }
 
     func updateLocalEvent(_ event: CalendarEvent) {
         guard let index = localEvents.firstIndex(where: { $0.id == event.id }) else { return }
-        cancelReminders(for: event.id)
+        let oldExpanded = RecurrenceExpander.expand(localEvents[index], excludedIds: excludedOccurrences)
+        for occurrence in oldExpanded { cancelReminders(for: occurrence.id) }
         localEvents[index] = event
         saveLocalEvents()
-        scheduleReminders(for: [event])
+        scheduleReminders(for: RecurrenceExpander.expand(event, excludedIds: excludedOccurrences))
     }
 
     private func saveLocalEvents() {
@@ -256,7 +281,20 @@ class ReminderService: ObservableObject {
     private func loadLocalEvents() {
         guard let data = UserDefaults.standard.data(forKey: "LocalEvents"),
               let events = try? JSONDecoder().decode([CalendarEvent].self, from: data) else { return }
-        localEvents = events.filter { $0.isUpcoming }
+        localEvents = events.filter { $0.isUpcoming || $0.recurrenceRule != nil }
+        loadExcludedOccurrences()
+    }
+
+    private func saveExcludedOccurrences() {
+        if let data = try? JSONEncoder().encode(Array(excludedOccurrences)) {
+            UserDefaults.standard.set(data, forKey: "ExcludedOccurrences")
+        }
+    }
+
+    private func loadExcludedOccurrences() {
+        guard let data = UserDefaults.standard.data(forKey: "ExcludedOccurrences"),
+              let ids = try? JSONDecoder().decode([String].self, from: data) else { return }
+        excludedOccurrences = Set(ids)
     }
 
     // MARK: - Snooze

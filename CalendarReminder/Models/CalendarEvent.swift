@@ -9,6 +9,9 @@ struct CalendarEvent: Identifiable, Codable, Hashable {
     let description: String?
     let calendarName: String?
     var customReminderMinutes: [Int]?
+    var recurrenceRule: RecurrenceRule?
+    /// Non-nil when this event is an expanded occurrence of a recurring series.
+    var seriesId: String?
 
     // MARK: - Static formatters (avoid re-creation per call)
 
@@ -25,6 +28,10 @@ struct CalendarEvent: Identifiable, Codable, Hashable {
     }()
 
     // MARK: - Computed properties
+
+    var isRecurring: Bool {
+        recurrenceRule != nil || seriesId != nil
+    }
 
     var isUpcoming: Bool {
         startDate > Date()

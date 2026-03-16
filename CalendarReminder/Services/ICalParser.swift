@@ -51,15 +51,10 @@ struct ICalParser {
             } else if trimmed == "END:VEVENT" {
                 inEvent = false
                 if let parsed = buildEvent(from: properties, vtimezones: vtimezones, calendarName: calendarName) {
-                    let rruleStr = properties["RRULE"]
-                    if let rruleStr = rruleStr {
-                        let expanded = expandRecurrence(
-                            baseEvent: parsed,
-                            rrule: rruleStr,
-                            from: expandFrom,
-                            to: expandTo,
-                            exdates: parseExDates(properties, vtimezones: vtimezones)
-                        )
+                    if parsed.recurrenceRule != nil {
+                        let exdates = parseExDates(properties, vtimezones: vtimezones)
+                        let expanded = RecurrenceExpander.expand(parsed, windowEnd: expandTo, excludedDates: exdates)
+                            .filter { $0.startDate >= expandFrom }
                         events.append(contentsOf: expanded)
                     } else if parsed.startDate >= expandFrom && parsed.startDate <= expandTo {
                         events.append(parsed)
@@ -76,7 +71,14 @@ struct ICalParser {
                         properties[key] = value
                         properties[baseName] = trimmed // full line for timezone extraction
                     } else if baseName == "EXDATE" {
-                        // Accumulate multiple EXDATE lines (RFC 5545 allows repeated properties)
+                        // Store full line to preserve TZID params for timezone-aware parsing
+                        let fullEntry = trimmed
+                        if let existing = properties["EXDATE_FULL"] {
+                            properties["EXDATE_FULL"] = existing + "\n" + fullEntry
+                        } else {
+                            properties["EXDATE_FULL"] = fullEntry
+                        }
+                        // Also store raw values for backward compatibility
                         if let existing = properties["EXDATE"] {
                             properties["EXDATE"] = existing + "," + value
                         } else {
@@ -108,6 +110,8 @@ struct ICalParser {
         let dtend = parseDateProperty(props, key: "DTEND", vtimezones: vtimezones)
         let endDate = dtend ?? startDate.addingTimeInterval(3600)
 
+        let recurrenceRule = props["RRULE"].flatMap { RecurrenceRule.fromRRULE($0) }
+
         return CalendarEvent(
             id: uid,
             title: summary,
@@ -115,7 +119,8 @@ struct ICalParser {
             endDate: endDate,
             location: props["LOCATION"],
             description: props["DESCRIPTION"],
-            calendarName: calendarName
+            calendarName: calendarName,
+            recurrenceRule: recurrenceRule
         )
     }
 
@@ -148,235 +153,58 @@ struct ICalParser {
         return parseICalDate(dateStr, tzId: tzId, vtimezones: vtimezones)
     }
 
+    /// Parse an iCalendar date string. Delegates to shared ICalDateParser.
     static func parseICalDate(
         _ dateStr: String,
         tzId: String? = nil,
         vtimezones: [String: TimeZone] = [:]
     ) -> Date? {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-
-        if dateStr.hasSuffix("Z") {
-            formatter.dateFormat = "yyyyMMdd'T'HHmmss'Z'"
-            formatter.timeZone = TimeZone(identifier: "UTC")
-        } else if dateStr.count == 8 {
-            // All-day event: VALUE=DATE
-            formatter.dateFormat = "yyyyMMdd"
-            formatter.timeZone = resolveTimeZoneForParsing(tzId: tzId, vtimezones: vtimezones)
-        } else {
-            formatter.dateFormat = "yyyyMMdd'T'HHmmss"
-            formatter.timeZone = resolveTimeZoneForParsing(tzId: tzId, vtimezones: vtimezones)
-        }
-
-        return formatter.date(from: dateStr)
+        ICalDateParser.parse(dateStr, tzId: tzId, vtimezones: vtimezones)
     }
 
-    private static func resolveTimeZoneForParsing(
-        tzId: String?,
-        vtimezones: [String: TimeZone]
-    ) -> TimeZone {
-        if let tzId = tzId {
-            return vtimezones[tzId] ?? resolveTimeZone(tzId) ?? .current
-        }
-        return .current
-    }
-
-    /// Resolve timezone identifier, handling common Yandex/Outlook variations
+    /// Resolve timezone identifier. Delegates to shared ICalDateParser.
     static func resolveTimeZone(_ identifier: String) -> TimeZone? {
-        // Direct match
-        if let tz = TimeZone(identifier: identifier) { return tz }
-
-        // Common aliases
-        let aliases: [String: String] = [
-            "Moscow Standard Time": "Europe/Moscow",
-            "Russian Standard Time": "Europe/Moscow",
-            "E. Europe Standard Time": "Europe/Minsk",
-            "FLE Standard Time": "Europe/Kiev",
-            "GTB Standard Time": "Europe/Bucharest",
-            "Ekaterinburg Standard Time": "Asia/Yekaterinburg",
-            "N. Central Asia Standard Time": "Asia/Novosibirsk",
-            "North Asia Standard Time": "Asia/Krasnoyarsk",
-            "North Asia East Standard Time": "Asia/Irkutsk",
-            "Yakutsk Standard Time": "Asia/Yakutsk",
-            "Vladivostok Standard Time": "Asia/Vladivostok",
-            "W. Europe Standard Time": "Europe/Berlin",
-            "Central European Standard Time": "Europe/Warsaw",
-            "Romance Standard Time": "Europe/Paris",
-            "US Eastern Standard Time": "America/New_York",
-            "Pacific Standard Time": "America/Los_Angeles",
-        ]
-
-        if let mapped = aliases[identifier] {
-            return TimeZone(identifier: mapped)
-        }
-
-        // Try removing spaces and common suffixes
-        let cleaned = identifier
-            .replacingOccurrences(of: " Standard Time", with: "")
-            .replacingOccurrences(of: " ", with: "_")
-
-        return TimeZone(identifier: cleaned)
+        ICalDateParser.resolveTimezone(identifier)
     }
 
-    // MARK: - RRULE Expansion
-
-    private static func expandRecurrence(
-        baseEvent: CalendarEvent,
-        rrule: String,
-        from: Date,
-        to: Date,
-        exdates: Set<Date>
-    ) -> [CalendarEvent] {
-        let rule = parseRRule(rrule)
-        let calendar = Calendar.current
-        let duration = baseEvent.endDate.timeIntervalSince(baseEvent.startDate)
-
-        var occurrences: [CalendarEvent] = []
-        var currentDate = baseEvent.startDate
-        var count = 0
-        let maxCount = rule.count ?? 365 // safety limit
-
-        while currentDate <= to && count < maxCount {
-            if currentDate >= from && !isExcluded(currentDate, from: exdates) {
-                let occurrence = CalendarEvent(
-                    id: "\(baseEvent.id)_\(currentDate.timeIntervalSince1970)",
-                    title: baseEvent.title,
-                    startDate: currentDate,
-                    endDate: currentDate.addingTimeInterval(duration),
-                    location: baseEvent.location,
-                    description: baseEvent.description,
-                    calendarName: baseEvent.calendarName
-                )
-                occurrences.append(occurrence)
-            }
-
-            // Advance to next occurrence
-            guard let nextDate = nextOccurrence(after: currentDate, rule: rule, calendar: calendar) else {
-                break
-            }
-
-            if let until = rule.until, nextDate > until {
-                break
-            }
-
-            currentDate = nextDate
-            count += 1
-        }
-
-        return occurrences
-    }
-
-    private struct RRule {
-        var freq: String = "DAILY"
-        var interval: Int = 1
-        var count: Int?
-        var until: Date?
-        var byDay: [String] = []   // MO, TU, WE, etc.
-        var byMonth: [Int] = []
-        var byMonthDay: [Int] = []
-    }
-
-    private static func parseRRule(_ rrule: String) -> RRule {
-        var rule = RRule()
-        let parts = rrule.components(separatedBy: ";")
-
-        for part in parts {
-            let kv = part.components(separatedBy: "=")
-            guard kv.count == 2 else { continue }
-            let key = kv[0]
-            let value = kv[1]
-
-            switch key {
-            case "FREQ": rule.freq = value
-            case "INTERVAL": rule.interval = Int(value) ?? 1
-            case "COUNT": rule.count = Int(value)
-            case "UNTIL": rule.until = parseICalDate(value)
-            case "BYDAY": rule.byDay = value.components(separatedBy: ",")
-            case "BYMONTH": rule.byMonth = value.components(separatedBy: ",").compactMap { Int($0) }
-            case "BYMONTHDAY": rule.byMonthDay = value.components(separatedBy: ",").compactMap { Int($0) }
-            default: break
-            }
-        }
-
-        return rule
-    }
-
-    private static func nextOccurrence(
-        after date: Date,
-        rule: RRule,
-        calendar: Calendar
-    ) -> Date? {
-        var component: Calendar.Component
-
-        switch rule.freq {
-        case "DAILY": component = .day
-        case "WEEKLY": component = .weekOfYear
-        case "MONTHLY": component = .month
-        case "YEARLY": component = .year
-        default: return nil
-        }
-
-        let nextDate = calendar.date(byAdding: component, value: rule.interval, to: date)
-
-        // Handle BYDAY for weekly recurrence
-        if rule.freq == "WEEKLY" && !rule.byDay.isEmpty {
-            let targetDays = rule.byDay.compactMap { dayStringToWeekday($0) }
-            if var candidate = nextDate {
-                // Find next matching day
-                for _ in 0..<7 {
-                    let weekday = calendar.component(.weekday, from: candidate)
-                    if targetDays.contains(weekday) {
-                        return candidate
-                    }
-                    guard let next = calendar.date(byAdding: .day, value: 1, to: candidate) else {
-                        return nextDate
-                    }
-                    candidate = next
-                }
-            }
-        }
-
-        return nextDate
-    }
-
-    private static func dayStringToWeekday(_ day: String) -> Int? {
-        // Strip any leading number (e.g., "1MO" -> "MO")
-        let clean = day.filter { $0.isLetter }
-        switch clean {
-        case "SU": return 1
-        case "MO": return 2
-        case "TU": return 3
-        case "WE": return 4
-        case "TH": return 5
-        case "FR": return 6
-        case "SA": return 7
-        default: return nil
-        }
-    }
+    // MARK: - EXDATE Handling
 
     private static func parseExDates(
         _ props: [String: String],
         vtimezones: [String: TimeZone]
     ) -> Set<Date> {
-        guard let exdateStr = props["EXDATE"] else { return [] }
-
         var dates = Set<Date>()
-        let values = exdateStr.components(separatedBy: ",")
-        for value in values {
-            if let date = parseICalDate(value.trimmingCharacters(in: .whitespaces)) {
-                dates.insert(date)
+
+        // Prefer full lines with TZID parameters
+        if let fullLines = props["EXDATE_FULL"] {
+            for line in fullLines.components(separatedBy: "\n") {
+                // Extract TZID from line like "EXDATE;TZID=Europe/Moscow:20260316T100000,20260317T100000"
+                var tzId: String?
+                if let tzRange = line.range(of: "TZID=") {
+                    let after = line[tzRange.upperBound...]
+                    if let end = after.firstIndex(of: ":") ?? after.firstIndex(of: ";") {
+                        tzId = String(after[..<end])
+                    }
+                }
+                // Extract values after the last colon
+                let parts = line.components(separatedBy: ":")
+                guard let valuesStr = parts.last else { continue }
+                for value in valuesStr.components(separatedBy: ",") {
+                    if let date = parseICalDate(value.trimmingCharacters(in: .whitespaces), tzId: tzId, vtimezones: vtimezones) {
+                        dates.insert(date)
+                    }
+                }
+            }
+        } else if let exdateStr = props["EXDATE"] {
+            // Fallback: raw values without timezone
+            for value in exdateStr.components(separatedBy: ",") {
+                if let date = parseICalDate(value.trimmingCharacters(in: .whitespaces)) {
+                    dates.insert(date)
+                }
             }
         }
+
         return dates
     }
 
-    private static func isExcluded(_ date: Date, from exdates: Set<Date>) -> Bool {
-        let calendar = Calendar.current
-        for exdate in exdates {
-            if calendar.isDate(date, inSameDayAs: exdate) {
-                return true
-            }
-        }
-        return false
-    }
 }

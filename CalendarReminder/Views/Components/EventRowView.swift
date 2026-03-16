@@ -37,10 +37,19 @@ struct EventRowView: View {
 
             // Event details
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                Text(event.title)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .lineLimit(2)
+                HStack(spacing: DS.Spacing.xs) {
+                    Text(event.title)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .lineLimit(2)
+
+                    if event.isRecurring {
+                        Image(systemName: "repeat")
+                            .font(.system(size: DS.Size.iconSmall))
+                            .foregroundColor(.secondary)
+                            .accessibilityLabel("Recurring")
+                    }
+                }
 
                 HStack(spacing: DS.Spacing.md) {
                     if let location = event.location, !location.isEmpty {
@@ -79,6 +88,7 @@ struct EventRowView: View {
                         .menuStyle(.borderlessButton)
                         .fixedSize()
                         .help("Snooze reminder")
+                        .accessibilityLabel("Snooze reminder")
                     }
 
                     if isLocal {
@@ -113,7 +123,7 @@ struct EventRowView: View {
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(event.title), \(event.formattedTimeRange)\(event.location.map { ", \($0)" } ?? "")")
+        .accessibilityLabel("\(event.title)\(event.isRecurring ? ", recurring" : ""), \(event.formattedTimeRange)\(event.location.map { ", \($0)" } ?? "")")
         .accessibilityHint("Click to view details. Right-click to snooze.")
         .accessibilityAddTraits(.isButton)
         .contextMenu {

@@ -15,6 +15,8 @@ struct AddEventView: View {
     @State private var useCustomReminders = false
     @State private var reminderMinutes: [Int] = [5]
     @State private var newReminderValue = 10
+    @State private var recurrenceRule: RecurrenceRule? = nil
+
     @FocusState private var isTitleFocused: Bool
 
     private static let presetReminders = [1, 2, 3, 5, 10, 15, 20, 30, 45, 60]
@@ -25,7 +27,7 @@ struct AddEventView: View {
         !title.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
-    private var endDate: Date {
+    private var eventEndDate: Date {
         date.addingTimeInterval(duration * 60)
     }
 
@@ -37,7 +39,6 @@ struct AddEventView: View {
                 onBack: onDismiss
             )
 
-            // Form
             Form {
                 Section {
                     TextField("Event title", text: $title)
@@ -72,7 +73,7 @@ struct AddEventView: View {
                     }
 
                     LabeledContent("Ends at") {
-                        Text(DS.timeFormatter.string(from: endDate))
+                        Text(DS.timeFormatter.string(from: eventEndDate))
                             .foregroundColor(.secondary)
                     }
                 }
@@ -84,6 +85,8 @@ struct AddEventView: View {
                     TextField("Notes (optional)", text: $description)
                         .textFieldStyle(.roundedBorder)
                 }
+
+                RecurrencePickerView(rule: $recurrenceRule, eventStartDate: date)
 
                 Section("Reminders") {
                     Toggle("Custom reminders", isOn: $useCustomReminders)
@@ -112,7 +115,6 @@ struct AddEventView: View {
                             }
                         }
 
-                        // Quick presets
                         let available = Self.presetReminders.filter { !reminderMinutes.contains($0) }
                         if !available.isEmpty {
                             HStack(spacing: DS.Spacing.xs) {
@@ -138,13 +140,10 @@ struct AddEventView: View {
 
             Divider()
 
-            // Actions
             HStack {
                 Spacer()
-                Button("Cancel") {
-                    onDismiss()
-                }
-                .keyboardShortcut(.cancelAction)
+                Button("Cancel") { onDismiss() }
+                    .keyboardShortcut(.cancelAction)
 
                 Button(isEditing ? "Save" : "Add Event") {
                     if isTitleValid {
@@ -172,6 +171,7 @@ struct AddEventView: View {
                     useCustomReminders = true
                     reminderMinutes = custom
                 }
+                recurrenceRule = event.recurrenceRule
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 isTitleFocused = true
@@ -184,11 +184,12 @@ struct AddEventView: View {
             id: editingEvent?.id ?? UUID().uuidString,
             title: title,
             startDate: date,
-            endDate: endDate,
+            endDate: eventEndDate,
             location: location.isEmpty ? nil : location,
             description: description.isEmpty ? nil : description,
             calendarName: "Local",
-            customReminderMinutes: useCustomReminders ? reminderMinutes.sorted() : nil
+            customReminderMinutes: useCustomReminders ? reminderMinutes.sorted() : nil,
+            recurrenceRule: recurrenceRule
         )
         if isEditing {
             reminderService.updateLocalEvent(event)
