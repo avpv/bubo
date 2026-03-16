@@ -342,8 +342,6 @@ class ReminderService: ObservableObject {
         if let location = event.location {
             content.body += "\n\(location)"
         }
-        content.sound = nil
-
         let request = UNNotificationRequest(
             identifier: "\(event.id)_\(minutesBefore)_\(Date().timeIntervalSince1970)",
             content: content,

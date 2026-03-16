@@ -139,4 +139,5 @@ CalendarReminder/
     │       └── GoogleOAuthService.swift           # Google OAuth 2.0
     │
     └── Resources/
+        └── AppIcon.icns                       # App icon
 ```
