@@ -27,9 +27,7 @@ A native macOS menu bar app for meeting reminders with full-screen notifications
 1. Go to [Releases](https://github.com/avpv/Owlenda/releases/latest)
 2. Download **Owlenda.dmg**
 3. Open the DMG and drag **Owlenda** to **Applications**
-4. On first launch macOS Gatekeeper will block the unsigned app. To allow it:
-   - Go to **System Settings → Privacy & Security** → scroll down → click **"Open Anyway"**
-   - Or run in Terminal: `xattr -cr /Applications/Owlenda.app` then launch normally
+4. Launch **Owlenda** from Applications
 
 ### Option B: Using Xcode
 

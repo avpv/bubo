@@ -97,6 +97,32 @@ jobs:
           PLIST
           sed -i '' "s/PLACEHOLDER_VERSION/${VERSION}/g" "$APP/Info.plist"
 
+      - name: Import signing certificate
+        if: env.MACOS_CERTIFICATE != ''
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+          KEYCHAIN_PWD: ${{ github.run_id }}
+        run: |
+          CERT_FILE=$(mktemp /tmp/cert.XXXXXX.p12)
+          echo "$MACOS_CERTIFICATE" | base64 --decode > "$CERT_FILE"
+          security create-keychain -p "$KEYCHAIN_PWD" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PWD" build.keychain
+          security import "$CERT_FILE" -k build.keychain -P "$MACOS_CERTIFICATE_PWD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PWD" build.keychain
+          rm "$CERT_FILE"
+
+      - name: Sign app bundle
+        if: env.MACOS_CERTIFICATE != ''
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          SIGNING_IDENTITY: ${{ secrets.SIGNING_IDENTITY }}
+        run: |
+          codesign --force --options runtime --deep \
+            --sign "$SIGNING_IDENTITY" \
+            Owlenda.app
+
       - name: Create DMG
         run: |
           mkdir -p dmg_contents
@@ -107,6 +133,33 @@ jobs:
             -srcfolder dmg_contents \
             -ov -format UDZO \
             Owlenda.dmg
+
+      - name: Sign DMG
+        if: env.MACOS_CERTIFICATE != ''
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          SIGNING_IDENTITY: ${{ secrets.SIGNING_IDENTITY }}
+        run: |
+          codesign --force --sign "$SIGNING_IDENTITY" Owlenda.dmg
+
+      - name: Notarize DMG
+        if: env.APPLE_ID != ''
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: |
+          xcrun notarytool submit Owlenda.dmg \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --wait
+          xcrun stapler staple Owlenda.dmg
+
+      - name: Cleanup keychain
+        if: always()
+        run: |
+          security delete-keychain build.keychain 2>/dev/null || true
 
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
@@ -119,7 +172,5 @@ jobs:
 
             1. Download **Owlenda.dmg**
             2. Open the DMG and drag **Owlenda** to **Applications**
-            3. On first launch macOS will block the unsigned app:
-               - Go to **System Settings → Privacy & Security** → scroll down → click **Open Anyway**
-               - Or run: `xattr -cr /Applications/Owlenda.app`
+            3. Launch **Owlenda** from Applications
           files: Owlenda.dmg
