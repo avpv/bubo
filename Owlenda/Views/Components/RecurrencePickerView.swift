@@ -124,7 +124,7 @@ struct RecurrencePickerView: View {
     private var pomodoroControls: some View {
         Group {
             // Work duration
-            Stepper(value: $pomodoroWork, in: 5...90, step: 5) {
+            Stepper(value: $pomodoroWork, in: 1...90) {
                 Label("Work: \(pomodoroWork) min", systemImage: "brain.head.profile")
                     .foregroundColor(.primary)
             }
@@ -174,47 +174,43 @@ struct RecurrencePickerView: View {
 
     // MARK: - Pomodoro Timeline Preview
 
+    /// Build the list of timeline segments with their start times.
+    private var pomodoroSegments: [(type: String, minutes: Int, startOffset: Int)] {
+        var segments: [(type: String, minutes: Int, startOffset: Int)] = []
+        var offset = 0
+        for round in 0..<pomodoroRounds {
+            segments.append((type: "work", minutes: pomodoroWork, startOffset: offset))
+            offset += pomodoroWork
+            if round < pomodoroRounds - 1 {
+                segments.append((type: "break", minutes: pomodoroBreak, startOffset: offset))
+                offset += pomodoroBreak
+            }
+        }
+        if pomodoroLongBreakEnabled && pomodoroLongBreak > 0 {
+            segments.append((type: "long", minutes: pomodoroLongBreak, startOffset: offset))
+        }
+        return segments
+    }
+
     private var pomodoroTimeline: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            // Bar visualization
             GeometryReader { geo in
                 let totalWidth = geo.size.width
                 let totalDuration = CGFloat(pomodoroTotalMinutes)
                 HStack(spacing: 0) {
-                    ForEach(0..<pomodoroRounds, id: \.self) { round in
-                        let workWidth = totalWidth * CGFloat(pomodoroWork) / totalDuration
-                        let breakWidth = round < pomodoroRounds - 1
-                            ? totalWidth * CGFloat(pomodoroBreak) / totalDuration
-                            : 0
+                    ForEach(Array(pomodoroSegments.enumerated()), id: \.offset) { _, segment in
+                        let segWidth = totalWidth * CGFloat(segment.minutes) / totalDuration
+                        let color: Color = segment.type == "work" ? .accentColor
+                            : segment.type == "long" ? .indigo.opacity(0.5)
+                            : .green.opacity(0.5)
 
-                        // Work block
                         RoundedRectangle(cornerRadius: 3)
-                            .fill(Color.accentColor)
-                            .frame(width: max(workWidth - 1, 4))
+                            .fill(color)
+                            .frame(width: max(segWidth - 1, 3))
                             .overlay {
-                                if workWidth > 20 {
-                                    Text("\(pomodoroWork)")
-                                        .font(.system(size: 9, weight: .medium, design: .rounded))
-                                        .foregroundColor(.white)
-                                }
-                            }
-
-                        if round < pomodoroRounds - 1 {
-                            // Short break block
-                            RoundedRectangle(cornerRadius: 3)
-                                .fill(Color.green.opacity(0.5))
-                                .frame(width: max(breakWidth - 1, 3))
-                        }
-                    }
-
-                    // Long break block at the end
-                    if pomodoroLongBreakEnabled && pomodoroLongBreak > 0 {
-                        let longBreakWidth = totalWidth * CGFloat(pomodoroLongBreak) / totalDuration
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(Color.indigo.opacity(0.5))
-                            .frame(width: max(longBreakWidth - 1, 6))
-                            .overlay {
-                                if longBreakWidth > 20 {
-                                    Text("\(pomodoroLongBreak)")
+                                if segWidth > 20 {
+                                    Text("\(segment.minutes)")
                                         .font(.system(size: 9, weight: .medium, design: .rounded))
                                         .foregroundColor(.white)
                                 }
@@ -229,12 +225,41 @@ struct RecurrencePickerView: View {
                 + (pomodoroLongBreakEnabled ? ", then \(pomodoroLongBreak) min long break" : "")
             )
 
+            // Session schedule with actual times
+            pomodoroSchedule
+
             // Legend
             HStack(spacing: DS.Spacing.lg) {
                 legendItem(color: Color.accentColor, label: "Work")
                 legendItem(color: Color.green.opacity(0.5), label: "Break")
                 if pomodoroLongBreakEnabled {
                     legendItem(color: Color.indigo.opacity(0.5), label: "Long")
+                }
+            }
+        }
+    }
+
+    /// Shows the actual session schedule with real times based on event start.
+    private var pomodoroSchedule: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+            ForEach(Array(pomodoroSegments.enumerated()), id: \.offset) { _, segment in
+                let start = eventStartDate.addingTimeInterval(TimeInterval(segment.startOffset * 60))
+                let end = start.addingTimeInterval(TimeInterval(segment.minutes * 60))
+                let icon = segment.type == "work" ? "brain.head.profile"
+                    : segment.type == "long" ? "moon.zzz"
+                    : "cup.and.saucer"
+                let color: Color = segment.type == "work" ? .primary
+                    : segment.type == "long" ? .indigo
+                    : .green
+
+                HStack(spacing: DS.Spacing.xs) {
+                    Image(systemName: icon)
+                        .font(.system(size: 9))
+                        .foregroundColor(color)
+                        .frame(width: 12)
+                    Text("\(DS.timeFormatter.string(from: start))–\(DS.timeFormatter.string(from: end))")
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundColor(.secondary)
                 }
             }
         }
