@@ -84,14 +84,36 @@ struct EventDetailView: View {
                     // Recurrence
                     if let rule = event.recurrenceRule {
                         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                            Label("Repeats", systemImage: "repeat")
-                                .font(.caption)
-                                .fontWeight(.medium)
-                                .foregroundStyle(.tertiary)
+                            Label(
+                                rule.isPomodoro ? "Pomodoro" : "Repeats",
+                                systemImage: rule.isPomodoro ? "timer" : "repeat"
+                            )
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundStyle(.tertiary)
 
                             Text(rule.displayText)
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
+
+                            if rule.isPomodoro {
+                                let workMin = Int(event.endDate.timeIntervalSince(event.startDate) / 60)
+                                let breakMin = max(rule.interval - workMin, 0)
+                                HStack(spacing: DS.Spacing.md) {
+                                    Label("\(workMin) min work", systemImage: "brain.head.profile")
+                                        .font(.caption2)
+                                        .padding(.horizontal, DS.Spacing.sm)
+                                        .padding(.vertical, DS.Spacing.xxs)
+                                        .background(Color.accentColor.opacity(0.15))
+                                        .clipShape(RoundedRectangle(cornerRadius: DS.Size.badgeCornerRadius))
+                                    Label("\(breakMin) min break", systemImage: "cup.and.saucer")
+                                        .font(.caption2)
+                                        .padding(.horizontal, DS.Spacing.sm)
+                                        .padding(.vertical, DS.Spacing.xxs)
+                                        .background(Color.green.opacity(0.15))
+                                        .clipShape(RoundedRectangle(cornerRadius: DS.Size.badgeCornerRadius))
+                                }
+                            }
 
                             if rule.frequency == .weekly && !rule.weekdays.isEmpty {
                                 HStack(spacing: DS.Spacing.xs) {

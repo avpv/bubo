@@ -63,8 +63,21 @@ struct RecurrenceRule: Codable, Hashable {
         self.monthlyMode = nil
     }
 
+    /// Whether this rule represents a Pomodoro Technique session.
+    var isPomodoro: Bool {
+        if case .afterCount = end {
+            return frequency == .minutely
+        }
+        return false
+    }
+
     /// Human-readable summary
     var displayText: String {
+        // Pomodoro-specific display (interval = cycle, count = rounds)
+        if isPomodoro, case .afterCount(let rounds) = end {
+            return "Pomodoro: \(rounds) rounds, every \(interval) min"
+        }
+
         var parts: [String] = []
 
         // Frequency + interval
@@ -236,7 +249,8 @@ enum RecurrenceFrequency: String, Codable, Hashable, CaseIterable {
     case yearly
 
     /// Frequencies appropriate for the calendar event UI picker.
-    static let userVisible: [RecurrenceFrequency] = [.minutely, .hourly, .daily, .weekly, .monthly, .yearly]
+    /// Minutely is used internally for Pomodoro but not shown as a raw frequency.
+    static let userVisible: [RecurrenceFrequency] = [.daily, .weekly, .monthly, .yearly]
 
     var label: String {
         switch self {

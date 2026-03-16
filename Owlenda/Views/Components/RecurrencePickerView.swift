@@ -1,17 +1,39 @@
 import SwiftUI
 
 /// Reusable recurrence configuration picker, inspired by Apple Calendar.
+/// Supports both standard calendar recurrence and Pomodoro Technique mode.
 struct RecurrencePickerView: View {
     @Binding var rule: RecurrenceRule?
+    @Binding var eventDuration: Double
     let eventStartDate: Date
 
-    @State private var frequency: RecurrenceFrequency? = nil
+    // MARK: - Repeat mode (top-level choice)
+
+    /// Top-level mode: none, pomodoro, or a standard calendar frequency.
+    private enum RepeatMode: Hashable {
+        case none
+        case pomodoro
+        case standard(RecurrenceFrequency)
+    }
+
+    @State private var mode: RepeatMode = .none
+
+    // MARK: - Standard recurrence state
+
     @State private var interval: Int = 1
     @State private var endChoice: EndChoice = .never
     @State private var endCount: Int = 10
     @State private var endDate: Date = Calendar.current.date(byAdding: .month, value: 1, to: Date()) ?? Date()
     @State private var selectedWeekdays: Set<Weekday> = []
     @State private var monthlyMode: MonthlyModeChoice = .dayOfMonth
+
+    // MARK: - Pomodoro state
+
+    @State private var pomodoroWork: Int = 25
+    @State private var pomodoroBreak: Int = 5
+    @State private var pomodoroRounds: Int = 4
+
+    // MARK: - Enums
 
     private enum EndChoice: String, CaseIterable {
         case never = "Never"
@@ -25,12 +47,12 @@ struct RecurrencePickerView: View {
         case lastWeekday = "Last weekday"
     }
 
-    /// Computed day of month from event start date.
+    // MARK: - Computed helpers
+
     private var startDayOfMonth: Int {
         Calendar.current.component(.day, from: eventStartDate)
     }
 
-    /// Computed weekday ordinal from event start date (e.g. "2nd Tuesday").
     private var startWeekdayOrdinal: Int {
         Calendar.current.component(.weekdayOrdinal, from: eventStartDate)
     }
@@ -40,78 +62,190 @@ struct RecurrencePickerView: View {
         return Weekday.from(calendarWeekday: wd)
     }
 
+    private var pomodoroCycleMinutes: Int {
+        pomodoroWork + pomodoroBreak
+    }
+
+    private var pomodoroTotalMinutes: Int {
+        pomodoroWork * pomodoroRounds + pomodoroBreak * (pomodoroRounds - 1)
+    }
+
+    // MARK: - Body
+
     var body: some View {
         Section("Repeat") {
-            Picker("Frequency", selection: $frequency) {
-                Text("Never").tag(RecurrenceFrequency?.none)
-                ForEach(RecurrenceFrequency.userVisible, id: \.self) { freq in
-                    Text("Every \(freq.label)").tag(Optional(freq))
-                }
-            }
-            .pickerStyle(.menu)
+            modePicker
 
-            if let freq = frequency {
-                // Interval
-                Stepper(
-                    "Every \(interval) \(interval == 1 ? freq.singularUnit : freq.pluralUnit)",
-                    value: $interval, in: 1...99
-                )
-
-                // Weekly: weekday chips
-                if freq == .weekly {
-                    weekdayChips
-                }
-
-                // Monthly: mode picker
-                if freq == .monthly {
-                    monthlyModePicker
-                }
-
-                // End condition
-                Picker("Ends", selection: $endChoice) {
-                    ForEach(EndChoice.allCases, id: \.self) { c in
-                        Text(c.rawValue).tag(c)
-                    }
-                }
-                .pickerStyle(.menu)
-
-                switch endChoice {
-                case .never:
-                    EmptyView()
-                case .afterCount:
-                    Stepper("After \(endCount) occurrences", value: $endCount, in: 2...100)
-                case .onDate:
-                    DatePicker("Until", selection: $endDate, in: eventStartDate..., displayedComponents: .date)
-                }
-
-                // Summary
-                if let built = buildRule() {
-                    Label(built.displayText, systemImage: "repeat")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
+            switch mode {
+            case .none:
+                EmptyView()
+            case .pomodoro:
+                pomodoroControls
+            case .standard(let freq):
+                standardControls(freq)
             }
         }
-        .onChange(of: frequency) { newFreq in
-            if newFreq != .weekly { selectedWeekdays.removeAll() }
-            // Set Pomodoro-friendly defaults when switching to minutely
-            if newFreq == .minutely && interval == 1 {
-                interval = 25
-                endChoice = .afterCount
-                endCount = 4
-            }
-            syncToBinding()
-        }
+        .onChange(of: mode) { _ in syncToBinding() }
         .onChange(of: interval) { _ in syncToBinding() }
         .onChange(of: endChoice) { _ in syncToBinding() }
         .onChange(of: endCount) { _ in syncToBinding() }
         .onChange(of: endDate) { _ in syncToBinding() }
         .onChange(of: selectedWeekdays) { _ in syncToBinding() }
         .onChange(of: monthlyMode) { _ in syncToBinding() }
+        .onChange(of: pomodoroWork) { _ in syncToBinding() }
+        .onChange(of: pomodoroBreak) { _ in syncToBinding() }
+        .onChange(of: pomodoroRounds) { _ in syncToBinding() }
         .onAppear { loadFromBinding() }
     }
 
-    // MARK: - Weekly Weekday Chips (adaptive layout)
+    // MARK: - Mode Picker
+
+    private var modePicker: some View {
+        Picker("Mode", selection: $mode) {
+            Text("Never").tag(RepeatMode.none)
+            Label("Pomodoro", systemImage: "timer").tag(RepeatMode.pomodoro)
+            Divider()
+            ForEach(RecurrenceFrequency.userVisible, id: \.self) { freq in
+                Text("Every \(freq.label)").tag(RepeatMode.standard(freq))
+            }
+        }
+        .pickerStyle(.menu)
+    }
+
+    // MARK: - Pomodoro Controls
+
+    private var pomodoroControls: some View {
+        Group {
+            // Work duration
+            Stepper(value: $pomodoroWork, in: 5...90, step: 5) {
+                Label("Work: \(pomodoroWork) min", systemImage: "brain.head.profile")
+                    .foregroundColor(.primary)
+            }
+
+            // Break duration
+            Stepper(value: $pomodoroBreak, in: 1...30) {
+                Label("Break: \(pomodoroBreak) min", systemImage: "cup.and.saucer")
+                    .foregroundColor(.primary)
+            }
+
+            // Rounds
+            Stepper(value: $pomodoroRounds, in: 1...12) {
+                Label("Rounds: \(pomodoroRounds)", systemImage: "arrow.trianglehead.2.counterclockwise")
+                    .foregroundColor(.primary)
+            }
+
+            // Visual timeline
+            pomodoroTimeline
+
+            // Total summary
+            Label(
+                "Total: \(DS.formatMinutes(pomodoroTotalMinutes))",
+                systemImage: "clock"
+            )
+            .font(.caption)
+            .foregroundColor(.secondary)
+        }
+    }
+
+    // MARK: - Pomodoro Timeline Preview
+
+    private var pomodoroTimeline: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            GeometryReader { geo in
+                let totalWidth = geo.size.width
+                let totalDuration = CGFloat(pomodoroTotalMinutes)
+                HStack(spacing: 0) {
+                    ForEach(0..<pomodoroRounds, id: \.self) { round in
+                        let workWidth = totalWidth * CGFloat(pomodoroWork) / totalDuration
+                        let breakWidth = round < pomodoroRounds - 1
+                            ? totalWidth * CGFloat(pomodoroBreak) / totalDuration
+                            : 0
+
+                        // Work block
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(Color.accentColor)
+                            .frame(width: max(workWidth - 1, 4))
+                            .overlay {
+                                if workWidth > 20 {
+                                    Text("\(pomodoroWork)")
+                                        .font(.system(size: 9, weight: .medium, design: .rounded))
+                                        .foregroundColor(.white)
+                                }
+                            }
+
+                        if round < pomodoroRounds - 1 {
+                            // Break block
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(Color.green.opacity(0.5))
+                                .frame(width: max(breakWidth - 1, 3))
+                        }
+                    }
+                }
+            }
+            .frame(height: 20)
+            .accessibilityElement()
+            .accessibilityLabel("Pomodoro timeline: \(pomodoroRounds) rounds of \(pomodoroWork) min work and \(pomodoroBreak) min break")
+
+            // Legend
+            HStack(spacing: DS.Spacing.lg) {
+                HStack(spacing: DS.Spacing.xs) {
+                    Circle().fill(Color.accentColor).frame(width: 6, height: 6)
+                    Text("Work").font(.caption2).foregroundColor(.secondary)
+                }
+                HStack(spacing: DS.Spacing.xs) {
+                    Circle().fill(Color.green.opacity(0.5)).frame(width: 6, height: 6)
+                    Text("Break").font(.caption2).foregroundColor(.secondary)
+                }
+            }
+        }
+    }
+
+    // MARK: - Standard Recurrence Controls
+
+    @ViewBuilder
+    private func standardControls(_ freq: RecurrenceFrequency) -> some View {
+        // Interval
+        Stepper(
+            "Every \(interval) \(interval == 1 ? freq.singularUnit : freq.pluralUnit)",
+            value: $interval, in: 1...99
+        )
+
+        // Weekly: weekday chips
+        if freq == .weekly {
+            weekdayChips
+        }
+
+        // Monthly: mode picker
+        if freq == .monthly {
+            monthlyModePicker
+        }
+
+        // End condition
+        Picker("Ends", selection: $endChoice) {
+            ForEach(EndChoice.allCases, id: \.self) { c in
+                Text(c.rawValue).tag(c)
+            }
+        }
+        .pickerStyle(.menu)
+
+        switch endChoice {
+        case .never:
+            EmptyView()
+        case .afterCount:
+            Stepper("After \(endCount) occurrences", value: $endCount, in: 2...100)
+        case .onDate:
+            DatePicker("Until", selection: $endDate, in: eventStartDate..., displayedComponents: .date)
+        }
+
+        // Summary
+        if let built = buildStandardRule(freq) {
+            Label(built.displayText, systemImage: "repeat")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+    }
+
+    // MARK: - Weekly Weekday Chips
 
     private var weekdayChips: some View {
         FlowLayout(spacing: DS.Spacing.xs) {
@@ -158,10 +292,17 @@ struct RecurrencePickerView: View {
         .pickerStyle(.menu)
     }
 
-    // MARK: - Build / Sync
+    // MARK: - Build Rules
 
-    private func buildRule() -> RecurrenceRule? {
-        guard let freq = frequency else { return nil }
+    private func buildPomodoroRule() -> RecurrenceRule {
+        RecurrenceRule(
+            frequency: .minutely,
+            interval: pomodoroCycleMinutes,
+            end: .afterCount(pomodoroRounds)
+        )
+    }
+
+    private func buildStandardRule(_ freq: RecurrenceFrequency) -> RecurrenceRule? {
         let end: RecurrenceEnd
         switch endChoice {
         case .never: end = .never
@@ -198,13 +339,40 @@ struct RecurrencePickerView: View {
         )
     }
 
+    // MARK: - Sync / Load
+
     private func syncToBinding() {
-        rule = buildRule()
+        switch mode {
+        case .none:
+            rule = nil
+        case .pomodoro:
+            rule = buildPomodoroRule()
+            eventDuration = Double(pomodoroWork)
+        case .standard(let freq):
+            if freq != .weekly { selectedWeekdays.removeAll() }
+            rule = buildStandardRule(freq)
+        }
     }
 
     private func loadFromBinding() {
-        guard let r = rule else { return }
-        frequency = r.frequency
+        guard let r = rule else {
+            mode = .none
+            return
+        }
+
+        // Detect Pomodoro: minutely frequency with afterCount end
+        if r.frequency == .minutely, case .afterCount(let rounds) = r.end {
+            mode = .pomodoro
+            pomodoroRounds = rounds
+            let workMin = Int(eventDuration)
+            let cycleMin = r.interval
+            pomodoroWork = max(workMin, 5)
+            pomodoroBreak = max(cycleMin - workMin, 1)
+            return
+        }
+
+        // Standard recurrence
+        mode = .standard(r.frequency)
         interval = r.interval
         selectedWeekdays = r.weekdays
         switch r.end {
@@ -212,8 +380,8 @@ struct RecurrencePickerView: View {
         case .afterCount(let c): endChoice = .afterCount; endCount = c
         case .untilDate(let d): endChoice = .onDate; endDate = d
         }
-        if let mode = r.monthlyMode {
-            switch mode {
+        if let m = r.monthlyMode {
+            switch m {
             case .dayOfMonth: monthlyMode = .dayOfMonth
             case .weekdayPosition(let ordinal, _):
                 monthlyMode = ordinal < 0 ? .lastWeekday : .weekdayPosition

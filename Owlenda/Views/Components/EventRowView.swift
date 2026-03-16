@@ -43,7 +43,12 @@ struct EventRowView: View {
                         .fontWeight(.medium)
                         .lineLimit(2)
 
-                    if event.isRecurring {
+                    if event.recurrenceRule?.isPomodoro == true {
+                        Image(systemName: "timer")
+                            .font(.system(size: DS.Size.iconSmall))
+                            .foregroundColor(.orange)
+                            .accessibilityLabel("Pomodoro")
+                    } else if event.isRecurring {
                         Image(systemName: "repeat")
                             .font(.system(size: DS.Size.iconSmall))
                             .foregroundColor(.secondary)
