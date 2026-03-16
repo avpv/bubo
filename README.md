@@ -25,7 +25,7 @@ A native macOS menu bar app for meeting reminders with full-screen notifications
 
 ```bash
 git clone https://github.com/avpv/CalendarReminder.git
-cd CalendarReminder/CalendarReminder
+cd CalendarReminder
 open -a Xcode Package.swift
 # Press Cmd+R in Xcode to build and run
 ```
@@ -41,7 +41,7 @@ open -a Xcode Package.swift
 ### Option 2: OAuth 2.0 (more secure)
 
 1. Register an app at [oauth.yandex.ru](https://oauth.yandex.ru/)
-2. Set `clientId` and `clientSecret` in `YandexOAuthService.swift`
+2. Set `yandexClientId` and `yandexClientSecret` in `Config/AppConfig.swift`
 3. In the app: Settings → Account → OAuth → authorize via browser
 
 ### Option 3: Google Calendar
@@ -49,34 +49,62 @@ open -a Xcode Package.swift
 1. Create a project in [Google Cloud Console](https://console.cloud.google.com/)
 2. Enable Google Calendar API
 3. Create OAuth 2.0 credentials (Desktop app)
-4. Set `clientId` and `clientSecret` in `GoogleOAuthService.swift`
+4. Set `googleClientId` and `googleClientSecret` in `Config/AppConfig.swift`
 5. In the app: Settings → Account → Enable Google Calendar → authorize
+
+## Architecture
+
+The project follows MVVM (Model–View–ViewModel) pattern with a service layer.
 
 ## Project Structure
 
 ```
 CalendarReminder/
 ├── Package.swift
+├── README.md
 └── CalendarReminder/
-    ├── App.swift                        # Entry point
-    ├── AppDelegate.swift                # Full-screen notifications + snooze
+    ├── App.swift                                  # Entry point, scene setup
+    ├── AppDelegate.swift                          # Full-screen alert window management
     ├── Info.plist
+    │
+    ├── Config/
+    │   └── AppConfig.swift                        # OAuth credentials, API URLs
+    │
     ├── Models/
-    │   ├── CalendarEvent.swift          # Event model
-    │   └── ReminderSettings.swift       # Settings (DND, auth, Keychain)
+    │   ├── CalendarEvent.swift                    # Event data model
+    │   └── ReminderSettings.swift                 # Settings, DND, Keychain proxies
+    │
+    ├── ViewModels/
+    │   └── SettingsViewModel.swift                # Async logic for settings UI
+    │
+    ├── Views/
+    │   ├── MenuBarView.swift                      # Menu bar layout
+    │   ├── SettingsView.swift                     # Settings tab container
+    │   ├── AddEventView.swift                     # Manual event creation form
+    │   ├── FullScreenAlertView.swift              # Full-screen reminder with countdown
+    │   ├── Settings/
+    │   │   ├── AccountTabView.swift               # Yandex & Google auth
+    │   │   ├── CalendarsTabView.swift             # Calendar selection
+    │   │   ├── RemindersTabView.swift             # Intervals, notifications, DND
+    │   │   └── GeneralTabView.swift               # Sync settings, status
+    │   └── Components/
+    │       ├── StatusBannerView.swift             # Status message banner
+    │       ├── DaySectionView.swift               # Day group header + events
+    │       └── EventRowView.swift                 # Single event row
+    │
     ├── Services/
-    │   ├── KeychainService.swift        # Secure password storage
-    │   ├── YandexOAuthService.swift     # Yandex OAuth 2.0
-    │   ├── GoogleOAuthService.swift     # Google OAuth 2.0
-    │   ├── YandexCalDAVService.swift    # CalDAV sync + retry
-    │   ├── GoogleCalendarService.swift  # Google Calendar API
-    │   ├── CalDAVXMLParser.swift        # XML parser
-    │   ├── ICalParser.swift             # iCal parser with RRULE and timezones
-    │   ├── ReminderService.swift        # Reminders, snooze, DND, cache
-    │   ├── NetworkMonitor.swift         # Network monitoring + retry
-    │   └── EventCache.swift             # Offline event cache
-    └── Views/
-        ├── MenuBarView.swift            # Menu bar with day grouping
-        ├── SettingsView.swift           # Settings (OAuth, DND, intervals)
-        └── AddEventView.swift           # Manual event creation
+    │   ├── ReminderService.swift                  # Sync, scheduling, notifications
+    │   ├── EventCache.swift                       # Offline event persistence
+    │   ├── NetworkMonitor.swift                   # Network status + retry helper
+    │   ├── KeychainService.swift                  # Secure credential storage
+    │   ├── CalDAVXMLParser.swift                  # CalDAV XML response parser
+    │   ├── ICalParser.swift                       # iCal parser (RRULE, timezones)
+    │   ├── Yandex/
+    │   │   ├── YandexCalDAVService.swift          # Yandex CalDAV sync
+    │   │   └── YandexOAuthService.swift           # Yandex OAuth 2.0
+    │   └── Google/
+    │       ├── GoogleCalendarService.swift        # Google Calendar API
+    │       └── GoogleOAuthService.swift           # Google OAuth 2.0
+    │
+    └── Resources/
 ```

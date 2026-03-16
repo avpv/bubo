@@ -1,15 +1,12 @@
 import Foundation
 import AppKit
 
-actor GoogleOAuthService {
-    // Register at https://console.cloud.google.com/
-    // Enable Google Calendar API, create OAuth 2.0 credentials (Desktop app)
-    static let clientId = "YOUR_GOOGLE_CLIENT_ID"
-    static let clientSecret = "YOUR_GOOGLE_CLIENT_SECRET"
-    private static let redirectURI = "urn:ietf:wg:oauth:2.0:oob"
-    private static let authURL = "https://accounts.google.com/o/oauth2/v2/auth"
-    private static let tokenURL = "https://oauth2.googleapis.com/token"
-    private static let scope = "https://www.googleapis.com/auth/calendar.readonly"
+actor YandexOAuthService {
+    private static var clientId: String { AppConfig.yandexClientId }
+    private static var clientSecret: String { AppConfig.yandexClientSecret }
+    private static var redirectURI: String { AppConfig.yandexRedirectURI }
+    private static var authURL: String { AppConfig.yandexAuthURL }
+    private static var tokenURL: String { AppConfig.yandexTokenURL }
 
     struct TokenResponse: Codable {
         let accessToken: String
@@ -25,15 +22,15 @@ actor GoogleOAuthService {
         }
     }
 
+    /// Opens browser for OAuth authorization
     static func startAuthFlow() {
         var components = URLComponents(string: authURL)!
         components.queryItems = [
+            URLQueryItem(name: "response_type", value: "code"),
             URLQueryItem(name: "client_id", value: clientId),
             URLQueryItem(name: "redirect_uri", value: redirectURI),
-            URLQueryItem(name: "response_type", value: "code"),
-            URLQueryItem(name: "scope", value: scope),
-            URLQueryItem(name: "access_type", value: "offline"),
-            URLQueryItem(name: "prompt", value: "consent")
+            URLQueryItem(name: "scope", value: "calendar:read"),
+            URLQueryItem(name: "force_confirm", value: "yes")
         ]
 
         if let url = components.url {
@@ -41,17 +38,17 @@ actor GoogleOAuthService {
         }
     }
 
+    /// Exchange authorization code for tokens
     static func exchangeCode(_ code: String) async throws -> TokenResponse {
         var request = URLRequest(url: URL(string: tokenURL)!)
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
 
         let body = [
+            "grant_type=authorization_code",
             "code=\(code)",
             "client_id=\(clientId)",
-            "client_secret=\(clientSecret)",
-            "redirect_uri=\(redirectURI)",
-            "grant_type=authorization_code"
+            "client_secret=\(clientSecret)"
         ].joined(separator: "&")
         request.httpBody = body.data(using: .utf8)
 
@@ -59,24 +56,26 @@ actor GoogleOAuthService {
 
         guard let httpResponse = response as? HTTPURLResponse,
               (200...299).contains(httpResponse.statusCode) else {
-            throw GoogleAuthError.tokenExchangeFailed
+            throw OAuthError.tokenExchangeFailed
         }
 
         let tokenResponse = try JSONDecoder().decode(TokenResponse.self, from: data)
 
-        try KeychainService.save(tokenResponse.accessToken, for: .googleAccessToken)
+        // Save tokens to Keychain
+        try KeychainService.save(tokenResponse.accessToken, for: .oauthAccessToken)
         if let refreshToken = tokenResponse.refreshToken {
-            try KeychainService.save(refreshToken, for: .googleRefreshToken)
+            try KeychainService.save(refreshToken, for: .oauthRefreshToken)
         }
         let expiry = Date().addingTimeInterval(TimeInterval(tokenResponse.expiresIn))
-        try KeychainService.save(expiry.ISO8601Format(), for: .googleTokenExpiry)
+        try KeychainService.save(expiry.ISO8601Format(), for: .oauthTokenExpiry)
 
         return tokenResponse
     }
 
+    /// Refresh expired access token
     static func refreshAccessToken() async throws -> TokenResponse {
-        guard let refreshToken = KeychainService.load(.googleRefreshToken) else {
-            throw GoogleAuthError.noRefreshToken
+        guard let refreshToken = KeychainService.load(.oauthRefreshToken) else {
+            throw OAuthError.noRefreshToken
         }
 
         var request = URLRequest(url: URL(string: tokenURL)!)
@@ -84,10 +83,10 @@ actor GoogleOAuthService {
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
 
         let body = [
+            "grant_type=refresh_token",
             "refresh_token=\(refreshToken)",
             "client_id=\(clientId)",
-            "client_secret=\(clientSecret)",
-            "grant_type=refresh_token"
+            "client_secret=\(clientSecret)"
         ].joined(separator: "&")
         request.httpBody = body.data(using: .utf8)
 
@@ -95,29 +94,31 @@ actor GoogleOAuthService {
 
         guard let httpResponse = response as? HTTPURLResponse,
               (200...299).contains(httpResponse.statusCode) else {
-            throw GoogleAuthError.refreshFailed
+            throw OAuthError.refreshFailed
         }
 
         let tokenResponse = try JSONDecoder().decode(TokenResponse.self, from: data)
 
-        try KeychainService.save(tokenResponse.accessToken, for: .googleAccessToken)
+        try KeychainService.save(tokenResponse.accessToken, for: .oauthAccessToken)
         if let refreshToken = tokenResponse.refreshToken {
-            try KeychainService.save(refreshToken, for: .googleRefreshToken)
+            try KeychainService.save(refreshToken, for: .oauthRefreshToken)
         }
         let expiry = Date().addingTimeInterval(TimeInterval(tokenResponse.expiresIn))
-        try KeychainService.save(expiry.ISO8601Format(), for: .googleTokenExpiry)
+        try KeychainService.save(expiry.ISO8601Format(), for: .oauthTokenExpiry)
 
         return tokenResponse
     }
 
+    /// Get a valid access token, refreshing if needed
     static func getValidAccessToken() async throws -> String {
-        guard let token = KeychainService.load(.googleAccessToken) else {
-            throw GoogleAuthError.notAuthenticated
+        guard let token = KeychainService.load(.oauthAccessToken) else {
+            throw OAuthError.notAuthenticated
         }
 
-        if let expiryStr = KeychainService.load(.googleTokenExpiry),
+        // Check if token is expired
+        if let expiryStr = KeychainService.load(.oauthTokenExpiry),
            let expiry = ISO8601DateFormatter().date(from: expiryStr),
-           expiry < Date().addingTimeInterval(60) {
+           expiry < Date().addingTimeInterval(60) { // refresh 60s before expiry
             let newToken = try await refreshAccessToken()
             return newToken.accessToken
         }
@@ -126,17 +127,17 @@ actor GoogleOAuthService {
     }
 
     static var isAuthenticated: Bool {
-        KeychainService.load(.googleAccessToken) != nil
+        KeychainService.load(.oauthAccessToken) != nil
     }
 
     static func logout() {
-        KeychainService.delete(.googleAccessToken)
-        KeychainService.delete(.googleRefreshToken)
-        KeychainService.delete(.googleTokenExpiry)
+        KeychainService.delete(.oauthAccessToken)
+        KeychainService.delete(.oauthRefreshToken)
+        KeychainService.delete(.oauthTokenExpiry)
     }
 }
 
-enum GoogleAuthError: LocalizedError {
+enum OAuthError: LocalizedError {
     case tokenExchangeFailed
     case refreshFailed
     case noRefreshToken
@@ -144,10 +145,10 @@ enum GoogleAuthError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .tokenExchangeFailed: return "Failed to obtain Google token"
-        case .refreshFailed: return "Failed to refresh Google token"
-        case .noRefreshToken: return "Missing Google refresh token"
-        case .notAuthenticated: return "Google authorization required"
+        case .tokenExchangeFailed: return "Failed to obtain token"
+        case .refreshFailed: return "Failed to refresh token"
+        case .noRefreshToken: return "Missing refresh token"
+        case .notAuthenticated: return "Authorization required"
         }
     }
 }

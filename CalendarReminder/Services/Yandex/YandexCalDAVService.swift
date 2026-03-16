@@ -1,7 +1,7 @@
 import Foundation
 
 actor YandexCalDAVService {
-    private let baseURL = "https://caldav.yandex.ru"
+    private let baseURL = AppConfig.yandexCalDAVBaseURL
 
     enum AuthMode {
         case appPassword(login: String, password: String)
