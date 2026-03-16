@@ -81,7 +81,14 @@ struct AddEventView: View {
                 }
 
                 Section("Date & Time") {
-                    DatePicker("Start", selection: $date, displayedComponents: [.date, .hourAndMinute])
+                    HStack {
+                        Text("Start")
+                        Spacer()
+                        DatePicker("", selection: $date, displayedComponents: .date)
+                            .labelsHidden()
+                        DatePicker("", selection: $date, displayedComponents: .hourAndMinute)
+                            .labelsHidden()
+                    }
 
                     Picker("Duration", selection: $duration) {
                         Text("15 min").tag(15.0)
