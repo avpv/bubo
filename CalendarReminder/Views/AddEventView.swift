@@ -29,8 +29,7 @@ struct AddEventView: View {
         VStack(alignment: .leading, spacing: 12) {
             // Header
             HStack {
-                Image(systemName: "calendar.badge.plus")
-                    .foregroundColor(.blue)
+                OwlIcon(size: 20)
                 Text("New Event")
                     .font(.headline)
                 Spacer()

@@ -12,8 +12,7 @@ struct MenuBarView: View {
         VStack(alignment: .leading, spacing: 8) {
             // Header
             HStack {
-                Image(systemName: "calendar.badge.clock")
-                    .foregroundColor(.blue)
+                OwlIcon(size: 20)
                 Text("Reminder")
                     .font(.headline)
                 Spacer()
