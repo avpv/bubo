@@ -8,12 +8,14 @@ enum RecurrenceExpander {
     /// - Parameters:
     ///   - event: The base recurring event (must have a `recurrenceRule`).
     ///   - windowEnd: Latest date to generate occurrences for.
-    ///   - excludedIds: Occurrence IDs to skip (EXDATE equivalent for local events).
+    ///   - excludedIds: Occurrence IDs to skip (for local event exclusions).
+    ///   - excludedDates: Dates to skip via same-day comparison (for iCal EXDATE support).
     /// - Returns: Array of expanded occurrences. Returns `[event]` if not recurring.
     static func expand(
         _ event: CalendarEvent,
         windowEnd: Date? = nil,
-        excludedIds: Set<String> = []
+        excludedIds: Set<String> = [],
+        excludedDates: Set<Date> = []
     ) -> [CalendarEvent] {
         guard let rule = event.recurrenceRule else { return [event] }
 
@@ -44,7 +46,9 @@ enum RecurrenceExpander {
                     ? event.id
                     : "\(event.id)_r\(Int(current.timeIntervalSince1970))"
 
-                if !excludedIds.contains(occurrenceId) {
+                let isDateExcluded = !excludedDates.isEmpty && excludedDates.contains { calendar.isDate(current, inSameDayAs: $0) }
+
+                if !excludedIds.contains(occurrenceId) && !isDateExcluded {
                     let occurrence = CalendarEvent(
                         id: occurrenceId,
                         title: event.title,

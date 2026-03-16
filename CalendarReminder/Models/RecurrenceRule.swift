@@ -116,6 +116,96 @@ struct RecurrenceRule: Codable, Hashable {
         f.dateFormat = "d MMM yyyy"
         return f
     }()
+
+    // MARK: - RRULE String Parsing (RFC 5545)
+
+    /// Parse an iCalendar RRULE string into a RecurrenceRule.
+    /// Example: "FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE,FR;COUNT=10"
+    static func fromRRULE(_ rruleString: String) -> RecurrenceRule? {
+        var freq: RecurrenceFrequency?
+        var interval = 1
+        var end: RecurrenceEnd = .never
+        var weekdays: Set<Weekday> = []
+        var monthlyMode: MonthlyMode? = nil
+
+        let parts = rruleString.components(separatedBy: ";")
+        for part in parts {
+            let kv = part.components(separatedBy: "=")
+            guard kv.count == 2 else { continue }
+            let key = kv[0]
+            let value = kv[1]
+
+            switch key {
+            case "FREQ":
+                freq = rruleFrequency(from: value)
+            case "INTERVAL":
+                interval = Int(value) ?? 1
+            case "COUNT":
+                if let count = Int(value) { end = .afterCount(count) }
+            case "UNTIL":
+                if let date = ICalParser.parseICalDate(value) { end = .untilDate(date) }
+            case "BYDAY":
+                weekdays = Set(value.components(separatedBy: ",").compactMap { rruleWeekday(from: $0) })
+            case "BYMONTHDAY":
+                if let day = value.components(separatedBy: ",").first.flatMap({ Int($0) }) {
+                    monthlyMode = .dayOfMonth(day)
+                }
+            default:
+                break
+            }
+        }
+
+        guard let frequency = freq else { return nil }
+
+        // Infer monthly mode from BYDAY with ordinal (e.g. "2TU" = 2nd Tuesday)
+        if frequency == .monthly && monthlyMode == nil {
+            for dayStr in rruleString.components(separatedBy: ";")
+                .first(where: { $0.hasPrefix("BYDAY=") })?
+                .dropFirst(6)
+                .components(separatedBy: ",") ?? []
+            {
+                let letters = dayStr.filter { $0.isLetter }
+                let digits = dayStr.filter { $0.isNumber || $0 == "-" }
+                if let ordinal = Int(digits), let wd = rruleWeekday(from: letters) {
+                    monthlyMode = .weekdayPosition(ordinal: ordinal, weekday: wd)
+                    break
+                }
+            }
+        }
+
+        return RecurrenceRule(
+            frequency: frequency,
+            interval: interval,
+            end: end,
+            weekdays: weekdays,
+            monthlyMode: monthlyMode
+        )
+    }
+
+    private static func rruleFrequency(from value: String) -> RecurrenceFrequency? {
+        switch value {
+        case "MINUTELY": return .minutely
+        case "DAILY":    return .daily
+        case "WEEKLY":   return .weekly
+        case "MONTHLY":  return .monthly
+        case "YEARLY":   return .yearly
+        default:         return nil
+        }
+    }
+
+    private static func rruleWeekday(from str: String) -> Weekday? {
+        let clean = str.filter { $0.isLetter }
+        switch clean {
+        case "MO": return .monday
+        case "TU": return .tuesday
+        case "WE": return .wednesday
+        case "TH": return .thursday
+        case "FR": return .friday
+        case "SA": return .saturday
+        case "SU": return .sunday
+        default:   return nil
+        }
+    }
 }
 
 // MARK: - Frequency

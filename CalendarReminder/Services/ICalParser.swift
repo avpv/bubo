@@ -51,15 +51,10 @@ struct ICalParser {
             } else if trimmed == "END:VEVENT" {
                 inEvent = false
                 if let parsed = buildEvent(from: properties, vtimezones: vtimezones, calendarName: calendarName) {
-                    let rruleStr = properties["RRULE"]
-                    if let rruleStr = rruleStr {
-                        let expanded = expandRecurrence(
-                            baseEvent: parsed,
-                            rrule: rruleStr,
-                            from: expandFrom,
-                            to: expandTo,
-                            exdates: parseExDates(properties, vtimezones: vtimezones)
-                        )
+                    if parsed.recurrenceRule != nil {
+                        let exdates = parseExDates(properties, vtimezones: vtimezones)
+                        let expanded = RecurrenceExpander.expand(parsed, windowEnd: expandTo, excludedDates: exdates)
+                            .filter { $0.startDate >= expandFrom }
                         events.append(contentsOf: expanded)
                     } else if parsed.startDate >= expandFrom && parsed.startDate <= expandTo {
                         events.append(parsed)
@@ -108,6 +103,8 @@ struct ICalParser {
         let dtend = parseDateProperty(props, key: "DTEND", vtimezones: vtimezones)
         let endDate = dtend ?? startDate.addingTimeInterval(3600)
 
+        let recurrenceRule = props["RRULE"].flatMap { RecurrenceRule.fromRRULE($0) }
+
         return CalendarEvent(
             id: uid,
             title: summary,
@@ -115,7 +112,8 @@ struct ICalParser {
             endDate: endDate,
             location: props["LOCATION"],
             description: props["DESCRIPTION"],
-            calendarName: calendarName
+            calendarName: calendarName,
+            recurrenceRule: recurrenceRule
         )
     }
 
@@ -218,141 +216,7 @@ struct ICalParser {
         return TimeZone(identifier: cleaned)
     }
 
-    // MARK: - RRULE Expansion
-
-    private static func expandRecurrence(
-        baseEvent: CalendarEvent,
-        rrule: String,
-        from: Date,
-        to: Date,
-        exdates: Set<Date>
-    ) -> [CalendarEvent] {
-        let rule = parseRRule(rrule)
-        let calendar = Calendar.current
-        let duration = baseEvent.endDate.timeIntervalSince(baseEvent.startDate)
-
-        var occurrences: [CalendarEvent] = []
-        var currentDate = baseEvent.startDate
-        var count = 0
-        let maxCount = rule.count ?? 365 // safety limit
-
-        while currentDate <= to && count < maxCount {
-            if currentDate >= from && !isExcluded(currentDate, from: exdates) {
-                let occurrence = CalendarEvent(
-                    id: "\(baseEvent.id)_\(currentDate.timeIntervalSince1970)",
-                    title: baseEvent.title,
-                    startDate: currentDate,
-                    endDate: currentDate.addingTimeInterval(duration),
-                    location: baseEvent.location,
-                    description: baseEvent.description,
-                    calendarName: baseEvent.calendarName
-                )
-                occurrences.append(occurrence)
-            }
-
-            // Advance to next occurrence
-            guard let nextDate = nextOccurrence(after: currentDate, rule: rule, calendar: calendar) else {
-                break
-            }
-
-            if let until = rule.until, nextDate > until {
-                break
-            }
-
-            currentDate = nextDate
-            count += 1
-        }
-
-        return occurrences
-    }
-
-    private struct RRule {
-        var freq: String = "DAILY"
-        var interval: Int = 1
-        var count: Int?
-        var until: Date?
-        var byDay: [String] = []   // MO, TU, WE, etc.
-        var byMonth: [Int] = []
-        var byMonthDay: [Int] = []
-    }
-
-    private static func parseRRule(_ rrule: String) -> RRule {
-        var rule = RRule()
-        let parts = rrule.components(separatedBy: ";")
-
-        for part in parts {
-            let kv = part.components(separatedBy: "=")
-            guard kv.count == 2 else { continue }
-            let key = kv[0]
-            let value = kv[1]
-
-            switch key {
-            case "FREQ": rule.freq = value
-            case "INTERVAL": rule.interval = Int(value) ?? 1
-            case "COUNT": rule.count = Int(value)
-            case "UNTIL": rule.until = parseICalDate(value)
-            case "BYDAY": rule.byDay = value.components(separatedBy: ",")
-            case "BYMONTH": rule.byMonth = value.components(separatedBy: ",").compactMap { Int($0) }
-            case "BYMONTHDAY": rule.byMonthDay = value.components(separatedBy: ",").compactMap { Int($0) }
-            default: break
-            }
-        }
-
-        return rule
-    }
-
-    private static func nextOccurrence(
-        after date: Date,
-        rule: RRule,
-        calendar: Calendar
-    ) -> Date? {
-        var component: Calendar.Component
-
-        switch rule.freq {
-        case "DAILY": component = .day
-        case "WEEKLY": component = .weekOfYear
-        case "MONTHLY": component = .month
-        case "YEARLY": component = .year
-        default: return nil
-        }
-
-        let nextDate = calendar.date(byAdding: component, value: rule.interval, to: date)
-
-        // Handle BYDAY for weekly recurrence
-        if rule.freq == "WEEKLY" && !rule.byDay.isEmpty {
-            let targetDays = rule.byDay.compactMap { dayStringToWeekday($0) }
-            if var candidate = nextDate {
-                // Find next matching day
-                for _ in 0..<7 {
-                    let weekday = calendar.component(.weekday, from: candidate)
-                    if targetDays.contains(weekday) {
-                        return candidate
-                    }
-                    guard let next = calendar.date(byAdding: .day, value: 1, to: candidate) else {
-                        return nextDate
-                    }
-                    candidate = next
-                }
-            }
-        }
-
-        return nextDate
-    }
-
-    private static func dayStringToWeekday(_ day: String) -> Int? {
-        // Strip any leading number (e.g., "1MO" -> "MO")
-        let clean = day.filter { $0.isLetter }
-        switch clean {
-        case "SU": return 1
-        case "MO": return 2
-        case "TU": return 3
-        case "WE": return 4
-        case "TH": return 5
-        case "FR": return 6
-        case "SA": return 7
-        default: return nil
-        }
-    }
+    // MARK: - EXDATE Handling
 
     private static func parseExDates(
         _ props: [String: String],
@@ -370,13 +234,4 @@ struct ICalParser {
         return dates
     }
 
-    private static func isExcluded(_ date: Date, from exdates: Set<Date>) -> Bool {
-        let calendar = Calendar.current
-        for exdate in exdates {
-            if calendar.isDate(date, inSameDayAs: exdate) {
-                return true
-            }
-        }
-        return false
-    }
 }
