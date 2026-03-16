@@ -111,7 +111,8 @@ struct EventDetailView: View {
                 .padding(.vertical, 8)
             }
         }
-        .frame(width: 340, minHeight: 200)
+        .frame(width: 340)
+        .frame(minHeight: 200)
     }
 
     private func formatMinutes(_ minutes: Int) -> String {

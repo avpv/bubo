@@ -50,9 +50,12 @@ class ReminderService: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] notification in
-            guard let event = notification.userInfo?["event"] as? CalendarEvent,
+            guard let self = self,
+                  let event = notification.userInfo?["event"] as? CalendarEvent,
                   let minutes = notification.userInfo?["minutes"] as? Int else { return }
-            self?.snoozeReminder(for: event, minutes: minutes)
+            Task { @MainActor in
+                self.snoozeReminder(for: event, minutes: minutes)
+            }
         }
     }
 
