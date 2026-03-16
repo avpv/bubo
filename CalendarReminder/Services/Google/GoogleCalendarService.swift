@@ -2,7 +2,7 @@ import Foundation
 
 /// Google Calendar API v3 service
 actor GoogleCalendarService {
-    private let baseURL = "https://www.googleapis.com/calendar/v3"
+    private let baseURL = AppConfig.googleCalendarBaseURL
 
     struct CalendarListResponse: Codable {
         let items: [CalendarListEntry]
