@@ -96,6 +96,7 @@ jobs:
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
           generate_release_notes: true
+          append_body: true
           body: |
             ## Installation
 
