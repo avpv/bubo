@@ -51,29 +51,18 @@ struct EventRowView: View {
 
             Spacer()
 
-            // Hover action buttons (local events only)
+            // Delete button (local events only, shown on hover)
             if isLocal && isHovered {
-                HStack(spacing: 4) {
-                    Button {
-                        onEdit?(event)
-                    } label: {
-                        Image(systemName: "pencil")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    .buttonStyle(.borderless)
-                    .help("Edit")
-
-                    Button {
-                        onDelete?(event)
-                    } label: {
-                        Image(systemName: "trash")
-                            .font(.caption)
-                            .foregroundColor(.red.opacity(0.8))
-                    }
-                    .buttonStyle(.borderless)
-                    .help("Delete")
+                Button {
+                    onDelete?(event)
+                } label: {
+                    Image(systemName: "minus.circle.fill")
+                        .font(.system(size: 16))
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(.red)
                 }
+                .buttonStyle(.borderless)
+                .help("Delete")
             }
         }
         .contentShape(Rectangle())
