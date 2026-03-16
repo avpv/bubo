@@ -56,7 +56,6 @@ struct MenuBarView: View {
             // Header
             HStack {
                 OwlIcon(size: 18)
-                    .accessibilityHidden(true)
                 Text("Reminder")
                     .font(.headline)
                 Spacer()
@@ -108,14 +107,6 @@ struct MenuBarView: View {
 
             if let error = reminderService.syncError, networkMonitor.isConnected {
                 StatusBanner(icon: "exclamationmark.triangle.fill", text: error, color: .orange)
-            }
-
-            if let lastSync = reminderService.lastSyncDate {
-                Text("Updated: \(lastSync.formatted(date: .omitted, time: .shortened))")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 12)
-                    .padding(.top, 2)
             }
 
             // Events
@@ -178,6 +169,15 @@ struct MenuBarView: View {
             Divider()
 
             // Actions
+            if let lastSync = reminderService.lastSyncDate {
+                Text(lastSync, style: .relative)
+                    .font(.caption2)
+                    .foregroundColor(.tertiary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, 4)
+                    .padding(.bottom, -4)
+            }
+
             HStack(spacing: 6) {
                 Button(action: {
                     editingEvent = nil
@@ -217,7 +217,8 @@ struct MenuBarView: View {
                 Button(action: { NSApplication.shared.terminate(nil) }) {
                     Label("Quit", systemImage: "power")
                 }
-                .help("Quit Reminder")
+                .help("Quit Reminder (⌘Q)")
+                .keyboardShortcut("q", modifiers: .command)
             }
             .buttonStyle(.borderless)
             .padding(.horizontal, 12)

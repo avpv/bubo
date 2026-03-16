@@ -58,5 +58,6 @@ struct OwlIcon: View {
             context.fill(beak, with: .foreground)
         }
         .frame(width: size, height: size)
+        .accessibilityHidden(true)
     }
 }

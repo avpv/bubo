@@ -15,8 +15,6 @@ struct AddEventView: View {
     @State private var reminderMinutes: [Int] = [5]
     @State private var newReminderValue = 10
     @FocusState private var isTitleFocused: Bool
-    @FocusState private var isLocationFocused: Bool
-    @FocusState private var isNotesFocused: Bool
 
     private static let presetReminders = [1, 2, 3, 5, 10, 15, 20, 30, 45, 60]
 
@@ -60,7 +58,6 @@ struct AddEventView: View {
                 Spacer()
 
                 OwlIcon(size: 18)
-                    .accessibilityHidden(true)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -110,11 +107,9 @@ struct AddEventView: View {
 
                 Section("Details") {
                     TextField("Location (optional)", text: $location)
-                        .focused($isLocationFocused)
                         .textFieldStyle(.roundedBorder)
 
                     TextField("Notes (optional)", text: $description)
-                        .focused($isNotesFocused)
                         .textFieldStyle(.roundedBorder)
                 }
 

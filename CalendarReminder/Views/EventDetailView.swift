@@ -32,7 +32,6 @@ struct EventDetailView: View {
                 Spacer()
 
                 OwlIcon(size: 18)
-                    .accessibilityHidden(true)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
