@@ -1,32 +1,28 @@
-<svg width="512" height="512" viewBox="0 0 680 680" xmlns="http://www.w3.org/2000/svg">
-<rect x="90" y="90" width="500" height="500" rx="110" fill="#1B1464"/>
-<g transform="translate(340,360)">
-<ellipse cx="0" cy="30" rx="110" ry="130" fill="#F8C291"/>
-<ellipse cx="0" cy="50" rx="85" ry="90" fill="#E8A87C"/>
-<ellipse cx="-50" cy="-60" rx="50" ry="55" fill="#F8C291"/>
-<ellipse cx="50" cy="-60" rx="50" ry="55" fill="#F8C291"/>
-<circle cx="-50" cy="-60" r="36" fill="#fff"/>
-<circle cx="50" cy="-60" r="36" fill="#fff"/>
-<circle cx="-50" cy="-55" r="18" fill="#1B1464"/>
-<circle cx="50" cy="-55" r="18" fill="#1B1464"/>
-<circle cx="-44" cy="-60" r="6" fill="#fff"/>
-<circle cx="56" cy="-60" r="6" fill="#fff"/>
-<path d="M-8,-20 L0,-8 L8,-20" fill="#FF6348" stroke="#FF6348" stroke-width="2" stroke-linejoin="round"/>
-<path d="M-65,15 L-120,-10 L-60,35" fill="#E8A87C"/>
-<path d="M65,15 L120,-10 L60,35" fill="#E8A87C"/>
-<path d="M-30,140 L-20,160 L-10,140" fill="#FF6348"/>
-<path d="M10,140 L20,160 L30,140" fill="#FF6348"/>
-<path d="M-70,-105 L-45,-130 L-20,-100" fill="none" stroke="#F8C291" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M70,-105 L45,-130 L20,-100" fill="none" stroke="#F8C291" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
-</g>
-<g fill="#fff" opacity="0.15">
-<circle cx="160" cy="160" r="2"/>
-<circle cx="200" cy="200" r="1.5"/>
-<circle cx="520" cy="170" r="2"/>
-<circle cx="490" cy="210" r="1.5"/>
-<circle cx="150" cy="400" r="1.5"/>
-<circle cx="530" cy="440" r="2"/>
-<circle cx="180" cy="500" r="1"/>
-<circle cx="500" cy="500" r="1.5"/>
-</g>
+<svg width="512" height="512" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background rounded rect -->
+  <rect x="5" y="5" width="90" height="90" rx="20" fill="#000000"/>
+
+  <!-- Owl body (rounded rect) -->
+  <rect x="15" y="25" width="70" height="70" rx="16" fill="#FFFFFF"/>
+
+  <!-- Left ear triangle -->
+  <polygon points="15,35 28,8 38,30" fill="#FFFFFF"/>
+
+  <!-- Right ear triangle -->
+  <polygon points="85,35 72,8 62,30" fill="#FFFFFF"/>
+
+  <!-- Left eye (cut out) -->
+  <circle cx="38" cy="42" r="10" fill="#000000"/>
+
+  <!-- Right eye (cut out) -->
+  <circle cx="62" cy="42" r="10" fill="#000000"/>
+
+  <!-- Left pupil -->
+  <circle cx="38" cy="42" r="5" fill="#FFFFFF"/>
+
+  <!-- Right pupil -->
+  <circle cx="62" cy="42" r="5" fill="#FFFFFF"/>
+
+  <!-- Beak triangle -->
+  <polygon points="44,60 50,68 56,60" fill="#FFFFFF"/>
 </svg>
