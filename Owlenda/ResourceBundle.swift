@@ -4,7 +4,7 @@ extension Bundle {
     /// Safe alternative to Bundle.module that returns nil instead of fatalError
     /// when the SPM resource bundle is not found at runtime.
     static var safeModule: Bundle? {
-        let bundleName = "CalendarReminder_CalendarReminder"
+        let bundleName = "Owlenda_Owlenda"
         let candidates: [URL?] = [
             Bundle.main.resourceURL,
             Bundle.main.bundleURL,

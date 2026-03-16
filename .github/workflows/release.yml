@@ -50,13 +50,13 @@ jobs:
           VERSION: ${{ steps.tag.outputs.version }}
           BIN_PATH: ${{ steps.build.outputs.bin_path }}
         run: |
-          APP="CalendarReminder.app/Contents"
+          APP="Owlenda.app/Contents"
 
           mkdir -p "$APP/MacOS" "$APP/Resources"
-          cp "${BIN_PATH}/CalendarReminder" "$APP/MacOS/"
-          cp CalendarReminder/Resources/AppIcon.icns "$APP/Resources/"
+          cp "${BIN_PATH}/Owlenda" "$APP/MacOS/"
+          cp Owlenda/Resources/AppIcon.icns "$APP/Resources/"
           # Copy SPM resource bundle so Bundle.module works at runtime
-          cp -R "${BIN_PATH}/CalendarReminder_CalendarReminder.bundle" "$APP/Resources/"
+          cp -R "${BIN_PATH}/Owlenda_Owlenda.bundle" "$APP/Resources/"
 
           cat > "$APP/Info.plist" <<'PLIST'
           <?xml version="1.0" encoding="UTF-8"?>
@@ -66,17 +66,17 @@ jobs:
             <key>CFBundleDevelopmentRegion</key>
             <string>en</string>
             <key>CFBundleExecutable</key>
-            <string>CalendarReminder</string>
+            <string>Owlenda</string>
             <key>CFBundleIconFile</key>
             <string>AppIcon</string>
             <key>NSPrincipalClass</key>
             <string>NSApplication</string>
             <key>CFBundleIdentifier</key>
-            <string>com.avpv.CalendarReminder</string>
+            <string>com.avpv.Owlenda</string>
             <key>CFBundleInfoDictionaryVersion</key>
             <string>6.0</string>
             <key>CFBundleName</key>
-            <string>CalendarReminder</string>
+            <string>Owlenda</string>
             <key>CFBundlePackageType</key>
             <string>APPL</string>
             <key>CFBundleShortVersionString</key>
@@ -100,13 +100,13 @@ jobs:
       - name: Create DMG
         run: |
           mkdir -p dmg_contents
-          cp -R CalendarReminder.app dmg_contents/
+          cp -R Owlenda.app dmg_contents/
           ln -s /Applications dmg_contents/Applications
           hdiutil create \
-            -volname "CalendarReminder" \
+            -volname "Owlenda" \
             -srcfolder dmg_contents \
             -ov -format UDZO \
-            CalendarReminder.dmg
+            Owlenda.dmg
 
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
@@ -117,9 +117,9 @@ jobs:
           body: |
             ## Installation
 
-            1. Download **CalendarReminder.dmg**
-            2. Open the DMG and drag **CalendarReminder** to **Applications**
+            1. Download **Owlenda.dmg**
+            2. Open the DMG and drag **Owlenda** to **Applications**
             3. On first launch macOS will block the unsigned app:
                - Go to **System Settings → Privacy & Security** → scroll down → click **Open Anyway**
-               - Or run: `xattr -cr /Applications/CalendarReminder.app`
-          files: CalendarReminder.dmg
+               - Or run: `xattr -cr /Applications/Owlenda.app`
+          files: Owlenda.dmg

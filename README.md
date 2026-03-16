@@ -1,4 +1,4 @@
-# CalendarReminder — macOS Menu Bar App for Yandex & Google Calendar
+# Owlenda — macOS Menu Bar App for Yandex & Google Calendar
 
 A native macOS menu bar app for meeting reminders with full-screen notifications.
 
@@ -24,12 +24,12 @@ A native macOS menu bar app for meeting reminders with full-screen notifications
 
 ### Option A: Download ready-made app (easiest)
 
-1. Go to [Releases](https://github.com/avpv/CalendarReminder/releases/latest)
-2. Download **CalendarReminder.dmg**
-3. Open the DMG and drag **CalendarReminder** to **Applications**
+1. Go to [Releases](https://github.com/avpv/Owlenda/releases/latest)
+2. Download **Owlenda.dmg**
+3. Open the DMG and drag **Owlenda** to **Applications**
 4. On first launch macOS Gatekeeper will block the unsigned app. To allow it:
    - Go to **System Settings → Privacy & Security** → scroll down → click **"Open Anyway"**
-   - Or run in Terminal: `xattr -cr /Applications/CalendarReminder.app` then launch normally
+   - Or run in Terminal: `xattr -cr /Applications/Owlenda.app` then launch normally
 
 ### Option B: Using Xcode
 
@@ -38,8 +38,8 @@ A native macOS menu bar app for meeting reminders with full-screen notifications
 3. Clone and open the project:
 
 ```bash
-git clone https://github.com/avpv/CalendarReminder.git
-cd CalendarReminder
+git clone https://github.com/avpv/Owlenda.git
+cd Owlenda
 open -a Xcode Package.swift
 ```
 
@@ -56,10 +56,10 @@ xcode-select --install
 2. Clone, build, and run:
 
 ```bash
-git clone https://github.com/avpv/CalendarReminder.git
-cd CalendarReminder
+git clone https://github.com/avpv/Owlenda.git
+cd Owlenda
 swift build -c release
-.build/release/CalendarReminder
+.build/release/Owlenda
 ```
 
 ## Authorization Setup
@@ -91,10 +91,10 @@ The project follows MVVM (Model–View–ViewModel) pattern with a service layer
 ## Project Structure
 
 ```
-CalendarReminder/
+Owlenda/
 ├── Package.swift
 ├── README.md
-└── CalendarReminder/
+└── Owlenda/
     ├── App.swift                                  # Entry point, scene setup
     ├── AppDelegate.swift                          # Full-screen alert window management
     ├── Info.plist

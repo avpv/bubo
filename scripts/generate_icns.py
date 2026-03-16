@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate AppIcon.icns for CalendarReminder from owl.svg.
+"""Generate AppIcon.icns for Owlenda from owl.svg.
 
 Uses cairosvg to render the SVG at each required resolution for
 crisp vector-quality icons at every size.
@@ -28,7 +28,7 @@ ICNS_TYPES = [
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
-SVG_PATH = os.path.join(PROJECT_DIR, 'CalendarReminder', 'Resources', 'owl.svg')
+SVG_PATH = os.path.join(PROJECT_DIR, 'Owlenda', 'Resources', 'owl.svg')
 
 
 def render_svg_to_png(size: int) -> bytes:
@@ -75,5 +75,5 @@ def build_icns(output_path: str):
 
 
 if __name__ == '__main__':
-    os.makedirs(os.path.join(PROJECT_DIR, 'CalendarReminder', 'Resources'), exist_ok=True)
-    build_icns(os.path.join(PROJECT_DIR, 'CalendarReminder', 'Resources', 'AppIcon.icns'))
+    os.makedirs(os.path.join(PROJECT_DIR, 'Owlenda', 'Resources'), exist_ok=True)
+    build_icns(os.path.join(PROJECT_DIR, 'Owlenda', 'Resources', 'AppIcon.icns'))
