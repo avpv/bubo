@@ -69,6 +69,29 @@ struct EventDetailView: View {
                             .foregroundColor(.blue)
                     }
 
+                    // Recurrence
+                    if let rule = event.recurrenceRule {
+                        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                            Label("Repeat", systemImage: "repeat")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .foregroundColor(.tertiary)
+
+                            HStack(spacing: DS.Spacing.xs) {
+                                Text(rule.type.label)
+                                    .font(.caption)
+                                    .padding(.horizontal, DS.Spacing.sm)
+                                    .padding(.vertical, DS.Spacing.xxs)
+                                    .background(.orange.opacity(0.15))
+                                    .clipShape(RoundedRectangle(cornerRadius: DS.Size.badgeCornerRadius))
+
+                                Text(rule.displayText)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+
                     // Custom reminders
                     if let reminders = event.customReminderMinutes, !reminders.isEmpty {
                         VStack(alignment: .leading, spacing: DS.Spacing.sm) {

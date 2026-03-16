@@ -15,11 +15,37 @@ struct AddEventView: View {
     @State private var useCustomReminders = false
     @State private var reminderMinutes: [Int] = [5]
     @State private var newReminderValue = 10
+    @State private var enableRecurrence = false
+    @State private var recurrencePreset: RecurrencePreset = .pomodoro
+    @State private var customIntervalMinutes = 30
+    @State private var customRepeatCount = 4
     @FocusState private var isTitleFocused: Bool
 
     private static let presetReminders = [1, 2, 3, 5, 10, 15, 20, 30, 45, 60]
 
+    private enum RecurrencePreset: String, CaseIterable {
+        case pomodoro = "Pomodoro (25/5, 4x)"
+        case pomodoroShort = "Short (15/5, 4x)"
+        case pomodoroLong = "Long (50/10, 3x)"
+        case custom = "Custom"
+
+        var rule: RecurrenceRule? {
+            switch self {
+            case .pomodoro: return .pomodoro
+            case .pomodoroShort: return .pomodoroShort
+            case .pomodoroLong: return .pomodoroLong
+            case .custom: return nil
+            }
+        }
+    }
+
     private var isEditing: Bool { editingEvent != nil }
+
+    private var currentRecurrenceRule: RecurrenceRule? {
+        guard enableRecurrence else { return nil }
+        if let rule = recurrencePreset.rule { return rule }
+        return RecurrenceRule(type: .custom, intervalMinutes: customIntervalMinutes, repeatCount: customRepeatCount)
+    }
 
     private var isTitleValid: Bool {
         !title.trimmingCharacters(in: .whitespaces).isEmpty
@@ -83,6 +109,38 @@ struct AddEventView: View {
 
                     TextField("Notes (optional)", text: $description)
                         .textFieldStyle(.roundedBorder)
+                }
+
+                Section("Repeat") {
+                    Toggle("Repeat event", isOn: $enableRecurrence)
+
+                    if enableRecurrence {
+                        Picker("Preset", selection: $recurrencePreset) {
+                            ForEach(RecurrencePreset.allCases, id: \.self) { preset in
+                                Text(preset.rawValue).tag(preset)
+                            }
+                        }
+
+                        if recurrencePreset == .custom {
+                            Stepper("Interval: \(DS.formatMinutes(customIntervalMinutes))",
+                                    value: $customIntervalMinutes, in: 5...180, step: 5)
+                            Stepper("Repeats: \(customRepeatCount)x",
+                                    value: $customRepeatCount, in: 2...20)
+                        }
+
+                        if let rule = currentRecurrenceRule {
+                            HStack(spacing: DS.Spacing.xs) {
+                                Image(systemName: "repeat")
+                                    .foregroundColor(.secondary)
+                                Text(rule.displayText)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Text("(\(DS.formatMinutes(rule.totalSpanMinutes)) total)")
+                                    .font(.caption)
+                                    .foregroundColor(.tertiary)
+                            }
+                        }
+                    }
                 }
 
                 Section("Reminders") {
@@ -172,6 +230,24 @@ struct AddEventView: View {
                     useCustomReminders = true
                     reminderMinutes = custom
                 }
+                if let rule = event.recurrenceRule {
+                    enableRecurrence = true
+                    switch rule.type {
+                    case .pomodoro:
+                        if rule == .pomodoro { recurrencePreset = .pomodoro }
+                        else if rule == .pomodoroShort { recurrencePreset = .pomodoroShort }
+                        else if rule == .pomodoroLong { recurrencePreset = .pomodoroLong }
+                        else {
+                            recurrencePreset = .custom
+                            customIntervalMinutes = rule.intervalMinutes
+                            customRepeatCount = rule.repeatCount
+                        }
+                    case .custom:
+                        recurrencePreset = .custom
+                        customIntervalMinutes = rule.intervalMinutes
+                        customRepeatCount = rule.repeatCount
+                    }
+                }
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 isTitleFocused = true
@@ -188,7 +264,8 @@ struct AddEventView: View {
             location: location.isEmpty ? nil : location,
             description: description.isEmpty ? nil : description,
             calendarName: "Local",
-            customReminderMinutes: useCustomReminders ? reminderMinutes.sorted() : nil
+            customReminderMinutes: useCustomReminders ? reminderMinutes.sorted() : nil,
+            recurrenceRule: currentRecurrenceRule
         )
         if isEditing {
             reminderService.updateLocalEvent(event)

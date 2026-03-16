@@ -21,9 +21,39 @@ class ReminderService: ObservableObject {
     private var networkMonitor: NetworkMonitor?
 
     var allEvents: [CalendarEvent] {
-        (upcomingEvents + localEvents)
+        let expandedLocal = localEvents.flatMap { Self.expandRecurringEvent($0) }
+        return (upcomingEvents + expandedLocal)
             .filter { $0.isUpcoming }
             .sorted { $0.startDate < $1.startDate }
+    }
+
+    /// Expands a recurring local event into individual occurrences.
+    private static func expandRecurringEvent(_ event: CalendarEvent) -> [CalendarEvent] {
+        guard let rule = event.recurrenceRule else { return [event] }
+
+        let eventDuration = event.endDate.timeIntervalSince(event.startDate)
+        var events: [CalendarEvent] = []
+
+        for i in 0..<rule.repeatCount {
+            let offset = TimeInterval(i * rule.intervalMinutes * 60)
+            let start = event.startDate.addingTimeInterval(offset)
+            let end = start.addingTimeInterval(eventDuration)
+
+            let occurrence = CalendarEvent(
+                id: i == 0 ? event.id : "\(event.id)_r\(i)",
+                title: "\(event.title) (\(i + 1)/\(rule.repeatCount))",
+                startDate: start,
+                endDate: end,
+                location: event.location,
+                description: event.description,
+                calendarName: event.calendarName,
+                customReminderMinutes: event.customReminderMinutes,
+                recurrenceRule: i == 0 ? event.recurrenceRule : nil
+            )
+            events.append(occurrence)
+        }
+
+        return events
     }
 
     /// Events grouped by day for display
@@ -230,21 +260,30 @@ class ReminderService: ObservableObject {
     func addLocalEvent(_ event: CalendarEvent) {
         localEvents.append(event)
         saveLocalEvents()
-        scheduleReminders(for: [event])
+        scheduleReminders(for: Self.expandRecurringEvent(event))
     }
 
     func removeLocalEvent(id: String) {
+        if let event = localEvents.first(where: { $0.id == id }) {
+            let expanded = Self.expandRecurringEvent(event)
+            for occurrence in expanded {
+                cancelReminders(for: occurrence.id)
+            }
+        }
         localEvents.removeAll { $0.id == id }
-        cancelReminders(for: id)
         saveLocalEvents()
     }
 
     func updateLocalEvent(_ event: CalendarEvent) {
         guard let index = localEvents.firstIndex(where: { $0.id == event.id }) else { return }
-        cancelReminders(for: event.id)
+        // Cancel reminders for all occurrences of the old event
+        let oldExpanded = Self.expandRecurringEvent(localEvents[index])
+        for occurrence in oldExpanded {
+            cancelReminders(for: occurrence.id)
+        }
         localEvents[index] = event
         saveLocalEvents()
-        scheduleReminders(for: [event])
+        scheduleReminders(for: Self.expandRecurringEvent(event))
     }
 
     private func saveLocalEvents() {

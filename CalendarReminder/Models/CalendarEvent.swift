@@ -9,6 +9,7 @@ struct CalendarEvent: Identifiable, Codable, Hashable {
     let description: String?
     let calendarName: String?
     var customReminderMinutes: [Int]?
+    var recurrenceRule: RecurrenceRule?
 
     // MARK: - Static formatters (avoid re-creation per call)
 

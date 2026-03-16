@@ -24,7 +24,7 @@ enum DS {
         static let width: CGFloat = 340
         static let listMaxHeight: CGFloat = 360
         static let detailMaxHeight: CGFloat = 300
-        static let formMaxHeight: CGFloat = 340
+        static let formMaxHeight: CGFloat = 420
         static let detailMinHeight: CGFloat = 200
     }
 
