@@ -325,9 +325,6 @@ class ReminderService: ObservableObject {
             showFullScreenAlert(for: event, minutesBefore: minutesBefore)
         }
 
-        if settings.playSound {
-            NSSound.beep()
-        }
     }
 
     private func sendNotification(for event: CalendarEvent, minutesBefore: Int, isSnooze: Bool) {
@@ -345,7 +342,7 @@ class ReminderService: ObservableObject {
         if let location = event.location {
             content.body += "\n\(location)"
         }
-        content.sound = .default
+        content.sound = nil
 
         let request = UNNotificationRequest(
             identifier: "\(event.id)_\(minutesBefore)_\(Date().timeIntervalSince1970)",
@@ -368,7 +365,7 @@ class ReminderService: ObservableObject {
     }
 
     private func requestNotificationPermission() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge]) { _, _ in }
     }
 }
 

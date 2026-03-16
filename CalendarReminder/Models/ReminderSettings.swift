@@ -34,7 +34,6 @@ class ReminderSettings: ObservableObject, Codable {
     @Published var syncIntervalMinutes: Int
     @Published var showFullScreenAlert: Bool
     @Published var showSystemNotification: Bool
-    @Published var playSound: Bool
     @Published var launchAtLogin: Bool
     @Published var authMethod: AuthMethod
     @Published var doNotDisturbEnabled: Bool
@@ -46,7 +45,7 @@ class ReminderSettings: ObservableObject, Codable {
 
     enum CodingKeys: String, CodingKey {
         case intervals, syncIntervalMinutes, showFullScreenAlert, showSystemNotification
-        case playSound, launchAtLogin, authMethod
+        case launchAtLogin, authMethod
         case doNotDisturbEnabled, doNotDisturbFrom, doNotDisturbTo
         case selectedCalendarHrefs
         case googleEnabled, selectedGoogleCalendarIds
@@ -60,7 +59,6 @@ class ReminderSettings: ObservableObject, Codable {
         self.syncIntervalMinutes = 5
         self.showFullScreenAlert = true
         self.showSystemNotification = true
-        self.playSound = true
         self.launchAtLogin = false
         self.authMethod = .appPassword
         self.doNotDisturbEnabled = false
@@ -79,7 +77,6 @@ class ReminderSettings: ObservableObject, Codable {
         syncIntervalMinutes = try container.decode(Int.self, forKey: .syncIntervalMinutes)
         showFullScreenAlert = try container.decode(Bool.self, forKey: .showFullScreenAlert)
         showSystemNotification = try container.decodeIfPresent(Bool.self, forKey: .showSystemNotification) ?? true
-        playSound = try container.decode(Bool.self, forKey: .playSound)
         launchAtLogin = try container.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? false
         authMethod = try container.decodeIfPresent(AuthMethod.self, forKey: .authMethod) ?? .appPassword
         doNotDisturbEnabled = try container.decodeIfPresent(Bool.self, forKey: .doNotDisturbEnabled) ?? false
@@ -100,7 +97,6 @@ class ReminderSettings: ObservableObject, Codable {
         try container.encode(syncIntervalMinutes, forKey: .syncIntervalMinutes)
         try container.encode(showFullScreenAlert, forKey: .showFullScreenAlert)
         try container.encode(showSystemNotification, forKey: .showSystemNotification)
-        try container.encode(playSound, forKey: .playSound)
         try container.encode(launchAtLogin, forKey: .launchAtLogin)
         try container.encode(authMethod, forKey: .authMethod)
         try container.encode(doNotDisturbEnabled, forKey: .doNotDisturbEnabled)
