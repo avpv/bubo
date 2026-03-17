@@ -43,15 +43,27 @@ struct AccountTabView: View {
 
     @ViewBuilder
     private var appPasswordSection: some View {
-        TextField("Login", text: Binding(
-            get: { settings.yandexLogin },
-            set: { settings.yandexLogin = $0 }
-        ))
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+            Text("Login")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            TextField("Enter your Yandex login", text: Binding(
+                get: { settings.yandexLogin },
+                set: { settings.yandexLogin = $0 }
+            ))
+            .textFieldStyle(.roundedBorder)
+        }
 
-        SecureField("App Password", text: Binding(
-            get: { settings.yandexAppPassword },
-            set: { settings.yandexAppPassword = $0 }
-        ))
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+            Text("App Password")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            SecureField("Enter your app password", text: Binding(
+                get: { settings.yandexAppPassword },
+                set: { settings.yandexAppPassword = $0 }
+            ))
+            .textFieldStyle(.roundedBorder)
+        }
 
         Text("Create an app password: id.yandex.ru \u{2192} Security \u{2192} App Passwords")
             .font(.caption)
@@ -71,10 +83,16 @@ struct AccountTabView: View {
 
     @ViewBuilder
     private var oauthSection: some View {
-        TextField("Yandex Login", text: Binding(
-            get: { settings.yandexLogin },
-            set: { settings.yandexLogin = $0 }
-        ))
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+            Text("Yandex Login")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            TextField("Enter your Yandex login", text: Binding(
+                get: { settings.yandexLogin },
+                set: { settings.yandexLogin = $0 }
+            ))
+            .textFieldStyle(.roundedBorder)
+        }
 
         if YandexOAuthService.isAuthenticated {
             HStack {
@@ -99,7 +117,8 @@ struct AccountTabView: View {
                 .foregroundColor(.secondary)
 
             HStack {
-                TextField("Authorization code", text: $viewModel.oauthCode)
+                TextField("Paste authorization code here", text: $viewModel.oauthCode)
+                    .textFieldStyle(.roundedBorder)
 
                 Button("Confirm") {
                     viewModel.exchangeOAuthCode()
@@ -143,7 +162,8 @@ struct AccountTabView: View {
                 .foregroundColor(.secondary)
 
             HStack {
-                TextField("Authorization code", text: $viewModel.googleOAuthCode)
+                TextField("Paste authorization code here", text: $viewModel.googleOAuthCode)
+                    .textFieldStyle(.roundedBorder)
 
                 Button("Confirm") {
                     viewModel.exchangeGoogleOAuthCode()
