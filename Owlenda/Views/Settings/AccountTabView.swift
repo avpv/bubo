@@ -43,24 +43,15 @@ struct AccountTabView: View {
 
     @ViewBuilder
     private var appPasswordSection: some View {
-        FormTextField(
-            label: "Login",
-            prompt: "user@yandex.ru",
-            text: Binding(
-                get: { settings.yandexLogin },
-                set: { settings.yandexLogin = $0 }
-            )
-        )
+        TextField("Login", text: Binding(
+            get: { settings.yandexLogin },
+            set: { settings.yandexLogin = $0 }
+        ), prompt: Text("user@yandex.ru"))
 
-        FormTextField(
-            label: "App Password",
-            prompt: "Paste app password",
-            text: Binding(
-                get: { settings.yandexAppPassword },
-                set: { settings.yandexAppPassword = $0 }
-            ),
-            isSecure: true
-        )
+        SecureField("App Password", text: Binding(
+            get: { settings.yandexAppPassword },
+            set: { settings.yandexAppPassword = $0 }
+        ), prompt: Text("Paste app password"))
 
         Text("Create an app password: id.yandex.ru \u{2192} Security \u{2192} App Passwords")
             .font(.caption)
@@ -80,14 +71,10 @@ struct AccountTabView: View {
 
     @ViewBuilder
     private var oauthSection: some View {
-        FormTextField(
-            label: "Login",
-            prompt: "user@yandex.ru",
-            text: Binding(
-                get: { settings.yandexLogin },
-                set: { settings.yandexLogin = $0 }
-            )
-        )
+        TextField("Login", text: Binding(
+            get: { settings.yandexLogin },
+            set: { settings.yandexLogin = $0 }
+        ), prompt: Text("user@yandex.ru"))
 
         if YandexOAuthService.isAuthenticated {
             HStack {
@@ -111,16 +98,13 @@ struct AccountTabView: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
 
-            LabeledContent("Code") {
-                HStack {
-                    TextField(text: $viewModel.oauthCode, prompt: Text("Paste code here").foregroundColor(.tertiary)) {}
-                        .textFieldStyle(.roundedBorder)
+            HStack {
+                TextField("Code", text: $viewModel.oauthCode, prompt: Text("Paste code here"))
 
-                    Button("Confirm") {
-                        viewModel.exchangeOAuthCode()
-                    }
-                    .disabled(viewModel.oauthCode.isEmpty)
+                Button("Confirm") {
+                    viewModel.exchangeOAuthCode()
                 }
+                .disabled(viewModel.oauthCode.isEmpty)
             }
 
             oauthStatusView(viewModel.oauthStatus)
@@ -158,16 +142,13 @@ struct AccountTabView: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
 
-            LabeledContent("Code") {
-                HStack {
-                    TextField(text: $viewModel.googleOAuthCode, prompt: Text("Paste code here").foregroundColor(.tertiary)) {}
-                        .textFieldStyle(.roundedBorder)
+            HStack {
+                TextField("Code", text: $viewModel.googleOAuthCode, prompt: Text("Paste code here"))
 
-                    Button("Confirm") {
-                        viewModel.exchangeGoogleOAuthCode()
-                    }
-                    .disabled(viewModel.googleOAuthCode.isEmpty)
+                Button("Confirm") {
+                    viewModel.exchangeGoogleOAuthCode()
                 }
+                .disabled(viewModel.googleOAuthCode.isEmpty)
             }
 
             oauthStatusView(viewModel.googleOAuthStatus)
