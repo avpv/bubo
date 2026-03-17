@@ -115,7 +115,6 @@ jobs:
             --icon "Owlenda.app" 180 200 \
             --hide-extension "Owlenda.app" \
             --app-drop-link 480 200 \
-            --no-internet-enable \
             "Owlenda.dmg" \
             "Owlenda.app" \
             || test $? -eq 2

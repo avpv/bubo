@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Generate a Retina background image for the Owlenda DMG installer.
 
-Run once locally, commit the output. Not part of CI.
+Run once locally on macOS, commit the output. Not part of CI.
 
-Output: Owlenda/Resources/dmg_background.png (1320x800 @144 DPI)
+Output: packaging/dmg_background.png (1320x800 @144 DPI)
 
 Icon positions must match create-dmg flags in release.yml:
   --icon "Owlenda.app" 180 200
@@ -11,6 +11,7 @@ Icon positions must match create-dmg flags in release.yml:
   --window-size 660 400
 """
 
+import io
 import math
 import os
 
@@ -30,11 +31,11 @@ PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
 SVG_PATH = os.path.join(PROJECT_DIR, "Owlenda", "Resources", "owl.svg")
 OUTPUT_PATH = os.path.join(PROJECT_DIR, "packaging", "dmg_background.png")
 
-# Brand palette
-BG_TOP = (28, 28, 32)
-BG_BOTTOM = (20, 20, 24)
-ARROW_COLOR = (255, 255, 255, 80)
-TEXT_COLOR = (255, 255, 255, 90)
+# Light palette
+BG_TOP = (248, 248, 250)
+BG_BOTTOM = (235, 235, 240)
+ARROW_COLOR = (0, 0, 0, 60)
+TEXT_COLOR = (0, 0, 0, 90)
 
 
 def draw_gradient(img):
@@ -54,7 +55,7 @@ def draw_watermark(img):
     owl_png = cairosvg.svg2png(
         url=SVG_PATH, output_width=owl_size, output_height=owl_size
     )
-    owl = Image.open(__import__("io").BytesIO(owl_png)).convert("RGBA")
+    owl = Image.open(io.BytesIO(owl_png)).convert("RGBA")
 
     # Very subtle
     alpha = owl.split()[3]
