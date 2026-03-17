@@ -2,9 +2,9 @@ import SwiftUI
 
 /// Compact duration picker following the same pattern as `TimeSlotPicker`.
 ///
-/// Shows a preset menu (hourglass icon) and an editable text field that
-/// accepts flexible human input: `90`, `1h30m`, `1.5h`, `1:30`, `2h`, `45m`.
-/// Designed to sit in a form row — keyboard-first, macOS-native.
+/// Shows a preset menu (hourglass icon) and an editable stepper — a text
+/// field with +/− arrows that also accepts typed input like `90`, `1h30m`,
+/// `1.5h`, or `1:30`. Best of both worlds: click to nudge, type to jump.
 ///
 /// ```swift
 /// HStack {
@@ -35,33 +35,66 @@ struct DurationPicker: View {
         PresetGroup(title: "Long",     id: "long",     values: [180, 240, 360, 480]),
     ]
 
+    /// Adaptive step: ±15 min for durations ≥ 2 h, ±5 min otherwise.
+    private var step: Int {
+        Int(minutes) >= 120 ? 15 : 5
+    }
+
     // MARK: - Body
 
     var body: some View {
         HStack(spacing: DS.Spacing.sm) {
             presetMenu
 
-            TextField("Duration", text: $text)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 80)
-                .multilineTextAlignment(.center)
-                .monospacedDigit()
-                .focused($isFocused)
-                .onSubmit { commitEdit() }
-                .onChange(of: isFocused) { _, focused in
-                    if focused {
-                        isEditing = true
-                    } else {
-                        commitEdit()
+            // Editable stepper: TextField + Stepper side-by-side.
+            // TextField for typing, Stepper arrows for nudging.
+            HStack(spacing: 0) {
+                TextField("Duration", text: $text)
+                    .textFieldStyle(.plain)
+                    .frame(width: 72)
+                    .multilineTextAlignment(.center)
+                    .monospacedDigit()
+                    .focused($isFocused)
+                    .onSubmit { commitEdit() }
+                    .onChange(of: isFocused) { _, focused in
+                        if focused {
+                            isEditing = true
+                        } else {
+                            commitEdit()
+                        }
                     }
-                }
-                .onChange(of: minutes) { _, newValue in
-                    if !isEditing {
-                        text = DS.formatMinutes(Int(newValue))
+                    .onChange(of: minutes) { _, newValue in
+                        if !isEditing {
+                            text = DS.formatMinutes(Int(newValue))
+                        }
                     }
-                }
-                .help(String(localized: "Type duration: 90, 1h30m, 1.5h, or 1:30",
-                             comment: "Tooltip for the duration text field"))
+
+                Stepper(
+                    "",
+                    value: Binding(
+                        get: { Int(minutes) },
+                        set: { newValue in
+                            let clamped = max(5, min(480, newValue))
+                            minutes = Double(clamped)
+                        }
+                    ),
+                    in: 5...480,
+                    step: step
+                )
+                .labelsHidden()
+                .fixedSize()
+            }
+            .padding(.leading, DS.Spacing.sm)
+            .background(
+                RoundedRectangle(cornerRadius: DS.Size.cornerRadius - 1)
+                    .fill(DS.Colors.surfaceSecondary)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Size.cornerRadius - 1)
+                    .strokeBorder(DS.Colors.border, lineWidth: 0.5)
+            )
+            .help(String(localized: "Type duration: 90, 1h30m, 1.5h, or 1:30",
+                         comment: "Tooltip for the duration field"))
         }
         .onAppear {
             text = DS.formatMinutes(Int(minutes))
@@ -69,6 +102,16 @@ struct DurationPicker: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(Text("Duration: \(DS.formatMinutes(Int(minutes)))",
                                  comment: "Accessibility label for duration picker"))
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment:
+                minutes = min(480, minutes + Double(step))
+            case .decrement:
+                minutes = max(5, minutes - Double(step))
+            @unknown default:
+                break
+            }
+        }
     }
 
     // MARK: - Commit
