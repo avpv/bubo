@@ -278,10 +278,9 @@ struct MenuBarView: View {
 
             Spacer()
 
-            SettingsLink {
-                Label("Settings", systemImage: "gear")
-            }
-            .help("Open settings")
+            OpenSettingsButton()
+                .keyboardShortcut(",", modifiers: .command)
+                .help("Open settings (⌘,)")
 
             Button(action: { NSApplication.shared.terminate(nil) }) {
                 Label("Quit", systemImage: "power")
@@ -293,5 +292,34 @@ struct MenuBarView: View {
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.md)
         .background(.bar)
+    }
+}
+
+// MARK: - Settings Button (version-aware)
+
+/// Uses `@Environment(\.openSettings)` on macOS 14+ for programmatic control,
+/// falls back to `SettingsLink` on macOS 13.
+private struct OpenSettingsButton: View {
+    var body: some View {
+        if #available(macOS 14.0, *) {
+            OpenSettingsButton14()
+        } else {
+            SettingsLink {
+                Label("Settings", systemImage: "gear")
+            }
+        }
+    }
+}
+
+@available(macOS 14.0, *)
+private struct OpenSettingsButton14: View {
+    @Environment(\.openSettings) private var openSettings
+
+    var body: some View {
+        Button {
+            openSettings()
+        } label: {
+            Label("Settings", systemImage: "gear")
+        }
     }
 }
