@@ -304,7 +304,9 @@ private struct OpenSettingsButton: View {
         if #available(macOS 14.0, *) {
             OpenSettingsButton14()
         } else {
-            SettingsLink {
+            Button {
+                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+            } label: {
                 Label("Settings", systemImage: "gear")
             }
         }
