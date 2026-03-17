@@ -99,7 +99,6 @@ struct MenuBarView: View {
         .onAppear {
             guard !hasStartedSync else { return }
             hasStartedSync = true
-            reminderService.setNetworkMonitor(networkMonitor)
             reminderService.updateSettings(settings)
             reminderService.startSync()
         }
@@ -138,7 +137,7 @@ struct MenuBarView: View {
             if !networkMonitor.isConnected {
                 StatusBanner(
                     icon: "wifi.slash",
-                    text: "No connection. Showing cached data",
+                    text: "No internet — calendar data may be outdated",
                     color: .orange
                 )
             } else if reminderService.isUsingCache {
@@ -149,8 +148,8 @@ struct MenuBarView: View {
                 )
             }
 
-            if reminderService.isKeychainDenied {
-                KeychainDeniedBanner()
+            if !AppleCalendarService.hasAccess {
+                CalendarAccessBanner()
             } else if let error = reminderService.syncError, networkMonitor.isConnected {
                 StatusBanner(icon: "exclamationmark.triangle.fill", text: error, color: .orange)
             }
@@ -270,12 +269,11 @@ struct MenuBarView: View {
 
             Button(action: {
                 reminderService.syncNow()
-                toastState.showInfo("Syncing calendars…", icon: "arrow.clockwise")
+                toastState.showInfo("Refreshing calendars…", icon: "arrow.clockwise")
             }) {
                 Label("Refresh", systemImage: "arrow.clockwise")
             }
-            .disabled(!networkMonitor.isConnected)
-            .help("Sync calendars now (⌘R)")
+            .help("Refresh calendars (⌘R)")
             .keyboardShortcut("r", modifiers: .command)
 
             Spacer()
@@ -313,7 +311,7 @@ private struct OpenSettingsButton: View {
     }
 }
 
-private struct KeychainDeniedBanner: View {
+private struct CalendarAccessBanner: View {
     @Environment(\.openSettings) private var openSettings
 
     var body: some View {
@@ -323,23 +321,23 @@ private struct KeychainDeniedBanner: View {
             NSApp.activate()
         } label: {
             HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: "key.slash")
+                Image(systemName: "calendar.badge.exclamationmark")
                     .font(.caption)
                     .symbolRenderingMode(.hierarchical)
-                Text("Keychain access denied. Click to open Settings.")
+                Text("Calendar access not granted. Click to open Settings.")
                     .font(.caption)
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.caption2)
             }
-            .foregroundColor(.red)
+            .foregroundColor(.orange)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.vertical, DS.Spacing.sm)
-            .background(Color.red.opacity(0.08))
+            .background(Color.orange.opacity(0.08))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Keychain access denied. Open settings to re-enter credentials.")
+        .accessibilityLabel("Calendar access not granted. Open settings to grant access.")
         .transition(.move(edge: .top).combined(with: .opacity))
     }
 }

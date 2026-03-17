@@ -21,7 +21,7 @@ struct EventDetailView: View {
     }
 
     private var isLocal: Bool {
-        event.calendarName == "Local"
+        event.isLocalEvent
     }
 
     var body: some View {

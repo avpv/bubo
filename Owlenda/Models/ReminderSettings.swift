@@ -25,11 +25,6 @@ struct ReminderInterval: Identifiable, Codable, Hashable {
     }
 }
 
-enum AuthMethod: String, Codable {
-    case appPassword
-    case oauth
-}
-
 class ReminderSettings: ObservableObject, Codable {
     private var autoSaveCancellable: AnyCancellable?
 
@@ -38,20 +33,16 @@ class ReminderSettings: ObservableObject, Codable {
     @Published var showFullScreenAlert: Bool
     @Published var showSystemNotification: Bool
     @Published var launchAtLogin: Bool
-    @Published var authMethod: AuthMethod
     @Published var doNotDisturbEnabled: Bool
     @Published var doNotDisturbFrom: Date  // time only
     @Published var doNotDisturbTo: Date    // time only
-    @Published var selectedCalendarHrefs: [String]  // empty = all Yandex calendars
-    @Published var googleEnabled: Bool
-    @Published var selectedGoogleCalendarIds: [String]  // empty = all Google calendars
+    @Published var selectedCalendarIds: [String]  // empty = all calendars
 
     enum CodingKeys: String, CodingKey {
         case intervals, syncIntervalMinutes, showFullScreenAlert, showSystemNotification
-        case launchAtLogin, authMethod
+        case launchAtLogin
         case doNotDisturbEnabled, doNotDisturbFrom, doNotDisturbTo
-        case selectedCalendarHrefs
-        case googleEnabled, selectedGoogleCalendarIds
+        case selectedCalendarIds
     }
 
     init() {
@@ -63,15 +54,12 @@ class ReminderSettings: ObservableObject, Codable {
         self.showFullScreenAlert = true
         self.showSystemNotification = true
         self.launchAtLogin = false
-        self.authMethod = .appPassword
         self.doNotDisturbEnabled = false
         // Default DND: 22:00 - 08:00
         let calendar = Calendar.current
         self.doNotDisturbFrom = calendar.date(from: DateComponents(hour: 22, minute: 0)) ?? Date()
         self.doNotDisturbTo = calendar.date(from: DateComponents(hour: 8, minute: 0)) ?? Date()
-        self.selectedCalendarHrefs = [] // empty = sync all
-        self.googleEnabled = false
-        self.selectedGoogleCalendarIds = []
+        self.selectedCalendarIds = [] // empty = sync all
         setupAutoSave()
     }
 
@@ -82,7 +70,6 @@ class ReminderSettings: ObservableObject, Codable {
         showFullScreenAlert = try container.decode(Bool.self, forKey: .showFullScreenAlert)
         showSystemNotification = try container.decodeIfPresent(Bool.self, forKey: .showSystemNotification) ?? true
         launchAtLogin = try container.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? false
-        authMethod = try container.decodeIfPresent(AuthMethod.self, forKey: .authMethod) ?? .appPassword
         doNotDisturbEnabled = try container.decodeIfPresent(Bool.self, forKey: .doNotDisturbEnabled) ?? false
 
         let calendar = Calendar.current
@@ -90,9 +77,7 @@ class ReminderSettings: ObservableObject, Codable {
             ?? calendar.date(from: DateComponents(hour: 22, minute: 0)) ?? Date()
         doNotDisturbTo = try container.decodeIfPresent(Date.self, forKey: .doNotDisturbTo)
             ?? calendar.date(from: DateComponents(hour: 8, minute: 0)) ?? Date()
-        selectedCalendarHrefs = try container.decodeIfPresent([String].self, forKey: .selectedCalendarHrefs) ?? []
-        googleEnabled = try container.decodeIfPresent(Bool.self, forKey: .googleEnabled) ?? false
-        selectedGoogleCalendarIds = try container.decodeIfPresent([String].self, forKey: .selectedGoogleCalendarIds) ?? []
+        selectedCalendarIds = try container.decodeIfPresent([String].self, forKey: .selectedCalendarIds) ?? []
         setupAutoSave()
     }
 
@@ -103,13 +88,10 @@ class ReminderSettings: ObservableObject, Codable {
         try container.encode(showFullScreenAlert, forKey: .showFullScreenAlert)
         try container.encode(showSystemNotification, forKey: .showSystemNotification)
         try container.encode(launchAtLogin, forKey: .launchAtLogin)
-        try container.encode(authMethod, forKey: .authMethod)
         try container.encode(doNotDisturbEnabled, forKey: .doNotDisturbEnabled)
         try container.encode(doNotDisturbFrom, forKey: .doNotDisturbFrom)
         try container.encode(doNotDisturbTo, forKey: .doNotDisturbTo)
-        try container.encode(selectedCalendarHrefs, forKey: .selectedCalendarHrefs)
-        try container.encode(googleEnabled, forKey: .googleEnabled)
-        try container.encode(selectedGoogleCalendarIds, forKey: .selectedGoogleCalendarIds)
+        try container.encode(selectedCalendarIds, forKey: .selectedCalendarIds)
     }
 
     /// Check if current time is within Do Not Disturb period
@@ -123,32 +105,11 @@ class ReminderSettings: ObservableObject, Codable {
         let toMinutes = calendar.component(.hour, from: doNotDisturbTo) * 60 + calendar.component(.minute, from: doNotDisturbTo)
 
         if fromMinutes == toMinutes {
-            // Same start and end time — DND effectively disabled
             return false
         } else if fromMinutes < toMinutes {
-            // Same day: e.g. 13:00 - 15:00
             return currentMinutes >= fromMinutes && currentMinutes < toMinutes
         } else {
-            // Overnight: e.g. 22:00 - 08:00
             return currentMinutes >= fromMinutes || currentMinutes < toMinutes
-        }
-    }
-
-    // MARK: - Credentials via Keychain
-
-    var yandexLogin: String {
-        get { KeychainService.load(.yandexLogin) ?? "" }
-        set {
-            try? KeychainService.save(newValue, for: .yandexLogin)
-            objectWillChange.send()
-        }
-    }
-
-    var yandexAppPassword: String {
-        get { KeychainService.load(.yandexAppPassword) ?? "" }
-        set {
-            try? KeychainService.save(newValue, for: .yandexAppPassword)
-            objectWillChange.send()
         }
     }
 
@@ -156,7 +117,6 @@ class ReminderSettings: ObservableObject, Codable {
         autoSaveCancellable = objectWillChange
             .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
             .sink { [weak self] _ in
-                // objectWillChange fires before mutation; async ensures we read the new value
                 DispatchQueue.main.async {
                     self?.save()
                 }

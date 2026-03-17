@@ -6,8 +6,8 @@ struct GeneralTabView: View {
 
     var body: some View {
         Form {
-            Section("Sync") {
-                Picker("Sync interval", selection: $settings.syncIntervalMinutes) {
+            Section("Refresh") {
+                Picker("Refresh interval", selection: $settings.syncIntervalMinutes) {
                     Text("1 minute").tag(1)
                     Text("3 minutes").tag(3)
                     Text("5 minutes").tag(5)
@@ -23,12 +23,12 @@ struct GeneralTabView: View {
 
             Section("Status") {
                 if let lastSync = reminderService.lastSyncDate {
-                    LabeledContent("Last sync") {
+                    LabeledContent("Last refresh") {
                         Text(lastSync.formatted())
                     }
                 }
 
-                LabeledContent("Synced events") {
+                LabeledContent("Calendar events") {
                     Text("\(reminderService.upcomingEvents.count)")
                 }
 

@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleDevelopmentRegion</key>
-    <string>ru</string>
+    <string>en</string>
     <key>CFBundleExecutable</key>
     <string>Owlenda</string>
     <key>CFBundleIconFile</key>
@@ -21,7 +21,7 @@
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>LSMinimumSystemVersion</key>
-    <string>13.0</string>
+    <string>14.0</string>
     <key>LSUIElement</key>
     <true/>
     <key>NSPrincipalClass</key>
@@ -31,5 +31,9 @@
         <key>NSAllowsArbitraryLoads</key>
         <false/>
     </dict>
+    <key>NSCalendarsUsageDescription</key>
+    <string>Owlenda needs access to your calendars to show meeting reminders from accounts configured in the Calendar app.</string>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>Owlenda needs access to your calendars to show meeting reminders from accounts configured in the Calendar app.</string>
 </dict>
 </plist>

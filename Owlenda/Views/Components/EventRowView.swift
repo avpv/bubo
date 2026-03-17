@@ -10,7 +10,7 @@ struct EventRowView: View {
     @State private var isHovered = false
 
     private var isLocal: Bool {
-        event.calendarName == "Local"
+        event.isLocalEvent
     }
 
     var body: some View {

@@ -7,9 +7,6 @@ struct SettingsView: View {
 
     var body: some View {
         TabView {
-            AccountTabView()
-                .tabItem { Label("Account", systemImage: "person.circle") }
-
             CalendarsTabView()
                 .tabItem { Label("Calendars", systemImage: "calendar") }
 

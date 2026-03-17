@@ -11,18 +11,17 @@ class ReminderService: ObservableObject {
     @Published var syncError: String?
     @Published var isSyncing = false
     @Published var isUsingCache = false
-    @Published var isKeychainDenied = false
 
-    private var calDAVService: YandexCalDAVService?
-    private var googleService: GoogleCalendarService?
     private var syncTimer: Timer?
     private var reminderTimers: [String: [Timer]] = [:]
     private var settings: ReminderSettings
     private var firedReminders: Set<String> = []
     private let eventCache = EventCache()
-    private var networkMonitor: NetworkMonitor?
     private var settingsObserver: AnyCancellable?
     private var excludedOccurrences: Set<String> = []
+    private var snoozeObserver: Any?
+    private var appleCalendarObserver: Any?
+    private var pendingAppleRefreshWork: DispatchWorkItem?
 
     var allEvents: [CalendarEvent] {
         let expandedLocal = localEvents.flatMap {
@@ -44,14 +43,11 @@ class ReminderService: ObservableObject {
             .map { (date: $0.key, events: $0.value) }
     }
 
-    private var snoozeObserver: Any?
-
     init(settings: ReminderSettings) {
         self.settings = settings
         requestNotificationPermission()
         loadLocalEvents()
 
-        // Listen for snooze from full-screen alert
         snoozeObserver = NotificationCenter.default.addObserver(
             forName: .snoozeReminder,
             object: nil,
@@ -65,7 +61,6 @@ class ReminderService: ObservableObject {
             }
         }
 
-        // Auto-update when settings change
         settingsObserver = settings.objectWillChange
             .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
             .sink { [weak self] _ in
@@ -73,10 +68,19 @@ class ReminderService: ObservableObject {
                     self?.onSettingsChanged()
                 }
             }
+
+        // Auto-sync when Calendar.app data changes (edits, iCloud sync).
+        // Debounced: EKEventStoreChanged can fire in bursts.
+        appleCalendarObserver = NotificationCenter.default.addObserver(
+            forName: AppleCalendarService.calendarDataChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.scheduleAppleCalendarRefresh()
+        }
     }
 
     private func onSettingsChanged() {
-        setupCalDAVService()
         rescheduleAllReminders()
         startSyncTimer()
     }
@@ -85,55 +89,35 @@ class ReminderService: ObservableObject {
         if let observer = snoozeObserver {
             NotificationCenter.default.removeObserver(observer)
         }
+        if let observer = appleCalendarObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        pendingAppleRefreshWork?.cancel()
         for timers in reminderTimers.values {
             timers.forEach { $0.invalidate() }
         }
         syncTimer?.invalidate()
     }
 
-    func setNetworkMonitor(_ monitor: NetworkMonitor) {
-        self.networkMonitor = monitor
+    private func scheduleAppleCalendarRefresh() {
+        pendingAppleRefreshWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            Task { @MainActor in
+                self?.syncNow()
+            }
+        }
+        pendingAppleRefreshWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: work)
     }
 
     func updateSettings(_ settings: ReminderSettings) {
         self.settings = settings
-        setupCalDAVService()
         rescheduleAllReminders()
     }
 
-    func setupCalDAVService() {
-        // Yandex
-        let login = settings.yandexLogin
-        let password = settings.yandexAppPassword
-
-        switch settings.authMethod {
-        case .appPassword:
-            guard !login.isEmpty, !password.isEmpty else {
-                calDAVService = nil
-                break
-            }
-            calDAVService = YandexCalDAVService(authMode: .appPassword(login: login, password: password))
-        case .oauth:
-            guard YandexOAuthService.isAuthenticated else {
-                calDAVService = nil
-                break
-            }
-            calDAVService = YandexCalDAVService(authMode: .oauth)
-        }
-
-        // Google
-        if settings.googleEnabled && GoogleOAuthService.isAuthenticated {
-            googleService = GoogleCalendarService()
-        } else {
-            googleService = nil
-        }
-
-        // Update reactive keychain state for UI
-        isKeychainDenied = KeychainService.isAccessDenied
-    }
+    // MARK: - Sync
 
     func startSync() {
-        setupCalDAVService()
         loadCachedEvents()
         syncNow()
         startSyncTimer()
@@ -159,82 +143,40 @@ class ReminderService: ObservableObject {
     }
 
     func syncNow() {
-        // Check network
-        if let monitor = networkMonitor, !monitor.isConnected {
-            syncError = "No internet connection"
-            loadCachedEvents()
+        guard AppleCalendarService.hasAccess else {
+            syncError = "Calendar access not granted"
             return
         }
-
-        let hasAnyProvider = calDAVService != nil || googleService != nil
-        guard hasAnyProvider else { return }
 
         isSyncing = true
         syncError = nil
 
+        let now = Date()
+        let endDate = Calendar.current.date(byAdding: .day, value: 7, to: now) ?? now
+
+        let events = AppleCalendarService.shared.fetchEvents(
+            from: now,
+            to: endDate,
+            onlyCalendarIds: settings.selectedCalendarIds
+        )
+
+        upcomingEvents = events.sorted { $0.startDate < $1.startDate }
+        lastSyncDate = Date()
+        isSyncing = false
+        isUsingCache = false
+
+        // Clean up firedReminders for events no longer in the window
+        let currentEventIds = Set(events.map { $0.id })
+        firedReminders = firedReminders.filter { key in
+            guard let lastUnderscore = key.lastIndex(of: "_") else { return false }
+            let eventId = String(key[..<lastUnderscore])
+            return currentEventIds.contains(eventId)
+        }
+
+        scheduleReminders(for: events)
+
         Task {
-            let now = Date()
-            let endDate = Calendar.current.date(byAdding: .day, value: 7, to: now) ?? now
-            var allEvents: [CalendarEvent] = []
-            var errors: [String] = []
-
-            // Yandex
-            if let yandexService = calDAVService {
-                do {
-                    let events = try await yandexService.fetchEvents(
-                        from: now,
-                        to: endDate,
-                        onlyCalendars: self.settings.selectedCalendarHrefs
-                    )
-                    allEvents.append(contentsOf: events)
-                } catch {
-                    errors.append("Yandex: \(error.localizedDescription)")
-                }
-            }
-
-            // Google
-            if let googleSvc = googleService {
-                do {
-                    let events = try await RetryHelper.withRetry {
-                        try await googleSvc.fetchEvents(
-                            from: now,
-                            to: endDate,
-                            onlyCalendarIds: self.settings.selectedGoogleCalendarIds
-                        )
-                    }
-                    allEvents.append(contentsOf: events)
-                } catch {
-                    errors.append("Google: \(error.localizedDescription)")
-                }
-            }
-
-            allEvents.sort { $0.startDate < $1.startDate }
-
-            self.upcomingEvents = allEvents
-            self.lastSyncDate = Date()
-            self.isSyncing = false
-            self.syncError = errors.isEmpty ? nil : errors.joined(separator: "\n")
-            self.isUsingCache = false
-            self.isKeychainDenied = KeychainService.isAccessDenied
-
-            // Clean up firedReminders for events no longer in the window
-            let currentEventIds = Set(allEvents.map { $0.id })
-            self.firedReminders = self.firedReminders.filter { key in
-                // reminderKey format: "\(event.id)_\(interval.minutes)"
-                // Find the last underscore to split id from minutes suffix
-                guard let lastUnderscore = key.lastIndex(of: "_") else { return false }
-                let eventId = String(key[..<lastUnderscore])
-                return currentEventIds.contains(eventId)
-            }
-
-            self.scheduleReminders(for: allEvents)
-
-            await eventCache.save(events: allEvents)
-
-            // If all providers failed, fall back to cache
-            if allEvents.isEmpty && !errors.isEmpty {
-                self.loadCachedEvents()
-            }
+            await eventCache.save(events: events)
         }
     }
 
@@ -259,27 +201,23 @@ class ReminderService: ObservableObject {
         scheduleReminders(for: RecurrenceExpander.expand(event, excludedIds: excludedOccurrences))
     }
 
-    /// Remove the entire recurring series (by the base event id).
     func removeLocalEvent(id: String) {
         if let event = localEvents.first(where: { $0.id == id }) {
             let expanded = RecurrenceExpander.expand(event, excludedIds: excludedOccurrences)
             for occurrence in expanded { cancelReminders(for: occurrence.id) }
         }
-        // Clean up any exclusions for this series
         excludedOccurrences = excludedOccurrences.filter { !$0.hasPrefix(id) }
         saveExcludedOccurrences()
         localEvents.removeAll { $0.id == id }
         saveLocalEvents()
     }
 
-    /// Exclude a single occurrence of a recurring event (EXDATE equivalent).
     func excludeOccurrence(occurrenceId: String) {
         excludedOccurrences.insert(occurrenceId)
         saveExcludedOccurrences()
         cancelReminders(for: occurrenceId)
     }
 
-    /// Find the base series event for an expanded occurrence.
     func seriesEvent(for event: CalendarEvent) -> CalendarEvent? {
         guard let sid = event.seriesId else { return nil }
         return localEvents.first { $0.id == sid }
@@ -330,7 +268,6 @@ class ReminderService: ObservableObject {
         }
         RunLoop.main.add(timer, forMode: .common)
 
-        // Store timer
         var timers = reminderTimers[event.id] ?? []
         timers.append(timer)
         reminderTimers[event.id] = timers
@@ -347,7 +284,6 @@ class ReminderService: ObservableObject {
             cancelReminders(for: event.id)
             var timers: [Timer] = []
 
-            // Per-event custom reminders take priority, then global settings, then default 5 min
             let minutesList: [Int]
             if let custom = event.customReminderMinutes, !custom.isEmpty {
                 minutesList = custom
@@ -395,7 +331,6 @@ class ReminderService: ObservableObject {
     }
 
     private func fireReminder(for event: CalendarEvent, minutesBefore: Int, isSnooze: Bool) {
-        // Check Do Not Disturb (but always fire snooze — user explicitly asked)
         if !isSnooze && settings.isDoNotDisturbActive {
             return
         }
@@ -407,7 +342,6 @@ class ReminderService: ObservableObject {
         if settings.showFullScreenAlert {
             showFullScreenAlert(for: event, minutesBefore: minutesBefore)
         }
-
     }
 
     private func sendNotification(for event: CalendarEvent, minutesBefore: Int, isSnooze: Bool) {
