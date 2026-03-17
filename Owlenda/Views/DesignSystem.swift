@@ -71,21 +71,92 @@ enum DS {
         static let quick: SwiftUI.Animation = .easeInOut(duration: 0.15)
         static let standard: SwiftUI.Animation = .easeInOut(duration: 0.2)
         static let entrance: SwiftUI.Animation = .easeOut(duration: 0.3)
+
+        // Spring-based animations for natural, modern feel (macOS 2026 standard)
+        static let microInteraction: SwiftUI.Animation = .spring(duration: 0.25, bounce: 0.15)
+        static let gentleBounce: SwiftUI.Animation = .spring(duration: 0.35, bounce: 0.2)
+        static let smoothSpring: SwiftUI.Animation = .spring(duration: 0.4, bounce: 0.1)
+        static let staggerBase: SwiftUI.Animation = .spring(duration: 0.3, bounce: 0.15)
+
+        /// Staggered entrance animation for list items.
+        static func staggered(index: Int) -> SwiftUI.Animation {
+            staggerBase.delay(Double(index) * 0.04)
+        }
+
+        /// Returns `.identity` (no animation) when Reduce Motion is on,
+        /// otherwise returns the provided animation.
+        static func motionAware(
+            _ animation: SwiftUI.Animation,
+            reduceMotion: Bool
+        ) -> SwiftUI.Animation {
+            reduceMotion ? .easeOut(duration: 0.01) : animation
+        }
+    }
+
+    // MARK: Semantic Colors (adaptive, respects appearance & accessibility)
+
+    enum Colors {
+        // Surface colors — adapt to light/dark and vibrancy
+        static let surfacePrimary = Color(nsColor: .windowBackgroundColor)
+        static let surfaceSecondary = Color(nsColor: .controlBackgroundColor)
+        static let surfaceElevated = Color(nsColor: .underPageBackgroundColor)
+
+        // Text colors — semantic hierarchy
+        static let textPrimary = Color(nsColor: .labelColor)
+        static let textSecondary = Color(nsColor: .secondaryLabelColor)
+        static let textTertiary = Color(nsColor: .tertiaryLabelColor)
+        static let textQuaternary = Color(nsColor: .quaternaryLabelColor)
+
+        // Accent & interactive
+        static let accent = Color.accentColor
+        static let accentSubtle = Color.accentColor.opacity(0.12)
+
+        // Semantic status
+        static let success = Color(nsColor: .systemGreen)
+        static let warning = Color(nsColor: .systemOrange)
+        static let error = Color(nsColor: .systemRed)
+        static let info = Color(nsColor: .systemBlue)
+
+        // Separator & borders
+        static let separator = Color(nsColor: .separatorColor)
+        static let border = Color(nsColor: .separatorColor).opacity(0.5)
+
+        // Hover & selection states
+        static let hoverFill = Color(nsColor: .labelColor).opacity(0.06)
+        static let selectedFill = Color.accentColor.opacity(0.1)
+
+        /// Badge/tag backgrounds — adaptive to accessibility contrast setting.
+        static func badgeFill(_ tint: Color, highContrast: Bool = false) -> Color {
+            tint.opacity(highContrast ? 0.22 : 0.12)
+        }
+
+        // Calendar-specific
+        static let calendarLabel = Color(nsColor: .systemBlue)
+    }
+
+    // MARK: Materials (vibrancy)
+
+    enum Materials {
+        static let toast: Material = .regularMaterial
+        static let overlay: Material = .ultraThinMaterial
+        static let hud: Material = .hudWindow
+        /// Header/footer bars — use thickMaterial for richer vibrancy than `.bar`
+        static let headerBar: Material = .thickMaterial
     }
 
     // MARK: Urgency Colors
 
     static func urgencyColor(minutesUntil: Int) -> Color {
-        if minutesUntil <= 5 { return .red }
-        if minutesUntil <= 15 { return .orange }
-        return .green
+        if minutesUntil <= 5 { return Colors.error }
+        if minutesUntil <= 15 { return Colors.warning }
+        return Colors.success
     }
 
     // MARK: Countdown Colors
 
     static func countdownColor(secondsRemaining: Int) -> Color {
-        if secondsRemaining <= 120 { return .red }
-        if secondsRemaining <= 300 { return .orange }
+        if secondsRemaining <= 120 { return Colors.error }
+        if secondsRemaining <= 300 { return Colors.warning }
         return .white
     }
 
@@ -143,25 +214,137 @@ enum DS {
     }()
 }
 
+// MARK: - Haptic Feedback (macOS Force Touch Trackpad)
+
+enum Haptics {
+    static func tap() {
+        NSHapticFeedbackManager.defaultPerformer.perform(
+            .alignment, performanceTime: .default
+        )
+    }
+
+    static func impact() {
+        NSHapticFeedbackManager.defaultPerformer.perform(
+            .levelChange, performanceTime: .default
+        )
+    }
+
+    static func generic() {
+        NSHapticFeedbackManager.defaultPerformer.perform(
+            .generic, performanceTime: .default
+        )
+    }
+}
+
+// MARK: - Motion-Aware Entrance Modifier
+
+/// Replaces the repeated `appeared` + `onAppear` boilerplate across views.
+/// Respects `accessibilityReduceMotion` — skips animation when enabled.
+struct StaggeredEntrance: ViewModifier {
+    var index: Int = 0
+    var offsetY: CGFloat = 8
+
+    @State private var appeared = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(appeared || reduceMotion ? 1 : 0)
+            .offset(y: appeared || reduceMotion ? 0 : offsetY)
+            .onAppear {
+                guard !reduceMotion else {
+                    appeared = true
+                    return
+                }
+                withAnimation(DS.Animation.staggered(index: index)) {
+                    appeared = true
+                }
+            }
+    }
+}
+
+extension View {
+    /// Staggered entrance animation — respects Reduce Motion.
+    func staggeredEntrance(index: Int = 0, offsetY: CGFloat = 8) -> some View {
+        modifier(StaggeredEntrance(index: index, offsetY: offsetY))
+    }
+}
+
+// MARK: - Scroll Transition Modifier
+
+extension View {
+    /// Applies a scroll-aware transition: items fade/scale as they enter/exit the visible area.
+    func eventScrollTransition() -> some View {
+        self.scrollTransition(.animated(.spring(duration: 0.3, bounce: 0.1))) { content, phase in
+            content
+                .opacity(phase.isIdentity ? 1 : 0.4)
+                .scaleEffect(phase.isIdentity ? 1 : 0.96, anchor: .leading)
+                .offset(x: phase.isIdentity ? 0 : phase.value * -8)
+        }
+    }
+}
+
+// MARK: - Motion-Aware Animation Modifier
+
+extension View {
+    /// Wraps `.animation()` to become a no-op when Reduce Motion is active.
+    func motionAwareAnimation<V: Equatable>(
+        _ animation: Animation,
+        value: V,
+        reduceMotion: Bool
+    ) -> some View {
+        self.animation(
+            reduceMotion ? .easeOut(duration: 0.01) : animation,
+            value: value
+        )
+    }
+}
+
+// MARK: - Adaptive Badge Background
+
+/// A badge background that automatically adapts to High Contrast accessibility setting.
+struct AdaptiveBadgeFill: ViewModifier {
+    let tint: Color
+
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    func body(content: Content) -> some View {
+        content.background(
+            DS.Colors.badgeFill(tint, highContrast: contrast == .increased)
+        )
+    }
+}
+
+extension View {
+    func adaptiveBadgeFill(_ tint: Color) -> some View {
+        modifier(AdaptiveBadgeFill(tint: tint))
+    }
+}
+
 // MARK: - Reusable Header
 
 /// Standard header bar used across popover views.
+/// Uses `.thickMaterial` for rich vibrancy instead of plain `.bar`.
 struct PopoverHeader: View {
     var title: String? = nil
     var showBack: Bool = false
     var onBack: (() -> Void)? = nil
     var trailing: AnyView? = nil
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: DS.Spacing.xs) {
                 if showBack {
                     Button {
+                        Haptics.tap()
                         onBack?()
                     } label: {
                         HStack(spacing: DS.Spacing.xxs) {
                             Image(systemName: "chevron.left")
                                 .font(.system(size: DS.Size.iconMedium, weight: .semibold))
+                                .contentTransition(.symbolEffect(.replace))
                             Text("Back")
                                 .font(.subheadline)
                         }
@@ -195,7 +378,7 @@ struct PopoverHeader: View {
             }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.vertical, DS.Spacing.md)
-            .background(.bar)
+            .background(DS.Materials.headerBar)
 
             Divider()
         }

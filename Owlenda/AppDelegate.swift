@@ -72,7 +72,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         alertWindow = window
 
         // Auto-dismiss after 60 seconds
-        DispatchQueue.main.asyncAfter(deadline: .now() + 60) { [weak self] in
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(60))
             self?.dismissAlert()
         }
     }

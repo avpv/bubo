@@ -5,25 +5,43 @@ struct DaySectionHeader: View {
     let date: Date
     let count: Int
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var contrast
+    @State private var appeared = false
+
     var body: some View {
         HStack(spacing: DS.Spacing.sm) {
             Text(dayTitle)
                 .font(.subheadline)
                 .fontWeight(.semibold)
-                .foregroundColor(isToday ? Color.accentColor : .primary)
+                .foregroundColor(isToday ? DS.Colors.accent : DS.Colors.textPrimary)
             if isToday {
                 Circle()
-                    .fill(Color.accentColor)
+                    .fill(DS.Colors.accent)
                     .frame(width: DS.Size.todayDotSize, height: DS.Size.todayDotSize)
+                    .scaleEffect(appeared ? 1 : 0)
             }
             Spacer()
             Text("\(count)")
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundColor(DS.Colors.textSecondary)
                 .padding(.horizontal, DS.Spacing.sm)
                 .padding(.vertical, DS.Spacing.xxs)
-                .background(.secondary.opacity(0.12))
+                .adaptiveBadgeFill(DS.Colors.textSecondary)
                 .clipShape(Capsule())
+                .contentTransition(.numericText())
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(dayTitle), \(count) \(count == 1 ? "event" : "events")")
+        .accessibilityAddTraits(.isHeader)
+        .onAppear {
+            guard !reduceMotion else {
+                appeared = true
+                return
+            }
+            withAnimation(DS.Animation.gentleBounce.delay(0.15)) {
+                appeared = true
+            }
         }
     }
 

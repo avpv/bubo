@@ -25,12 +25,14 @@ struct ToastMessage: Equatable, Identifiable {
 }
 
 /// Observable toast state manager.
-final class ToastState: ObservableObject {
-    @Published var current: ToastMessage?
+@Observable
+final class ToastState {
+    var current: ToastMessage?
     private var dismissTask: DispatchWorkItem?
 
     func show(_ message: ToastMessage, duration: TimeInterval = 2.5) {
         dismissTask?.cancel()
+        Haptics.generic()
         withAnimation(DS.Animation.standard) {
             current = message
         }
@@ -54,7 +56,9 @@ final class ToastState: ObservableObject {
 
 /// Toast overlay view, placed at bottom of popover.
 struct ToastOverlay: View {
-    @ObservedObject var toastState: ToastState
+    let toastState: ToastState
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack {
@@ -64,21 +68,32 @@ struct ToastOverlay: View {
                     Image(systemName: toast.icon)
                         .font(.caption)
                         .foregroundColor(toast.color)
+                        .contentTransition(.symbolEffect(.replace))
                     Text(toast.text)
                         .font(.caption)
                         .foregroundColor(.primary)
                 }
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.vertical, DS.Spacing.md)
-                .background(.regularMaterial)
+                .background(DS.Materials.toast)
                 .clipShape(Capsule())
-                .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
+                .shadow(color: .black.opacity(0.12), radius: 12, y: 6)
                 .padding(.bottom, DS.Spacing.md)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .transition(
+                    reduceMotion
+                        ? .opacity
+                        : .asymmetric(
+                            insertion: .move(edge: .bottom).combined(with: .opacity).combined(with: .scale(scale: 0.9)),
+                            removal: .move(edge: .bottom).combined(with: .opacity).combined(with: .scale(scale: 0.95))
+                        )
+                )
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Status: \(toast.text)")
             }
         }
-        .animation(DS.Animation.standard, value: toastState.current?.id)
+        .animation(
+            reduceMotion ? DS.Animation.quick : DS.Animation.gentleBounce,
+            value: toastState.current?.id
+        )
     }
 }

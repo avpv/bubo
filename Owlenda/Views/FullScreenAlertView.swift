@@ -9,15 +9,17 @@ struct FullScreenAlertView: View {
     @State private var secondsRemaining: Int = 0
     @State private var countdownTimer: Timer?
     @State private var isVisible = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
         ZStack {
-            // Native material background
+            // Native material background with vibrancy
             Rectangle()
-                .fill(.ultraThinMaterial)
+                .fill(DS.Materials.overlay)
                 .ignoresSafeArea()
 
-            Color.black.opacity(0.6)
+            Color.black.opacity(contrast == .increased ? 0.8 : 0.6)
                 .ignoresSafeArea()
 
             VStack(spacing: DS.Spacing.xxxl) {
@@ -35,7 +37,7 @@ struct FullScreenAlertView: View {
                     .foregroundColor(DS.countdownColor(secondsRemaining: secondsRemaining))
                     .shadow(color: DS.countdownColor(secondsRemaining: secondsRemaining).opacity(0.5), radius: 10)
                     .contentTransition(.numericText())
-                    .animation(.linear(duration: 0.3), value: secondsRemaining)
+                    .motionAwareAnimation(.linear(duration: 0.3), value: secondsRemaining, reduceMotion: reduceMotion)
 
                 Text(event.title)
                     .font(.system(size: 36, weight: .semibold))
@@ -61,7 +63,11 @@ struct FullScreenAlertView: View {
                 HStack(spacing: 20) {
                     Menu {
                         ForEach(DS.snoozeOptions) { option in
-                            Button("In \(option.label)") { cleanup(); onSnooze(option.minutes) }
+                            Button("In \(option.label)") {
+                                Haptics.tap()
+                                cleanup()
+                                onSnooze(option.minutes)
+                            }
                         }
                     } label: {
                         Text("Snooze")
@@ -77,7 +83,11 @@ struct FullScreenAlertView: View {
                     }
                     .buttonStyle(.plain)
 
-                    Button(action: { cleanup(); onDismiss() }) {
+                    Button(action: {
+                        Haptics.impact()
+                        cleanup()
+                        onDismiss()
+                    }) {
                         Text("Dismiss")
                             .font(.title2)
                             .fontWeight(.semibold)
@@ -108,22 +118,33 @@ struct FullScreenAlertView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .opacity(isVisible ? 1 : 0)
-        .scaleEffect(isVisible ? 1 : 0.95)
+        .scaleEffect(isVisible ? 1 : (reduceMotion ? 1 : 0.92))
         .onAppear {
+            Haptics.impact()
             startCountdown()
-            withAnimation(DS.Animation.entrance) {
+            if reduceMotion {
                 isVisible = true
+            } else {
+                withAnimation(DS.Animation.smoothSpring) {
+                    isVisible = true
+                }
             }
         }
         .onDisappear { cleanup() }
     }
+
+    // MARK: - Bell Icon with KeyframeAnimator
 
     private var bellIcon: some View {
         Image(systemName: "bell.fill")
             .font(.system(size: 60))
             .foregroundColor(.yellow)
             .shadow(color: .yellow.opacity(0.5), radius: 20)
-            .symbolEffect(.pulse, options: .repeating)
+            .symbolEffect(
+                .bounce,
+                options: reduceMotion ? .default : .repeating.speed(0.4),
+                value: isVisible
+            )
     }
 
     // MARK: - Countdown

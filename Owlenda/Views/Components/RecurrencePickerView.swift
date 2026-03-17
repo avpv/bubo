@@ -90,18 +90,18 @@ struct RecurrencePickerView: View {
                 standardControls(freq)
             }
         }
-        .onChange(of: mode) { _ in syncToBinding() }
-        .onChange(of: interval) { _ in syncToBinding() }
-        .onChange(of: endChoice) { _ in syncToBinding() }
-        .onChange(of: endCount) { _ in syncToBinding() }
-        .onChange(of: endDate) { _ in syncToBinding() }
-        .onChange(of: selectedWeekdays) { _ in syncToBinding() }
-        .onChange(of: monthlyMode) { _ in syncToBinding() }
-        .onChange(of: pomodoroWork) { _ in syncToBinding() }
-        .onChange(of: pomodoroBreak) { _ in syncToBinding() }
-        .onChange(of: pomodoroRounds) { _ in syncToBinding() }
-        .onChange(of: pomodoroLongBreak) { _ in syncToBinding() }
-        .onChange(of: pomodoroLongBreakEnabled) { _ in syncToBinding() }
+        .onChange(of: mode) { syncToBinding() }
+        .onChange(of: interval) { syncToBinding() }
+        .onChange(of: endChoice) { syncToBinding() }
+        .onChange(of: endCount) { syncToBinding() }
+        .onChange(of: endDate) { syncToBinding() }
+        .onChange(of: selectedWeekdays) { syncToBinding() }
+        .onChange(of: monthlyMode) { syncToBinding() }
+        .onChange(of: pomodoroWork) { syncToBinding() }
+        .onChange(of: pomodoroBreak) { syncToBinding() }
+        .onChange(of: pomodoroRounds) { syncToBinding() }
+        .onChange(of: pomodoroLongBreak) { syncToBinding() }
+        .onChange(of: pomodoroLongBreakEnabled) { syncToBinding() }
         .onAppear { loadFromBinding() }
     }
 
@@ -258,7 +258,7 @@ struct RecurrencePickerView: View {
                     scheduleRow(segment)
                 }
                 HStack(spacing: DS.Spacing.xs) {
-                    Spacer().frame(width: 12)
+                    Spacer().frame(width: DS.Spacing.lg)
                     Text("···  \(segments.count - 4) more")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
@@ -284,7 +284,7 @@ struct RecurrencePickerView: View {
             Image(systemName: icon)
                 .font(.system(size: 9))
                 .foregroundColor(color)
-                .frame(width: 12)
+                .frame(width: DS.Spacing.lg)
             Text("\(DS.timeFormatter.string(from: start))–\(DS.timeFormatter.string(from: end))")
                 .font(.system(.caption2, design: .monospaced))
                 .foregroundColor(.secondary)
@@ -293,7 +293,7 @@ struct RecurrencePickerView: View {
 
     private func legendItem(color: Color, label: String) -> some View {
         HStack(spacing: DS.Spacing.xs) {
-            Circle().fill(color).frame(width: 6, height: 6)
+            Circle().fill(color).frame(width: DS.Size.todayDotSize, height: DS.Size.todayDotSize)
             Text(label).font(.caption2).foregroundColor(.secondary)
         }
     }
@@ -363,7 +363,7 @@ struct RecurrencePickerView: View {
                         .background(
                             selectedWeekdays.contains(day)
                                 ? Color.accentColor
-                                : Color.secondary.opacity(0.12)
+                                : DS.Colors.badgeFill(.secondary)
                         )
                         .foregroundColor(selectedWeekdays.contains(day) ? .white : .primary)
                         .clipShape(Capsule())

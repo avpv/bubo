@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct AddEventView: View {
-    @ObservedObject var reminderService: ReminderService
+    var reminderService: ReminderService
     var editingEvent: CalendarEvent? = nil
     var onDismiss: () -> Void
     var onSave: (_ isEdit: Bool) -> Void
@@ -49,11 +49,13 @@ struct AddEventView: View {
                     TextField("Title", text: $title, prompt: Text("Event title"))
                         .textFieldStyle(.roundedBorder)
                         .focused($isTitleFocused)
+                        .defaultFocus($isTitleFocused, true)
 
                     if showValidation && !isTitleValid {
                         Label("Title is required", systemImage: "exclamationmark.triangle.fill")
                             .font(.caption)
-                            .foregroundColor(.red)
+                            .foregroundColor(DS.Colors.error)
+                            .transition(.move(edge: .top).combined(with: .opacity))
                     }
                 }
 
@@ -82,7 +84,9 @@ struct AddEventView: View {
 
                     LabeledContent("Ends at") {
                         Text(DS.timeFormatter.string(from: eventEndDate))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(DS.Colors.textSecondary)
+                            .contentTransition(.numericText())
+                            .animation(DS.Animation.microInteraction, value: eventEndDate)
                     }
                 }
 
@@ -164,7 +168,7 @@ struct AddEventView: View {
             }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.vertical, DS.Spacing.md)
-            .background(.bar)
+            .background(DS.Materials.headerBar)
         }
         .frame(width: DS.Popover.width)
         .onAppear {
@@ -180,7 +184,8 @@ struct AddEventView: View {
                 }
                 recurrenceRule = event.recurrenceRule
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            Task {
+                try? await Task.sleep(for: .milliseconds(100))
                 isTitleFocused = true
             }
         }

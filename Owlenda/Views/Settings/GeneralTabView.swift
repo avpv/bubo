@@ -1,10 +1,12 @@
 import SwiftUI
 
 struct GeneralTabView: View {
-    @EnvironmentObject var settings: ReminderSettings
-    @EnvironmentObject var reminderService: ReminderService
+    @Environment(ReminderSettings.self) var settings
+    @Environment(ReminderService.self) var reminderService
 
     var body: some View {
+        @Bindable var settings = settings
+
         Form {
             Section("Refresh") {
                 Picker("Refresh interval", selection: $settings.syncIntervalMinutes) {

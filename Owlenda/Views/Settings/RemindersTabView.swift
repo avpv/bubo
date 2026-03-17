@@ -1,10 +1,13 @@
 import SwiftUI
 
 struct RemindersTabView: View {
-    @EnvironmentObject var settings: ReminderSettings
-    @EnvironmentObject var viewModel: SettingsViewModel
+    @Environment(ReminderSettings.self) var settings
+    @Environment(SettingsViewModel.self) var viewModel
 
     var body: some View {
+        @Bindable var settings = settings
+        @Bindable var viewModel = viewModel
+
         Form {
             Section("Reminder Intervals") {
                 ForEach($settings.intervals) { $interval in

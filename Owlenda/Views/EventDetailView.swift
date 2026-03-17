@@ -10,13 +10,15 @@ struct EventDetailView: View {
 
     @State private var showDeleteConfirmation = false
     @State private var showSeriesDeleteChoice = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var contrast
 
     private func pomodoroBadge(_ text: String, icon: String, color: Color) -> some View {
         Label(text, systemImage: icon)
             .font(.caption2)
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, DS.Spacing.xxs)
-            .background(color.opacity(0.15))
+            .adaptiveBadgeFill(color)
             .clipShape(RoundedRectangle(cornerRadius: DS.Size.badgeCornerRadius))
     }
 
@@ -44,29 +46,33 @@ struct EventDetailView: View {
                         if event.isRecurring {
                             Image(systemName: "repeat")
                                 .font(.system(size: DS.Size.iconMedium))
-                                .foregroundColor(.secondary)
+                                .foregroundColor(DS.Colors.textSecondary)
+                                .contentTransition(.symbolEffect(.replace))
                                 .accessibilityLabel("Recurring event")
                         }
                     }
+                    .staggeredEntrance(index: 0)
 
                     // Date & Time group
                     VStack(alignment: .leading, spacing: DS.Spacing.md) {
                         Label(event.formattedDate, systemImage: "calendar")
                             .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(DS.Colors.textSecondary)
                             .accessibilityLabel("Date: \(event.formattedDate)")
 
                         Label(event.formattedTimeRange, systemImage: "clock")
                             .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(DS.Colors.textSecondary)
                             .accessibilityLabel("Time: \(event.formattedTimeRange)")
                     }
+                    .staggeredEntrance(index: 1)
 
                     // Location
                     if let location = event.location, !location.isEmpty {
                         Label(location, systemImage: "location.fill")
                             .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(DS.Colors.textSecondary)
+                            .staggeredEntrance(index: 2)
                     }
 
                     // Description
@@ -75,88 +81,38 @@ struct EventDetailView: View {
                             Label("Notes", systemImage: "note.text")
                                 .font(.caption)
                                 .fontWeight(.medium)
-                                .foregroundStyle(.tertiary)
+                                .foregroundStyle(DS.Colors.textTertiary)
                             Text(description)
                                 .font(.subheadline)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(DS.Colors.textSecondary)
                                 .lineSpacing(DS.Typography.bodyLineSpacing)
                                 .textSelection(.enabled)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .padding(DS.Spacing.lg)
-                        .background(Color.primary.opacity(0.04))
+                        .background(DS.Colors.hoverFill)
                         .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius))
+                        .staggeredEntrance(index: 3)
                     }
 
                     // Calendar name
                     if let calName = event.calendarName {
                         Label(calName, systemImage: "tray.full")
                             .font(.caption)
-                            .foregroundColor(.blue)
+                            .foregroundColor(DS.Colors.calendarLabel)
+                            .staggeredEntrance(index: 4)
                     }
 
                     // Recurrence
                     if let rule = event.recurrenceRule {
-                        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                            Label(
-                                rule.isPomodoro ? "Pomodoro" : "Repeats",
-                                systemImage: rule.isPomodoro ? "timer" : "repeat"
-                            )
-                            .font(.caption)
-                            .fontWeight(.medium)
-                            .foregroundStyle(.tertiary)
-
-                            Text(rule.displayText)
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-
-                            if rule.isPomodoro {
-                                let workMin = Int(event.endDate.timeIntervalSince(event.startDate) / 60)
-                                let breakMin = max(rule.interval - workMin, 0)
-                                FlowLayout(spacing: DS.Spacing.xs) {
-                                    pomodoroBadge("\(workMin) min work", icon: "brain.head.profile", color: .accentColor)
-                                    pomodoroBadge("\(breakMin) min break", icon: "cup.and.saucer", color: .green)
-                                    if rule.pomodoroLongBreak > 0 {
-                                        pomodoroBadge("\(rule.pomodoroLongBreak) min long break", icon: "moon.zzz", color: .indigo)
-                                    }
-                                }
-                            }
-
-                            if rule.frequency == .weekly && !rule.weekdays.isEmpty {
-                                HStack(spacing: DS.Spacing.xs) {
-                                    ForEach(Weekday.allCases.filter { rule.weekdays.contains($0) }, id: \.self) { day in
-                                        Text(day.shortName)
-                                            .font(.caption2)
-                                            .padding(.horizontal, DS.Spacing.sm)
-                                            .padding(.vertical, DS.Spacing.xxs)
-                                            .background(Color.accentColor.opacity(0.15))
-                                            .clipShape(RoundedRectangle(cornerRadius: DS.Size.badgeCornerRadius))
-                                            .accessibilityLabel(day.fullName)
-                                    }
-                                }
-                            }
-                        }
+                        recurrenceSection(rule)
+                            .staggeredEntrance(index: 5)
                     }
 
                     // Custom reminders
                     if let reminders = event.customReminderMinutes, !reminders.isEmpty {
-                        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                            Label("Reminders", systemImage: "bell.fill")
-                                .font(.caption)
-                                .fontWeight(.medium)
-                                .foregroundStyle(.tertiary)
-
-                            HStack(spacing: DS.Spacing.xs) {
-                                ForEach(reminders.sorted(), id: \.self) { min in
-                                    Text(DS.formatMinutes(min))
-                                        .font(.caption)
-                                        .padding(.horizontal, DS.Spacing.sm)
-                                        .padding(.vertical, DS.Spacing.xxs)
-                                        .background(.secondary.opacity(0.12))
-                                        .clipShape(RoundedRectangle(cornerRadius: DS.Size.badgeCornerRadius))
-                                }
-                            }
-                        }
+                        remindersSection(reminders)
+                            .staggeredEntrance(index: 6)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -172,6 +128,7 @@ struct EventDetailView: View {
 
                 HStack {
                     Button(role: .destructive) {
+                        Haptics.impact()
                         if event.isRecurring {
                             showSeriesDeleteChoice = true
                         } else {
@@ -211,6 +168,7 @@ struct EventDetailView: View {
                     Spacer()
 
                     Button {
+                        Haptics.tap()
                         onEdit?(event)
                     } label: {
                         Label("Edit", systemImage: "pencil")
@@ -219,10 +177,78 @@ struct EventDetailView: View {
                 }
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.vertical, DS.Spacing.md)
-                .background(.bar)
+                .background(DS.Materials.headerBar)
             }
         }
         .frame(width: DS.Popover.width)
         .frame(minHeight: DS.Popover.detailMinHeight)
+    }
+
+    // MARK: - Recurrence Section
+
+    @ViewBuilder
+    private func recurrenceSection(_ rule: RecurrenceRule) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            Label(
+                rule.isPomodoro ? "Pomodoro" : "Repeats",
+                systemImage: rule.isPomodoro ? "timer" : "repeat"
+            )
+            .font(.caption)
+            .fontWeight(.medium)
+            .foregroundStyle(DS.Colors.textTertiary)
+
+            Text(rule.displayText)
+                .font(.subheadline)
+                .foregroundColor(DS.Colors.textSecondary)
+
+            if rule.isPomodoro {
+                let workMin = Int(event.endDate.timeIntervalSince(event.startDate) / 60)
+                let breakMin = max(rule.interval - workMin, 0)
+                FlowLayout(spacing: DS.Spacing.xs) {
+                    pomodoroBadge("\(workMin) min work", icon: "brain.head.profile", color: DS.Colors.accent)
+                    pomodoroBadge("\(breakMin) min break", icon: "cup.and.saucer", color: DS.Colors.success)
+                    if rule.pomodoroLongBreak > 0 {
+                        pomodoroBadge("\(rule.pomodoroLongBreak) min long break", icon: "moon.zzz", color: .indigo)
+                    }
+                }
+            }
+
+            if rule.frequency == .weekly && !rule.weekdays.isEmpty {
+                HStack(spacing: DS.Spacing.xs) {
+                    ForEach(Weekday.allCases.filter { rule.weekdays.contains($0) }, id: \.self) { day in
+                        Text(day.shortName)
+                            .font(.caption2)
+                            .padding(.horizontal, DS.Spacing.sm)
+                            .padding(.vertical, DS.Spacing.xxs)
+                            .background(DS.Colors.accentSubtle)
+                            .clipShape(RoundedRectangle(cornerRadius: DS.Size.badgeCornerRadius))
+                            .accessibilityLabel(day.fullName)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Reminders Section
+
+    @ViewBuilder
+    private func remindersSection(_ reminders: [Int]) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            Label("Reminders", systemImage: "bell.fill")
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundStyle(DS.Colors.textTertiary)
+
+            HStack(spacing: DS.Spacing.xs) {
+                ForEach(reminders.sorted(), id: \.self) { min in
+                    Text(DS.formatMinutes(min))
+                        .font(.caption)
+                        .padding(.horizontal, DS.Spacing.sm)
+                        .padding(.vertical, DS.Spacing.xxs)
+                        .adaptiveBadgeFill(DS.Colors.textSecondary)
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Size.badgeCornerRadius))
+                }
+            }
+        }
     }
 }
