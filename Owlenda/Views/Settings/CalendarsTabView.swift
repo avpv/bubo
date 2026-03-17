@@ -61,7 +61,7 @@ struct CalendarsTabView: View {
                                 .controlSize(.small)
                             Text("Requesting Access…")
                         } else {
-                            Label("Grant Calendar Access", systemImage: "calendar")
+                            Label("Connect", systemImage: "calendar")
                         }
                     }
                     .buttonStyle(.borderedProminent)
