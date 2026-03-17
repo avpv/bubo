@@ -149,7 +149,13 @@ struct MenuBarView: View {
                 )
             }
 
-            if let error = reminderService.syncError, networkMonitor.isConnected {
+            if KeychainService.isAccessDenied {
+                StatusBanner(
+                    icon: "key.slash",
+                    text: "Keychain access denied. Re-enter credentials in Settings.",
+                    color: .red
+                )
+            } else if let error = reminderService.syncError, networkMonitor.isConnected {
                 StatusBanner(icon: "exclamationmark.triangle.fill", text: error, color: .orange)
             }
 

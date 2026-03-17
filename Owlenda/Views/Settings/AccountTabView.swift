@@ -6,6 +6,26 @@ struct AccountTabView: View {
 
     var body: some View {
         Form {
+            if KeychainService.isAccessDenied {
+                Section {
+                    HStack(spacing: DS.Spacing.sm) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.red)
+                        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                            Text("Keychain access was denied")
+                                .fontWeight(.medium)
+                            Text("Re-enter your credentials below. They will be saved to a secure keychain that won't prompt again.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Button("Retry") {
+                            KeychainService.resetAccessDenied()
+                        }
+                    }
+                }
+            }
+
             Section("Yandex Calendar") {
                 Picker("Authorization", selection: $settings.authMethod) {
                     Text("App Password").tag(AuthMethod.appPassword)

@@ -8,6 +8,11 @@ struct OwlendaApp: App {
     @StateObject private var networkMonitor = NetworkMonitor()
 
     init() {
+        // Migrate legacy keychain items to Data Protection keychain (no ACL dialogs),
+        // then pre-load all values into memory so the UI never triggers keychain prompts.
+        KeychainService.migrateFromLegacyKeychainIfNeeded()
+        KeychainService.warmUpCache()
+
         let s = ReminderSettings.load()
         _settings = StateObject(wrappedValue: s)
         _reminderService = StateObject(wrappedValue: ReminderService(settings: s))
