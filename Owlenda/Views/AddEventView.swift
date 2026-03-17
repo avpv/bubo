@@ -47,6 +47,7 @@ struct AddEventView: View {
             Form {
                 Section {
                     TextField("Title", text: $title, prompt: Text("Event title"))
+                        .textFieldStyle(.roundedBorder)
                         .focused($isTitleFocused)
 
                     if showValidation && !isTitleValid {
@@ -57,11 +58,12 @@ struct AddEventView: View {
                 }
 
                 Section("Date & Time") {
+                    DatePicker("Date", selection: $date, displayedComponents: .date)
+
                     HStack {
-                        Text("Start")
+                        Text("Time")
                         Spacer()
-                        DatePicker("", selection: $date, displayedComponents: .date)
-                            .labelsHidden()
+                        TimeSlotPicker(selection: $date)
                         DatePicker("", selection: $date, displayedComponents: .hourAndMinute)
                             .labelsHidden()
                     }
@@ -86,7 +88,29 @@ struct AddEventView: View {
 
                 Section("Details") {
                     TextField("Location", text: $location, prompt: Text("Optional"))
-                    TextField("Notes", text: $description, prompt: Text("Optional"))
+                        .textFieldStyle(.roundedBorder)
+
+                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                        Text("Notes")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        TextEditor(text: $description)
+                            .font(.body)
+                            .frame(minHeight: 60, maxHeight: 120)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: DS.Size.cornerRadius)
+                                    .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                            )
+                            .overlay(alignment: .topLeading) {
+                                if description.isEmpty {
+                                    Text("Optional")
+                                        .foregroundColor(.secondary.opacity(0.5))
+                                        .padding(.horizontal, 5)
+                                        .padding(.vertical, 8)
+                                        .allowsHitTesting(false)
+                                }
+                            }
+                    }
                 }
 
                 RecurrencePickerView(rule: $recurrenceRule, eventDuration: $duration, eventStartDate: date)
