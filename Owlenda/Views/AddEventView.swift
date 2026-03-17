@@ -97,18 +97,20 @@ struct AddEventView: View {
                         TextEditor(text: $description)
                             .font(.body)
                             .scrollContentBackground(.hidden)
-                            .background(Color.clear)
+                            .padding(DS.Spacing.xs)
                             .frame(minHeight: 60, maxHeight: 120)
+                            .background(.quinary)
+                            .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius))
                             .overlay(
                                 RoundedRectangle(cornerRadius: DS.Size.cornerRadius)
-                                    .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                                    .strokeBorder(.separator)
                             )
                             .overlay(alignment: .topLeading) {
                                 if description.isEmpty {
                                     Text("Optional")
-                                        .foregroundColor(.secondary.opacity(0.5))
-                                        .padding(.horizontal, 5)
-                                        .padding(.vertical, 8)
+                                        .foregroundStyle(.placeholder)
+                                        .padding(.horizontal, DS.Spacing.md)
+                                        .padding(.vertical, DS.Spacing.md)
                                         .allowsHitTesting(false)
                                 }
                             }
