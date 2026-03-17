@@ -29,6 +29,11 @@ struct CalendarEvent: Identifiable, Codable, Hashable {
 
     // MARK: - Computed properties
 
+    /// True for events created locally (not from Apple Calendar via EventKit).
+    var isLocalEvent: Bool {
+        !id.hasPrefix("apple_")
+    }
+
     var isRecurring: Bool {
         recurrenceRule != nil || seriesId != nil
     }

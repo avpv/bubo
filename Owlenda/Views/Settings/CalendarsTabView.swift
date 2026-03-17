@@ -81,7 +81,7 @@ struct CalendarsTabView: View {
             .fontWeight(.medium)
 
             Text(settings.selectedCalendarIds.isEmpty
-                ? "Syncing all \(allCalendars.count) calendars"
+                ? "Showing all \(allCalendars.count) calendars"
                 : "Selected: \(settings.selectedCalendarIds.count) of \(allCalendars.count)")
                 .font(.caption)
                 .foregroundColor(.secondary)

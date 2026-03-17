@@ -269,11 +269,11 @@ struct MenuBarView: View {
 
             Button(action: {
                 reminderService.syncNow()
-                toastState.showInfo("Syncing calendars…", icon: "arrow.clockwise")
+                toastState.showInfo("Refreshing calendars…", icon: "arrow.clockwise")
             }) {
                 Label("Refresh", systemImage: "arrow.clockwise")
             }
-            .help("Sync calendars now (⌘R)")
+            .help("Refresh calendars (⌘R)")
             .keyboardShortcut("r", modifiers: .command)
 
             Spacer()

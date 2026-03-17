@@ -68,7 +68,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.setFrame(screen.frame, display: true)
         window.makeKeyAndOrderFront(nil)
 
-        NSApplication.shared.activate(ignoringOtherApps: true)
+        NSApplication.shared.activate()
         alertWindow = window
 
         // Auto-dismiss after 60 seconds
