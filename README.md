@@ -60,7 +60,7 @@ Built-in Pomodoro technique support. Set work intervals (e.g. 25 min) with autom
 ### Option A: One command install (easiest)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/avpv/owlenda/HEAD/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/avpv/owlenda/main/scripts/install.sh | bash
 ```
 
 ### Option B: Download DMG manually
