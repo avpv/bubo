@@ -8,6 +8,7 @@ struct EventRowView: View {
     var onTap: ((CalendarEvent) -> Void)? = nil
 
     @State private var isHovered = false
+    @State private var appeared = false
 
     private var isLocal: Bool {
         event.isLocalEvent
@@ -15,11 +16,17 @@ struct EventRowView: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 0) {
-            // Urgency accent bar
+            // Urgency accent bar with pulse animation for imminent events
             RoundedRectangle(cornerRadius: 1.5)
                 .fill(DS.urgencyColor(minutesUntil: event.minutesUntilStart))
                 .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
                 .padding(.trailing, DS.Spacing.md)
+                .shadow(
+                    color: event.minutesUntilStart <= 5
+                        ? DS.urgencyColor(minutesUntil: event.minutesUntilStart).opacity(0.4)
+                        : .clear,
+                    radius: 4
+                )
 
             // Time indicator
             VStack(spacing: DS.Spacing.xxs) {
@@ -46,12 +53,12 @@ struct EventRowView: View {
                     if event.recurrenceRule?.isPomodoro == true {
                         Image(systemName: "timer")
                             .font(.system(size: DS.Size.iconSmall))
-                            .foregroundColor(.orange)
+                            .foregroundColor(DS.Colors.warning)
                             .accessibilityLabel("Pomodoro")
                     } else if event.isRecurring {
                         Image(systemName: "repeat")
                             .font(.system(size: DS.Size.iconSmall))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(DS.Colors.textSecondary)
                             .accessibilityLabel("Recurring")
                     }
                 }
@@ -60,21 +67,21 @@ struct EventRowView: View {
                     if let location = event.location, !location.isEmpty {
                         Label(location, systemImage: "location.fill")
                             .font(.caption2)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(DS.Colors.textSecondary)
                             .lineLimit(1)
                     }
 
                     if let calName = event.calendarName {
                         Text(calName)
                             .font(.caption2)
-                            .foregroundColor(.blue)
+                            .foregroundColor(DS.Colors.calendarLabel)
                     }
                 }
             }
 
             Spacer(minLength: DS.Spacing.md)
 
-            // Actions on hover
+            // Actions on hover — slide in from right
             if isHovered {
                 HStack(spacing: DS.Spacing.xs) {
                     if event.isUpcoming {
@@ -87,7 +94,7 @@ struct EventRowView: View {
                         } label: {
                             Image(systemName: "bell.badge")
                                 .font(.system(size: DS.Size.iconMedium))
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(DS.Colors.textSecondary)
                         }
                         .buttonStyle(.borderless)
                         .menuStyle(.borderlessButton)
@@ -103,28 +110,42 @@ struct EventRowView: View {
                             Image(systemName: "minus.circle.fill")
                                 .font(.system(size: DS.Size.iconLarge))
                                 .symbolRenderingMode(.hierarchical)
-                                .foregroundStyle(.red)
+                                .foregroundStyle(DS.Colors.error)
                         }
                         .buttonStyle(.borderless)
                         .help("Delete event")
                     }
                 }
-                .transition(.opacity.animation(DS.Animation.quick))
+                .transition(
+                    .asymmetric(
+                        insertion: .move(edge: .trailing).combined(with: .opacity),
+                        removal: .opacity
+                    )
+                )
             }
         }
         .padding(.vertical, DS.Spacing.xs)
         .padding(.horizontal, DS.Spacing.xs)
         .background(
             RoundedRectangle(cornerRadius: DS.Size.cornerRadius)
-                .fill(isHovered ? Color.primary.opacity(0.06) : Color.clear)
+                .fill(isHovered ? DS.Colors.hoverFill : Color.clear)
         )
+        .scaleEffect(isHovered ? 1.01 : 1.0)
         .contentShape(Rectangle())
         .onTapGesture {
             onTap?(event)
         }
         .onHover { hovering in
-            withAnimation(DS.Animation.quick) {
+            withAnimation(DS.Animation.microInteraction) {
                 isHovered = hovering
+            }
+        }
+        // Staggered entrance animation
+        .opacity(appeared ? 1 : 0)
+        .offset(y: appeared ? 0 : 6)
+        .onAppear {
+            withAnimation(DS.Animation.gentleBounce) {
+                appeared = true
             }
         }
         .accessibilityElement(children: .combine)

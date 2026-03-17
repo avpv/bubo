@@ -12,9 +12,9 @@ struct FullScreenAlertView: View {
 
     var body: some View {
         ZStack {
-            // Native material background
+            // Native material background with vibrancy
             Rectangle()
-                .fill(.ultraThinMaterial)
+                .fill(DS.Materials.overlay)
                 .ignoresSafeArea()
 
             Color.black.opacity(0.6)
@@ -108,10 +108,10 @@ struct FullScreenAlertView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .opacity(isVisible ? 1 : 0)
-        .scaleEffect(isVisible ? 1 : 0.95)
+        .scaleEffect(isVisible ? 1 : 0.92)
         .onAppear {
             startCountdown()
-            withAnimation(DS.Animation.entrance) {
+            withAnimation(DS.Animation.smoothSpring) {
                 isVisible = true
             }
         }

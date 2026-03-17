@@ -71,21 +71,81 @@ enum DS {
         static let quick: SwiftUI.Animation = .easeInOut(duration: 0.15)
         static let standard: SwiftUI.Animation = .easeInOut(duration: 0.2)
         static let entrance: SwiftUI.Animation = .easeOut(duration: 0.3)
+
+        // Spring-based animations for natural, modern feel (macOS 2026 standard)
+        static let microInteraction: SwiftUI.Animation = .spring(duration: 0.25, bounce: 0.15)
+        static let gentleBounce: SwiftUI.Animation = .spring(duration: 0.35, bounce: 0.2)
+        static let smoothSpring: SwiftUI.Animation = .spring(duration: 0.4, bounce: 0.1)
+        static let staggerBase: SwiftUI.Animation = .spring(duration: 0.3, bounce: 0.15)
+
+        /// Staggered entrance animation for list items.
+        static func staggered(index: Int) -> SwiftUI.Animation {
+            staggerBase.delay(Double(index) * 0.04)
+        }
+    }
+
+    // MARK: Semantic Colors (adaptive, respects appearance & accessibility)
+
+    enum Colors {
+        // Surface colors — adapt to light/dark and vibrancy
+        static let surfacePrimary = Color(nsColor: .windowBackgroundColor)
+        static let surfaceSecondary = Color(nsColor: .controlBackgroundColor)
+        static let surfaceElevated = Color(nsColor: .underPageBackgroundColor)
+
+        // Text colors — semantic hierarchy
+        static let textPrimary = Color(nsColor: .labelColor)
+        static let textSecondary = Color(nsColor: .secondaryLabelColor)
+        static let textTertiary = Color(nsColor: .tertiaryLabelColor)
+        static let textQuaternary = Color(nsColor: .quaternaryLabelColor)
+
+        // Accent & interactive
+        static let accent = Color.accentColor
+        static let accentSubtle = Color.accentColor.opacity(0.12)
+
+        // Semantic status
+        static let success = Color(nsColor: .systemGreen)
+        static let warning = Color(nsColor: .systemOrange)
+        static let error = Color(nsColor: .systemRed)
+        static let info = Color(nsColor: .systemBlue)
+
+        // Separator & borders
+        static let separator = Color(nsColor: .separatorColor)
+        static let border = Color(nsColor: .separatorColor).opacity(0.5)
+
+        // Hover & selection states
+        static let hoverFill = Color(nsColor: .labelColor).opacity(0.06)
+        static let selectedFill = Color.accentColor.opacity(0.1)
+
+        // Badge/tag backgrounds
+        static func badgeFill(_ tint: Color) -> Color {
+            tint.opacity(0.12)
+        }
+
+        // Calendar-specific
+        static let calendarLabel = Color(nsColor: .systemBlue)
+    }
+
+    // MARK: Materials (vibrancy)
+
+    enum Materials {
+        static let toast: Material = .regularMaterial
+        static let overlay: Material = .ultraThinMaterial
+        static let hud: Material = .hudWindow
     }
 
     // MARK: Urgency Colors
 
     static func urgencyColor(minutesUntil: Int) -> Color {
-        if minutesUntil <= 5 { return .red }
-        if minutesUntil <= 15 { return .orange }
-        return .green
+        if minutesUntil <= 5 { return Colors.error }
+        if minutesUntil <= 15 { return Colors.warning }
+        return Colors.success
     }
 
     // MARK: Countdown Colors
 
     static func countdownColor(secondsRemaining: Int) -> Color {
-        if secondsRemaining <= 120 { return .red }
-        if secondsRemaining <= 300 { return .orange }
+        if secondsRemaining <= 120 { return Colors.error }
+        if secondsRemaining <= 300 { return Colors.warning }
         return .white
     }
 

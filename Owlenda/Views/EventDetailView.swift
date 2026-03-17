@@ -10,13 +10,14 @@ struct EventDetailView: View {
 
     @State private var showDeleteConfirmation = false
     @State private var showSeriesDeleteChoice = false
+    @State private var contentAppeared = false
 
     private func pomodoroBadge(_ text: String, icon: String, color: Color) -> some View {
         Label(text, systemImage: icon)
             .font(.caption2)
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, DS.Spacing.xxs)
-            .background(color.opacity(0.15))
+            .background(DS.Colors.badgeFill(color))
             .clipShape(RoundedRectangle(cornerRadius: DS.Size.badgeCornerRadius))
     }
 
@@ -44,29 +45,35 @@ struct EventDetailView: View {
                         if event.isRecurring {
                             Image(systemName: "repeat")
                                 .font(.system(size: DS.Size.iconMedium))
-                                .foregroundColor(.secondary)
+                                .foregroundColor(DS.Colors.textSecondary)
                                 .accessibilityLabel("Recurring event")
                         }
                     }
+                    .opacity(contentAppeared ? 1 : 0)
+                    .offset(y: contentAppeared ? 0 : 8)
 
                     // Date & Time group
                     VStack(alignment: .leading, spacing: DS.Spacing.md) {
                         Label(event.formattedDate, systemImage: "calendar")
                             .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(DS.Colors.textSecondary)
                             .accessibilityLabel("Date: \(event.formattedDate)")
 
                         Label(event.formattedTimeRange, systemImage: "clock")
                             .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(DS.Colors.textSecondary)
                             .accessibilityLabel("Time: \(event.formattedTimeRange)")
                     }
+                    .opacity(contentAppeared ? 1 : 0)
+                    .offset(y: contentAppeared ? 0 : 8)
 
                     // Location
                     if let location = event.location, !location.isEmpty {
                         Label(location, systemImage: "location.fill")
                             .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(DS.Colors.textSecondary)
+                            .opacity(contentAppeared ? 1 : 0)
+                            .offset(y: contentAppeared ? 0 : 8)
                     }
 
                     // Description
@@ -75,24 +82,28 @@ struct EventDetailView: View {
                             Label("Notes", systemImage: "note.text")
                                 .font(.caption)
                                 .fontWeight(.medium)
-                                .foregroundStyle(.tertiary)
+                                .foregroundStyle(DS.Colors.textTertiary)
                             Text(description)
                                 .font(.subheadline)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(DS.Colors.textSecondary)
                                 .lineSpacing(DS.Typography.bodyLineSpacing)
                                 .textSelection(.enabled)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .padding(DS.Spacing.lg)
-                        .background(Color.primary.opacity(0.04))
+                        .background(DS.Colors.hoverFill)
                         .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius))
+                        .opacity(contentAppeared ? 1 : 0)
+                        .offset(y: contentAppeared ? 0 : 8)
                     }
 
                     // Calendar name
                     if let calName = event.calendarName {
                         Label(calName, systemImage: "tray.full")
                             .font(.caption)
-                            .foregroundColor(.blue)
+                            .foregroundColor(DS.Colors.calendarLabel)
+                            .opacity(contentAppeared ? 1 : 0)
+                            .offset(y: contentAppeared ? 0 : 8)
                     }
 
                     // Recurrence
@@ -104,18 +115,18 @@ struct EventDetailView: View {
                             )
                             .font(.caption)
                             .fontWeight(.medium)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(DS.Colors.textTertiary)
 
                             Text(rule.displayText)
                                 .font(.subheadline)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(DS.Colors.textSecondary)
 
                             if rule.isPomodoro {
                                 let workMin = Int(event.endDate.timeIntervalSince(event.startDate) / 60)
                                 let breakMin = max(rule.interval - workMin, 0)
                                 FlowLayout(spacing: DS.Spacing.xs) {
-                                    pomodoroBadge("\(workMin) min work", icon: "brain.head.profile", color: .accentColor)
-                                    pomodoroBadge("\(breakMin) min break", icon: "cup.and.saucer", color: .green)
+                                    pomodoroBadge("\(workMin) min work", icon: "brain.head.profile", color: DS.Colors.accent)
+                                    pomodoroBadge("\(breakMin) min break", icon: "cup.and.saucer", color: DS.Colors.success)
                                     if rule.pomodoroLongBreak > 0 {
                                         pomodoroBadge("\(rule.pomodoroLongBreak) min long break", icon: "moon.zzz", color: .indigo)
                                     }
@@ -129,13 +140,15 @@ struct EventDetailView: View {
                                             .font(.caption2)
                                             .padding(.horizontal, DS.Spacing.sm)
                                             .padding(.vertical, DS.Spacing.xxs)
-                                            .background(Color.accentColor.opacity(0.15))
+                                            .background(DS.Colors.accentSubtle)
                                             .clipShape(RoundedRectangle(cornerRadius: DS.Size.badgeCornerRadius))
                                             .accessibilityLabel(day.fullName)
                                     }
                                 }
                             }
                         }
+                        .opacity(contentAppeared ? 1 : 0)
+                        .offset(y: contentAppeared ? 0 : 8)
                     }
 
                     // Custom reminders
@@ -144,7 +157,7 @@ struct EventDetailView: View {
                             Label("Reminders", systemImage: "bell.fill")
                                 .font(.caption)
                                 .fontWeight(.medium)
-                                .foregroundStyle(.tertiary)
+                                .foregroundStyle(DS.Colors.textTertiary)
 
                             HStack(spacing: DS.Spacing.xs) {
                                 ForEach(reminders.sorted(), id: \.self) { min in
@@ -152,11 +165,13 @@ struct EventDetailView: View {
                                         .font(.caption)
                                         .padding(.horizontal, DS.Spacing.sm)
                                         .padding(.vertical, DS.Spacing.xxs)
-                                        .background(.secondary.opacity(0.12))
+                                        .background(DS.Colors.badgeFill(DS.Colors.textSecondary))
                                         .clipShape(RoundedRectangle(cornerRadius: DS.Size.badgeCornerRadius))
                                 }
                             }
                         }
+                        .opacity(contentAppeared ? 1 : 0)
+                        .offset(y: contentAppeared ? 0 : 8)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -224,5 +239,10 @@ struct EventDetailView: View {
         }
         .frame(width: DS.Popover.width)
         .frame(minHeight: DS.Popover.detailMinHeight)
+        .onAppear {
+            withAnimation(DS.Animation.smoothSpring.delay(0.1)) {
+                contentAppeared = true
+            }
+        }
     }
 }

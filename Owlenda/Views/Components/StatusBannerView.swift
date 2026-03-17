@@ -17,8 +17,13 @@ struct StatusBanner: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.sm)
-        .background(color.opacity(0.08))
+        .background(DS.Colors.badgeFill(color))
         .accessibilityElement(children: .combine)
-        .transition(.move(edge: .top).combined(with: .opacity))
+        .transition(
+            .asymmetric(
+                insertion: .move(edge: .top).combined(with: .opacity),
+                removal: .move(edge: .top).combined(with: .opacity).combined(with: .scale(scale: 0.95, anchor: .top))
+            )
+        )
     }
 }

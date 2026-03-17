@@ -33,7 +33,12 @@ struct MenuBarView: View {
                 switch navigation {
                 case .list:
                     mainContent
-                        .transition(.move(edge: .leading).combined(with: .opacity))
+                        .transition(
+                            .asymmetric(
+                                insertion: .move(edge: .leading).combined(with: .opacity),
+                                removal: .move(edge: .leading).combined(with: .opacity).combined(with: .scale(scale: 0.98))
+                            )
+                        )
 
                 case .detail(let event):
                     EventDetailView(
@@ -57,7 +62,12 @@ struct MenuBarView: View {
                             toastState.showSuccess("Occurrence skipped", icon: "trash.fill")
                         }
                     )
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                    .transition(
+                        .asymmetric(
+                            insertion: .move(edge: .trailing).combined(with: .opacity),
+                            removal: .move(edge: .trailing).combined(with: .opacity).combined(with: .scale(scale: 0.98))
+                        )
+                    )
 
                 case .addEvent(let editing):
                     AddEventView(
@@ -69,10 +79,15 @@ struct MenuBarView: View {
                             toastState.showSuccess(isEdit ? "Event updated" : "Event added")
                         }
                     )
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                    .transition(
+                        .asymmetric(
+                            insertion: .move(edge: .trailing).combined(with: .opacity),
+                            removal: .move(edge: .trailing).combined(with: .opacity).combined(with: .scale(scale: 0.98))
+                        )
+                    )
                 }
             }
-            .animation(DS.Animation.standard, value: navigation)
+            .animation(DS.Animation.smoothSpring, value: navigation)
 
             ToastOverlay(toastState: toastState)
         }
@@ -184,10 +199,12 @@ struct MenuBarView: View {
         HStack(spacing: DS.Spacing.sm) {
             if !networkMonitor.isConnected {
                 Image(systemName: "wifi.slash")
-                    .foregroundColor(.red)
+                    .foregroundColor(DS.Colors.error)
                     .font(.system(size: DS.Size.iconSmall))
+                    .symbolEffect(.pulse, options: .repeating.speed(0.5))
                     .help("No internet connection")
                     .accessibilityLabel("No internet connection")
+                    .transition(.scale.combined(with: .opacity))
             }
 
             if settings.isDoNotDisturbActive {
@@ -196,29 +213,35 @@ struct MenuBarView: View {
                     .font(.system(size: DS.Size.iconSmall))
                     .help("Do Not Disturb")
                     .accessibilityLabel("Do Not Disturb is active")
+                    .transition(.scale.combined(with: .opacity))
             }
 
             if reminderService.isSyncing {
                 ProgressView()
                     .scaleEffect(0.5)
                     .frame(width: DS.Size.syncIndicatorSize, height: DS.Size.syncIndicatorSize)
+                    .transition(.scale.combined(with: .opacity))
             }
         }
+        .animation(DS.Animation.microInteraction, value: networkMonitor.isConnected)
+        .animation(DS.Animation.microInteraction, value: settings.isDoNotDisturbActive)
+        .animation(DS.Animation.microInteraction, value: reminderService.isSyncing)
     }
 
     private var emptyState: some View {
         VStack(spacing: DS.EmptyState.spacing) {
             Image(systemName: "calendar.badge.checkmark")
                 .font(.system(size: DS.EmptyState.iconSize))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(DS.Colors.textSecondary)
                 .symbolRenderingMode(.hierarchical)
+                .symbolEffect(.pulse, options: .repeating.speed(0.3))
             Text("No upcoming meetings")
                 .font(.subheadline)
                 .fontWeight(.medium)
-                .foregroundColor(.secondary)
+                .foregroundColor(DS.Colors.textSecondary)
             Text("Your schedule is clear")
                 .font(.caption)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(DS.Colors.textTertiary)
             Button {
                 navigation = .addEvent()
             } label: {
@@ -230,6 +253,7 @@ struct MenuBarView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, DS.Spacing.xxl)
+        .transition(.opacity.combined(with: .scale(scale: 0.95)))
     }
 
     private var eventList: some View {
@@ -330,11 +354,11 @@ private struct CalendarAccessBanner: View {
                 Image(systemName: "chevron.right")
                     .font(.caption2)
             }
-            .foregroundColor(.orange)
+            .foregroundColor(DS.Colors.warning)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.vertical, DS.Spacing.sm)
-            .background(Color.orange.opacity(0.08))
+            .background(DS.Colors.badgeFill(DS.Colors.warning))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Calendar access not granted. Open settings to grant access.")

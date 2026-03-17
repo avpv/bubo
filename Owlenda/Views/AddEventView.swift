@@ -53,7 +53,8 @@ struct AddEventView: View {
                     if showValidation && !isTitleValid {
                         Label("Title is required", systemImage: "exclamationmark.triangle.fill")
                             .font(.caption)
-                            .foregroundColor(.red)
+                            .foregroundColor(DS.Colors.error)
+                            .transition(.move(edge: .top).combined(with: .opacity))
                     }
                 }
 
@@ -82,7 +83,9 @@ struct AddEventView: View {
 
                     LabeledContent("Ends at") {
                         Text(DS.timeFormatter.string(from: eventEndDate))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(DS.Colors.textSecondary)
+                            .contentTransition(.numericText())
+                            .animation(DS.Animation.microInteraction, value: eventEndDate)
                     }
                 }
 

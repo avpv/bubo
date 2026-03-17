@@ -5,25 +5,33 @@ struct DaySectionHeader: View {
     let date: Date
     let count: Int
 
+    @State private var appeared = false
+
     var body: some View {
         HStack(spacing: DS.Spacing.sm) {
             Text(dayTitle)
                 .font(.subheadline)
                 .fontWeight(.semibold)
-                .foregroundColor(isToday ? Color.accentColor : .primary)
+                .foregroundColor(isToday ? DS.Colors.accent : DS.Colors.textPrimary)
             if isToday {
                 Circle()
-                    .fill(Color.accentColor)
+                    .fill(DS.Colors.accent)
                     .frame(width: DS.Size.todayDotSize, height: DS.Size.todayDotSize)
+                    .scaleEffect(appeared ? 1 : 0)
             }
             Spacer()
             Text("\(count)")
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundColor(DS.Colors.textSecondary)
                 .padding(.horizontal, DS.Spacing.sm)
                 .padding(.vertical, DS.Spacing.xxs)
-                .background(.secondary.opacity(0.12))
+                .background(DS.Colors.badgeFill(DS.Colors.textSecondary))
                 .clipShape(Capsule())
+        }
+        .onAppear {
+            withAnimation(DS.Animation.gentleBounce.delay(0.15)) {
+                appeared = true
+            }
         }
     }
 

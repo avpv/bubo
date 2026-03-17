@@ -70,15 +70,20 @@ struct ToastOverlay: View {
                 }
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.vertical, DS.Spacing.md)
-                .background(.regularMaterial)
+                .background(DS.Materials.toast)
                 .clipShape(Capsule())
-                .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
+                .shadow(color: .black.opacity(0.12), radius: 12, y: 6)
                 .padding(.bottom, DS.Spacing.md)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .transition(
+                    .asymmetric(
+                        insertion: .move(edge: .bottom).combined(with: .opacity).combined(with: .scale(scale: 0.9)),
+                        removal: .move(edge: .bottom).combined(with: .opacity).combined(with: .scale(scale: 0.95))
+                    )
+                )
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Status: \(toast.text)")
             }
         }
-        .animation(DS.Animation.standard, value: toastState.current?.id)
+        .animation(DS.Animation.gentleBounce, value: toastState.current?.id)
     }
 }
