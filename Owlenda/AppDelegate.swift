@@ -6,6 +6,7 @@ private class KeyableWindow: NSWindow {
     override var canBecomeMain: Bool { true }
 }
 
+@MainActor
 class AppDelegate: NSObject, NSApplicationDelegate {
     private var alertWindow: NSWindow?
     private var alertObserver: Any?
@@ -43,7 +44,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func showAlert(event: CalendarEvent, minutesBefore: Int) {
-        alertWindow?.close()
+        dismissAlert()
 
         guard let screen = NSScreen.main else { return }
 
