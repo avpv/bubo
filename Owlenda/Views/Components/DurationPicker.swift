@@ -35,10 +35,7 @@ struct DurationPicker: View {
         PresetGroup(title: "Long",     id: "long",     values: [180, 240, 360, 480]),
     ]
 
-    /// Adaptive step: ±15 min for durations ≥ 2 h, ±5 min otherwise.
-    private var step: Int {
-        Int(minutes) >= 120 ? 15 : 5
-    }
+    private let step = 5
 
     // MARK: - Body
 
