@@ -72,12 +72,16 @@ struct AddEventView: View {
 
                 Section("Date & Time") {
                     HStack {
+                        TimeSlotPicker(selection: $date)
+
                         DatePicker("", selection: $date,
                                    displayedComponents: [.hourAndMinute, .date])
                             .labelsHidden()
 
                         Text("—")
                             .foregroundColor(DS.Colors.textSecondary)
+
+                        TimeSlotPicker(selection: endDateBinding)
 
                         DatePicker("", selection: endDateBinding, in: date...,
                                    displayedComponents: [.hourAndMinute, .date])
