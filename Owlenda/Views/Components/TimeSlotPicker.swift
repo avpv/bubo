@@ -136,11 +136,9 @@ struct TimeSlotPicker: View {
     }
 
     private func apply(_ slot: Slot) -> Date {
-        let cal = Calendar.current
-        var comps = cal.dateComponents([.year, .month, .day], from: selection)
-        comps.hour = slot.hour
-        comps.minute = slot.minute
-        comps.second = 0
-        return cal.date(from: comps) ?? selection
+        Calendar.current.date(
+            bySettingHour: slot.hour, minute: slot.minute, second: 0,
+            of: selection
+        ) ?? selection
     }
 }
