@@ -71,23 +71,36 @@ struct AddEventView: View {
                 }
 
                 Section("Date & Time") {
-                    HStack {
-                        InlineTimePicker(selection: $date)
-
+                    HStack(spacing: DS.Spacing.xs) {
                         DatePicker("", selection: $date,
                                    displayedComponents: .date)
                             .labelsHidden()
+                            
+                        HStack(spacing: 2) {
+                            DatePicker("", selection: $date,
+                                       displayedComponents: .hourAndMinute)
+                                .labelsHidden()
+                            TimeSlotPicker(selection: $date)
+                        }
 
-                        Text("—")
+                        Text("to")
+                            .font(.caption)
                             .foregroundColor(DS.Colors.textSecondary)
+                            .padding(.horizontal, 2)
 
-                        InlineTimePicker(selection: endDateBinding)
+                        HStack(spacing: 2) {
+                            DatePicker("", selection: endDateBinding,
+                                       displayedComponents: .hourAndMinute)
+                                .labelsHidden()
+                            TimeSlotPicker(selection: endDateBinding)
+                        }
 
                         DatePicker("", selection: endDateBinding, in: date...,
                                    displayedComponents: .date)
                             .labelsHidden()
                     }
                     .datePickerStyle(.stepperField)
+                    .controlSize(.small)
                 }
 
                 Section("Details") {
