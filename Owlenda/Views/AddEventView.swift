@@ -16,13 +16,10 @@ struct AddEventView: View {
     @State private var reminderMinutes: [Int] = [5]
     @State private var newReminderValue = 10
     @State private var recurrenceRule: RecurrenceRule? = nil
-    @State private var isCustomDuration = false
-    @State private var customDurationMinutes: Int = 60
 
     @FocusState private var isTitleFocused: Bool
 
     private static let presetReminders = [1, 2, 3, 5, 10, 15, 20, 30, 45, 60]
-    private static let presetDurations: [Double] = [15, 30, 45, 60, 90, 120, 180]
 
     private var isEditing: Bool { editingEvent != nil }
 
@@ -74,39 +71,10 @@ struct AddEventView: View {
                     }
 
                     if !isPomodoroMode {
-                        Picker("Duration", selection: Binding(
-                            get: { isCustomDuration ? -1.0 : duration },
-                            set: { newValue in
-                                if newValue == -1.0 {
-                                    isCustomDuration = true
-                                    customDurationMinutes = Int(duration)
-                                } else {
-                                    isCustomDuration = false
-                                    duration = newValue
-                                }
-                            }
-                        )) {
-                            Text("15 min").tag(15.0)
-                            Text("30 min").tag(30.0)
-                            Text("45 min").tag(45.0)
-                            Text("1 hour").tag(60.0)
-                            Text("1.5 hours").tag(90.0)
-                            Text("2 hours").tag(120.0)
-                            Text("3 hours").tag(180.0)
-                            Divider()
-                            Text("Custom").tag(-1.0)
-                        }
-
-                        if isCustomDuration {
-                            Stepper(
-                                "\(DS.formatMinutes(customDurationMinutes))",
-                                value: $customDurationMinutes,
-                                in: 5...480,
-                                step: 5
-                            )
-                            .onChange(of: customDurationMinutes) { _, newValue in
-                                duration = Double(newValue)
-                            }
+                        HStack {
+                            Text("Duration")
+                            Spacer()
+                            DurationPicker(minutes: $duration)
                         }
                     }
 
@@ -204,10 +172,6 @@ struct AddEventView: View {
                 title = event.title
                 date = event.startDate
                 duration = event.endDate.timeIntervalSince(event.startDate) / 60
-                if !Self.presetDurations.contains(duration) {
-                    isCustomDuration = true
-                    customDurationMinutes = Int(duration)
-                }
                 location = event.location ?? ""
                 description = event.description ?? ""
                 if let custom = event.customReminderMinutes, !custom.isEmpty {
