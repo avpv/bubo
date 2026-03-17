@@ -5,11 +5,14 @@ struct StatusBanner: View {
     let text: String
     let color: Color
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         HStack(spacing: DS.Spacing.sm) {
             Image(systemName: icon)
                 .font(.caption)
                 .symbolRenderingMode(.hierarchical)
+                .contentTransition(.symbolEffect(.replace))
             Text(text)
                 .font(.caption)
         }
@@ -17,13 +20,15 @@ struct StatusBanner: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.sm)
-        .background(DS.Colors.badgeFill(color))
+        .adaptiveBadgeFill(color)
         .accessibilityElement(children: .combine)
         .transition(
-            .asymmetric(
-                insertion: .move(edge: .top).combined(with: .opacity),
-                removal: .move(edge: .top).combined(with: .opacity).combined(with: .scale(scale: 0.95, anchor: .top))
-            )
+            reduceMotion
+                ? .opacity
+                : .asymmetric(
+                    insertion: .move(edge: .top).combined(with: .opacity),
+                    removal: .move(edge: .top).combined(with: .opacity).combined(with: .scale(scale: 0.95, anchor: .top))
+                )
         )
     }
 }

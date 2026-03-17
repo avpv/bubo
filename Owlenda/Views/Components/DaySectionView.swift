@@ -5,6 +5,8 @@ struct DaySectionHeader: View {
     let date: Date
     let count: Int
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var contrast
     @State private var appeared = false
 
     var body: some View {
@@ -25,10 +27,15 @@ struct DaySectionHeader: View {
                 .foregroundColor(DS.Colors.textSecondary)
                 .padding(.horizontal, DS.Spacing.sm)
                 .padding(.vertical, DS.Spacing.xxs)
-                .background(DS.Colors.badgeFill(DS.Colors.textSecondary))
+                .adaptiveBadgeFill(DS.Colors.textSecondary)
                 .clipShape(Capsule())
+                .contentTransition(.numericText())
         }
         .onAppear {
+            guard !reduceMotion else {
+                appeared = true
+                return
+            }
             withAnimation(DS.Animation.gentleBounce.delay(0.15)) {
                 appeared = true
             }

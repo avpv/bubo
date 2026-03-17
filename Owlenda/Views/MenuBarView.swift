@@ -3,13 +3,15 @@ import SwiftUI
 struct MenuBarView: View {
     @ObservedObject var settings: ReminderSettings
     @ObservedObject var reminderService: ReminderService
-    @ObservedObject var networkMonitor: NetworkMonitor
+    var networkMonitor: NetworkMonitor
 
     @State private var navigation: Navigation = .list
     @State private var hasStartedSync = false
-    @StateObject private var toastState = ToastState()
+    @State private var toastState = ToastState()
     @State private var pendingDeleteEvent: CalendarEvent? = nil
     @State private var showRecurrenceDeleteDialog = false
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Enum-based navigation state machine replaces fragile boolean flags.
     enum Navigation: Equatable {
@@ -34,7 +36,7 @@ struct MenuBarView: View {
                 case .list:
                     mainContent
                         .transition(
-                            .asymmetric(
+                            reduceMotion ? .opacity : .asymmetric(
                                 insertion: .move(edge: .leading).combined(with: .opacity),
                                 removal: .move(edge: .leading).combined(with: .opacity).combined(with: .scale(scale: 0.98))
                             )
@@ -63,7 +65,7 @@ struct MenuBarView: View {
                         }
                     )
                     .transition(
-                        .asymmetric(
+                        reduceMotion ? .opacity : .asymmetric(
                             insertion: .move(edge: .trailing).combined(with: .opacity),
                             removal: .move(edge: .trailing).combined(with: .opacity).combined(with: .scale(scale: 0.98))
                         )
@@ -80,14 +82,17 @@ struct MenuBarView: View {
                         }
                     )
                     .transition(
-                        .asymmetric(
+                        reduceMotion ? .opacity : .asymmetric(
                             insertion: .move(edge: .trailing).combined(with: .opacity),
                             removal: .move(edge: .trailing).combined(with: .opacity).combined(with: .scale(scale: 0.98))
                         )
                     )
                 }
             }
-            .animation(DS.Animation.smoothSpring, value: navigation)
+            .animation(
+                reduceMotion ? DS.Animation.quick : DS.Animation.smoothSpring,
+                value: navigation
+            )
 
             ToastOverlay(toastState: toastState)
         }
@@ -243,6 +248,7 @@ struct MenuBarView: View {
                 .font(.caption)
                 .foregroundStyle(DS.Colors.textTertiary)
             Button {
+                Haptics.tap()
                 navigation = .addEvent()
             } label: {
                 Label("Add Event", systemImage: "plus")
@@ -257,26 +263,31 @@ struct MenuBarView: View {
     }
 
     private var eventList: some View {
-        List {
-            ForEach(reminderService.eventsByDay, id: \.date) { dayGroup in
-                Section {
-                    ForEach(dayGroup.events) { event in
-                        EventRowView(
-                            event: event,
-                            reminderService: reminderService,
-                            onEdit: { event in resolveEdit(event) },
-                            onDelete: { event in handleDelete(event) },
-                            onTap: { event in
-                                navigation = .detail(event)
-                            }
-                        )
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(reminderService.eventsByDay, id: \.date) { dayGroup in
+                    Section {
+                        ForEach(dayGroup.events) { event in
+                            EventRowView(
+                                event: event,
+                                reminderService: reminderService,
+                                onEdit: { event in resolveEdit(event) },
+                                onDelete: { event in handleDelete(event) },
+                                onTap: { event in
+                                    navigation = .detail(event)
+                                }
+                            )
+                        }
+                    } header: {
+                        DaySectionHeader(date: dayGroup.date, count: dayGroup.events.count)
+                            .padding(.horizontal, DS.Spacing.lg)
+                            .padding(.top, DS.Spacing.md)
+                            .padding(.bottom, DS.Spacing.xs)
                     }
-                } header: {
-                    DaySectionHeader(date: dayGroup.date, count: dayGroup.events.count)
                 }
             }
+            .padding(.horizontal, DS.Spacing.xs)
         }
-        .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .frame(maxHeight: DS.Popover.listMaxHeight)
     }
@@ -284,38 +295,40 @@ struct MenuBarView: View {
     private var footerActions: some View {
         HStack(spacing: DS.Spacing.sm) {
             Button(action: {
+                Haptics.tap()
                 navigation = .addEvent()
             }) {
                 Label("Add", systemImage: "plus")
             }
-            .help("Add a new event (⌘N)")
+            .help("Add a new event (\u{2318}N)")
             .keyboardShortcut("n", modifiers: .command)
 
             Button(action: {
+                Haptics.tap()
                 reminderService.syncNow()
                 toastState.showInfo("Refreshing calendars…", icon: "arrow.clockwise")
             }) {
                 Label("Refresh", systemImage: "arrow.clockwise")
             }
-            .help("Refresh calendars (⌘R)")
+            .help("Refresh calendars (\u{2318}R)")
             .keyboardShortcut("r", modifiers: .command)
 
             Spacer()
 
             OpenSettingsButton()
                 .keyboardShortcut(",", modifiers: .command)
-                .help("Open settings (⌘,)")
+                .help("Open settings (\u{2318},)")
 
             Button(action: { NSApplication.shared.terminate(nil) }) {
                 Label("Quit", systemImage: "power")
             }
-            .help("Quit Owlenda (⌘Q)")
+            .help("Quit Owlenda (\u{2318}Q)")
             .keyboardShortcut("q", modifiers: .command)
         }
         .buttonStyle(.borderless)
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.md)
-        .background(.bar)
+        .background(DS.Materials.headerBar)
     }
 }
 
@@ -326,6 +339,7 @@ private struct OpenSettingsButton: View {
 
     var body: some View {
         Button {
+            Haptics.tap()
             NSApp.keyWindow?.close()
             openSettings()
             NSApp.activate()
@@ -337,9 +351,11 @@ private struct OpenSettingsButton: View {
 
 private struct CalendarAccessBanner: View {
     @Environment(\.openSettings) private var openSettings
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Button {
+            Haptics.tap()
             NSApp.keyWindow?.close()
             openSettings()
             NSApp.activate()
@@ -358,10 +374,14 @@ private struct CalendarAccessBanner: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.vertical, DS.Spacing.sm)
-            .background(DS.Colors.badgeFill(DS.Colors.warning))
+            .adaptiveBadgeFill(DS.Colors.warning)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Calendar access not granted. Open settings to grant access.")
-        .transition(.move(edge: .top).combined(with: .opacity))
+        .transition(
+            reduceMotion
+                ? .opacity
+                : .move(edge: .top).combined(with: .opacity)
+        )
     }
 }

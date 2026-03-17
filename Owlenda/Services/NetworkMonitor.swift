@@ -2,9 +2,10 @@ import Foundation
 import Network
 
 @MainActor
-class NetworkMonitor: ObservableObject {
-    @Published var isConnected = true
-    @Published var connectionType: ConnectionType = .unknown
+@Observable
+class NetworkMonitor {
+    var isConnected = true
+    var connectionType: ConnectionType = .unknown
 
     enum ConnectionType {
         case wifi, cellular, wiredEthernet, unknown

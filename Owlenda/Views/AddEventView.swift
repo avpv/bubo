@@ -167,7 +167,7 @@ struct AddEventView: View {
             }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.vertical, DS.Spacing.md)
-            .background(.bar)
+            .background(DS.Materials.headerBar)
         }
         .frame(width: DS.Popover.width)
         .onAppear {

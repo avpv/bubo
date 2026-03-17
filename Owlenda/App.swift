@@ -5,7 +5,7 @@ struct OwlendaApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var settings: ReminderSettings
     @StateObject private var reminderService: ReminderService
-    @StateObject private var networkMonitor = NetworkMonitor()
+    @State private var networkMonitor = NetworkMonitor()
 
     init() {
         let s = ReminderSettings.load()
