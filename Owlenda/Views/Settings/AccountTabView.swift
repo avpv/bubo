@@ -3,9 +3,66 @@ import SwiftUI
 struct AccountTabView: View {
     @EnvironmentObject var settings: ReminderSettings
     @EnvironmentObject var viewModel: SettingsViewModel
+    @EnvironmentObject var reminderService: ReminderService
+    @AppStorage("CredentialsMigrationNoticeDismissed") private var migrationDismissed = false
+
+    /// Detects when an existing user's credentials were lost due to keychain migration.
+    /// True when: auth is configured (non-default settings exist) but credentials are empty.
+    private var needsCredentialReentry: Bool {
+        if migrationDismissed { return false }
+        switch settings.authMethod {
+        case .appPassword:
+            // Settings were previously saved (not a fresh install) but credentials vanished
+            let hadPreviousConfig = UserDefaults.standard.data(forKey: "ReminderSettings") != nil
+            return hadPreviousConfig && settings.yandexLogin.isEmpty && settings.yandexAppPassword.isEmpty
+        case .oauth:
+            return false // OAuth users just re-authenticate via the button
+        }
+    }
 
     var body: some View {
         Form {
+            if reminderService.isKeychainDenied {
+                Section {
+                    VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                        Label("Keychain access was denied", systemImage: "key.slash")
+                            .foregroundColor(.red)
+                            .fontWeight(.medium)
+                        Text("Your saved credentials could not be read. Please re-enter them below — they will be stored securely without prompting again.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Button("Retry Keychain Access") {
+                            KeychainService.resetAccessDenied()
+                            reminderService.setupCalDAVService()
+                        }
+                        .controlSize(.small)
+                    }
+                }
+            } else if needsCredentialReentry {
+                Section {
+                    HStack(alignment: .top, spacing: DS.Spacing.md) {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .foregroundColor(.blue)
+                            .font(.title3)
+                        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                            Text("Credentials need to be re-entered")
+                                .fontWeight(.medium)
+                            Text("The app was updated to use a more secure credential storage. Please re-enter your login and app password below. This is a one-time step.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Button {
+                            migrationDismissed = true
+                        } label: {
+                            Image(systemName: "xmark")
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+            }
+
             Section("Yandex Calendar") {
                 Picker("Authorization", selection: $settings.authMethod) {
                     Text("App Password").tag(AuthMethod.appPassword)
