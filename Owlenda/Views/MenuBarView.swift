@@ -150,11 +150,7 @@ struct MenuBarView: View {
             }
 
             if reminderService.isKeychainDenied {
-                StatusBanner(
-                    icon: "key.slash",
-                    text: "Keychain access denied. Re-enter credentials in Settings.",
-                    color: .red
-                )
+                KeychainDeniedBanner()
             } else if let error = reminderService.syncError, networkMonitor.isConnected {
                 StatusBanner(icon: "exclamationmark.triangle.fill", text: error, color: .orange)
             }
@@ -314,5 +310,36 @@ private struct OpenSettingsButton: View {
         } label: {
             Label("Settings", systemImage: "gear")
         }
+    }
+}
+
+private struct KeychainDeniedBanner: View {
+    @Environment(\.openSettings) private var openSettings
+
+    var body: some View {
+        Button {
+            NSApp.keyWindow?.close()
+            openSettings()
+            NSApp.activate()
+        } label: {
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: "key.slash")
+                    .font(.caption)
+                    .symbolRenderingMode(.hierarchical)
+                Text("Keychain access denied. Click to open Settings.")
+                    .font(.caption)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption2)
+            }
+            .foregroundColor(.red)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.vertical, DS.Spacing.sm)
+            .background(Color.red.opacity(0.08))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Keychain access denied. Open settings to re-enter credentials.")
+        .transition(.move(edge: .top).combined(with: .opacity))
     }
 }

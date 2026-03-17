@@ -4,6 +4,21 @@ struct AccountTabView: View {
     @EnvironmentObject var settings: ReminderSettings
     @EnvironmentObject var viewModel: SettingsViewModel
     @EnvironmentObject var reminderService: ReminderService
+    @AppStorage("CredentialsMigrationNoticeDismissed") private var migrationDismissed = false
+
+    /// Detects when an existing user's credentials were lost due to keychain migration.
+    /// True when: auth is configured (non-default settings exist) but credentials are empty.
+    private var needsCredentialReentry: Bool {
+        if migrationDismissed { return false }
+        switch settings.authMethod {
+        case .appPassword:
+            // Settings were previously saved (not a fresh install) but credentials vanished
+            let hadPreviousConfig = UserDefaults.standard.data(forKey: "ReminderSettings") != nil
+            return hadPreviousConfig && settings.yandexLogin.isEmpty && settings.yandexAppPassword.isEmpty
+        case .oauth:
+            return false // OAuth users just re-authenticate via the button
+        }
+    }
 
     var body: some View {
         Form {
@@ -21,6 +36,29 @@ struct AccountTabView: View {
                             reminderService.setupCalDAVService()
                         }
                         .controlSize(.small)
+                    }
+                }
+            } else if needsCredentialReentry {
+                Section {
+                    HStack(alignment: .top, spacing: DS.Spacing.md) {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .foregroundColor(.blue)
+                            .font(.title3)
+                        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                            Text("Credentials need to be re-entered")
+                                .fontWeight(.medium)
+                            Text("The app was updated to use a more secure credential storage. Please re-enter your login and app password below. This is a one-time step.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Button {
+                            migrationDismissed = true
+                        } label: {
+                            Image(systemName: "xmark")
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.borderless)
                     }
                 }
             }
