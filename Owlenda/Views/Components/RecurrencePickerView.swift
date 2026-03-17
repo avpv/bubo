@@ -260,7 +260,7 @@ struct RecurrencePickerView: View {
                     Spacer().frame(width: 12)
                     Text("···  \(segments.count - 4) more")
                         .font(.caption2)
-                        .foregroundColor(.tertiary)
+                        .foregroundStyle(.tertiary)
                 }
                 ForEach(Array(segments.suffix(2).enumerated()), id: \.offset) { idx, segment in
                     scheduleRow(segment)
