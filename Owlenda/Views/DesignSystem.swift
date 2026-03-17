@@ -137,6 +137,34 @@ enum DS {
     }()
 }
 
+// MARK: - Form Fields
+
+/// Styled text field for use inside `Form { }` with `.formStyle(.grouped)`.
+/// Renders as a standard macOS labeled row with a rounded-border input.
+struct FormTextField: View {
+    let label: String
+    var prompt: String? = nil
+    @Binding var text: String
+    var isSecure: Bool = false
+
+    var body: some View {
+        LabeledContent(label) {
+            Group {
+                if isSecure {
+                    SecureField(text: $text, prompt: promptText)
+                } else {
+                    TextField(text: $text, prompt: promptText)
+                }
+            }
+            .textFieldStyle(.roundedBorder)
+        }
+    }
+
+    private var promptText: Text? {
+        prompt.map { Text($0).foregroundColor(.tertiary) }
+    }
+}
+
 // MARK: - Reusable Header
 
 /// Standard header bar used across popover views.

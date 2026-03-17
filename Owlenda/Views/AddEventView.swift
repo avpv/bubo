@@ -46,9 +46,8 @@ struct AddEventView: View {
 
             Form {
                 Section {
-                    TextField("Event title", text: $title)
+                    FormTextField(label: "Title", prompt: "Event title", text: $title)
                         .focused($isTitleFocused)
-                        .textFieldStyle(.roundedBorder)
 
                     if showValidation && !isTitleValid {
                         Label("Title is required", systemImage: "exclamationmark.triangle.fill")
@@ -86,11 +85,8 @@ struct AddEventView: View {
                 }
 
                 Section("Details") {
-                    TextField("Location (optional)", text: $location)
-                        .textFieldStyle(.roundedBorder)
-
-                    TextField("Notes (optional)", text: $description)
-                        .textFieldStyle(.roundedBorder)
+                    FormTextField(label: "Location", prompt: "Optional", text: $location)
+                    FormTextField(label: "Notes", prompt: "Optional", text: $description)
                 }
 
                 RecurrencePickerView(rule: $recurrenceRule, eventDuration: $duration, eventStartDate: date)

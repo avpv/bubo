@@ -43,33 +43,30 @@ struct AccountTabView: View {
 
     @ViewBuilder
     private var appPasswordSection: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
-            Text("Login")
-                .font(.caption)
-                .foregroundColor(.secondary)
-            TextField("Enter your Yandex login", text: Binding(
+        FormTextField(
+            label: "Login",
+            prompt: "user@yandex.ru",
+            text: Binding(
                 get: { settings.yandexLogin },
                 set: { settings.yandexLogin = $0 }
-            ))
-            .textFieldStyle(.roundedBorder)
-        }
+            )
+        )
 
-        VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
-            Text("App Password")
-                .font(.caption)
-                .foregroundColor(.secondary)
-            SecureField("Enter your app password", text: Binding(
+        FormTextField(
+            label: "App Password",
+            prompt: "Paste app password",
+            text: Binding(
                 get: { settings.yandexAppPassword },
                 set: { settings.yandexAppPassword = $0 }
-            ))
-            .textFieldStyle(.roundedBorder)
-        }
+            ),
+            isSecure: true
+        )
 
         Text("Create an app password: id.yandex.ru \u{2192} Security \u{2192} App Passwords")
             .font(.caption)
             .foregroundColor(.secondary)
 
-        HStack(spacing: 4) {
+        HStack(spacing: DS.Spacing.xs) {
             Image(systemName: "lock.shield.fill")
                 .foregroundColor(.green)
                 .font(.caption)
@@ -83,16 +80,14 @@ struct AccountTabView: View {
 
     @ViewBuilder
     private var oauthSection: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
-            Text("Yandex Login")
-                .font(.caption)
-                .foregroundColor(.secondary)
-            TextField("Enter your Yandex login", text: Binding(
+        FormTextField(
+            label: "Login",
+            prompt: "user@yandex.ru",
+            text: Binding(
                 get: { settings.yandexLogin },
                 set: { settings.yandexLogin = $0 }
-            ))
-            .textFieldStyle(.roundedBorder)
-        }
+            )
+        )
 
         if YandexOAuthService.isAuthenticated {
             HStack {
@@ -116,14 +111,16 @@ struct AccountTabView: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
 
-            HStack {
-                TextField("Paste authorization code here", text: $viewModel.oauthCode)
-                    .textFieldStyle(.roundedBorder)
+            LabeledContent("Code") {
+                HStack {
+                    TextField(text: $viewModel.oauthCode, prompt: Text("Paste code here").foregroundColor(.tertiary)) {}
+                        .textFieldStyle(.roundedBorder)
 
-                Button("Confirm") {
-                    viewModel.exchangeOAuthCode()
+                    Button("Confirm") {
+                        viewModel.exchangeOAuthCode()
+                    }
+                    .disabled(viewModel.oauthCode.isEmpty)
                 }
-                .disabled(viewModel.oauthCode.isEmpty)
             }
 
             oauthStatusView(viewModel.oauthStatus)
@@ -161,14 +158,16 @@ struct AccountTabView: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
 
-            HStack {
-                TextField("Paste authorization code here", text: $viewModel.googleOAuthCode)
-                    .textFieldStyle(.roundedBorder)
+            LabeledContent("Code") {
+                HStack {
+                    TextField(text: $viewModel.googleOAuthCode, prompt: Text("Paste code here").foregroundColor(.tertiary)) {}
+                        .textFieldStyle(.roundedBorder)
 
-                Button("Confirm") {
-                    viewModel.exchangeGoogleOAuthCode()
+                    Button("Confirm") {
+                        viewModel.exchangeGoogleOAuthCode()
+                    }
+                    .disabled(viewModel.googleOAuthCode.isEmpty)
                 }
-                .disabled(viewModel.googleOAuthCode.isEmpty)
             }
 
             oauthStatusView(viewModel.googleOAuthStatus)
