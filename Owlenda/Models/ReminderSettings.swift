@@ -1,4 +1,5 @@
 import Foundation
+import ServiceManagement
 
 struct ReminderInterval: Identifiable, Codable, Hashable {
     let id: UUID
@@ -32,7 +33,12 @@ class ReminderSettings: Codable {
     var syncIntervalMinutes: Int { didSet { scheduleSave() } }
     var showFullScreenAlert: Bool { didSet { scheduleSave() } }
     var showSystemNotification: Bool { didSet { scheduleSave() } }
-    var launchAtLogin: Bool { didSet { scheduleSave() } }
+    var launchAtLogin: Bool {
+        didSet {
+            scheduleSave()
+            applyLaunchAtLogin()
+        }
+    }
     var doNotDisturbEnabled: Bool { didSet { scheduleSave() } }
     var doNotDisturbFrom: Date { didSet { scheduleSave() } }
     var doNotDisturbTo: Date { didSet { scheduleSave() } }
@@ -114,6 +120,19 @@ class ReminderSettings: Codable {
         }
     }
 
+    func applyLaunchAtLogin() {
+        let service = SMAppService.mainApp
+        do {
+            if launchAtLogin {
+                try service.register()
+            } else {
+                try service.unregister()
+            }
+        } catch {
+            // Registration can fail if user denied in System Settings
+        }
+    }
+
     private func scheduleSave() {
         saveTask?.cancel()
         saveTask = Task { @MainActor [weak self] in
@@ -135,6 +154,8 @@ class ReminderSettings: Codable {
               let settings = try? JSONDecoder().decode(ReminderSettings.self, from: data) else {
             return ReminderSettings()
         }
+        // Sync with actual system login-item state (user may have changed it in System Settings)
+        settings.launchAtLogin = SMAppService.mainApp.status == .enabled
         return settings
     }
 }
