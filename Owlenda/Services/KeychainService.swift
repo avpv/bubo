@@ -4,6 +4,9 @@ import Security
 enum KeychainService {
     private static let serviceName = "com.reminder.yandex-calendar"
 
+    /// Cooldown after user denies keychain access (5 minutes)
+    private static let denialCooldown: TimeInterval = 300
+
     enum Key: String {
         case yandexLogin = "yandex_login"
         case yandexAppPassword = "yandex_app_password"
@@ -14,6 +17,24 @@ enum KeychainService {
         case googleAccessToken = "google_access_token"
         case googleRefreshToken = "google_refresh_token"
         case googleTokenExpiry = "google_token_expiry"
+    }
+
+    // MARK: - In-memory cache
+
+    /// Sentinel to distinguish "we cached nil" from "not cached yet"
+    private enum CacheEntry {
+        case value(String)
+        case missing
+    }
+
+    private static var cache: [Key: CacheEntry] = [:]
+    /// Timestamp when the user last denied keychain access
+    private static var lastDenialDate: Date?
+
+    /// Whether keychain access is currently blocked due to user denial cooldown
+    private static var isDenied: Bool {
+        guard let denial = lastDenialDate else { return false }
+        return Date().timeIntervalSince(denial) < denialCooldown
     }
 
     static func save(_ value: String, for key: Key) throws {
@@ -39,9 +60,27 @@ enum KeychainService {
         guard status == errSecSuccess else {
             throw KeychainError.saveFailed(status)
         }
+
+        // Update cache on successful save
+        cache[key] = .value(value)
+        // Successful keychain operation clears any denial state
+        lastDenialDate = nil
     }
 
     static func load(_ key: Key) -> String? {
+        // Return cached value if available
+        if let entry = cache[key] {
+            switch entry {
+            case .value(let str): return str
+            case .missing: return nil
+            }
+        }
+
+        // If user recently denied keychain access, don't prompt again
+        if isDenied {
+            return nil
+        }
+
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: serviceName,
@@ -53,11 +92,25 @@ enum KeychainService {
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
 
-        guard status == errSecSuccess, let data = result as? Data else {
+        // errSecUserCanceled (-128): user clicked "Deny" on the keychain dialog
+        // errSecAuthFailed (-25293): authentication failed (wrong password or denied)
+        if status == errSecUserCanceled || status == errSecAuthFailed {
+            lastDenialDate = Date()
             return nil
         }
 
-        return String(data: data, encoding: .utf8)
+        guard status == errSecSuccess, let data = result as? Data else {
+            cache[key] = .missing
+            return nil
+        }
+
+        let value = String(data: data, encoding: .utf8)
+        if let value {
+            cache[key] = .value(value)
+        } else {
+            cache[key] = .missing
+        }
+        return value
     }
 
     static func delete(_ key: Key) {
@@ -67,12 +120,20 @@ enum KeychainService {
             kSecAttrAccount as String: key.rawValue
         ]
         SecItemDelete(query as CFDictionary)
+        cache[key] = .missing
     }
 
     static func deleteAll() {
         for key in [Key.yandexLogin, .yandexAppPassword, .oauthAccessToken, .oauthRefreshToken, .oauthTokenExpiry, .googleAccessToken, .googleRefreshToken, .googleTokenExpiry] {
             delete(key)
         }
+    }
+
+    /// Clear the in-memory cache, forcing the next load to hit the keychain.
+    /// Call this when the user explicitly grants access (e.g. "Always Allow").
+    static func clearCache() {
+        cache.removeAll()
+        lastDenialDate = nil
     }
 }
 
