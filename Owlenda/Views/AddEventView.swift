@@ -96,6 +96,8 @@ struct AddEventView: View {
                             .foregroundColor(.secondary)
                         TextEditor(text: $description)
                             .font(.body)
+                            .scrollContentBackground(.hidden)
+                            .background(Color.clear)
                             .frame(minHeight: 60, maxHeight: 120)
                             .overlay(
                                 RoundedRectangle(cornerRadius: DS.Size.cornerRadius)
