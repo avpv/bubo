@@ -71,7 +71,7 @@ struct EventDetailView: View {
 
                     // Description
                     if let description = event.description, !description.isEmpty {
-                        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                             Label("Notes", systemImage: "note.text")
                                 .font(.caption)
                                 .fontWeight(.medium)
@@ -79,8 +79,13 @@ struct EventDetailView: View {
                             Text(description)
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
+                                .lineSpacing(2)
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                         }
+                        .padding(DS.Spacing.md)
+                        .background(.quaternary.opacity(0.5))
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius))
                     }
 
                     // Calendar name
