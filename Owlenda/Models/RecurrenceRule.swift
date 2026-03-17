@@ -31,13 +31,9 @@ struct RecurrenceRule: Codable, Hashable {
         self.pomodoroLongBreak = pomodoroLongBreak
     }
 
-    // MARK: - Codable migration from old format (intervalMinutes + repeatCount)
-
     private enum CodingKeys: String, CodingKey {
         case frequency, interval, end, weekdays, monthlyMode
         case pomodoroMode, pomodoroLongBreak
-        // Legacy keys
-        case intervalMinutes, repeatCount
     }
 
     func encode(to encoder: Encoder) throws {
@@ -57,29 +53,13 @@ struct RecurrenceRule: Codable, Hashable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-
-        // Try new format first
-        if let freq = try? container.decode(RecurrenceFrequency.self, forKey: .frequency) {
-            self.frequency = freq
-            self.interval = try container.decodeIfPresent(Int.self, forKey: .interval) ?? 1
-            self.end = try container.decodeIfPresent(RecurrenceEnd.self, forKey: .end) ?? .never
-            self.weekdays = try container.decodeIfPresent(Set<Weekday>.self, forKey: .weekdays) ?? []
-            self.monthlyMode = try container.decodeIfPresent(MonthlyMode.self, forKey: .monthlyMode)
-            self.pomodoroMode = try container.decodeIfPresent(Bool.self, forKey: .pomodoroMode) ?? false
-            self.pomodoroLongBreak = try container.decodeIfPresent(Int.self, forKey: .pomodoroLongBreak) ?? 0
-            return
-        }
-
-        // Legacy format: { intervalMinutes: 30, repeatCount: 4 }
-        let intervalMinutes = try container.decode(Int.self, forKey: .intervalMinutes)
-        let repeatCount = try container.decode(Int.self, forKey: .repeatCount)
-        self.frequency = .minutely
-        self.interval = intervalMinutes
-        self.end = .afterCount(repeatCount)
-        self.weekdays = []
-        self.monthlyMode = nil
-        self.pomodoroMode = true  // Legacy minutely rules were Pomodoro presets
-        self.pomodoroLongBreak = 0
+        self.frequency = try container.decode(RecurrenceFrequency.self, forKey: .frequency)
+        self.interval = try container.decodeIfPresent(Int.self, forKey: .interval) ?? 1
+        self.end = try container.decodeIfPresent(RecurrenceEnd.self, forKey: .end) ?? .never
+        self.weekdays = try container.decodeIfPresent(Set<Weekday>.self, forKey: .weekdays) ?? []
+        self.monthlyMode = try container.decodeIfPresent(MonthlyMode.self, forKey: .monthlyMode)
+        self.pomodoroMode = try container.decodeIfPresent(Bool.self, forKey: .pomodoroMode) ?? false
+        self.pomodoroLongBreak = try container.decodeIfPresent(Int.self, forKey: .pomodoroLongBreak) ?? 0
     }
 
     /// Whether this rule represents a Pomodoro Technique session.
