@@ -18,6 +18,7 @@ struct AddEventView: View {
     @State private var recurrenceRule: RecurrenceRule? = nil
 
     @FocusState private var isTitleFocused: Bool
+    @State private var showManualTimePicker = false
 
     private static let presetReminders = [1, 2, 3, 5, 10, 15, 20, 30, 45, 60]
 
@@ -29,9 +30,19 @@ struct AddEventView: View {
         var label: String { String(format: "%02d:%02d", hour, minute) }
     }
 
-    /// Generate time slots for dropdown (every 30 min, 00:00–23:30).
-    private static let timeSlots: [TimeSlot] = (0..<48).map { i in
-        TimeSlot(id: i * 30, hour: i / 2, minute: (i % 2) * 30)
+    /// Generate time slots from nearest 30-min ceiling of `date` up to 23:30.
+    private var relevantTimeSlots: [TimeSlot] {
+        let cal = Calendar.current
+        let hour = cal.component(.hour, from: date)
+        let minute = cal.component(.minute, from: date)
+        let totalMinutes = hour * 60 + minute
+        // Next 30-min boundary (round up)
+        let nextSlot = totalMinutes % 30 == 0 ? totalMinutes + 30 : ((totalMinutes / 30) + 1) * 30
+        let startIndex = nextSlot / 30
+        guard startIndex < 48 else { return [] }
+        return (startIndex..<48).map { i in
+            TimeSlot(id: i * 30, hour: i / 2, minute: (i % 2) * 30)
+        }
     }
 
     private var isEditing: Bool { editingEvent != nil }
@@ -219,45 +230,59 @@ struct AddEventView: View {
 
     // MARK: - Time Input with Dropdown
 
-    /// Time picker that shows a dropdown of 30-min slots while preserving manual entry via native DatePicker.
-    private var timeInput: some View {
-        HStack(spacing: DS.Spacing.xs) {
-            // Native DatePicker for manual keyboard entry
-            DatePicker("", selection: $date, displayedComponents: .hourAndMinute)
-                .labelsHidden()
+    private func applyTimeSlot(_ slot: TimeSlot) {
+        var cal = Calendar.current
+        cal.timeZone = .current
+        var comps = cal.dateComponents([.year, .month, .day], from: date)
+        comps.hour = slot.hour
+        comps.minute = slot.minute
+        comps.second = 0
+        if let newDate = cal.date(from: comps) {
+            date = newDate
+        }
+    }
 
-            // Dropdown menu for quick 30-min slot selection
+    /// Clicking the current time opens a dropdown with 30-min slots starting from the next boundary.
+    /// "Custom…" option reveals a native DatePicker for manual entry.
+    private var timeInput: some View {
+        VStack(alignment: .trailing, spacing: DS.Spacing.xxs) {
             Menu {
-                ForEach(Self.timeSlots) { slot in
+                ForEach(relevantTimeSlots) { slot in
                     Button(slot.label) {
-                        var cal = Calendar.current
-                        cal.timeZone = .current
-                        var comps = cal.dateComponents([.year, .month, .day], from: date)
-                        comps.hour = slot.hour
-                        comps.minute = slot.minute
-                        comps.second = 0
-                        if let newDate = cal.date(from: comps) {
-                            date = newDate
-                        }
+                        showManualTimePicker = false
+                        applyTimeSlot(slot)
                     }
                 }
+                Divider()
+                Button("Custom…") {
+                    showManualTimePicker = true
+                }
             } label: {
-                Image(systemName: "clock")
-                    .font(.system(size: DS.Size.iconMedium))
-                    .foregroundColor(.secondary)
-                    .padding(DS.Spacing.xs)
-                    .background(
-                        RoundedRectangle(cornerRadius: DS.Size.cornerRadius)
-                            .fill(Color.secondary.opacity(0.08))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DS.Size.cornerRadius)
-                            .stroke(Color.secondary.opacity(0.25), lineWidth: 1)
-                    )
+                HStack(spacing: DS.Spacing.xs) {
+                    Text(DS.timeFormatter.string(from: date))
+                        .monospacedDigit()
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.system(size: 9))
+                        .foregroundColor(.secondary)
+                }
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.xs)
+                .background(
+                    RoundedRectangle(cornerRadius: DS.Size.cornerRadius)
+                        .fill(Color.secondary.opacity(0.08))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: DS.Size.cornerRadius)
+                        .stroke(Color.secondary.opacity(0.25), lineWidth: 1)
+                )
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
-            .help("Quick time slots (30 min intervals)")
+
+            if showManualTimePicker {
+                DatePicker("", selection: $date, displayedComponents: .hourAndMinute)
+                    .labelsHidden()
+            }
         }
     }
 
