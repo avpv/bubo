@@ -19,6 +19,7 @@ class ReminderService {
     private let eventCache = EventCache()
     private nonisolated(unsafe) var settingsObserver: Any?
     private var excludedOccurrences: Set<String> = []
+    private var localRemindersOverrides: [String: [Int]] = [:]
     private nonisolated(unsafe) var snoozeObserver: Any?
     private nonisolated(unsafe) var appleCalendarObserver: Any?
     private nonisolated(unsafe) var pendingAppleRefreshTask: Task<Void, Never>?
@@ -47,6 +48,7 @@ class ReminderService {
         self.settings = settings
         requestNotificationPermission()
         loadLocalEvents()
+        loadLocalRemindersOverrides()
 
         snoozeObserver = NotificationCenter.default.addObserver(
             forName: .snoozeReminder,
@@ -160,11 +162,19 @@ class ReminderService {
         let now = Date()
         let endDate = Calendar.current.date(byAdding: .day, value: 7, to: now) ?? now
 
-        let events = AppleCalendarService.shared.fetchEvents(
+        var events = AppleCalendarService.shared.fetchEvents(
             from: now,
             to: endDate,
             onlyCalendarIds: settings.selectedCalendarIds
         )
+
+        // Apply local overrides
+        for i in events.indices {
+            // Note: event id is typically "apple_EVENT_ID"
+            if let overrides = localRemindersOverrides[events[i].id] {
+                events[i].customReminderMinutes = overrides.isEmpty ? nil : overrides
+            }
+        }
 
         upcomingEvents = events.sorted { $0.startDate < $1.startDate }
         lastSyncDate = Date()
@@ -261,6 +271,34 @@ class ReminderService {
         guard let data = UserDefaults.standard.data(forKey: "ExcludedOccurrences"),
               let ids = try? JSONDecoder().decode([String].self, from: data) else { return }
         excludedOccurrences = Set(ids)
+    }
+
+    // MARK: - Local Reminder Overrides
+
+    func updateLocalReminder(for eventId: String, minutes: [Int]?) {
+        localRemindersOverrides[eventId] = minutes ?? []
+        saveLocalRemindersOverrides()
+
+        // Apply immediately to the current state if it's an upcoming event
+        if let idx = upcomingEvents.firstIndex(where: { $0.id == eventId }) {
+            upcomingEvents[idx].customReminderMinutes = minutes
+            scheduleReminders(for: [upcomingEvents[idx]])
+        } else if let idx = localEvents.firstIndex(where: { $0.id == eventId }) {
+            localEvents[idx].customReminderMinutes = minutes
+            scheduleReminders(for: RecurrenceExpander.expand(localEvents[idx], excludedIds: excludedOccurrences))
+        }
+    }
+
+    private func saveLocalRemindersOverrides() {
+        if let data = try? JSONEncoder().encode(localRemindersOverrides) {
+            UserDefaults.standard.set(data, forKey: "LocalRemindersOverrides")
+        }
+    }
+
+    private func loadLocalRemindersOverrides() {
+        guard let data = UserDefaults.standard.data(forKey: "LocalRemindersOverrides"),
+              let overrides = try? JSONDecoder().decode([String: [Int]].self, from: data) else { return }
+        localRemindersOverrides = overrides
     }
 
     // MARK: - Snooze

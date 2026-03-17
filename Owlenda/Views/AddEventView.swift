@@ -22,6 +22,7 @@ struct AddEventView: View {
     private static let presetReminders = [1, 2, 3, 5, 10, 15, 20, 30, 45, 60]
 
     private var isEditing: Bool { editingEvent != nil }
+    private var isExternal: Bool { editingEvent?.isLocalEvent == false }
 
     private var isTitleValid: Bool {
         !title.trimmingCharacters(in: .whitespaces).isEmpty
@@ -78,6 +79,8 @@ struct AddEventView: View {
                                 .transition(.move(edge: .top).combined(with: .opacity))
                         }
                     }
+                    .disabled(isExternal)
+                    .opacity(isExternal ? 0.6 : 1.0)
                     
                     // Date & Time
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
@@ -115,6 +118,8 @@ struct AddEventView: View {
                         .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
                         .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
                     }
+                    .disabled(isExternal)
+                    .opacity(isExternal ? 0.6 : 1.0)
 
                     // Details
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
@@ -137,6 +142,8 @@ struct AddEventView: View {
                         .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
                         .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
                     }
+                    .disabled(isExternal)
+                    .opacity(isExternal ? 0.6 : 1.0)
 
                     // Recurrence
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
@@ -146,6 +153,8 @@ struct AddEventView: View {
                             .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
                             .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
                     }
+                    .disabled(isExternal || isPomodoroMode)
+                    .opacity((isExternal || isPomodoroMode) ? 0.6 : 1.0)
 
                     // Reminders
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
@@ -268,6 +277,13 @@ struct AddEventView: View {
     }
 
     private func saveEvent() {
+        if isExternal, let event = editingEvent {
+            let minutes = useCustomReminders ? reminderMinutes.sorted() : nil
+            reminderService.updateLocalReminder(for: event.id, minutes: minutes)
+            onSave(true)
+            return
+        }
+
         let event = CalendarEvent(
             id: editingEvent?.id ?? UUID().uuidString,
             title: title,

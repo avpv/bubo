@@ -130,10 +130,10 @@ struct EventDetailView: View {
             Spacer(minLength: 0)
 
             // Actions (only for local events)
-            if isLocal {
-                Divider()
+            Divider()
 
-                HStack {
+            HStack {
+                if isLocal {
                     Button(role: .destructive) {
                         Haptics.impact()
                         if event.isRecurring {
@@ -171,10 +171,11 @@ struct EventDetailView: View {
                     } message: {
                         Text("\"\(event.title)\" is a recurring event.")
                     }
+                }
 
-                    Spacer()
+                Spacer()
 
-                    Button {
+                Button {
                         Haptics.tap()
                         onEdit?(event)
                     } label: {
@@ -188,11 +189,11 @@ struct EventDetailView: View {
                     .buttonStyle(.plain)
                     .clipShape(Capsule())
                     .shadow(color: DS.Colors.accent.opacity(0.3), radius: 6, y: 3)
-                }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.md)
-                .background(DS.Materials.headerBar)
+                .shadow(color: DS.Colors.accent.opacity(0.3), radius: 6, y: 3)
             }
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.vertical, DS.Spacing.md)
+            .background(DS.Materials.headerBar)
         }
         .frame(width: DS.Popover.width)
         .frame(minHeight: DS.Popover.detailMinHeight)
