@@ -27,9 +27,19 @@ class SettingsViewModel {
     func requestAppleCalendarAccess() {
         guard !isRequestingCalendarAccess else { return }
         isRequestingCalendarAccess = true
-        NSApp.activate()
+
+        // LSUIElement apps need to temporarily become regular apps
+        // so macOS shows the calendar permission dialog on top.
+        let previousPolicy = NSApp.activationPolicy()
+        NSApp.setActivationPolicy(.regular)
+        NSRunningApplication.current.activate(options: .activateIgnoringOtherApps)
+
         Task {
             let granted = await AppleCalendarService.shared.requestAccess()
+
+            // Restore menu-bar-only activation policy.
+            NSApp.setActivationPolicy(previousPolicy)
+
             calendarAuthStatus = AppleCalendarService.authorizationStatus
             isRequestingCalendarAccess = false
             if granted {
