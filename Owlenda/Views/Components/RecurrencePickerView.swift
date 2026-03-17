@@ -110,6 +110,7 @@ struct RecurrencePickerView: View {
     private var modePicker: some View {
         Picker("Mode", selection: $mode) {
             Text("Never").tag(RepeatMode.none)
+            Divider()
             Label("Pomodoro", systemImage: "timer").tag(RepeatMode.pomodoro)
             Divider()
             ForEach(RecurrenceFrequency.userVisible, id: \.self) { freq in
