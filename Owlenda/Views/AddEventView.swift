@@ -35,7 +35,8 @@ struct AddEventView: View {
         Binding(
             get: { eventEndDate },
             set: { newEnd in
-                let diff = max(5 * 60, newEnd.timeIntervalSince(date))
+                let diff = newEnd.timeIntervalSince(date)
+                guard diff >= 5 * 60 else { return }
                 duration = diff / 60
             }
         )
@@ -70,20 +71,19 @@ struct AddEventView: View {
                 }
 
                 Section("Date & Time") {
-                    HStack(spacing: DS.Spacing.sm) {
-                        DatePicker("", selection: $date, displayedComponents: .hourAndMinute)
-                            .labelsHidden()
-                        DatePicker("", selection: $date, displayedComponents: .date)
+                    HStack {
+                        DatePicker("", selection: $date,
+                                   displayedComponents: [.hourAndMinute, .date])
                             .labelsHidden()
 
                         Text("—")
                             .foregroundColor(DS.Colors.textSecondary)
 
-                        DatePicker("", selection: endDateBinding, displayedComponents: .hourAndMinute)
-                            .labelsHidden()
-                        DatePicker("", selection: endDateBinding, displayedComponents: .date)
+                        DatePicker("", selection: endDateBinding, in: date...,
+                                   displayedComponents: [.hourAndMinute, .date])
                             .labelsHidden()
                     }
+                    .datePickerStyle(.stepperField)
                 }
 
                 Section("Details") {
