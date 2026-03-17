@@ -237,9 +237,8 @@ struct MenuBarView: View {
         VStack(spacing: DS.EmptyState.spacing) {
             Image(systemName: "calendar.badge.checkmark")
                 .font(.system(size: DS.EmptyState.iconSize))
-                .foregroundStyle(DS.Colors.textSecondary)
-                .symbolRenderingMode(.hierarchical)
-                .symbolEffect(.pulse, options: .repeating.speed(0.3))
+                .foregroundStyle(DS.Colors.accent, DS.Colors.textSecondary)
+                .symbolEffect(.pulse, options: .repeating.speed(0.2))
             Text("No upcoming meetings")
                 .font(.subheadline)
                 .fontWeight(.medium)
@@ -278,13 +277,7 @@ struct MenuBarView: View {
                                         navigation = .detail(event)
                                     }
                                 )
-                                
-                                if index < dayGroup.events.count - 1 {
-                                    Divider()
-                                        .opacity(0.5)
-                                        .padding(.leading, DS.Spacing.xs + DS.Size.accentBarWidth + DS.Spacing.md + DS.Size.timeColumnWidth + DS.Spacing.xs)
-                                        .padding(.trailing, DS.Spacing.xs)
-                                }
+                                // Card-based layout removes hard dividers
                             }
                         }
                     } header: {

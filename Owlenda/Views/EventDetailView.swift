@@ -16,10 +16,10 @@ struct EventDetailView: View {
     private func pomodoroBadge(_ text: String, icon: String, color: Color) -> some View {
         Label(text, systemImage: icon)
             .font(.caption2)
-            .padding(.horizontal, DS.Spacing.sm)
-            .padding(.vertical, DS.Spacing.xxs)
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.xs)
             .adaptiveBadgeFill(color)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Size.badgeCornerRadius))
+            .clipShape(Capsule())
     }
 
     private var isLocal: Bool {
@@ -39,8 +39,7 @@ struct EventDetailView: View {
                     // Title
                     HStack(spacing: DS.Spacing.sm) {
                         Text(event.title)
-                            .font(.title3)
-                            .fontWeight(.semibold)
+                            .font(.system(.title2, design: .rounded, weight: .bold))
                             .accessibilityAddTraits(.isHeader)
 
                         if event.isRecurring {
@@ -53,27 +52,34 @@ struct EventDetailView: View {
                     }
                     .staggeredEntrance(index: 0)
 
-                    // Date & Time group
                     VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                        Label(event.formattedDate, systemImage: "calendar")
-                            .font(.subheadline)
-                            .foregroundColor(DS.Colors.textSecondary)
-                            .accessibilityLabel("Date: \(event.formattedDate)")
+                        // Date & Time group
+                        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                            Label(event.formattedDate, systemImage: "calendar")
+                                .font(.subheadline)
+                                .foregroundColor(DS.Colors.textSecondary)
+                                .accessibilityLabel("Date: \(event.formattedDate)")
 
-                        Label(event.formattedTimeRange, systemImage: "clock")
-                            .font(.subheadline)
-                            .foregroundColor(DS.Colors.textSecondary)
-                            .accessibilityLabel("Time: \(event.formattedTimeRange)")
-                    }
-                    .staggeredEntrance(index: 1)
+                            Label(event.formattedTimeRange, systemImage: "clock")
+                                .font(.subheadline)
+                                .foregroundColor(DS.Colors.textSecondary)
+                                .accessibilityLabel("Time: \(event.formattedTimeRange)")
+                        }
+                        .staggeredEntrance(index: 1)
 
-                    // Location
-                    if let location = event.location, !location.isEmpty {
-                        Label(location, systemImage: "location.fill")
-                            .font(.subheadline)
-                            .foregroundColor(DS.Colors.textSecondary)
-                            .staggeredEntrance(index: 2)
+                        // Location
+                        if let location = event.location, !location.isEmpty {
+                            Label(location, systemImage: "location.fill")
+                                .font(.subheadline)
+                                .foregroundColor(DS.Colors.textSecondary)
+                                .staggeredEntrance(index: 2)
+                        }
                     }
+                    .padding(DS.Spacing.lg)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(DS.Materials.platter)
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
+                    .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
 
                     // Description
                     if let description = event.description, !description.isEmpty {
@@ -90,8 +96,9 @@ struct EventDetailView: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .padding(DS.Spacing.lg)
-                        .background(DS.Colors.hoverFill)
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius))
+                        .background(DS.Materials.platter)
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
+                        .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
                         .staggeredEntrance(index: 3)
                     }
 
@@ -218,10 +225,10 @@ struct EventDetailView: View {
                     ForEach(Weekday.allCases.filter { rule.weekdays.contains($0) }, id: \.self) { day in
                         Text(day.shortName)
                             .font(.caption2)
-                            .padding(.horizontal, DS.Spacing.sm)
-                            .padding(.vertical, DS.Spacing.xxs)
+                            .padding(.horizontal, DS.Spacing.md)
+                            .padding(.vertical, DS.Spacing.xs)
                             .background(DS.Colors.accentSubtle)
-                            .clipShape(RoundedRectangle(cornerRadius: DS.Size.badgeCornerRadius))
+                            .clipShape(Capsule())
                             .accessibilityLabel(day.fullName)
                     }
                 }
@@ -243,10 +250,10 @@ struct EventDetailView: View {
                 ForEach(reminders.sorted(), id: \.self) { min in
                     Text(DS.formatMinutes(min))
                         .font(.caption)
-                        .padding(.horizontal, DS.Spacing.sm)
-                        .padding(.vertical, DS.Spacing.xxs)
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.xs)
                         .adaptiveBadgeFill(DS.Colors.textSecondary)
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Size.badgeCornerRadius))
+                        .clipShape(Capsule())
                 }
             }
         }

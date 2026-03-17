@@ -165,6 +165,8 @@ struct AddEventView: View {
                 Spacer()
                 Button("Cancel") { onDismiss() }
                     .keyboardShortcut(.cancelAction)
+                    .controlSize(.large)
+                    .buttonStyle(.borderless)
 
                 Button(isEditing ? "Save" : "Add Event") {
                     if isTitleValid {
@@ -175,6 +177,9 @@ struct AddEventView: View {
                 }
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .clipShape(Capsule())
+                .shadow(color: DS.Colors.accent.opacity(0.3), radius: 6, y: 3)
             }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.vertical, DS.Spacing.md)

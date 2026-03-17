@@ -32,14 +32,23 @@ struct EventRowView: View {
                 hoverActions
             }
         }
-        .padding(.vertical, DS.Spacing.xs)
-        .padding(.horizontal, DS.Spacing.xs)
+        .padding(.vertical, DS.Spacing.sm)
+        .padding(.horizontal, DS.Spacing.sm)
         .background(
-            RoundedRectangle(cornerRadius: DS.Size.cornerRadius)
-                .fill(isHovered ? DS.Colors.hoverFill : Color.clear)
+            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                .fill(DS.Materials.platter)
+                .overlay(
+                    RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                        .fill(isHovered ? DS.Colors.hoverFill : Color.clear)
+                )
+        )
+        .shadow(
+            color: isHovered ? DS.Shadows.hoverColor : DS.Shadows.ambientColor,
+            radius: isHovered ? DS.Shadows.hoverRadius : DS.Shadows.ambientRadius,
+            y: isHovered ? DS.Shadows.hoverY : DS.Shadows.ambientY
         )
         // Hover scale — slightly more pronounced for tactile feel
-        .scaleEffect(isHovered ? 1.015 : 1.0)
+        .scaleEffect(isHovered ? 1.02 : 1.0)
         .contentShape(Rectangle())
         .onTapGesture {
             Haptics.tap()
@@ -76,15 +85,13 @@ struct EventRowView: View {
     // MARK: - Urgency Bar
 
     private var urgencyBar: some View {
-        RoundedRectangle(cornerRadius: 1.5)
+        Capsule()
             .fill(DS.urgencyColor(minutesUntil: event.minutesUntilStart))
             .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
             .padding(.trailing, DS.Spacing.md)
             .shadow(
-                color: event.minutesUntilStart <= 5
-                    ? DS.urgencyColor(minutesUntil: event.minutesUntilStart).opacity(0.4)
-                    : .clear,
-                radius: 4
+                color: DS.urgencyColor(minutesUntil: event.minutesUntilStart).opacity(event.minutesUntilStart <= 15 ? 0.6 : 0.2),
+                radius: event.minutesUntilStart <= 5 ? 6 : 3
             )
     }
 

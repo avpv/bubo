@@ -10,12 +10,12 @@ enum DS {
     enum Spacing {
         static let xxs: CGFloat = 2
         static let xs: CGFloat = 4
-        static let sm: CGFloat = 6
-        static let md: CGFloat = 8
-        static let lg: CGFloat = 12
-        static let xl: CGFloat = 16
+        static let sm: CGFloat = 8
+        static let md: CGFloat = 12
+        static let lg: CGFloat = 16
+        static let xl: CGFloat = 20
         static let xxl: CGFloat = 24
-        static let xxxl: CGFloat = 30
+        static let xxxl: CGFloat = 32
     }
 
     // MARK: Popover Dimensions
@@ -39,8 +39,8 @@ enum DS {
     // MARK: Empty State
 
     enum EmptyState {
-        static let iconSize: CGFloat = 36
-        static let spacing: CGFloat = 10
+        static let iconSize: CGFloat = 42
+        static let spacing: CGFloat = 12
     }
 
     // MARK: Typography
@@ -52,17 +52,29 @@ enum DS {
     // MARK: Component Sizes
 
     enum Size {
-        static let accentBarWidth: CGFloat = 3
+        static let accentBarWidth: CGFloat = 4
         static let accentBarHeight: CGFloat = 28
         static let timeColumnWidth: CGFloat = 50
         static let iconSmall: CGFloat = 12
-        static let iconMedium: CGFloat = 13
-        static let iconLarge: CGFloat = 14
-        static let headerIcon: CGFloat = 18
-        static let cornerRadius: CGFloat = 6
-        static let badgeCornerRadius: CGFloat = 4
+        static let iconMedium: CGFloat = 14
+        static let iconLarge: CGFloat = 16
+        static let headerIcon: CGFloat = 20
+        static let cornerRadius: CGFloat = 12
+        static let badgeCornerRadius: CGFloat = 20
         static let syncIndicatorSize: CGFloat = 14
         static let todayDotSize: CGFloat = 6
+    }
+    
+    // MARK: Shadows
+    
+    enum Shadows {
+        static let ambientColor = Color.black.opacity(0.06)
+        static let ambientRadius: CGFloat = 8
+        static let ambientY: CGFloat = 4
+        
+        static let hoverColor = Color.black.opacity(0.12)
+        static let hoverRadius: CGFloat = 12
+        static let hoverY: CGFloat = 6
     }
 
     // MARK: Animation
@@ -73,10 +85,10 @@ enum DS {
         static let entrance: SwiftUI.Animation = .easeOut(duration: 0.3)
 
         // Spring-based animations for natural, modern feel (macOS 2026 standard)
-        static let microInteraction: SwiftUI.Animation = .spring(duration: 0.25, bounce: 0.15)
-        static let gentleBounce: SwiftUI.Animation = .spring(duration: 0.35, bounce: 0.2)
-        static let smoothSpring: SwiftUI.Animation = .spring(duration: 0.4, bounce: 0.1)
-        static let staggerBase: SwiftUI.Animation = .spring(duration: 0.3, bounce: 0.15)
+        static let microInteraction: SwiftUI.Animation = .spring(duration: 0.3, bounce: 0.15)
+        static let gentleBounce: SwiftUI.Animation = .spring(duration: 0.35, bounce: 0.25)
+        static let smoothSpring: SwiftUI.Animation = .spring(duration: 0.4, bounce: 0.2)
+        static let staggerBase: SwiftUI.Animation = .spring(duration: 0.4, bounce: 0.2)
 
         /// Staggered entrance animation for list items.
         static func staggered(index: Int) -> SwiftUI.Animation {
@@ -142,6 +154,7 @@ enum DS {
         static let hud: Material = .thickMaterial
         /// Header/footer bars — use thickMaterial for richer vibrancy than `.bar`
         static let headerBar: Material = .thickMaterial
+        static let platter: Material = .ultraThinMaterial
     }
 
     // MARK: Urgency Colors
@@ -275,10 +288,10 @@ extension View {
 extension View {
     /// Applies a scroll-aware transition: items fade/scale as they enter/exit the visible area.
     func eventScrollTransition() -> some View {
-        self.scrollTransition(.animated(.spring(duration: 0.3, bounce: 0.1))) { content, phase in
+        self.scrollTransition(.animated(.spring(duration: 0.4, bounce: 0.2))) { content, phase in
             content
                 .opacity(phase.isIdentity ? 1 : 0.4)
-                .scaleEffect(phase.isIdentity ? 1 : 0.96, anchor: .leading)
+                .scaleEffect(phase.isIdentity ? 1 : 0.94, anchor: .leading)
                 .offset(x: phase.isIdentity ? 0 : phase.value * -8)
         }
     }

@@ -16,11 +16,13 @@ struct StatusBanner: View {
             Text(text)
                 .font(.caption)
         }
-        .foregroundColor(color)
-        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.sm)
+        .padding(.vertical, DS.Spacing.md)
         .adaptiveBadgeFill(color)
+        .clipShape(Capsule())
+        .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.xs)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Status: \(text)")
         .transition(
