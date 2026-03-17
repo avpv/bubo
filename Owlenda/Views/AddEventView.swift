@@ -71,14 +71,10 @@ struct AddEventView: View {
                     }
 
                     if !isPomodoroMode {
-                        Picker("Duration", selection: $duration) {
-                            Text("15 min").tag(15.0)
-                            Text("30 min").tag(30.0)
-                            Text("45 min").tag(45.0)
-                            Text("1 hour").tag(60.0)
-                            Text("1.5 hours").tag(90.0)
-                            Text("2 hours").tag(120.0)
-                            Text("3 hours").tag(180.0)
+                        HStack {
+                            Text("Duration")
+                            Spacer()
+                            DurationPicker(minutes: $duration)
                         }
                     }
 
