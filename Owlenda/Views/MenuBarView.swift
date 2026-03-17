@@ -295,35 +295,16 @@ struct MenuBarView: View {
     }
 }
 
-// MARK: - Settings Button (version-aware)
+// MARK: - Settings Button
 
-/// Uses `@Environment(\.openSettings)` on macOS 14+ for programmatic control,
-/// falls back to `SettingsLink` on macOS 13.
 private struct OpenSettingsButton: View {
-    var body: some View {
-        if #available(macOS 14.0, *) {
-            OpenSettingsButton14()
-        } else {
-            Button {
-                NSApp.keyWindow?.close()
-                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-                NSApp.activate(ignoringOtherApps: true)
-            } label: {
-                Label("Settings", systemImage: "gear")
-            }
-        }
-    }
-}
-
-@available(macOS 14.0, *)
-private struct OpenSettingsButton14: View {
     @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         Button {
             NSApp.keyWindow?.close()
             openSettings()
-            NSApp.activate(ignoringOtherApps: true)
+            NSApp.activate()
         } label: {
             Label("Settings", systemImage: "gear")
         }
