@@ -19,17 +19,27 @@ struct TimeSlotPicker: View {
 
     var body: some View {
         let nearest = nearestSlotID
-        let allSlots = Self.makeSlots(step: step)
+        let allSlots = availableSlots
 
         Menu {
-            Section("Morning") {
-                slotButtons(allSlots.filter { $0.id < Self.noon }, nearest: nearest)
+            let morning = allSlots.filter { $0.id < Self.noon }
+            let afternoon = allSlots.filter { $0.id >= Self.noon && $0.id < Self.evening }
+            let evening = allSlots.filter { $0.id >= Self.evening }
+
+            if !morning.isEmpty {
+                Section("Morning") {
+                    slotButtons(morning, nearest: nearest)
+                }
             }
-            Section("Afternoon") {
-                slotButtons(allSlots.filter { $0.id >= Self.noon && $0.id < Self.evening }, nearest: nearest)
+            if !afternoon.isEmpty {
+                Section("Afternoon") {
+                    slotButtons(afternoon, nearest: nearest)
+                }
             }
-            Section("Evening") {
-                slotButtons(allSlots.filter { $0.id >= Self.evening }, nearest: nearest)
+            if !evening.isEmpty {
+                Section("Evening") {
+                    slotButtons(evening, nearest: nearest)
+                }
             }
         } label: {
             Image(systemName: "clock")
@@ -56,6 +66,17 @@ struct TimeSlotPicker: View {
 
     private static func makeSlots(step: Int) -> [Slot] {
         stride(from: 0, to: midnight, by: step).map { Slot(id: $0) }
+    }
+
+    /// All slots, filtered to future-only when the selected date is today.
+    private var availableSlots: [Slot] {
+        let all = Self.makeSlots(step: step)
+        let cal = Calendar.current
+        guard cal.isDateInToday(selection) else { return all }
+        let now = Date()
+        let currentMinutes = cal.component(.hour, from: now) * 60
+            + cal.component(.minute, from: now)
+        return all.filter { $0.id >= currentMinutes }
     }
 
     /// Computed once per body evaluation and passed down — not recomputed per slot.
