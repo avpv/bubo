@@ -80,7 +80,7 @@ cat > "$APP/Info.plist" <<'PLIST'
 PLIST
 
 # Ad-hoc sign so the app runs locally without xattr workaround
-codesign --force --deep --sign - "$PROJECT_DIR/Owlenda.app"
+codesign --force --deep --entitlements "$PROJECT_DIR/Owlenda/Owlenda.entitlements" --sign - "$PROJECT_DIR/Owlenda.app"
 
 echo ""
 echo "Built: $PROJECT_DIR/Owlenda.app"
