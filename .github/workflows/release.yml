@@ -99,14 +99,50 @@ jobs:
 
       - name: Create DMG
         run: |
+          # Create a temporary read-write DMG
           mkdir -p dmg_contents
           cp -R Owlenda.app dmg_contents/
           ln -s /Applications dmg_contents/Applications
+
           hdiutil create \
             -volname "Owlenda" \
             -srcfolder dmg_contents \
-            -ov -format UDZO \
-            Owlenda.dmg
+            -ov -format UDRW \
+            -size 200m \
+            Owlenda_rw.dmg
+
+          # Mount the read-write DMG
+          MOUNT_DIR=$(hdiutil attach -readwrite -noverify Owlenda_rw.dmg | grep '/Volumes/' | awk '{print $NF}')
+
+          # Configure DMG window layout with AppleScript
+          osascript <<'APPLESCRIPT'
+          tell application "Finder"
+            tell disk "Owlenda"
+              open
+              set current view of container window to icon view
+              set toolbar visible of container window to false
+              set statusbar visible of container window to false
+              set bounds of container window to {100, 100, 640, 440}
+              set theViewOptions to icon view options of container window
+              set arrangement of theViewOptions to not arranged
+              set icon size of theViewOptions to 128
+              set position of item "Owlenda.app" of container window to {135, 160}
+              set position of item "Applications" of container window to {405, 160}
+              close
+              open
+            end tell
+          end tell
+          APPLESCRIPT
+
+          # Wait for Finder to apply changes
+          sleep 2
+
+          # Unmount
+          hdiutil detach "$MOUNT_DIR"
+
+          # Convert to compressed read-only DMG
+          hdiutil convert Owlenda_rw.dmg -format UDZO -o Owlenda.dmg
+          rm -f Owlenda_rw.dmg
 
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
