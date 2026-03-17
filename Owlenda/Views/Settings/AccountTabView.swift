@@ -46,18 +46,18 @@ struct AccountTabView: View {
         TextField("Login", text: Binding(
             get: { settings.yandexLogin },
             set: { settings.yandexLogin = $0 }
-        ))
+        ), prompt: Text("user@yandex.ru"))
 
         SecureField("App Password", text: Binding(
             get: { settings.yandexAppPassword },
             set: { settings.yandexAppPassword = $0 }
-        ))
+        ), prompt: Text("Paste app password"))
 
         Text("Create an app password: id.yandex.ru \u{2192} Security \u{2192} App Passwords")
             .font(.caption)
             .foregroundColor(.secondary)
 
-        HStack(spacing: 4) {
+        HStack(spacing: DS.Spacing.xs) {
             Image(systemName: "lock.shield.fill")
                 .foregroundColor(.green)
                 .font(.caption)
@@ -71,10 +71,10 @@ struct AccountTabView: View {
 
     @ViewBuilder
     private var oauthSection: some View {
-        TextField("Yandex Login", text: Binding(
+        TextField("Login", text: Binding(
             get: { settings.yandexLogin },
             set: { settings.yandexLogin = $0 }
-        ))
+        ), prompt: Text("user@yandex.ru"))
 
         if YandexOAuthService.isAuthenticated {
             HStack {
@@ -99,7 +99,7 @@ struct AccountTabView: View {
                 .foregroundColor(.secondary)
 
             HStack {
-                TextField("Authorization code", text: $viewModel.oauthCode)
+                TextField("Code", text: $viewModel.oauthCode, prompt: Text("Paste code here"))
 
                 Button("Confirm") {
                     viewModel.exchangeOAuthCode()
@@ -143,7 +143,7 @@ struct AccountTabView: View {
                 .foregroundColor(.secondary)
 
             HStack {
-                TextField("Authorization code", text: $viewModel.googleOAuthCode)
+                TextField("Code", text: $viewModel.googleOAuthCode, prompt: Text("Paste code here"))
 
                 Button("Confirm") {
                     viewModel.exchangeGoogleOAuthCode()
