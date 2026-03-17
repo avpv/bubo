@@ -179,8 +179,15 @@ struct EventDetailView: View {
                         onEdit?(event)
                     } label: {
                         Label("Edit", systemImage: "pencil")
+                            .padding(.horizontal, DS.Spacing.md)
+                            .padding(.vertical, DS.Spacing.xs)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .background(DS.Colors.accent)
+                    .foregroundColor(.white)
+                    .fontWeight(.medium)
+                    .buttonStyle(.plain)
+                    .clipShape(Capsule())
+                    .shadow(color: DS.Colors.accent.opacity(0.3), radius: 6, y: 3)
                 }
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.vertical, DS.Spacing.md)

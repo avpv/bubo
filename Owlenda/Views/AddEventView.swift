@@ -55,107 +55,158 @@ struct AddEventView: View {
                 onBack: onDismiss
             )
 
-            Form {
-                Section {
-                    TextField("Title", text: $title, prompt: Text("Event title"))
-                        .textFieldStyle(.roundedBorder)
-                        .focused($isTitleFocused)
-                        .defaultFocus($isTitleFocused, true)
+            ScrollView {
+                VStack(spacing: DS.Spacing.md) {
+                    
+                    // Title section
+                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                        TextField("Title", text: $title, prompt: Text("Event title"))
+                            .textFieldStyle(.plain)
+                            .font(.headline)
+                            .padding(.horizontal, DS.Spacing.md)
+                            .padding(.vertical, DS.Spacing.sm)
+                            .background(DS.Materials.platter)
+                            .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
+                            .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
+                            .focused($isTitleFocused)
+                            .defaultFocus($isTitleFocused, true)
 
-                    if showValidation && !isTitleValid {
-                        Label("Title is required", systemImage: "exclamationmark.triangle.fill")
-                            .font(.caption)
-                            .foregroundColor(DS.Colors.error)
-                            .transition(.move(edge: .top).combined(with: .opacity))
-                    }
-                }
-
-                Section("Date & Time") {
-                    Grid(alignment: .leading, horizontalSpacing: DS.Spacing.sm, verticalSpacing: DS.Spacing.xs) {
-                        GridRow {
-                            Text("Starts")
-                                .foregroundColor(DS.Colors.textSecondary)
-                                .gridColumnAlignment(.trailing)
-                            
-                            HStack(spacing: DS.Spacing.xs) {
-                                DatePicker("", selection: $date)
-                                    .labelsHidden()
-                                TimeSlotPicker(selection: $date)
-                            }
+                        if showValidation && !isTitleValid {
+                            Label("Title is required", systemImage: "exclamationmark.triangle.fill")
+                                .font(.caption)
+                                .foregroundColor(DS.Colors.error)
+                                .transition(.move(edge: .top).combined(with: .opacity))
                         }
+                    }
+                    
+                    // Date & Time
+                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                        Text("Date & Time")
+                            .font(.headline)
+                            .foregroundColor(DS.Colors.textPrimary)
                         
-                        GridRow {
-                            Text("Ends")
-                                .foregroundColor(DS.Colors.textSecondary)
-                                .gridColumnAlignment(.trailing)
+                        Grid(alignment: .leading, horizontalSpacing: DS.Spacing.sm, verticalSpacing: DS.Spacing.xs) {
+                            GridRow {
+                                Text("Starts")
+                                    .foregroundColor(DS.Colors.textSecondary)
+                                    .gridColumnAlignment(.trailing)
+                                
+                                HStack(spacing: DS.Spacing.xs) {
+                                    DatePicker("", selection: $date)
+                                        .labelsHidden()
+                                    TimeSlotPicker(selection: $date)
+                                }
+                            }
                             
-                            HStack(spacing: DS.Spacing.xs) {
-                                DatePicker("", selection: endDateBinding, in: date...)
-                                    .labelsHidden()
-                                TimeSlotPicker(selection: endDateBinding)
+                            GridRow {
+                                Text("Ends")
+                                    .foregroundColor(DS.Colors.textSecondary)
+                                    .gridColumnAlignment(.trailing)
+                                
+                                HStack(spacing: DS.Spacing.xs) {
+                                    DatePicker("", selection: endDateBinding, in: date...)
+                                        .labelsHidden()
+                                    TimeSlotPicker(selection: endDateBinding)
+                                }
                             }
                         }
+                        .padding(DS.Spacing.md)
+                        .background(DS.Materials.platter)
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
+                        .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
                     }
-                    .datePickerStyle(.stepperField)
-                    .controlSize(.small)
-                }
 
-                Section("Details") {
-                    TextField("Location", text: $location, prompt: Text("Optional"))
+                    // Details
+                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                        Text("Details")
+                            .font(.headline)
+                            .foregroundColor(DS.Colors.textPrimary)
+                        
+                        VStack(spacing: DS.Spacing.md) {
+                            TextField("Location", text: $location, prompt: Text("Optional"))
+                                .textFieldStyle(.plain)
 
-                    TextField("Notes", text: $description, prompt: Text("Optional"), axis: .vertical)
-                        .lineLimit(3...8)
-                }
+                            Divider()
 
-                RecurrencePickerView(rule: $recurrenceRule, eventDuration: $duration, eventStartDate: date)
-
-                Section("Reminders") {
-                    Toggle("Custom reminders", isOn: $useCustomReminders)
-
-                    if useCustomReminders {
-                        ForEach(reminderMinutes.sorted(), id: \.self) { minutes in
-                            HStack {
-                                Label("\(DS.formatMinutes(minutes)) before", systemImage: "bell.fill")
-                                Spacer()
-                                Button(role: .destructive) {
-                                    reminderMinutes.removeAll { $0 == minutes }
-                                } label: {
-                                    Image(systemName: "trash")
-                                }
-                                .buttonStyle(.borderless)
-                            }
+                            TextField("Notes", text: $description, prompt: Text("Optional"), axis: .vertical)
+                                .textFieldStyle(.plain)
+                                .lineLimit(3...8)
                         }
+                        .padding(DS.Spacing.md)
+                        .background(DS.Materials.platter)
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
+                        .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
+                    }
 
-                        HStack {
-                            Stepper("\(DS.formatMinutes(newReminderValue))", value: $newReminderValue, in: 1...120)
+                    // Recurrence
+                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                        RecurrencePickerView(rule: $recurrenceRule, eventDuration: $duration, eventStartDate: date)
+                            .padding(DS.Spacing.md)
+                            .background(DS.Materials.platter)
+                            .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
+                            .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
+                    }
 
-                            Button("Add") {
-                                if !reminderMinutes.contains(newReminderValue) {
-                                    reminderMinutes.append(newReminderValue)
-                                }
-                            }
-                        }
+                    // Reminders
+                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                        Text("Reminders")
+                            .font(.headline)
+                            .foregroundColor(DS.Colors.textPrimary)
+                        
+                        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                            Toggle("Custom reminders", isOn: $useCustomReminders)
 
-                        let available = Self.presetReminders.filter { !reminderMinutes.contains($0) }
-                        if !available.isEmpty {
-                            HStack(spacing: DS.Spacing.xs) {
-                                ForEach(available.prefix(5), id: \.self) { preset in
-                                    Button(DS.formatMinutes(preset)) {
-                                        reminderMinutes.append(preset)
+                            if useCustomReminders {
+                                ForEach(reminderMinutes.sorted(), id: \.self) { minutes in
+                                    HStack {
+                                        Label("\(DS.formatMinutes(minutes)) before", systemImage: "bell.fill")
+                                        Spacer()
+                                        Button(role: .destructive) {
+                                            reminderMinutes.removeAll { $0 == minutes }
+                                        } label: {
+                                            Image(systemName: "trash")
+                                        }
+                                        .buttonStyle(.borderless)
                                     }
-                                    .buttonStyle(.bordered)
-                                    .controlSize(.mini)
                                 }
+
+                                HStack {
+                                    Stepper("\(DS.formatMinutes(newReminderValue))", value: $newReminderValue, in: 1...120)
+
+                                    Button("Add") {
+                                        if !reminderMinutes.contains(newReminderValue) {
+                                            reminderMinutes.append(newReminderValue)
+                                        }
+                                    }
+                                }
+
+                                let available = Self.presetReminders.filter { !reminderMinutes.contains($0) }
+                                if !available.isEmpty {
+                                    HStack(spacing: DS.Spacing.xs) {
+                                        ForEach(available.prefix(5), id: \.self) { preset in
+                                            Button(DS.formatMinutes(preset)) {
+                                                reminderMinutes.append(preset)
+                                            }
+                                            .buttonStyle(.bordered)
+                                            .controlSize(.mini)
+                                        }
+                                    }
+                                }
+                            } else {
+                                Text("Default: 5 min before")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
                             }
                         }
-                    } else {
-                        Text("Default: 5 min before")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                        .padding(DS.Spacing.md)
+                        .background(DS.Materials.platter)
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
+                        .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
                     }
                 }
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.vertical, DS.Spacing.md)
             }
-            .formStyle(.grouped)
             .scrollContentBackground(.hidden)
             .frame(maxHeight: DS.Popover.formMaxHeight)
 
@@ -166,7 +217,14 @@ struct AddEventView: View {
                 Button("Cancel") { onDismiss() }
                     .keyboardShortcut(.cancelAction)
                     .controlSize(.large)
-                    .buttonStyle(.borderless)
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.xs)
+                    .background(
+                        Capsule()
+                            .fill(DS.Colors.badgeFill(.secondary))
+                    )
+                    .foregroundColor(DS.Colors.textPrimary)
+                    .buttonStyle(.plain)
 
                 Button(isEditing ? "Save" : "Add Event") {
                     if isTitleValid {
@@ -175,9 +233,12 @@ struct AddEventView: View {
                         showValidation = true
                     }
                 }
-                .keyboardShortcut(.defaultAction)
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.vertical, DS.Spacing.sm)
+                .background(DS.Colors.accent)
+                .foregroundColor(.white)
+                .fontWeight(.medium)
+                .buttonStyle(.plain)
                 .clipShape(Capsule())
                 .shadow(color: DS.Colors.accent.opacity(0.3), radius: 6, y: 3)
             }

@@ -166,12 +166,15 @@ struct MenuBarView: View {
                     text: "Showing cached data",
                     color: .yellow
                 )
+                .frame(maxWidth: .infinity, alignment: .center)
             }
 
             if !AppleCalendarService.hasAccess {
                 CalendarAccessBanner()
+                    .frame(maxWidth: .infinity, alignment: .center)
             } else if let error = reminderService.syncError, networkMonitor.isConnected {
                 StatusBanner(icon: "exclamationmark.triangle.fill", text: error, color: .orange)
+                    .frame(maxWidth: .infinity, alignment: .center)
             }
 
             // Events
@@ -263,11 +266,11 @@ struct MenuBarView: View {
 
     private var eventList: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 0) {
+            LazyVStack(alignment: .leading, spacing: DS.Spacing.lg) {
                 ForEach(reminderService.eventsByDay, id: \.date) { dayGroup in
                     Section {
-                        ForEach(Array(dayGroup.events.enumerated()), id: \.element.id) { index, event in
-                            VStack(spacing: 0) {
+                        VStack(spacing: DS.Spacing.md) {
+                            ForEach(dayGroup.events) { event in
                                 EventRowView(
                                     event: event,
                                     reminderService: reminderService,
@@ -277,18 +280,17 @@ struct MenuBarView: View {
                                         navigation = .detail(event)
                                     }
                                 )
-                                // Card-based layout removes hard dividers
                             }
                         }
                     } header: {
                         DaySectionHeader(date: dayGroup.date, count: dayGroup.events.count)
-                            .padding(.horizontal, DS.Spacing.lg)
-                            .padding(.top, DS.Spacing.md)
-                            .padding(.bottom, DS.Spacing.xs)
+                            .padding(.horizontal, DS.Spacing.sm)
                     }
                 }
             }
-            .padding(.horizontal, DS.Spacing.xs)
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.top, DS.Spacing.md)
+            .padding(.bottom, DS.Spacing.xl)
         }
         .scrollContentBackground(.hidden)
         .frame(maxHeight: DS.Popover.listMaxHeight)
@@ -373,11 +375,14 @@ private struct CalendarAccessBanner: View {
                     .font(.caption2)
             }
             .foregroundColor(DS.Colors.warning)
-            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.sm)
+            .padding(.vertical, DS.Spacing.md)
             .adaptiveBadgeFill(DS.Colors.warning)
+            .clipShape(Capsule())
+            .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
         }
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.xs)
         .buttonStyle(.plain)
         .accessibilityLabel("Calendar access not granted. Open settings to grant access.")
         .transition(
