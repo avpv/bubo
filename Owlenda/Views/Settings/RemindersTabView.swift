@@ -1,9 +1,8 @@
 import SwiftUI
 
 struct RemindersTabView: View {
-    @ObservedObject var settings: ReminderSettings
-    @ObservedObject var reminderService: ReminderService
-    @ObservedObject var viewModel: SettingsViewModel
+    @EnvironmentObject var settings: ReminderSettings
+    @EnvironmentObject var viewModel: SettingsViewModel
 
     var body: some View {
         Form {
@@ -13,13 +12,13 @@ struct RemindersTabView: View {
                         Toggle(isOn: $interval.isEnabled) {
                             Text("\(interval.displayText) before meeting")
                         }
-                        .onChange(of: interval.isEnabled) { _ in save() }
+                        .onChange(of: interval.isEnabled) { _ in viewModel.save() }
 
                         Spacer()
 
                         Button(role: .destructive) {
                             settings.intervals.removeAll { $0.id == interval.id }
-                            save()
+                            viewModel.save()
                         } label: {
                             Image(systemName: "trash")
                         }
@@ -32,17 +31,17 @@ struct RemindersTabView: View {
 
                     Button("Add") {
                         settings.intervals.append(ReminderInterval(minutes: viewModel.newIntervalMinutes))
-                        save()
+                        viewModel.save()
                     }
                 }
             }
 
             Section {
                 Toggle("Full-screen notification", isOn: $settings.showFullScreenAlert)
-                    .onChange(of: settings.showFullScreenAlert) { _ in save() }
+                    .onChange(of: settings.showFullScreenAlert) { _ in viewModel.save() }
 
                 Toggle("System notification", isOn: $settings.showSystemNotification)
-                    .onChange(of: settings.showSystemNotification) { _ in save() }
+                    .onChange(of: settings.showSystemNotification) { _ in viewModel.save() }
             } header: {
                 Text("Notification Types")
             } footer: {
@@ -52,14 +51,14 @@ struct RemindersTabView: View {
 
             Section("Do Not Disturb") {
                 Toggle("Enable Do Not Disturb", isOn: $settings.doNotDisturbEnabled)
-                    .onChange(of: settings.doNotDisturbEnabled) { _ in save() }
+                    .onChange(of: settings.doNotDisturbEnabled) { _ in viewModel.save() }
 
                 if settings.doNotDisturbEnabled {
                     DatePicker("From", selection: $settings.doNotDisturbFrom, displayedComponents: .hourAndMinute)
-                        .onChange(of: settings.doNotDisturbFrom) { _ in save() }
+                        .onChange(of: settings.doNotDisturbFrom) { _ in viewModel.save() }
 
                     DatePicker("To", selection: $settings.doNotDisturbTo, displayedComponents: .hourAndMinute)
-                        .onChange(of: settings.doNotDisturbTo) { _ in save() }
+                        .onChange(of: settings.doNotDisturbTo) { _ in viewModel.save() }
 
                     if settings.isDoNotDisturbActive {
                         Label("Currently active", systemImage: "moon.fill")
@@ -70,9 +69,5 @@ struct RemindersTabView: View {
             }
         }
         .formStyle(.grouped)
-    }
-
-    private func save() {
-        viewModel.saveSettings(settings, reminderService)
     }
 }

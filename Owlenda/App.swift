@@ -80,7 +80,9 @@ struct OwlendaApp: App {
         .menuBarExtraStyle(.window)
 
         Settings {
-            SettingsView(settings: settings, reminderService: reminderService)
+            SettingsView()
+                .environmentObject(settings)
+                .environmentObject(reminderService)
         }
     }
 }

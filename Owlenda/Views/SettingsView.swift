@@ -1,25 +1,30 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @ObservedObject var settings: ReminderSettings
-    @ObservedObject var reminderService: ReminderService
+    @EnvironmentObject var settings: ReminderSettings
+    @EnvironmentObject var reminderService: ReminderService
     @StateObject private var viewModel = SettingsViewModel()
 
     var body: some View {
         TabView {
-            AccountTabView(settings: settings, reminderService: reminderService, viewModel: viewModel)
+            AccountTabView()
                 .tabItem { Label("Account", systemImage: "person.circle") }
 
-            CalendarsTabView(settings: settings, reminderService: reminderService, viewModel: viewModel)
+            CalendarsTabView()
                 .tabItem { Label("Calendars", systemImage: "calendar") }
 
-            RemindersTabView(settings: settings, reminderService: reminderService, viewModel: viewModel)
+            RemindersTabView()
                 .tabItem { Label("Reminders", systemImage: "bell") }
 
-            GeneralTabView(settings: settings, reminderService: reminderService, viewModel: viewModel)
+            GeneralTabView()
                 .tabItem { Label("General", systemImage: "gear") }
         }
+        .environmentObject(viewModel)
         .frame(minHeight: DS.Settings.minHeight, idealHeight: DS.Settings.idealHeight)
         .frame(width: DS.Settings.width)
+        .onAppear {
+            viewModel.settings = settings
+            viewModel.reminderService = reminderService
+        }
     }
 }

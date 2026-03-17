@@ -1,9 +1,9 @@
 import SwiftUI
 
 struct GeneralTabView: View {
-    @ObservedObject var settings: ReminderSettings
-    @ObservedObject var reminderService: ReminderService
-    @ObservedObject var viewModel: SettingsViewModel
+    @EnvironmentObject var settings: ReminderSettings
+    @EnvironmentObject var reminderService: ReminderService
+    @EnvironmentObject var viewModel: SettingsViewModel
 
     var body: some View {
         Form {
@@ -17,14 +17,14 @@ struct GeneralTabView: View {
                     Text("30 minutes").tag(30)
                 }
                 .onChange(of: settings.syncIntervalMinutes) { _ in
-                    save()
+                    viewModel.save()
                     reminderService.startSyncTimer()
                 }
             }
 
             Section("Startup") {
                 Toggle("Launch at login", isOn: $settings.launchAtLogin)
-                    .onChange(of: settings.launchAtLogin) { _ in save() }
+                    .onChange(of: settings.launchAtLogin) { _ in viewModel.save() }
             }
 
             Section("Status") {
@@ -60,9 +60,5 @@ struct GeneralTabView: View {
             }
         }
         .formStyle(.grouped)
-    }
-
-    private func save() {
-        viewModel.saveSettings(settings, reminderService)
     }
 }

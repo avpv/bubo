@@ -2,6 +2,11 @@ import Foundation
 
 @MainActor
 class SettingsViewModel: ObservableObject {
+    // MARK: - Dependencies (set by SettingsView.onAppear)
+
+    var settings: ReminderSettings?
+    var reminderService: ReminderService?
+
     // MARK: - Reminders Tab
     @Published var newIntervalMinutes = 10
 
@@ -34,14 +39,16 @@ class SettingsViewModel: ObservableObject {
 
     // MARK: - Actions
 
-    func saveSettings(_ settings: ReminderSettings, _ reminderService: ReminderService) {
+    func save() {
+        guard let settings, let reminderService else { return }
         settings.save()
         reminderService.updateSettings(settings)
     }
 
-    func checkConnection(settings: ReminderSettings, reminderService: ReminderService) {
+    func checkConnection() {
+        guard let settings, let reminderService else { return }
         connectionStatus = .checking
-        saveSettings(settings, reminderService)
+        save()
         reminderService.setupCalDAVService()
 
         let authMode: YandexCalDAVService.AuthMode
@@ -79,21 +86,22 @@ class SettingsViewModel: ObservableObject {
         }
     }
 
-    func exchangeGoogleOAuthCode(settings: ReminderSettings, reminderService: ReminderService) {
+    func exchangeGoogleOAuthCode() {
         googleOAuthStatus = .exchanging
         Task {
             do {
                 _ = try await GoogleOAuthService.exchangeCode(googleOAuthCode)
                 googleOAuthStatus = .success
                 googleOAuthCode = ""
-                saveSettings(settings, reminderService)
+                save()
             } catch {
                 googleOAuthStatus = .failed(error.localizedDescription)
             }
         }
     }
 
-    func loadYandexCalendars(settings: ReminderSettings) {
+    func loadYandexCalendars() {
+        guard let settings else { return }
         isLoadingCalendars = true
         calendarLoadError = nil
 

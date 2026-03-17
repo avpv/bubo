@@ -1,16 +1,15 @@
 import SwiftUI
 
 struct CalendarsTabView: View {
-    @ObservedObject var settings: ReminderSettings
-    @ObservedObject var reminderService: ReminderService
-    @ObservedObject var viewModel: SettingsViewModel
+    @EnvironmentObject var settings: ReminderSettings
+    @EnvironmentObject var viewModel: SettingsViewModel
 
     var body: some View {
         Form {
             Section("Yandex Calendar") {
                 HStack {
                     Button {
-                        viewModel.loadYandexCalendars(settings: settings)
+                        viewModel.loadYandexCalendars()
                     } label: {
                         Label("Load Calendars", systemImage: "arrow.clockwise")
                     }
@@ -77,7 +76,7 @@ struct CalendarsTabView: View {
             get: { selected.wrappedValue.isEmpty },
             set: { isAll in
                 selected.wrappedValue = isAll ? [] : calendars.map { $0.id }
-                save()
+                viewModel.save()
             }
         ))
         .fontWeight(.medium)
@@ -97,7 +96,7 @@ struct CalendarsTabView: View {
                         if selected.wrappedValue.count == calendars.count {
                             selected.wrappedValue = []
                         }
-                        save()
+                        viewModel.save()
                     }
                 ))
             }
@@ -108,9 +107,5 @@ struct CalendarsTabView: View {
             : "Selected: \(selected.wrappedValue.count) of \(calendars.count)")
             .font(.caption)
             .foregroundColor(.secondary)
-    }
-
-    private func save() {
-        viewModel.saveSettings(settings, reminderService)
     }
 }
