@@ -1,8 +1,12 @@
 import SwiftUI
 
-/// A single-control time picker: click the displayed time to open a popover
-/// with a scrollable list of 30-min slots (auto-scrolled to nearest) and
-/// a native DatePicker for arbitrary manual entry.
+/// A combobox-style time picker for macOS menu bar apps.
+///
+/// Click the displayed time → native `NSMenu` with 30-min slot presets
+/// grouped by Morning / Afternoon / Evening. Nearest slot is marked.
+///
+/// For manual entry, the caller should show a `DatePicker` separately
+/// (e.g. in a disclosure group), keeping this control focused on quick selection.
 ///
 /// ```swift
 /// TimeSlotPicker(selection: $date, step: 30)
@@ -11,16 +15,19 @@ struct TimeSlotPicker: View {
     @Binding var selection: Date
     var step: Int = 30
 
-    @State private var isOpen = false
-
-    // Pre-computed once based on step; stable across renders.
-    private var slots: [Slot] {
-        Self.makeSlots(step: step)
-    }
-
     var body: some View {
-        Button {
-            isOpen.toggle()
+        let nearest = nearestSlotID
+
+        Menu {
+            Section("Morning") {
+                slotButtons(from: 0, to: Self.noon, nearest: nearest)
+            }
+            Section("Afternoon") {
+                slotButtons(from: Self.noon, to: Self.evening, nearest: nearest)
+            }
+            Section("Evening") {
+                slotButtons(from: Self.evening, to: Self.midnight, nearest: nearest)
+            }
         } label: {
             HStack(spacing: DS.Spacing.xs) {
                 Text(DS.timeFormatter.string(from: selection))
@@ -40,84 +47,17 @@ struct TimeSlotPicker: View {
                     .stroke(Color.secondary.opacity(0.25), lineWidth: 1)
             )
         }
-        .buttonStyle(.plain)
-        .popover(isPresented: $isOpen, arrowEdge: .bottom) {
-            popoverContent
-        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
     }
 
-    // MARK: - Popover Content
+    // MARK: - Constants
 
-    private var nearestSlotID: Int {
-        let cal = Calendar.current
-        let mins = cal.component(.hour, from: selection) * 60
-            + cal.component(.minute, from: selection)
-        let rounded = ((mins + step / 2) / step) * step
-        return min(rounded, 24 * 60 - step)
-    }
+    private static let noon = 12 * 60       // 12:00
+    private static let evening = 18 * 60    // 18:00
+    private static let midnight = 24 * 60   // 24:00
 
-    private var popoverContent: some View {
-        VStack(spacing: 0) {
-            // Manual entry
-            HStack {
-                Text("Custom")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Spacer()
-                DatePicker("", selection: $selection, displayedComponents: .hourAndMinute)
-                    .labelsHidden()
-            }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.sm)
-
-            Divider()
-
-            // Scrollable slot list, grouped by morning/afternoon/evening
-            ScrollViewReader { proxy in
-                List {
-                    slotSection("Morning", range: 0..<720, proxy: proxy)
-                    slotSection("Afternoon", range: 720..<1080, proxy: proxy)
-                    slotSection("Evening", range: 1080..<1440, proxy: proxy)
-                }
-                .listStyle(.plain)
-                .frame(width: 180, height: 220)
-                .onAppear {
-                    proxy.scrollTo(nearestSlotID, anchor: .center)
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func slotSection(_ title: String, range: Range<Int>, proxy: ScrollViewProxy) -> some View {
-        let sectionSlots = slots.filter { range.contains($0.id) }
-        if !sectionSlots.isEmpty {
-            Section(title) {
-                ForEach(sectionSlots) { slot in
-                    Button {
-                        selection = apply(slot)
-                        isOpen = false
-                    } label: {
-                        HStack {
-                            Text(slot.label)
-                                .monospacedDigit()
-                                .foregroundColor(slot.id == nearestSlotID ? .accentColor : .primary)
-                            Spacer()
-                            if slot.id == nearestSlotID {
-                                Image(systemName: "circle.fill")
-                                    .font(.system(size: 5))
-                                    .foregroundColor(.accentColor)
-                            }
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .id(slot.id)
-                }
-            }
-        }
-    }
-
-    // MARK: - Slot Model
+    // MARK: - Slots
 
     private struct Slot: Identifiable {
         let id: Int // total minutes from midnight
@@ -127,7 +67,31 @@ struct TimeSlotPicker: View {
     }
 
     private static func makeSlots(step: Int) -> [Slot] {
-        stride(from: 0, to: 24 * 60, by: step).map { Slot(id: $0) }
+        stride(from: 0, to: midnight, by: step).map { Slot(id: $0) }
+    }
+
+    /// Computed once per body evaluation and passed down — not recomputed per slot.
+    private var nearestSlotID: Int {
+        let cal = Calendar.current
+        let mins = cal.component(.hour, from: selection) * 60
+            + cal.component(.minute, from: selection)
+        let rounded = ((mins + step / 2) / step) * step
+        return min(rounded, Self.midnight - step)
+    }
+
+    @ViewBuilder
+    private func slotButtons(from lower: Int, to upper: Int, nearest: Int) -> some View {
+        ForEach(Self.makeSlots(step: step).filter({ $0.id >= lower && $0.id < upper })) { slot in
+            Button {
+                selection = apply(slot)
+            } label: {
+                if slot.id == nearest {
+                    Label(slot.label, systemImage: "smallcircle.filled.circle")
+                } else {
+                    Text(slot.label)
+                }
+            }
+        }
     }
 
     private func apply(_ slot: Slot) -> Date {

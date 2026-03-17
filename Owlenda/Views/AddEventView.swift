@@ -66,6 +66,13 @@ struct AddEventView: View {
                         TimeSlotPicker(selection: $date)
                     }
 
+                    HStack {
+                        Text("Time")
+                        Spacer()
+                        DatePicker("", selection: $date, displayedComponents: .hourAndMinute)
+                            .labelsHidden()
+                    }
+
                     if !isPomodoroMode {
                         Picker("Duration", selection: $duration) {
                             Text("15 min").tag(15.0)
