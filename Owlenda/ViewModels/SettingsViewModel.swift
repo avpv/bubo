@@ -26,6 +26,7 @@ class SettingsViewModel: ObservableObject {
 
     // MARK: - Calendars Tab (Apple)
     @Published var availableAppleCalendars: [AppleCalendarService.CalendarInfo] = []
+    @Published var appleCalendarsByAccount: [(account: String, calendars: [AppleCalendarService.CalendarInfo])] = []
 
     enum ConnectionStatus {
         case unknown, checking, success, failed(String)
@@ -114,10 +115,12 @@ class SettingsViewModel: ObservableObject {
         }
     }
 
+    @Published var appleCalendarAccessGranted = AppleCalendarService.hasAccess
+
     func requestAppleCalendarAccess() {
-        let service = AppleCalendarService()
         Task {
-            let granted = await service.requestAccess()
+            let granted = await AppleCalendarService.shared.requestAccess()
+            appleCalendarAccessGranted = granted
             if granted {
                 loadAppleCalendars()
             }
@@ -125,8 +128,8 @@ class SettingsViewModel: ObservableObject {
     }
 
     func loadAppleCalendars() {
-        let service = AppleCalendarService()
-        availableAppleCalendars = service.listCalendars()
+        availableAppleCalendars = AppleCalendarService.shared.listCalendars()
+        appleCalendarsByAccount = AppleCalendarService.shared.listCalendarsByAccount()
     }
 
     func loadGoogleCalendars() {

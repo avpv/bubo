@@ -15,7 +15,6 @@ class ReminderService: ObservableObject {
 
     private var calDAVService: YandexCalDAVService?
     private var googleService: GoogleCalendarService?
-    private var appleService: AppleCalendarService?
     private var syncTimer: Timer?
     private var reminderTimers: [String: [Timer]] = [:]
     private var settings: ReminderSettings
@@ -24,6 +23,7 @@ class ReminderService: ObservableObject {
     private var networkMonitor: NetworkMonitor?
     private var settingsObserver: AnyCancellable?
     private var excludedOccurrences: Set<String> = []
+    private var appleCalendarObserver: Any?
 
     var allEvents: [CalendarEvent] {
         let expandedLocal = localEvents.flatMap {
@@ -74,6 +74,17 @@ class ReminderService: ObservableObject {
                     self?.onSettingsChanged()
                 }
             }
+
+        // Re-sync when Apple Calendar data changes externally (Calendar.app edits, iCloud sync)
+        appleCalendarObserver = NotificationCenter.default.addObserver(
+            forName: AppleCalendarService.calendarDataChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.syncNow()
+            }
+        }
     }
 
     private func onSettingsChanged() {
@@ -84,6 +95,9 @@ class ReminderService: ObservableObject {
 
     deinit {
         if let observer = snoozeObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        if let observer = appleCalendarObserver {
             NotificationCenter.default.removeObserver(observer)
         }
         for timers in reminderTimers.values {
@@ -129,18 +143,6 @@ class ReminderService: ObservableObject {
             googleService = nil
         }
 
-        // Apple Calendar (EventKit)
-        if settings.appleCalendarEnabled {
-            let status = AppleCalendarService.authorizationStatus
-            if status == .authorized || status == .fullAccess {
-                appleService = AppleCalendarService()
-            } else {
-                appleService = nil
-            }
-        } else {
-            appleService = nil
-        }
-
         // Update reactive keychain state for UI
         isKeychainDenied = KeychainService.isAccessDenied
     }
@@ -172,15 +174,19 @@ class ReminderService: ObservableObject {
     }
 
     func syncNow() {
-        // Check network
-        if let monitor = networkMonitor, !monitor.isConnected {
+        let appleEnabled = settings.appleCalendarEnabled && AppleCalendarService.hasAccess
+        let networkAvailable = networkMonitor == nil || networkMonitor!.isConnected
+        let hasNetworkProvider = calDAVService != nil || googleService != nil
+
+        // If no providers at all, nothing to sync
+        guard hasNetworkProvider || appleEnabled else { return }
+
+        // If only network providers and no network — use cache
+        if !appleEnabled && !networkAvailable {
             syncError = "No internet connection"
             loadCachedEvents()
             return
         }
-
-        let hasAnyProvider = calDAVService != nil || googleService != nil || appleService != nil
-        guard hasAnyProvider else { return }
 
         isSyncing = true
         syncError = nil
@@ -191,23 +197,9 @@ class ReminderService: ObservableObject {
             var allEvents: [CalendarEvent] = []
             var errors: [String] = []
 
-            // Yandex
-            if let yandexService = calDAVService {
-                do {
-                    let events = try await yandexService.fetchEvents(
-                        from: now,
-                        to: endDate,
-                        onlyCalendars: self.settings.selectedCalendarHrefs
-                    )
-                    allEvents.append(contentsOf: events)
-                } catch {
-                    errors.append("Yandex: \(error.localizedDescription)")
-                }
-            }
-
-            // Apple Calendar (EventKit — synchronous, no network needed)
-            if let appleSvc = self.appleService {
-                let events = appleSvc.fetchEvents(
+            // Apple Calendar (EventKit — local, no network needed)
+            if appleEnabled {
+                let events = AppleCalendarService.shared.fetchEvents(
                     from: now,
                     to: endDate,
                     onlyCalendarIds: self.settings.selectedAppleCalendarIds
@@ -215,22 +207,45 @@ class ReminderService: ObservableObject {
                 allEvents.append(contentsOf: events)
             }
 
-            // Google
-            if let googleSvc = googleService {
-                do {
-                    let events = try await RetryHelper.withRetry {
-                        try await googleSvc.fetchEvents(
+            // Network providers — only if connected
+            if networkAvailable {
+                // Yandex
+                if let yandexService = calDAVService {
+                    do {
+                        let events = try await yandexService.fetchEvents(
                             from: now,
                             to: endDate,
-                            onlyCalendarIds: self.settings.selectedGoogleCalendarIds
+                            onlyCalendars: self.settings.selectedCalendarHrefs
                         )
+                        allEvents.append(contentsOf: events)
+                    } catch {
+                        errors.append("Yandex: \(error.localizedDescription)")
                     }
-                    allEvents.append(contentsOf: events)
-                } catch {
-                    errors.append("Google: \(error.localizedDescription)")
                 }
+
+                // Google
+                if let googleSvc = googleService {
+                    do {
+                        let events = try await RetryHelper.withRetry {
+                            try await googleSvc.fetchEvents(
+                                from: now,
+                                to: endDate,
+                                onlyCalendarIds: self.settings.selectedGoogleCalendarIds
+                            )
+                        }
+                        allEvents.append(contentsOf: events)
+                    } catch {
+                        errors.append("Google: \(error.localizedDescription)")
+                    }
+                }
+            } else if hasNetworkProvider {
+                errors.append("No internet — showing only local calendars")
             }
 
+            // Deduplicate: if the same event appears from both Apple Calendar and a network
+            // provider, prefer the network version (it may have richer metadata).
+            // Match by title + start time within 1 minute tolerance.
+            allEvents = Self.deduplicateEvents(allEvents)
             allEvents.sort { $0.startDate < $1.startDate }
 
             self.upcomingEvents = allEvents
@@ -243,8 +258,6 @@ class ReminderService: ObservableObject {
             // Clean up firedReminders for events no longer in the window
             let currentEventIds = Set(allEvents.map { $0.id })
             self.firedReminders = self.firedReminders.filter { key in
-                // reminderKey format: "\(event.id)_\(interval.minutes)"
-                // Find the last underscore to split id from minutes suffix
                 guard let lastUnderscore = key.lastIndex(of: "_") else { return false }
                 let eventId = String(key[..<lastUnderscore])
                 return currentEventIds.contains(eventId)
@@ -254,11 +267,33 @@ class ReminderService: ObservableObject {
 
             await eventCache.save(events: allEvents)
 
-            // If all providers failed, fall back to cache
+            // If all providers failed and no events, fall back to cache
             if allEvents.isEmpty && !errors.isEmpty {
                 self.loadCachedEvents()
             }
         }
+    }
+
+    /// Remove duplicate events that appear from multiple providers.
+    /// Events with the same title and start time (within 60s) are considered duplicates.
+    /// Non-Apple (network) versions are preferred as they may have richer metadata.
+    private static func deduplicateEvents(_ events: [CalendarEvent]) -> [CalendarEvent] {
+        var seen: [String: CalendarEvent] = [:]
+        for event in events {
+            // Normalize start time to the minute for matching
+            let minuteTimestamp = Int(event.startDate.timeIntervalSince1970 / 60)
+            let key = "\(event.title.lowercased())_\(minuteTimestamp)"
+
+            if let existing = seen[key] {
+                // Prefer non-Apple version (richer metadata from API)
+                if existing.id.hasPrefix("apple_") && !event.id.hasPrefix("apple_") {
+                    seen[key] = event
+                }
+            } else {
+                seen[key] = event
+            }
+        }
+        return Array(seen.values)
     }
 
     // MARK: - Cache

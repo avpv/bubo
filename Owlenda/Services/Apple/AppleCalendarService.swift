@@ -4,12 +4,46 @@ import Foundation
 /// Provides access to calendars configured in the native macOS Calendar.app
 /// via EventKit. This includes iCloud, Exchange, Google, CalDAV, and any other
 /// accounts the user has set up in System Settings → Internet Accounts.
+///
+/// Uses a shared EKEventStore instance and listens for external changes
+/// (e.g. user edits in Calendar.app).
 class AppleCalendarService {
-    private let store = EKEventStore()
+    /// Shared event store — creating multiple instances is expensive and discouraged by Apple.
+    static let shared = AppleCalendarService()
+
+    let store = EKEventStore()
+
+    /// Posted when the underlying EKEventStore detects changes (events added/modified/deleted
+    /// in Calendar.app or via iCloud sync). Observers should re-fetch events.
+    static let calendarDataChanged = Notification.Name("AppleCalendarDataChanged")
+
+    private var storeChangedObserver: Any?
+
+    private init() {
+        // Forward EKEventStoreChanged to our own notification on main queue
+        storeChangedObserver = NotificationCenter.default.addObserver(
+            forName: .EKEventStoreChanged,
+            object: store,
+            queue: .main
+        ) { _ in
+            NotificationCenter.default.post(name: Self.calendarDataChanged, object: nil)
+        }
+    }
+
+    deinit {
+        if let observer = storeChangedObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
 
     /// Current authorization status for calendar access.
     static var authorizationStatus: EKAuthorizationStatus {
         EKEventStore.authorizationStatus(for: .event)
+    }
+
+    static var hasAccess: Bool {
+        let status = authorizationStatus
+        return status == .authorized || status == .fullAccess
     }
 
     /// Request access to the user's calendars. Returns true if access was granted.
@@ -29,27 +63,37 @@ class AppleCalendarService {
         }
     }
 
-    /// List all calendars available in the system Calendar.app.
+    /// List all calendars available in the system Calendar.app, grouped by source/account.
     func listCalendars() -> [CalendarInfo] {
         store.calendars(for: .event).map { cal in
             CalendarInfo(
                 id: cal.calendarIdentifier,
                 title: cal.title,
                 accountName: cal.source.title,
+                sourceId: cal.source.sourceIdentifier,
                 color: cal.cgColor
             )
         }
+        .sorted { a, b in
+            if a.accountName != b.accountName { return a.accountName < b.accountName }
+            return a.title < b.title
+        }
+    }
+
+    /// List calendars grouped by account name.
+    func listCalendarsByAccount() -> [(account: String, calendars: [CalendarInfo])] {
+        let all = listCalendars()
+        let grouped = Dictionary(grouping: all) { $0.accountName }
+        return grouped
+            .sorted { $0.key < $1.key }
+            .map { (account: $0.key, calendars: $0.value) }
     }
 
     /// Fetch events from selected Apple calendars within a date range.
-    /// - Parameters:
-    ///   - from: Start date
-    ///   - to: End date
-    ///   - onlyCalendarIds: If non-empty, only fetch from these calendar identifiers.
     func fetchEvents(from: Date, to: Date, onlyCalendarIds: [String] = []) -> [CalendarEvent] {
         let calendars: [EKCalendar]?
         if onlyCalendarIds.isEmpty {
-            calendars = nil // all calendars
+            calendars = nil
         } else {
             calendars = store.calendars(for: .event).filter {
                 onlyCalendarIds.contains($0.calendarIdentifier)
@@ -60,7 +104,6 @@ class AppleCalendarService {
         let ekEvents = store.events(matching: predicate)
 
         return ekEvents.compactMap { ek in
-            // Skip all-day events
             guard !ek.isAllDay else { return nil }
 
             return CalendarEvent(
@@ -81,10 +124,11 @@ class AppleCalendarService {
         let id: String
         let title: String
         let accountName: String
+        let sourceId: String
         let color: CGColor?
 
         var displayName: String {
-            "\(title) (\(accountName))"
+            title
         }
     }
 }

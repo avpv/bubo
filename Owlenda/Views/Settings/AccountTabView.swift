@@ -6,6 +6,7 @@ struct AccountTabView: View {
     @EnvironmentObject var viewModel: SettingsViewModel
     @EnvironmentObject var reminderService: ReminderService
     @AppStorage("CredentialsMigrationNoticeDismissed") private var migrationDismissed = false
+    private var appleCalendarAccessGranted: Bool { viewModel.appleCalendarAccessGranted }
 
     /// Detects when an existing user's credentials were lost due to keychain migration.
     /// True when: auth is configured (non-default settings exist) but credentials are empty.
@@ -64,6 +65,14 @@ struct AccountTabView: View {
                 }
             }
 
+            Section("Apple Calendar") {
+                Toggle("Enable Apple Calendar", isOn: $settings.appleCalendarEnabled)
+
+                if settings.appleCalendarEnabled {
+                    appleCalendarSection
+                }
+            }
+
             Section("Yandex Calendar") {
                 Picker("Authorization", selection: $settings.authMethod) {
                     Text("App Password").tag(AuthMethod.appPassword)
@@ -91,14 +100,6 @@ struct AccountTabView: View {
 
                 if settings.googleEnabled {
                     googleAccountSection
-                }
-            }
-
-            Section("Apple Calendar") {
-                Toggle("Enable Apple Calendar", isOn: $settings.appleCalendarEnabled)
-
-                if settings.appleCalendarEnabled {
-                    appleCalendarSection
                 }
             }
         }
@@ -229,36 +230,41 @@ struct AccountTabView: View {
 
     @ViewBuilder
     private var appleCalendarSection: some View {
-        let status = AppleCalendarService.authorizationStatus
-
-        switch status {
-        case .authorized, .fullAccess:
-            Label("Calendar access granted", systemImage: "checkmark.circle.fill")
-                .foregroundColor(.green)
-        case .denied, .restricted:
-            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                Label("Calendar access denied", systemImage: "xmark.circle.fill")
-                    .foregroundColor(.red)
-                Text("Grant access in System Settings → Privacy & Security → Calendars")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Button("Open System Settings") {
-                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars") {
-                        NSWorkspace.shared.open(url)
-                    }
+        if appleCalendarAccessGranted {
+            HStack {
+                Label("Calendar access granted", systemImage: "checkmark.circle.fill")
+                    .foregroundColor(.green)
+                Spacer()
+                Button("Disable") {
+                    settings.appleCalendarEnabled = false
                 }
                 .controlSize(.small)
             }
-        default:
-            Button {
-                viewModel.requestAppleCalendarAccess()
-            } label: {
-                Label("Grant Calendar Access", systemImage: "calendar")
+        } else {
+            let status = AppleCalendarService.authorizationStatus
+            if status == .denied || status == .restricted {
+                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                    Label("Calendar access denied", systemImage: "xmark.circle.fill")
+                        .foregroundColor(.red)
+                    Text("Grant access in System Settings → Privacy & Security → Calendars")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Button("Open System Settings") {
+                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Settings.extension.input?Privacy_Calendars")!)
+                    }
+                    .controlSize(.small)
+                }
+            } else {
+                Button {
+                    viewModel.requestAppleCalendarAccess()
+                } label: {
+                    Label("Grant Calendar Access", systemImage: "calendar")
+                }
+                .buttonStyle(.borderedProminent)
             }
-            .buttonStyle(.borderedProminent)
         }
 
-        Text("Uses calendars from the native Calendar app (iCloud, Exchange, Google, CalDAV, etc.)")
+        Text("Uses all accounts from the Calendar app (iCloud, Exchange, Google, CalDAV, etc.)")
             .font(.caption)
             .foregroundColor(.secondary)
     }
