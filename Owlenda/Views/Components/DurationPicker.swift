@@ -2,11 +2,9 @@ import SwiftUI
 
 /// Compact duration picker following the same pattern as `TimeSlotPicker`.
 ///
-/// Shows the current duration as a label with a preset menu (hourglass icon)
-/// and ±5 min stepper for fine-tuning — all in a single row.
-///
-/// Presets are grouped by Quick / Standard / Long and the current value
-/// is marked with a bullet indicator.
+/// Shows a preset menu (hourglass icon) and an editable text field that
+/// accepts flexible human input: `90`, `1h30m`, `1.5h`, `1:30`, `2h`, `45m`.
+/// Designed to sit in a form row — keyboard-first, macOS-native.
 ///
 /// ```swift
 /// HStack {
@@ -18,6 +16,10 @@ import SwiftUI
 struct DurationPicker: View {
     /// Duration in minutes (as `Double` to match existing event model).
     @Binding var minutes: Double
+
+    @State private var text = ""
+    @State private var isEditing = false
+    @FocusState private var isFocused: Bool
 
     // MARK: - Preset groups
 
@@ -33,50 +35,53 @@ struct DurationPicker: View {
         PresetGroup(title: "Long",     id: "long",     values: [180, 240, 360, 480]),
     ]
 
-    // MARK: - Stepper step
-
-    /// Adaptive step: ±15 min for durations ≥ 2 h, ±5 min otherwise.
-    private var step: Int {
-        Int(minutes) >= 120 ? 15 : 5
-    }
-
     // MARK: - Body
 
     var body: some View {
         HStack(spacing: DS.Spacing.sm) {
             presetMenu
 
-            Text(DS.formatMinutes(Int(minutes)))
+            TextField("Duration", text: $text)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 80)
+                .multilineTextAlignment(.center)
                 .monospacedDigit()
-                .foregroundColor(DS.Colors.textPrimary)
-                .contentTransition(.numericText())
-                .animation(DS.Animation.microInteraction, value: minutes)
-
-            Stepper(
-                "",
-                value: Binding(
-                    get: { Int(minutes) },
-                    set: { minutes = Double($0) }
-                ),
-                in: 5...480,
-                step: step
-            )
-            .labelsHidden()
-            .fixedSize()
+                .focused($isFocused)
+                .onSubmit { commitEdit() }
+                .onChange(of: isFocused) { _, focused in
+                    if focused {
+                        isEditing = true
+                    } else {
+                        commitEdit()
+                    }
+                }
+                .onChange(of: minutes) { _, newValue in
+                    if !isEditing {
+                        text = DS.formatMinutes(Int(newValue))
+                    }
+                }
+                .help(String(localized: "Type duration: 90, 1h30m, 1.5h, or 1:30",
+                             comment: "Tooltip for the duration text field"))
+        }
+        .onAppear {
+            text = DS.formatMinutes(Int(minutes))
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(Text("Duration: \(DS.formatMinutes(Int(minutes)))",
                                  comment: "Accessibility label for duration picker"))
-        .accessibilityAdjustableAction { direction in
-            switch direction {
-            case .increment:
-                minutes = min(480, minutes + Double(step))
-            case .decrement:
-                minutes = max(5, minutes - Double(step))
-            @unknown default:
-                break
+    }
+
+    // MARK: - Commit
+
+    private func commitEdit() {
+        isEditing = false
+        if let parsed = Self.parseDuration(text) {
+            let clamped = max(5, min(480, parsed))
+            withAnimation(DS.Animation.microInteraction) {
+                minutes = Double(clamped)
             }
         }
+        text = DS.formatMinutes(Int(minutes))
     }
 
     // MARK: - Preset menu
@@ -92,6 +97,7 @@ struct DurationPicker: View {
                             withAnimation(DS.Animation.microInteraction) {
                                 minutes = Double(value)
                             }
+                            text = DS.formatMinutes(value)
                             Haptics.tap()
                         } label: {
                             if value == current {
@@ -112,5 +118,65 @@ struct DurationPicker: View {
         .fixedSize()
         .help(String(localized: "Duration presets",
                      comment: "Tooltip for the duration preset menu"))
+    }
+
+    // MARK: - Smart Duration Parser
+
+    /// Parses flexible human duration input into total minutes.
+    ///
+    /// Supported formats:
+    /// - Plain number: `"90"` → 90 min
+    /// - Hours + minutes: `"1h30m"`, `"1h 30m"`, `"1h30"` → 90 min
+    /// - Hours only: `"2h"` → 120 min
+    /// - Minutes only: `"45m"`, `"45 min"` → 45 min
+    /// - Decimal hours: `"1.5h"` → 90 min
+    /// - Colon notation: `"1:30"` → 90 min
+    /// - Formatted output: `"1 h 30 min"` → 90 min (round-trip)
+    static func parseDuration(_ input: String) -> Int? {
+        let s = input.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !s.isEmpty else { return nil }
+
+        // "1:30" colon notation
+        if s.contains(":") {
+            let parts = s.split(separator: ":")
+            guard parts.count == 2,
+                  let h = Int(parts[0]),
+                  let m = Int(parts[1]),
+                  h >= 0, m >= 0, m < 60 else { return nil }
+            let total = h * 60 + m
+            return total > 0 ? total : nil
+        }
+
+        // "1h30m", "1h 30m", "1h30", "2h", "1.5h", "1 h 30 min"
+        let hPattern = #/(\d+(?:\.\d+)?)\s*h/#
+        let mPattern = #/(\d+)\s*m/#
+
+        if let hMatch = s.firstMatch(of: hPattern) {
+            let hours = Double(hMatch.1)!
+            var total = Int(hours * 60)
+            if let mMatch = s.firstMatch(of: mPattern) {
+                total += Int(mMatch.1)!
+            } else {
+                // "1h30" — digits after 'h' without 'm'
+                let afterH = #/h\s*(\d+)$/#
+                if let trailing = s.firstMatch(of: afterH) {
+                    total += Int(trailing.1)!
+                }
+            }
+            return total > 0 ? total : nil
+        }
+
+        // "45m", "45 min", "45min"
+        if let mMatch = s.firstMatch(of: mPattern) {
+            let total = Int(mMatch.1)!
+            return total > 0 ? total : nil
+        }
+
+        // Plain number → minutes
+        if let n = Int(s), n > 0 {
+            return n
+        }
+
+        return nil
     }
 }
