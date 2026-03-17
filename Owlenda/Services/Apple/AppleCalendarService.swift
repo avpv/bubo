@@ -56,6 +56,7 @@ class AppleCalendarService {
             do {
                 return try await store.requestFullAccessToEvents()
             } catch {
+                print("Failed to request full access: \(error)")
                 return false
             }
         } else {
