@@ -118,17 +118,12 @@ struct FullScreenAlertView: View {
         .onDisappear { cleanup() }
     }
 
-    @ViewBuilder
     private var bellIcon: some View {
-        let base = Image(systemName: "bell.fill")
+        Image(systemName: "bell.fill")
             .font(.system(size: 60))
             .foregroundColor(.yellow)
             .shadow(color: .yellow.opacity(0.5), radius: 20)
-        if #available(macOS 14.0, *) {
-            base.symbolEffect(.pulse, options: .repeating)
-        } else {
-            base
-        }
+            .symbolEffect(.pulse, options: .repeating)
     }
 
     // MARK: - Countdown
