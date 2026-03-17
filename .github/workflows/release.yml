@@ -92,10 +92,17 @@ jobs:
               <key>NSAllowsArbitraryLoads</key>
               <false/>
             </dict>
+            <key>NSCalendarsUsageDescription</key>
+            <string>Owlenda needs access to your calendars to show meeting reminders from accounts configured in the Calendar app.</string>
+            <key>NSCalendarsFullAccessUsageDescription</key>
+            <string>Owlenda needs access to your calendars to show meeting reminders from accounts configured in the Calendar app.</string>
           </dict>
           </plist>
           PLIST
           sed -i '' "s/PLACEHOLDER_VERSION/${VERSION}/g" "$APP/Info.plist"
+
+          # Ad-hoc sign the app so it runs locally, and provide the correct entitlements
+          codesign --force --deep --entitlements "Owlenda/Owlenda.entitlements" --sign - "Owlenda.app"
 
       - name: Create DMG
         run: |
