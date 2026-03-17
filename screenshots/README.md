@@ -1,0 +1,1 @@
+Place your screenshots and GIFs here. Recommended files:\n\n- menu-bar-overview.png — main menu bar popover with event list\n- calendar-sync.gif — calendar sync in action\n- create-event.gif — creating a local event\n- pomodoro.gif — Pomodoro timer workflow\n- full-screen-alert.png — full-screen reminder notification
