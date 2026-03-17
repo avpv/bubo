@@ -88,11 +88,9 @@ struct AddEventView: View {
 
                 Section("Details") {
                     TextField("Location", text: $location, prompt: Text("Optional"))
-                        .textFieldStyle(.roundedBorder)
 
                     TextField("Notes", text: $description, prompt: Text("Optional"), axis: .vertical)
-                        .lineLimit(3...6)
-                        .textFieldStyle(.roundedBorder)
+                        .lineLimit(3...8)
                 }
 
                 RecurrencePickerView(rule: $recurrenceRule, eventDuration: $duration, eventStartDate: date)
