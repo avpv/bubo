@@ -97,11 +97,6 @@ jobs:
           PLIST
           sed -i '' "s/PLACEHOLDER_VERSION/${VERSION}/g" "$APP/Info.plist"
 
-      - name: Generate DMG background
-        run: |
-          pip3 install --quiet Pillow cairosvg
-          python3 scripts/generate_dmg_background.py
-
       - name: Create DMG
         run: |
           brew install create-dmg
