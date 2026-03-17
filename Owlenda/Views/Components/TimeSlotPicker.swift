@@ -17,16 +17,17 @@ struct TimeSlotPicker: View {
 
     var body: some View {
         let nearest = nearestSlotID
+        let allSlots = Self.makeSlots(step: step)
 
         Menu {
             Section("Morning") {
-                slotButtons(from: 0, to: Self.noon, nearest: nearest)
+                slotButtons(allSlots.filter { $0.id < Self.noon }, nearest: nearest)
             }
             Section("Afternoon") {
-                slotButtons(from: Self.noon, to: Self.evening, nearest: nearest)
+                slotButtons(allSlots.filter { $0.id >= Self.noon && $0.id < Self.evening }, nearest: nearest)
             }
             Section("Evening") {
-                slotButtons(from: Self.evening, to: Self.midnight, nearest: nearest)
+                slotButtons(allSlots.filter { $0.id >= Self.evening }, nearest: nearest)
             }
         } label: {
             HStack(spacing: DS.Spacing.xs) {
@@ -80,8 +81,8 @@ struct TimeSlotPicker: View {
     }
 
     @ViewBuilder
-    private func slotButtons(from lower: Int, to upper: Int, nearest: Int) -> some View {
-        ForEach(Self.makeSlots(step: step).filter({ $0.id >= lower && $0.id < upper })) { slot in
+    private func slotButtons(_ slots: [Slot], nearest: Int) -> some View {
+        ForEach(slots) { slot in
             Button {
                 selection = apply(slot)
             } label: {

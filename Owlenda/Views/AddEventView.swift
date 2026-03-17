@@ -58,17 +58,12 @@ struct AddEventView: View {
                 }
 
                 Section("Date & Time") {
-                    HStack {
-                        Text("Start")
-                        Spacer()
-                        DatePicker("", selection: $date, displayedComponents: .date)
-                            .labelsHidden()
-                        TimeSlotPicker(selection: $date)
-                    }
+                    DatePicker("Date", selection: $date, displayedComponents: .date)
 
                     HStack {
                         Text("Time")
                         Spacer()
+                        TimeSlotPicker(selection: $date)
                         DatePicker("", selection: $date, displayedComponents: .hourAndMinute)
                             .labelsHidden()
                     }
