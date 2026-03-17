@@ -28,9 +28,7 @@ IMG_W, IMG_H = WIN_W * SCALE, WIN_H * SCALE
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
 SVG_PATH = os.path.join(PROJECT_DIR, "Owlenda", "Resources", "owl.svg")
-OUTPUT_PATH = os.path.join(
-    PROJECT_DIR, "Owlenda", "Resources", "dmg_background.png"
-)
+OUTPUT_PATH = os.path.join(PROJECT_DIR, "packaging", "dmg_background.png")
 
 # Brand palette
 BG_TOP = (28, 28, 32)

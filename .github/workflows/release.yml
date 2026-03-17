@@ -107,7 +107,7 @@ jobs:
           "$CREATE_DMG" \
             --volname "Owlenda" \
             --volicon "Owlenda/Resources/AppIcon.icns" \
-            --background "Owlenda/Resources/dmg_background.png" \
+            --background "packaging/dmg_background.png" \
             --window-pos 200 120 \
             --window-size 660 400 \
             --icon-size 128 \
