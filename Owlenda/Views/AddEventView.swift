@@ -31,6 +31,11 @@ struct AddEventView: View {
         date.addingTimeInterval(duration * 60)
     }
 
+    /// Whether the Pomodoro mode is controlling the event duration.
+    private var isPomodoroMode: Bool {
+        recurrenceRule?.frequency == .minutely
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             PopoverHeader(
@@ -62,14 +67,16 @@ struct AddEventView: View {
                             .labelsHidden()
                     }
 
-                    Picker("Duration", selection: $duration) {
-                        Text("15 min").tag(15.0)
-                        Text("30 min").tag(30.0)
-                        Text("45 min").tag(45.0)
-                        Text("1 hour").tag(60.0)
-                        Text("1.5 hours").tag(90.0)
-                        Text("2 hours").tag(120.0)
-                        Text("3 hours").tag(180.0)
+                    if !isPomodoroMode {
+                        Picker("Duration", selection: $duration) {
+                            Text("15 min").tag(15.0)
+                            Text("30 min").tag(30.0)
+                            Text("45 min").tag(45.0)
+                            Text("1 hour").tag(60.0)
+                            Text("1.5 hours").tag(90.0)
+                            Text("2 hours").tag(120.0)
+                            Text("3 hours").tag(180.0)
+                        }
                     }
 
                     LabeledContent("Ends at") {
@@ -86,7 +93,7 @@ struct AddEventView: View {
                         .textFieldStyle(.roundedBorder)
                 }
 
-                RecurrencePickerView(rule: $recurrenceRule, eventStartDate: date)
+                RecurrencePickerView(rule: $recurrenceRule, eventDuration: $duration, eventStartDate: date)
 
                 Section("Reminders") {
                     Toggle("Custom reminders", isOn: $useCustomReminders)

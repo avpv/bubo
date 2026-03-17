@@ -8,27 +8,32 @@ struct RecurrenceRule: Codable, Hashable {
     let end: RecurrenceEnd
     let weekdays: Set<Weekday>
     let monthlyMode: MonthlyMode?
+    /// Explicit flag: this rule was created via the Pomodoro picker.
+    let pomodoroMode: Bool
+    /// Minutes of long break after all Pomodoro rounds (0 = no long break).
+    let pomodoroLongBreak: Int
 
     init(
         frequency: RecurrenceFrequency,
         interval: Int = 1,
         end: RecurrenceEnd = .never,
         weekdays: Set<Weekday> = [],
-        monthlyMode: MonthlyMode? = nil
+        monthlyMode: MonthlyMode? = nil,
+        pomodoroMode: Bool = false,
+        pomodoroLongBreak: Int = 0
     ) {
         self.frequency = frequency
         self.interval = interval
         self.end = end
         self.weekdays = weekdays
         self.monthlyMode = monthlyMode
+        self.pomodoroMode = pomodoroMode
+        self.pomodoroLongBreak = pomodoroLongBreak
     }
-
-    // MARK: - Codable migration from old format (intervalMinutes + repeatCount)
 
     private enum CodingKeys: String, CodingKey {
         case frequency, interval, end, weekdays, monthlyMode
-        // Legacy keys
-        case intervalMinutes, repeatCount
+        case pomodoroMode, pomodoroLongBreak
     }
 
     func encode(to encoder: Encoder) throws {
@@ -38,33 +43,39 @@ struct RecurrenceRule: Codable, Hashable {
         try container.encode(end, forKey: .end)
         try container.encode(weekdays, forKey: .weekdays)
         try container.encodeIfPresent(monthlyMode, forKey: .monthlyMode)
+        if pomodoroMode {
+            try container.encode(pomodoroMode, forKey: .pomodoroMode)
+        }
+        if pomodoroLongBreak > 0 {
+            try container.encode(pomodoroLongBreak, forKey: .pomodoroLongBreak)
+        }
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-
-        // Try new format first
-        if let freq = try? container.decode(RecurrenceFrequency.self, forKey: .frequency) {
-            self.frequency = freq
-            self.interval = try container.decodeIfPresent(Int.self, forKey: .interval) ?? 1
-            self.end = try container.decodeIfPresent(RecurrenceEnd.self, forKey: .end) ?? .never
-            self.weekdays = try container.decodeIfPresent(Set<Weekday>.self, forKey: .weekdays) ?? []
-            self.monthlyMode = try container.decodeIfPresent(MonthlyMode.self, forKey: .monthlyMode)
-            return
-        }
-
-        // Legacy format: { intervalMinutes: 30, repeatCount: 4 }
-        let intervalMinutes = try container.decode(Int.self, forKey: .intervalMinutes)
-        let repeatCount = try container.decode(Int.self, forKey: .repeatCount)
-        self.frequency = .minutely
-        self.interval = intervalMinutes
-        self.end = .afterCount(repeatCount)
-        self.weekdays = []
-        self.monthlyMode = nil
+        self.frequency = try container.decode(RecurrenceFrequency.self, forKey: .frequency)
+        self.interval = try container.decodeIfPresent(Int.self, forKey: .interval) ?? 1
+        self.end = try container.decodeIfPresent(RecurrenceEnd.self, forKey: .end) ?? .never
+        self.weekdays = try container.decodeIfPresent(Set<Weekday>.self, forKey: .weekdays) ?? []
+        self.monthlyMode = try container.decodeIfPresent(MonthlyMode.self, forKey: .monthlyMode)
+        self.pomodoroMode = try container.decodeIfPresent(Bool.self, forKey: .pomodoroMode) ?? false
+        self.pomodoroLongBreak = try container.decodeIfPresent(Int.self, forKey: .pomodoroLongBreak) ?? 0
     }
+
+    /// Whether this rule represents a Pomodoro Technique session.
+    var isPomodoro: Bool { pomodoroMode }
 
     /// Human-readable summary
     var displayText: String {
+        // Pomodoro-specific display
+        if isPomodoro, case .afterCount(let rounds) = end {
+            var text = "Pomodoro: \(rounds) rounds, every \(interval) min"
+            if pomodoroLongBreak > 0 {
+                text += ", then \(pomodoroLongBreak) min break"
+            }
+            return text
+        }
+
         var parts: [String] = []
 
         // Frequency + interval
@@ -236,8 +247,7 @@ enum RecurrenceFrequency: String, Codable, Hashable, CaseIterable {
     case yearly
 
     /// Frequencies appropriate for the calendar event UI picker.
-    /// Minutely and hourly are supported by the parser/expander but not shown to users.
-    static let userVisible: [RecurrenceFrequency] = [.daily, .weekly, .monthly, .yearly]
+    static let userVisible: [RecurrenceFrequency] = [.minutely, .daily, .weekly, .monthly, .yearly]
 
     var label: String {
         switch self {

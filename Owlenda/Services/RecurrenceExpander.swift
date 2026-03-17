@@ -78,6 +78,29 @@ enum RecurrenceExpander {
             current = nextDate(after: current, rule: rule, calendar: calendar)
         }
 
+        // Pomodoro long break: add a final "long break" event after the last work session
+        if rule.isPomodoro && rule.pomodoroLongBreak > 0, let lastWork = occurrences.last {
+            let longBreakStart = lastWork.endDate
+            let longBreakEnd = longBreakStart.addingTimeInterval(TimeInterval(rule.pomodoroLongBreak * 60))
+            let longBreakId = "\(event.id)_longbreak"
+
+            if !excludedIds.contains(longBreakId) {
+                let longBreakEvent = CalendarEvent(
+                    id: longBreakId,
+                    title: "\(event.title) — Long Break",
+                    startDate: longBreakStart,
+                    endDate: longBreakEnd,
+                    location: nil,
+                    description: nil,
+                    calendarName: event.calendarName,
+                    customReminderMinutes: [0],
+                    recurrenceRule: event.recurrenceRule,
+                    seriesId: event.id
+                )
+                occurrences.append(longBreakEvent)
+            }
+        }
+
         return occurrences.isEmpty ? [event] : occurrences
     }
 

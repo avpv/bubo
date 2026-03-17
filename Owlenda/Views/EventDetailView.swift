@@ -11,6 +11,15 @@ struct EventDetailView: View {
     @State private var showDeleteConfirmation = false
     @State private var showSeriesDeleteChoice = false
 
+    private func pomodoroBadge(_ text: String, icon: String, color: Color) -> some View {
+        Label(text, systemImage: icon)
+            .font(.caption2)
+            .padding(.horizontal, DS.Spacing.sm)
+            .padding(.vertical, DS.Spacing.xxs)
+            .background(color.opacity(0.15))
+            .clipShape(RoundedRectangle(cornerRadius: DS.Size.badgeCornerRadius))
+    }
+
     private var isLocal: Bool {
         event.calendarName == "Local"
     }
@@ -84,14 +93,29 @@ struct EventDetailView: View {
                     // Recurrence
                     if let rule = event.recurrenceRule {
                         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                            Label("Repeats", systemImage: "repeat")
-                                .font(.caption)
-                                .fontWeight(.medium)
-                                .foregroundStyle(.tertiary)
+                            Label(
+                                rule.isPomodoro ? "Pomodoro" : "Repeats",
+                                systemImage: rule.isPomodoro ? "timer" : "repeat"
+                            )
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundStyle(.tertiary)
 
                             Text(rule.displayText)
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
+
+                            if rule.isPomodoro {
+                                let workMin = Int(event.endDate.timeIntervalSince(event.startDate) / 60)
+                                let breakMin = max(rule.interval - workMin, 0)
+                                FlowLayout(spacing: DS.Spacing.xs) {
+                                    pomodoroBadge("\(workMin) min work", icon: "brain.head.profile", color: .accentColor)
+                                    pomodoroBadge("\(breakMin) min break", icon: "cup.and.saucer", color: .green)
+                                    if rule.pomodoroLongBreak > 0 {
+                                        pomodoroBadge("\(rule.pomodoroLongBreak) min long break", icon: "moon.zzz", color: .indigo)
+                                    }
+                                }
+                            }
 
                             if rule.frequency == .weekly && !rule.weekdays.isEmpty {
                                 HStack(spacing: DS.Spacing.xs) {
