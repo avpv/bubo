@@ -129,28 +129,29 @@ struct RecurrencePickerView: View {
                     .foregroundColor(.primary)
             }
 
-            // Break duration
-            Stepper(value: $pomodoroBreak, in: 1...30) {
-                Label("Break: \(pomodoroBreak) min", systemImage: "cup.and.saucer")
-                    .foregroundColor(.primary)
-            }
-
             // Rounds
             Stepper(value: $pomodoroRounds, in: 1...12) {
                 Label("Rounds: \(pomodoroRounds)", systemImage: "arrow.trianglehead.2.counterclockwise")
                     .foregroundColor(.primary)
             }
 
-            // Long break toggle + stepper
-            Toggle(isOn: $pomodoroLongBreakEnabled) {
-                Label("Long break", systemImage: "moon.zzz")
-                    .foregroundColor(.primary)
-            }
-
-            if pomodoroLongBreakEnabled {
-                Stepper(value: $pomodoroLongBreak, in: 5...60, step: 5) {
-                    Label("Long break: \(pomodoroLongBreak) min", systemImage: "moon.zzz")
+            // Break controls only when there are multiple rounds
+            if pomodoroRounds > 1 {
+                Stepper(value: $pomodoroBreak, in: 1...30) {
+                    Label("Break: \(pomodoroBreak) min", systemImage: "cup.and.saucer")
                         .foregroundColor(.primary)
+                }
+
+                Toggle(isOn: $pomodoroLongBreakEnabled) {
+                    Label("Long break", systemImage: "moon.zzz")
+                        .foregroundColor(.primary)
+                }
+
+                if pomodoroLongBreakEnabled {
+                    Stepper(value: $pomodoroLongBreak, in: 5...60, step: 5) {
+                        Label("Long break: \(pomodoroLongBreak) min", systemImage: "moon.zzz")
+                            .foregroundColor(.primary)
+                    }
                 }
             }
 
@@ -240,28 +241,52 @@ struct RecurrencePickerView: View {
     }
 
     /// Shows the actual session schedule with real times based on event start.
+    /// Collapses middle segments when there are too many to fit.
     private var pomodoroSchedule: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-            ForEach(Array(pomodoroSegments.enumerated()), id: \.offset) { _, segment in
-                let start = eventStartDate.addingTimeInterval(TimeInterval(segment.startOffset * 60))
-                let end = start.addingTimeInterval(TimeInterval(segment.minutes * 60))
-                let icon = segment.type == "work" ? "brain.head.profile"
-                    : segment.type == "long" ? "moon.zzz"
-                    : "cup.and.saucer"
-                let color: Color = segment.type == "work" ? .primary
-                    : segment.type == "long" ? .indigo
-                    : .green
+        let segments = pomodoroSegments
+        let maxVisible = 6
 
+        return VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+            if segments.count <= maxVisible {
+                ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
+                    scheduleRow(segment)
+                }
+            } else {
+                // Show first 2, ellipsis, last 2
+                ForEach(Array(segments.prefix(2).enumerated()), id: \.offset) { _, segment in
+                    scheduleRow(segment)
+                }
                 HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: icon)
-                        .font(.system(size: 9))
-                        .foregroundColor(color)
-                        .frame(width: 12)
-                    Text("\(DS.timeFormatter.string(from: start))–\(DS.timeFormatter.string(from: end))")
-                        .font(.system(.caption2, design: .monospaced))
-                        .foregroundColor(.secondary)
+                    Spacer().frame(width: 12)
+                    Text("···  \(segments.count - 4) more")
+                        .font(.caption2)
+                        .foregroundColor(.tertiary)
+                }
+                ForEach(Array(segments.suffix(2).enumerated()), id: \.offset) { idx, segment in
+                    scheduleRow(segment)
                 }
             }
+        }
+    }
+
+    private func scheduleRow(_ segment: (type: String, minutes: Int, startOffset: Int)) -> some View {
+        let start = eventStartDate.addingTimeInterval(TimeInterval(segment.startOffset * 60))
+        let end = start.addingTimeInterval(TimeInterval(segment.minutes * 60))
+        let icon = segment.type == "work" ? "brain.head.profile"
+            : segment.type == "long" ? "moon.zzz"
+            : "cup.and.saucer"
+        let color: Color = segment.type == "work" ? .primary
+            : segment.type == "long" ? .indigo
+            : .green
+
+        return HStack(spacing: DS.Spacing.xs) {
+            Image(systemName: icon)
+                .font(.system(size: 9))
+                .foregroundColor(color)
+                .frame(width: 12)
+            Text("\(DS.timeFormatter.string(from: start))–\(DS.timeFormatter.string(from: end))")
+                .font(.system(.caption2, design: .monospaced))
+                .foregroundColor(.secondary)
         }
     }
 

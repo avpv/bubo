@@ -93,7 +93,7 @@ enum RecurrenceExpander {
                     location: nil,
                     description: nil,
                     calendarName: event.calendarName,
-                    customReminderMinutes: event.customReminderMinutes,
+                    customReminderMinutes: [0],
                     recurrenceRule: event.recurrenceRule,
                     seriesId: event.id
                 )
