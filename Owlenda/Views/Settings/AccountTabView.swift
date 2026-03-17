@@ -1,3 +1,4 @@
+import EventKit
 import SwiftUI
 
 struct AccountTabView: View {
@@ -90,6 +91,14 @@ struct AccountTabView: View {
 
                 if settings.googleEnabled {
                     googleAccountSection
+                }
+            }
+
+            Section("Apple Calendar") {
+                Toggle("Enable Apple Calendar", isOn: $settings.appleCalendarEnabled)
+
+                if settings.appleCalendarEnabled {
+                    appleCalendarSection
                 }
             }
         }
@@ -212,6 +221,44 @@ struct AccountTabView: View {
         }
 
         Text("Requires a Google Cloud Console project with Calendar API enabled")
+            .font(.caption)
+            .foregroundColor(.secondary)
+    }
+
+    // MARK: - Apple Calendar
+
+    @ViewBuilder
+    private var appleCalendarSection: some View {
+        let status = AppleCalendarService.authorizationStatus
+
+        switch status {
+        case .authorized, .fullAccess:
+            Label("Calendar access granted", systemImage: "checkmark.circle.fill")
+                .foregroundColor(.green)
+        case .denied, .restricted:
+            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                Label("Calendar access denied", systemImage: "xmark.circle.fill")
+                    .foregroundColor(.red)
+                Text("Grant access in System Settings → Privacy & Security → Calendars")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Button("Open System Settings") {
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+                .controlSize(.small)
+            }
+        default:
+            Button {
+                viewModel.requestAppleCalendarAccess()
+            } label: {
+                Label("Grant Calendar Access", systemImage: "calendar")
+            }
+            .buttonStyle(.borderedProminent)
+        }
+
+        Text("Uses calendars from the native Calendar app (iCloud, Exchange, Google, CalDAV, etc.)")
             .font(.caption)
             .foregroundColor(.secondary)
     }

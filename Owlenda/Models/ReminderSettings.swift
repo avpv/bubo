@@ -45,6 +45,8 @@ class ReminderSettings: ObservableObject, Codable {
     @Published var selectedCalendarHrefs: [String]  // empty = all Yandex calendars
     @Published var googleEnabled: Bool
     @Published var selectedGoogleCalendarIds: [String]  // empty = all Google calendars
+    @Published var appleCalendarEnabled: Bool
+    @Published var selectedAppleCalendarIds: [String]  // empty = all Apple calendars
 
     enum CodingKeys: String, CodingKey {
         case intervals, syncIntervalMinutes, showFullScreenAlert, showSystemNotification
@@ -52,6 +54,7 @@ class ReminderSettings: ObservableObject, Codable {
         case doNotDisturbEnabled, doNotDisturbFrom, doNotDisturbTo
         case selectedCalendarHrefs
         case googleEnabled, selectedGoogleCalendarIds
+        case appleCalendarEnabled, selectedAppleCalendarIds
     }
 
     init() {
@@ -72,6 +75,8 @@ class ReminderSettings: ObservableObject, Codable {
         self.selectedCalendarHrefs = [] // empty = sync all
         self.googleEnabled = false
         self.selectedGoogleCalendarIds = []
+        self.appleCalendarEnabled = false
+        self.selectedAppleCalendarIds = []
         setupAutoSave()
     }
 
@@ -93,6 +98,8 @@ class ReminderSettings: ObservableObject, Codable {
         selectedCalendarHrefs = try container.decodeIfPresent([String].self, forKey: .selectedCalendarHrefs) ?? []
         googleEnabled = try container.decodeIfPresent(Bool.self, forKey: .googleEnabled) ?? false
         selectedGoogleCalendarIds = try container.decodeIfPresent([String].self, forKey: .selectedGoogleCalendarIds) ?? []
+        appleCalendarEnabled = try container.decodeIfPresent(Bool.self, forKey: .appleCalendarEnabled) ?? false
+        selectedAppleCalendarIds = try container.decodeIfPresent([String].self, forKey: .selectedAppleCalendarIds) ?? []
         setupAutoSave()
     }
 
@@ -110,6 +117,8 @@ class ReminderSettings: ObservableObject, Codable {
         try container.encode(selectedCalendarHrefs, forKey: .selectedCalendarHrefs)
         try container.encode(googleEnabled, forKey: .googleEnabled)
         try container.encode(selectedGoogleCalendarIds, forKey: .selectedGoogleCalendarIds)
+        try container.encode(appleCalendarEnabled, forKey: .appleCalendarEnabled)
+        try container.encode(selectedAppleCalendarIds, forKey: .selectedAppleCalendarIds)
     }
 
     /// Check if current time is within Do Not Disturb period

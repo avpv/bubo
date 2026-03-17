@@ -15,6 +15,7 @@ class ReminderService: ObservableObject {
 
     private var calDAVService: YandexCalDAVService?
     private var googleService: GoogleCalendarService?
+    private var appleService: AppleCalendarService?
     private var syncTimer: Timer?
     private var reminderTimers: [String: [Timer]] = [:]
     private var settings: ReminderSettings
@@ -128,6 +129,18 @@ class ReminderService: ObservableObject {
             googleService = nil
         }
 
+        // Apple Calendar (EventKit)
+        if settings.appleCalendarEnabled {
+            let status = AppleCalendarService.authorizationStatus
+            if status == .authorized || status == .fullAccess {
+                appleService = AppleCalendarService()
+            } else {
+                appleService = nil
+            }
+        } else {
+            appleService = nil
+        }
+
         // Update reactive keychain state for UI
         isKeychainDenied = KeychainService.isAccessDenied
     }
@@ -166,7 +179,7 @@ class ReminderService: ObservableObject {
             return
         }
 
-        let hasAnyProvider = calDAVService != nil || googleService != nil
+        let hasAnyProvider = calDAVService != nil || googleService != nil || appleService != nil
         guard hasAnyProvider else { return }
 
         isSyncing = true
@@ -190,6 +203,16 @@ class ReminderService: ObservableObject {
                 } catch {
                     errors.append("Yandex: \(error.localizedDescription)")
                 }
+            }
+
+            // Apple Calendar (EventKit — synchronous, no network needed)
+            if let appleSvc = self.appleService {
+                let events = appleSvc.fetchEvents(
+                    from: now,
+                    to: endDate,
+                    onlyCalendarIds: self.settings.selectedAppleCalendarIds
+                )
+                allEvents.append(contentsOf: events)
             }
 
             // Google

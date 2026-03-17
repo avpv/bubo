@@ -24,6 +24,9 @@ class SettingsViewModel: ObservableObject {
     @Published var isLoadingGoogleCalendars = false
     @Published var googleCalendarLoadError: String?
 
+    // MARK: - Calendars Tab (Apple)
+    @Published var availableAppleCalendars: [AppleCalendarService.CalendarInfo] = []
+
     enum ConnectionStatus {
         case unknown, checking, success, failed(String)
     }
@@ -109,6 +112,21 @@ class SettingsViewModel: ObservableObject {
                 isLoadingCalendars = false
             }
         }
+    }
+
+    func requestAppleCalendarAccess() {
+        let service = AppleCalendarService()
+        Task {
+            let granted = await service.requestAccess()
+            if granted {
+                loadAppleCalendars()
+            }
+        }
+    }
+
+    func loadAppleCalendars() {
+        let service = AppleCalendarService()
+        availableAppleCalendars = service.listCalendars()
     }
 
     func loadGoogleCalendars() {

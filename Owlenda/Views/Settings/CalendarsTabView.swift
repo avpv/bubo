@@ -1,3 +1,4 @@
+import EventKit
 import SwiftUI
 
 struct CalendarsTabView: View {
@@ -31,6 +32,27 @@ struct CalendarsTabView: View {
                         calendars: viewModel.availableCalendars.map { ($0.href, $0.displayName) },
                         selected: $settings.selectedCalendarHrefs
                     )
+                }
+            }
+
+            if settings.appleCalendarEnabled
+                && (AppleCalendarService.authorizationStatus == .authorized
+                    || AppleCalendarService.authorizationStatus == .fullAccess) {
+                Section("Apple Calendar") {
+                    HStack {
+                        Button {
+                            viewModel.loadAppleCalendars()
+                        } label: {
+                            Label("Load Calendars", systemImage: "arrow.clockwise")
+                        }
+                    }
+
+                    if !viewModel.availableAppleCalendars.isEmpty {
+                        calendarToggles(
+                            calendars: viewModel.availableAppleCalendars.map { ($0.id, $0.displayName) },
+                            selected: $settings.selectedAppleCalendarIds
+                        )
+                    }
                 }
             }
 
