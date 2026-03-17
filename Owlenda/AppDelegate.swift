@@ -1,9 +1,15 @@
 import AppKit
 import SwiftUI
 
+private class KeyableWindow: NSWindow {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
+}
+
 class AppDelegate: NSObject, NSApplicationDelegate {
     private var alertWindow: NSWindow?
     private var alertObserver: Any?
+    private var autoDismissTask: Task<Void, Never>?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         alertObserver = NotificationCenter.default.addObserver(
@@ -28,8 +34,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func dismissAlert() {
-        alertWindow?.close()
+        autoDismissTask?.cancel()
+        autoDismissTask = nil
+        guard let window = alertWindow else { return }
         alertWindow = nil
+        window.orderOut(nil)
+        window.close()
     }
 
     private func showAlert(event: CalendarEvent, minutesBefore: Int) {
@@ -55,7 +65,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let hostingView = NSHostingView(rootView: alertView)
 
-        let window = NSWindow(
+        let window = KeyableWindow(
             contentRect: screen.frame,
             styleMask: [.borderless],
             backing: .buffered,
@@ -72,7 +82,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         alertWindow = window
 
         // Auto-dismiss after 60 seconds
-        Task { @MainActor [weak self] in
+        autoDismissTask?.cancel()
+        autoDismissTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(60))
             self?.dismissAlert()
         }
