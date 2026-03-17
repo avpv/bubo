@@ -99,9 +99,12 @@ jobs:
 
       - name: Create DMG
         run: |
-          brew install create-dmg
+          # Pin create-dmg version — no brew, no moving targets
+          curl -fsSL https://github.com/create-dmg/create-dmg/archive/refs/tags/v1.2.3.tar.gz | tar xz
+          CREATE_DMG="./create-dmg-1.2.3/create-dmg"
 
-          create-dmg \
+          # create-dmg exits 2 when no signing identity is found — expected in CI
+          "$CREATE_DMG" \
             --volname "Owlenda" \
             --volicon "Owlenda/Resources/AppIcon.icns" \
             --background "Owlenda/Resources/dmg_background.png" \
@@ -114,7 +117,8 @@ jobs:
             --app-drop-link 480 200 \
             --no-internet-enable \
             "Owlenda.dmg" \
-            "Owlenda.app"
+            "Owlenda.app" \
+            || test $? -eq 2
 
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
