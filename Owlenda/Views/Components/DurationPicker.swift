@@ -21,18 +21,10 @@ struct DurationPicker: View {
     @State private var isEditing = false
     @FocusState private var isFocused: Bool
 
-    // MARK: - Preset groups
+    // MARK: - Presets
 
-    private struct PresetGroup: Identifiable {
-        let title: LocalizedStringKey
-        let id: String
-        let values: [Int]
-    }
-
-    private static let groups: [PresetGroup] = [
-        PresetGroup(title: "Quick",    id: "quick",    values: [15, 30, 45]),
-        PresetGroup(title: "Standard", id: "standard", values: [60, 90, 120]),
-        PresetGroup(title: "Long",     id: "long",     values: [180, 240, 360, 480]),
+    private static let presets: [Int] = [
+        15, 30, 45, 60, 90, 120, 180, 240, 360, 480,
     ]
 
     private let step = 5
@@ -130,23 +122,19 @@ struct DurationPicker: View {
         let current = Int(minutes)
 
         return Menu {
-            ForEach(Self.groups) { group in
-                Section(group.title) {
-                    ForEach(group.values, id: \.self) { value in
-                        Button {
-                            withAnimation(DS.Animation.microInteraction) {
-                                minutes = Double(value)
-                            }
-                            text = DS.formatMinutes(value)
-                            Haptics.tap()
-                        } label: {
-                            if value == current {
-                                Label(DS.formatMinutes(value),
-                                      systemImage: "smallcircle.filled.circle")
-                            } else {
-                                Text(DS.formatMinutes(value))
-                            }
-                        }
+            ForEach(Self.presets, id: \.self) { value in
+                Button {
+                    withAnimation(DS.Animation.microInteraction) {
+                        minutes = Double(value)
+                    }
+                    text = DS.formatMinutes(value)
+                    Haptics.tap()
+                } label: {
+                    if value == current {
+                        Label(DS.formatMinutes(value),
+                              systemImage: "smallcircle.filled.circle")
+                    } else {
+                        Text(DS.formatMinutes(value))
                     }
                 }
             }
