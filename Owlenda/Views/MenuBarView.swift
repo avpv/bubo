@@ -278,19 +278,7 @@ struct MenuBarView: View {
 
             Spacer()
 
-            Button(action: {
-                if let window = NSApp.keyWindow {
-                    window.close()
-                }
-                DispatchQueue.main.async {
-                    NSApp.activate(ignoringOtherApps: true)
-                    if #available(macOS 14.0, *) {
-                        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-                    } else {
-                        NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
-                    }
-                }
-            }) {
+            SettingsLink {
                 Label("Settings", systemImage: "gear")
             }
             .help("Open settings")
