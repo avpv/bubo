@@ -1,15 +1,17 @@
 import SwiftUI
 
-/// A combobox-style time picker for macOS menu bar apps.
+/// Compact quick-preset button for time selection.
 ///
-/// Click the displayed time → native `NSMenu` with 30-min slot presets
-/// grouped by Morning / Afternoon / Evening. Nearest slot is marked.
-///
-/// For manual entry, the caller should show a `DatePicker` separately
-/// (e.g. in a disclosure group), keeping this control focused on quick selection.
+/// Shows a clock icon that opens a native `NSMenu` with 30-min slot
+/// presets grouped by Morning / Afternoon / Evening. Designed to sit
+/// next to a `DatePicker(.hourAndMinute)` — the DatePicker handles
+/// display and manual entry, this button handles quick preset selection.
 ///
 /// ```swift
-/// TimeSlotPicker(selection: $date, step: 30)
+/// HStack {
+///     TimeSlotPicker(selection: $date)
+///     DatePicker("", selection: $date, displayedComponents: .hourAndMinute)
+/// }
 /// ```
 struct TimeSlotPicker: View {
     @Binding var selection: Date
@@ -30,23 +32,8 @@ struct TimeSlotPicker: View {
                 slotButtons(allSlots.filter { $0.id >= Self.evening }, nearest: nearest)
             }
         } label: {
-            HStack(spacing: DS.Spacing.xs) {
-                Text(DS.timeFormatter.string(from: selection))
-                    .monospacedDigit()
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 9))
-                    .foregroundColor(.secondary)
-            }
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.xs)
-            .background(
-                RoundedRectangle(cornerRadius: DS.Size.cornerRadius)
-                    .fill(Color.secondary.opacity(0.08))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Size.cornerRadius)
-                    .stroke(Color.secondary.opacity(0.25), lineWidth: 1)
-            )
+            Image(systemName: "clock")
+                .foregroundColor(.secondary)
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
