@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 
 struct ReminderInterval: Identifiable, Codable, Hashable {
@@ -30,6 +31,8 @@ enum AuthMethod: String, Codable {
 }
 
 class ReminderSettings: ObservableObject, Codable {
+    private var autoSaveCancellable: AnyCancellable?
+
     @Published var intervals: [ReminderInterval]
     @Published var syncIntervalMinutes: Int
     @Published var showFullScreenAlert: Bool
@@ -69,6 +72,7 @@ class ReminderSettings: ObservableObject, Codable {
         self.selectedCalendarHrefs = [] // empty = sync all
         self.googleEnabled = false
         self.selectedGoogleCalendarIds = []
+        setupAutoSave()
     }
 
     required init(from decoder: Decoder) throws {
@@ -89,6 +93,7 @@ class ReminderSettings: ObservableObject, Codable {
         selectedCalendarHrefs = try container.decodeIfPresent([String].self, forKey: .selectedCalendarHrefs) ?? []
         googleEnabled = try container.decodeIfPresent(Bool.self, forKey: .googleEnabled) ?? false
         selectedGoogleCalendarIds = try container.decodeIfPresent([String].self, forKey: .selectedGoogleCalendarIds) ?? []
+        setupAutoSave()
     }
 
     func encode(to encoder: Encoder) throws {
@@ -145,6 +150,17 @@ class ReminderSettings: ObservableObject, Codable {
             try? KeychainService.save(newValue, for: .yandexAppPassword)
             objectWillChange.send()
         }
+    }
+
+    private func setupAutoSave() {
+        autoSaveCancellable = objectWillChange
+            .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
+            .sink { [weak self] _ in
+                // objectWillChange fires before mutation; async ensures we read the new value
+                DispatchQueue.main.async {
+                    self?.save()
+                }
+            }
     }
 
     func save() {

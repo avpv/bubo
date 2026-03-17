@@ -34,15 +34,8 @@ class SettingsViewModel: ObservableObject {
 
     // MARK: - Actions
 
-    func saveSettings(_ settings: ReminderSettings, _ reminderService: ReminderService) {
-        settings.save()
-        reminderService.updateSettings(settings)
-    }
-
-    func checkConnection(settings: ReminderSettings, reminderService: ReminderService) {
+    func checkConnection(settings: ReminderSettings) {
         connectionStatus = .checking
-        saveSettings(settings, reminderService)
-        reminderService.setupCalDAVService()
 
         let authMode: YandexCalDAVService.AuthMode
         switch settings.authMethod {
@@ -79,14 +72,13 @@ class SettingsViewModel: ObservableObject {
         }
     }
 
-    func exchangeGoogleOAuthCode(settings: ReminderSettings, reminderService: ReminderService) {
+    func exchangeGoogleOAuthCode() {
         googleOAuthStatus = .exchanging
         Task {
             do {
                 _ = try await GoogleOAuthService.exchangeCode(googleOAuthCode)
                 googleOAuthStatus = .success
                 googleOAuthCode = ""
-                saveSettings(settings, reminderService)
             } catch {
                 googleOAuthStatus = .failed(error.localizedDescription)
             }

@@ -1,9 +1,8 @@
 import SwiftUI
 
 struct AccountTabView: View {
-    @ObservedObject var settings: ReminderSettings
-    @ObservedObject var reminderService: ReminderService
-    @ObservedObject var viewModel: SettingsViewModel
+    @EnvironmentObject var settings: ReminderSettings
+    @EnvironmentObject var viewModel: SettingsViewModel
 
     var body: some View {
         Form {
@@ -13,7 +12,6 @@ struct AccountTabView: View {
                     Text("OAuth 2.0").tag(AuthMethod.oauth)
                 }
                 .pickerStyle(.segmented)
-                .onChange(of: settings.authMethod) { _ in save() }
 
                 if settings.authMethod == .appPassword {
                     appPasswordSection
@@ -23,7 +21,7 @@ struct AccountTabView: View {
 
                 HStack {
                     Button("Test Connection") {
-                        viewModel.checkConnection(settings: settings, reminderService: reminderService)
+                        viewModel.checkConnection(settings: settings)
                     }
                     Spacer()
                     connectionStatusView
@@ -32,7 +30,6 @@ struct AccountTabView: View {
 
             Section("Google Calendar") {
                 Toggle("Enable Google Calendar", isOn: $settings.googleEnabled)
-                    .onChange(of: settings.googleEnabled) { _ in save() }
 
                 if settings.googleEnabled {
                     googleAccountSection
@@ -131,7 +128,6 @@ struct AccountTabView: View {
                     GoogleOAuthService.logout()
                     settings.googleEnabled = false
                     viewModel.googleOAuthStatus = .idle
-                    save()
                 }
             }
         } else {
@@ -150,7 +146,7 @@ struct AccountTabView: View {
                 TextField("Authorization code", text: $viewModel.googleOAuthCode)
 
                 Button("Confirm") {
-                    viewModel.exchangeGoogleOAuthCode(settings: settings, reminderService: reminderService)
+                    viewModel.exchangeGoogleOAuthCode()
                 }
                 .disabled(viewModel.googleOAuthCode.isEmpty)
             }
@@ -195,9 +191,5 @@ struct AccountTabView: View {
                 .foregroundColor(.red)
                 .font(.caption)
         }
-    }
-
-    private func save() {
-        viewModel.saveSettings(settings, reminderService)
     }
 }
