@@ -43,7 +43,11 @@ class AppleCalendarService {
 
     static var hasAccess: Bool {
         let status = authorizationStatus
-        return status == .authorized || status == .fullAccess
+        if #available(macOS 14.0, *) {
+            return status == .fullAccess
+        } else {
+            return status == .authorized
+        }
     }
 
     /// Request access to the user's calendars. Returns true if access was granted.

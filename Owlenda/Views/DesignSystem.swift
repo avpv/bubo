@@ -139,7 +139,7 @@ enum DS {
     enum Materials {
         static let toast: Material = .regularMaterial
         static let overlay: Material = .ultraThinMaterial
-        static let hud: Material = .hudWindow
+        static let hud: Material = .thickMaterial
         /// Header/footer bars — use thickMaterial for richer vibrancy than `.bar`
         static let headerBar: Material = .thickMaterial
     }

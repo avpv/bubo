@@ -12,16 +12,16 @@ class ReminderService {
     var isSyncing = false
     var isUsingCache = false
 
-    private var syncTimer: Timer?
-    private var reminderTimers: [String: [Timer]] = [:]
+    private nonisolated(unsafe) var syncTimer: Timer?
+    private nonisolated(unsafe) var reminderTimers: [String: [Timer]] = [:]
     private var settings: ReminderSettings
     private var firedReminders: Set<String> = []
     private let eventCache = EventCache()
-    private var settingsObserver: Any?
+    private nonisolated(unsafe) var settingsObserver: Any?
     private var excludedOccurrences: Set<String> = []
-    private var snoozeObserver: Any?
-    private var appleCalendarObserver: Any?
-    private var pendingAppleRefreshTask: Task<Void, Never>?
+    private nonisolated(unsafe) var snoozeObserver: Any?
+    private nonisolated(unsafe) var appleCalendarObserver: Any?
+    private nonisolated(unsafe) var pendingAppleRefreshTask: Task<Void, Never>?
 
     var allEvents: [CalendarEvent] {
         let expandedLocal = localEvents.flatMap {
@@ -79,7 +79,9 @@ class ReminderService {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.scheduleAppleCalendarRefresh()
+            Task { @MainActor in
+                self?.scheduleAppleCalendarRefresh()
+            }
         }
     }
 
