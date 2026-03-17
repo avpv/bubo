@@ -8,11 +8,6 @@ struct OwlendaApp: App {
     @StateObject private var networkMonitor = NetworkMonitor()
 
     init() {
-        // Pre-load all keychain values into memory at startup.
-        // Uses Data Protection keychain (kSecUseDataProtectionKeychain) which never
-        // shows the legacy macOS "Allow / Deny" dialog.
-        KeychainService.warmUpCache()
-
         let s = ReminderSettings.load()
         _settings = StateObject(wrappedValue: s)
         _reminderService = StateObject(wrappedValue: ReminderService(settings: s))

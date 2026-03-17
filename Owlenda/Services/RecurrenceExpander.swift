@@ -1,7 +1,7 @@
 import Foundation
 
-/// Shared recurrence expansion engine used by both ReminderService (local events)
-/// and ICalParser (synced events). Handles all RFC 5545 frequency types.
+/// Recurrence expansion engine for local events.
+/// Handles all RFC 5545 frequency types.
 enum RecurrenceExpander {
 
     /// Expand a recurring event into individual occurrences within a date window.

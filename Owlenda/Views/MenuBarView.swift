@@ -149,8 +149,8 @@ struct MenuBarView: View {
                 )
             }
 
-            if reminderService.isKeychainDenied {
-                KeychainDeniedBanner()
+            if !AppleCalendarService.hasAccess {
+                CalendarAccessBanner()
             } else if let error = reminderService.syncError, networkMonitor.isConnected {
                 StatusBanner(icon: "exclamationmark.triangle.fill", text: error, color: .orange)
             }
@@ -313,7 +313,7 @@ private struct OpenSettingsButton: View {
     }
 }
 
-private struct KeychainDeniedBanner: View {
+private struct CalendarAccessBanner: View {
     @Environment(\.openSettings) private var openSettings
 
     var body: some View {
@@ -323,23 +323,23 @@ private struct KeychainDeniedBanner: View {
             NSApp.activate()
         } label: {
             HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: "key.slash")
+                Image(systemName: "calendar.badge.exclamationmark")
                     .font(.caption)
                     .symbolRenderingMode(.hierarchical)
-                Text("Keychain access denied. Click to open Settings.")
+                Text("Calendar access not granted. Click to open Settings.")
                     .font(.caption)
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.caption2)
             }
-            .foregroundColor(.red)
+            .foregroundColor(.orange)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.vertical, DS.Spacing.sm)
-            .background(Color.red.opacity(0.08))
+            .background(Color.orange.opacity(0.08))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Keychain access denied. Open settings to re-enter credentials.")
+        .accessibilityLabel("Calendar access not granted. Open settings to grant access.")
         .transition(.move(edge: .top).combined(with: .opacity))
     }
 }
