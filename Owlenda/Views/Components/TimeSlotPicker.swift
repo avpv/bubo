@@ -7,9 +7,8 @@ import SwiftUI
 /// next to a `DatePicker(.hourAndMinute)` — the DatePicker handles
 /// display and manual entry, this button handles quick preset selection.
 ///
-/// When the selected date is today, past slots are hidden so the user
-/// can only pick future times. A per-minute timer keeps the list
-/// up to date while the form is open.
+/// When the selected date is today, past slots are hidden entirely.
+/// A per-minute task keeps the list up to date while the form is open.
 ///
 /// ```swift
 /// HStack {
@@ -27,25 +26,12 @@ struct TimeSlotPicker: View {
 
     var body: some View {
         let nearest = nearestSlotID
-        let slots = availableSlots
-        let morning = slots.filter { $0.id < Self.noon }
-        let afternoon = slots.filter { $0.id >= Self.noon && $0.id < Self.evening }
-        let evening = slots.filter { $0.id >= Self.evening }
+        let groups = sectionedSlots
 
         Menu {
-            if !morning.isEmpty {
-                Section("Morning") {
-                    slotButtons(morning, nearest: nearest)
-                }
-            }
-            if !afternoon.isEmpty {
-                Section("Afternoon") {
-                    slotButtons(afternoon, nearest: nearest)
-                }
-            }
-            if !evening.isEmpty {
-                Section("Evening") {
-                    slotButtons(evening, nearest: nearest)
+            ForEach(groups) { group in
+                Section(group.title) {
+                    slotButtons(group.slots, nearest: nearest)
                 }
             }
         } label: {
@@ -54,13 +40,39 @@ struct TimeSlotPicker: View {
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
-        .onReceive(minuteTimer) { now = $0 }
+        .task(id: "minute-tick") {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(60))
+                now = .now
+            }
+        }
     }
 
-    // MARK: - Timer
+    // MARK: - Section model
 
-    /// Fires once per minute to keep the slot list up to date.
-    private let minuteTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
+    private struct SlotSection: Identifiable {
+        let title: String
+        let slots: [Slot]
+        var id: String { title }
+    }
+
+    private static let sections: [(String, Range<Int>)] = [
+        ("Morning",   0 ..< noon),
+        ("Afternoon", noon ..< evening),
+        ("Evening",   evening ..< midnight),
+    ]
+
+    /// Slots grouped by time-of-day, with past slots and empty sections removed.
+    private var sectionedSlots: [SlotSection] {
+        let cutoff = currentMinutesCutoff
+        return Self.sections.compactMap { title, range in
+            let slots = stride(from: range.lowerBound, to: range.upperBound, by: step)
+                .filter { $0 >= cutoff }
+                .map { Slot(id: $0) }
+            guard !slots.isEmpty else { return nil }
+            return SlotSection(title: title, slots: slots)
+        }
+    }
 
     // MARK: - Constants
 
@@ -68,7 +80,7 @@ struct TimeSlotPicker: View {
     private static let evening = 18 * 60    // 18:00
     private static let midnight = 24 * 60   // 24:00
 
-    // MARK: - Slots
+    // MARK: - Slot
 
     private struct Slot: Identifiable {
         let id: Int // total minutes from midnight
@@ -77,21 +89,15 @@ struct TimeSlotPicker: View {
         var label: String { String(format: "%02d:%02d", hour, minute) }
     }
 
-    private static func makeSlots(step: Int) -> [Slot] {
-        stride(from: 0, to: midnight, by: step).map { Slot(id: $0) }
-    }
-
-    /// All slots, with past slots hidden when the selected date is today.
-    private var availableSlots: [Slot] {
-        let all = Self.makeSlots(step: step)
+    /// Minutes-from-midnight cutoff: slots before this value are hidden.
+    /// Returns `0` when the selected date is not today (all slots visible).
+    private var currentMinutesCutoff: Int {
         let cal = Calendar.current
-        guard cal.isDateInToday(selection) else { return all }
-        let currentMinutes = cal.component(.hour, from: now) * 60
+        guard cal.isDateInToday(selection) else { return 0 }
+        return cal.component(.hour, from: now) * 60
             + cal.component(.minute, from: now)
-        return all.filter { $0.id >= currentMinutes }
     }
 
-    /// Computed once per body evaluation and passed down — not recomputed per slot.
     private var nearestSlotID: Int {
         let cal = Calendar.current
         let mins = cal.component(.hour, from: selection) * 60
