@@ -79,7 +79,7 @@ struct EventDetailView: View {
                             Text(description)
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
-                                .lineLimit(6)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
 
