@@ -22,9 +22,5 @@ struct SettingsView: View {
         .environmentObject(viewModel)
         .frame(minHeight: DS.Settings.minHeight, idealHeight: DS.Settings.idealHeight)
         .frame(width: DS.Settings.width)
-        .onAppear {
-            viewModel.settings = settings
-            viewModel.reminderService = reminderService
-        }
     }
 }

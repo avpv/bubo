@@ -9,7 +9,7 @@ struct CalendarsTabView: View {
             Section("Yandex Calendar") {
                 HStack {
                     Button {
-                        viewModel.loadYandexCalendars()
+                        viewModel.loadYandexCalendars(settings: settings)
                     } label: {
                         Label("Load Calendars", systemImage: "arrow.clockwise")
                     }
@@ -76,7 +76,6 @@ struct CalendarsTabView: View {
             get: { selected.wrappedValue.isEmpty },
             set: { isAll in
                 selected.wrappedValue = isAll ? [] : calendars.map { $0.id }
-                viewModel.save()
             }
         ))
         .fontWeight(.medium)
@@ -96,7 +95,6 @@ struct CalendarsTabView: View {
                         if selected.wrappedValue.count == calendars.count {
                             selected.wrappedValue = []
                         }
-                        viewModel.save()
                     }
                 ))
             }

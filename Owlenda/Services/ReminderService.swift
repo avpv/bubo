@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import UserNotifications
 import AppKit
@@ -19,6 +20,7 @@ class ReminderService: ObservableObject {
     private var firedReminders: Set<String> = []
     private let eventCache = EventCache()
     private var networkMonitor: NetworkMonitor?
+    private var settingsObserver: AnyCancellable?
     private var excludedOccurrences: Set<String> = []
 
     var allEvents: [CalendarEvent] {
@@ -61,6 +63,21 @@ class ReminderService: ObservableObject {
                 self.snoozeReminder(for: event, minutes: minutes)
             }
         }
+
+        // Auto-update when settings change
+        settingsObserver = settings.objectWillChange
+            .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
+            .sink { [weak self] _ in
+                DispatchQueue.main.async {
+                    self?.onSettingsChanged()
+                }
+            }
+    }
+
+    private func onSettingsChanged() {
+        setupCalDAVService()
+        rescheduleAllReminders()
+        startSyncTimer()
     }
 
     deinit {

@@ -3,7 +3,6 @@ import SwiftUI
 struct GeneralTabView: View {
     @EnvironmentObject var settings: ReminderSettings
     @EnvironmentObject var reminderService: ReminderService
-    @EnvironmentObject var viewModel: SettingsViewModel
 
     var body: some View {
         Form {
@@ -16,15 +15,10 @@ struct GeneralTabView: View {
                     Text("15 minutes").tag(15)
                     Text("30 minutes").tag(30)
                 }
-                .onChange(of: settings.syncIntervalMinutes) { _ in
-                    viewModel.save()
-                    reminderService.startSyncTimer()
-                }
             }
 
             Section("Startup") {
                 Toggle("Launch at login", isOn: $settings.launchAtLogin)
-                    .onChange(of: settings.launchAtLogin) { _ in viewModel.save() }
             }
 
             Section("Status") {

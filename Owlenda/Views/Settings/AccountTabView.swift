@@ -2,7 +2,6 @@ import SwiftUI
 
 struct AccountTabView: View {
     @EnvironmentObject var settings: ReminderSettings
-    @EnvironmentObject var reminderService: ReminderService
     @EnvironmentObject var viewModel: SettingsViewModel
 
     var body: some View {
@@ -13,7 +12,6 @@ struct AccountTabView: View {
                     Text("OAuth 2.0").tag(AuthMethod.oauth)
                 }
                 .pickerStyle(.segmented)
-                .onChange(of: settings.authMethod) { _ in viewModel.save() }
 
                 if settings.authMethod == .appPassword {
                     appPasswordSection
@@ -23,7 +21,7 @@ struct AccountTabView: View {
 
                 HStack {
                     Button("Test Connection") {
-                        viewModel.checkConnection()
+                        viewModel.checkConnection(settings: settings)
                     }
                     Spacer()
                     connectionStatusView
@@ -32,7 +30,6 @@ struct AccountTabView: View {
 
             Section("Google Calendar") {
                 Toggle("Enable Google Calendar", isOn: $settings.googleEnabled)
-                    .onChange(of: settings.googleEnabled) { _ in viewModel.save() }
 
                 if settings.googleEnabled {
                     googleAccountSection
@@ -131,7 +128,6 @@ struct AccountTabView: View {
                     GoogleOAuthService.logout()
                     settings.googleEnabled = false
                     viewModel.googleOAuthStatus = .idle
-                    viewModel.save()
                 }
             }
         } else {
