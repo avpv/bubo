@@ -95,11 +95,11 @@ struct EventRowView: View {
             Text(event.formattedTime)
                 .font(.system(.caption, design: .monospaced))
                 .fontWeight(.bold)
-                .foregroundColor(DS.urgencyColor(minutesUntil: event.minutesUntilStart))
+                .foregroundColor(DS.Colors.textPrimary)
 
             Text(timeUntilText)
                 .font(.system(.caption2, design: .monospaced))
-                .foregroundColor(DS.urgencyColor(minutesUntil: event.minutesUntilStart).opacity(0.8))
+                .foregroundColor(DS.Colors.textSecondary)
                 .contentTransition(.numericText())
         }
         .frame(width: DS.Size.timeColumnWidth)
@@ -142,7 +142,7 @@ struct EventRowView: View {
                 if let calName = event.calendarName {
                     Text(calName)
                         .font(.caption2)
-                        .foregroundColor(DS.Colors.calendarLabel)
+                        .foregroundColor(DS.Colors.textTertiary)
                 }
             }
         }

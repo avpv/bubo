@@ -71,33 +71,30 @@ struct AddEventView: View {
                 }
 
                 Section("Date & Time") {
-                    HStack(spacing: DS.Spacing.xs) {
-                        DatePicker("", selection: $date,
-                                   displayedComponents: .date)
-                            .labelsHidden()
+                    Grid(alignment: .leading, horizontalSpacing: DS.Spacing.sm, verticalSpacing: DS.Spacing.xs) {
+                        GridRow {
+                            Text("Starts")
+                                .foregroundColor(DS.Colors.textSecondary)
+                                .gridColumnAlignment(.trailing)
                             
-                        HStack(spacing: 2) {
-                            DatePicker("", selection: $date,
-                                       displayedComponents: .hourAndMinute)
-                                .labelsHidden()
-                            TimeSlotPicker(selection: $date)
+                            HStack(spacing: DS.Spacing.xs) {
+                                DatePicker("", selection: $date)
+                                    .labelsHidden()
+                                TimeSlotPicker(selection: $date)
+                            }
                         }
-
-                        Text("to")
-                            .font(.caption)
-                            .foregroundColor(DS.Colors.textSecondary)
-                            .padding(.horizontal, 2)
-
-                        HStack(spacing: 2) {
-                            DatePicker("", selection: endDateBinding,
-                                       displayedComponents: .hourAndMinute)
-                                .labelsHidden()
-                            TimeSlotPicker(selection: endDateBinding)
+                        
+                        GridRow {
+                            Text("Ends")
+                                .foregroundColor(DS.Colors.textSecondary)
+                                .gridColumnAlignment(.trailing)
+                            
+                            HStack(spacing: DS.Spacing.xs) {
+                                DatePicker("", selection: endDateBinding, in: date...)
+                                    .labelsHidden()
+                                TimeSlotPicker(selection: endDateBinding)
+                            }
                         }
-
-                        DatePicker("", selection: endDateBinding, in: date...,
-                                   displayedComponents: .date)
-                            .labelsHidden()
                     }
                     .datePickerStyle(.stepperField)
                     .controlSize(.small)

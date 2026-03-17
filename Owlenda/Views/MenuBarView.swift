@@ -267,16 +267,25 @@ struct MenuBarView: View {
             LazyVStack(alignment: .leading, spacing: 0) {
                 ForEach(reminderService.eventsByDay, id: \.date) { dayGroup in
                     Section {
-                        ForEach(dayGroup.events) { event in
-                            EventRowView(
-                                event: event,
-                                reminderService: reminderService,
-                                onEdit: { event in resolveEdit(event) },
-                                onDelete: { event in handleDelete(event) },
-                                onTap: { event in
-                                    navigation = .detail(event)
+                        ForEach(Array(dayGroup.events.enumerated()), id: \.element.id) { index, event in
+                            VStack(spacing: 0) {
+                                EventRowView(
+                                    event: event,
+                                    reminderService: reminderService,
+                                    onEdit: { event in resolveEdit(event) },
+                                    onDelete: { event in handleDelete(event) },
+                                    onTap: { event in
+                                        navigation = .detail(event)
+                                    }
+                                )
+                                
+                                if index < dayGroup.events.count - 1 {
+                                    Divider()
+                                        .opacity(0.5)
+                                        .padding(.leading, DS.Spacing.xs + DS.Size.accentBarWidth + DS.Spacing.md + DS.Size.timeColumnWidth + DS.Spacing.xs)
+                                        .padding(.trailing, DS.Spacing.xs)
                                 }
-                            )
+                            }
                         }
                     } header: {
                         DaySectionHeader(date: dayGroup.date, count: dayGroup.events.count)
