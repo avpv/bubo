@@ -32,7 +32,7 @@ class ReminderSettings: Codable {
     var syncIntervalMinutes: Int { didSet { scheduleSave() } }
     var showFullScreenAlert: Bool { didSet { scheduleSave() } }
     var showSystemNotification: Bool { didSet { scheduleSave() } }
-    var launchAtLogin: Bool { didSet { scheduleSave() } }
+    var launchAtLogin: Bool
     var doNotDisturbEnabled: Bool { didSet { scheduleSave() } }
     var doNotDisturbFrom: Date { didSet { scheduleSave() } }
     var doNotDisturbTo: Date { didSet { scheduleSave() } }
@@ -43,7 +43,6 @@ class ReminderSettings: Codable {
 
     enum CodingKeys: String, CodingKey {
         case intervals, syncIntervalMinutes, showFullScreenAlert, showSystemNotification
-        case launchAtLogin
         case doNotDisturbEnabled, doNotDisturbFrom, doNotDisturbTo
         case selectedCalendarIds
     }
@@ -71,7 +70,7 @@ class ReminderSettings: Codable {
         syncIntervalMinutes = try container.decode(Int.self, forKey: .syncIntervalMinutes)
         showFullScreenAlert = try container.decode(Bool.self, forKey: .showFullScreenAlert)
         showSystemNotification = try container.decodeIfPresent(Bool.self, forKey: .showSystemNotification) ?? true
-        launchAtLogin = try container.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? false
+        launchAtLogin = false
         doNotDisturbEnabled = try container.decodeIfPresent(Bool.self, forKey: .doNotDisturbEnabled) ?? false
 
         let calendar = Calendar.current
@@ -88,7 +87,6 @@ class ReminderSettings: Codable {
         try container.encode(syncIntervalMinutes, forKey: .syncIntervalMinutes)
         try container.encode(showFullScreenAlert, forKey: .showFullScreenAlert)
         try container.encode(showSystemNotification, forKey: .showSystemNotification)
-        try container.encode(launchAtLogin, forKey: .launchAtLogin)
         try container.encode(doNotDisturbEnabled, forKey: .doNotDisturbEnabled)
         try container.encode(doNotDisturbFrom, forKey: .doNotDisturbFrom)
         try container.encode(doNotDisturbTo, forKey: .doNotDisturbTo)

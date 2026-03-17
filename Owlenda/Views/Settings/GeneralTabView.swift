@@ -1,8 +1,28 @@
+import ServiceManagement
 import SwiftUI
 
 struct GeneralTabView: View {
     @Environment(ReminderSettings.self) var settings
     @Environment(ReminderService.self) var reminderService
+    @State private var loginItemError: String?
+
+    private var launchAtLoginBinding: Binding<Bool> {
+        Binding(
+            get: { settings.launchAtLogin },
+            set: { newValue in
+                do {
+                    if newValue {
+                        try SMAppService.mainApp.register()
+                    } else {
+                        try SMAppService.mainApp.unregister()
+                    }
+                    settings.launchAtLogin = newValue
+                } catch {
+                    loginItemError = error.localizedDescription
+                }
+            }
+        )
+    }
 
     var body: some View {
         @Bindable var settings = settings
@@ -20,7 +40,7 @@ struct GeneralTabView: View {
             }
 
             Section("Startup") {
-                Toggle("Launch at login", isOn: $settings.launchAtLogin)
+                Toggle("Launch at login", isOn: launchAtLoginBinding)
             }
 
             Section("Status") {
@@ -56,5 +76,16 @@ struct GeneralTabView: View {
             }
         }
         .formStyle(.grouped)
+        .onAppear {
+            settings.launchAtLogin = SMAppService.mainApp.status == .enabled
+        }
+        .alert("Cannot change login item", isPresented: .init(
+            get: { loginItemError != nil },
+            set: { if !$0 { loginItemError = nil } }
+        )) {
+            Button("OK") { loginItemError = nil }
+        } message: {
+            Text(loginItemError ?? "")
+        }
     }
 }
