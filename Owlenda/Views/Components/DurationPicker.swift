@@ -2,8 +2,8 @@ import SwiftUI
 
 /// Compact duration picker with a preset menu and a stepper.
 ///
-/// The label is clickable — tap it to type a value directly (e.g. `90`,
-/// `1h30m`, `1.5h`, or `1:30`). Press Enter or click away to confirm.
+/// The label is clickable — tap it to type duration in minutes.
+/// Press Enter or click away to confirm.
 ///
 /// ```swift
 /// HStack {
@@ -89,9 +89,8 @@ struct DurationPicker: View {
     // MARK: - Editing
 
     private func startEditing() {
-        text = DS.formatMinutes(Int(minutes))
+        text = "\(Int(minutes))"
         isEditing = true
-        // Focus after SwiftUI lays out the TextField.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
             isFocused = true
         }
@@ -99,8 +98,8 @@ struct DurationPicker: View {
 
     private func commitEdit() {
         isEditing = false
-        if let parsed = Self.parseDuration(text) {
-            let clamped = max(5, min(480, parsed))
+        if let value = Int(text.trimmingCharacters(in: .whitespaces)), value > 0 {
+            let clamped = max(5, min(480, value))
             withAnimation(DS.Animation.microInteraction) {
                 minutes = Double(clamped)
             }
@@ -136,64 +135,5 @@ struct DurationPicker: View {
         .fixedSize()
         .help(String(localized: "Duration presets",
                      comment: "Tooltip for the duration preset menu"))
-    }
-
-    // MARK: - Smart Duration Parser
-
-    /// Parses flexible human duration input into total minutes.
-    ///
-    /// Supported formats:
-    /// - Plain number: `"90"` → 90 min
-    /// - Hours + minutes: `"1h30m"`, `"1h 30m"`, `"1h30"` → 90 min
-    /// - Hours only: `"2h"` → 120 min
-    /// - Minutes only: `"45m"`, `"45 min"` → 45 min
-    /// - Decimal hours: `"1.5h"` → 90 min
-    /// - Colon notation: `"1:30"` → 90 min
-    /// - Formatted output: `"1 h 30 min"` → 90 min (round-trip)
-    static func parseDuration(_ input: String) -> Int? {
-        let s = input.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !s.isEmpty else { return nil }
-
-        // "1:30" colon notation
-        if s.contains(":") {
-            let parts = s.split(separator: ":")
-            guard parts.count == 2,
-                  let h = Int(parts[0]),
-                  let m = Int(parts[1]),
-                  h >= 0, m >= 0, m < 60 else { return nil }
-            let total = h * 60 + m
-            return total > 0 ? total : nil
-        }
-
-        // "1h30m", "1h 30m", "1h30", "2h", "1.5h", "1 h 30 min"
-        let hPattern = #/(\d+(?:\.\d+)?)\s*h/#
-        let mPattern = #/(\d+)\s*m/#
-
-        if let hMatch = s.firstMatch(of: hPattern) {
-            let hours = Double(hMatch.1)!
-            var total = Int(hours * 60)
-            if let mMatch = s.firstMatch(of: mPattern) {
-                total += Int(mMatch.1)!
-            } else {
-                let afterH = #/h\s*(\d+)$/#
-                if let trailing = s.firstMatch(of: afterH) {
-                    total += Int(trailing.1)!
-                }
-            }
-            return total > 0 ? total : nil
-        }
-
-        // "45m", "45 min", "45min"
-        if let mMatch = s.firstMatch(of: mPattern) {
-            let total = Int(mMatch.1)!
-            return total > 0 ? total : nil
-        }
-
-        // Plain number → minutes
-        if let n = Int(s), n > 0 {
-            return n
-        }
-
-        return nil
     }
 }
