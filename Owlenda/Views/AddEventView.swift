@@ -31,6 +31,17 @@ struct AddEventView: View {
         date.addingTimeInterval(duration * 60)
     }
 
+    private var endDateBinding: Binding<Date> {
+        Binding(
+            get: { eventEndDate },
+            set: { newEnd in
+                let diff = newEnd.timeIntervalSince(date)
+                guard diff >= 5 * 60 else { return }
+                duration = diff / 60
+            }
+        )
+    }
+
     /// Whether the Pomodoro mode is controlling the event duration.
     private var isPomodoroMode: Bool {
         recurrenceRule?.frequency == .minutely
@@ -60,30 +71,19 @@ struct AddEventView: View {
                 }
 
                 Section("Date & Time") {
-                    DatePicker("Date", selection: $date, displayedComponents: .date)
-
                     HStack {
-                        Text("Time")
-                        Spacer()
-                        TimeSlotPicker(selection: $date)
-                        DatePicker("", selection: $date, displayedComponents: .hourAndMinute)
+                        DatePicker("", selection: $date,
+                                   displayedComponents: [.hourAndMinute, .date])
+                            .labelsHidden()
+
+                        Text("—")
+                            .foregroundColor(DS.Colors.textSecondary)
+
+                        DatePicker("", selection: endDateBinding, in: date...,
+                                   displayedComponents: [.hourAndMinute, .date])
                             .labelsHidden()
                     }
-
-                    if !isPomodoroMode {
-                        HStack {
-                            Text("Duration")
-                            Spacer()
-                            DurationPicker(minutes: $duration)
-                        }
-                    }
-
-                    LabeledContent("Ends at") {
-                        Text(DS.timeFormatter.string(from: eventEndDate))
-                            .foregroundColor(DS.Colors.textSecondary)
-                            .contentTransition(.numericText())
-                            .animation(DS.Animation.microInteraction, value: eventEndDate)
-                    }
+                    .datePickerStyle(.stepperField)
                 }
 
                 Section("Details") {
