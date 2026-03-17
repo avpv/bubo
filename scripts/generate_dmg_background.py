@@ -15,7 +15,6 @@ import io
 import math
 import os
 
-import cairosvg
 from PIL import Image, ImageDraw, ImageFont
 
 # Layout (points) — single source of truth
@@ -115,11 +114,9 @@ def draw_text(draw):
 def generate():
     img = Image.new("RGBA", (IMG_W, IMG_H))
     draw_gradient(img)
-    draw_watermark(img)
 
     draw = ImageDraw.Draw(img)
     draw_curved_arrow(draw)
-    draw_text(draw)
 
     img.save(OUTPUT_PATH, dpi=(144, 144))
     print(f"Created {OUTPUT_PATH} ({IMG_W}x{IMG_H} @144 DPI)")
