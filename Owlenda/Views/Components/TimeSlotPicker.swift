@@ -8,7 +8,7 @@ import SwiftUI
 /// display and manual entry, this button handles quick preset selection.
 ///
 /// When the selected date is today, past slots are hidden entirely.
-/// A per-minute task keeps the list up to date while the form is open.
+/// If no future slots remain, the button is disabled with a tooltip.
 ///
 /// ```swift
 /// HStack {
@@ -25,8 +25,8 @@ struct TimeSlotPicker: View {
     @State private var now = Date()
 
     var body: some View {
-        let nearest = nearestSlotID
         let groups = sectionedSlots
+        let nearest = nearestAvailableSlotID(in: groups)
 
         Menu {
             ForEach(groups) { group in
@@ -40,7 +40,14 @@ struct TimeSlotPicker: View {
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
-        .task(id: "minute-tick") {
+        .disabled(groups.isEmpty)
+        .help(groups.isEmpty
+              ? String(localized: "No time slots left for today",
+                       comment: "Tooltip when all time slots are in the past")
+              : String(localized: "Pick a time slot",
+                       comment: "Tooltip for the time slot picker button"))
+        .accessibilityLabel(Text("Time slot picker", comment: "Accessibility label for the time slot menu button"))
+        .task {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(60))
                 now = .now
@@ -51,26 +58,26 @@ struct TimeSlotPicker: View {
     // MARK: - Section model
 
     private struct SlotSection: Identifiable {
-        let title: String
+        let title: LocalizedStringKey
         let slots: [Slot]
-        var id: String { title }
+        let id: String
     }
 
-    private static let sections: [(String, Range<Int>)] = [
-        ("Morning",   0 ..< noon),
-        ("Afternoon", noon ..< evening),
-        ("Evening",   evening ..< midnight),
+    private static let sections: [(LocalizedStringKey, String, Range<Int>)] = [
+        ("Morning",   "morning",   0 ..< noon),
+        ("Afternoon", "afternoon", noon ..< evening),
+        ("Evening",   "evening",   evening ..< midnight),
     ]
 
     /// Slots grouped by time-of-day, with past slots and empty sections removed.
     private var sectionedSlots: [SlotSection] {
         let cutoff = currentMinutesCutoff
-        return Self.sections.compactMap { title, range in
+        return Self.sections.compactMap { title, id, range in
             let slots = stride(from: range.lowerBound, to: range.upperBound, by: step)
                 .filter { $0 >= cutoff }
                 .map { Slot(id: $0) }
             guard !slots.isEmpty else { return nil }
-            return SlotSection(title: title, slots: slots)
+            return SlotSection(title: title, slots: slots, id: id)
         }
     }
 
@@ -98,16 +105,23 @@ struct TimeSlotPicker: View {
             + cal.component(.minute, from: now)
     }
 
-    private var nearestSlotID: Int {
+    /// Nearest slot to current selection, clamped to actually visible slots.
+    private func nearestAvailableSlotID(in groups: [SlotSection]) -> Int? {
         let cal = Calendar.current
         let mins = cal.component(.hour, from: selection) * 60
             + cal.component(.minute, from: selection)
         let rounded = ((mins + step / 2) / step) * step
-        return min(rounded, Self.midnight - step)
+        let target = min(rounded, Self.midnight - step)
+
+        let allIDs = groups.flatMap { $0.slots.map(\.id) }
+        guard !allIDs.isEmpty else { return nil }
+
+        // Find the closest visible slot to the target.
+        return allIDs.min(by: { abs($0 - target) < abs($1 - target) })
     }
 
     @ViewBuilder
-    private func slotButtons(_ slots: [Slot], nearest: Int) -> some View {
+    private func slotButtons(_ slots: [Slot], nearest: Int?) -> some View {
         ForEach(slots) { slot in
             Button {
                 selection = apply(slot)
