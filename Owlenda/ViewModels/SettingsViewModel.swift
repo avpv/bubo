@@ -1,14 +1,15 @@
 import Foundation
 
 @MainActor
-class SettingsViewModel: ObservableObject {
+@Observable
+class SettingsViewModel {
     // MARK: - Reminders Tab
-    @Published var newIntervalMinutes = 10
+    var newIntervalMinutes = 10
 
     // MARK: - Apple Calendar
-    @Published var appleCalendarAccessGranted = AppleCalendarService.hasAccess
-    @Published var availableAppleCalendars: [AppleCalendarService.CalendarInfo] = []
-    @Published var appleCalendarsByAccount: [(account: String, calendars: [AppleCalendarService.CalendarInfo])] = []
+    var appleCalendarAccessGranted = AppleCalendarService.hasAccess
+    var availableAppleCalendars: [AppleCalendarService.CalendarInfo] = []
+    var appleCalendarsByAccount: [(account: String, calendars: [AppleCalendarService.CalendarInfo])] = []
 
     // MARK: - Actions
 

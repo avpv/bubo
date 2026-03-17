@@ -1,9 +1,9 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @EnvironmentObject var settings: ReminderSettings
-    @EnvironmentObject var reminderService: ReminderService
-    @StateObject private var viewModel = SettingsViewModel()
+    @Environment(ReminderSettings.self) var settings
+    @Environment(ReminderService.self) var reminderService
+    @State private var viewModel = SettingsViewModel()
 
     var body: some View {
         TabView {
@@ -16,7 +16,10 @@ struct SettingsView: View {
             GeneralTabView()
                 .tabItem { Label("General", systemImage: "gear") }
         }
-        .environmentObject(viewModel)
+        .environment(viewModel)
+        .environment(settings)
+        .environment(reminderService)
+        .navigationTitle("Owlenda Settings")
         .frame(minHeight: DS.Settings.minHeight, idealHeight: DS.Settings.idealHeight)
         .frame(width: DS.Settings.width)
     }

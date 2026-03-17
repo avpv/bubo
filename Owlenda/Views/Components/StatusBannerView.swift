@@ -22,6 +22,7 @@ struct StatusBanner: View {
         .padding(.vertical, DS.Spacing.sm)
         .adaptiveBadgeFill(color)
         .accessibilityElement(children: .combine)
+        .accessibilityLabel("Status: \(text)")
         .transition(
             reduceMotion
                 ? .opacity

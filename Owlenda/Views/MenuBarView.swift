@@ -1,8 +1,8 @@
 import SwiftUI
 
 struct MenuBarView: View {
-    @ObservedObject var settings: ReminderSettings
-    @ObservedObject var reminderService: ReminderService
+    var settings: ReminderSettings
+    var reminderService: ReminderService
     var networkMonitor: NetworkMonitor
 
     @State private var navigation: Navigation = .list

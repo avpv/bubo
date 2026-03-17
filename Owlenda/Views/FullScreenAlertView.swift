@@ -10,6 +10,7 @@ struct FullScreenAlertView: View {
     @State private var countdownTimer: Timer?
     @State private var isVisible = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
         ZStack {
@@ -18,7 +19,7 @@ struct FullScreenAlertView: View {
                 .fill(DS.Materials.overlay)
                 .ignoresSafeArea()
 
-            Color.black.opacity(0.6)
+            Color.black.opacity(contrast == .increased ? 0.8 : 0.6)
                 .ignoresSafeArea()
 
             VStack(spacing: DS.Spacing.xxxl) {

@@ -1,27 +1,27 @@
-import Combine
 import Foundation
 import UserNotifications
 import AppKit
 
 @MainActor
-class ReminderService: ObservableObject {
-    @Published var upcomingEvents: [CalendarEvent] = []
-    @Published var localEvents: [CalendarEvent] = []
-    @Published var lastSyncDate: Date?
-    @Published var syncError: String?
-    @Published var isSyncing = false
-    @Published var isUsingCache = false
+@Observable
+class ReminderService {
+    var upcomingEvents: [CalendarEvent] = []
+    var localEvents: [CalendarEvent] = []
+    var lastSyncDate: Date?
+    var syncError: String?
+    var isSyncing = false
+    var isUsingCache = false
 
     private var syncTimer: Timer?
     private var reminderTimers: [String: [Timer]] = [:]
     private var settings: ReminderSettings
     private var firedReminders: Set<String> = []
     private let eventCache = EventCache()
-    private var settingsObserver: AnyCancellable?
+    private var settingsObserver: Any?
     private var excludedOccurrences: Set<String> = []
     private var snoozeObserver: Any?
     private var appleCalendarObserver: Any?
-    private var pendingAppleRefreshWork: DispatchWorkItem?
+    private var pendingAppleRefreshTask: Task<Void, Never>?
 
     var allEvents: [CalendarEvent] {
         let expandedLocal = localEvents.flatMap {
@@ -61,13 +61,16 @@ class ReminderService: ObservableObject {
             }
         }
 
-        settingsObserver = settings.objectWillChange
-            .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
-            .sink { [weak self] _ in
-                DispatchQueue.main.async {
-                    self?.onSettingsChanged()
-                }
+        // Observe settings changes via NotificationCenter (replaces Combine pipeline)
+        settingsObserver = NotificationCenter.default.addObserver(
+            forName: ReminderSettings.settingsDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.onSettingsChanged()
             }
+        }
 
         // Auto-sync when Calendar.app data changes (edits, iCloud sync).
         // Debounced: EKEventStoreChanged can fire in bursts.
@@ -89,10 +92,13 @@ class ReminderService: ObservableObject {
         if let observer = snoozeObserver {
             NotificationCenter.default.removeObserver(observer)
         }
+        if let observer = settingsObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
         if let observer = appleCalendarObserver {
             NotificationCenter.default.removeObserver(observer)
         }
-        pendingAppleRefreshWork?.cancel()
+        pendingAppleRefreshTask?.cancel()
         for timers in reminderTimers.values {
             timers.forEach { $0.invalidate() }
         }
@@ -100,14 +106,12 @@ class ReminderService: ObservableObject {
     }
 
     private func scheduleAppleCalendarRefresh() {
-        pendingAppleRefreshWork?.cancel()
-        let work = DispatchWorkItem { [weak self] in
-            Task { @MainActor in
-                self?.syncNow()
-            }
+        pendingAppleRefreshTask?.cancel()
+        pendingAppleRefreshTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled else { return }
+            self?.syncNow()
         }
-        pendingAppleRefreshWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: work)
     }
 
     func updateSettings(_ settings: ReminderSettings) {

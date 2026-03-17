@@ -3,14 +3,14 @@ import SwiftUI
 @main
 struct OwlendaApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @StateObject private var settings: ReminderSettings
-    @StateObject private var reminderService: ReminderService
+    @State private var settings: ReminderSettings
+    @State private var reminderService: ReminderService
     @State private var networkMonitor = NetworkMonitor()
 
     init() {
         let s = ReminderSettings.load()
-        _settings = StateObject(wrappedValue: s)
-        _reminderService = StateObject(wrappedValue: ReminderService(settings: s))
+        _settings = State(wrappedValue: s)
+        _reminderService = State(wrappedValue: ReminderService(settings: s))
     }
 
     private var menuBarIcon: NSImage {
@@ -81,8 +81,8 @@ struct OwlendaApp: App {
 
         Settings {
             SettingsView()
-                .environmentObject(settings)
-                .environmentObject(reminderService)
+                .environment(settings)
+                .environment(reminderService)
         }
     }
 }

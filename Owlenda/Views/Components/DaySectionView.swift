@@ -31,6 +31,9 @@ struct DaySectionHeader: View {
                 .clipShape(Capsule())
                 .contentTransition(.numericText())
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(dayTitle), \(count) \(count == 1 ? "event" : "events")")
+        .accessibilityAddTraits(.isHeader)
         .onAppear {
             guard !reduceMotion else {
                 appeared = true

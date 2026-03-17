@@ -1,4 +1,3 @@
-import Combine
 import Foundation
 
 struct ReminderInterval: Identifiable, Codable, Hashable {
@@ -25,18 +24,22 @@ struct ReminderInterval: Identifiable, Codable, Hashable {
     }
 }
 
-class ReminderSettings: ObservableObject, Codable {
-    private var autoSaveCancellable: AnyCancellable?
+@Observable
+class ReminderSettings: Codable {
+    static let settingsDidChange = Notification.Name("ReminderSettingsDidChange")
 
-    @Published var intervals: [ReminderInterval]
-    @Published var syncIntervalMinutes: Int
-    @Published var showFullScreenAlert: Bool
-    @Published var showSystemNotification: Bool
-    @Published var launchAtLogin: Bool
-    @Published var doNotDisturbEnabled: Bool
-    @Published var doNotDisturbFrom: Date  // time only
-    @Published var doNotDisturbTo: Date    // time only
-    @Published var selectedCalendarIds: [String]  // empty = all calendars
+    var intervals: [ReminderInterval] { didSet { scheduleSave() } }
+    var syncIntervalMinutes: Int { didSet { scheduleSave() } }
+    var showFullScreenAlert: Bool { didSet { scheduleSave() } }
+    var showSystemNotification: Bool { didSet { scheduleSave() } }
+    var launchAtLogin: Bool { didSet { scheduleSave() } }
+    var doNotDisturbEnabled: Bool { didSet { scheduleSave() } }
+    var doNotDisturbFrom: Date { didSet { scheduleSave() } }
+    var doNotDisturbTo: Date { didSet { scheduleSave() } }
+    var selectedCalendarIds: [String] { didSet { scheduleSave() } }
+
+    // Task-based debounced save — replaces Combine pipeline
+    private var saveTask: Task<Void, Never>?
 
     enum CodingKeys: String, CodingKey {
         case intervals, syncIntervalMinutes, showFullScreenAlert, showSystemNotification
@@ -60,7 +63,6 @@ class ReminderSettings: ObservableObject, Codable {
         self.doNotDisturbFrom = calendar.date(from: DateComponents(hour: 22, minute: 0)) ?? Date()
         self.doNotDisturbTo = calendar.date(from: DateComponents(hour: 8, minute: 0)) ?? Date()
         self.selectedCalendarIds = [] // empty = sync all
-        setupAutoSave()
     }
 
     required init(from decoder: Decoder) throws {
@@ -78,7 +80,6 @@ class ReminderSettings: ObservableObject, Codable {
         doNotDisturbTo = try container.decodeIfPresent(Date.self, forKey: .doNotDisturbTo)
             ?? calendar.date(from: DateComponents(hour: 8, minute: 0)) ?? Date()
         selectedCalendarIds = try container.decodeIfPresent([String].self, forKey: .selectedCalendarIds) ?? []
-        setupAutoSave()
     }
 
     func encode(to encoder: Encoder) throws {
@@ -113,14 +114,14 @@ class ReminderSettings: ObservableObject, Codable {
         }
     }
 
-    private func setupAutoSave() {
-        autoSaveCancellable = objectWillChange
-            .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
-            .sink { [weak self] _ in
-                DispatchQueue.main.async {
-                    self?.save()
-                }
-            }
+    private func scheduleSave() {
+        saveTask?.cancel()
+        saveTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+            self?.save()
+            NotificationCenter.default.post(name: Self.settingsDidChange, object: nil)
+        }
     }
 
     func save() {

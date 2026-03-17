@@ -2,10 +2,12 @@ import EventKit
 import SwiftUI
 
 struct CalendarsTabView: View {
-    @EnvironmentObject var settings: ReminderSettings
-    @EnvironmentObject var viewModel: SettingsViewModel
+    @Environment(ReminderSettings.self) var settings
+    @Environment(SettingsViewModel.self) var viewModel
 
     var body: some View {
+        @Bindable var settings = settings
+
         Form {
             accessSection
 
@@ -41,7 +43,7 @@ struct CalendarsTabView: View {
                     VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                         Label("Calendar access denied", systemImage: "xmark.circle.fill")
                             .foregroundColor(.red)
-                        Text("Grant access in System Settings → Privacy & Security → Calendars")
+                        Text("Grant access in System Settings \u{2192} Privacy & Security \u{2192} Calendars")
                             .font(.caption)
                             .foregroundColor(.secondary)
                         Button("Open System Settings") {
@@ -61,7 +63,7 @@ struct CalendarsTabView: View {
                 }
             }
 
-            Text("Owlenda reads events from all accounts configured in the Calendar app — iCloud, Google, Exchange, CalDAV, and others.")
+            Text("Owlenda reads events from all accounts configured in the Calendar app \u{2014} iCloud, Google, Exchange, CalDAV, and others.")
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
@@ -71,6 +73,7 @@ struct CalendarsTabView: View {
 
     @ViewBuilder
     private var calendarSelectionSection: some View {
+        @Bindable var settings = settings
         let allCalendars = viewModel.availableAppleCalendars
 
         Section {
@@ -111,7 +114,7 @@ struct CalendarsTabView: View {
                             HStack(spacing: DS.Spacing.sm) {
                                 Circle()
                                     .fill(Color(cgColor: cal.color ?? CGColor(red: 0.5, green: 0.5, blue: 0.5, alpha: 1)))
-                                    .frame(width: 10, height: 10)
+                                    .frame(width: DS.Size.iconSmall, height: DS.Size.iconSmall)
                                 Text(cal.title)
                             }
                         }
