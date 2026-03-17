@@ -71,6 +71,10 @@ cat > "$APP/Info.plist" <<'PLIST'
     <key>NSAllowsArbitraryLoads</key>
     <false/>
   </dict>
+  <key>NSCalendarsUsageDescription</key>
+  <string>Owlenda needs access to your calendars to show meeting reminders from accounts configured in the Calendar app.</string>
+  <key>NSCalendarsFullAccessUsageDescription</key>
+  <string>Owlenda needs access to your calendars to show meeting reminders from accounts configured in the Calendar app.</string>
 </dict>
 </plist>
 PLIST
