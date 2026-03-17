@@ -1,5 +1,4 @@
 import Foundation
-import ServiceManagement
 
 struct ReminderInterval: Identifiable, Codable, Hashable {
     let id: UUID
@@ -56,7 +55,7 @@ class ReminderSettings: Codable {
         self.syncIntervalMinutes = 5
         self.showFullScreenAlert = true
         self.showSystemNotification = true
-        self.launchAtLogin = SMAppService.mainApp.status == .enabled
+        self.launchAtLogin = false
         self.doNotDisturbEnabled = false
         // Default DND: 22:00 - 08:00
         let calendar = Calendar.current
@@ -71,7 +70,7 @@ class ReminderSettings: Codable {
         syncIntervalMinutes = try container.decode(Int.self, forKey: .syncIntervalMinutes)
         showFullScreenAlert = try container.decode(Bool.self, forKey: .showFullScreenAlert)
         showSystemNotification = try container.decodeIfPresent(Bool.self, forKey: .showSystemNotification) ?? true
-        launchAtLogin = SMAppService.mainApp.status == .enabled
+        launchAtLogin = false
         doNotDisturbEnabled = try container.decodeIfPresent(Bool.self, forKey: .doNotDisturbEnabled) ?? false
 
         let calendar = Calendar.current
