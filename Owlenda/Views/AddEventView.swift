@@ -88,26 +88,9 @@ struct AddEventView: View {
 
                 Section("Details") {
                     TextField("Location", text: $location, prompt: Text("Optional"))
-                        .textFieldStyle(.roundedBorder)
 
-                    LabeledContent("Notes") {
-                        TextEditor(text: $description)
-                            .font(.body)
-                            .frame(minHeight: 60, maxHeight: 120)
-                            .scrollContentBackground(.hidden)
-                            .padding(DS.Spacing.xs)
-                            .background(Color(.textBackgroundColor))
-                            .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius))
-                            .overlay(alignment: .topLeading) {
-                                if description.isEmpty {
-                                    Text("Optional")
-                                        .foregroundStyle(.placeholder)
-                                        .padding(.horizontal, DS.Spacing.xs)
-                                        .padding(.vertical, DS.Spacing.md)
-                                        .allowsHitTesting(false)
-                                }
-                            }
-                    }
+                    TextField("Notes", text: $description, prompt: Text("Optional"), axis: .vertical)
+                        .lineLimit(3...8)
                 }
 
                 RecurrencePickerView(rule: $recurrenceRule, eventDuration: $duration, eventStartDate: date)
