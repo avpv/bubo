@@ -7,6 +7,10 @@ import SwiftUI
 /// next to a `DatePicker(.hourAndMinute)` — the DatePicker handles
 /// display and manual entry, this button handles quick preset selection.
 ///
+/// When the selected date is today, past slots are shown as disabled
+/// (dimmed) so the user keeps full-day context while only being able
+/// to pick future times.
+///
 /// ```swift
 /// HStack {
 ///     TimeSlotPicker(selection: $date)
@@ -15,31 +19,29 @@ import SwiftUI
 /// ```
 struct TimeSlotPicker: View {
     @Binding var selection: Date
+
     var step: Int = 30
+
+    /// Re-evaluated every minute so past slots become disabled in real time.
+    @State private var now = Date()
 
     var body: some View {
         let nearest = nearestSlotID
-        let allSlots = availableSlots
+        let allSlots = Self.makeSlots(step: step)
+        let cutoff = currentMinutesCutoff
 
         Menu {
-            let morning = allSlots.filter { $0.id < Self.noon }
-            let afternoon = allSlots.filter { $0.id >= Self.noon && $0.id < Self.evening }
-            let evening = allSlots.filter { $0.id >= Self.evening }
-
-            if !morning.isEmpty {
-                Section("Morning") {
-                    slotButtons(morning, nearest: nearest)
-                }
+            Section("Morning") {
+                slotButtons(allSlots.filter { $0.id < Self.noon },
+                            nearest: nearest, cutoff: cutoff)
             }
-            if !afternoon.isEmpty {
-                Section("Afternoon") {
-                    slotButtons(afternoon, nearest: nearest)
-                }
+            Section("Afternoon") {
+                slotButtons(allSlots.filter { $0.id >= Self.noon && $0.id < Self.evening },
+                            nearest: nearest, cutoff: cutoff)
             }
-            if !evening.isEmpty {
-                Section("Evening") {
-                    slotButtons(evening, nearest: nearest)
-                }
+            Section("Evening") {
+                slotButtons(allSlots.filter { $0.id >= Self.evening },
+                            nearest: nearest, cutoff: cutoff)
             }
         } label: {
             Image(systemName: "clock")
@@ -47,7 +49,13 @@ struct TimeSlotPicker: View {
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
+        .onReceive(minuteTimer) { now = $0 }
     }
+
+    // MARK: - Timer
+
+    /// Fires once per minute to keep the cutoff up to date.
+    private let minuteTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
     // MARK: - Constants
 
@@ -68,15 +76,13 @@ struct TimeSlotPicker: View {
         stride(from: 0, to: midnight, by: step).map { Slot(id: $0) }
     }
 
-    /// All slots, filtered to future-only when the selected date is today.
-    private var availableSlots: [Slot] {
-        let all = Self.makeSlots(step: step)
+    /// Minutes-from-midnight cutoff: slots before this value are disabled.
+    /// Returns `nil` when the selected date is not today (all slots enabled).
+    private var currentMinutesCutoff: Int? {
         let cal = Calendar.current
-        guard cal.isDateInToday(selection) else { return all }
-        let now = Date()
-        let currentMinutes = cal.component(.hour, from: now) * 60
+        guard cal.isDateInToday(selection) else { return nil }
+        return cal.component(.hour, from: now) * 60
             + cal.component(.minute, from: now)
-        return all.filter { $0.id >= currentMinutes }
     }
 
     /// Computed once per body evaluation and passed down — not recomputed per slot.
@@ -89,8 +95,9 @@ struct TimeSlotPicker: View {
     }
 
     @ViewBuilder
-    private func slotButtons(_ slots: [Slot], nearest: Int) -> some View {
+    private func slotButtons(_ slots: [Slot], nearest: Int, cutoff: Int?) -> some View {
         ForEach(slots) { slot in
+            let isPast = cutoff.map { slot.id < $0 } ?? false
             Button {
                 selection = apply(slot)
             } label: {
@@ -100,6 +107,7 @@ struct TimeSlotPicker: View {
                     Text(slot.label)
                 }
             }
+            .disabled(isPast)
         }
     }
 
