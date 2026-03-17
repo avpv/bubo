@@ -38,7 +38,7 @@ struct CalendarsTabView: View {
                         .font(.caption)
                 }
             } else {
-                let status = AppleCalendarService.authorizationStatus
+                let status = viewModel.appleCalendarStatus
                 if status == .denied || status == .restricted {
                     VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                         Label("Calendar access denied", systemImage: "xmark.circle.fill")
