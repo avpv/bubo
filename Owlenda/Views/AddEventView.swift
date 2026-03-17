@@ -31,6 +31,16 @@ struct AddEventView: View {
         date.addingTimeInterval(duration * 60)
     }
 
+    private var endDateBinding: Binding<Date> {
+        Binding(
+            get: { eventEndDate },
+            set: { newEnd in
+                let diff = max(5 * 60, newEnd.timeIntervalSince(date))
+                duration = diff / 60
+            }
+        )
+    }
+
     /// Whether the Pomodoro mode is controlling the event duration.
     private var isPomodoroMode: Bool {
         recurrenceRule?.frequency == .minutely
@@ -60,29 +70,19 @@ struct AddEventView: View {
                 }
 
                 Section("Date & Time") {
-                    DatePicker("Date", selection: $date, displayedComponents: .date)
-
-                    HStack {
-                        Text("Time")
-                        Spacer()
-                        TimeSlotPicker(selection: $date)
+                    HStack(spacing: DS.Spacing.sm) {
                         DatePicker("", selection: $date, displayedComponents: .hourAndMinute)
                             .labelsHidden()
-                    }
+                        DatePicker("", selection: $date, displayedComponents: .date)
+                            .labelsHidden()
 
-                    if !isPomodoroMode {
-                        HStack {
-                            Text("Duration")
-                            Spacer()
-                            DurationPicker(minutes: $duration)
-                        }
-                    }
-
-                    LabeledContent("Ends at") {
-                        Text(DS.timeFormatter.string(from: eventEndDate))
+                        Text("—")
                             .foregroundColor(DS.Colors.textSecondary)
-                            .contentTransition(.numericText())
-                            .animation(DS.Animation.microInteraction, value: eventEndDate)
+
+                        DatePicker("", selection: endDateBinding, displayedComponents: .hourAndMinute)
+                            .labelsHidden()
+                        DatePicker("", selection: endDateBinding, displayedComponents: .date)
+                            .labelsHidden()
                     }
                 }
 
