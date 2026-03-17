@@ -79,12 +79,12 @@ struct EventDetailView: View {
                             Text(description)
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
-                                .lineSpacing(2)
+                                .lineSpacing(DS.Typography.bodyLineSpacing)
                                 .textSelection(.enabled)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        .padding(DS.Spacing.md)
-                        .background(.quaternary.opacity(0.5))
+                        .padding(DS.Spacing.lg)
+                        .background(Color.primary.opacity(0.04))
                         .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius))
                     }
 

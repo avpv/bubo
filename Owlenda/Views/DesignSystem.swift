@@ -43,6 +43,12 @@ enum DS {
         static let spacing: CGFloat = 10
     }
 
+    // MARK: Typography
+
+    enum Typography {
+        static let bodyLineSpacing: CGFloat = 3
+    }
+
     // MARK: Component Sizes
 
     enum Size {
