@@ -33,7 +33,7 @@ class ReminderSettings: Codable {
     var syncIntervalMinutes: Int { didSet { scheduleSave() } }
     var showFullScreenAlert: Bool { didSet { scheduleSave() } }
     var showSystemNotification: Bool { didSet { scheduleSave() } }
-    var launchAtLogin: Bool { didSet { applyLaunchAtLogin() } }
+    var launchAtLogin: Bool
     var doNotDisturbEnabled: Bool { didSet { scheduleSave() } }
     var doNotDisturbFrom: Date { didSet { scheduleSave() } }
     var doNotDisturbTo: Date { didSet { scheduleSave() } }
@@ -110,19 +110,6 @@ class ReminderSettings: Codable {
             return currentMinutes >= fromMinutes && currentMinutes < toMinutes
         } else {
             return currentMinutes >= fromMinutes || currentMinutes < toMinutes
-        }
-    }
-
-    func applyLaunchAtLogin() {
-        let service = SMAppService.mainApp
-        do {
-            if launchAtLogin {
-                try service.register()
-            } else {
-                try service.unregister()
-            }
-        } catch {
-            // Registration can fail if user denied in System Settings
         }
     }
 
