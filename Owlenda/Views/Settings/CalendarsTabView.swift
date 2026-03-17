@@ -1,4 +1,3 @@
-import EventKit
 import SwiftUI
 
 struct CalendarsTabView: View {
@@ -38,7 +37,7 @@ struct CalendarsTabView: View {
                         .font(.caption)
                 }
             } else {
-                let status = viewModel.appleCalendarStatus
+                let status = viewModel.calendarAuthStatus
                 if status == .denied || status == .restricted {
                     VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                         Label("Calendar access denied", systemImage: "xmark.circle.fill")
@@ -57,9 +56,16 @@ struct CalendarsTabView: View {
                     Button {
                         viewModel.requestAppleCalendarAccess()
                     } label: {
-                        Label("Grant Calendar Access", systemImage: "calendar")
+                        if viewModel.isRequestingCalendarAccess {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("Requesting Access…")
+                        } else {
+                            Label("Grant Calendar Access", systemImage: "calendar")
+                        }
                     }
                     .buttonStyle(.borderedProminent)
+                    .disabled(viewModel.isRequestingCalendarAccess)
                 }
             }
 
