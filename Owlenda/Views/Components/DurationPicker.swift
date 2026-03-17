@@ -38,9 +38,9 @@ struct DurationPicker: View {
             // Editable stepper: TextField + Stepper side-by-side.
             // TextField for typing, Stepper arrows for nudging.
             HStack(spacing: 0) {
-                TextField("Duration", text: $text)
+                TextField("", text: $text)
                     .textFieldStyle(.plain)
-                    .frame(width: 72)
+                    .frame(width: 80)
                     .multilineTextAlignment(.center)
                     .monospacedDigit()
                     .focused($isFocused)
