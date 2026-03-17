@@ -72,15 +72,19 @@ struct AddEventView: View {
 
                 Section("Date & Time") {
                     HStack {
+                        InlineTimePicker(selection: $date)
+
                         DatePicker("", selection: $date,
-                                   displayedComponents: [.hourAndMinute, .date])
+                                   displayedComponents: .date)
                             .labelsHidden()
 
                         Text("—")
                             .foregroundColor(DS.Colors.textSecondary)
 
+                        InlineTimePicker(selection: endDateBinding)
+
                         DatePicker("", selection: endDateBinding, in: date...,
-                                   displayedComponents: [.hourAndMinute, .date])
+                                   displayedComponents: .date)
                             .labelsHidden()
                     }
                     .datePickerStyle(.stepperField)
