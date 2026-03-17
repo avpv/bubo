@@ -64,11 +64,6 @@ struct AddEventView: View {
                         TextField("Title", text: $title, prompt: Text("Event title"))
                             .textFieldStyle(.plain)
                             .font(.headline)
-                            .padding(.horizontal, DS.Spacing.md)
-                            .padding(.vertical, DS.Spacing.sm)
-                            .background(DS.Materials.platter)
-                            .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
-                            .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
                             .focused($isTitleFocused)
                             .defaultFocus($isTitleFocused, true)
 
@@ -79,6 +74,11 @@ struct AddEventView: View {
                                 .transition(.move(edge: .top).combined(with: .opacity))
                         }
                     }
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.sm)
+                    .background(DS.Materials.platter)
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
+                    .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
                     .disabled(isExternal)
                     .opacity(isExternal ? 0.6 : 1.0)
                     
@@ -153,8 +153,8 @@ struct AddEventView: View {
                             .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
                             .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
                     }
-                    .disabled(isExternal || isPomodoroMode)
-                    .opacity((isExternal || isPomodoroMode) ? 0.6 : 1.0)
+                    .disabled(isExternal)
+                    .opacity(isExternal ? 0.6 : 1.0)
 
                     // Reminders
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
@@ -202,8 +202,8 @@ struct AddEventView: View {
                                     }
                                 }
                             } else {
-                                Text("Default: 5 min before")
-                                    .font(.caption)
+                                Label("Default: 5 min before", systemImage: "bell.fill")
+                                    .font(.subheadline)
                                     .foregroundColor(.secondary)
                             }
                         }

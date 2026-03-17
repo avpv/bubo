@@ -78,7 +78,11 @@ struct RecurrencePickerView: View {
     // MARK: - Body
 
     var body: some View {
-        Section("Repeat") {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            Text("Repeat")
+                .font(.headline)
+                .foregroundColor(DS.Colors.textPrimary)
+
             modePicker
 
             switch mode {

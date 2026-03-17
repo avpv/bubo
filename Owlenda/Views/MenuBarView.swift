@@ -186,14 +186,16 @@ struct MenuBarView: View {
 
             Divider()
 
-            // Footer
             if let lastSync = reminderService.lastSyncDate {
-                Text(lastSync, style: .relative)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.top, DS.Spacing.xs)
-                    .padding(.bottom, -DS.Spacing.xs)
+                HStack(spacing: DS.Spacing.xs) {
+                    Text("Updated")
+                    Text(lastSync, style: .relative)
+                    Text("ago")
+                }
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.vertical, DS.Spacing.xs)
             }
 
             footerActions

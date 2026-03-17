@@ -140,7 +140,7 @@ struct EventRowView: View {
 
             HStack(spacing: DS.Spacing.md) {
                 if let location = event.location, !location.isEmpty {
-                    Label(location, systemImage: "location.fill")
+                    Label(location, systemImage: "mappin")
                         .font(.caption2)
                         .foregroundColor(DS.Colors.textSecondary)
                         .lineLimit(1)
