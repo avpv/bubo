@@ -99,14 +99,25 @@ jobs:
 
       - name: Create DMG
         run: |
-          mkdir -p dmg_contents
-          cp -R Owlenda.app dmg_contents/
-          ln -s /Applications dmg_contents/Applications
-          hdiutil create \
-            -volname "Owlenda" \
-            -srcfolder dmg_contents \
-            -ov -format UDZO \
-            Owlenda.dmg
+          # Pin create-dmg version — no brew, no moving targets
+          curl -fsSL https://github.com/create-dmg/create-dmg/archive/refs/tags/v1.2.3.tar.gz | tar xz
+          CREATE_DMG="./create-dmg-1.2.3/create-dmg"
+
+          # create-dmg exits 2 when no signing identity is found — expected in CI
+          "$CREATE_DMG" \
+            --volname "Owlenda" \
+            --volicon "Owlenda/Resources/AppIcon.icns" \
+            --background "packaging/dmg_background.png" \
+            --window-pos 200 120 \
+            --window-size 660 400 \
+            --icon-size 128 \
+            --text-size 14 \
+            --icon "Owlenda.app" 180 200 \
+            --hide-extension "Owlenda.app" \
+            --app-drop-link 480 200 \
+            "Owlenda.dmg" \
+            "Owlenda.app" \
+            || test $? -eq 2
 
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
