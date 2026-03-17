@@ -1,8 +1,17 @@
 import Foundation
 import Security
 
+/// Thread-safe keychain wrapper using the modern Data Protection keychain.
+///
+/// Data Protection keychain (`kSecUseDataProtectionKeychain`) is tied to the app's
+/// entitlements (team ID + bundle ID), not to file-based ACLs. This means macOS
+/// never shows the legacy "Allow / Deny" keychain dialog.
+///
+/// All values are cached in memory after first read. The cache is invalidated
+/// on save/delete so callers always see fresh data.
 enum KeychainService {
     private static let serviceName = "com.reminder.yandex-calendar"
+    private static let lock = NSLock()
 
     enum Key: String, CaseIterable {
         case yandexLogin = "yandex_login"
@@ -10,31 +19,36 @@ enum KeychainService {
         case oauthAccessToken = "oauth_access_token"
         case oauthRefreshToken = "oauth_refresh_token"
         case oauthTokenExpiry = "oauth_token_expiry"
-        // Google
         case googleAccessToken = "google_access_token"
         case googleRefreshToken = "google_refresh_token"
         case googleTokenExpiry = "google_token_expiry"
     }
 
-    // MARK: - In-memory cache
+    // MARK: - Thread-safe state
 
-    private static var cache: [Key: String] = [:]
-    private static var cacheLoaded = false
+    private static var _cache: [Key: String] = [:]
+    private static var _cacheLoaded = false
+    private static var _isAccessDenied = false
 
     /// True when the user denied keychain access via the macOS dialog.
-    /// UI should check this to show an actionable message.
-    private(set) static var isAccessDenied = false
+    /// Checked by `ReminderService` to update its `@Published` property for UI.
+    static var isAccessDenied: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return _isAccessDenied
+    }
 
     // MARK: - Public API
 
     static func save(_ value: String, for key: Key) throws {
+        lock.lock()
+        defer { lock.unlock() }
+
         let data = Data(value.utf8)
+        let base = baseQuery(for: key)
+        SecItemDelete(base as CFDictionary)
 
-        // Delete then add (both in Data Protection keychain)
-        let baseQuery = self.baseQuery(for: key)
-        SecItemDelete(baseQuery as CFDictionary)
-
-        var addQuery = baseQuery
+        var addQuery = base
         addQuery[kSecValueData as String] = data
         addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlocked
 
@@ -43,24 +57,17 @@ enum KeychainService {
             throw KeychainError.saveFailed(status)
         }
 
-        cache[key] = value
-        isAccessDenied = false
+        _cache[key] = value
+        _isAccessDenied = false
     }
 
     static func load(_ key: Key) -> String? {
-        // Serve from cache if available
-        if let value = cache[key] {
-            return value
-        }
-        // If we already loaded everything and this key isn't in cache, it's absent
-        if cacheLoaded {
-            return nil
-        }
+        lock.lock()
+        defer { lock.unlock() }
 
-        // Skip keychain calls if user previously denied access
-        if isAccessDenied {
-            return nil
-        }
+        if let value = _cache[key] { return value }
+        if _cacheLoaded { return nil }
+        if _isAccessDenied { return nil }
 
         var query = baseQuery(for: key)
         query[kSecReturnData as String] = true
@@ -70,71 +77,55 @@ enum KeychainService {
         let status = SecItemCopyMatching(query as CFDictionary, &result)
 
         if status == errSecUserCanceled || status == errSecAuthFailed {
-            isAccessDenied = true
+            _isAccessDenied = true
             return nil
         }
 
-        guard status == errSecSuccess, let data = result as? Data,
+        guard status == errSecSuccess,
+              let data = result as? Data,
               let value = String(data: data, encoding: .utf8) else {
             return nil
         }
 
-        cache[key] = value
+        _cache[key] = value
         return value
     }
 
     static func delete(_ key: Key) {
+        lock.lock()
+        defer { lock.unlock() }
         SecItemDelete(baseQuery(for: key) as CFDictionary)
-        cache.removeValue(forKey: key)
+        _cache.removeValue(forKey: key)
     }
 
     static func deleteAll() {
-        for key in Key.allCases {
-            delete(key)
-        }
+        for key in Key.allCases { delete(key) }
     }
 
-    /// Pre-load all keys into memory cache.
-    /// Call once at app startup to avoid repeated keychain hits.
+    /// Pre-load all keys into memory. Call once at app startup.
     static func warmUpCache() {
-        guard !cacheLoaded else { return }
-        for key in Key.allCases {
-            _ = load(key)
-        }
-        cacheLoaded = true
+        lock.lock()
+        guard !_cacheLoaded else { lock.unlock(); return }
+        lock.unlock()
+
+        for key in Key.allCases { _ = load(key) }
+
+        lock.lock()
+        _cacheLoaded = true
+        lock.unlock()
     }
 
-    /// Reset denial state (e.g. user re-authorized in Keychain Access).
+    /// Clear denial state so the next `load` will try the keychain again.
     static func resetAccessDenied() {
-        isAccessDenied = false
-        cacheLoaded = false
-        cache.removeAll()
-    }
-
-    // MARK: - Migration
-
-    /// Migrate items from legacy keychain to Data Protection keychain.
-    /// Call once at app startup before any other keychain operations.
-    static func migrateFromLegacyKeychainIfNeeded() {
-        let migrationKey = "KeychainMigratedToDataProtection"
-        guard !UserDefaults.standard.bool(forKey: migrationKey) else { return }
-
-        for key in Key.allCases {
-            // Try reading from legacy keychain (without kSecUseDataProtectionKeychain)
-            if let value = loadFromLegacy(key) {
-                // Save to Data Protection keychain
-                try? save(value, for: key)
-                // Delete from legacy
-                deleteFromLegacy(key)
-            }
-        }
-
-        UserDefaults.standard.set(true, forKey: migrationKey)
+        lock.lock()
+        _isAccessDenied = false
+        _cacheLoaded = false
+        _cache.removeAll()
+        lock.unlock()
     }
 
     // MARK: - Private
 
-    /// Base query using the modern Data Protection keychain — no ACL dialogs.
     private static func baseQuery(for key: Key) -> [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
@@ -143,52 +134,15 @@ enum KeychainService {
             kSecUseDataProtectionKeychain as String: true
         ]
     }
-
-    /// Read from the legacy (file-based) keychain — used only for migration.
-    private static func loadFromLegacy(_ key: Key) -> String? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: serviceName,
-            kSecAttrAccount as String: key.rawValue,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne
-            // No kSecUseDataProtectionKeychain → legacy keychain
-        ]
-
-        var result: AnyObject?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-
-        // If denied during migration, skip gracefully — don't block the app
-        if status == errSecUserCanceled || status == errSecAuthFailed {
-            return nil
-        }
-
-        guard status == errSecSuccess, let data = result as? Data else {
-            return nil
-        }
-        return String(data: data, encoding: .utf8)
-    }
-
-    private static func deleteFromLegacy(_ key: Key) {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: serviceName,
-            kSecAttrAccount as String: key.rawValue
-        ]
-        SecItemDelete(query as CFDictionary)
-    }
 }
 
 enum KeychainError: LocalizedError {
     case saveFailed(OSStatus)
-    case accessDenied
 
     var errorDescription: String? {
         switch self {
         case .saveFailed(let status):
             return "Keychain save error: \(status)"
-        case .accessDenied:
-            return "Keychain access was denied. Open Keychain Access and allow Owlenda."
         }
     }
 }

@@ -8,9 +8,9 @@ struct OwlendaApp: App {
     @StateObject private var networkMonitor = NetworkMonitor()
 
     init() {
-        // Migrate legacy keychain items to Data Protection keychain (no ACL dialogs),
-        // then pre-load all values into memory so the UI never triggers keychain prompts.
-        KeychainService.migrateFromLegacyKeychainIfNeeded()
+        // Pre-load all keychain values into memory at startup.
+        // Uses Data Protection keychain (kSecUseDataProtectionKeychain) which never
+        // shows the legacy macOS "Allow / Deny" dialog.
         KeychainService.warmUpCache()
 
         let s = ReminderSettings.load()

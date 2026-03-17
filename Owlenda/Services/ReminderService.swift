@@ -11,6 +11,7 @@ class ReminderService: ObservableObject {
     @Published var syncError: String?
     @Published var isSyncing = false
     @Published var isUsingCache = false
+    @Published var isKeychainDenied = false
 
     private var calDAVService: YandexCalDAVService?
     private var googleService: GoogleCalendarService?
@@ -126,6 +127,9 @@ class ReminderService: ObservableObject {
         } else {
             googleService = nil
         }
+
+        // Update reactive keychain state for UI
+        isKeychainDenied = KeychainService.isAccessDenied
     }
 
     func startSync() {
@@ -211,6 +215,7 @@ class ReminderService: ObservableObject {
             self.isSyncing = false
             self.syncError = errors.isEmpty ? nil : errors.joined(separator: "\n")
             self.isUsingCache = false
+            self.isKeychainDenied = KeychainService.isAccessDenied
 
             // Clean up firedReminders for events no longer in the window
             let currentEventIds = Set(allEvents.map { $0.id })

@@ -3,25 +3,24 @@ import SwiftUI
 struct AccountTabView: View {
     @EnvironmentObject var settings: ReminderSettings
     @EnvironmentObject var viewModel: SettingsViewModel
+    @EnvironmentObject var reminderService: ReminderService
 
     var body: some View {
         Form {
-            if KeychainService.isAccessDenied {
+            if reminderService.isKeychainDenied {
                 Section {
-                    HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "exclamationmark.triangle.fill")
+                    VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                        Label("Keychain access was denied", systemImage: "key.slash")
                             .foregroundColor(.red)
-                        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                            Text("Keychain access was denied")
-                                .fontWeight(.medium)
-                            Text("Re-enter your credentials below. They will be saved to a secure keychain that won't prompt again.")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        Spacer()
-                        Button("Retry") {
+                            .fontWeight(.medium)
+                        Text("Your saved credentials could not be read. Please re-enter them below — they will be stored securely without prompting again.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Button("Retry Keychain Access") {
                             KeychainService.resetAccessDenied()
+                            reminderService.setupCalDAVService()
                         }
+                        .controlSize(.small)
                     }
                 }
             }

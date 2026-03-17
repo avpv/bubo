@@ -149,7 +149,7 @@ struct MenuBarView: View {
                 )
             }
 
-            if KeychainService.isAccessDenied {
+            if reminderService.isKeychainDenied {
                 StatusBanner(
                     icon: "key.slash",
                     text: "Keychain access denied. Re-enter credentials in Settings.",
