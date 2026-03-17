@@ -97,52 +97,29 @@ jobs:
           PLIST
           sed -i '' "s/PLACEHOLDER_VERSION/${VERSION}/g" "$APP/Info.plist"
 
+      - name: Generate DMG background
+        run: |
+          pip3 install --quiet Pillow cairosvg
+          python3 scripts/generate_dmg_background.py
+
       - name: Create DMG
         run: |
-          # Create a temporary read-write DMG
-          mkdir -p dmg_contents
-          cp -R Owlenda.app dmg_contents/
-          ln -s /Applications dmg_contents/Applications
+          brew install create-dmg
 
-          hdiutil create \
-            -volname "Owlenda" \
-            -srcfolder dmg_contents \
-            -ov -format UDRW \
-            -size 200m \
-            Owlenda_rw.dmg
-
-          # Mount the read-write DMG
-          MOUNT_DIR=$(hdiutil attach -readwrite -noverify Owlenda_rw.dmg | grep '/Volumes/' | awk '{print $NF}')
-
-          # Configure DMG window layout with AppleScript
-          osascript <<'APPLESCRIPT'
-          tell application "Finder"
-            tell disk "Owlenda"
-              open
-              set current view of container window to icon view
-              set toolbar visible of container window to false
-              set statusbar visible of container window to false
-              set bounds of container window to {100, 100, 640, 440}
-              set theViewOptions to icon view options of container window
-              set arrangement of theViewOptions to not arranged
-              set icon size of theViewOptions to 128
-              set position of item "Owlenda.app" of container window to {135, 160}
-              set position of item "Applications" of container window to {405, 160}
-              close
-              open
-            end tell
-          end tell
-          APPLESCRIPT
-
-          # Wait for Finder to apply changes
-          sleep 2
-
-          # Unmount
-          hdiutil detach "$MOUNT_DIR"
-
-          # Convert to compressed read-only DMG
-          hdiutil convert Owlenda_rw.dmg -format UDZO -o Owlenda.dmg
-          rm -f Owlenda_rw.dmg
+          create-dmg \
+            --volname "Owlenda" \
+            --volicon "Owlenda/Resources/AppIcon.icns" \
+            --background "Owlenda/Resources/dmg_background.png" \
+            --window-pos 200 120 \
+            --window-size 660 400 \
+            --icon-size 128 \
+            --text-size 14 \
+            --icon "Owlenda.app" 180 200 \
+            --hide-extension "Owlenda.app" \
+            --app-drop-link 480 200 \
+            --no-internet-enable \
+            "Owlenda.dmg" \
+            "Owlenda.app"
 
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
