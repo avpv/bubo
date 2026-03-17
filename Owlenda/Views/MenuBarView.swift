@@ -307,9 +307,7 @@ private struct OpenSettingsButton: View {
             Button {
                 NSApp.keyWindow?.close()
                 NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-                DispatchQueue.main.async {
-                    NSApp.activate(ignoringOtherApps: true)
-                }
+                NSApp.activate(ignoringOtherApps: true)
             } label: {
                 Label("Settings", systemImage: "gear")
             }
@@ -325,14 +323,7 @@ private struct OpenSettingsButton14: View {
         Button {
             NSApp.keyWindow?.close()
             openSettings()
-            DispatchQueue.main.async {
-                NSApp.activate(ignoringOtherApps: true)
-                for window in NSApp.windows where window.title == "Settings" || window.identifier?.rawValue == "com_apple_SwiftUI_Settings_window" {
-                    window.level = .floating
-                    window.makeKeyAndOrderFront(nil)
-                    window.level = .normal
-                }
-            }
+            NSApp.activate(ignoringOtherApps: true)
         } label: {
             Label("Settings", systemImage: "gear")
         }
