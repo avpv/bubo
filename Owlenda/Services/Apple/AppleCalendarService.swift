@@ -11,7 +11,7 @@ class AppleCalendarService {
     /// Shared event store — creating multiple instances is expensive and discouraged by Apple.
     static let shared = AppleCalendarService()
 
-    let store = EKEventStore()
+    private let store = EKEventStore()
 
     /// Posted when the underlying EKEventStore detects changes (events added/modified/deleted
     /// in Calendar.app or via iCloud sync). Observers should re-fetch events.

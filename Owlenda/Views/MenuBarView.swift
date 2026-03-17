@@ -99,7 +99,6 @@ struct MenuBarView: View {
         .onAppear {
             guard !hasStartedSync else { return }
             hasStartedSync = true
-            reminderService.setNetworkMonitor(networkMonitor)
             reminderService.updateSettings(settings)
             reminderService.startSync()
         }
@@ -138,7 +137,7 @@ struct MenuBarView: View {
             if !networkMonitor.isConnected {
                 StatusBanner(
                     icon: "wifi.slash",
-                    text: "No connection. Showing cached data",
+                    text: "No internet — calendar data may be outdated",
                     color: .orange
                 )
             } else if reminderService.isUsingCache {
@@ -274,7 +273,6 @@ struct MenuBarView: View {
             }) {
                 Label("Refresh", systemImage: "arrow.clockwise")
             }
-            .disabled(!networkMonitor.isConnected)
             .help("Sync calendars now (⌘R)")
             .keyboardShortcut("r", modifiers: .command)
 
