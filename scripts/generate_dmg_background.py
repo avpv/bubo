@@ -39,7 +39,7 @@ TEXT_COLOR = (0, 0, 0, 90)
 
 
 def draw_gradient(img):
-    """Dark vertical gradient."""
+    """Light vertical gradient."""
     draw = ImageDraw.Draw(img)
     for y in range(IMG_H):
         t = y / IMG_H
