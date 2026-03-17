@@ -33,12 +33,7 @@ class ReminderSettings: Codable {
     var syncIntervalMinutes: Int { didSet { scheduleSave() } }
     var showFullScreenAlert: Bool { didSet { scheduleSave() } }
     var showSystemNotification: Bool { didSet { scheduleSave() } }
-    var launchAtLogin: Bool {
-        didSet {
-            scheduleSave()
-            applyLaunchAtLogin()
-        }
-    }
+    var launchAtLogin: Bool { didSet { applyLaunchAtLogin() } }
     var doNotDisturbEnabled: Bool { didSet { scheduleSave() } }
     var doNotDisturbFrom: Date { didSet { scheduleSave() } }
     var doNotDisturbTo: Date { didSet { scheduleSave() } }
@@ -49,7 +44,6 @@ class ReminderSettings: Codable {
 
     enum CodingKeys: String, CodingKey {
         case intervals, syncIntervalMinutes, showFullScreenAlert, showSystemNotification
-        case launchAtLogin
         case doNotDisturbEnabled, doNotDisturbFrom, doNotDisturbTo
         case selectedCalendarIds
     }
@@ -62,7 +56,7 @@ class ReminderSettings: Codable {
         self.syncIntervalMinutes = 5
         self.showFullScreenAlert = true
         self.showSystemNotification = true
-        self.launchAtLogin = false
+        self.launchAtLogin = SMAppService.mainApp.status == .enabled
         self.doNotDisturbEnabled = false
         // Default DND: 22:00 - 08:00
         let calendar = Calendar.current
@@ -77,7 +71,7 @@ class ReminderSettings: Codable {
         syncIntervalMinutes = try container.decode(Int.self, forKey: .syncIntervalMinutes)
         showFullScreenAlert = try container.decode(Bool.self, forKey: .showFullScreenAlert)
         showSystemNotification = try container.decodeIfPresent(Bool.self, forKey: .showSystemNotification) ?? true
-        launchAtLogin = try container.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? false
+        launchAtLogin = SMAppService.mainApp.status == .enabled
         doNotDisturbEnabled = try container.decodeIfPresent(Bool.self, forKey: .doNotDisturbEnabled) ?? false
 
         let calendar = Calendar.current
@@ -94,7 +88,6 @@ class ReminderSettings: Codable {
         try container.encode(syncIntervalMinutes, forKey: .syncIntervalMinutes)
         try container.encode(showFullScreenAlert, forKey: .showFullScreenAlert)
         try container.encode(showSystemNotification, forKey: .showSystemNotification)
-        try container.encode(launchAtLogin, forKey: .launchAtLogin)
         try container.encode(doNotDisturbEnabled, forKey: .doNotDisturbEnabled)
         try container.encode(doNotDisturbFrom, forKey: .doNotDisturbFrom)
         try container.encode(doNotDisturbTo, forKey: .doNotDisturbTo)
@@ -154,8 +147,6 @@ class ReminderSettings: Codable {
               let settings = try? JSONDecoder().decode(ReminderSettings.self, from: data) else {
             return ReminderSettings()
         }
-        // Sync with actual system login-item state (user may have changed it in System Settings)
-        settings.launchAtLogin = SMAppService.mainApp.status == .enabled
         return settings
     }
 }
