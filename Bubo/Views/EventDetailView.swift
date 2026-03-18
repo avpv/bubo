@@ -133,65 +133,91 @@ struct EventDetailView: View {
             Divider()
 
             HStack {
-                if isLocal {
-                    Button(role: .destructive) {
+                if showDeleteConfirmation {
+                    Text("Delete?")
+                        .font(.subheadline)
+                        .foregroundColor(DS.Colors.error)
+                        .fontWeight(.medium)
+                        
+                    Spacer()
+                    
+                    Button("Cancel") {
+                        withAnimation { showDeleteConfirmation = false }
+                        Haptics.tap()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.regular)
+                    
+                    Button("Delete") {
                         Haptics.impact()
-                        if event.isRecurring {
-                            showSeriesDeleteChoice = true
-                        } else {
-                            showDeleteConfirmation = true
-                        }
-                    } label: {
-                        Label("Delete", systemImage: "trash")
+                        onDelete?(event)
                     }
-                    .buttonStyle(.action(role: .destructive))
-                    // Single (non-recurring) event
-                    .alert(
-                        "Delete Event",
-                        isPresented: $showDeleteConfirmation
-                    ) {
-                        Button("Delete") {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                                onDelete?(event)
-                            }
-                        }
-                        Button("Cancel", role: .cancel) { }
-                    } message: {
-                        Text("Are you sure you want to delete \"\(event.title)\"?")
-                    }
-                    // Recurring event — scope-of-delete
-                    .alert(
-                        "Delete Recurring Event",
-                        isPresented: $showSeriesDeleteChoice
-                    ) {
-                        Button("Delete This Event Only") {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    .buttonStyle(.borderedProminent)
+                    .tint(DS.Colors.error)
+                    .controlSize(.regular)
+                } else if showSeriesDeleteChoice {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Delete recurring event?")
+                            .font(.caption)
+                            .foregroundColor(DS.Colors.error)
+                            .fontWeight(.medium)
+                        
+                        HStack(spacing: DS.Spacing.xs) {
+                            Button("Only This") {
+                                Haptics.impact()
                                 onDeleteOccurrence?(event)
                             }
-                        }
-                        Button("Delete All Events") {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            
+                            Button("All Events") {
+                                Haptics.impact()
                                 onDeleteSeries?(event)
                             }
+                            .buttonStyle(.borderedProminent)
+                            .tint(DS.Colors.error)
+                            .controlSize(.small)
+                            
+                            Spacer()
+                            
+                            Button("Cancel") {
+                                withAnimation { showSeriesDeleteChoice = false }
+                                Haptics.tap()
+                            }
+                            .buttonStyle(.borderless)
+                            .controlSize(.small)
                         }
-                        Button("Cancel", role: .cancel) { }
-                    } message: {
-                        Text("\"\(event.title)\" is a recurring event.")
                     }
+                } else {
+                    if isLocal {
+                        Button(role: .destructive) {
+                            Haptics.impact()
+                            withAnimation {
+                                if event.isRecurring {
+                                    showSeriesDeleteChoice = true
+                                } else {
+                                    showDeleteConfirmation = true
+                                }
+                            }
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                        .buttonStyle(.action(role: .destructive))
+                    }
+                    
+                    Spacer()
+                    
+                    Button {
+                        Haptics.tap()
+                        onEdit?(event)
+                    } label: {
+                        Label("Edit", systemImage: "pencil")
+                    }
+                    .buttonStyle(.action(role: .primary))
                 }
-
-                Spacer()
-
-                Button {
-                    Haptics.tap()
-                    onEdit?(event)
-                } label: {
-                    Label("Edit", systemImage: "pencil")
-                }
-                .buttonStyle(.action(role: .primary))
             }
             .padding(.horizontal, DS.Spacing.lg)
-            .frame(height: DS.Size.actionFooterHeight)
+            .frame(height: showSeriesDeleteChoice ? DS.Size.actionFooterHeight + 15 : DS.Size.actionFooterHeight)
             .background(DS.Materials.headerBar)
         }
         .frame(width: DS.Popover.width)
