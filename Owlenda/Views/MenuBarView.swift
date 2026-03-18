@@ -169,12 +169,14 @@ struct MenuBarView: View {
                 .frame(maxWidth: .infinity, alignment: .center)
             }
 
-            if !AppleCalendarService.hasAccess {
-                CalendarAccessBanner()
-                    .frame(maxWidth: .infinity, alignment: .center)
-            } else if let error = reminderService.syncError, networkMonitor.isConnected {
-                StatusBanner(icon: "exclamationmark.triangle.fill", text: error, color: .orange)
-                    .frame(maxWidth: .infinity, alignment: .center)
+            if settings.isCalendarSyncEnabled {
+                if !AppleCalendarService.hasAccess {
+                    CalendarAccessBanner()
+                        .frame(maxWidth: .infinity, alignment: .center)
+                } else if let error = reminderService.syncError, networkMonitor.isConnected {
+                    StatusBanner(icon: "exclamationmark.triangle.fill", text: error, color: .orange)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                }
             }
 
             // Events

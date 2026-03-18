@@ -88,7 +88,8 @@ class ReminderService {
     }
 
     private func onSettingsChanged() {
-        rescheduleAllReminders()
+        // Immediately sync (which will drop external events if disabled)
+        syncNow()
         startSyncTimer()
     }
 
@@ -151,6 +152,14 @@ class ReminderService {
     }
 
     func syncNow() {
+        guard settings.isCalendarSyncEnabled else {
+            upcomingEvents = []
+            isUsingCache = false
+            syncError = "Calendar sync disabled"
+            rescheduleAllReminders()
+            return
+        }
+
         guard AppleCalendarService.hasAccess else {
             syncError = "Calendar access not granted"
             return

@@ -37,6 +37,7 @@ class ReminderSettings: Codable {
     var doNotDisturbFrom: Date { didSet { scheduleSave() } }
     var doNotDisturbTo: Date { didSet { scheduleSave() } }
     var selectedCalendarIds: [String] { didSet { scheduleSave() } }
+    var isCalendarSyncEnabled: Bool { didSet { scheduleSave() } }
 
     // Task-based debounced save — replaces Combine pipeline
     private var saveTask: Task<Void, Never>?
@@ -44,7 +45,7 @@ class ReminderSettings: Codable {
     enum CodingKeys: String, CodingKey {
         case intervals, syncIntervalMinutes, showFullScreenAlert, showSystemNotification
         case doNotDisturbEnabled, doNotDisturbFrom, doNotDisturbTo
-        case selectedCalendarIds
+        case selectedCalendarIds, isCalendarSyncEnabled
     }
 
     init() {
@@ -62,6 +63,7 @@ class ReminderSettings: Codable {
         self.doNotDisturbFrom = calendar.date(from: DateComponents(hour: 22, minute: 0)) ?? Date()
         self.doNotDisturbTo = calendar.date(from: DateComponents(hour: 8, minute: 0)) ?? Date()
         self.selectedCalendarIds = [] // empty = sync all
+        self.isCalendarSyncEnabled = true
     }
 
     required init(from decoder: Decoder) throws {
@@ -79,6 +81,7 @@ class ReminderSettings: Codable {
         doNotDisturbTo = try container.decodeIfPresent(Date.self, forKey: .doNotDisturbTo)
             ?? calendar.date(from: DateComponents(hour: 8, minute: 0)) ?? Date()
         selectedCalendarIds = try container.decodeIfPresent([String].self, forKey: .selectedCalendarIds) ?? []
+        isCalendarSyncEnabled = try container.decodeIfPresent(Bool.self, forKey: .isCalendarSyncEnabled) ?? true
     }
 
     func encode(to encoder: Encoder) throws {
@@ -91,6 +94,7 @@ class ReminderSettings: Codable {
         try container.encode(doNotDisturbFrom, forKey: .doNotDisturbFrom)
         try container.encode(doNotDisturbTo, forKey: .doNotDisturbTo)
         try container.encode(selectedCalendarIds, forKey: .selectedCalendarIds)
+        try container.encode(isCalendarSyncEnabled, forKey: .isCalendarSyncEnabled)
     }
 
     /// Check if current time is within Do Not Disturb period
