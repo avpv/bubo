@@ -59,7 +59,7 @@ struct AddEventView: View {
             )
 
             ScrollView {
-                VStack(spacing: DS.Spacing.md) {
+                VStack(spacing: DS.Spacing.lg) {
                     
                     // Title section
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
@@ -99,7 +99,7 @@ struct AddEventView: View {
                             .font(.headline)
                             .foregroundColor(DS.Colors.textPrimary)
                         
-                        Grid(alignment: .leading, horizontalSpacing: DS.Spacing.sm, verticalSpacing: DS.Spacing.xs) {
+                        Grid(alignment: .leading, horizontalSpacing: DS.Spacing.sm, verticalSpacing: DS.Spacing.md) {
                             GridRow {
                                 Text("Starts")
                                     .foregroundColor(DS.Colors.textSecondary)
@@ -240,7 +240,7 @@ struct AddEventView: View {
                     }
                 }
                 .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.xl)
             }
             .scrollContentBackground(.hidden)
             .frame(maxHeight: DS.Popover.formMaxHeight)
@@ -279,7 +279,7 @@ struct AddEventView: View {
                 .shadow(color: DS.Colors.accent.opacity(0.3), radius: 6, y: 3)
             }
             .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.xl)
             .background(DS.Materials.headerBar)
         }
         .frame(width: DS.Popover.width)
