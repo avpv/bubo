@@ -332,6 +332,7 @@ struct MenuBarView: View {
             .keyboardShortcut("q", modifiers: .command)
         }
         .buttonStyle(.borderless)
+        .font(.system(size: 13, weight: .medium))
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.md)
         .background(DS.Materials.headerBar)
