@@ -296,11 +296,10 @@ struct AddEventView: View {
             } else {
                 let now = Date()
                 let cal = Calendar.current
-                let mins = cal.component(.minute, from: now)
-                let extraMins = 30 - (mins % 30)
-                if let snapped = cal.date(byAdding: .minute, value: extraMins, to: now) {
-                    date = cal.date(bySetting: .second, value: 0, of: snapped) ?? snapped
-                }
+                var comps = cal.dateComponents([.year, .month, .day, .hour, .minute], from: now)
+                let currentMins = comps.minute ?? 0
+                comps.minute = currentMins + (30 - (currentMins % 30))
+                date = cal.date(from: comps) ?? now
             }
             Task {
                 try? await Task.sleep(for: .milliseconds(100))
