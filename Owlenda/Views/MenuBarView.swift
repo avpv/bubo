@@ -336,7 +336,7 @@ struct MenuBarView: View {
         .buttonStyle(.borderless)
         .font(.system(size: 13, weight: .medium))
         .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.md)
+        .frame(height: DS.Size.actionFooterHeight)
         .background(DS.Materials.headerBar)
     }
 }

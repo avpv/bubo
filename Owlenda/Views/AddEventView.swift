@@ -279,7 +279,7 @@ struct AddEventView: View {
                 .shadow(color: DS.Colors.accent.opacity(0.3), radius: 6, y: 3)
             }
             .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.sm)
+            .frame(height: DS.Size.actionFooterHeight)
             .background(DS.Materials.headerBar)
         }
         .frame(width: DS.Popover.width)

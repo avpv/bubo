@@ -54,6 +54,7 @@ enum DS {
     enum Size {
         static let accentBarWidth: CGFloat = 4
         static let accentBarHeight: CGFloat = 28
+        static let actionFooterHeight: CGFloat = 48
         static let timeColumnWidth: CGFloat = 50
         static let iconSmall: CGFloat = 12
         static let iconMedium: CGFloat = 14
