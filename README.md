@@ -60,7 +60,7 @@ Bubo uses custom AppKit + SwiftUI logic to provide a visually stunning experienc
 
 ### Option A: One-Command Install (Easiest)
 ```bash
-curl -fsSL https://raw.githubusercontent.com/avpv/bubo/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/avpv/bubo/HEAD/scripts/install.sh | bash
 ```
 
 ### Option B: Download Release

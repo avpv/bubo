@@ -201,7 +201,7 @@ struct RecurrencePickerView: View {
 
                 Spacer()
 
-                Link("Learn about Pomodoro combinations", destination: URL(string: "https://github.com/avpv/bubo/blob/main/docs/Pomodoro.md")!)
+                Link("Learn about Pomodoro combinations", destination: URL(string: "https://github.com/avpv/bubo/blob/HEAD/docs/Pomodoro.md")!)
                     .font(.caption)
                     .foregroundColor(.accentColor)
             }
