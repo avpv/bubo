@@ -393,3 +393,96 @@ struct PopoverHeader: View {
         }
     }
 }
+
+// MARK: - Unified Action Button Style
+
+enum ActionButtonRole {
+    case primary
+    case secondary
+    case destructive
+}
+
+enum ActionButtonSize {
+    case flexible // minWidth: 100, lg padding
+    case compact  // padding: sm, xs
+    case regular  // fixedSize, padding: md, sm
+}
+
+struct ActionButtonStyle: ButtonStyle {
+    var role: ActionButtonRole = .primary
+    var size: ActionButtonSize = .flexible
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .fontWeight(.medium)
+            .padding(.horizontal, horizontalPadding)
+            .padding(.vertical, verticalPadding)
+            .frame(minWidth: size == .flexible ? 100 : nil)
+            .fixedSize(horizontal: size == .regular, vertical: false)
+            .contentShape(Rectangle())
+            .background(backgroundView(isPressed: configuration.isPressed))
+            .foregroundColor(foregroundColor)
+            .clipShape(Capsule())
+            .shadow(
+                color: shadowColor,
+                radius: role == .primary ? 6 : 4,
+                y: role == .primary ? 3 : 2
+            )
+            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
+            .animation(DS.Animation.microInteraction, value: configuration.isPressed)
+    }
+
+    private var horizontalPadding: CGFloat {
+        switch size {
+        case .flexible: return DS.Spacing.lg
+        case .regular: return DS.Spacing.md
+        case .compact: return DS.Spacing.sm
+        }
+    }
+
+    private var verticalPadding: CGFloat {
+        switch size {
+        case .flexible, .regular: return DS.Spacing.sm
+        case .compact: return DS.Spacing.xs
+        }
+    }
+
+    @ViewBuilder
+    private func backgroundView(isPressed: Bool) -> some View {
+        switch role {
+        case .primary:
+            if isPressed {
+                Color.accentColor.opacity(0.8)
+            } else {
+                DS.Colors.accent
+            }
+        case .secondary, .destructive:
+            if isPressed {
+                Color.black.opacity(0.12) // Hover/pressed dim
+            } else {
+                Rectangle().fill(DS.Materials.platter)
+            }
+        }
+    }
+
+    private var foregroundColor: Color {
+        switch role {
+        case .primary: return .white
+        case .secondary: return DS.Colors.textPrimary
+        case .destructive: return DS.Colors.error
+        }
+    }
+
+    private var shadowColor: Color {
+        switch role {
+        case .primary: return DS.Colors.accent.opacity(0.3)
+        case .secondary, .destructive: return DS.Shadows.ambientColor
+        }
+    }
+}
+
+extension ButtonStyle where Self == ActionButtonStyle {
+    static func action(role: ActionButtonRole = .primary, size: ActionButtonSize = .flexible) -> ActionButtonStyle {
+        ActionButtonStyle(role: role, size: size)
+    }
+}

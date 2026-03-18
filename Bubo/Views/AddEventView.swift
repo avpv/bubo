@@ -213,15 +213,8 @@ struct AddEventView: View {
                                         }
                                     } label: {
                                         Label("Add", systemImage: "plus")
-                                            .padding(.horizontal, DS.Spacing.sm)
-                                            .padding(.vertical, DS.Spacing.xs)
                                     }
-                                    .background(DS.Colors.accent)
-                                    .foregroundColor(.white)
-                                    .fontWeight(.medium)
-                                    .buttonStyle(.plain)
-                                    .clipShape(Capsule())
-                                    .shadow(color: DS.Colors.accent.opacity(0.3), radius: 6, y: 3)
+                                    .buttonStyle(.action(role: .primary, size: .compact))
                                 }
 
                                 let available = Self.presetReminders.filter { !reminderMinutes.contains($0) }
@@ -261,18 +254,9 @@ struct AddEventView: View {
                 Spacer()
                 Button(action: { onDismiss() }) {
                     Text("Cancel")
-                        .frame(minWidth: 100)
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.vertical, DS.Spacing.sm)
-                        .contentShape(Rectangle())
                 }
                 .keyboardShortcut(.cancelAction)
-                .background(DS.Materials.platter)
-                .foregroundColor(DS.Colors.textPrimary)
-                .fontWeight(.medium)
-                .clipShape(Capsule())
-                .shadow(color: DS.Shadows.ambientColor, radius: 4, y: 2)
-                .buttonStyle(.plain)
+                .buttonStyle(.action(role: .secondary))
 
                 Button(action: {
                     if isTitleValid {
@@ -282,17 +266,8 @@ struct AddEventView: View {
                     }
                 }) {
                     Label(isEditing ? "Save" : "Add Event", systemImage: isEditing ? "checkmark.circle" : "calendar.badge.plus")
-                        .frame(minWidth: 100)
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.vertical, DS.Spacing.sm)
-                        .contentShape(Rectangle())
                 }
-                .background(DS.Colors.accent)
-                .foregroundColor(.white)
-                .fontWeight(.medium)
-                .buttonStyle(.plain)
-                .clipShape(Capsule())
-                .shadow(color: DS.Colors.accent.opacity(0.3), radius: 6, y: 3)
+                .buttonStyle(.action(role: .primary))
             }
             .padding(.horizontal, DS.Spacing.lg)
             .frame(height: DS.Size.actionFooterHeight)
