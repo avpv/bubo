@@ -10,32 +10,39 @@
 
 Owlenda is a beautifully designed, native macOS menu bar application dedicated to preserving your focus. Built with modern, glassmorphic **macOS 2026 aesthetics**, it serves as a lightweight calendar client, meeting reminder system, and advanced Pomodoro cycle tracker. 
 
-## Features
+## How it Works
 
-### 📅 Universal Calendar Sync
-<img src="screenshots/feat_calendar.png" alt="Universal Apple Calendar Sync" width="300" align="right">
+### 1. Daily Planner & Timeline
+<img src="screenshots/ui_timeline.png" alt="Daily Timeline" width="300" align="right">
 
-Owlenda syncs flawlessly with **all calendars** configured in macOS native settings — iCloud, Google, Exchange, Outlook, CalDAV. No extra setup or sketchy OAuth logins required. If it shows up in your Mac's Calendar.app, it shows up in Owlenda.
-
-<br clear="both"/>
-
-### 🍅 Built-In Pomodoro Engine
-<img src="screenshots/feat_pomodoro.png" alt="Advanced Pomodoro Tracking" width="300" align="right">
-
-Say goodbye to context-switching. Block your schedule and start focus sessions directly from the menu bar. Owlenda supports advanced, fully customizable Pomodoro time-boxing logic.
-- **Classic, Deep Work, Sprinter, and Ultradian** rhythms.
-- Read our full [Pomodoro Technique & Workflow Guide](docs/Pomodoro.md) to supercharge your productivity.
+Owlenda lives entirely in your macOS menu bar. Click the calendar icon to reveal your daily timeline. 
+- **View Your Day:** See a beautiful, frosted-glass list of your upcoming meetings and tasks. 
+- **Calendar Sync:** Owlenda automatically pulls data from iCloud, Google, Exchange, Outlook, and CalDAV without any extra logins. 
 
 <br clear="both"/>
 
-### 🔌 Standalone Local Mode
-<img src="screenshots/feat_local.png" alt="Offline Local Mode" width="300" align="right">
+### 2. Creating an Event
+<img src="screenshots/ui_new_event.png" alt="Add Event Form" width="300" align="right">
 
-Prefer to keep things local? Toggle off Apple Calendar Sync in Settings to enter **Standalone Mode**. Owlenda will instantly become an offline-first, local event and Pomodoro tracker without ever pinging external accounts.
+Adding tasks or meetings is blazing fast and doesn't require opening a heavy standalone app.
+- Click the **"+" (Add Event)** button in the header.
+- Fill out the minimalist form with your **Task Name**, **Date**, **Time**, and **Duration**.
+- You can create events that sync to your external calendars, or keep them completely local by toggling off Apple Calendar sync in Settings (Standalone Mode).
 
 <br clear="both"/>
 
-### 🔔 Full-Screen Reminders
+### 3. Pomodoro Focus Timer
+<img src="screenshots/ui_pomodoro.png" alt="Pomodoro Session" width="300" align="right">
+
+Say goodbye to context-switching. Block your schedule and start focus sessions directly from the menu bar.
+- When creating an event, look for the **Pomodoro** toggle under recurrence settings.
+- Select your preferred work interval (e.g., 25 minutes) and how many rounds you want to do.
+- Owlenda will lock you into a focus session, showing a prominent ring timer and providing full-screen alerts when it is time to take a break.
+- Read our full [Pomodoro Technique & Workflow Guide](docs/Pomodoro.md) to explore the best interval combinations (Classic, Deep Work, Sprinter).
+
+<br clear="both"/>
+
+## Key Features
 - **Customizable reminder intervals** — add any number of reminders (1, 5, 10, 30 min, etc.)
 - **Full-screen, distraction-blocking notifications** with live countdowns — never miss a meeting again.
 - **Snooze** directly from the UI.
