@@ -128,34 +128,54 @@ struct RecurrencePickerView: View {
 
     private var pomodoroControls: some View {
         Group {
-            // Work duration
-            Stepper(value: $pomodoroWork, in: 1...90) {
-                Label("Work: \(pomodoroWork) min", systemImage: "brain.head.profile")
-                    .foregroundColor(.primary)
-            }
-
-            // Rounds
-            Stepper(value: $pomodoroRounds, in: 1...12) {
-                Label("Rounds: \(pomodoroRounds)", systemImage: "arrow.trianglehead.2.counterclockwise")
-                    .foregroundColor(.primary)
-            }
-
-            // Break controls only when there are multiple rounds
-            if pomodoroRounds > 1 {
-                Stepper(value: $pomodoroBreak, in: 1...30) {
-                    Label("Break: \(pomodoroBreak) min", systemImage: "cup.and.saucer")
+            Grid(alignment: .leading, horizontalSpacing: DS.Spacing.md, verticalSpacing: DS.Spacing.xs) {
+                // Work duration
+                GridRow {
+                    Label("Work: \(pomodoroWork) min", systemImage: "brain.head.profile")
                         .foregroundColor(.primary)
+                        .gridColumnAlignment(.leading)
+                    
+                    Stepper("", value: $pomodoroWork, in: 1...90)
+                        .labelsHidden()
                 }
 
-                Toggle(isOn: $pomodoroLongBreakEnabled) {
-                    Label("Long break", systemImage: "moon.zzz")
+                // Rounds
+                GridRow {
+                    Label("Rounds: \(pomodoroRounds)", systemImage: "arrow.trianglehead.2.counterclockwise")
                         .foregroundColor(.primary)
+                    
+                    Stepper("", value: $pomodoroRounds, in: 1...12)
+                        .labelsHidden()
                 }
 
-                if pomodoroLongBreakEnabled {
-                    Stepper(value: $pomodoroLongBreak, in: 5...60, step: 5) {
-                        Label("Long break: \(pomodoroLongBreak) min", systemImage: "moon.zzz")
+                // Break controls only when there are multiple rounds
+                if pomodoroRounds > 1 {
+                    GridRow {
+                        Label("Break: \(pomodoroBreak) min", systemImage: "cup.and.saucer")
                             .foregroundColor(.primary)
+                        
+                        Stepper("", value: $pomodoroBreak, in: 1...30)
+                            .labelsHidden()
+                    }
+
+                    GridRow {
+                        Toggle(isOn: $pomodoroLongBreakEnabled) {
+                            Label("Long break", systemImage: "moon.zzz")
+                                .foregroundColor(.primary)
+                        }
+                        
+                        Color.clear // Empty cell for alignment
+                    }
+
+                    if pomodoroLongBreakEnabled {
+                        GridRow {
+                            Label("Duration: \(pomodoroLongBreak) min", systemImage: "moon.zzz")
+                                .foregroundColor(.primary)
+                                .padding(.leading, DS.Spacing.lg) // Optional indent for hierarchy
+                            
+                            Stepper("", value: $pomodoroLongBreak, in: 5...60, step: 5)
+                                .labelsHidden()
+                        }
                     }
                 }
             }
