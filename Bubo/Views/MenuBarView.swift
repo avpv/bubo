@@ -315,6 +315,7 @@ struct MenuBarView: View {
             .background(DS.Colors.accent)
             .foregroundColor(.white)
             .clipShape(Capsule())
+            .shadow(color: DS.Colors.accent.opacity(0.3), radius: 6, y: 3)
             .help("Add a new event (\u{2318}N)")
             .keyboardShortcut("n", modifiers: .command)
 
