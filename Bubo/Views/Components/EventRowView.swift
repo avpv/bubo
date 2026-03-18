@@ -64,13 +64,19 @@ struct EventRowView: View {
         .eventScrollTransition()
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(event.title)\(event.isRecurring ? ", recurring" : ""), \(event.formattedTimeRange)\(event.location.map { ", \($0)" } ?? "")")
-        .accessibilityHint("Click to view details. Right-click to snooze.")
+        .accessibilityHint("Click to view details. Right-click to set reminder.")
         .accessibilityAddTraits(.isButton)
         .contextMenu {
-            Section("Snooze") {
+            Section("Set Reminder") {
                 ForEach(DS.snoozeOptions) { option in
-                    Button(option.label) {
-                        reminderService.snoozeReminder(for: event, minutes: option.minutes)
+                    Button {
+                        reminderService.updateLocalReminder(for: event.id, minutes: [option.minutes])
+                    } label: {
+                        if reminderService.activeReminderMinutes(for: event).contains(option.minutes) {
+                            Label(option.label, systemImage: "checkmark")
+                        } else {
+                            Text(option.label)
+                        }
                     }
                 }
             }
@@ -162,8 +168,14 @@ struct EventRowView: View {
             if event.isUpcoming {
                 Menu {
                     ForEach(DS.snoozeOptions) { option in
-                        Button(option.label) {
-                            reminderService.snoozeReminder(for: event, minutes: option.minutes)
+                        Button {
+                            reminderService.updateLocalReminder(for: event.id, minutes: [option.minutes])
+                        } label: {
+                            if reminderService.activeReminderMinutes(for: event).contains(option.minutes) {
+                                Label(option.label, systemImage: "checkmark")
+                            } else {
+                                Text(option.label)
+                            }
                         }
                     }
                 } label: {
@@ -174,8 +186,8 @@ struct EventRowView: View {
                 .buttonStyle(.borderless)
                 .menuStyle(.borderlessButton)
                 .fixedSize()
-                .help("Snooze reminder")
-                .accessibilityLabel("Snooze reminder")
+                .help("Set reminder")
+                .accessibilityLabel("Set reminder")
             }
 
             if isLocal {

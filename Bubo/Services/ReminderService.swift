@@ -330,21 +330,23 @@ class ReminderService {
 
     private static let defaultReminderMinutes = [5]
 
-    private func scheduleReminders(for events: [CalendarEvent]) {
+    func activeReminderMinutes(for event: CalendarEvent) -> [Int] {
+        if let custom = event.customReminderMinutes, !custom.isEmpty {
+            return custom
+        }
         let enabledIntervals = settings.intervals.filter { $0.isEnabled }
+        if !enabledIntervals.isEmpty {
+            return enabledIntervals.map { $0.minutes }
+        }
+        return Self.defaultReminderMinutes
+    }
 
+    private func scheduleReminders(for events: [CalendarEvent]) {
         for event in events where event.isUpcoming {
             cancelReminders(for: event.id)
             var timers: [Timer] = []
 
-            let minutesList: [Int]
-            if let custom = event.customReminderMinutes, !custom.isEmpty {
-                minutesList = custom
-            } else if !enabledIntervals.isEmpty {
-                minutesList = enabledIntervals.map { $0.minutes }
-            } else {
-                minutesList = Self.defaultReminderMinutes
-            }
+            let minutesList = activeReminderMinutes(for: event)
 
             for minutes in minutesList {
                 let reminderKey = "\(event.id)_\(minutes)"
