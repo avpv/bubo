@@ -22,6 +22,9 @@ Feel free to tweak Owlenda's Recurrence parameters to fit your personal workflow
 
 ### 1. The Classic (Standard Focus)
 The traditional setup developed by Cirillo, perfect for mixed cognitive tasks.
+
+![Classic Pomodoro Timer](images/classic.png)
+
 - **Work:** 25 min
 - **Rounds:** 4
 - **Break:** 5 min
@@ -29,6 +32,9 @@ The traditional setup developed by Cirillo, perfect for mixed cognitive tasks.
 
 ### 2. Deep Work (For Coding, Writing, Design)
 Longer focus periods for complex tasks that require loading a lot of context into your brain. Constant 5-minute interruptions can break your "flow state" here.
+
+![Deep Work Flow State](images/deepwork.png)
+
 - **Work:** 50-60 min
 - **Rounds:** 2
 - **Break:** 10 min
@@ -36,6 +42,9 @@ Longer focus periods for complex tasks that require loading a lot of context int
 
 ### 3. The Sprinter (Administrative Tasks / Emails)
 Short, rapid bursts. Best used when you have low energy or a large backlog of dozens of tiny, unrelated tasks (like clearing out an inbox).
+
+![Sprinter Tasks Loop](images/sprinter.png)
+
 - **Work:** 15 min
 - **Rounds:** 4
 - **Break:** 3-5 min
