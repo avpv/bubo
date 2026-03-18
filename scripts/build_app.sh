@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build Owlenda.app from SPM sources
+# Build Bubo.app from SPM sources
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -7,27 +7,27 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 cd "$PROJECT_DIR"
 
 CONFIG="${1:-release}"
-echo "Building Owlenda ($CONFIG)..."
+echo "Building Bubo ($CONFIG)..."
 
 swift build -c "$CONFIG"
 BIN_PATH=$(swift build -c "$CONFIG" --show-bin-path)
 
-APP="$PROJECT_DIR/Owlenda.app/Contents"
+APP="$PROJECT_DIR/Bubo.app/Contents"
 
 # Clean previous build
-rm -rf "$PROJECT_DIR/Owlenda.app"
+rm -rf "$PROJECT_DIR/Bubo.app"
 
 # Create bundle structure
 mkdir -p "$APP/MacOS" "$APP/Resources"
 
 # Copy binary
-cp "$BIN_PATH/Owlenda" "$APP/MacOS/"
+cp "$BIN_PATH/Bubo" "$APP/MacOS/"
 
 # Copy resources
-cp "$PROJECT_DIR/Owlenda/Resources/AppIcon.icns" "$APP/Resources/"
+cp "$PROJECT_DIR/Bubo/Resources/AppIcon.icns" "$APP/Resources/"
 
 # Copy SPM resource bundle (needed for Bundle.module / Bundle.safeModule)
-BUNDLE_NAME="Owlenda_Owlenda.bundle"
+BUNDLE_NAME="Bubo_Bubo.bundle"
 if [ -d "$BIN_PATH/$BUNDLE_NAME" ]; then
     cp -R "$BIN_PATH/$BUNDLE_NAME" "$APP/Resources/"
     echo "Copied SPM resource bundle"
@@ -45,17 +45,17 @@ cat > "$APP/Info.plist" <<'PLIST'
   <key>CFBundleDevelopmentRegion</key>
   <string>ru</string>
   <key>CFBundleExecutable</key>
-  <string>Owlenda</string>
+  <string>Bubo</string>
   <key>CFBundleIconFile</key>
   <string>AppIcon</string>
   <key>NSPrincipalClass</key>
   <string>NSApplication</string>
   <key>CFBundleIdentifier</key>
-  <string>com.avpv.Owlenda</string>
+  <string>com.avpv.Bubo</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>
-  <string>Owlenda</string>
+  <string>Bubo</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
@@ -72,19 +72,19 @@ cat > "$APP/Info.plist" <<'PLIST'
     <false/>
   </dict>
   <key>NSCalendarsUsageDescription</key>
-  <string>Owlenda needs access to your calendars to show meeting reminders from accounts configured in the Calendar app.</string>
+  <string>Bubo needs access to your calendars to show meeting reminders from accounts configured in the Calendar app.</string>
   <key>NSCalendarsFullAccessUsageDescription</key>
-  <string>Owlenda needs access to your calendars to show meeting reminders from accounts configured in the Calendar app.</string>
+  <string>Bubo needs access to your calendars to show meeting reminders from accounts configured in the Calendar app.</string>
 </dict>
 </plist>
 PLIST
 
 # Ad-hoc sign so the app runs locally without xattr workaround
-codesign --force --deep --entitlements "$PROJECT_DIR/Owlenda/Owlenda.entitlements" --sign - "$PROJECT_DIR/Owlenda.app"
+codesign --force --deep --entitlements "$PROJECT_DIR/Bubo/Bubo.entitlements" --sign - "$PROJECT_DIR/Bubo.app"
 
 echo ""
-echo "Built: $PROJECT_DIR/Owlenda.app"
+echo "Built: $PROJECT_DIR/Bubo.app"
 echo ""
 echo "To install:"
-echo "  cp -R Owlenda.app /Applications/"
-echo "  open /Applications/Owlenda.app"
+echo "  cp -R Bubo.app /Applications/"
+echo "  open /Applications/Bubo.app"

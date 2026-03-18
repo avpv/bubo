@@ -19,7 +19,7 @@ struct SettingsView: View {
         .environment(viewModel)
         .environment(settings)
         .environment(reminderService)
-        .navigationTitle("Owlenda Settings")
+        .navigationTitle("Bubo Settings")
         .frame(minHeight: DS.Settings.minHeight, idealHeight: DS.Settings.idealHeight)
         .frame(width: DS.Settings.width)
     }

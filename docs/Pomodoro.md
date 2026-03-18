@@ -1,14 +1,14 @@
-# The Pomodoro Technique with Owlenda 🦉🍅
+# The Pomodoro Technique with Bubo 🦉🍅
 
 The Pomodoro Technique is a time management method developed by Francesco Cirillo. It uses a timer to break work into intervals, traditionally 25 minutes long, separated by short breaks. By chunking your workflow, you maintain high mental agility and prevent burnout.
 
-With Owlenda, you can natively block your calendar and reserve your time for deep work through automated Pomodoro event generation.
+With Bubo, you can natively block your calendar and reserve your time for deep work through automated Pomodoro event generation.
 
 ---
 
 ## How it Works
 
-1. **Pick a task** you want to focus on natively through the Owlenda menu bar.
+1. **Pick a task** you want to focus on natively through the Bubo menu bar.
 2. **Set the Work duration** (e.g., 25 minutes).
 3. **Commit** and work entirely focused until the event ends.
 4. **Take a Short Break** (typically 5 minutes) to stretch or grab water.
@@ -18,7 +18,7 @@ With Owlenda, you can natively block your calendar and reserve your time for dee
 
 ## Recommended Setting Combinations
 
-Feel free to tweak Owlenda's Recurrence parameters to fit your personal workflow. Here are the most effective combinations used by professionals:
+Feel free to tweak Bubo's Recurrence parameters to fit your personal workflow. Here are the most effective combinations used by professionals:
 
 ### 1. The Classic (Standard Focus)
 The traditional setup developed by Cirillo, perfect for mixed cognitive tasks.

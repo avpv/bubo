@@ -81,7 +81,7 @@ struct CalendarsTabView: View {
                     }
                 }
                 
-                Text("Owlenda reads events from all accounts configured in the Calendar app \u{2014} iCloud, Google, Exchange, CalDAV, and others.")
+                Text("Bubo reads events from all accounts configured in the Calendar app \u{2014} iCloud, Google, Exchange, CalDAV, and others.")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .padding(.top, DS.Spacing.xs)

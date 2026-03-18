@@ -1,9 +1,9 @@
 #!/bin/bash
-# Install Owlenda from the latest GitHub release
+# Install Bubo from the latest GitHub release
 set -euo pipefail
 
-APP_NAME="Owlenda"
-REPO="avpv/owlenda"
+APP_NAME="Bubo"
+REPO="avpv/bubo"
 INSTALL_DIR="/Applications"
 
 echo "Installing $APP_NAME..."
@@ -19,7 +19,7 @@ if [ -z "$DMG_URL" ]; then
   exit 1
 fi
 
-TMP_DMG=$(mktemp /tmp/Owlenda.XXXXXX.dmg)
+TMP_DMG=$(mktemp /tmp/Bubo.XXXXXX.dmg)
 trap 'rm -f "$TMP_DMG"; hdiutil detach "/Volumes/$APP_NAME" 2>/dev/null || true' EXIT
 
 echo "Downloading $DMG_URL..."

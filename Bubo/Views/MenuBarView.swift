@@ -149,7 +149,7 @@ struct MenuBarView: View {
     private var mainContent: some View {
         VStack(alignment: .leading, spacing: 0) {
             PopoverHeader(
-                title: "Owlenda",
+                title: "Bubo",
                 trailing: AnyView(statusIndicators)
             )
 
@@ -330,7 +330,7 @@ struct MenuBarView: View {
             Button(action: { NSApplication.shared.terminate(nil) }) {
                 Label("Quit", systemImage: "power")
             }
-            .help("Quit Owlenda (\u{2318}Q)")
+            .help("Quit Bubo (\u{2318}Q)")
             .keyboardShortcut("q", modifiers: .command)
         }
         .buttonStyle(.borderless)

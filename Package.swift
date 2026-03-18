@@ -2,15 +2,15 @@
 import PackageDescription
 
 let package = Package(
-    name: "Owlenda",
+    name: "Bubo",
     platforms: [
         .macOS(.v14)
     ],
     targets: [
         .executableTarget(
-            name: "Owlenda",
-            path: "Owlenda",
-            exclude: ["Info.plist", "Resources/owl.svg", "Owlenda.entitlements"],
+            name: "Bubo",
+            path: "Bubo",
+            exclude: ["Info.plist", "Resources/owl.svg", "Bubo.entitlements"],
             resources: [
                 .copy("Resources/AppIcon.icns"),
                 .copy("Resources/MenuBarIcon.png"),

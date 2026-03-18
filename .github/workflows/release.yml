@@ -50,13 +50,13 @@ jobs:
           VERSION: ${{ steps.tag.outputs.version }}
           BIN_PATH: ${{ steps.build.outputs.bin_path }}
         run: |
-          APP="Owlenda.app/Contents"
+          APP="Bubo.app/Contents"
 
           mkdir -p "$APP/MacOS" "$APP/Resources"
-          cp "${BIN_PATH}/Owlenda" "$APP/MacOS/"
-          cp Owlenda/Resources/AppIcon.icns "$APP/Resources/"
+          cp "${BIN_PATH}/Bubo" "$APP/MacOS/"
+          cp Bubo/Resources/AppIcon.icns "$APP/Resources/"
           # Copy SPM resource bundle so Bundle.module works at runtime
-          cp -R "${BIN_PATH}/Owlenda_Owlenda.bundle" "$APP/Resources/"
+          cp -R "${BIN_PATH}/Bubo_Bubo.bundle" "$APP/Resources/"
 
           cat > "$APP/Info.plist" <<'PLIST'
           <?xml version="1.0" encoding="UTF-8"?>
@@ -66,17 +66,17 @@ jobs:
             <key>CFBundleDevelopmentRegion</key>
             <string>en</string>
             <key>CFBundleExecutable</key>
-            <string>Owlenda</string>
+            <string>Bubo</string>
             <key>CFBundleIconFile</key>
             <string>AppIcon</string>
             <key>NSPrincipalClass</key>
             <string>NSApplication</string>
             <key>CFBundleIdentifier</key>
-            <string>com.avpv.Owlenda</string>
+            <string>com.avpv.Bubo</string>
             <key>CFBundleInfoDictionaryVersion</key>
             <string>6.0</string>
             <key>CFBundleName</key>
-            <string>Owlenda</string>
+            <string>Bubo</string>
             <key>CFBundlePackageType</key>
             <string>APPL</string>
             <key>CFBundleShortVersionString</key>
@@ -93,16 +93,16 @@ jobs:
               <false/>
             </dict>
             <key>NSCalendarsUsageDescription</key>
-            <string>Owlenda needs access to your calendars to show meeting reminders from accounts configured in the Calendar app.</string>
+            <string>Bubo needs access to your calendars to show meeting reminders from accounts configured in the Calendar app.</string>
             <key>NSCalendarsFullAccessUsageDescription</key>
-            <string>Owlenda needs access to your calendars to show meeting reminders from accounts configured in the Calendar app.</string>
+            <string>Bubo needs access to your calendars to show meeting reminders from accounts configured in the Calendar app.</string>
           </dict>
           </plist>
           PLIST
           sed -i '' "s/PLACEHOLDER_VERSION/${VERSION}/g" "$APP/Info.plist"
 
           # Ad-hoc sign the app so it runs locally, and provide the correct entitlements
-          codesign --force --deep --entitlements "Owlenda/Owlenda.entitlements" --sign - "Owlenda.app"
+          codesign --force --deep --entitlements "Bubo/Bubo.entitlements" --sign - "Bubo.app"
 
       - name: Create DMG
         run: |
@@ -112,18 +112,18 @@ jobs:
 
           # create-dmg exits 2 when no signing identity is found — expected in CI
           "$CREATE_DMG" \
-            --volname "Owlenda" \
-            --volicon "Owlenda/Resources/AppIcon.icns" \
+            --volname "Bubo" \
+            --volicon "Bubo/Resources/AppIcon.icns" \
             --background "packaging/dmg_background.png" \
             --window-pos 200 120 \
             --window-size 660 400 \
             --icon-size 128 \
             --text-size 14 \
-            --icon "Owlenda.app" 180 200 \
-            --hide-extension "Owlenda.app" \
+            --icon "Bubo.app" 180 200 \
+            --hide-extension "Bubo.app" \
             --app-drop-link 480 200 \
-            "Owlenda.dmg" \
-            "Owlenda.app" \
+            "Bubo.dmg" \
+            "Bubo.app" \
             || test $? -eq 2
 
       - name: Upload to Release
@@ -137,11 +137,11 @@ jobs:
 
             One command in Terminal:
             ```
-            curl -fsSL https://raw.githubusercontent.com/avpv/owlenda/HEAD/scripts/install.sh | bash
+            curl -fsSL https://raw.githubusercontent.com/avpv/bubo/HEAD/scripts/install.sh | bash
             ```
 
             Or manually:
-            1. Download **Owlenda.dmg**
-            2. Open the DMG and drag **Owlenda** to **Applications**
-            3. Run `xattr -cr /Applications/Owlenda.app` and launch
-          files: Owlenda.dmg
+            1. Download **Bubo.dmg**
+            2. Open the DMG and drag **Bubo** to **Applications**
+            3. Run `xattr -cr /Applications/Bubo.app` and launch
+          files: Bubo.dmg

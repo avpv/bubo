@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct OwlendaApp: App {
+struct BuboApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @State private var settings: ReminderSettings
     @State private var reminderService: ReminderService

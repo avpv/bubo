@@ -69,7 +69,7 @@ struct GeneralTabView: View {
             SettingsPlatter {
                 HStack {
                     Spacer()
-                    Text("Owlenda \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0")")
+                    Text("Bubo \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0")")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                     Spacer()

@@ -5,15 +5,15 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleExecutable</key>
-    <string>Owlenda</string>
+    <string>Bubo</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
-    <string>com.avpv.Owlenda</string>
+    <string>com.avpv.Bubo</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>Owlenda</string>
+    <string>Bubo</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -32,8 +32,8 @@
         <false/>
     </dict>
     <key>NSCalendarsUsageDescription</key>
-    <string>Owlenda needs access to your calendars to show meeting reminders from accounts configured in the Calendar app.</string>
+    <string>Bubo needs access to your calendars to show meeting reminders from accounts configured in the Calendar app.</string>
     <key>NSCalendarsFullAccessUsageDescription</key>
-    <string>Owlenda needs access to your calendars to show meeting reminders from accounts configured in the Calendar app.</string>
+    <string>Bubo needs access to your calendars to show meeting reminders from accounts configured in the Calendar app.</string>
 </dict>
 </plist>

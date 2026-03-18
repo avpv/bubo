@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Generate a Retina background image for the Owlenda DMG installer.
+"""Generate a Retina background image for the Bubo DMG installer.
 
 Run once locally on macOS, commit the output. Not part of CI.
 
 Output: packaging/dmg_background.png (1320x800 @144 DPI)
 
 Icon positions must match create-dmg flags in release.yml:
-  --icon "Owlenda.app" 180 200
+  --icon "Bubo.app" 180 200
   --app-drop-link 480 200
   --window-size 660 400
 """
@@ -27,7 +27,7 @@ IMG_W, IMG_H = WIN_W * SCALE, WIN_H * SCALE
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
-SVG_PATH = os.path.join(PROJECT_DIR, "Owlenda", "Resources", "owl.svg")
+SVG_PATH = os.path.join(PROJECT_DIR, "Bubo", "Resources", "owl.svg")
 OUTPUT_PATH = os.path.join(PROJECT_DIR, "packaging", "dmg_background.png")
 
 # Light palette
