@@ -207,11 +207,20 @@ struct AddEventView: View {
                                 HStack {
                                     Stepper("\(DS.formatMinutes(newReminderValue))", value: $newReminderValue, in: 1...120)
 
-                                    Button("Add") {
+                                    Button {
                                         if !reminderMinutes.contains(newReminderValue) {
                                             reminderMinutes.append(newReminderValue)
                                         }
+                                    } label: {
+                                        Label("Add", systemImage: "plus")
+                                            .padding(.horizontal, DS.Spacing.sm)
+                                            .padding(.vertical, DS.Spacing.xs)
                                     }
+                                    .background(DS.Colors.accent)
+                                    .foregroundColor(.white)
+                                    .fontWeight(.medium)
+                                    .buttonStyle(.plain)
+                                    .clipShape(Capsule())
                                 }
 
                                 let available = Self.presetReminders.filter { !reminderMinutes.contains($0) }
