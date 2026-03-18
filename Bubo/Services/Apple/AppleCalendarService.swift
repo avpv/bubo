@@ -123,6 +123,18 @@ class AppleCalendarService {
         }
     }
 
+    /// Shift the start and end times of an Apple Calendar event by a given number of minutes.
+    func shiftEventTime(id: String, byMinutes minutes: Int) throws {
+        let actualId = id.replacingOccurrences(of: "apple_", with: "")
+        guard let ekEvent = store.event(withIdentifier: actualId) else {
+            throw NSError(domain: "AppleCalendarService", code: 404, userInfo: [NSLocalizedDescriptionKey: "Event not found."])
+        }
+        let interval = TimeInterval(minutes * 60)
+        ekEvent.startDate = ekEvent.startDate.addingTimeInterval(interval)
+        ekEvent.endDate = ekEvent.endDate.addingTimeInterval(interval)
+        try store.save(ekEvent, span: .thisEvent)
+    }
+
     // MARK: - Types
 
     struct CalendarInfo: Identifiable {

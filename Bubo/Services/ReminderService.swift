@@ -313,17 +313,28 @@ class ReminderService {
     // MARK: - Snooze
 
     func snoozeReminder(for event: CalendarEvent, minutes: Int) {
-        let snoozeDate = Date().addingTimeInterval(TimeInterval(minutes * 60))
-        let timer = Timer(fire: snoozeDate, interval: 0, repeats: false) { [weak self] _ in
-            Task { @MainActor in
-                self?.fireReminder(for: event, minutesBefore: 0, isSnooze: true)
+        if event.isLocalEvent {
+            let interval = TimeInterval(minutes * 60)
+            let updatedEvent = CalendarEvent(
+                id: event.id,
+                title: event.title,
+                startDate: event.startDate.addingTimeInterval(interval),
+                endDate: event.endDate.addingTimeInterval(interval),
+                location: event.location,
+                description: event.description,
+                calendarName: event.calendarName,
+                customReminderMinutes: event.customReminderMinutes,
+                recurrenceRule: event.recurrenceRule,
+                seriesId: event.seriesId
+            )
+            updateLocalEvent(updatedEvent)
+        } else {
+            do {
+                try AppleCalendarService.shared.shiftEventTime(id: event.id, byMinutes: minutes)
+            } catch {
+                print("Failed to shift Apple Calendar event time: \(error)")
             }
         }
-        RunLoop.main.add(timer, forMode: .common)
-
-        var timers = reminderTimers[event.id] ?? []
-        timers.append(timer)
-        reminderTimers[event.id] = timers
     }
 
     // MARK: - Reminders
