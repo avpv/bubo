@@ -307,7 +307,13 @@ struct MenuBarView: View {
                 navigation = .addEvent()
             }) {
                 Label("Add", systemImage: "plus")
+                    .padding(.horizontal, DS.Spacing.sm)
+                    .padding(.vertical, DS.Spacing.xs)
             }
+            .buttonStyle(.plain)
+            .background(DS.Colors.accent)
+            .foregroundColor(.white)
+            .clipShape(Capsule())
             .help("Add a new event (\u{2318}N)")
             .keyboardShortcut("n", modifiers: .command)
 
