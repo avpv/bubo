@@ -22,6 +22,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                   let minutes = notification.userInfo?["minutesBefore"] as? Int else { return }
             self?.showAlert(event: event, minutesBefore: minutes)
         }
+
+        // Workaround for SwiftUI Settings window leaving the app in the Dock
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification,
+            object: nil,
+            queue: .main
+        ) { notification in
+            if let window = notification.object as? NSWindow, window.title == "Bubo Settings" {
+                NSApp.setActivationPolicy(.accessory)
+                if NSApp.isActive {
+                    NSApp.hide(nil)
+                }
+            }
+        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
