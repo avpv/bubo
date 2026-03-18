@@ -29,27 +29,7 @@ class SettingsViewModel {
         isRequestingCalendarAccess = true
 
         Task {
-            // LSUIElement apps need to temporarily become regular apps
-            // so macOS shows the calendar permission dialog on top.
-            let previousPolicy = NSApp.activationPolicy()
-            NSApp.setActivationPolicy(.regular)
-            NSRunningApplication.current.activate(options: .activateIgnoringOtherApps)
-            
-            // Wait for the policy change to propagate so the dialog isn't suppressed
-            try? await Task.sleep(nanoseconds: 500_000_000)
-
             let granted = await AppleCalendarService.shared.requestAccess()
-
-            // Restore menu-bar-only activation policy or keep previous if settings window is still open.
-            let isSettingsOpen = NSApp.windows.contains { $0.isVisible && ($0.title.contains("Settings") || $0.identifier?.rawValue.contains("Settings") == true) }
-            if isSettingsOpen {
-                NSApp.setActivationPolicy(previousPolicy)
-            } else {
-                NSApp.setActivationPolicy(.accessory)
-                if NSApp.isActive {
-                    NSApp.hide(nil)
-                }
-            }
 
             calendarAuthStatus = AppleCalendarService.authorizationStatus
             isRequestingCalendarAccess = false
