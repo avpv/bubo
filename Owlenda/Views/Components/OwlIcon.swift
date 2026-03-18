@@ -2,6 +2,7 @@ import SwiftUI
 
 struct OwlIcon: View {
     var size: CGFloat = 20
+    @State private var isBouncing = false
 
     var body: some View {
         Canvas { context, canvasSize in
@@ -59,5 +60,27 @@ struct OwlIcon: View {
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)
+        .scaleEffect(isBouncing ? 0.75 : 1.0)
+        .rotationEffect(.degrees(isBouncing ? 12 : 0))
+        .onTapGesture {
+            Haptics.generic()
+            withAnimation(.spring(response: 0.2, dampingFraction: 0.4)) {
+                isBouncing = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.5)) {
+                    isBouncing = false
+                }
+            }
+        }
+        #if os(macOS)
+        .onHover { isHovered in
+            if isHovered {
+                NSCursor.pointingHand.push()
+            } else {
+                NSCursor.pop()
+            }
+        }
+        #endif
     }
 }
