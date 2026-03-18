@@ -336,6 +336,8 @@ struct RecurrencePickerView: View {
 
     @ViewBuilder
     private func standardControls(_ freq: RecurrenceFrequency) -> some View {
+        Color.clear.frame(height: DS.Spacing.xs) // Adds top spacing matching Pomodoro
+
         // Interval
         Stepper(
             "Every \(interval) \(interval == 1 ? freq.singularUnit : freq.pluralUnit)",
@@ -344,13 +346,17 @@ struct RecurrencePickerView: View {
 
         // Weekly: weekday chips
         if freq == .weekly {
+            Color.clear.frame(height: 2)
             weekdayChips
         }
 
         // Monthly: mode picker
         if freq == .monthly {
+            Color.clear.frame(height: 2)
             monthlyModePicker
         }
+
+        Color.clear.frame(height: 4)
 
         // End condition
         Picker("Ends", selection: $endChoice) {
@@ -364,13 +370,16 @@ struct RecurrencePickerView: View {
         case .never:
             EmptyView()
         case .afterCount:
+            Color.clear.frame(height: 2)
             Stepper("After \(endCount) occurrences", value: $endCount, in: 2...100)
         case .onDate:
+            Color.clear.frame(height: 2)
             DatePicker("Until", selection: $endDate, in: eventStartDate..., displayedComponents: .date)
         }
 
         // Summary
         if let built = buildStandardRule(freq) {
+            Color.clear.frame(height: 4)
             Label(built.displayText, systemImage: "repeat")
                 .font(.caption)
                 .foregroundColor(.secondary)
