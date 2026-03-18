@@ -8,9 +8,6 @@
   <strong>Native macOS Menu Bar Calendar, Pomodoro, and Focus App</strong>
 </p>
 
-<p align="center">
-  <img src="screenshots/menu-bar-overview.png" alt="Bubo in menu bar" width="500">
-</p>
 
 Bubo is a beautifully designed, native macOS menu bar application dedicated to preserving your focus. Built with modern, glassmorphic **macOS 2026 aesthetics**, it serves as a lightweight calendar client, meeting reminder system, and advanced Pomodoro cycle tracker. 
 
