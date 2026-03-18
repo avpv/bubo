@@ -29,10 +29,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             object: nil,
             queue: .main
         ) { notification in
-            if let window = notification.object as? NSWindow, window.title == "Bubo Settings" {
-                NSApp.setActivationPolicy(.accessory)
-                if NSApp.isActive {
-                    NSApp.hide(nil)
+            if let window = notification.object as? NSWindow {
+                if window.title.contains("Settings") || window.title.contains("Bubo") || window.identifier?.rawValue.contains("Settings") == true {
+                    DispatchQueue.main.async {
+                        NSApp.setActivationPolicy(.accessory)
+                        if NSApp.isActive {
+                            NSApp.hide(nil)
+                        }
+                    }
                 }
             }
         }

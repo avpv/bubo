@@ -204,17 +204,24 @@ struct AddEventView: View {
                                     }
                                 }
 
-                                HStack {
-                                    Stepper("\(DS.formatMinutes(newReminderValue))", value: $newReminderValue, in: 1...120)
-
-                                    Button {
-                                        if !reminderMinutes.contains(newReminderValue) {
-                                            reminderMinutes.append(newReminderValue)
+                                Grid(alignment: .leading, horizontalSpacing: DS.Spacing.sm) {
+                                    GridRow {
+                                        Text("\(DS.formatMinutes(newReminderValue))")
+                                            .frame(minWidth: 60, alignment: .leading)
+                                            .monospacedDigit()
+                                        
+                                        Stepper("", value: $newReminderValue, in: 1...120)
+                                            .labelsHidden()
+                                        
+                                        Button {
+                                            if !reminderMinutes.contains(newReminderValue) {
+                                                reminderMinutes.append(newReminderValue)
+                                            }
+                                        } label: {
+                                            Label("Add", systemImage: "plus")
                                         }
-                                    } label: {
-                                        Label("Add", systemImage: "plus")
+                                        .buttonStyle(.action(role: .primary, size: .compact))
                                     }
-                                    .buttonStyle(.action(role: .primary, size: .compact))
                                 }
 
                                 let available = Self.presetReminders.filter { !reminderMinutes.contains($0) }
