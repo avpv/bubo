@@ -39,7 +39,7 @@ struct CalendarEvent: Identifiable, Codable, Hashable {
     }
 
     var isUpcoming: Bool {
-        startDate > Date()
+        endDate > Date()
     }
 
     var timeUntilStart: TimeInterval {
