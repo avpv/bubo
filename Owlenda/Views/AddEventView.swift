@@ -249,28 +249,34 @@ struct AddEventView: View {
 
             HStack {
                 Spacer()
-                Button("Cancel") { onDismiss() }
-                    .keyboardShortcut(.cancelAction)
-                    .frame(minWidth: 100)
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.sm)
-                    .background(DS.Materials.platter)
-                    .foregroundColor(DS.Colors.textPrimary)
-                    .fontWeight(.medium)
-                    .clipShape(Capsule())
-                    .shadow(color: DS.Shadows.ambientColor, radius: 4, y: 2)
-                    .buttonStyle(.plain)
+                Button(action: { onDismiss() }) {
+                    Text("Cancel")
+                        .frame(minWidth: 100)
+                        .padding(.horizontal, DS.Spacing.lg)
+                        .padding(.vertical, DS.Spacing.sm)
+                        .contentShape(Rectangle())
+                }
+                .keyboardShortcut(.cancelAction)
+                .background(DS.Materials.platter)
+                .foregroundColor(DS.Colors.textPrimary)
+                .fontWeight(.medium)
+                .clipShape(Capsule())
+                .shadow(color: DS.Shadows.ambientColor, radius: 4, y: 2)
+                .buttonStyle(.plain)
 
-                Button(isEditing ? "Save" : "Add Event") {
+                Button(action: {
                     if isTitleValid {
                         saveEvent()
                     } else {
                         showValidation = true
                     }
+                }) {
+                    Text(isEditing ? "Save" : "Add Event")
+                        .frame(minWidth: 100)
+                        .padding(.horizontal, DS.Spacing.lg)
+                        .padding(.vertical, DS.Spacing.sm)
+                        .contentShape(Rectangle())
                 }
-                .frame(minWidth: 100)
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.sm)
                 .background(DS.Colors.accent)
                 .foregroundColor(.white)
                 .fontWeight(.medium)

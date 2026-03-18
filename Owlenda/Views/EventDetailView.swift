@@ -182,6 +182,7 @@ struct EventDetailView: View {
                         Label("Edit", systemImage: "pencil")
                             .padding(.horizontal, DS.Spacing.md)
                             .padding(.vertical, DS.Spacing.xs)
+                            .contentShape(Rectangle())
                     }
                     .background(DS.Colors.accent)
                     .foregroundColor(.white)
