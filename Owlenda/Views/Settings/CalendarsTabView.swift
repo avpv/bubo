@@ -7,14 +7,16 @@ struct CalendarsTabView: View {
     var body: some View {
         @Bindable var settings = settings
 
-        Form {
-            accessSection
+        ScrollView {
+            VStack(spacing: DS.Spacing.lg) {
+                accessSection
 
-            if viewModel.appleCalendarAccessGranted {
-                calendarSelectionSection
+                if viewModel.appleCalendarAccessGranted {
+                    calendarSelectionSection
+                }
             }
+            .padding(20)
         }
-        .padding(20)
         .onAppear {
             if viewModel.appleCalendarAccessGranted && viewModel.availableAppleCalendars.isEmpty {
                 viewModel.loadAppleCalendars()
@@ -26,7 +28,7 @@ struct CalendarsTabView: View {
 
     @ViewBuilder
     private var accessSection: some View {
-        Section("Calendar Access") {
+        SettingsPlatter("Calendar Access") {
             if viewModel.appleCalendarAccessGranted {
                 HStack {
                     Label("Access granted", systemImage: "checkmark.circle.fill")
@@ -82,7 +84,7 @@ struct CalendarsTabView: View {
         @Bindable var settings = settings
         let allCalendars = viewModel.availableAppleCalendars
 
-        Section {
+        SettingsPlatter("Calendars") {
             Toggle("All calendars", isOn: Binding(
                 get: { settings.selectedCalendarIds.isEmpty },
                 set: { isAll in
@@ -100,29 +102,30 @@ struct CalendarsTabView: View {
 
         if !settings.selectedCalendarIds.isEmpty {
             ForEach(viewModel.appleCalendarsByAccount, id: \.account) { group in
-                Section(group.account) {
-                    ForEach(group.calendars) { cal in
-                        Toggle(isOn: Binding(
-                            get: { settings.selectedCalendarIds.contains(cal.id) },
-                            set: { isOn in
-                                if isOn {
-                                    if !settings.selectedCalendarIds.contains(cal.id) {
-                                        settings.selectedCalendarIds.append(cal.id)
-                                    }
-                                } else {
-                                    settings.selectedCalendarIds.removeAll { $0 == cal.id }
+                Divider().padding(.vertical, DS.Spacing.xs)
+                Text(group.account).font(.subheadline).foregroundColor(.secondary)
+                
+                ForEach(group.calendars) { cal in
+                    Toggle(isOn: Binding(
+                        get: { settings.selectedCalendarIds.contains(cal.id) },
+                        set: { isOn in
+                            if isOn {
+                                if !settings.selectedCalendarIds.contains(cal.id) {
+                                    settings.selectedCalendarIds.append(cal.id)
                                 }
-                                if settings.selectedCalendarIds.count == allCalendars.count {
-                                    settings.selectedCalendarIds = []
-                                }
+                            } else {
+                                settings.selectedCalendarIds.removeAll { $0 == cal.id }
                             }
-                        )) {
-                            HStack(spacing: DS.Spacing.sm) {
-                                Circle()
-                                    .fill(Color(cgColor: cal.color ?? CGColor(red: 0.5, green: 0.5, blue: 0.5, alpha: 1)))
-                                    .frame(width: DS.Size.iconSmall, height: DS.Size.iconSmall)
-                                Text(cal.title)
+                            if settings.selectedCalendarIds.count == allCalendars.count {
+                                settings.selectedCalendarIds = []
                             }
+                        }
+                    )) {
+                        HStack(spacing: DS.Spacing.sm) {
+                            Circle()
+                                .fill(Color(cgColor: cal.color ?? CGColor(red: 0.5, green: 0.5, blue: 0.5, alpha: 1)))
+                                .frame(width: DS.Size.iconSmall, height: DS.Size.iconSmall)
+                            Text(cal.title)
                         }
                     }
                 }

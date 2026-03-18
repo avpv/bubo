@@ -27,8 +27,9 @@ struct GeneralTabView: View {
     var body: some View {
         @Bindable var settings = settings
 
-        Form {
-            Section("Refresh") {
+        ScrollView {
+            VStack(spacing: DS.Spacing.lg) {
+            SettingsPlatter("Refresh") {
                 Picker("Refresh interval", selection: $settings.syncIntervalMinutes) {
                     Text("1 minute").tag(1)
                     Text("3 minutes").tag(3)
@@ -39,11 +40,11 @@ struct GeneralTabView: View {
                 }
             }
 
-            Section("Startup") {
+            SettingsPlatter("Startup") {
                 Toggle("Launch at login", isOn: launchAtLoginBinding)
             }
 
-            Section("Status") {
+            SettingsPlatter("Status") {
                 if let lastSync = reminderService.lastSyncDate {
                     LabeledContent("Last refresh") {
                         Text(lastSync.formatted())
@@ -65,7 +66,7 @@ struct GeneralTabView: View {
                 }
             }
 
-            Section {
+            SettingsPlatter {
                 HStack {
                     Spacer()
                     Text("Owlenda \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0")")
@@ -74,8 +75,9 @@ struct GeneralTabView: View {
                     Spacer()
                 }
             }
+            }
+            .padding(20)
         }
-        .padding(20)
         .onAppear {
             settings.launchAtLogin = SMAppService.mainApp.status == .enabled
         }

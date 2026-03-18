@@ -8,8 +8,9 @@ struct RemindersTabView: View {
         @Bindable var settings = settings
         @Bindable var viewModel = viewModel
 
-        Form {
-            Section("Reminder Intervals") {
+        ScrollView {
+            VStack(spacing: DS.Spacing.lg) {
+            SettingsPlatter("Reminder Intervals") {
                 ForEach($settings.intervals) { $interval in
                     HStack {
                         Toggle(isOn: $interval.isEnabled) {
@@ -36,17 +37,16 @@ struct RemindersTabView: View {
                 }
             }
 
-            Section {
+            SettingsPlatter("Notification Types") {
                 Toggle("Full-screen notification", isOn: $settings.showFullScreenAlert)
                 Toggle("System notification", isOn: $settings.showSystemNotification)
-            } header: {
-                Text("Notification Types")
-            } footer: {
                 Text("At least one notification type should be enabled to receive meeting alerts.")
+                    .font(.caption)
                     .foregroundColor(.secondary)
+                    .padding(.top, DS.Spacing.xs)
             }
 
-            Section("Do Not Disturb") {
+            SettingsPlatter("Do Not Disturb") {
                 Toggle("Enable Do Not Disturb", isOn: $settings.doNotDisturbEnabled)
 
                 if settings.doNotDisturbEnabled {
@@ -60,7 +60,8 @@ struct RemindersTabView: View {
                     }
                 }
             }
+            }
+            .padding(20)
         }
-        .padding(20)
     }
 }
