@@ -192,7 +192,7 @@ struct EventDetailView: View {
                 .shadow(color: DS.Colors.accent.opacity(0.3), radius: 6, y: 3)
             }
             .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.sm)
             .background(DS.Materials.headerBar)
         }
         .frame(width: DS.Popover.width)
