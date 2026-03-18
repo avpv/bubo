@@ -103,14 +103,19 @@ struct MenuBarView: View {
             presenting: pendingDeleteEvent
         ) { event in
             Button("Delete This Event Only") {
-                reminderService.excludeOccurrence(occurrenceId: event.id)
-                toastState.showSuccess("Occurrence skipped", icon: "trash.fill")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    reminderService.excludeOccurrence(occurrenceId: event.id)
+                    toastState.showSuccess("Occurrence skipped", icon: "trash.fill")
+                }
             }
             Button("Delete All Events") {
-                let seriesId = event.seriesId ?? event.id
-                reminderService.removeLocalEvent(id: seriesId)
-                toastState.showSuccess("All occurrences deleted", icon: "trash.fill")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    let seriesId = event.seriesId ?? event.id
+                    reminderService.removeLocalEvent(id: seriesId)
+                    toastState.showSuccess("All occurrences deleted", icon: "trash.fill")
+                }
             }
+            .keyboardShortcut(.defaultAction)
             Button("Cancel", role: .cancel) { }
         } message: { event in
             Text("\"\(event.title)\" is a recurring event.")

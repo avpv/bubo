@@ -150,7 +150,12 @@ struct EventDetailView: View {
                         "Delete Event",
                         isPresented: $showDeleteConfirmation
                     ) {
-                        Button("Delete") { onDelete?(event) }
+                        Button("Delete") {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                onDelete?(event)
+                            }
+                        }
+                        .keyboardShortcut(.defaultAction)
                         Button("Cancel", role: .cancel) { }
                     } message: {
                         Text("Are you sure you want to delete \"\(event.title)\"?")
@@ -161,11 +166,16 @@ struct EventDetailView: View {
                         isPresented: $showSeriesDeleteChoice
                     ) {
                         Button("Delete This Event Only") {
-                            onDeleteOccurrence?(event)
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                onDeleteOccurrence?(event)
+                            }
                         }
                         Button("Delete All Events") {
-                            onDeleteSeries?(event)
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                onDeleteSeries?(event)
+                            }
                         }
+                        .keyboardShortcut(.defaultAction)
                         Button("Cancel", role: .cancel) { }
                     } message: {
                         Text("\"\(event.title)\" is a recurring event.")
