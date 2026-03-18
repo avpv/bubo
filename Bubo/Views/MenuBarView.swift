@@ -307,7 +307,7 @@ struct MenuBarView: View {
                 navigation = .addEvent()
             }) {
                 Label("Add", systemImage: "plus")
-                    .padding(.horizontal, DS.Spacing.sm)
+                    .padding(.horizontal, DS.Spacing.md)
                     .padding(.vertical, DS.Spacing.xs)
             }
             .buttonStyle(.plain)
