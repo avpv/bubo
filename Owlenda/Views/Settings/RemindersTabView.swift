@@ -61,6 +61,6 @@ struct RemindersTabView: View {
                 }
             }
         }
-        .formStyle(.grouped)
+        .padding(20)
     }
 }

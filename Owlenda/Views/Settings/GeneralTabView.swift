@@ -75,7 +75,7 @@ struct GeneralTabView: View {
                 }
             }
         }
-        .formStyle(.grouped)
+        .padding(20)
         .onAppear {
             settings.launchAtLogin = SMAppService.mainApp.status == .enabled
         }

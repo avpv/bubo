@@ -14,7 +14,7 @@ struct CalendarsTabView: View {
                 calendarSelectionSection
             }
         }
-        .formStyle(.grouped)
+        .padding(20)
         .onAppear {
             if viewModel.appleCalendarAccessGranted && viewModel.availableAppleCalendars.isEmpty {
                 viewModel.loadAppleCalendars()
