@@ -293,6 +293,14 @@ struct AddEventView: View {
                     reminderMinutes = custom
                 }
                 recurrenceRule = event.recurrenceRule
+            } else {
+                let now = Date()
+                let cal = Calendar.current
+                let mins = cal.component(.minute, from: now)
+                let extraMins = 30 - (mins % 30)
+                if let snapped = cal.date(byAdding: .minute, value: extraMins, to: now) {
+                    date = cal.date(bySetting: .second, value: 0, of: snapped) ?? snapped
+                }
             }
             Task {
                 try? await Task.sleep(for: .milliseconds(100))
