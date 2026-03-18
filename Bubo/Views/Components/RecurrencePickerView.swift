@@ -179,9 +179,11 @@ struct RecurrencePickerView: View {
                     }
                 }
             }
+            .padding(.top, DS.Spacing.md)
 
             // Visual timeline
             pomodoroTimeline
+                .padding(.vertical, DS.Spacing.md)
                 .animation(DS.Animation.standard, value: pomodoroWork)
                 .animation(DS.Animation.standard, value: pomodoroBreak)
                 .animation(DS.Animation.standard, value: pomodoroRounds)
