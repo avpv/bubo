@@ -18,6 +18,8 @@ struct AddEventView: View {
     @State private var recurrenceRule: RecurrenceRule? = nil
 
     @FocusState private var isTitleFocused: Bool
+    @FocusState private var isLocationFocused: Bool
+    @FocusState private var isNotesFocused: Bool
 
     private static let presetReminders = [1, 2, 3, 5, 10, 15, 20, 30, 45, 60]
 
@@ -78,7 +80,16 @@ struct AddEventView: View {
                     .padding(.vertical, DS.Spacing.sm)
                     .background(DS.Materials.platter)
                     .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
-                    .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                            .stroke(isTitleFocused ? DS.Colors.accent.opacity(0.8) : Color.clear, lineWidth: 2)
+                    )
+                    .shadow(
+                        color: isTitleFocused ? DS.Colors.accent.opacity(0.15) : DS.Shadows.ambientColor,
+                        radius: isTitleFocused ? DS.Shadows.ambientRadius + 1 : DS.Shadows.ambientRadius,
+                        y: DS.Shadows.ambientY
+                    )
+                    .animation(DS.Animation.microInteraction, value: isTitleFocused)
                     .disabled(isExternal)
                     .opacity(isExternal ? 0.6 : 1.0)
                     
@@ -130,17 +141,28 @@ struct AddEventView: View {
                         VStack(spacing: DS.Spacing.md) {
                             TextField("Location", text: $location, prompt: Text("Optional"))
                                 .textFieldStyle(.plain)
+                                .focused($isLocationFocused)
 
                             Divider()
 
                             TextField("Notes", text: $description, prompt: Text("Optional"), axis: .vertical)
                                 .textFieldStyle(.plain)
+                                .focused($isNotesFocused)
                                 .lineLimit(3...8)
                         }
                         .padding(DS.Spacing.md)
                         .background(DS.Materials.platter)
                         .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
-                        .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                                .stroke((isLocationFocused || isNotesFocused) ? DS.Colors.accent.opacity(0.8) : Color.clear, lineWidth: 2)
+                        )
+                        .shadow(
+                            color: (isLocationFocused || isNotesFocused) ? DS.Colors.accent.opacity(0.15) : DS.Shadows.ambientColor,
+                            radius: (isLocationFocused || isNotesFocused) ? DS.Shadows.ambientRadius + 1 : DS.Shadows.ambientRadius,
+                            y: DS.Shadows.ambientY
+                        )
+                        .animation(DS.Animation.microInteraction, value: isLocationFocused || isNotesFocused)
                     }
                     .disabled(isExternal)
                     .opacity(isExternal ? 0.6 : 1.0)
