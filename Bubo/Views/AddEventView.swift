@@ -193,7 +193,7 @@ struct AddEventView: View {
                             if useCustomReminders {
                                 ForEach(reminderMinutes.sorted(), id: \.self) { minutes in
                                     HStack {
-                                        Label("\(DS.formatMinutes(minutes)) before", systemImage: "bell.fill")
+                                        Label(DS.formatMinutes(minutes), systemImage: "bell.fill")
                                         Spacer()
                                         Button(role: .destructive) {
                                             reminderMinutes.removeAll { $0 == minutes }
@@ -237,7 +237,7 @@ struct AddEventView: View {
                                     }
                                 }
                             } else {
-                                Label("Default: 5 min before", systemImage: "bell.fill")
+                                Label("Default: 5 min", systemImage: "bell.fill")
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
                             }

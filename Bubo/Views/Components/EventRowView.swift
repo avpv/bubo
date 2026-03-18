@@ -226,7 +226,7 @@ struct EventRowView: View {
                 if let option = DS.snoozeOptions.first(where: { $0.minutes == minutes }) {
                     Text(option.label)
                 } else {
-                    Text("\(DS.formatMinutes(minutes)) before")
+                    Text(DS.formatMinutes(minutes))
                 }
             }
         }

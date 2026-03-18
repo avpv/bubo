@@ -184,7 +184,7 @@ enum DS {
         init(_ minutes: Int) {
             self.id = minutes
             self.minutes = minutes
-            self.label = "\(minutes) minutes"
+            self.label = DS.formatMinutes(minutes)
         }
     }
 
