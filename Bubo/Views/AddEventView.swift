@@ -261,7 +261,7 @@ struct AddEventView: View {
                 Spacer()
                 Button(action: { onDismiss() }) {
                     Text("Cancel")
-                        .frame(minWidth: 130)
+                        .frame(minWidth: 100)
                         .padding(.horizontal, DS.Spacing.lg)
                         .padding(.vertical, DS.Spacing.sm)
                         .contentShape(Rectangle())
@@ -282,7 +282,7 @@ struct AddEventView: View {
                     }
                 }) {
                     Label(isEditing ? "Save" : "Add Event", systemImage: isEditing ? "checkmark.circle" : "calendar.badge.plus")
-                        .frame(minWidth: 130)
+                        .frame(minWidth: 100)
                         .padding(.horizontal, DS.Spacing.lg)
                         .padding(.vertical, DS.Spacing.sm)
                         .contentShape(Rectangle())

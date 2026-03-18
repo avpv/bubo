@@ -143,7 +143,7 @@ struct EventDetailView: View {
                         }
                     } label: {
                         Label("Delete", systemImage: "trash")
-                            .frame(minWidth: 130)
+                            .frame(minWidth: 100)
                             .padding(.horizontal, DS.Spacing.lg)
                             .padding(.vertical, DS.Spacing.sm)
                             .contentShape(Rectangle())
@@ -190,7 +190,7 @@ struct EventDetailView: View {
                     onEdit?(event)
                 } label: {
                     Label("Edit", systemImage: "pencil")
-                        .frame(minWidth: 130)
+                        .frame(minWidth: 100)
                         .padding(.horizontal, DS.Spacing.lg)
                         .padding(.vertical, DS.Spacing.sm)
                         .contentShape(Rectangle())

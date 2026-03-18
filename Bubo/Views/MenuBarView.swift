@@ -307,8 +307,8 @@ struct MenuBarView: View {
                 navigation = .addEvent()
             }) {
                 Label("Add", systemImage: "plus")
-                    .frame(minWidth: 130)
-                    .padding(.horizontal, DS.Spacing.lg)
+                    .fixedSize()
+                    .padding(.horizontal, DS.Spacing.md)
                     .padding(.vertical, DS.Spacing.sm)
                     .contentShape(Rectangle())
             }
