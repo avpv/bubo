@@ -354,15 +354,10 @@ struct PopoverHeader: View {
                         Haptics.tap()
                         onBack?()
                     } label: {
-                        HStack(spacing: DS.Spacing.xxs) {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: DS.Size.iconMedium, weight: .semibold))
-                                .contentTransition(.symbolEffect(.replace))
-                            Text("Back")
-                                .font(.subheadline)
-                        }
+                        Label("Back", systemImage: "chevron.left")
                     }
-                    .buttonStyle(.borderless)
+                    .buttonStyle(.bordered)
+                    .controlSize(.regular)
                     .keyboardShortcut(.escape, modifiers: [])
                 }
 
