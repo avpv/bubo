@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="screenshots/logo.png" alt="Owlenda Logo" width="128">
+</p>
+
 <h1 align="center">Owlenda</h1>
 
 <p align="center">
