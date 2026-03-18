@@ -128,7 +128,7 @@ struct RecurrencePickerView: View {
 
     private var pomodoroControls: some View {
         Group {
-            Grid(alignment: .leading, horizontalSpacing: DS.Spacing.md, verticalSpacing: DS.Spacing.xs) {
+            Grid(alignment: .leading, horizontalSpacing: DS.Spacing.md, verticalSpacing: DS.Spacing.sm) {
                 // Work duration
                 GridRow {
                     Label("Work: \(pomodoroWork) min", systemImage: "brain.head.profile")
