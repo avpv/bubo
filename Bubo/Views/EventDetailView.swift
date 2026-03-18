@@ -155,7 +155,6 @@ struct EventDetailView: View {
                                 onDelete?(event)
                             }
                         }
-                        .keyboardShortcut(.defaultAction)
                         Button("Cancel", role: .cancel) { }
                     } message: {
                         Text("Are you sure you want to delete \"\(event.title)\"?")
@@ -175,7 +174,6 @@ struct EventDetailView: View {
                                 onDeleteSeries?(event)
                             }
                         }
-                        .keyboardShortcut(.defaultAction)
                         Button("Cancel", role: .cancel) { }
                     } message: {
                         Text("\"\(event.title)\" is a recurring event.")

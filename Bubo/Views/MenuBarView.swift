@@ -115,7 +115,6 @@ struct MenuBarView: View {
                     toastState.showSuccess("All occurrences deleted", icon: "trash.fill")
                 }
             }
-            .keyboardShortcut(.defaultAction)
             Button("Cancel", role: .cancel) { }
         } message: { event in
             Text("\"\(event.title)\" is a recurring event.")
