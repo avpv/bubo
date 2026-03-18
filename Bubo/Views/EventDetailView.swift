@@ -141,51 +141,54 @@ struct EventDetailView: View {
                         
                     Spacer()
                     
-                    Button("Cancel") {
+                    Button {
                         withAnimation { showDeleteConfirmation = false }
                         Haptics.tap()
+                    } label: {
+                        Text("Cancel")
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.regular)
+                    .buttonStyle(.action(role: .secondary, size: .regular))
                     
-                    Button("Delete") {
+                    Button {
                         Haptics.impact()
                         onDelete?(event)
+                    } label: {
+                        Text("Delete")
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(DS.Colors.error)
-                    .controlSize(.regular)
+                    .buttonStyle(.action(role: .destructive, size: .regular))
                 } else if showSeriesDeleteChoice {
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                         Text("Delete recurring event?")
                             .font(.caption)
                             .foregroundColor(DS.Colors.error)
                             .fontWeight(.medium)
                         
                         HStack(spacing: DS.Spacing.xs) {
-                            Button("Only This") {
+                            Button {
                                 Haptics.impact()
                                 onDeleteOccurrence?(event)
+                            } label: {
+                                Text("Only This")
                             }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
+                            .buttonStyle(.action(role: .secondary, size: .compact))
                             
-                            Button("All Events") {
+                            Button {
                                 Haptics.impact()
                                 onDeleteSeries?(event)
+                            } label: {
+                                Text("All Events")
                             }
-                            .buttonStyle(.borderedProminent)
-                            .tint(DS.Colors.error)
-                            .controlSize(.small)
+                            .buttonStyle(.action(role: .destructive, size: .compact))
                             
                             Spacer()
                             
-                            Button("Cancel") {
+                            Button {
                                 withAnimation { showSeriesDeleteChoice = false }
                                 Haptics.tap()
+                            } label: {
+                                Text("Cancel")
                             }
-                            .buttonStyle(.borderless)
-                            .controlSize(.small)
+                            .buttonStyle(.action(role: .secondary, size: .compact))
                         }
                     }
                 } else {
