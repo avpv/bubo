@@ -40,8 +40,16 @@ class SettingsViewModel {
 
             let granted = await AppleCalendarService.shared.requestAccess()
 
-            // Restore menu-bar-only activation policy.
-            NSApp.setActivationPolicy(previousPolicy)
+            // Restore menu-bar-only activation policy or keep previous if settings window is still open.
+            let isSettingsOpen = NSApp.windows.contains { $0.isVisible && ($0.title.contains("Settings") || $0.identifier?.rawValue.contains("Settings") == true) }
+            if isSettingsOpen {
+                NSApp.setActivationPolicy(previousPolicy)
+            } else {
+                NSApp.setActivationPolicy(.accessory)
+                if NSApp.isActive {
+                    NSApp.hide(nil)
+                }
+            }
 
             calendarAuthStatus = AppleCalendarService.authorizationStatus
             isRequestingCalendarAccess = false
