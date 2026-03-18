@@ -146,10 +146,9 @@ struct EventDetailView: View {
                     }
                     .buttonStyle(.action(role: .destructive))
                     // Single (non-recurring) event
-                    .confirmationDialog(
+                    .alert(
                         "Delete Event",
-                        isPresented: $showDeleteConfirmation,
-                        titleVisibility: .visible
+                        isPresented: $showDeleteConfirmation
                     ) {
                         Button("Delete", role: .destructive) { onDelete?(event) }
                         Button("Cancel", role: .cancel) { }
@@ -157,10 +156,9 @@ struct EventDetailView: View {
                         Text("Are you sure you want to delete \"\(event.title)\"?")
                     }
                     // Recurring event — scope-of-delete
-                    .confirmationDialog(
+                    .alert(
                         "Delete Recurring Event",
-                        isPresented: $showSeriesDeleteChoice,
-                        titleVisibility: .visible
+                        isPresented: $showSeriesDeleteChoice
                     ) {
                         Button("Delete This Event Only") {
                             onDeleteOccurrence?(event)

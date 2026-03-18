@@ -97,10 +97,9 @@ struct MenuBarView: View {
             ToastOverlay(toastState: toastState)
         }
         // Scope-of-delete dialog for list-level deletes on recurring events
-        .confirmationDialog(
+        .alert(
             "Delete Recurring Event",
             isPresented: $showRecurrenceDeleteDialog,
-            titleVisibility: .visible,
             presenting: pendingDeleteEvent
         ) { event in
             Button("Delete This Event Only") {
