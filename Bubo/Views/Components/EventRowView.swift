@@ -68,17 +68,22 @@ struct EventRowView: View {
         .accessibilityAddTraits(.isButton)
         .contextMenu {
             Section("Set Reminder") {
-                ForEach(DS.snoozeOptions) { option in
-                    Button {
-                        reminderService.updateLocalReminder(for: event.id, minutes: [option.minutes])
-                    } label: {
-                        if reminderService.activeReminderMinutes(for: event).contains(option.minutes) {
-                            Label(option.label, systemImage: "checkmark")
+                Picker(selection: Binding(
+                    get: { reminderService.activeReminderMinutes(for: event).first },
+                    set: { newValue in
+                        if let newValue {
+                            reminderService.updateLocalReminder(for: event.id, minutes: [newValue])
                         } else {
-                            Text(option.label)
+                            reminderService.updateLocalReminder(for: event.id, minutes: [])
                         }
                     }
+                ), label: EmptyView()) {
+                    Text("None").tag(Int?.none)
+                    ForEach(DS.snoozeOptions) { option in
+                        Text(option.label).tag(Int?.some(option.minutes))
+                    }
                 }
+                .pickerStyle(.inline)
             }
             if isLocal {
                 Divider()
@@ -167,17 +172,22 @@ struct EventRowView: View {
         HStack(spacing: DS.Spacing.xs) {
             if event.isUpcoming {
                 Menu {
-                    ForEach(DS.snoozeOptions) { option in
-                        Button {
-                            reminderService.updateLocalReminder(for: event.id, minutes: [option.minutes])
-                        } label: {
-                            if reminderService.activeReminderMinutes(for: event).contains(option.minutes) {
-                                Label(option.label, systemImage: "checkmark")
+                    Picker(selection: Binding(
+                        get: { reminderService.activeReminderMinutes(for: event).first },
+                        set: { newValue in
+                            if let newValue {
+                                reminderService.updateLocalReminder(for: event.id, minutes: [newValue])
                             } else {
-                                Text(option.label)
+                                reminderService.updateLocalReminder(for: event.id, minutes: [])
                             }
                         }
+                    ), label: EmptyView()) {
+                        Text("None").tag(Int?.none)
+                        ForEach(DS.snoozeOptions) { option in
+                            Text(option.label).tag(Int?.some(option.minutes))
+                        }
                     }
+                    .pickerStyle(.inline)
                 } label: {
                     Image(systemName: "bell.badge")
                         .font(.system(size: DS.Size.iconMedium))
