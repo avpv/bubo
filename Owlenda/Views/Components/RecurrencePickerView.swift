@@ -189,12 +189,20 @@ struct RecurrencePickerView: View {
                 .animation(DS.Animation.standard, value: pomodoroLongBreak)
 
             // Total summary
-            Label(
-                "Total: \(DS.formatMinutes(pomodoroTotalMinutes))",
-                systemImage: "clock"
-            )
-            .font(.caption)
-            .foregroundColor(.secondary)
+            HStack {
+                Label(
+                    "Total: \(DS.formatMinutes(pomodoroTotalMinutes))",
+                    systemImage: "clock"
+                )
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+                Spacer()
+
+                Link("Learn about Pomodoro combinations", destination: URL(string: "https://github.com/avpv/owlenda/blob/main/docs/Pomodoro.md")!)
+                    .font(.caption)
+                    .foregroundColor(.accentColor)
+            }
         }
     }
 
