@@ -368,15 +368,17 @@ private struct CalendarAccessBanner: View {
         } label: {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "calendar.badge.exclamationmark")
+                    .foregroundColor(DS.Colors.warning)
                     .font(.caption)
                     .symbolRenderingMode(.hierarchical)
                 Text("Calendar access not granted. Click to open Settings.")
                     .font(.caption)
+                    .foregroundColor(DS.Colors.textPrimary)
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.caption2)
+                    .foregroundColor(DS.Colors.textTertiary)
             }
-            .foregroundColor(DS.Colors.warning)
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.vertical, DS.Spacing.md)
             .adaptiveBadgeFill(DS.Colors.warning)

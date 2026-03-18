@@ -1,94 +1,98 @@
 import SwiftUI
 
-/// Compact quick-preset button for time selection.
+/// Compact quick-preset horizontal scroll for time selection.
 ///
-/// Shows a clock icon that opens a native `NSMenu` with 30-min slot
-/// presets grouped by Morning / Afternoon / Evening. Designed to sit
+/// Shows a horizontal list of 30-min slot chips. Designed to sit
 /// next to a `DatePicker(.hourAndMinute)` — the DatePicker handles
-/// display and manual entry, this button handles quick preset selection.
+/// display and manual entry, this ribbon handles quick preset selection.
 ///
 /// When the selected date is today, past slots are hidden entirely.
-/// If no future slots remain, the button is disabled with a tooltip.
-///
-/// ```swift
-/// HStack {
-///     TimeSlotPicker(selection: $date)
-///     DatePicker("", selection: $date, displayedComponents: .hourAndMinute)
-/// }
-/// ```
+/// If no future slots remain, it shows a text placeholder.
 struct TimeSlotPicker: View {
     @Binding var selection: Date
-
     var step: Int = 30
 
     /// Re-evaluated every minute so past slots disappear in real time.
     @State private var now = Date()
+    @State private var hasScrolledToInitial = false
 
     var body: some View {
-        let groups = sectionedSlots
-        let nearest = nearestAvailableSlotID(in: groups)
+        let slots = availableSlots
+        let nearest = nearestAvailableSlotID(in: slots)
 
-        Menu {
-            ForEach(groups) { group in
-                Section(group.title) {
-                    slotButtons(group.slots, nearest: nearest)
+        if slots.isEmpty {
+            Text("No slots left today")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .padding(.horizontal, DS.Spacing.xs)
+                .task {
+                    while !Task.isCancelled {
+                        try? await Task.sleep(for: .seconds(60))
+                        now = .now
+                    }
+                }
+        } else {
+            ScrollView(.horizontal, showsIndicators: false) {
+                ScrollViewReader { proxy in
+                    HStack(spacing: DS.Spacing.xs) {
+                        ForEach(slots) { slot in
+                            Button {
+                                selection = apply(slot)
+                            } label: {
+                                Text(slot.label)
+                                    .font(.caption)
+                                    .fontWeight(slot.id == nearest ? .semibold : .regular)
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.horizontal, DS.Spacing.sm)
+                            .padding(.vertical, 4)
+                            .background(
+                                Capsule()
+                                    .fill(slot.id == nearest ? DS.Colors.accent : DS.Colors.badgeFill(DS.Colors.textPrimary))
+                            )
+                            .foregroundColor(slot.id == nearest ? .white : DS.Colors.textPrimary)
+                            .id(slot.id)
+                            #if os(macOS)
+                            .onHover { isHovered in
+                                if slot.id != nearest && isHovered {
+                                    NSCursor.pointingHand.push()
+                                } else {
+                                    NSCursor.pop()
+                                }
+                            }
+                            #endif
+                        }
+                    }
+                    .padding(.vertical, 2)
+                    .padding(.horizontal, 2)
+                    .onAppear {
+                        if !hasScrolledToInitial, let nearestId = nearest {
+                            proxy.scrollTo(nearestId, anchor: .center)
+                            hasScrolledToInitial = true
+                        }
+                    }
+                    .onChange(of: selection) { _ in
+                        if let nearestId = nearestAvailableSlotID(in: slots) {
+                            withAnimation(DS.Animation.microInteraction) {
+                                proxy.scrollTo(nearestId, anchor: .center)
+                            }
+                        }
+                    }
                 }
             }
-        } label: {
-            Image(systemName: "clock")
-                .foregroundColor(.secondary)
-        }
-        .menuStyle(.borderlessButton)
-        .fixedSize()
-        .disabled(groups.isEmpty)
-        .help(groups.isEmpty
-              ? String(localized: "No time slots left for today",
-                       comment: "Tooltip when all time slots are in the past")
-              : String(localized: "Pick a time slot",
-                       comment: "Tooltip for the time slot picker button"))
-        .accessibilityLabel(Text("Time slot picker", comment: "Accessibility label for the time slot menu button"))
-        .task {
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(60))
-                now = .now
+            .task {
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(60))
+                    now = .now
+                }
             }
-        }
-    }
-
-    // MARK: - Section model
-
-    private struct SlotSection: Identifiable {
-        let title: LocalizedStringKey
-        let slots: [Slot]
-        let id: String
-    }
-
-    private static let sections: [(LocalizedStringKey, String, Range<Int>)] = [
-        ("Morning",   "morning",   0 ..< noon),
-        ("Afternoon", "afternoon", noon ..< evening),
-        ("Evening",   "evening",   evening ..< midnight),
-    ]
-
-    /// Slots grouped by time-of-day, with past slots and empty sections removed.
-    private var sectionedSlots: [SlotSection] {
-        let cutoff = currentMinutesCutoff
-        return Self.sections.compactMap { title, id, range in
-            let slots = stride(from: range.lowerBound, to: range.upperBound, by: step)
-                .filter { $0 >= cutoff }
-                .map { Slot(id: $0) }
-            guard !slots.isEmpty else { return nil }
-            return SlotSection(title: title, slots: slots, id: id)
         }
     }
 
     // MARK: - Constants
-
-    private static let noon = 12 * 60       // 12:00
-    private static let evening = 18 * 60    // 18:00
-    private static let midnight = 24 * 60   // 24:00
+    private static let midnight = 24 * 60
 
     // MARK: - Slot
-
     private struct Slot: Identifiable {
         let id: Int // total minutes from midnight
         var hour: Int { id / 60 }
@@ -105,34 +109,26 @@ struct TimeSlotPicker: View {
             + cal.component(.minute, from: now)
     }
 
+    private var availableSlots: [Slot] {
+        let cutoff = currentMinutesCutoff
+        return stride(from: 0, to: Self.midnight, by: step)
+            .filter { $0 >= cutoff }
+            .map { Slot(id: $0) }
+    }
+
     /// Nearest slot to current selection, clamped to actually visible slots.
-    private func nearestAvailableSlotID(in groups: [SlotSection]) -> Int? {
+    private func nearestAvailableSlotID(in slots: [Slot]) -> Int? {
         let cal = Calendar.current
         let mins = cal.component(.hour, from: selection) * 60
             + cal.component(.minute, from: selection)
         let rounded = ((mins + step / 2) / step) * step
         let target = min(rounded, Self.midnight - step)
 
-        let allIDs = groups.flatMap { $0.slots.map(\.id) }
+        let allIDs = slots.map(\.id)
         guard !allIDs.isEmpty else { return nil }
 
         // Find the closest visible slot to the target.
         return allIDs.min(by: { abs($0 - target) < abs($1 - target) })
-    }
-
-    @ViewBuilder
-    private func slotButtons(_ slots: [Slot], nearest: Int?) -> some View {
-        ForEach(slots) { slot in
-            Button {
-                selection = apply(slot)
-            } label: {
-                if slot.id == nearest {
-                    Label(slot.label, systemImage: "smallcircle.filled.circle")
-                } else {
-                    Text(slot.label)
-                }
-            }
-        }
     }
 
     private func apply(_ slot: Slot) -> Date {
