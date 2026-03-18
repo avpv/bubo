@@ -68,22 +68,7 @@ struct EventRowView: View {
         .accessibilityAddTraits(.isButton)
         .contextMenu {
             Section("Set Reminder") {
-                Picker(selection: Binding(
-                    get: { reminderService.activeReminderMinutes(for: event).first },
-                    set: { newValue in
-                        if let newValue {
-                            reminderService.updateLocalReminder(for: event.id, minutes: [newValue])
-                        } else {
-                            reminderService.updateLocalReminder(for: event.id, minutes: [])
-                        }
-                    }
-                ), label: EmptyView()) {
-                    Text("None").tag(Int?.none)
-                    ForEach(DS.snoozeOptions) { option in
-                        Text(option.label).tag(Int?.some(option.minutes))
-                    }
-                }
-                .pickerStyle(.inline)
+                reminderMenuItems
             }
             if isLocal {
                 Divider()
@@ -172,22 +157,7 @@ struct EventRowView: View {
         HStack(spacing: DS.Spacing.xs) {
             if event.isUpcoming {
                 Menu {
-                    Picker(selection: Binding(
-                        get: { reminderService.activeReminderMinutes(for: event).first },
-                        set: { newValue in
-                            if let newValue {
-                                reminderService.updateLocalReminder(for: event.id, minutes: [newValue])
-                            } else {
-                                reminderService.updateLocalReminder(for: event.id, minutes: [])
-                            }
-                        }
-                    ), label: EmptyView()) {
-                        Text("None").tag(Int?.none)
-                        ForEach(DS.snoozeOptions) { option in
-                            Text(option.label).tag(Int?.some(option.minutes))
-                        }
-                    }
-                    .pickerStyle(.inline)
+                    reminderMenuItems
                 } label: {
                     Image(systemName: "bell.badge")
                         .font(.system(size: DS.Size.iconMedium))
@@ -230,5 +200,40 @@ struct EventRowView: View {
         let mins = minutes % 60
         if mins == 0 { return "in \(hours)h" }
         return "in \(hours)h \(mins)m"
+    }
+
+    @ViewBuilder
+    private var reminderMenuItems: some View {
+        let activeReminders = reminderService.activeReminderMinutes(for: event)
+        let customReminders = activeReminders.filter { active in 
+            !DS.snoozeOptions.contains { $0.minutes == active }
+        }
+        let allOptions = (DS.snoozeOptions.map { $0.minutes } + customReminders).sorted()
+
+        ForEach(allOptions, id: \.self) { minutes in
+            Toggle(isOn: Binding(
+                get: { activeReminders.contains(minutes) },
+                set: { isSet in
+                    var current = Set(activeReminders)
+                    if isSet {
+                        current.insert(minutes)
+                    } else {
+                        current.remove(minutes)
+                    }
+                    reminderService.updateLocalReminder(for: event.id, minutes: Array(current).sorted())
+                }
+            )) {
+                if let option = DS.snoozeOptions.first(where: { $0.minutes == minutes }) {
+                    Text(option.label)
+                } else {
+                    Text("\(DS.formatMinutes(minutes)) before")
+                }
+            }
+        }
+        Divider()
+        Button("Clear All") {
+            reminderService.updateLocalReminder(for: event.id, minutes: [])
+        }
+        .disabled(activeReminders.isEmpty)
     }
 }
