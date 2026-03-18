@@ -307,13 +307,15 @@ struct MenuBarView: View {
                 navigation = .addEvent()
             }) {
                 Label("Add", systemImage: "plus")
-                    .fixedSize()
-                    .padding(.horizontal, DS.Spacing.md)
+                    .frame(minWidth: 130)
+                    .padding(.horizontal, DS.Spacing.lg)
                     .padding(.vertical, DS.Spacing.sm)
+                    .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
             .background(DS.Colors.accent)
             .foregroundColor(.white)
+            .fontWeight(.medium)
+            .buttonStyle(.plain)
             .clipShape(Capsule())
             .shadow(color: DS.Colors.accent.opacity(0.3), radius: 6, y: 3)
             .help("Add a new event (\u{2318}N)")

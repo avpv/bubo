@@ -221,6 +221,7 @@ struct AddEventView: View {
                                     .fontWeight(.medium)
                                     .buttonStyle(.plain)
                                     .clipShape(Capsule())
+                                    .shadow(color: DS.Colors.accent.opacity(0.3), radius: 6, y: 3)
                                 }
 
                                 let available = Self.presetReminders.filter { !reminderMinutes.contains($0) }
@@ -260,7 +261,7 @@ struct AddEventView: View {
                 Spacer()
                 Button(action: { onDismiss() }) {
                     Text("Cancel")
-                        .frame(minWidth: 100)
+                        .frame(minWidth: 130)
                         .padding(.horizontal, DS.Spacing.lg)
                         .padding(.vertical, DS.Spacing.sm)
                         .contentShape(Rectangle())
@@ -281,7 +282,7 @@ struct AddEventView: View {
                     }
                 }) {
                     Label(isEditing ? "Save" : "Add Event", systemImage: isEditing ? "checkmark.circle" : "calendar.badge.plus")
-                        .frame(minWidth: 100)
+                        .frame(minWidth: 130)
                         .padding(.horizontal, DS.Spacing.lg)
                         .padding(.vertical, DS.Spacing.sm)
                         .contentShape(Rectangle())

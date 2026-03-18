@@ -143,7 +143,17 @@ struct EventDetailView: View {
                         }
                     } label: {
                         Label("Delete", systemImage: "trash")
+                            .frame(minWidth: 130)
+                            .padding(.horizontal, DS.Spacing.lg)
+                            .padding(.vertical, DS.Spacing.sm)
+                            .contentShape(Rectangle())
                     }
+                    .background(DS.Materials.platter)
+                    .foregroundColor(DS.Colors.error)
+                    .fontWeight(.medium)
+                    .buttonStyle(.plain)
+                    .clipShape(Capsule())
+                    .shadow(color: DS.Shadows.ambientColor, radius: 4, y: 2)
                     // Single (non-recurring) event
                     .confirmationDialog(
                         "Delete Event",
@@ -176,20 +186,20 @@ struct EventDetailView: View {
                 Spacer()
 
                 Button {
-                        Haptics.tap()
-                        onEdit?(event)
-                    } label: {
-                        Label("Edit", systemImage: "pencil")
-                            .padding(.horizontal, DS.Spacing.md)
-                            .padding(.vertical, DS.Spacing.xs)
-                            .contentShape(Rectangle())
-                    }
-                    .background(DS.Colors.accent)
-                    .foregroundColor(.white)
-                    .fontWeight(.medium)
-                    .buttonStyle(.plain)
-                    .clipShape(Capsule())
-                    .shadow(color: DS.Colors.accent.opacity(0.3), radius: 6, y: 3)
+                    Haptics.tap()
+                    onEdit?(event)
+                } label: {
+                    Label("Edit", systemImage: "pencil")
+                        .frame(minWidth: 130)
+                        .padding(.horizontal, DS.Spacing.lg)
+                        .padding(.vertical, DS.Spacing.sm)
+                        .contentShape(Rectangle())
+                }
+                .background(DS.Colors.accent)
+                .foregroundColor(.white)
+                .fontWeight(.medium)
+                .buttonStyle(.plain)
+                .clipShape(Capsule())
                 .shadow(color: DS.Colors.accent.opacity(0.3), radius: 6, y: 3)
             }
             .padding(.horizontal, DS.Spacing.lg)
