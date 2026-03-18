@@ -124,6 +124,7 @@ struct AddEventView: View {
                                 }
                             }
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(DS.Spacing.md)
                         .background(DS.Materials.platter)
                         .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
@@ -150,6 +151,7 @@ struct AddEventView: View {
                                 .focused($isNotesFocused)
                                 .lineLimit(3...8)
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(DS.Spacing.md)
                         .background(DS.Materials.platter)
                         .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
@@ -170,6 +172,7 @@ struct AddEventView: View {
                     // Recurrence
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                         RecurrencePickerView(rule: $recurrenceRule, eventDuration: $duration, eventStartDate: date)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(DS.Spacing.md)
                             .background(DS.Materials.platter)
                             .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
@@ -229,6 +232,7 @@ struct AddEventView: View {
                                     .foregroundColor(.secondary)
                             }
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(DS.Spacing.md)
                         .background(DS.Materials.platter)
                         .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
@@ -247,14 +251,14 @@ struct AddEventView: View {
                 Spacer()
                 Button("Cancel") { onDismiss() }
                     .keyboardShortcut(.cancelAction)
-                    .controlSize(.large)
-                    .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, DS.Spacing.xs)
-                    .background(
-                        Capsule()
-                            .fill(DS.Colors.badgeFill(.secondary))
-                    )
+                    .frame(minWidth: 100)
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.vertical, DS.Spacing.sm)
+                    .background(DS.Materials.platter)
                     .foregroundColor(DS.Colors.textPrimary)
+                    .fontWeight(.medium)
+                    .clipShape(Capsule())
+                    .shadow(color: DS.Shadows.ambientColor, radius: 4, y: 2)
                     .buttonStyle(.plain)
 
                 Button(isEditing ? "Save" : "Add Event") {
@@ -264,6 +268,7 @@ struct AddEventView: View {
                         showValidation = true
                     }
                 }
+                .frame(minWidth: 100)
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.vertical, DS.Spacing.sm)
                 .background(DS.Colors.accent)
