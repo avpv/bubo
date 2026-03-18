@@ -271,7 +271,7 @@ struct AddEventView: View {
                         showValidation = true
                     }
                 }) {
-                    Text(isEditing ? "Save" : "Add Event")
+                    Label(isEditing ? "Save" : "Add Event", systemImage: isEditing ? "checkmark.circle" : "calendar.badge.plus")
                         .frame(minWidth: 100)
                         .padding(.horizontal, DS.Spacing.lg)
                         .padding(.vertical, DS.Spacing.sm)
