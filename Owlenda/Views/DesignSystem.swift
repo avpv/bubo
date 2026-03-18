@@ -154,7 +154,7 @@ enum DS {
         static let hud: Material = .thickMaterial
         /// Header/footer bars — use thickMaterial for richer vibrancy than `.bar`
         static let headerBar: Material = .thickMaterial
-        static let platter: Material = .ultraThinMaterial
+        static let platter: Material = .regularMaterial
     }
 
     // MARK: Urgency Colors
