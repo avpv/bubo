@@ -67,12 +67,20 @@ struct GeneralTabView: View {
             }
 
             SettingsPlatter {
-                HStack {
-                    Spacer()
-                    Text("Bubo \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0")")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                    Spacer()
+                VStack(spacing: DS.Spacing.xs) {
+                    HStack {
+                        Spacer()
+                        Text("Bubo \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0")")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                        Spacer()
+                    }
+                    HStack {
+                        Spacer()
+                        Link("GitHub Project", destination: URL(string: "https://github.com/avpv/bubo")!)
+                            .font(.caption2)
+                        Spacer()
+                    }
                 }
             }
             }
