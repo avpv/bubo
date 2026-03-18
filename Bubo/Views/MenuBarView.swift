@@ -106,7 +106,7 @@ struct MenuBarView: View {
                 reminderService.excludeOccurrence(occurrenceId: event.id)
                 toastState.showSuccess("Occurrence skipped", icon: "trash.fill")
             }
-            Button("Delete All Events", role: .destructive) {
+            Button("Delete All Events") {
                 let seriesId = event.seriesId ?? event.id
                 reminderService.removeLocalEvent(id: seriesId)
                 toastState.showSuccess("All occurrences deleted", icon: "trash.fill")

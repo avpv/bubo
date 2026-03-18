@@ -150,7 +150,7 @@ struct EventDetailView: View {
                         "Delete Event",
                         isPresented: $showDeleteConfirmation
                     ) {
-                        Button("Delete", role: .destructive) { onDelete?(event) }
+                        Button("Delete") { onDelete?(event) }
                         Button("Cancel", role: .cancel) { }
                     } message: {
                         Text("Are you sure you want to delete \"\(event.title)\"?")
@@ -163,7 +163,7 @@ struct EventDetailView: View {
                         Button("Delete This Event Only") {
                             onDeleteOccurrence?(event)
                         }
-                        Button("Delete All Events", role: .destructive) {
+                        Button("Delete All Events") {
                             onDeleteSeries?(event)
                         }
                         Button("Cancel", role: .cancel) { }
