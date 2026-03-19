@@ -23,7 +23,7 @@ enum DS {
     // MARK: Popover Dimensions
 
     enum Popover {
-        static let width: CGFloat = 380
+        static let width: CGFloat = 360
         static let listMaxHeight: CGFloat = 360
         static let detailMaxHeight: CGFloat = 300
         static let formMaxHeight: CGFloat = 480
