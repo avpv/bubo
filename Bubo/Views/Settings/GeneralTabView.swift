@@ -44,6 +44,14 @@ struct GeneralTabView: View {
                 Toggle("Launch at login", isOn: launchAtLoginBinding)
             }
 
+            SettingsPlatter("Appearance") {
+                Picker("Background", selection: $settings.backgroundStyle) {
+                    ForEach(AppBackgroundStyle.allCases) { style in
+                        Text(style.displayName).tag(style)
+                    }
+                }
+            }
+
             SettingsPlatter("Status") {
                 if let lastSync = reminderService.lastSyncDate {
                     LabeledContent("Last refresh") {

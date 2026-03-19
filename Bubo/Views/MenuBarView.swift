@@ -31,6 +31,8 @@ struct MenuBarView: View {
 
     var body: some View {
         ZStack {
+            AppBackgroundLayer(style: settings.backgroundStyle)
+
             Group {
                 switch navigation {
                 case .list:
