@@ -122,6 +122,7 @@ struct RecurrencePickerView: View {
             }
         }
         .pickerStyle(.menu)
+        .controlSize(.large)
         .frame(height: DS.Size.controlHeight)
     }
 
@@ -366,6 +367,7 @@ struct RecurrencePickerView: View {
             }
         }
         .pickerStyle(.menu)
+        .controlSize(.large)
         .frame(height: DS.Size.controlHeight)
 
         switch endChoice {
@@ -433,6 +435,7 @@ struct RecurrencePickerView: View {
             }
         }
         .pickerStyle(.menu)
+        .controlSize(.large)
         .frame(height: DS.Size.controlHeight)
     }
 
