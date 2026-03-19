@@ -8,7 +8,7 @@ struct AddEventView: View {
 
     @State private var title = ""
     @State private var date = Date()
-    @State private var duration: Double = 60
+    @State private var duration: Double = 30
     @State private var location = ""
     @State private var description = ""
     @State private var showValidation = false
