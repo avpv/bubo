@@ -11,6 +11,8 @@ enum DS {
         static let xxs: CGFloat = 2
         static let xs: CGFloat = 4
         static let sm: CGFloat = 8
+        static let pillVertical: CGFloat = 6
+        static let pillHorizontal: CGFloat = 10
         static let md: CGFloat = 12
         static let lg: CGFloat = 16
         static let xl: CGFloat = 20
@@ -57,6 +59,9 @@ enum DS {
         static let eventRowMinHeight: CGFloat = 36
         static let actionFooterHeight: CGFloat = 48
         static let timeColumnWidth: CGFloat = 50
+        static let datePillWidth: CGFloat = 54
+        static let timePillWidth: CGFloat = 52
+        static let focusRingWidth: CGFloat = 2
         static let iconSmall: CGFloat = 12
         static let iconMedium: CGFloat = 14
         static let iconLarge: CGFloat = 16
@@ -77,6 +82,9 @@ enum DS {
         static let hoverColor = Color.black.opacity(0.12)
         static let hoverRadius: CGFloat = 12
         static let hoverY: CGFloat = 6
+        
+        static let pillRadius: CGFloat = 1
+        static let pillY: CGFloat = 1
     }
 
     // MARK: Animation
