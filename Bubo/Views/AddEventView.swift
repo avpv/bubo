@@ -106,9 +106,8 @@ struct AddEventView: View {
                                     .gridColumnAlignment(.trailing)
                                 
                                 HStack(spacing: DS.Spacing.xs) {
-                                    DatePicker("", selection: $date)
-                                        .labelsHidden()
-                                    TimeSlotPicker(selection: $date)
+                                    DateTimePickerPills(date: $date)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
                                 }
                             }
                             
@@ -118,9 +117,8 @@ struct AddEventView: View {
                                     .gridColumnAlignment(.trailing)
                                 
                                 HStack(spacing: DS.Spacing.xs) {
-                                    DatePicker("", selection: endDateBinding, in: date...)
-                                        .labelsHidden()
-                                    TimeSlotPicker(selection: endDateBinding)
+                                    DateTimePickerPills(date: endDateBinding, range: date...)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
                                 }
                             }
                         }
