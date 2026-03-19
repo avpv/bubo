@@ -30,14 +30,16 @@ struct DateSuggestionsPopover: View {
                             isPresented = false
                         }), in: range, displayedComponents: .date)
                         .datePickerStyle(.graphical)
-                        .padding()
+                        .padding(.horizontal)
+                        .padding(.bottom)
                     } else {
                         DatePicker("", selection: Binding(get: { date }, set: { newDate in
                             date = newDate
                             isPresented = false
                         }), displayedComponents: .date)
                         .datePickerStyle(.graphical)
-                        .padding()
+                        .padding(.horizontal)
+                        .padding(.bottom)
                     }
                 }
                 .fixedSize()
