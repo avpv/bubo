@@ -135,12 +135,6 @@ struct EventRowView: View {
                         .foregroundColor(DS.Colors.warning)
                         .contentTransition(.symbolEffect(.replace))
                         .accessibilityLabel("Pomodoro")
-                } else if event.isRecurring {
-                    Image(systemName: "repeat")
-                        .font(.system(size: DS.Size.iconSmall))
-                        .foregroundColor(DS.Colors.textSecondary)
-                        .contentTransition(.symbolEffect(.replace))
-                        .accessibilityLabel("Recurring")
                 }
             }
 
