@@ -40,7 +40,7 @@ struct DateSuggestionsPopover: View {
                         .padding()
                     }
                 }
-                .frame(width: 280)
+                .fixedSize()
             } else {
                 VStack(alignment: .leading, spacing: 0) {
                     Text("Suggestions")
