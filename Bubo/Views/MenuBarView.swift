@@ -47,6 +47,7 @@ struct MenuBarView: View {
                 case .detail(let event):
                     EventDetailView(
                         event: event,
+                        reminderService: reminderService,
                         onBack: { navigation = .list },
                         onEdit: { event in resolveEdit(event) },
                         onDelete: { event in

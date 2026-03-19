@@ -2,6 +2,7 @@ import SwiftUI
 
 struct EventDetailView: View {
     let event: CalendarEvent
+    var reminderService: ReminderService
     var onBack: () -> Void
     var onEdit: ((CalendarEvent) -> Void)? = nil
     var onDelete: ((CalendarEvent) -> Void)? = nil
@@ -116,9 +117,10 @@ struct EventDetailView: View {
                             .staggeredEntrance(index: 5)
                     }
 
-                    // Custom reminders
-                    if let reminders = event.customReminderMinutes, !reminders.isEmpty {
-                        remindersSection(reminders)
+                    // Active Reminders (Default + Custom)
+                    let activeReminders = reminderService.activeReminderMinutes(for: event)
+                    if !activeReminders.isEmpty {
+                        remindersSection(activeReminders)
                             .staggeredEntrance(index: 6)
                     }
                 }
