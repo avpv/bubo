@@ -179,9 +179,12 @@ class ReminderService {
 
         // Apply local overrides
         for i in events.indices {
-            // Note: event id is typically "apple_EVENT_ID"
-            if let overrides = localRemindersOverrides[events[i].id] {
-                events[i].customReminderMinutes = overrides.isEmpty ? nil : overrides
+            let uniqueId = events[i].id
+            let seriesOverrides = events[i].seriesId.flatMap { localRemindersOverrides[$0] }
+            let exactOverrides = localRemindersOverrides[uniqueId]
+            
+            if let active = exactOverrides ?? seriesOverrides {
+                events[i].customReminderMinutes = active.isEmpty ? nil : active
             }
         }
 

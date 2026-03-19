@@ -110,22 +110,31 @@ class AppleCalendarService {
 
         return ekEvents.compactMap { ek in
             guard !ek.isAllDay else { return nil }
+            
+            let baseId = "apple_\(ek.eventIdentifier ?? UUID().uuidString)"
+            let uniqueId = "\(baseId)_\(ek.startDate.timeIntervalSince1970)"
 
             return CalendarEvent(
-                id: "apple_\(ek.eventIdentifier ?? UUID().uuidString)",
+                id: uniqueId,
                 title: ek.title ?? "Untitled",
                 startDate: ek.startDate,
                 endDate: ek.endDate,
                 location: ek.location,
                 description: ek.notes,
-                calendarName: ek.calendar.title
+                calendarName: ek.calendar.title,
+                seriesId: baseId
             )
         }
     }
 
     /// Shift the start and end times of an Apple Calendar event by a given number of minutes.
     func shiftEventTime(id: String, byMinutes minutes: Int) throws {
-        let actualId = id.replacingOccurrences(of: "apple_", with: "")
+        var actualId = id.replacingOccurrences(of: "apple_", with: "")
+        if let lastUnderscore = actualId.lastIndex(of: "_") {
+            // Strip the timestamp we added to make it unique per occurrence
+            actualId = String(actualId[..<lastUnderscore])
+        }
+        
         guard let ekEvent = store.event(withIdentifier: actualId) else {
             throw NSError(domain: "AppleCalendarService", code: 404, userInfo: [NSLocalizedDescriptionKey: "Event not found."])
         }
