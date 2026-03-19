@@ -364,10 +364,7 @@ class ReminderService {
                 guard !firedReminders.contains(reminderKey) else { continue }
 
                 let fireDate = event.startDate.addingTimeInterval(-TimeInterval(minutes * 60))
-                
-                // If it's already past the reminder time, skip it ONLY if the event has also already started.
-                // Otherwise (if we launched the app right before the event, after the reminder time), fire it immediately!
-                guard fireDate > Date() || Date() < event.startDate else { continue }
+                guard fireDate > Date() else { continue }
 
                 let timer = Timer(fire: fireDate, interval: 0, repeats: false) { [weak self] _ in
                     Task { @MainActor in
