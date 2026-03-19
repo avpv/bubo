@@ -426,7 +426,8 @@ struct ActionButtonStyle: ButtonStyle {
         configuration.label
             .fontWeight(.medium)
             .padding(.horizontal, horizontalPadding)
-            .padding(.vertical, verticalPadding)
+            .padding(.vertical, size == .compact ? 0 : verticalPadding)
+            .frame(height: size == .compact ? DS.Size.selectorHeight : nil)
             .frame(minWidth: size == .flexible ? 100 : nil)
             .fixedSize(horizontal: size == .regular, vertical: false)
             .contentShape(Rectangle())

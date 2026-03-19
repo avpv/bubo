@@ -226,11 +226,18 @@ struct AddEventView: View {
                                 if !available.isEmpty {
                                     HStack(spacing: DS.Spacing.xs) {
                                         ForEach(available.prefix(5), id: \.self) { preset in
-                                            Button(DS.formatMinutes(preset)) {
+                                            Button {
+                                                Haptics.tap()
                                                 reminderMinutes.append(preset)
+                                            } label: {
+                                                Text(DS.formatMinutes(preset))
+                                                    .font(.caption)
                                             }
-                                            .buttonStyle(.bordered)
-                                            .controlSize(.mini)
+                                            .buttonStyle(.plain)
+                                            .padding(.horizontal, DS.Spacing.sm)
+                                            .frame(height: DS.Size.selectorHeight)
+                                            .background(Capsule().fill(DS.Colors.badgeFill(DS.Colors.textPrimary)))
+                                            .foregroundColor(DS.Colors.textPrimary)
                                         }
                                     }
                                 }
