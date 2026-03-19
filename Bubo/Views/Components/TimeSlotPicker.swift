@@ -133,14 +133,13 @@ fileprivate struct TimeSlotChip: View {
             action()
         }) {
             Text(slot.label)
-                .font(.caption)
                 .fontWeight(isSelected ? .semibold : .regular)
                 .foregroundColor(isSelected ? .white : DS.Colors.textPrimary)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .padding(.horizontal, DS.Spacing.sm)
-        .padding(.vertical, 4)
+        .padding(.vertical, DS.Spacing.pillVertical)
         .background(
             ZStack {
                 Capsule()
