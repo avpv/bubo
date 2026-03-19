@@ -122,6 +122,7 @@ struct RecurrencePickerView: View {
             }
         }
         .pickerStyle(.menu)
+        .frame(height: DS.Size.selectorHeight)
     }
 
     // MARK: - Pomodoro Controls
@@ -365,6 +366,7 @@ struct RecurrencePickerView: View {
             }
         }
         .pickerStyle(.menu)
+        .frame(height: DS.Size.selectorHeight)
 
         switch endChoice {
         case .never:
@@ -431,6 +433,7 @@ struct RecurrencePickerView: View {
             }
         }
         .pickerStyle(.menu)
+        .frame(height: DS.Size.selectorHeight)
     }
 
     // MARK: - Build Rules

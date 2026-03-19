@@ -61,6 +61,7 @@ enum DS {
         static let timeColumnWidth: CGFloat = 50
         static let datePillWidth: CGFloat = 54
         static let timePillWidth: CGFloat = 52
+        static let selectorHeight: CGFloat = 28
         static let focusRingWidth: CGFloat = 2
         static let iconSmall: CGFloat = 12
         static let iconMedium: CGFloat = 14
