@@ -50,24 +50,14 @@ struct DateSuggestionsPopover: View {
                         .padding(.top, 12)
                         .padding(.bottom, 8)
                     
-                    suggestionRow(
-                        title: "Today",
-                        subtitle: formatted(Date()),
-                        action: { selectDate(Date()) }
-                    )
-                    
-                    suggestionRow(
-                        title: "Tomorrow",
-                        subtitle: formatted(Calendar.current.date(byAdding: .day, value: 1, to: Date())!),
-                        action: { selectDate(Calendar.current.date(byAdding: .day, value: 1, to: Date())!) }
-                    )
-                    
-                    if let weekend = nextWeekend() {
-                        suggestionRow(
-                            title: "This Weekend",
-                            subtitle: formatted(weekend),
-                            action: { selectDate(weekend) }
-                        )
+                    ForEach(0..<7) { offset in
+                        if let d = Calendar.current.date(byAdding: .day, value: offset, to: Date()) {
+                            suggestionRow(
+                                title: titleForDate(d, offset: offset),
+                                subtitle: formatted(d),
+                                action: { selectDate(d) }
+                            )
+                        }
                     }
                     
                     Divider().padding(.vertical, 4)
@@ -126,11 +116,12 @@ struct DateSuggestionsPopover: View {
         return formatter.string(from: date)
     }
     
-    private func nextWeekend() -> Date? {
-        let cal = Calendar.current
-        var comps = DateComponents()
-        comps.weekday = 7 // Saturday
-        return cal.nextDate(after: Date(), matching: comps, matchingPolicy: .nextTime)
+    private func titleForDate(_ date: Date, offset: Int) -> String {
+        if offset == 0 { return "Today" }
+        if offset == 1 { return "Tomorrow" }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE"
+        return formatter.string(from: date)
     }
     
     private func selectDate(_ newDate: Date) {
