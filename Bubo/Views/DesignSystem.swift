@@ -61,7 +61,7 @@ enum DS {
         static let timeColumnWidth: CGFloat = 50
         static let datePillWidth: CGFloat = 54
         static let timePillWidth: CGFloat = 52
-        static let selectorHeight: CGFloat = 28
+        static let controlHeight: CGFloat = 28
         static let focusRingWidth: CGFloat = 2
         static let iconSmall: CGFloat = 12
         static let iconMedium: CGFloat = 14
@@ -427,7 +427,7 @@ struct ActionButtonStyle: ButtonStyle {
             .fontWeight(.medium)
             .padding(.horizontal, horizontalPadding)
             .padding(.vertical, size == .compact ? 0 : verticalPadding)
-            .frame(height: size == .compact ? DS.Size.selectorHeight : nil)
+            .frame(height: size == .compact ? DS.Size.controlHeight : nil)
             .frame(minWidth: size == .flexible ? 100 : nil)
             .fixedSize(horizontal: size == .regular, vertical: false)
             .contentShape(Rectangle())

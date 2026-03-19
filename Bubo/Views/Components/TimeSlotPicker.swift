@@ -139,7 +139,7 @@ fileprivate struct TimeSlotChip: View {
         }
         .buttonStyle(.plain)
         .padding(.horizontal, DS.Spacing.sm)
-        .frame(height: DS.Size.selectorHeight)
+        .frame(height: DS.Size.controlHeight)
         .background(
             ZStack {
                 Capsule()
