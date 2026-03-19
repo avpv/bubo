@@ -194,7 +194,24 @@ struct EventRowView: View {
 
     private var timeUntilText: String {
         let minutes = event.minutesUntilStart
-        if minutes <= 0 { return "now" }
+        if minutes <= 0 {
+            let timeIntervalEnd = event.endDate.timeIntervalSinceNow
+            if timeIntervalEnd > 0 {
+                let minutesEnd = Int(timeIntervalEnd / 60)
+                let secondsEnd = Int(timeIntervalEnd) % 60
+                
+                if minutesEnd == 0 {
+                    return "\(secondsEnd)s left"
+                }
+                
+                let hours = minutesEnd / 60
+                let mins = minutesEnd % 60
+                if hours == 0 { return "\(mins)m left" }
+                if mins == 0 { return "\(hours)h left" }
+                return "\(hours)h \(mins)m left"
+            }
+            return "now"
+        }
         if minutes < 60 { return "in \(minutes)m" }
         let hours = minutes / 60
         let mins = minutes % 60
