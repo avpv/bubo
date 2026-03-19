@@ -32,15 +32,25 @@ struct EventRowView: View {
                 hoverActions
             }
         }
+        .frame(minHeight: DS.Size.eventRowMinHeight)
         .padding(.vertical, DS.Spacing.sm)
         .padding(.horizontal, DS.Spacing.sm)
         .background(
-            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                .fill(DS.Materials.platter)
-                .overlay(
-                    RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                        .fill(isHovered ? DS.Colors.hoverFill : Color.clear)
-                )
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                    .fill(DS.Materials.platter)
+                
+                if eventProgress > 0 {
+                    GeometryReader { geo in
+                        RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                            .fill(DS.Colors.accentSubtle)
+                            .frame(width: max(geo.size.width * eventProgress, DS.Size.cornerRadius * 2))
+                    }
+                }
+                
+                RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                    .fill(isHovered ? DS.Colors.hoverFill : Color.clear)
+            }
         )
         .shadow(
             color: isHovered ? DS.Shadows.hoverColor : DS.Shadows.ambientColor,
@@ -217,6 +227,15 @@ struct EventRowView: View {
         let mins = minutes % 60
         if mins == 0 { return "in \(hours)h" }
         return "in \(hours)h \(mins)m"
+    }
+
+    private var eventProgress: Double {
+        let now = Date()
+        guard event.startDate <= now && event.endDate > now else { return 0 }
+        let total = event.endDate.timeIntervalSince(event.startDate)
+        guard total > 0 else { return 0 }
+        let elapsed = now.timeIntervalSince(event.startDate)
+        return min(max(elapsed / total, 0), 1)
     }
 
     @ViewBuilder
