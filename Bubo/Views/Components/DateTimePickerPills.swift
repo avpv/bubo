@@ -17,7 +17,17 @@ struct DateTimePickerPills: View {
                     Text(formattedDate)
                         .foregroundColor(DS.Colors.textPrimary)
                         .fixedSize(horizontal: true, vertical: false)
-                        .lineLimit(1)
+                        .frame(width: 54, alignment: .leading)
+                        .mask(
+                            LinearGradient(
+                                gradient: Gradient(stops: [
+                                    .init(color: .black, location: 0.85),
+                                    .init(color: .clear, location: 1.0)
+                                ]),
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
