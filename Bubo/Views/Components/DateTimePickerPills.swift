@@ -23,13 +23,16 @@ struct DateTimePickerPills: View {
                 if let range = range {
                     DatePicker("", selection: $date, in: range, displayedComponents: .date)
                         .labelsHidden()
+                        .scaleEffect(3.0)
                         .opacity(0.011)
                 } else {
                     DatePicker("", selection: $date, displayedComponents: .date)
                         .labelsHidden()
+                        .scaleEffect(3.0)
                         .opacity(0.011)
                 }
             }
+            .clipped()
             
             // Time Pill
             ZStack {
@@ -48,13 +51,16 @@ struct DateTimePickerPills: View {
                 if let range = range {
                     DatePicker("", selection: $date, in: range, displayedComponents: .hourAndMinute)
                         .labelsHidden()
+                        .scaleEffect(3.0)
                         .opacity(0.011)
                 } else {
                     DatePicker("", selection: $date, displayedComponents: .hourAndMinute)
                         .labelsHidden()
+                        .scaleEffect(3.0)
                         .opacity(0.011)
                 }
             }
+            .clipped()
         }
     }
     

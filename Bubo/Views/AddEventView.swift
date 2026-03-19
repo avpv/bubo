@@ -107,7 +107,7 @@ struct AddEventView: View {
                                 
                                 HStack(spacing: DS.Spacing.xs) {
                                     DateTimePickerPills(date: $date)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                    TimeSlotPicker(selection: $date)
                                 }
                             }
                             
@@ -118,7 +118,7 @@ struct AddEventView: View {
                                 
                                 HStack(spacing: DS.Spacing.xs) {
                                     DateTimePickerPills(date: endDateBinding, range: date...)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                    TimeSlotPicker(selection: endDateBinding)
                                 }
                             }
                         }
