@@ -73,14 +73,10 @@ struct DateTimePickerPills: View {
                             .labelsHidden()
                             .datePickerStyle(.stepperField)
                     }
-                    
-                    Button("Done") {
-                        showTimePopover = false
-                    }
-                    .keyboardShortcut(.defaultAction)
                 }
-                .padding()
-                .frame(width: 160)
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.sm)
+                .fixedSize(horizontal: true, vertical: false)
             }
             .layoutPriority(1)
         }
