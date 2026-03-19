@@ -189,7 +189,8 @@ struct AddEventView: View {
                             Toggle("Custom reminders", isOn: $useCustomReminders)
 
                             if useCustomReminders {
-                                ForEach(reminderMinutes.sorted(), id: \.self) { minutes in
+                                ForEach(Array(reminderMinutes.sorted().enumerated()), id: \.element) { index, minutes in
+                                    if index > 0 { Divider() }
                                     HStack {
                                         Label(DS.formatMinutes(minutes), systemImage: "bell.fill")
                                         Spacer()
