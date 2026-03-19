@@ -138,13 +138,13 @@ struct AddEventView: View {
                             .foregroundColor(DS.Colors.textPrimary)
                         
                         VStack(spacing: DS.Spacing.md) {
-                            TextField("Location", text: $location, prompt: Text("Optional"))
+                            TextField("Location", text: $location, prompt: Text("Location"))
                                 .textFieldStyle(.plain)
                                 .focused($isLocationFocused)
 
                             Divider()
 
-                            TextField("Notes", text: $description, prompt: Text("Optional"), axis: .vertical)
+                            TextField("Notes", text: $description, prompt: Text("Notes"), axis: .vertical)
                                 .textFieldStyle(.plain)
                                 .focused($isNotesFocused)
                                 .lineLimit(3...8)
