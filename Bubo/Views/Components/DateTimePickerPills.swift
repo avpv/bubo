@@ -4,70 +4,74 @@ struct DateTimePickerPills: View {
     @Binding var date: Date
     var range: PartialRangeFrom<Date>?
 
+    @State private var showDatePopover = false
+    @State private var showTimePopover = false
+
     var body: some View {
         HStack(spacing: DS.Spacing.sm) {
             // Date Pill
-            HStack(spacing: 6) {
-                Image(systemName: "calendar")
-                    .foregroundColor(DS.Colors.accent)
-                Text(formattedDate)
-                    .foregroundColor(DS.Colors.textPrimary)
-                    .fixedSize(horizontal: true, vertical: false)
-                    .lineLimit(1)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(DS.Materials.platter)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
-            .shadow(color: DS.Shadows.ambientColor, radius: 1, y: 1)
-            .background(
-                Group {
-                    if let range = range {
-                        DatePicker("", selection: $date, in: range, displayedComponents: .date)
-                            .labelsHidden()
-                            .scaleEffect(5.0)
-                            .opacity(0.011)
-                    } else {
-                        DatePicker("", selection: $date, displayedComponents: .date)
-                            .labelsHidden()
-                            .scaleEffect(5.0)
-                            .opacity(0.011)
-                    }
+            Button(action: { showDatePopover.toggle() }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "calendar")
+                        .foregroundColor(DS.Colors.accent)
+                    Text(formattedDate)
+                        .foregroundColor(DS.Colors.textPrimary)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .lineLimit(1)
                 }
-            )
-            .clipped()
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(DS.Materials.platter)
+                .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
+                .shadow(color: DS.Shadows.ambientColor, radius: 1, y: 1)
+            }
+            .buttonStyle(.plain)
+            .popover(isPresented: $showDatePopover, arrowEdge: .bottom) {
+                DateSuggestionsPopover(date: $date, isPresented: $showDatePopover, range: range)
+            }
             .layoutPriority(1)
             
             // Time Pill
-            HStack(spacing: 6) {
-                Image(systemName: "clock")
-                    .foregroundColor(.gray)
-                Text(formattedTime)
-                    .foregroundColor(DS.Colors.textPrimary)
-                    .fixedSize(horizontal: true, vertical: false)
-                    .lineLimit(1)
+            Button(action: { showTimePopover.toggle() }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "clock")
+                        .foregroundColor(.gray)
+                    Text(formattedTime)
+                        .foregroundColor(DS.Colors.textPrimary)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .lineLimit(1)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(DS.Materials.platter)
+                .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
+                .shadow(color: DS.Shadows.ambientColor, radius: 1, y: 1)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(DS.Materials.platter)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
-            .shadow(color: DS.Shadows.ambientColor, radius: 1, y: 1)
-            .background(
-                Group {
+            .buttonStyle(.plain)
+            .popover(isPresented: $showTimePopover, arrowEdge: .bottom) {
+                VStack(spacing: DS.Spacing.sm) {
+                    Text("Select Time")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
                     if let range = range {
                         DatePicker("", selection: $date, in: range, displayedComponents: .hourAndMinute)
                             .labelsHidden()
-                            .scaleEffect(5.0)
-                            .opacity(0.011)
+                            .datePickerStyle(.stepperField)
                     } else {
                         DatePicker("", selection: $date, displayedComponents: .hourAndMinute)
                             .labelsHidden()
-                            .scaleEffect(5.0)
-                            .opacity(0.011)
+                            .datePickerStyle(.stepperField)
                     }
+                    
+                    Button("Done") {
+                        showTimePopover = false
+                    }
+                    .keyboardShortcut(.defaultAction)
                 }
-            )
-            .clipped()
+                .padding()
+                .frame(width: 160)
+            }
             .layoutPriority(1)
         }
     }
