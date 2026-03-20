@@ -291,6 +291,7 @@ struct AddEventView: View {
         }
         .frame(width: DS.Popover.width)
         .onAppear {
+            reminderMinutes = reminderService.defaultReminderMinutesList
             if let event = editingEvent {
                 title = event.title
                 date = event.startDate
@@ -309,7 +310,6 @@ struct AddEventView: View {
                 let currentMins = comps.minute ?? 0
                 comps.minute = currentMins + (30 - (currentMins % 30))
                 date = cal.date(from: comps) ?? now
-                reminderMinutes = reminderService.defaultReminderMinutesList
             }
             Task {
                 try? await Task.sleep(for: .milliseconds(100))
