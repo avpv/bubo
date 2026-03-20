@@ -17,6 +17,8 @@ struct AddEventView: View {
     @State private var newReminderValue = 10
     @State private var recurrenceRule: RecurrenceRule? = nil
     @State private var addToCalendar = false
+    @State private var availableCalendars: [AppleCalendarService.CalendarInfo] = []
+    @State private var selectedCalendarId: String = ""
 
     @FocusState private var isTitleFocused: Bool
     @FocusState private var isLocationFocused: Bool
@@ -183,20 +185,26 @@ struct AddEventView: View {
                     // Calendar
                     if !isEditing {
                         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                            Toggle("Add to Calendar", isOn: $addToCalendar)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(DS.Spacing.md)
-                                .background(DS.Materials.platter)
-                                .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
-                                .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
+                            VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                                Toggle("Add to Calendar", isOn: $addToCalendar)
+
+                                if addToCalendar && !availableCalendars.isEmpty {
+                                    Picker("Calendar", selection: $selectedCalendarId) {
+                                        ForEach(availableCalendars) { cal in
+                                            Text(cal.title)
+                                                .tag(cal.id)
+                                        }
+                                    }
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(DS.Spacing.md)
+                            .background(DS.Materials.platter)
+                            .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
+                            .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
 
                             if !addToCalendar {
                                 Text("Event will be stored locally in Bubo only")
-                                    .font(.caption)
-                                    .foregroundColor(DS.Colors.textSecondary)
-                                    .padding(.horizontal, DS.Spacing.sm)
-                            } else {
-                                Text("Event will be added to your default Apple Calendar")
                                     .font(.caption)
                                     .foregroundColor(DS.Colors.textSecondary)
                                     .padding(.horizontal, DS.Spacing.sm)
@@ -316,6 +324,8 @@ struct AddEventView: View {
         }
         .frame(width: DS.Popover.width)
         .onAppear {
+            availableCalendars = AppleCalendarService.shared.listCalendars()
+            selectedCalendarId = AppleCalendarService.shared.defaultCalendarId ?? availableCalendars.first?.id ?? ""
             reminderMinutes = reminderService.defaultReminderMinutesList
             if let event = editingEvent {
                 title = event.title
@@ -365,7 +375,7 @@ struct AddEventView: View {
         if isEditing {
             reminderService.updateLocalEvent(event)
         } else if addToCalendar {
-            reminderService.addCalendarEvent(event)
+            reminderService.addCalendarEvent(event, calendarId: selectedCalendarId)
         } else {
             reminderService.addLocalEvent(event)
         }

@@ -127,16 +127,29 @@ class AppleCalendarService {
         }
     }
 
-    /// Create a new event in Apple Calendar's default calendar.
-    func createEvent(_ event: CalendarEvent) throws {
+    /// Create a new event in Apple Calendar.
+    /// - Parameters:
+    ///   - event: The event data to create.
+    ///   - calendarId: The calendar identifier to add the event to. Uses the default calendar if nil.
+    func createEvent(_ event: CalendarEvent, calendarId: String? = nil) throws {
         let ekEvent = EKEvent(eventStore: store)
         ekEvent.title = event.title
         ekEvent.startDate = event.startDate
         ekEvent.endDate = event.endDate
         ekEvent.location = event.location
         ekEvent.notes = event.description
-        ekEvent.calendar = store.defaultCalendarForNewEvents
+        if let calendarId,
+           let calendar = store.calendars(for: .event).first(where: { $0.calendarIdentifier == calendarId }) {
+            ekEvent.calendar = calendar
+        } else {
+            ekEvent.calendar = store.defaultCalendarForNewEvents
+        }
         try store.save(ekEvent, span: .thisEvent)
+    }
+
+    /// The identifier of the default calendar for new events, if available.
+    var defaultCalendarId: String? {
+        store.defaultCalendarForNewEvents?.calendarIdentifier
     }
 
     /// Shift the start and end times of an Apple Calendar event by a given number of minutes.
