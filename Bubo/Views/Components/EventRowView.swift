@@ -210,6 +210,12 @@ struct EventRowView: View {
             let minutes = secondsUntilStart / 60
             if minutes < 60 { return "in \(minutes)m" }
             let hours = minutes / 60
+            if hours >= 24 {
+                let days = hours / 24
+                let remainingHours = hours % 24
+                if remainingHours == 0 { return "in \(days)d" }
+                return "in \(days)d \(remainingHours)h"
+            }
             let mins = minutes % 60
             if mins == 0 { return "in \(hours)h" }
             return "in \(hours)h \(mins)m"
