@@ -10,19 +10,20 @@ struct DateSuggestionsPopover: View {
     var body: some View {
         VStack(spacing: 0) {
             if showCustomCalendar {
-                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                VStack(alignment: .leading, spacing: 0) {
                     HStack {
                         Button(action: { showCustomCalendar = false }) {
-                            Image(systemName: "chevron.left")
-                            Text("Back")
+                            Label("Back", systemImage: "chevron.left")
                         }
-                        .buttonStyle(.plain)
-                        .foregroundColor(DS.Colors.accent)
-                        
+                        .buttonStyle(.bordered)
+                        .controlSize(.regular)
+
                         Spacer()
                     }
-                    .padding(.horizontal)
-                    .padding(.top, 12)
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.vertical, DS.Spacing.md)
+
+                    Divider()
                     
                     if let range = range {
                         DatePicker("", selection: Binding(get: { date }, set: { newDate in
