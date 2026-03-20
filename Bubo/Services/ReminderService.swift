@@ -205,6 +205,12 @@ class ReminderService {
 
         scheduleReminders(for: events)
 
+        // Ask EventKit to pull fresh data from remote calendar servers
+        // (iCloud, Google, Exchange, CalDAV). If there are changes (e.g. a
+        // deletion made on the remote side), EventKit will fire
+        // EKEventStoreChanged and we'll sync again automatically.
+        AppleCalendarService.shared.triggerRemoteRefresh()
+
         Task {
             await eventCache.save(events: events)
         }

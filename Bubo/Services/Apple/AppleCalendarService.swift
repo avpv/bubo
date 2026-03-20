@@ -94,11 +94,19 @@ class AppleCalendarService {
             .map { (account: $0.key, calendars: $0.value) }
     }
 
+    /// Ask EventKit to pull the latest data from remote calendar sources
+    /// (iCloud, Google, Exchange, CalDAV). This is asynchronous — the actual
+    /// data arrives later via an `EKEventStoreChanged` notification.
+    func triggerRemoteRefresh() {
+        store.refreshSourcesIfNecessary()
+    }
+
     /// Fetch events from selected Apple calendars within a date range.
     func fetchEvents(from: Date, to: Date, onlyCalendarIds: [String] = []) -> [CalendarEvent] {
-        // Ensure the store reflects the latest changes (deletions, edits) from
-        // Calendar.app and remote sources (iCloud, Google, Exchange) before querying.
-        store.refreshSourcesIfNecessary()
+        // Reset the in-memory cache so EventKit re-reads from the on-disk
+        // calendar database. Without this, deleted events from remote
+        // calendars can linger in the store's in-process cache.
+        store.reset()
 
         let calendars: [EKCalendar]?
         if onlyCalendarIds.isEmpty {
