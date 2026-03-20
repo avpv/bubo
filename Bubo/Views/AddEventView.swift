@@ -146,14 +146,16 @@ struct AddEventView: View {
                                 }
                             }
                             
-                            GridRow {
-                                Text("Ends")
-                                    .foregroundColor(DS.Colors.textSecondary)
-                                    .gridColumnAlignment(.trailing)
-                                
-                                HStack(spacing: DS.Spacing.xs) {
-                                    DateTimePickerPills(date: endDateBinding, range: date...)
-                                    TimeSlotPicker(selection: endDateBinding)
+                            if selectedEventType != .pomodoro {
+                                GridRow {
+                                    Text("Ends")
+                                        .foregroundColor(DS.Colors.textSecondary)
+                                        .gridColumnAlignment(.trailing)
+
+                                    HStack(spacing: DS.Spacing.xs) {
+                                        DateTimePickerPills(date: endDateBinding, range: date...)
+                                        TimeSlotPicker(selection: endDateBinding)
+                                    }
                                 }
                             }
                         }
