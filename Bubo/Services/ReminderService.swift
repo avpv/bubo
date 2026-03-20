@@ -23,6 +23,7 @@ class ReminderService {
     private nonisolated(unsafe) var snoozeObserver: Any?
     private nonisolated(unsafe) var appleCalendarObserver: Any?
     private nonisolated(unsafe) var pendingAppleRefreshTask: Task<Void, Never>?
+    private var hasCompletedLiveSync = false
 
     var allEvents: [CalendarEvent] {
         let expandedLocal = localEvents.flatMap {
@@ -192,6 +193,7 @@ class ReminderService {
         lastSyncDate = Date()
         isSyncing = false
         isUsingCache = false
+        hasCompletedLiveSync = true
 
         // Clean up firedReminders for events no longer in the window
         let currentEventIds = Set(events.map { $0.id })
@@ -213,7 +215,9 @@ class ReminderService {
     private func loadCachedEvents() {
         Task {
             let cached = await eventCache.loadEvents()
-            if !cached.isEmpty && self.upcomingEvents.isEmpty {
+            // Only use cache if a live sync hasn't already completed —
+            // prevents stale cached data from overwriting fresh results.
+            if !cached.isEmpty && !self.hasCompletedLiveSync && self.upcomingEvents.isEmpty {
                 self.upcomingEvents = cached
                 self.isUsingCache = true
                 self.scheduleReminders(for: cached)

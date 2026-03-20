@@ -96,6 +96,10 @@ class AppleCalendarService {
 
     /// Fetch events from selected Apple calendars within a date range.
     func fetchEvents(from: Date, to: Date, onlyCalendarIds: [String] = []) -> [CalendarEvent] {
+        // Ensure the store reflects the latest changes (deletions, edits) from
+        // Calendar.app and remote sources (iCloud, Google, Exchange) before querying.
+        store.refreshSourcesIfNecessary()
+
         let calendars: [EKCalendar]?
         if onlyCalendarIds.isEmpty {
             calendars = nil
