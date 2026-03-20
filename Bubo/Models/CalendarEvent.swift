@@ -23,33 +23,6 @@ struct CalendarEvent: Identifiable, Codable, Hashable {
     /// The type of event — standard calendar event or Pomodoro session.
     var eventType: EventType
 
-    // MARK: - Codable (backward-compatible)
-
-    private enum CodingKeys: String, CodingKey {
-        case id, title, startDate, endDate, location, description, calendarName
-        case customReminderMinutes, recurrenceRule, seriesId, eventType
-    }
-
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        id = try c.decode(String.self, forKey: .id)
-        title = try c.decode(String.self, forKey: .title)
-        startDate = try c.decode(Date.self, forKey: .startDate)
-        endDate = try c.decode(Date.self, forKey: .endDate)
-        location = try c.decodeIfPresent(String.self, forKey: .location)
-        description = try c.decodeIfPresent(String.self, forKey: .description)
-        calendarName = try c.decodeIfPresent(String.self, forKey: .calendarName)
-        customReminderMinutes = try c.decodeIfPresent([Int].self, forKey: .customReminderMinutes)
-        recurrenceRule = try c.decodeIfPresent(RecurrenceRule.self, forKey: .recurrenceRule)
-        seriesId = try c.decodeIfPresent(String.self, forKey: .seriesId)
-        // Backward compatibility: infer from recurrenceRule if eventType is missing
-        if let type = try c.decodeIfPresent(EventType.self, forKey: .eventType) {
-            eventType = type
-        } else {
-            eventType = recurrenceRule?.pomodoroMode == true ? .pomodoro : .standard
-        }
-    }
-
     // MARK: - Static formatters (avoid re-creation per call)
 
     private static let timeFormatter: DateFormatter = {
