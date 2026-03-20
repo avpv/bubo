@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="340" viewBox="0 0 720 340">
+  <style>
+    text { font-family: 'Segoe Print', 'Comic Sans MS', 'Patrick Hand', cursive; fill: #1a1a1a; }
+    .label { font-size: 15px; font-weight: bold; }
+    .sublabel { font-size: 12px; fill: #555; }
+    .arrow { fill: none; stroke: #1a1a1a; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+    .box { fill: none; stroke: #1a1a1a; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .fill-green { fill: #d4edda; }
+    .fill-blue { fill: #d6eaf8; }
+    .fill-orange { fill: #fdebd0; }
+    .fill-gray { fill: #f0f0f0; }
+    .fill-purple { fill: #e8daef; }
+  </style>
+
+  <rect width="720" height="340" fill="white"/>
+
+  <!-- Title -->
+  <text x="360" y="32" text-anchor="middle" style="font-size:20px; font-weight:bold;">90-Minute Ultradian Rhythm — Flowchart</text>
+
+  <!-- Start node -->
+  <path class="box fill-gray" d="M30,155 Q28,131 78,130 Q130,129 129,155 Q131,181 78,182 Q27,181 30,155" />
+  <text x="78" y="161" text-anchor="middle" class="label">Start</text>
+
+  <!-- Arrow Start -> Deep Work -->
+  <path class="arrow" d="M131,156 Q145,155 155,155" marker-end="url(#ah)"/>
+
+  <!-- Deep Work block -->
+  <path class="box fill-purple" d="M170,108 L332,107 Q335,108 334,110 L335,202 Q334,205 332,204 L170,205 Q168,204 169,202 L168,110 Q169,107 170,108 Z"/>
+  <text x="252" y="145" text-anchor="middle" class="label">Deep Work</text>
+  <text x="252" y="167" text-anchor="middle" class="sublabel">90 minutes</text>
+  <text x="252" y="185" text-anchor="middle" class="sublabel" style="font-size:11px; fill:#777;">(one ultradian cycle)</text>
+
+  <!-- Arrow Work -> Rest -->
+  <path class="arrow" d="M336,156 Q350,155 360,155" marker-end="url(#ah)"/>
+
+  <!-- Rest block -->
+  <path class="box fill-blue" d="M375,108 L537,107 Q540,108 539,110 L540,202 Q539,205 537,204 L375,205 Q373,204 374,202 L373,110 Q374,107 375,108 Z"/>
+  <text x="457" y="145" text-anchor="middle" class="label">Rest</text>
+  <text x="457" y="167" text-anchor="middle" class="sublabel">15–20 minutes</text>
+  <text x="457" y="185" text-anchor="middle" class="sublabel" style="font-size:11px; fill:#777;">(unplug completely)</text>
+
+  <!-- Arrow Rest -> Decision -->
+  <path class="arrow" d="M541,156 Q555,155 565,155" marker-end="url(#ah)"/>
+
+  <!-- Decision diamond -->
+  <polygon class="box fill-orange" points="640,105 695,156 640,207 585,156"/>
+  <text x="640" y="148" text-anchor="middle" class="label" style="font-size:13px;">More</text>
+  <text x="640" y="165" text-anchor="middle" class="label" style="font-size:13px;">energy?</text>
+
+  <!-- Arrow Decision -> loop back (Yes) -->
+  <path class="arrow" d="M640,207 Q641,245 640,265 Q639,285 457,286 Q252,287 252,230 L252,207" marker-end="url(#ah)"/>
+  <text x="644" y="248" class="sublabel" style="font-size:13px; font-weight:bold;">Yes</text>
+
+  <!-- Arrow Decision -> End (No) -->
+  <path class="arrow" d="M640,105 L640,72" marker-end="url(#ah)"/>
+  <text x="655" y="88" class="sublabel" style="font-size:13px; font-weight:bold;">No</text>
+
+  <!-- End node -->
+  <path class="box fill-gray" d="M612,47 Q610,23 640,22 Q672,23 670,47 Q672,73 640,72 Q610,73 612,47" />
+  <text x="640" y="52" text-anchor="middle" class="label" style="font-size:14px;">End</text>
+
+  <!-- Arrowhead marker -->
+  <defs>
+    <marker id="ah" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <path d="M0,0 L0,7 L10,3.5 Z" fill="#1a1a1a"/>
+    </marker>
+  </defs>
+</svg>

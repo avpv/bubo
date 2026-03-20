@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="780" height="370" viewBox="0 0 780 370">
+  <style>
+    text { font-family: 'Segoe Print', 'Comic Sans MS', 'Patrick Hand', cursive; fill: #1a1a1a; }
+    .label { font-size: 15px; font-weight: bold; }
+    .sublabel { font-size: 12px; fill: #555; }
+    .small { font-size: 11px; fill: #777; }
+    .arrow { fill: none; stroke: #1a1a1a; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+    .box { fill: none; stroke: #1a1a1a; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .fill-green { fill: #d4edda; }
+    .fill-blue { fill: #d6eaf8; }
+    .fill-orange { fill: #fdebd0; }
+    .fill-gray { fill: #f0f0f0; }
+    .fill-red { fill: #fadbd8; }
+    .fill-purple { fill: #e8daef; }
+  </style>
+
+  <rect width="780" height="370" fill="white"/>
+
+  <!-- Title -->
+  <text x="390" y="32" text-anchor="middle" style="font-size:20px; font-weight:bold;">Deep Work — Flowchart</text>
+
+  <!-- Start node -->
+  <path class="box fill-gray" d="M22,165 Q20,141 58,140 Q98,139 97,165 Q99,191 58,192 Q19,191 22,165"/>
+  <text x="58" y="171" text-anchor="middle" class="label">Start</text>
+
+  <!-- Arrow Start -> Focus -->
+  <path class="arrow" d="M99,166 Q110,165 120,165" marker-end="url(#ah2)"/>
+
+  <!-- Focus block -->
+  <path class="box fill-purple" d="M135,118 L290,117 Q293,118 292,120 L293,212 Q292,215 290,214 L135,215 Q133,214 134,212 L133,120 Q134,117 135,118 Z"/>
+  <text x="213" y="155" text-anchor="middle" class="label">Deep Focus</text>
+  <text x="213" y="177" text-anchor="middle" class="sublabel">50–60 minutes</text>
+  <text x="213" y="197" text-anchor="middle" class="small">(flow state)</text>
+
+  <!-- Arrow Focus -> Break -->
+  <path class="arrow" d="M294,166 Q305,165 315,165" marker-end="url(#ah2)"/>
+
+  <!-- Break block -->
+  <path class="box fill-blue" d="M330,128 L460,127 Q463,128 462,130 L463,202 Q462,205 460,204 L330,205 Q328,204 329,202 L328,130 Q329,127 330,128 Z"/>
+  <text x="395" y="160" text-anchor="middle" class="label">Break</text>
+  <text x="395" y="180" text-anchor="middle" class="sublabel">10 minutes</text>
+
+  <!-- Arrow Break -> Round check -->
+  <path class="arrow" d="M464,166 Q475,165 485,165" marker-end="url(#ah2)"/>
+
+  <!-- Round check diamond -->
+  <polygon class="box fill-orange" points="548,110 608,166 548,222 488,166"/>
+  <text x="548" y="158" text-anchor="middle" class="label" style="font-size:12px;">Round</text>
+  <text x="548" y="174" text-anchor="middle" class="label" style="font-size:12px;">2 of 2?</text>
+
+  <!-- Arrow loop back (No) -->
+  <path class="arrow" d="M548,222 Q549,255 548,270 Q547,290 395,291 Q213,292 213,250 L213,217" marker-end="url(#ah2)"/>
+  <text x="555" y="255" class="sublabel" style="font-size:13px; font-weight:bold;">No</text>
+
+  <!-- Arrow Round check -> Long Break (Yes) -->
+  <path class="arrow" d="M609,166 Q620,165 635,165" marker-end="url(#ah2)"/>
+  <text x="617" y="155" class="sublabel" style="font-size:13px; font-weight:bold;">Yes</text>
+
+  <!-- Long Break block -->
+  <path class="box fill-red" d="M650,123 L755,122 Q758,123 757,125 L758,207 Q757,210 755,209 L650,210 Q648,209 649,207 L648,125 Q649,122 650,123 Z"/>
+  <text x="703" y="155" text-anchor="middle" class="label" style="font-size:13px;">Long Break</text>
+  <text x="703" y="177" text-anchor="middle" class="sublabel">20–30 min</text>
+
+  <!-- Arrow Long Break -> End -->
+  <path class="arrow" d="M703,123 L703,90" marker-end="url(#ah2)"/>
+
+  <!-- End node -->
+  <path class="box fill-gray" d="M677,65 Q675,41 703,40 Q733,41 731,65 Q733,91 703,90 Q673,91 677,65"/>
+  <text x="703" y="71" text-anchor="middle" class="label" style="font-size:14px;">End</text>
+
+  <!-- Counter label -->
+  <text x="213" y="305" text-anchor="middle" class="small">← repeat 2 rounds</text>
+
+  <defs>
+    <marker id="ah2" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <path d="M0,0 L0,7 L10,3.5 Z" fill="#1a1a1a"/>
+    </marker>
+  </defs>
+</svg>
