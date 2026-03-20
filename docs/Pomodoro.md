@@ -50,10 +50,24 @@ Short, rapid bursts. Best used when you have low energy or a large backlog of do
 - **Break:** 3-5 min
 - **Long Break:** 15 min
 
-### 4. The Ultradian Rhythm (Advanced)
-Based on human natural energy cycles. Humans biologically cycle through 90-minute peaks of alertness.
+### 4. The 52/17 Rule (Research-Backed Productivity)
+A study by the time-tracking company DeskTime found that the most productive employees work for approximately 52 minutes and then take a 17-minute break. This rhythm offers longer uninterrupted sessions than the classic Pomodoro while still enforcing regular recovery, making it ideal for tasks that require deep immersion — such as coding, data analysis, or strategic planning.
+
+![52/17 Rule Flowchart](images/52-17-rule-flowchart.svg)
+
+- **Work:** 52 min
+- **Rounds:** 3–4
+- **Break:** 17 min
+- **Long Break:** 30 min (after all rounds)
+
+### 5. 90-Minute Ultradian Rhythm (Advanced)
+Based on the natural biological cycles of the human body known as *ultradian rhythms*. Research shows that the brain oscillates between high and low alertness in roughly 90-minute waves. By working a full 90-minute cycle and then taking a genuine 15–20-minute rest, you align your schedule with your physiology. This approach is best suited for complex intellectual work — programming, writing, research, or design — where entering and sustaining a flow state is critical.
+
+![90-Minute Ultradian Rhythm Flowchart](images/ultradian-90min-flowchart.svg)
+
 - **Work:** 90 min
 - **Rounds:** 1
-- *(Take a natural unplugged 20-30 minute break before scheduling your next event).*
+- **Break:** 15–20 min
+- *(Take a natural unplugged break before scheduling your next event.)*
 
 Happy focusing! 🦉
