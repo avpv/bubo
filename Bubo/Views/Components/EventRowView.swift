@@ -8,7 +8,10 @@ struct EventRowView: View {
     var onTap: ((CalendarEvent) -> Void)? = nil
 
     @State private var isHovered = false
+    @State private var now = Date()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private let everySecondTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     private var isLocal: Bool {
         event.isLocalEvent
@@ -76,6 +79,9 @@ struct EventRowView: View {
         .accessibilityLabel("\(event.title)\(event.isRecurring ? ", recurring" : ""), \(event.formattedTimeRange)\(event.location.map { ", \($0)" } ?? "")")
         .accessibilityHint("Click to view details. Right-click to set reminder.")
         .accessibilityAddTraits(.isButton)
+        .onReceive(everySecondTimer) { _ in
+            now = Date()
+        }
         .contextMenu {
             Section("Set Reminder") {
                 reminderMenuItems
@@ -197,34 +203,41 @@ struct EventRowView: View {
     }
 
     private var timeUntilText: String {
-        let minutes = event.minutesUntilStart
-        if minutes <= 0 {
-            let timeIntervalEnd = event.endDate.timeIntervalSinceNow
-            if timeIntervalEnd > 0 {
-                let minutesEnd = Int(timeIntervalEnd / 60)
-                let secondsEnd = Int(timeIntervalEnd) % 60
-                
-                if minutesEnd == 0 {
-                    return "\(secondsEnd)s left"
-                }
-                
-                let hours = minutesEnd / 60
-                let mins = minutesEnd % 60
-                if hours == 0 { return "\(mins)m left" }
-                if mins == 0 { return "\(hours)h left" }
-                return "\(hours)h \(mins)m left"
+        let secondsUntilStart = Int(event.startDate.timeIntervalSince(now))
+        if secondsUntilStart > 0 {
+            // Event hasn't started yet
+            if secondsUntilStart < 60 { return "in \(secondsUntilStart)s" }
+            let minutes = secondsUntilStart / 60
+            let secs = secondsUntilStart % 60
+            if minutes < 60 {
+                if secs == 0 { return "in \(minutes)m" }
+                return "in \(minutes)m \(secs)s"
             }
-            return "now"
+            let hours = minutes / 60
+            let mins = minutes % 60
+            if mins == 0 { return "in \(hours)h" }
+            return "in \(hours)h \(mins)m"
         }
-        if minutes < 60 { return "in \(minutes)m" }
-        let hours = minutes / 60
-        let mins = minutes % 60
-        if mins == 0 { return "in \(hours)h" }
-        return "in \(hours)h \(mins)m"
+        // Event has started or starting now
+        let secondsUntilEnd = Int(event.endDate.timeIntervalSince(now))
+        if secondsUntilEnd > 0 {
+            let minutesEnd = secondsUntilEnd / 60
+            let secondsEnd = secondsUntilEnd % 60
+
+            if minutesEnd == 0 {
+                return "\(secondsEnd)s left"
+            }
+
+            let hours = minutesEnd / 60
+            let mins = minutesEnd % 60
+            if hours == 0 { return "\(mins)m \(secondsEnd)s left" }
+            if mins == 0 { return "\(hours)h left" }
+            return "\(hours)h \(mins)m left"
+        }
+        return "now"
     }
 
     private var eventProgress: Double {
-        let now = Date()
         guard event.startDate <= now && event.endDate > now else { return 0 }
         let total = event.endDate.timeIntervalSince(event.startDate)
         guard total > 0 else { return 0 }
