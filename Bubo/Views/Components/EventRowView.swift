@@ -5,6 +5,8 @@ struct EventRowView: View {
     let reminderService: ReminderService
     var onEdit: ((CalendarEvent) -> Void)? = nil
     var onDelete: ((CalendarEvent) -> Void)? = nil
+    var onDeleteOccurrence: ((CalendarEvent) -> Void)? = nil
+    var onDeleteSeries: ((CalendarEvent) -> Void)? = nil
     var onTap: ((CalendarEvent) -> Void)? = nil
 
     @State private var isHovered = false
@@ -89,7 +91,14 @@ struct EventRowView: View {
             if isLocal {
                 Divider()
                 Button("Edit") { onEdit?(event) }
-                Button("Delete", role: .destructive) { onDelete?(event) }
+                if event.isRecurring {
+                    Menu("Delete") {
+                        Button("Delete This Event Only", role: .destructive) { onDeleteOccurrence?(event) }
+                        Button("Delete All Events", role: .destructive) { onDeleteSeries?(event) }
+                    }
+                } else {
+                    Button("Delete", role: .destructive) { onDelete?(event) }
+                }
             }
         }
     }
