@@ -190,7 +190,6 @@ struct AddEventView: View {
 
                             if useCustomReminders {
                                 ForEach(Array(reminderMinutes.sorted().enumerated()), id: \.element) { index, minutes in
-                                    if index > 0 { Divider() }
                                     HStack {
                                         Label(DS.formatMinutes(minutes), systemImage: "bell.fill")
                                         Spacer()
@@ -201,6 +200,7 @@ struct AddEventView: View {
                                         }
                                         .buttonStyle(.borderless)
                                     }
+                                    Divider()
                                 }
 
                                 Grid(alignment: .leading, horizontalSpacing: DS.Spacing.sm) {
