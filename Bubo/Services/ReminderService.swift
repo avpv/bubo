@@ -223,6 +223,15 @@ class ReminderService {
 
     // MARK: - Local Events
 
+    func addCalendarEvent(_ event: CalendarEvent) {
+        do {
+            try AppleCalendarService.shared.createEvent(event)
+            syncNow()
+        } catch {
+            print("Failed to create Apple Calendar event: \(error)")
+        }
+    }
+
     func addLocalEvent(_ event: CalendarEvent) {
         localEvents.append(event)
         saveLocalEvents()

@@ -127,6 +127,18 @@ class AppleCalendarService {
         }
     }
 
+    /// Create a new event in Apple Calendar's default calendar.
+    func createEvent(_ event: CalendarEvent) throws {
+        let ekEvent = EKEvent(eventStore: store)
+        ekEvent.title = event.title
+        ekEvent.startDate = event.startDate
+        ekEvent.endDate = event.endDate
+        ekEvent.location = event.location
+        ekEvent.notes = event.description
+        ekEvent.calendar = store.defaultCalendarForNewEvents
+        try store.save(ekEvent, span: .thisEvent)
+    }
+
     /// Shift the start and end times of an Apple Calendar event by a given number of minutes.
     func shiftEventTime(id: String, byMinutes minutes: Int) throws {
         var actualId = id.replacingOccurrences(of: "apple_", with: "")
