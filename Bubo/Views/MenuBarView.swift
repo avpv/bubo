@@ -307,42 +307,47 @@ struct MenuBarView: View {
     }
 
     private var footerActions: some View {
-        HStack(spacing: DS.Spacing.sm) {
-            Button(action: {
-                Haptics.tap()
-                navigation = .addEvent()
-            }) {
-                Label("Add", systemImage: "plus")
+        Grid(alignment: .center, horizontalSpacing: DS.Spacing.sm) {
+            GridRow {
+                Button(action: {
+                    Haptics.tap()
+                    navigation = .addEvent()
+                }) {
+                    Label("Add", systemImage: "plus")
+                }
+                .buttonStyle(.action(role: .primary, size: .regular))
+                .help("Add a new event (\u{2318}N)")
+                .keyboardShortcut("n", modifiers: .command)
+                .gridColumnAlignment(.leading)
+
+                HStack(spacing: DS.Spacing.sm) {
+                    Button(action: {
+                        Haptics.tap()
+                        reminderService.syncNow()
+                        toastState.showInfo("Refreshing calendars…", icon: "arrow.clockwise")
+                    }) {
+                        Label("Refresh", systemImage: "arrow.clockwise")
+                    }
+                    .help("Refresh calendars (\u{2318}R)")
+                    .keyboardShortcut("r", modifiers: .command)
+
+                    OpenSettingsButton()
+                        .keyboardShortcut(",", modifiers: .command)
+                        .help("Open settings (\u{2318},)")
+
+                    Button(action: { NSApplication.shared.terminate(nil) }) {
+                        Label("Quit", systemImage: "power")
+                    }
+                    .help("Quit Bubo (\u{2318}Q)")
+                    .keyboardShortcut("q", modifiers: .command)
+                }
+                .gridColumnAlignment(.trailing)
             }
-            .buttonStyle(.action(role: .primary, size: .regular))
-            .help("Add a new event (\u{2318}N)")
-            .keyboardShortcut("n", modifiers: .command)
-
-            Button(action: {
-                Haptics.tap()
-                reminderService.syncNow()
-                toastState.showInfo("Refreshing calendars…", icon: "arrow.clockwise")
-            }) {
-                Label("Refresh", systemImage: "arrow.clockwise")
-            }
-            .help("Refresh calendars (\u{2318}R)")
-            .keyboardShortcut("r", modifiers: .command)
-
-            Spacer()
-
-            OpenSettingsButton()
-                .keyboardShortcut(",", modifiers: .command)
-                .help("Open settings (\u{2318},)")
-
-            Button(action: { NSApplication.shared.terminate(nil) }) {
-                Label("Quit", systemImage: "power")
-            }
-            .help("Quit Bubo (\u{2318}Q)")
-            .keyboardShortcut("q", modifiers: .command)
         }
         .buttonStyle(.borderless)
         .font(.system(size: 13, weight: .medium))
         .padding(.horizontal, DS.Spacing.lg)
+        .frame(maxWidth: .infinity)
         .frame(height: DS.Size.actionFooterHeight)
         .background(DS.Materials.headerBar)
     }
