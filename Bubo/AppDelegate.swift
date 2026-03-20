@@ -101,12 +101,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApplication.shared.activate()
         alertWindow = window
 
-        // Auto-dismiss 60 seconds after the event starts (not after showing the alert)
+        // Auto-dismiss when the event starts (countdown reaches 0)
         autoDismissTask?.cancel()
         let secondsUntilStart = max(event.startDate.timeIntervalSinceNow, 0)
-        let autoDismissDelay = secondsUntilStart + 60
         autoDismissTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(autoDismissDelay))
+            try? await Task.sleep(for: .seconds(secondsUntilStart))
             self?.dismissAlert()
         }
     }
