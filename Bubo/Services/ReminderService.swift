@@ -344,6 +344,15 @@ class ReminderService {
 
     private static let defaultReminderMinutes = [5]
 
+    /// The default reminder minutes that would apply to an event without custom reminders.
+    var defaultReminderMinutesList: [Int] {
+        let enabledIntervals = settings.intervals.filter { $0.isEnabled }
+        if !enabledIntervals.isEmpty {
+            return enabledIntervals.map { $0.minutes }.sorted()
+        }
+        return Self.defaultReminderMinutes
+    }
+
     func activeReminderMinutes(for event: CalendarEvent) -> [Int] {
         if let custom = event.customReminderMinutes {
             return custom

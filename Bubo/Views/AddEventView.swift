@@ -243,7 +243,10 @@ struct AddEventView: View {
                                     }
                                 }
                             } else {
-                                Label("Default: 5 min", systemImage: "bell.fill")
+                                Label(
+                                        "Default: \(reminderService.defaultReminderMinutesList.map { DS.formatMinutes($0) }.joined(separator: ", "))",
+                                        systemImage: "bell.fill"
+                                    )
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
                             }
@@ -306,6 +309,7 @@ struct AddEventView: View {
                 let currentMins = comps.minute ?? 0
                 comps.minute = currentMins + (30 - (currentMins % 30))
                 date = cal.date(from: comps) ?? now
+                reminderMinutes = reminderService.defaultReminderMinutesList
             }
             Task {
                 try? await Task.sleep(for: .milliseconds(100))
