@@ -208,11 +208,7 @@ struct EventRowView: View {
             // Event hasn't started yet
             if secondsUntilStart < 60 { return "in \(secondsUntilStart)s" }
             let minutes = secondsUntilStart / 60
-            let secs = secondsUntilStart % 60
-            if minutes < 60 {
-                if secs == 0 { return "in \(minutes)m" }
-                return "in \(minutes)m \(secs)s"
-            }
+            if minutes < 60 { return "in \(minutes)m" }
             let hours = minutes / 60
             let mins = minutes % 60
             if mins == 0 { return "in \(hours)h" }
@@ -221,16 +217,13 @@ struct EventRowView: View {
         // Event has started or starting now
         let secondsUntilEnd = Int(event.endDate.timeIntervalSince(now))
         if secondsUntilEnd > 0 {
-            let minutesEnd = secondsUntilEnd / 60
-            let secondsEnd = secondsUntilEnd % 60
-
-            if minutesEnd == 0 {
-                return "\(secondsEnd)s left"
+            if secondsUntilEnd < 60 {
+                return "\(secondsUntilEnd)s left"
             }
-
+            let minutesEnd = secondsUntilEnd / 60
             let hours = minutesEnd / 60
             let mins = minutesEnd % 60
-            if hours == 0 { return "\(mins)m \(secondsEnd)s left" }
+            if hours == 0 { return "\(mins)m left" }
             if mins == 0 { return "\(hours)h left" }
             return "\(hours)h \(mins)m left"
         }
