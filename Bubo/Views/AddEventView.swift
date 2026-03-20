@@ -474,11 +474,11 @@ struct AddEventView: View {
                 // Visual timeline
                 pomodoroTimeline
                     .padding(.vertical, DS.Spacing.md)
-                    .animation(DS.Animation.standard, value: pomodoroWork)
-                    .animation(DS.Animation.standard, value: pomodoroBreak)
-                    .animation(DS.Animation.standard, value: pomodoroRounds)
-                    .animation(DS.Animation.standard, value: pomodoroLongBreakEnabled)
-                    .animation(DS.Animation.standard, value: pomodoroLongBreak)
+                    .animation(DS.Animation.smoothSpring, value: pomodoroWork)
+                    .animation(DS.Animation.smoothSpring, value: pomodoroBreak)
+                    .animation(DS.Animation.smoothSpring, value: pomodoroRounds)
+                    .animation(DS.Animation.gentleBounce, value: pomodoroLongBreakEnabled)
+                    .animation(DS.Animation.smoothSpring, value: pomodoroLongBreak)
 
                 HStack {
                     Label(
@@ -523,50 +523,100 @@ struct AddEventView: View {
         return segments
     }
 
+    // MARK: - Segment Styling Helpers
+
+    private func segmentColor(for type: String) -> Color {
+        switch type {
+        case "work": .accentColor
+        case "long": .indigo
+        default: .green
+        }
+    }
+
+    private func segmentIcon(for type: String) -> String {
+        switch type {
+        case "work": "brain.head.profile"
+        case "long": "moon.zzz"
+        default: "cup.and.saucer"
+        }
+    }
+
+    private func segmentLabel(for type: String) -> String {
+        switch type {
+        case "work": "Work"
+        case "long": "Long break"
+        default: "Break"
+        }
+    }
+
+    // MARK: - Improved Timeline
+
     private var pomodoroTimeline: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            // Legend row (above bar for context)
+            HStack(spacing: DS.Spacing.md) {
+                legendItem(color: .accentColor, icon: "brain.head.profile", label: "Work")
+                legendItem(color: .green, icon: "cup.and.saucer", label: "Break")
+                if pomodoroLongBreakEnabled {
+                    legendItem(color: .indigo, icon: "moon.zzz", label: "Long break")
+                }
+                Spacer()
+                // Work/break ratio
+                let totalWork = pomodoroWork * pomodoroRounds
+                let totalBreak = pomodoroTotalMinutes - totalWork
+                if totalBreak > 0 {
+                    Text("\(totalWork):\(totalBreak)")
+                        .font(.system(.caption2, design: .monospaced, weight: .medium))
+                        .foregroundStyle(.tertiary)
+                    + Text(" work:rest")
+                        .font(.caption2)
+                        .foregroundColor(.tertiary)
+                }
+            }
+
             // Bar visualization
             GeometryReader { geo in
                 let totalWidth = geo.size.width
                 let totalDuration = CGFloat(pomodoroTotalMinutes)
-                HStack(spacing: 0) {
-                    ForEach(Array(pomodoroSegments.enumerated()), id: \.offset) { _, segment in
-                        let segWidth = totalWidth * CGFloat(segment.minutes) / totalDuration
-                        let color: Color = segment.type == "work" ? .accentColor
-                            : segment.type == "long" ? .indigo.opacity(0.5)
-                            : .green.opacity(0.5)
+                HStack(spacing: 1.5) {
+                    ForEach(Array(pomodoroSegments.enumerated()), id: \.offset) { idx, segment in
+                        let rawWidth = totalWidth * CGFloat(segment.minutes) / totalDuration
+                        let segWidth = max(rawWidth - 1.5, 4)
+                        let color = segmentColor(for: segment.type)
+                        let isFirst = idx == 0
+                        let isLast = idx == pomodoroSegments.count - 1
 
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(color)
-                            .frame(width: max(segWidth - 1, 3))
-                            .overlay {
-                                if segWidth > 20 {
-                                    Text("\(segment.minutes)")
-                                        .font(.system(size: 9, weight: .medium, design: .rounded))
-                                        .foregroundColor(.white)
-                                }
+                        RoundedRectangle(
+                            cornerRadius: (isFirst || isLast) ? 5 : 3,
+                            style: .continuous
+                        )
+                        .fill(
+                            LinearGradient(
+                                colors: [color, color.opacity(0.7)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .frame(width: segWidth)
+                        .overlay {
+                            if segWidth > 30 {
+                                Text("\(segment.minutes)m")
+                                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(.white)
                             }
+                        }
                     }
                 }
             }
-            .frame(height: 20)
+            .frame(height: 28)
             .accessibilityElement()
             .accessibilityLabel(
                 "Pomodoro timeline: \(pomodoroRounds) rounds of \(pomodoroWork) min work and \(pomodoroBreak) min break"
                 + (pomodoroLongBreakEnabled ? ", then \(pomodoroLongBreak) min long break" : "")
             )
 
-            // Session schedule with actual times
+            // Session schedule
             pomodoroSchedule
-
-            // Legend
-            HStack(spacing: DS.Spacing.lg) {
-                legendItem(color: Color.accentColor, label: "Work")
-                legendItem(color: Color.green.opacity(0.5), label: "Break")
-                if pomodoroLongBreakEnabled {
-                    legendItem(color: Color.indigo.opacity(0.5), label: "Long")
-                }
-            }
         }
     }
 
@@ -576,54 +626,87 @@ struct AddEventView: View {
         let segments = pomodoroSegments
         let maxVisible = 6
 
-        return VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+        return VStack(alignment: .leading, spacing: 0) {
             if segments.count <= maxVisible {
-                ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
-                    scheduleRow(segment)
+                ForEach(Array(segments.enumerated()), id: \.offset) { idx, segment in
+                    scheduleRow(segment, index: idx, total: segments.count)
                 }
             } else {
-                // Show first 2, ellipsis, last 2
-                ForEach(Array(segments.prefix(2).enumerated()), id: \.offset) { _, segment in
-                    scheduleRow(segment)
+                ForEach(Array(segments.prefix(2).enumerated()), id: \.offset) { idx, segment in
+                    scheduleRow(segment, index: idx, total: segments.count)
                 }
                 HStack(spacing: DS.Spacing.xs) {
-                    Spacer().frame(width: DS.Spacing.lg)
-                    Text("···  \(segments.count - 4) more")
-                        .font(.caption2)
+                    // Connecting line
+                    Rectangle()
+                        .fill(Color.secondary.opacity(0.15))
+                        .frame(width: 1.5)
+                        .frame(height: 16)
+                        .padding(.leading, 5)
+                    Text("\(segments.count - 4) more")
+                        .font(.system(.caption2, design: .rounded))
                         .foregroundStyle(.tertiary)
                 }
-                ForEach(Array(segments.suffix(2).enumerated()), id: \.offset) { _, segment in
-                    scheduleRow(segment)
+                .padding(.leading, DS.Spacing.xs)
+                ForEach(Array(segments.suffix(2).enumerated()), id: \.offset) { idx, segment in
+                    scheduleRow(segment, index: segments.count - 2 + idx, total: segments.count)
                 }
             }
         }
     }
 
-    private func scheduleRow(_ segment: (type: String, minutes: Int, startOffset: Int)) -> some View {
+    private func scheduleRow(
+        _ segment: (type: String, minutes: Int, startOffset: Int),
+        index: Int,
+        total: Int
+    ) -> some View {
         let start = date.addingTimeInterval(TimeInterval(segment.startOffset * 60))
         let end = start.addingTimeInterval(TimeInterval(segment.minutes * 60))
-        let icon = segment.type == "work" ? "brain.head.profile"
-            : segment.type == "long" ? "moon.zzz"
-            : "cup.and.saucer"
-        let color: Color = segment.type == "work" ? .primary
-            : segment.type == "long" ? .indigo
-            : .green
+        let color = segmentColor(for: segment.type)
+        let icon = segmentIcon(for: segment.type)
+        let label = segmentLabel(for: segment.type)
+        let isLast = index == total - 1
 
-        return HStack(spacing: DS.Spacing.xs) {
-            Image(systemName: icon)
-                .font(.system(size: 9))
-                .foregroundColor(color)
-                .frame(width: DS.Spacing.lg)
-            Text("\(DS.timeFormatter.string(from: start))–\(DS.timeFormatter.string(from: end))")
-                .font(.system(.caption2, design: .monospaced))
-                .foregroundColor(.secondary)
+        return HStack(spacing: DS.Spacing.sm) {
+            // Left: icon dot with connecting line
+            VStack(spacing: 0) {
+                Circle()
+                    .fill(color)
+                    .frame(width: 12, height: 12)
+                    .overlay {
+                        Image(systemName: icon)
+                            .font(.system(size: 6, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
+                if !isLast {
+                    Rectangle()
+                        .fill(color.opacity(0.2))
+                        .frame(width: 1.5)
+                        .frame(maxHeight: .infinity)
+                }
+            }
+            .frame(width: 12)
+
+            // Right: time and label
+            VStack(alignment: .leading, spacing: 1) {
+                Text("\(DS.timeFormatter.string(from: start)) – \(DS.timeFormatter.string(from: end))")
+                    .font(.system(.caption, design: .monospaced, weight: .medium))
+                    .foregroundColor(.primary)
+                Text("\(label) · \(segment.minutes) min")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.bottom, isLast ? 0 : DS.Spacing.xs)
         }
     }
 
-    private func legendItem(color: Color, label: String) -> some View {
-        HStack(spacing: DS.Spacing.xs) {
-            Circle().fill(color).frame(width: DS.Size.todayDotSize, height: DS.Size.todayDotSize)
-            Text(label).font(.caption2).foregroundColor(.secondary)
+    private func legendItem(color: Color, icon: String, label: String) -> some View {
+        HStack(spacing: DS.Spacing.xxs) {
+            Image(systemName: icon)
+                .font(.system(size: 8))
+                .foregroundStyle(color)
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
     }
 
