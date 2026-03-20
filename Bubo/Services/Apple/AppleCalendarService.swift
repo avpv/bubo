@@ -134,7 +134,8 @@ class AppleCalendarService {
                 location: ek.location,
                 description: ek.notes,
                 calendarName: ek.calendar.title,
-                seriesId: ek.hasRecurrenceRules ? baseId : nil
+                seriesId: ek.hasRecurrenceRules ? baseId : nil,
+                eventType: .standard
             )
         }
     }

@@ -135,7 +135,7 @@ struct EventRowView: View {
                     .fontWeight(.medium)
                     .lineLimit(2)
 
-                if event.recurrenceRule?.isPomodoro == true {
+                if event.eventType == .pomodoro {
                     Image(systemName: "timer")
                         .font(.system(size: DS.Size.iconSmall))
                         .foregroundColor(DS.Colors.warning)

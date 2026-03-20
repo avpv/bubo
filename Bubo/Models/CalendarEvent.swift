@@ -1,5 +1,13 @@
 import Foundation
 
+// MARK: - Event Type
+
+/// Distinguishes regular calendar events from Pomodoro sessions.
+enum EventType: String, Codable, Hashable {
+    case standard
+    case pomodoro
+}
+
 struct CalendarEvent: Identifiable, Codable, Hashable {
     let id: String
     let title: String
@@ -12,6 +20,8 @@ struct CalendarEvent: Identifiable, Codable, Hashable {
     var recurrenceRule: RecurrenceRule?
     /// Non-nil when this event is an expanded occurrence of a recurring series.
     var seriesId: String?
+    /// The type of event — standard calendar event or Pomodoro session.
+    var eventType: EventType
 
     // MARK: - Static formatters (avoid re-creation per call)
 

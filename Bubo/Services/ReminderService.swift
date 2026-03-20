@@ -347,7 +347,8 @@ class ReminderService {
                 calendarName: event.calendarName,
                 customReminderMinutes: event.customReminderMinutes,
                 recurrenceRule: event.recurrenceRule,
-                seriesId: event.seriesId
+                seriesId: event.seriesId,
+                eventType: event.eventType
             )
             updateLocalEvent(updatedEvent)
         } else {
