@@ -635,18 +635,16 @@ struct AddEventView: View {
                 ForEach(Array(segments.prefix(2).enumerated()), id: \.offset) { idx, segment in
                     scheduleRow(segment, index: idx, total: segments.count)
                 }
-                HStack(spacing: DS.Spacing.xs) {
-                    // Connecting line
+                HStack(spacing: DS.Spacing.sm) {
+                    // Connecting line centered in the same 12pt column as dots
                     Rectangle()
                         .fill(Color.secondary.opacity(0.15))
-                        .frame(width: 1.5)
-                        .frame(height: 16)
-                        .padding(.leading, 5)
+                        .frame(width: 1.5, height: 16)
+                        .frame(width: 12)
                     Text("\(segments.count - 4) more")
                         .font(.system(.caption2, design: .rounded))
                         .foregroundStyle(.tertiary)
                 }
-                .padding(.leading, DS.Spacing.xs)
                 ForEach(Array(segments.suffix(2).enumerated()), id: \.offset) { idx, segment in
                     scheduleRow(segment, index: segments.count - 2 + idx, total: segments.count)
                 }
@@ -666,9 +664,15 @@ struct AddEventView: View {
         let label = segmentLabel(for: segment.type)
         let isLast = index == total - 1
 
-        return HStack(spacing: DS.Spacing.sm) {
+        return HStack(alignment: .top, spacing: DS.Spacing.sm) {
             // Left: icon dot with connecting line
-            VStack(spacing: 0) {
+            ZStack(alignment: .top) {
+                if !isLast {
+                    Rectangle()
+                        .fill(color.opacity(0.2))
+                        .frame(width: 1.5)
+                        .frame(maxHeight: .infinity)
+                }
                 Circle()
                     .fill(color)
                     .frame(width: 12, height: 12)
@@ -677,12 +681,6 @@ struct AddEventView: View {
                             .font(.system(size: 6, weight: .bold))
                             .foregroundStyle(.white)
                     }
-                if !isLast {
-                    Rectangle()
-                        .fill(color.opacity(0.2))
-                        .frame(width: 1.5)
-                        .frame(maxHeight: .infinity)
-                }
             }
             .frame(width: 12)
 
