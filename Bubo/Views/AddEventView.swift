@@ -195,6 +195,9 @@ struct AddEventView: View {
                                                 .tag(cal.id)
                                         }
                                     }
+                                    .pickerStyle(.menu)
+                                    .controlSize(.large)
+                                    .frame(height: DS.Size.controlHeight)
                                 }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
