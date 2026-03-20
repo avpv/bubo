@@ -30,7 +30,7 @@ struct EventDetailView: View {
     var body: some View {
         VStack(spacing: 0) {
             PopoverHeader(
-                title: isLocal ? "Event" : nil,
+                title: isLocal ? (event.eventType == .pomodoro ? "Pomodoro" : "Event") : nil,
                 showBack: true,
                 onBack: onBack
             )
@@ -111,9 +111,15 @@ struct EventDetailView: View {
                             .staggeredEntrance(index: 4)
                     }
 
-                    // Recurrence
+                    // Recurrence / Pomodoro info
                     if let rule = event.recurrenceRule {
                         recurrenceSection(rule)
+                            .staggeredEntrance(index: 5)
+                    } else if event.eventType == .pomodoro {
+                        Label("Pomodoro", systemImage: "timer")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundStyle(DS.Colors.textTertiary)
                             .staggeredEntrance(index: 5)
                     }
 
@@ -235,8 +241,8 @@ struct EventDetailView: View {
     private func recurrenceSection(_ rule: RecurrenceRule) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             Label(
-                rule.isPomodoro ? "Pomodoro" : "Repeats",
-                systemImage: rule.isPomodoro ? "timer" : "repeat"
+                event.eventType == .pomodoro ? "Pomodoro" : "Repeats",
+                systemImage: event.eventType == .pomodoro ? "timer" : "repeat"
             )
             .font(.caption)
             .fontWeight(.medium)
@@ -246,7 +252,7 @@ struct EventDetailView: View {
                 .font(.subheadline)
                 .foregroundColor(DS.Colors.textSecondary)
 
-            if rule.isPomodoro {
+            if event.eventType == .pomodoro {
                 let workMin = Int(event.endDate.timeIntervalSince(event.startDate) / 60)
                 let breakMin = max(rule.interval - workMin, 0)
                 FlowLayout(spacing: DS.Spacing.xs) {

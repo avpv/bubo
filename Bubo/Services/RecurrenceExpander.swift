@@ -68,7 +68,8 @@ enum RecurrenceExpander {
                         calendarName: event.calendarName,
                         customReminderMinutes: event.customReminderMinutes,
                         recurrenceRule: event.recurrenceRule,
-                        seriesId: event.id
+                        seriesId: event.id,
+                        eventType: event.eventType
                     )
                     occurrences.append(occurrence)
                 }
@@ -95,7 +96,8 @@ enum RecurrenceExpander {
                     calendarName: event.calendarName,
                     customReminderMinutes: [0],
                     recurrenceRule: event.recurrenceRule,
-                    seriesId: event.id
+                    seriesId: event.id,
+                    eventType: .pomodoro
                 )
                 occurrences.append(longBreakEvent)
             }
