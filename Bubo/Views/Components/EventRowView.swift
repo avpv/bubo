@@ -5,6 +5,8 @@ struct EventRowView: View {
     let reminderService: ReminderService
     var onEdit: ((CalendarEvent) -> Void)? = nil
     var onDelete: ((CalendarEvent) -> Void)? = nil
+    var onDeleteOccurrence: ((CalendarEvent) -> Void)? = nil
+    var onDeleteSeries: ((CalendarEvent) -> Void)? = nil
     var onTap: ((CalendarEvent) -> Void)? = nil
 
     @State private var isHovered = false
@@ -89,7 +91,14 @@ struct EventRowView: View {
             if isLocal {
                 Divider()
                 Button("Edit") { onEdit?(event) }
-                Button("Delete", role: .destructive) { onDelete?(event) }
+                if event.isRecurring {
+                    Menu("Delete") {
+                        Button("Delete This Event Only", role: .destructive) { onDeleteOccurrence?(event) }
+                        Button("Delete All Events", role: .destructive) { onDeleteSeries?(event) }
+                    }
+                } else {
+                    Button("Delete", role: .destructive) { onDelete?(event) }
+                }
             }
         }
     }
@@ -181,17 +190,39 @@ struct EventRowView: View {
             }
 
             if isLocal {
-                Button {
-                    Haptics.impact()
-                    onDelete?(event)
-                } label: {
-                    Image(systemName: "minus.circle.fill")
-                        .font(.system(size: DS.Size.iconLarge))
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(DS.Colors.error)
+                if event.isRecurring {
+                    Menu {
+                        Button("Delete This Event Only", role: .destructive) {
+                            Haptics.impact()
+                            onDeleteOccurrence?(event)
+                        }
+                        Button("Delete All Events", role: .destructive) {
+                            Haptics.impact()
+                            onDeleteSeries?(event)
+                        }
+                    } label: {
+                        Image(systemName: "minus.circle.fill")
+                            .font(.system(size: DS.Size.iconLarge))
+                            .symbolRenderingMode(.hierarchical)
+                            .foregroundStyle(DS.Colors.error)
+                    }
+                    .buttonStyle(.borderless)
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                    .help("Delete recurring event")
+                } else {
+                    Button {
+                        Haptics.impact()
+                        onDelete?(event)
+                    } label: {
+                        Image(systemName: "minus.circle.fill")
+                            .font(.system(size: DS.Size.iconLarge))
+                            .symbolRenderingMode(.hierarchical)
+                            .foregroundStyle(DS.Colors.error)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Delete event")
                 }
-                .buttonStyle(.borderless)
-                .help("Delete event")
             }
         }
         .transition(

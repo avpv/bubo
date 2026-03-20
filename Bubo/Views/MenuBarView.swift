@@ -8,8 +8,6 @@ struct MenuBarView: View {
     @State private var navigation: Navigation = .list
     @State private var hasStartedSync = false
     @State private var toastState = ToastState()
-    @State private var pendingDeleteEvent: CalendarEvent? = nil
-    @State private var showRecurrenceDeleteDialog = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -99,29 +97,6 @@ struct MenuBarView: View {
 
             ToastOverlay(toastState: toastState)
         }
-        // Scope-of-delete dialog for list-level deletes on recurring events
-        .alert(
-            "Delete Recurring Event",
-            isPresented: $showRecurrenceDeleteDialog,
-            presenting: pendingDeleteEvent
-        ) { event in
-            Button("Delete This Event Only") {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    reminderService.excludeOccurrence(occurrenceId: event.id)
-                    toastState.showSuccess("Occurrence skipped", icon: "trash.fill")
-                }
-            }
-            Button("Delete All Events") {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    let seriesId = event.seriesId ?? event.id
-                    reminderService.removeLocalEvent(id: seriesId)
-                    toastState.showSuccess("All occurrences deleted", icon: "trash.fill")
-                }
-            }
-            Button("Cancel", role: .cancel) { }
-        } message: { event in
-            Text("\"\(event.title)\" is a recurring event.")
-        }
         .onAppear {
             guard !hasStartedSync else { return }
             hasStartedSync = true
@@ -141,13 +116,8 @@ struct MenuBarView: View {
     }
 
     private func handleDelete(_ event: CalendarEvent) {
-        if event.isRecurring {
-            pendingDeleteEvent = event
-            showRecurrenceDeleteDialog = true
-        } else {
-            reminderService.removeLocalEvent(id: event.id)
-            toastState.showSuccess("Event deleted", icon: "trash.fill")
-        }
+        reminderService.removeLocalEvent(id: event.id)
+        toastState.showSuccess("Event deleted", icon: "trash.fill")
     }
 
     // MARK: - Main Content
@@ -286,6 +256,15 @@ struct MenuBarView: View {
                                     reminderService: reminderService,
                                     onEdit: { event in resolveEdit(event) },
                                     onDelete: { event in handleDelete(event) },
+                                    onDeleteOccurrence: { event in
+                                        reminderService.excludeOccurrence(occurrenceId: event.id)
+                                        toastState.showSuccess("Occurrence skipped", icon: "trash.fill")
+                                    },
+                                    onDeleteSeries: { event in
+                                        let seriesId = event.seriesId ?? event.id
+                                        reminderService.removeLocalEvent(id: seriesId)
+                                        toastState.showSuccess("All occurrences deleted", icon: "trash.fill")
+                                    },
                                     onTap: { event in
                                         navigation = .detail(event)
                                     }
