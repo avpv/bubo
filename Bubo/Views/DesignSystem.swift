@@ -199,9 +199,11 @@ enum DS {
     }
 
     static let snoozeOptions: [SnoozeOption] = [
+        SnoozeOption(2),
         SnoozeOption(5),
         SnoozeOption(10),
         SnoozeOption(15),
+        SnoozeOption(20),
     ]
 
     // MARK: Ordinal Formatting
