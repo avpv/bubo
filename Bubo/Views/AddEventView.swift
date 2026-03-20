@@ -134,6 +134,39 @@ struct AddEventView: View {
                     .disabled(isExternal)
                     .opacity(isExternal ? 0.6 : 1.0)
 
+                    // Calendar
+                    if !isEditing {
+                        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                            VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                                Toggle("Add to Calendar", isOn: $addToCalendar)
+
+                                if addToCalendar && !availableCalendars.isEmpty {
+                                    Picker("Calendar", selection: $selectedCalendarId) {
+                                        ForEach(availableCalendars) { cal in
+                                            Text(cal.title)
+                                                .tag(cal.id)
+                                        }
+                                    }
+                                    .pickerStyle(.menu)
+                                    .controlSize(.large)
+                                    .frame(height: DS.Size.controlHeight)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(DS.Spacing.md)
+                            .background(DS.Materials.platter)
+                            .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
+                            .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
+
+                            if !addToCalendar {
+                                Text("Event will be stored locally in Bubo only")
+                                    .font(.caption)
+                                    .foregroundColor(DS.Colors.textSecondary)
+                                    .padding(.horizontal, DS.Spacing.sm)
+                            }
+                        }
+                    }
+
                     // Details
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                         Text("Details")
@@ -181,39 +214,6 @@ struct AddEventView: View {
                     }
                     .disabled(isExternal)
                     .opacity(isExternal ? 0.6 : 1.0)
-
-                    // Calendar
-                    if !isEditing {
-                        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                            VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                                Toggle("Add to Calendar", isOn: $addToCalendar)
-
-                                if addToCalendar && !availableCalendars.isEmpty {
-                                    Picker("Calendar", selection: $selectedCalendarId) {
-                                        ForEach(availableCalendars) { cal in
-                                            Text(cal.title)
-                                                .tag(cal.id)
-                                        }
-                                    }
-                                    .pickerStyle(.menu)
-                                    .controlSize(.large)
-                                    .frame(height: DS.Size.controlHeight)
-                                }
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(DS.Spacing.md)
-                            .background(DS.Materials.platter)
-                            .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
-                            .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
-
-                            if !addToCalendar {
-                                Text("Event will be stored locally in Bubo only")
-                                    .font(.caption)
-                                    .foregroundColor(DS.Colors.textSecondary)
-                                    .padding(.horizontal, DS.Spacing.sm)
-                            }
-                        }
-                    }
 
                     // Reminders
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
