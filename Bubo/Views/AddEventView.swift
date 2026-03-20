@@ -570,7 +570,7 @@ struct AddEventView: View {
                         .foregroundStyle(.tertiary)
                     + Text(" work:rest")
                         .font(.caption2)
-                        .foregroundColor(.tertiary)
+                        .foregroundStyle(.tertiary)
                 }
             }
 
