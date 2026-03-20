@@ -168,6 +168,13 @@ struct AddEventView: View {
                     .disabled(isExternal)
                     .opacity(isExternal ? 0.6 : 1.0)
 
+                    // Pomodoro controls (only when Pomodoro type selected)
+                    if isPomodoroMode {
+                        pomodoroSection
+                            .disabled(isExternal)
+                            .opacity(isExternal ? 0.6 : 1.0)
+                    }
+
                     // Calendar
                     if !isEditing {
                         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
@@ -236,13 +243,6 @@ struct AddEventView: View {
                     }
                     .disabled(isExternal)
                     .opacity(isExternal ? 0.6 : 1.0)
-
-                    // Pomodoro controls (only when Pomodoro type selected)
-                    if isPomodoroMode {
-                        pomodoroSection
-                            .disabled(isExternal)
-                            .opacity(isExternal ? 0.6 : 1.0)
-                    }
 
                     // Recurrence (only for standard events)
                     if !isPomodoroMode {
