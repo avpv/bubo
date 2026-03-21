@@ -58,9 +58,10 @@ enum RecurrenceExpander {
                 let isDateExcluded = !excludedDates.isEmpty && excludedDates.contains { abs($0.timeIntervalSince(current)) < 1 }
 
                 if !excludedIds.contains(occurrenceId) && !isDateExcluded {
+                    let workTitle = rule.isPomodoro ? "🧠 \(event.title) — Work" : event.title
                     let occurrence = CalendarEvent(
                         id: occurrenceId,
-                        title: event.title,
+                        title: workTitle,
                         startDate: current,
                         endDate: current.addingTimeInterval(duration),
                         location: event.location,
