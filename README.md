@@ -14,6 +14,10 @@ You're in the middle of writing the best code of your life. The flow state is re
 
 **This happens twelve times a day.**
 
+<p align="center">
+  <img src="screenshots/story_flow_broken.svg" alt="Flow state broken by notifications" width="700">
+</p>
+
 Bubo was built for people who are tired of this cycle. It's a native macOS menu bar app that quietly watches your schedule, blocks your focus time, and only interrupts you when it truly matters — like an owl perched above, seeing everything, disturbing nothing.
 
 ---
@@ -52,6 +56,10 @@ Toggle Pomodoro mode when creating an event, and Bubo locks you into a focus ses
 
 When it's time to break, a full-screen alert rises — not a dismissible notification you'll ignore, but an unmissable signal that your brain needs rest.
 
+<p align="center">
+  <img src="screenshots/story_pomodoro.svg" alt="Pomodoro focus cycle" width="700">
+</p>
+
 Choose the rhythm that fits how you think:
 
 | Rhythm | Work | Break | Rounds |
@@ -75,11 +83,19 @@ And tomorrow at 9:00 you have a standup you've already missed twice.
 
 With any other calendar app, that meeting would announce itself as a shy little banner in the top-right corner. You'd swipe it away without reading it, the way you've done a thousand times before. Or worse — you'd never see it at all, because notifications were silenced for "Focus Mode."
 
+<p align="center">
+  <img src="screenshots/story_vibe_coding.svg" alt="Without vs With Bubo comparison" width="700">
+</p>
+
 **Bubo doesn't do that.** When your meeting is approaching, the entire screen goes dark. A countdown timer fills your display — the meeting title, the time remaining, ticking down second by second. You cannot miss it. You cannot accidentally dismiss it. It is *there*, demanding exactly one decision: go to the meeting, or snooze.
 
 This is the feature people didn't know they needed until they had it.
 
 ### Reminders You Actually Configure
+
+<p align="center">
+  <img src="screenshots/story_reminders.svg" alt="Stacking reminder intervals" width="650">
+</p>
 
 The beauty is in the setup. Open Settings, and you'll see a clean list of reminder intervals. Want to be nudged **30 minutes** before a big presentation, then again at **5 minutes**, then a final **1-minute** alert? Add all three. Want just a single 10-minute heads-up for daily standups? Done.
 
