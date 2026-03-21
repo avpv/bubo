@@ -94,7 +94,7 @@ enum RecurrenceExpander {
                             let breakEnd = breakStart.addingTimeInterval(TimeInterval(breakMinutes * 60))
                             let breakEvent = CalendarEvent(
                                 id: breakId,
-                                title: event.title,
+                                title: "☕ \(event.title) — Break",
                                 startDate: breakStart,
                                 endDate: breakEnd,
                                 location: nil,
@@ -122,7 +122,7 @@ enum RecurrenceExpander {
             if !excludedIds.contains(longBreakId) {
                 let longBreakEvent = CalendarEvent(
                     id: longBreakId,
-                    title: event.title,
+                    title: "🌙 \(event.title) — Long Break",
                     startDate: longBreakStart,
                     endDate: longBreakEnd,
                     location: nil,
