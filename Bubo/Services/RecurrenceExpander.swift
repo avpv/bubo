@@ -58,7 +58,7 @@ enum RecurrenceExpander {
                 let isDateExcluded = !excludedDates.isEmpty && excludedDates.contains { abs($0.timeIntervalSince(current)) < 1 }
 
                 if !excludedIds.contains(occurrenceId) && !isDateExcluded {
-                    let workTitle = rule.isPomodoro ? "🧠 \(event.title) — Work" : event.title
+                    let workTitle = rule.isPomodoro ? "\(event.title) — Work" : event.title
                     let occurrence = CalendarEvent(
                         id: occurrenceId,
                         title: workTitle,
@@ -95,7 +95,7 @@ enum RecurrenceExpander {
                             let breakEnd = breakStart.addingTimeInterval(TimeInterval(breakMinutes * 60))
                             let breakEvent = CalendarEvent(
                                 id: breakId,
-                                title: "☕ \(event.title) — Break",
+                                title: "\(event.title) — Break",
                                 startDate: breakStart,
                                 endDate: breakEnd,
                                 location: nil,
@@ -123,7 +123,7 @@ enum RecurrenceExpander {
             if !excludedIds.contains(longBreakId) {
                 let longBreakEvent = CalendarEvent(
                     id: longBreakId,
-                    title: "🌙 \(event.title) — Long Break",
+                    title: "\(event.title) — Long Break",
                     startDate: longBreakStart,
                     endDate: longBreakEnd,
                     location: nil,

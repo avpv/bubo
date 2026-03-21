@@ -71,4 +71,37 @@ struct CalendarEvent: Identifiable, Codable, Hashable {
     var formattedTimeRange: String {
         "\(Self.timeFormatter.string(from: startDate)) – \(Self.timeFormatter.string(from: endDate))"
     }
+
+    // MARK: - Pomodoro Segment
+
+    /// The type of segment within a Pomodoro session.
+    enum PomodoroSegment {
+        case work
+        case shortBreak
+        case longBreak
+
+        var iconName: String {
+            switch self {
+            case .work: "brain.head.profile"
+            case .shortBreak: "cup.and.saucer"
+            case .longBreak: "moon.zzz"
+            }
+        }
+
+        var label: String {
+            switch self {
+            case .work: "Work"
+            case .shortBreak: "Break"
+            case .longBreak: "Long break"
+            }
+        }
+    }
+
+    /// Determines the Pomodoro segment type based on event ID pattern.
+    var pomodoroSegment: PomodoroSegment? {
+        guard eventType == .pomodoro else { return nil }
+        if id.contains("_longbreak") { return .longBreak }
+        if id.contains("_break") { return .shortBreak }
+        return .work
+    }
 }
