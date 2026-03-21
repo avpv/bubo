@@ -67,13 +67,33 @@ Read the full [Pomodoro & Workflow Guide →](docs/Pomodoro.md)
 
 ---
 
-## The Details That Matter
+## You Will Not Miss a Meeting Again
 
-**Reminders that actually work.** Set as many as you want — 1 minute, 5 minutes, 30 minutes before. When a meeting is approaching, Bubo doesn't send a quiet ping you'll swipe away. It shows a full-screen countdown with a live timer. You will not miss a meeting again.
+It's 2 AM. You're deep in a vibe coding session — the AI is generating, you're reviewing, the terminal is hot. Three tabs of docs, a half-finished refactor, and a Spotify playlist that hasn't changed in four hours. You are *in it*.
 
-**Snooze without guilt.** Not ready? Hit snooze right from the alert. Bubo will come back.
+And tomorrow at 9:00 you have a standup you've already missed twice.
 
-**Do Not Disturb.** Set quiet hours. Bubo goes silent. No reminders, no alerts, no interruptions — until you're ready.
+With any other calendar app, that meeting would announce itself as a shy little banner in the top-right corner. You'd swipe it away without reading it, the way you've done a thousand times before. Or worse — you'd never see it at all, because notifications were silenced for "Focus Mode."
+
+**Bubo doesn't do that.** When your meeting is approaching, the entire screen goes dark. A countdown timer fills your display — the meeting title, the time remaining, ticking down second by second. You cannot miss it. You cannot accidentally dismiss it. It is *there*, demanding exactly one decision: go to the meeting, or snooze.
+
+This is the feature people didn't know they needed until they had it.
+
+### Reminders You Actually Configure
+
+The beauty is in the setup. Open Settings, and you'll see a clean list of reminder intervals. Want to be nudged **30 minutes** before a big presentation, then again at **5 minutes**, then a final **1-minute** alert? Add all three. Want just a single 10-minute heads-up for daily standups? Done.
+
+Stack as many intervals as you want — 1, 2, 3, 5, 10, 15, 20, 30, 45, 60 minutes — in any combination. Each event can even have its own custom overrides, so your "Lunch with Dad" gets a gentle 15-minute nudge while your "Board Review" gets the full 60 → 30 → 10 → 5 → 1 escalation sequence.
+
+No confusing menus. No hidden preferences buried three screens deep. Just a list of times, and a toggle.
+
+### Snooze Without Guilt
+
+Not ready when the alert hits? Hit **Snooze** right from the full-screen overlay. Bubo steps back and comes again later. No judgment.
+
+### Do Not Disturb
+
+Sometimes you *want* silence. Set quiet hours — say, 10 PM to 7 AM — and Bubo goes completely dark. No reminders, no alerts, no full-screen takeovers. Just peace. Until the morning comes and the owl wakes up again.
 
 **Built like a Mac app should be.** Frosted glass. Spring animations. Haptic feedback. Bubo doesn't look like an Electron wrapper or a web view pretending to be native. It's Swift and SwiftUI from the first line to the last, designed to feel like it shipped with your Mac.
 
