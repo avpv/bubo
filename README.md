@@ -18,11 +18,11 @@ You're in the middle of writing the best code of your life. The flow state is re
   <img src="screenshots/story_flow_broken.svg" alt="Flow state broken by notifications" width="700">
 </p>
 
-Bubo was built for people who are tired of this cycle. It's a native macOS menu bar app that quietly watches your schedule, blocks your focus time, and only interrupts you when it truly matters — like an owl perched above, seeing everything, disturbing nothing.
+Bubo was built for people who are tired of this cycle. It's a native macOS menu bar app that quietly watches your schedule, blocks your focus time, and only interrupts you when it truly matters — like an eagle-owl perched above, seeing everything, disturbing nothing.
 
 ---
 
-## The Moment You Click the Owl
+## The Moment You Click the Eagle-Owl
 
 <img src="screenshots/ui_timeline.png" alt="Daily Timeline" width="300" align="right">
 
@@ -109,7 +109,7 @@ Not ready when the alert hits? Hit **Snooze** right from the full-screen overlay
 
 ### Do Not Disturb
 
-Sometimes you *want* silence. Set quiet hours — say, 10 PM to 7 AM — and Bubo goes completely dark. No reminders, no alerts, no full-screen takeovers. Just peace. Until the morning comes and the owl wakes up again.
+Sometimes you *want* silence. Set quiet hours — say, 10 PM to 7 AM — and Bubo goes completely dark. No reminders, no alerts, no full-screen takeovers. Just peace. Until the morning comes and the eagle-owl wakes up again.
 
 **Built like a Mac app should be.** Frosted glass. Spring animations. Haptic feedback. Bubo doesn't look like an Electron wrapper or a web view pretending to be native. It's Swift and SwiftUI from the first line to the last, designed to feel like it shipped with your Mac.
 
