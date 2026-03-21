@@ -235,7 +235,26 @@ class ReminderService {
 
     func addCalendarEvent(_ event: CalendarEvent, calendarId: String? = nil) {
         do {
-            try AppleCalendarService.shared.createEvent(event, calendarId: calendarId)
+            // For pomodoro events, expand into work + break + long break events
+            if event.eventType == .pomodoro, event.recurrenceRule?.isPomodoro == true {
+                let expanded = RecurrenceExpander.expand(event)
+                for occurrence in expanded {
+                    // Create each expanded event without recurrence rule (they are individual events)
+                    let calEvent = CalendarEvent(
+                        id: occurrence.id,
+                        title: occurrence.title,
+                        startDate: occurrence.startDate,
+                        endDate: occurrence.endDate,
+                        location: occurrence.location,
+                        description: occurrence.description,
+                        calendarName: occurrence.calendarName,
+                        eventType: occurrence.eventType
+                    )
+                    try AppleCalendarService.shared.createEvent(calEvent, calendarId: calendarId)
+                }
+            } else {
+                try AppleCalendarService.shared.createEvent(event, calendarId: calendarId)
+            }
             syncNow()
         } catch {
             print("Failed to create Apple Calendar event: \(error)")

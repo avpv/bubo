@@ -144,12 +144,12 @@ struct EventRowView: View {
                     .fontWeight(.medium)
                     .lineLimit(2)
 
-                if event.eventType == .pomodoro {
-                    Image(systemName: "timer")
+                if let segment = event.pomodoroSegment {
+                    Image(systemName: segment.iconName)
                         .font(.system(size: DS.Size.iconSmall))
-                        .foregroundColor(DS.Colors.warning)
+                        .foregroundColor(pomodoroSegmentColor(segment))
                         .contentTransition(.symbolEffect(.replace))
-                        .accessibilityLabel("Pomodoro")
+                        .accessibilityLabel(segment.label)
                 }
             }
 
@@ -265,6 +265,14 @@ struct EventRowView: View {
             return "\(hours)h \(mins)m left"
         }
         return "now"
+    }
+
+    private func pomodoroSegmentColor(_ segment: CalendarEvent.PomodoroSegment) -> Color {
+        switch segment {
+        case .work: .accentColor
+        case .shortBreak: .green
+        case .longBreak: .indigo
+        }
     }
 
     private var eventProgress: Double {
