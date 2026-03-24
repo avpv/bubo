@@ -16,7 +16,7 @@ struct BuboApp: App {
     private func drawOwl(in ctx: CGContext, size s: CGFloat, color: CGColor) {
         ctx.setShouldAntialias(true)
         ctx.setAllowsAntialiasing(true)
-        ctx.setInterpolationQuality(.high)
+        ctx.interpolationQuality = .high
         ctx.setFillColor(color)
 
         // Owl body (rounded rect)
@@ -140,7 +140,7 @@ struct BuboApp: App {
             ctx.scaleBy(x: scale, y: scale)
 
             // Determine icon color based on current appearance (light/dark menu bar)
-            let isDark = NSAppearance.current.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            let isDark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
             let iconColor = isDark ? NSColor.white.cgColor : NSColor.black.cgColor
 
             // Draw owl icon shifted up to make room for badge overflow at the bottom

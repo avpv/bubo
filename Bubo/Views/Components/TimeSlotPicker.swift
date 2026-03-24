@@ -52,7 +52,7 @@ struct TimeSlotPicker: View {
                             hasScrolledToInitial = true
                         }
                     }
-                    .onChange(of: selection) { _ in
+                    .onChange(of: selection) {
                         if let nearestId = nearestAvailableSlotID(in: slots) {
                             withAnimation(DS.Animation.microInteraction) {
                                 proxy.scrollTo(nearestId, anchor: .center)
