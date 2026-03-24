@@ -67,6 +67,10 @@ struct BuboApp: App {
         return image
     }
 
+    private var badgeCount: Int {
+        reminderService.badgeCount
+    }
+
     var body: some Scene {
         MenuBarExtra {
             MenuBarView(
@@ -75,7 +79,15 @@ struct BuboApp: App {
                 networkMonitor: networkMonitor
             )
         } label: {
-            Image(nsImage: menuBarIcon)
+            if badgeCount > 0 {
+                Label {
+                    Text("\(badgeCount)")
+                } icon: {
+                    Image(nsImage: menuBarIcon)
+                }
+            } else {
+                Image(nsImage: menuBarIcon)
+            }
         }
         .menuBarExtraStyle(.window)
 

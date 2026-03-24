@@ -34,6 +34,25 @@ class ReminderService {
             .sorted { $0.startDate < $1.startDate }
     }
 
+    /// Number of remaining events to show as badge on the menu bar icon.
+    var badgeCount: Int {
+        guard settings.showBadgeCount else { return 0 }
+        let calendar = Calendar.current
+        let now = Date()
+
+        let cutoff: Date
+        switch settings.badgeCountMode {
+        case .wholeDay:
+            cutoff = calendar.startOfDay(for: now).addingTimeInterval(24 * 60 * 60)
+        case .timeWindow:
+            cutoff = now.addingTimeInterval(TimeInterval(settings.badgeTimeWindowHours) * 60 * 60)
+        }
+
+        return allEvents.filter { event in
+            event.startDate >= now && event.startDate < cutoff
+        }.count
+    }
+
     /// Events grouped by day for display
     var eventsByDay: [(date: Date, events: [CalendarEvent])] {
         let calendar = Calendar.current
