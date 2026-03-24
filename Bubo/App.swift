@@ -26,30 +26,17 @@ struct BuboApp: App {
         ctx.addPath(bodyPath)
         ctx.fillPath()
 
-        // Left ear (smooth curve)
-        let leftEar = CGMutablePath()
-        leftEar.move(to: CGPoint(x: s * 0.15, y: s * 0.65))
-        leftEar.addCurve(to: CGPoint(x: s * 0.28, y: s * 0.92),
-                         control1: CGPoint(x: s * 0.14, y: s * 0.78),
-                         control2: CGPoint(x: s * 0.20, y: s * 0.90))
-        leftEar.addCurve(to: CGPoint(x: s * 0.38, y: s * 0.7),
-                         control1: CGPoint(x: s * 0.34, y: s * 0.90),
-                         control2: CGPoint(x: s * 0.38, y: s * 0.78))
-        leftEar.closeSubpath()
-        ctx.addPath(leftEar)
+        // Ears (two triangles)
+        ctx.move(to: CGPoint(x: s * 0.15, y: s * 0.65))
+        ctx.addLine(to: CGPoint(x: s * 0.28, y: s * 0.92))
+        ctx.addLine(to: CGPoint(x: s * 0.38, y: s * 0.7))
+        ctx.closePath()
         ctx.fillPath()
 
-        // Right ear (smooth curve)
-        let rightEar = CGMutablePath()
-        rightEar.move(to: CGPoint(x: s * 0.85, y: s * 0.65))
-        rightEar.addCurve(to: CGPoint(x: s * 0.72, y: s * 0.92),
-                          control1: CGPoint(x: s * 0.86, y: s * 0.78),
-                          control2: CGPoint(x: s * 0.80, y: s * 0.90))
-        rightEar.addCurve(to: CGPoint(x: s * 0.62, y: s * 0.7),
-                          control1: CGPoint(x: s * 0.66, y: s * 0.90),
-                          control2: CGPoint(x: s * 0.62, y: s * 0.78))
-        rightEar.closeSubpath()
-        ctx.addPath(rightEar)
+        ctx.move(to: CGPoint(x: s * 0.85, y: s * 0.65))
+        ctx.addLine(to: CGPoint(x: s * 0.72, y: s * 0.92))
+        ctx.addLine(to: CGPoint(x: s * 0.62, y: s * 0.7))
+        ctx.closePath()
         ctx.fillPath()
 
         // Eyes (cut out circles — clear)
@@ -112,20 +99,21 @@ struct BuboApp: App {
         let bottomOverflow = max(0, overlapY - 1)
         let totalHeight = iconSize + bottomOverflow
 
-        let imgSize = NSSize(width: totalWidth, height: totalHeight)
-
-        // Pre-render the template owl icon resolved for current menu bar appearance
-        let owlTemplate = menuBarIcon
-
-        let image = NSImage(size: imgSize, flipped: false) { rect in
+        let image = NSImage(size: NSSize(width: totalWidth, height: totalHeight), flipped: false) { rect in
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
 
-            // Draw the template owl icon — the system resolves it for the current
-            // menu bar appearance (vibrancy, proper dark/light color & opacity)
-            let owlRect = NSRect(x: 0, y: bottomOverflow + 2, width: iconSize, height: iconSize)
-            owlTemplate.draw(in: owlRect, from: .zero, operation: .sourceOver, fraction: 1.0)
+            // Determine icon color based on current appearance (light/dark menu bar)
+            let isDark = NSAppearance.current.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            let iconColor = isDark ? NSColor.white.cgColor : NSColor.black.cgColor
+
+            // Draw owl icon shifted up to make room for badge overflow at the bottom
+            ctx.saveGState()
+            ctx.translateBy(x: 0, y: bottomOverflow + 2)
+            self.drawOwl(in: ctx, size: iconSize, color: iconColor)
+            ctx.restoreGState()
 
             // Cut out a circular area from the owl where the badge will sit
+            // This creates the knockout/punch-out effect shown in the design
             let badgeX = iconSize - overlapX
             let badgeY: CGFloat = bottomOverflow - overlapY + 1
             let badgeRect = NSRect(x: badgeX, y: badgeY, width: badgeWidth, height: badgeDiameter)
