@@ -470,10 +470,6 @@ class ReminderService {
     }
 
     private func fireReminder(for event: CalendarEvent, minutesBefore: Int, isSnooze: Bool) {
-        if !isSnooze && settings.isDoNotDisturbActive {
-            return
-        }
-
         if settings.showSystemNotification {
             sendNotification(for: event, minutesBefore: minutesBefore, isSnooze: isSnooze)
         }
