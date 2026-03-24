@@ -5,6 +5,9 @@ import AppKit
 @MainActor
 @Observable
 class ReminderService {
+    /// How many days ahead to fetch events. Used as the ceiling for badge time window.
+    static let fetchWindowDays = 7
+
     var upcomingEvents: [CalendarEvent] = []
     var localEvents: [CalendarEvent] = []
     var lastSyncDate: Date?
@@ -32,6 +35,25 @@ class ReminderService {
         return (upcomingEvents + expandedLocal)
             .filter { $0.isUpcoming }
             .sorted { $0.startDate < $1.startDate }
+    }
+
+    /// Number of remaining events to show as badge on the menu bar icon.
+    var badgeCount: Int {
+        guard settings.showBadgeCount else { return 0 }
+        let calendar = Calendar.current
+        let now = Date()
+
+        let cutoff: Date
+        switch settings.badgeCountMode {
+        case .wholeDay:
+            cutoff = calendar.startOfDay(for: now).addingTimeInterval(24 * 60 * 60)
+        case .timeWindow:
+            cutoff = now.addingTimeInterval(TimeInterval(settings.badgeTimeWindowHours) * 60 * 60)
+        }
+
+        return allEvents.filter { event in
+            event.startDate >= now && event.startDate < cutoff
+        }.count
     }
 
     /// Events grouped by day for display
@@ -170,7 +192,7 @@ class ReminderService {
         syncError = nil
 
         let now = Date()
-        let endDate = Calendar.current.date(byAdding: .day, value: 7, to: now) ?? now
+        let endDate = Calendar.current.date(byAdding: .day, value: Self.fetchWindowDays, to: now) ?? now
 
         var events = AppleCalendarService.shared.fetchEvents(
             from: now,

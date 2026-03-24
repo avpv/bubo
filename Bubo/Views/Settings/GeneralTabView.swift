@@ -44,6 +44,26 @@ struct GeneralTabView: View {
                 Toggle("Launch at login", isOn: launchAtLoginBinding)
             }
 
+            SettingsPlatter("Event Counter Badge") {
+                Toggle("Show event count in menu bar", isOn: $settings.showBadgeCount)
+
+                if settings.showBadgeCount {
+                    Picker("Count mode", selection: $settings.badgeCountMode) {
+                        ForEach(BadgeCountMode.allCases) { mode in
+                            Text(mode.displayName).tag(mode)
+                        }
+                    }
+
+                    if settings.badgeCountMode == .timeWindow {
+                        Stepper(
+                            "Time window: \(settings.badgeTimeWindowHours) h",
+                            value: $settings.badgeTimeWindowHours,
+                            in: 1...ReminderService.fetchWindowDays * 24
+                        )
+                    }
+                }
+            }
+
             SettingsPlatter("Appearance") {
                 Picker("Background", selection: $settings.backgroundStyle) {
                     ForEach(AppBackgroundStyle.allCases) { style in
