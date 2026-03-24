@@ -17,6 +17,11 @@ struct BuboApp: App {
         ctx.setShouldAntialias(true)
         ctx.setAllowsAntialiasing(true)
         ctx.interpolationQuality = .high
+
+        // Flip vertically so the owl renders right-side up (ears on top)
+        ctx.translateBy(x: 0, y: s)
+        ctx.scaleBy(x: 1, y: -1)
+
         ctx.setFillColor(color)
 
         // Owl body (rounded rect)
