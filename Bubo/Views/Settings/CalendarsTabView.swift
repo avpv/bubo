@@ -29,7 +29,7 @@ struct CalendarsTabView: View {
     @ViewBuilder
     private var accessSection: some View {
         @Bindable var settings = settings
-        return SettingsPlatter("Calendar Access") {
+        SettingsPlatter("Calendar Access") {
             Toggle(isOn: $settings.isCalendarSyncEnabled) {
                 Text("Sync Apple Calendar Events")
                     .fontWeight(.medium)

@@ -20,7 +20,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         ) { [weak self] notification in
             guard let event = notification.userInfo?["event"] as? CalendarEvent,
                   let minutes = notification.userInfo?["minutesBefore"] as? Int else { return }
-            self?.showAlert(event: event, minutesBefore: minutes)
+            MainActor.assumeIsolated {
+                self?.showAlert(event: event, minutesBefore: minutes)
+            }
         }
 
         // Workaround for SwiftUI Settings window leaving the app in the Dock
