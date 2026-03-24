@@ -113,35 +113,45 @@ struct CalendarsTabView: View {
         }
 
         if !settings.selectedCalendarIds.isEmpty {
-            ForEach(viewModel.appleCalendarsByAccount, id: \.account) { group in
-                Divider().padding(.vertical, DS.Spacing.xs)
-                Text(group.account).font(.subheadline).foregroundColor(.secondary)
-                
-                ForEach(group.calendars) { cal in
-                    Toggle(isOn: Binding(
-                        get: { settings.selectedCalendarIds.contains(cal.id) },
-                        set: { isOn in
-                            if isOn {
-                                if !settings.selectedCalendarIds.contains(cal.id) {
-                                    settings.selectedCalendarIds.append(cal.id)
+            Grid(alignment: .leading, horizontalSpacing: DS.Spacing.sm, verticalSpacing: DS.Spacing.sm) {
+                ForEach(viewModel.appleCalendarsByAccount, id: \.account) { group in
+                    GridRow {
+                        Divider().padding(.vertical, DS.Spacing.xs)
+                    }
+                    GridRow {
+                        Text(group.account).font(.subheadline).foregroundColor(.secondary)
+                    }
+                    
+                    ForEach(group.calendars) { cal in
+                        GridRow {
+                            Toggle(isOn: Binding(
+                                get: { settings.selectedCalendarIds.contains(cal.id) },
+                                set: { isOn in
+                                    if isOn {
+                                        if !settings.selectedCalendarIds.contains(cal.id) {
+                                            settings.selectedCalendarIds.append(cal.id)
+                                        }
+                                    } else {
+                                        settings.selectedCalendarIds.removeAll { $0 == cal.id }
+                                    }
+                                    if settings.selectedCalendarIds.count == allCalendars.count {
+                                        settings.selectedCalendarIds = []
+                                    }
                                 }
-                            } else {
-                                settings.selectedCalendarIds.removeAll { $0 == cal.id }
+                            )) {
+                                HStack(spacing: DS.Spacing.sm) {
+                                    Circle()
+                                        .fill(Color(cgColor: cal.color ?? CGColor(red: 0.5, green: 0.5, blue: 0.5, alpha: 1)))
+                                        .frame(width: DS.Size.iconSmall, height: DS.Size.iconSmall)
+                                    Text(cal.title)
+                                }
                             }
-                            if settings.selectedCalendarIds.count == allCalendars.count {
-                                settings.selectedCalendarIds = []
-                            }
-                        }
-                    )) {
-                        HStack(spacing: DS.Spacing.sm) {
-                            Circle()
-                                .fill(Color(cgColor: cal.color ?? CGColor(red: 0.5, green: 0.5, blue: 0.5, alpha: 1)))
-                                .frame(width: DS.Size.iconSmall, height: DS.Size.iconSmall)
-                            Text(cal.title)
                         }
                     }
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, DS.Spacing.lg)
         }
     }
 }

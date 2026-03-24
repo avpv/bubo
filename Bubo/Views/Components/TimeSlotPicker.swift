@@ -36,31 +36,12 @@ struct TimeSlotPicker: View {
                 ScrollViewReader { proxy in
                     HStack(spacing: DS.Spacing.xs) {
                         ForEach(slots) { slot in
-                            Button {
-                                selection = apply(slot)
-                            } label: {
-                                Text(slot.label)
-                                    .font(.caption)
-                                    .fontWeight(slot.id == nearest ? .semibold : .regular)
-                            }
-                            .buttonStyle(.plain)
-                            .padding(.horizontal, DS.Spacing.sm)
-                            .padding(.vertical, 4)
-                            .background(
-                                Capsule()
-                                    .fill(slot.id == nearest ? DS.Colors.accent : DS.Colors.badgeFill(DS.Colors.textPrimary))
+                            TimeSlotChip(
+                                slot: slot,
+                                isSelected: slot.id == nearest,
+                                action: { selection = apply(slot) }
                             )
-                            .foregroundColor(slot.id == nearest ? .white : DS.Colors.textPrimary)
                             .id(slot.id)
-                            #if os(macOS)
-                            .onHover { isHovered in
-                                if slot.id != nearest && isHovered {
-                                    NSCursor.pointingHand.push()
-                                } else {
-                                    NSCursor.pop()
-                                }
-                            }
-                            #endif
                         }
                     }
                     .padding(.vertical, 2)
@@ -93,7 +74,7 @@ struct TimeSlotPicker: View {
     private static let midnight = 24 * 60
 
     // MARK: - Slot
-    private struct Slot: Identifiable {
+    fileprivate struct Slot: Identifiable {
         let id: Int // total minutes from midnight
         var hour: Int { id / 60 }
         var minute: Int { id % 60 }
@@ -136,5 +117,61 @@ struct TimeSlotPicker: View {
             bySettingHour: slot.hour, minute: slot.minute, second: 0,
             of: selection
         ) ?? selection
+    }
+}
+
+fileprivate struct TimeSlotChip: View {
+    let slot: TimeSlotPicker.Slot
+    let isSelected: Bool
+    let action: () -> Void
+    
+    @State private var isHovered = false
+    
+    var body: some View {
+        Button(action: {
+            Haptics.tap()
+            action()
+        }) {
+            Text(slot.label)
+                .fontWeight(isSelected ? .semibold : .regular)
+                .foregroundColor(isSelected ? .white : DS.Colors.textPrimary)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, DS.Spacing.sm)
+        .frame(height: DS.Size.controlHeight)
+        .background(
+            ZStack {
+                Capsule()
+                    .fill(isSelected ? DS.Colors.accent : DS.Colors.badgeFill(DS.Colors.textPrimary))
+                
+                if isHovered && !isSelected {
+                    Capsule()
+                        .fill(DS.Colors.hoverFill)
+                }
+            }
+        )
+        .shadow(
+            color: isHovered && !isSelected ? DS.Shadows.hoverColor : DS.Shadows.ambientColor,
+            radius: isHovered && !isSelected ? DS.Shadows.hoverRadius : 0,
+            y: isHovered && !isSelected ? DS.Shadows.hoverY : 0
+        )
+        .scaleEffect(isHovered && !isSelected ? 1.03 : 1.0)
+        .animation(DS.Animation.microInteraction, value: isHovered)
+        .animation(DS.Animation.microInteraction, value: isSelected)
+        .contentShape(Capsule())
+        #if os(macOS)
+        .onHover { hovering in
+            withAnimation(DS.Animation.microInteraction) {
+                isHovered = hovering
+            }
+            if hovering && !isSelected {
+                NSCursor.pointingHand.push()
+                Haptics.generic()
+            } else {
+                NSCursor.pop()
+            }
+        }
+        #endif
     }
 }

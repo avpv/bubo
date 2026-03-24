@@ -5,10 +5,15 @@ struct EventRowView: View {
     let reminderService: ReminderService
     var onEdit: ((CalendarEvent) -> Void)? = nil
     var onDelete: ((CalendarEvent) -> Void)? = nil
+    var onDeleteOccurrence: ((CalendarEvent) -> Void)? = nil
+    var onDeleteSeries: ((CalendarEvent) -> Void)? = nil
     var onTap: ((CalendarEvent) -> Void)? = nil
 
     @State private var isHovered = false
+    @State private var now = Date()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private let everySecondTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     private var isLocal: Bool {
         event.isLocalEvent
@@ -32,15 +37,25 @@ struct EventRowView: View {
                 hoverActions
             }
         }
+        .frame(minHeight: DS.Size.eventRowMinHeight)
         .padding(.vertical, DS.Spacing.sm)
         .padding(.horizontal, DS.Spacing.sm)
         .background(
-            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                .fill(DS.Materials.platter)
-                .overlay(
-                    RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                        .fill(isHovered ? DS.Colors.hoverFill : Color.clear)
-                )
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                    .fill(DS.Materials.platter)
+                
+                if eventProgress > 0 {
+                    GeometryReader { geo in
+                        RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                            .fill(DS.Colors.accentSubtle)
+                            .frame(width: max(geo.size.width * eventProgress, DS.Size.cornerRadius * 2))
+                    }
+                }
+                
+                RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                    .fill(isHovered ? DS.Colors.hoverFill : Color.clear)
+            }
         )
         .shadow(
             color: isHovered ? DS.Shadows.hoverColor : DS.Shadows.ambientColor,
@@ -64,20 +79,26 @@ struct EventRowView: View {
         .eventScrollTransition()
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(event.title)\(event.isRecurring ? ", recurring" : ""), \(event.formattedTimeRange)\(event.location.map { ", \($0)" } ?? "")")
-        .accessibilityHint("Click to view details. Right-click to snooze.")
+        .accessibilityHint("Click to view details. Right-click to set reminder.")
         .accessibilityAddTraits(.isButton)
+        .onReceive(everySecondTimer) { _ in
+            now = Date()
+        }
         .contextMenu {
-            Section("Snooze") {
-                ForEach(DS.snoozeOptions) { option in
-                    Button(option.label) {
-                        reminderService.snoozeReminder(for: event, minutes: option.minutes)
-                    }
-                }
+            Section("Set Reminder") {
+                reminderMenuItems
             }
             if isLocal {
                 Divider()
                 Button("Edit") { onEdit?(event) }
-                Button("Delete", role: .destructive) { onDelete?(event) }
+                if event.isRecurring {
+                    Menu("Delete") {
+                        Button("Delete This Event Only", role: .destructive) { onDeleteOccurrence?(event) }
+                        Button("Delete All Events", role: .destructive) { onDeleteSeries?(event) }
+                    }
+                } else {
+                    Button("Delete", role: .destructive) { onDelete?(event) }
+                }
             }
         }
     }
@@ -123,18 +144,12 @@ struct EventRowView: View {
                     .fontWeight(.medium)
                     .lineLimit(2)
 
-                if event.recurrenceRule?.isPomodoro == true {
-                    Image(systemName: "timer")
+                if let segment = event.pomodoroSegment {
+                    Image(systemName: segment.iconName)
                         .font(.system(size: DS.Size.iconSmall))
-                        .foregroundColor(DS.Colors.warning)
+                        .foregroundColor(pomodoroSegmentColor(segment))
                         .contentTransition(.symbolEffect(.replace))
-                        .accessibilityLabel("Pomodoro")
-                } else if event.isRecurring {
-                    Image(systemName: "repeat")
-                        .font(.system(size: DS.Size.iconSmall))
-                        .foregroundColor(DS.Colors.textSecondary)
-                        .contentTransition(.symbolEffect(.replace))
-                        .accessibilityLabel("Recurring")
+                        .accessibilityLabel(segment.label)
                 }
             }
 
@@ -161,11 +176,7 @@ struct EventRowView: View {
         HStack(spacing: DS.Spacing.xs) {
             if event.isUpcoming {
                 Menu {
-                    ForEach(DS.snoozeOptions) { option in
-                        Button(option.label) {
-                            reminderService.snoozeReminder(for: event, minutes: option.minutes)
-                        }
-                    }
+                    reminderMenuItems
                 } label: {
                     Image(systemName: "bell.badge")
                         .font(.system(size: DS.Size.iconMedium))
@@ -174,22 +185,44 @@ struct EventRowView: View {
                 .buttonStyle(.borderless)
                 .menuStyle(.borderlessButton)
                 .fixedSize()
-                .help("Snooze reminder")
-                .accessibilityLabel("Snooze reminder")
+                .help("Set reminder")
+                .accessibilityLabel("Set reminder")
             }
 
             if isLocal {
-                Button {
-                    Haptics.impact()
-                    onDelete?(event)
-                } label: {
-                    Image(systemName: "minus.circle.fill")
-                        .font(.system(size: DS.Size.iconLarge))
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(DS.Colors.error)
+                if event.isRecurring {
+                    Menu {
+                        Button("Delete This Event Only", role: .destructive) {
+                            Haptics.impact()
+                            onDeleteOccurrence?(event)
+                        }
+                        Button("Delete All Events", role: .destructive) {
+                            Haptics.impact()
+                            onDeleteSeries?(event)
+                        }
+                    } label: {
+                        Image(systemName: "minus.circle.fill")
+                            .font(.system(size: DS.Size.iconLarge))
+                            .symbolRenderingMode(.hierarchical)
+                            .foregroundStyle(DS.Colors.error)
+                    }
+                    .buttonStyle(.borderless)
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                    .help("Delete recurring event")
+                } else {
+                    Button {
+                        Haptics.impact()
+                        onDelete?(event)
+                    } label: {
+                        Image(systemName: "minus.circle.fill")
+                            .font(.system(size: DS.Size.iconLarge))
+                            .symbolRenderingMode(.hierarchical)
+                            .foregroundStyle(DS.Colors.error)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Delete event")
                 }
-                .buttonStyle(.borderless)
-                .help("Delete event")
             }
         }
         .transition(
@@ -201,12 +234,87 @@ struct EventRowView: View {
     }
 
     private var timeUntilText: String {
-        let minutes = event.minutesUntilStart
-        if minutes <= 0 { return "now" }
-        if minutes < 60 { return "in \(minutes)m" }
-        let hours = minutes / 60
-        let mins = minutes % 60
-        if mins == 0 { return "in \(hours)h" }
-        return "in \(hours)h \(mins)m"
+        let secondsUntilStart = Int(event.startDate.timeIntervalSince(now))
+        if secondsUntilStart > 0 {
+            // Event hasn't started yet
+            if secondsUntilStart < 60 { return "in \(secondsUntilStart)s" }
+            let minutes = secondsUntilStart / 60
+            if minutes < 60 { return "in \(minutes)m" }
+            let hours = minutes / 60
+            if hours >= 24 {
+                let days = hours / 24
+                let remainingHours = hours % 24
+                if remainingHours == 0 { return "in \(days)d" }
+                return "in \(days)d \(remainingHours)h"
+            }
+            let mins = minutes % 60
+            if mins == 0 { return "in \(hours)h" }
+            return "in \(hours)h \(mins)m"
+        }
+        // Event has started or starting now
+        let secondsUntilEnd = Int(event.endDate.timeIntervalSince(now))
+        if secondsUntilEnd > 0 {
+            if secondsUntilEnd < 60 {
+                return "\(secondsUntilEnd)s left"
+            }
+            let minutesEnd = secondsUntilEnd / 60
+            let hours = minutesEnd / 60
+            let mins = minutesEnd % 60
+            if hours == 0 { return "\(mins)m left" }
+            if mins == 0 { return "\(hours)h left" }
+            return "\(hours)h \(mins)m left"
+        }
+        return "now"
+    }
+
+    private func pomodoroSegmentColor(_ segment: CalendarEvent.PomodoroSegment) -> Color {
+        switch segment {
+        case .work: .accentColor
+        case .shortBreak: .green
+        case .longBreak: .indigo
+        }
+    }
+
+    private var eventProgress: Double {
+        guard event.startDate <= now && event.endDate > now else { return 0 }
+        let total = event.endDate.timeIntervalSince(event.startDate)
+        guard total > 0 else { return 0 }
+        let elapsed = now.timeIntervalSince(event.startDate)
+        return min(max(elapsed / total, 0), 1)
+    }
+
+    @ViewBuilder
+    private var reminderMenuItems: some View {
+        let activeReminders = reminderService.activeReminderMinutes(for: event)
+        let customReminders = activeReminders.filter { active in 
+            !DS.snoozeOptions.contains { $0.minutes == active }
+        }
+        let allOptions = (DS.snoozeOptions.map { $0.minutes } + customReminders).sorted()
+
+        ForEach(allOptions, id: \.self) { minutes in
+            Toggle(isOn: Binding(
+                get: { activeReminders.contains(minutes) },
+                set: { isSet in
+                    var current = Set(activeReminders)
+                    if isSet {
+                        current.insert(minutes)
+                    } else {
+                        current.remove(minutes)
+                    }
+                    reminderService.updateLocalReminder(for: event.id, minutes: Array(current).sorted())
+                }
+            )) {
+                if let option = DS.snoozeOptions.first(where: { $0.minutes == minutes }) {
+                    Text(option.label)
+                } else {
+                    Text(DS.formatMinutes(minutes))
+                }
+            }
+        }
+        Divider()
+        Button("Clear All") {
+            reminderService.updateLocalReminder(for: event.id, minutes: [])
+        }
+        .disabled(activeReminders.isEmpty)
     }
 }

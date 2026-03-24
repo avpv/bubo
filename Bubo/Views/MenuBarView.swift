@@ -8,8 +8,6 @@ struct MenuBarView: View {
     @State private var navigation: Navigation = .list
     @State private var hasStartedSync = false
     @State private var toastState = ToastState()
-    @State private var pendingDeleteEvent: CalendarEvent? = nil
-    @State private var showRecurrenceDeleteDialog = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -31,6 +29,8 @@ struct MenuBarView: View {
 
     var body: some View {
         ZStack {
+            AppBackgroundLayer(style: settings.backgroundStyle)
+
             Group {
                 switch navigation {
                 case .list:
@@ -45,6 +45,7 @@ struct MenuBarView: View {
                 case .detail(let event):
                     EventDetailView(
                         event: event,
+                        reminderService: reminderService,
                         onBack: { navigation = .list },
                         onEdit: { event in resolveEdit(event) },
                         onDelete: { event in
@@ -96,26 +97,6 @@ struct MenuBarView: View {
 
             ToastOverlay(toastState: toastState)
         }
-        // Scope-of-delete dialog for list-level deletes on recurring events
-        .confirmationDialog(
-            "Delete Recurring Event",
-            isPresented: $showRecurrenceDeleteDialog,
-            titleVisibility: .visible,
-            presenting: pendingDeleteEvent
-        ) { event in
-            Button("Delete This Event Only") {
-                reminderService.excludeOccurrence(occurrenceId: event.id)
-                toastState.showSuccess("Occurrence skipped", icon: "trash.fill")
-            }
-            Button("Delete All Events", role: .destructive) {
-                let seriesId = event.seriesId ?? event.id
-                reminderService.removeLocalEvent(id: seriesId)
-                toastState.showSuccess("All occurrences deleted", icon: "trash.fill")
-            }
-            Button("Cancel", role: .cancel) { }
-        } message: { event in
-            Text("\"\(event.title)\" is a recurring event.")
-        }
         .onAppear {
             guard !hasStartedSync else { return }
             hasStartedSync = true
@@ -135,13 +116,8 @@ struct MenuBarView: View {
     }
 
     private func handleDelete(_ event: CalendarEvent) {
-        if event.isRecurring {
-            pendingDeleteEvent = event
-            showRecurrenceDeleteDialog = true
-        } else {
-            reminderService.removeLocalEvent(id: event.id)
-            toastState.showSuccess("Event deleted", icon: "trash.fill")
-        }
+        reminderService.removeLocalEvent(id: event.id)
+        toastState.showSuccess("Event deleted", icon: "trash.fill")
     }
 
     // MARK: - Main Content
@@ -280,6 +256,15 @@ struct MenuBarView: View {
                                     reminderService: reminderService,
                                     onEdit: { event in resolveEdit(event) },
                                     onDelete: { event in handleDelete(event) },
+                                    onDeleteOccurrence: { event in
+                                        reminderService.excludeOccurrence(occurrenceId: event.id)
+                                        toastState.showSuccess("Occurrence skipped", icon: "trash.fill")
+                                    },
+                                    onDeleteSeries: { event in
+                                        let seriesId = event.seriesId ?? event.id
+                                        reminderService.removeLocalEvent(id: seriesId)
+                                        toastState.showSuccess("All occurrences deleted", icon: "trash.fill")
+                                    },
                                     onTap: { event in
                                         navigation = .detail(event)
                                     }
@@ -301,7 +286,7 @@ struct MenuBarView: View {
     }
 
     private var footerActions: some View {
-        HStack(spacing: DS.Spacing.sm) {
+        HStack {
             Button(action: {
                 Haptics.tap()
                 navigation = .addEvent()
@@ -312,31 +297,34 @@ struct MenuBarView: View {
             .help("Add a new event (\u{2318}N)")
             .keyboardShortcut("n", modifiers: .command)
 
-            Button(action: {
-                Haptics.tap()
-                reminderService.syncNow()
-                toastState.showInfo("Refreshing calendars…", icon: "arrow.clockwise")
-            }) {
-                Label("Refresh", systemImage: "arrow.clockwise")
-            }
-            .help("Refresh calendars (\u{2318}R)")
-            .keyboardShortcut("r", modifiers: .command)
-
             Spacer()
 
-            OpenSettingsButton()
-                .keyboardShortcut(",", modifiers: .command)
-                .help("Open settings (\u{2318},)")
+            HStack(spacing: DS.Spacing.sm) {
+                Button(action: {
+                    Haptics.tap()
+                    reminderService.syncNow()
+                    toastState.showInfo("Refreshing calendars…", icon: "arrow.clockwise")
+                }) {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+                .help("Refresh calendars (\u{2318}R)")
+                .keyboardShortcut("r", modifiers: .command)
 
-            Button(action: { NSApplication.shared.terminate(nil) }) {
-                Label("Quit", systemImage: "power")
+                OpenSettingsButton()
+                    .keyboardShortcut(",", modifiers: .command)
+                    .help("Open settings (\u{2318},)")
+
+                Button(action: { NSApplication.shared.terminate(nil) }) {
+                    Label("Quit", systemImage: "power")
+                }
+                .help("Quit Bubo (\u{2318}Q)")
+                .keyboardShortcut("q", modifiers: .command)
             }
-            .help("Quit Bubo (\u{2318}Q)")
-            .keyboardShortcut("q", modifiers: .command)
+            .buttonStyle(.borderless)
         }
-        .buttonStyle(.borderless)
         .font(.system(size: 13, weight: .medium))
         .padding(.horizontal, DS.Spacing.lg)
+        .frame(maxWidth: .infinity)
         .frame(height: DS.Size.actionFooterHeight)
         .background(DS.Materials.headerBar)
     }

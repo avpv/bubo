@@ -28,11 +28,18 @@ struct RemindersTabView: View {
                     }
                 }
 
-                HStack {
-                    Stepper("Add: \(viewModel.newIntervalMinutes) min", value: $viewModel.newIntervalMinutes, in: 1...120)
+                Grid(alignment: .leading, horizontalSpacing: DS.Spacing.sm) {
+                    GridRow {
+                        Text("Add: \(viewModel.newIntervalMinutes) min")
+                            .frame(minWidth: 100, alignment: .leading)
+                            .monospacedDigit()
+                        
+                        Stepper("", value: $viewModel.newIntervalMinutes, in: 1...120)
+                            .labelsHidden()
 
-                    Button("Add") {
-                        settings.intervals.append(ReminderInterval(minutes: viewModel.newIntervalMinutes))
+                        Button("Add") {
+                            settings.intervals.append(ReminderInterval(minutes: viewModel.newIntervalMinutes))
+                        }
                     }
                 }
             }

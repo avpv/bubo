@@ -1,5 +1,19 @@
 import Foundation
 
+enum BadgeCountMode: String, Codable, CaseIterable, Identifiable {
+    case wholeDay
+    case timeWindow
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .wholeDay: "Whole day"
+        case .timeWindow: "Time window"
+        }
+    }
+}
+
 struct ReminderInterval: Identifiable, Codable, Hashable {
     let id: UUID
     var minutes: Int
@@ -38,6 +52,10 @@ class ReminderSettings: Codable {
     var doNotDisturbTo: Date { didSet { scheduleSave() } }
     var selectedCalendarIds: [String] { didSet { scheduleSave() } }
     var isCalendarSyncEnabled: Bool { didSet { scheduleSave() } }
+    var backgroundStyle: AppBackgroundStyle { didSet { scheduleSave() } }
+    var showBadgeCount: Bool { didSet { scheduleSave() } }
+    var badgeCountMode: BadgeCountMode { didSet { scheduleSave() } }
+    var badgeTimeWindowHours: Int { didSet { scheduleSave() } }
 
     // Task-based debounced save — replaces Combine pipeline
     private var saveTask: Task<Void, Never>?
@@ -45,7 +63,8 @@ class ReminderSettings: Codable {
     enum CodingKeys: String, CodingKey {
         case intervals, syncIntervalMinutes, showFullScreenAlert, showSystemNotification
         case doNotDisturbEnabled, doNotDisturbFrom, doNotDisturbTo
-        case selectedCalendarIds, isCalendarSyncEnabled
+        case selectedCalendarIds, isCalendarSyncEnabled, backgroundStyle
+        case showBadgeCount, badgeCountMode, badgeTimeWindowHours
     }
 
     init() {
@@ -64,6 +83,10 @@ class ReminderSettings: Codable {
         self.doNotDisturbTo = calendar.date(from: DateComponents(hour: 8, minute: 0)) ?? Date()
         self.selectedCalendarIds = [] // empty = sync all
         self.isCalendarSyncEnabled = true
+        self.backgroundStyle = .system
+        self.showBadgeCount = true
+        self.badgeCountMode = .wholeDay
+        self.badgeTimeWindowHours = 8
     }
 
     required init(from decoder: Decoder) throws {
@@ -82,6 +105,10 @@ class ReminderSettings: Codable {
             ?? calendar.date(from: DateComponents(hour: 8, minute: 0)) ?? Date()
         selectedCalendarIds = try container.decodeIfPresent([String].self, forKey: .selectedCalendarIds) ?? []
         isCalendarSyncEnabled = try container.decodeIfPresent(Bool.self, forKey: .isCalendarSyncEnabled) ?? true
+        backgroundStyle = try container.decodeIfPresent(AppBackgroundStyle.self, forKey: .backgroundStyle) ?? .system
+        showBadgeCount = try container.decodeIfPresent(Bool.self, forKey: .showBadgeCount) ?? true
+        badgeCountMode = try container.decodeIfPresent(BadgeCountMode.self, forKey: .badgeCountMode) ?? .wholeDay
+        badgeTimeWindowHours = try container.decodeIfPresent(Int.self, forKey: .badgeTimeWindowHours) ?? 8
     }
 
     func encode(to encoder: Encoder) throws {
@@ -95,6 +122,10 @@ class ReminderSettings: Codable {
         try container.encode(doNotDisturbTo, forKey: .doNotDisturbTo)
         try container.encode(selectedCalendarIds, forKey: .selectedCalendarIds)
         try container.encode(isCalendarSyncEnabled, forKey: .isCalendarSyncEnabled)
+        try container.encode(backgroundStyle, forKey: .backgroundStyle)
+        try container.encode(showBadgeCount, forKey: .showBadgeCount)
+        try container.encode(badgeCountMode, forKey: .badgeCountMode)
+        try container.encode(badgeTimeWindowHours, forKey: .badgeTimeWindowHours)
     }
 
     /// Check if current time is within Do Not Disturb period

@@ -1,5 +1,13 @@
 import Foundation
 
+// MARK: - Event Type
+
+/// Distinguishes regular calendar events from Pomodoro sessions.
+enum EventType: String, Codable, Hashable {
+    case standard
+    case pomodoro
+}
+
 struct CalendarEvent: Identifiable, Codable, Hashable {
     let id: String
     let title: String
@@ -12,6 +20,8 @@ struct CalendarEvent: Identifiable, Codable, Hashable {
     var recurrenceRule: RecurrenceRule?
     /// Non-nil when this event is an expanded occurrence of a recurring series.
     var seriesId: String?
+    /// The type of event — standard calendar event or Pomodoro session.
+    var eventType: EventType
 
     // MARK: - Static formatters (avoid re-creation per call)
 
@@ -39,7 +49,7 @@ struct CalendarEvent: Identifiable, Codable, Hashable {
     }
 
     var isUpcoming: Bool {
-        startDate > Date()
+        endDate > Date()
     }
 
     var timeUntilStart: TimeInterval {
@@ -60,5 +70,38 @@ struct CalendarEvent: Identifiable, Codable, Hashable {
 
     var formattedTimeRange: String {
         "\(Self.timeFormatter.string(from: startDate)) – \(Self.timeFormatter.string(from: endDate))"
+    }
+
+    // MARK: - Pomodoro Segment
+
+    /// The type of segment within a Pomodoro session.
+    enum PomodoroSegment {
+        case work
+        case shortBreak
+        case longBreak
+
+        var iconName: String {
+            switch self {
+            case .work: "brain.head.profile"
+            case .shortBreak: "cup.and.saucer"
+            case .longBreak: "moon.zzz"
+            }
+        }
+
+        var label: String {
+            switch self {
+            case .work: "Work"
+            case .shortBreak: "Break"
+            case .longBreak: "Long break"
+            }
+        }
+    }
+
+    /// Determines the Pomodoro segment type based on event ID pattern.
+    var pomodoroSegment: PomodoroSegment? {
+        guard eventType == .pomodoro else { return nil }
+        if id.contains("_longbreak") { return .longBreak }
+        if id.contains("_break") { return .shortBreak }
+        return .work
     }
 }

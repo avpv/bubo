@@ -58,9 +58,10 @@ enum RecurrenceExpander {
                 let isDateExcluded = !excludedDates.isEmpty && excludedDates.contains { abs($0.timeIntervalSince(current)) < 1 }
 
                 if !excludedIds.contains(occurrenceId) && !isDateExcluded {
+                    let workTitle = rule.isPomodoro ? "\(event.title) — Work" : event.title
                     let occurrence = CalendarEvent(
                         id: occurrenceId,
-                        title: event.title,
+                        title: workTitle,
                         startDate: current,
                         endDate: current.addingTimeInterval(duration),
                         location: event.location,
@@ -68,7 +69,8 @@ enum RecurrenceExpander {
                         calendarName: event.calendarName,
                         customReminderMinutes: event.customReminderMinutes,
                         recurrenceRule: event.recurrenceRule,
-                        seriesId: event.id
+                        seriesId: event.id,
+                        eventType: event.eventType
                     )
                     occurrences.append(occurrence)
                 }
@@ -76,6 +78,40 @@ enum RecurrenceExpander {
             }
 
             current = nextDate(after: current, rule: rule, calendar: calendar)
+        }
+
+        // Pomodoro breaks: insert short break events between work sessions
+        if rule.isPomodoro && occurrences.count > 1 {
+            let breakMinutes = rule.interval - Int(duration / 60)
+            if breakMinutes > 0 {
+                var withBreaks: [CalendarEvent] = []
+                for (index, work) in occurrences.enumerated() {
+                    withBreaks.append(work)
+                    // Add a short break after every work session except the last
+                    if index < occurrences.count - 1 {
+                        let breakId = "\(event.id)_break\(index)"
+                        if !excludedIds.contains(breakId) {
+                            let breakStart = work.endDate
+                            let breakEnd = breakStart.addingTimeInterval(TimeInterval(breakMinutes * 60))
+                            let breakEvent = CalendarEvent(
+                                id: breakId,
+                                title: "\(event.title) — Break",
+                                startDate: breakStart,
+                                endDate: breakEnd,
+                                location: nil,
+                                description: nil,
+                                calendarName: event.calendarName,
+                                customReminderMinutes: [0],
+                                recurrenceRule: event.recurrenceRule,
+                                seriesId: event.id,
+                                eventType: .pomodoro
+                            )
+                            withBreaks.append(breakEvent)
+                        }
+                    }
+                }
+                occurrences = withBreaks
+            }
         }
 
         // Pomodoro long break: add a final "long break" event after the last work session
@@ -95,7 +131,8 @@ enum RecurrenceExpander {
                     calendarName: event.calendarName,
                     customReminderMinutes: [0],
                     recurrenceRule: event.recurrenceRule,
-                    seriesId: event.id
+                    seriesId: event.id,
+                    eventType: .pomodoro
                 )
                 occurrences.append(longBreakEvent)
             }

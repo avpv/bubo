@@ -5,6 +5,9 @@ import AppKit
 @MainActor
 @Observable
 class ReminderService {
+    /// How many days ahead to fetch events. Used as the ceiling for badge time window.
+    static let fetchWindowDays = 7
+
     var upcomingEvents: [CalendarEvent] = []
     var localEvents: [CalendarEvent] = []
     var lastSyncDate: Date?
@@ -23,6 +26,7 @@ class ReminderService {
     private nonisolated(unsafe) var snoozeObserver: Any?
     private nonisolated(unsafe) var appleCalendarObserver: Any?
     private nonisolated(unsafe) var pendingAppleRefreshTask: Task<Void, Never>?
+    private var hasCompletedLiveSync = false
 
     var allEvents: [CalendarEvent] {
         let expandedLocal = localEvents.flatMap {
@@ -31,6 +35,25 @@ class ReminderService {
         return (upcomingEvents + expandedLocal)
             .filter { $0.isUpcoming }
             .sorted { $0.startDate < $1.startDate }
+    }
+
+    /// Number of remaining events to show as badge on the menu bar icon.
+    var badgeCount: Int {
+        guard settings.showBadgeCount else { return 0 }
+        let calendar = Calendar.current
+        let now = Date()
+
+        let cutoff: Date
+        switch settings.badgeCountMode {
+        case .wholeDay:
+            cutoff = calendar.startOfDay(for: now).addingTimeInterval(24 * 60 * 60)
+        case .timeWindow:
+            cutoff = now.addingTimeInterval(TimeInterval(settings.badgeTimeWindowHours) * 60 * 60)
+        }
+
+        return allEvents.filter { event in
+            event.startDate >= now && event.startDate < cutoff
+        }.count
     }
 
     /// Events grouped by day for display
@@ -169,7 +192,7 @@ class ReminderService {
         syncError = nil
 
         let now = Date()
-        let endDate = Calendar.current.date(byAdding: .day, value: 7, to: now) ?? now
+        let endDate = Calendar.current.date(byAdding: .day, value: Self.fetchWindowDays, to: now) ?? now
 
         var events = AppleCalendarService.shared.fetchEvents(
             from: now,
@@ -179,9 +202,12 @@ class ReminderService {
 
         // Apply local overrides
         for i in events.indices {
-            // Note: event id is typically "apple_EVENT_ID"
-            if let overrides = localRemindersOverrides[events[i].id] {
-                events[i].customReminderMinutes = overrides.isEmpty ? nil : overrides
+            let uniqueId = events[i].id
+            let seriesOverrides = events[i].seriesId.flatMap { localRemindersOverrides[$0] }
+            let exactOverrides = localRemindersOverrides[uniqueId]
+            
+            if let active = exactOverrides ?? seriesOverrides {
+                events[i].customReminderMinutes = active.isEmpty ? nil : active
             }
         }
 
@@ -189,6 +215,7 @@ class ReminderService {
         lastSyncDate = Date()
         isSyncing = false
         isUsingCache = false
+        hasCompletedLiveSync = true
 
         // Clean up firedReminders for events no longer in the window
         let currentEventIds = Set(events.map { $0.id })
@@ -200,6 +227,12 @@ class ReminderService {
 
         scheduleReminders(for: events)
 
+        // Ask EventKit to pull fresh data from remote calendar servers
+        // (iCloud, Google, Exchange, CalDAV). If there are changes (e.g. a
+        // deletion made on the remote side), EventKit will fire
+        // EKEventStoreChanged and we'll sync again automatically.
+        AppleCalendarService.shared.triggerRemoteRefresh()
+
         Task {
             await eventCache.save(events: events)
         }
@@ -210,7 +243,9 @@ class ReminderService {
     private func loadCachedEvents() {
         Task {
             let cached = await eventCache.loadEvents()
-            if !cached.isEmpty && self.upcomingEvents.isEmpty {
+            // Only use cache if a live sync hasn't already completed —
+            // prevents stale cached data from overwriting fresh results.
+            if !cached.isEmpty && !self.hasCompletedLiveSync && self.upcomingEvents.isEmpty {
                 self.upcomingEvents = cached
                 self.isUsingCache = true
                 self.scheduleReminders(for: cached)
@@ -219,6 +254,34 @@ class ReminderService {
     }
 
     // MARK: - Local Events
+
+    func addCalendarEvent(_ event: CalendarEvent, calendarId: String? = nil) {
+        do {
+            // For pomodoro events, expand into work + break + long break events
+            if event.eventType == .pomodoro, event.recurrenceRule?.isPomodoro == true {
+                let expanded = RecurrenceExpander.expand(event)
+                for occurrence in expanded {
+                    // Create each expanded event without recurrence rule (they are individual events)
+                    let calEvent = CalendarEvent(
+                        id: occurrence.id,
+                        title: occurrence.title,
+                        startDate: occurrence.startDate,
+                        endDate: occurrence.endDate,
+                        location: occurrence.location,
+                        description: occurrence.description,
+                        calendarName: occurrence.calendarName,
+                        eventType: occurrence.eventType
+                    )
+                    try AppleCalendarService.shared.createEvent(calEvent, calendarId: calendarId)
+                }
+            } else {
+                try AppleCalendarService.shared.createEvent(event, calendarId: calendarId)
+            }
+            syncNow()
+        } catch {
+            print("Failed to create Apple Calendar event: \(error)")
+        }
+    }
 
     func addLocalEvent(_ event: CalendarEvent) {
         localEvents.append(event)
@@ -313,38 +376,61 @@ class ReminderService {
     // MARK: - Snooze
 
     func snoozeReminder(for event: CalendarEvent, minutes: Int) {
-        let snoozeDate = Date().addingTimeInterval(TimeInterval(minutes * 60))
-        let timer = Timer(fire: snoozeDate, interval: 0, repeats: false) { [weak self] _ in
-            Task { @MainActor in
-                self?.fireReminder(for: event, minutesBefore: 0, isSnooze: true)
+        if event.isLocalEvent {
+            let interval = TimeInterval(minutes * 60)
+            let updatedEvent = CalendarEvent(
+                id: event.id,
+                title: event.title,
+                startDate: event.startDate.addingTimeInterval(interval),
+                endDate: event.endDate.addingTimeInterval(interval),
+                location: event.location,
+                description: event.description,
+                calendarName: event.calendarName,
+                customReminderMinutes: event.customReminderMinutes,
+                recurrenceRule: event.recurrenceRule,
+                seriesId: event.seriesId,
+                eventType: event.eventType
+            )
+            updateLocalEvent(updatedEvent)
+        } else {
+            do {
+                try AppleCalendarService.shared.shiftEventTime(id: event.id, byMinutes: minutes)
+            } catch {
+                print("Failed to shift Apple Calendar event time: \(error)")
             }
         }
-        RunLoop.main.add(timer, forMode: .common)
-
-        var timers = reminderTimers[event.id] ?? []
-        timers.append(timer)
-        reminderTimers[event.id] = timers
     }
 
     // MARK: - Reminders
 
     private static let defaultReminderMinutes = [5]
 
-    private func scheduleReminders(for events: [CalendarEvent]) {
+    /// The default reminder minutes that would apply to an event without custom reminders.
+    var defaultReminderMinutesList: [Int] {
         let enabledIntervals = settings.intervals.filter { $0.isEnabled }
+        if !enabledIntervals.isEmpty {
+            return enabledIntervals.map { $0.minutes }.sorted()
+        }
+        return Self.defaultReminderMinutes
+    }
 
+    func activeReminderMinutes(for event: CalendarEvent) -> [Int] {
+        if let custom = event.customReminderMinutes {
+            return custom
+        }
+        let enabledIntervals = settings.intervals.filter { $0.isEnabled }
+        if !enabledIntervals.isEmpty {
+            return enabledIntervals.map { $0.minutes }
+        }
+        return Self.defaultReminderMinutes
+    }
+
+    private func scheduleReminders(for events: [CalendarEvent]) {
         for event in events where event.isUpcoming {
             cancelReminders(for: event.id)
             var timers: [Timer] = []
 
-            let minutesList: [Int]
-            if let custom = event.customReminderMinutes, !custom.isEmpty {
-                minutesList = custom
-            } else if !enabledIntervals.isEmpty {
-                minutesList = enabledIntervals.map { $0.minutes }
-            } else {
-                minutesList = Self.defaultReminderMinutes
-            }
+            let minutesList = activeReminderMinutes(for: event)
 
             for minutes in minutesList {
                 let reminderKey = "\(event.id)_\(minutes)"

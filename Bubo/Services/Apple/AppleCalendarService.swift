@@ -94,8 +94,20 @@ class AppleCalendarService {
             .map { (account: $0.key, calendars: $0.value) }
     }
 
+    /// Ask EventKit to pull the latest data from remote calendar sources
+    /// (iCloud, Google, Exchange, CalDAV). This is asynchronous — the actual
+    /// data arrives later via an `EKEventStoreChanged` notification.
+    func triggerRemoteRefresh() {
+        store.refreshSourcesIfNecessary()
+    }
+
     /// Fetch events from selected Apple calendars within a date range.
     func fetchEvents(from: Date, to: Date, onlyCalendarIds: [String] = []) -> [CalendarEvent] {
+        // Reset the in-memory cache so EventKit re-reads from the on-disk
+        // calendar database. Without this, deleted events from remote
+        // calendars can linger in the store's in-process cache.
+        store.reset()
+
         let calendars: [EKCalendar]?
         if onlyCalendarIds.isEmpty {
             calendars = nil
@@ -110,17 +122,64 @@ class AppleCalendarService {
 
         return ekEvents.compactMap { ek in
             guard !ek.isAllDay else { return nil }
+            
+            let baseId = "apple_\(ek.eventIdentifier ?? UUID().uuidString)"
+            let uniqueId = "\(baseId)_\(ek.startDate.timeIntervalSince1970)"
 
             return CalendarEvent(
-                id: "apple_\(ek.eventIdentifier ?? UUID().uuidString)",
+                id: uniqueId,
                 title: ek.title ?? "Untitled",
                 startDate: ek.startDate,
                 endDate: ek.endDate,
                 location: ek.location,
                 description: ek.notes,
-                calendarName: ek.calendar.title
+                calendarName: ek.calendar.title,
+                seriesId: ek.hasRecurrenceRules ? baseId : nil,
+                eventType: .standard
             )
         }
+    }
+
+    /// Create a new event in Apple Calendar.
+    /// - Parameters:
+    ///   - event: The event data to create.
+    ///   - calendarId: The calendar identifier to add the event to. Uses the default calendar if nil.
+    func createEvent(_ event: CalendarEvent, calendarId: String? = nil) throws {
+        let ekEvent = EKEvent(eventStore: store)
+        ekEvent.title = event.title
+        ekEvent.startDate = event.startDate
+        ekEvent.endDate = event.endDate
+        ekEvent.location = event.location
+        ekEvent.notes = event.description
+        if let calendarId,
+           let calendar = store.calendars(for: .event).first(where: { $0.calendarIdentifier == calendarId }) {
+            ekEvent.calendar = calendar
+        } else {
+            ekEvent.calendar = store.defaultCalendarForNewEvents
+        }
+        try store.save(ekEvent, span: .thisEvent)
+    }
+
+    /// The identifier of the default calendar for new events, if available.
+    var defaultCalendarId: String? {
+        store.defaultCalendarForNewEvents?.calendarIdentifier
+    }
+
+    /// Shift the start and end times of an Apple Calendar event by a given number of minutes.
+    func shiftEventTime(id: String, byMinutes minutes: Int) throws {
+        var actualId = id.replacingOccurrences(of: "apple_", with: "")
+        if let lastUnderscore = actualId.lastIndex(of: "_") {
+            // Strip the timestamp we added to make it unique per occurrence
+            actualId = String(actualId[..<lastUnderscore])
+        }
+        
+        guard let ekEvent = store.event(withIdentifier: actualId) else {
+            throw NSError(domain: "AppleCalendarService", code: 404, userInfo: [NSLocalizedDescriptionKey: "Event not found."])
+        }
+        let interval = TimeInterval(minutes * 60)
+        ekEvent.startDate = ekEvent.startDate.addingTimeInterval(interval)
+        ekEvent.endDate = ekEvent.endDate.addingTimeInterval(interval)
+        try store.save(ekEvent, span: .thisEvent)
     }
 
     // MARK: - Types

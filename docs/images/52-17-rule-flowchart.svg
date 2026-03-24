@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="340" viewBox="0 0 720 340">
+  <style>
+    text { font-family: 'Segoe Print', 'Comic Sans MS', 'Patrick Hand', cursive; fill: #1a1a1a; }
+    .label { font-size: 15px; font-weight: bold; }
+    .sublabel { font-size: 12px; fill: #555; }
+    .arrow { fill: none; stroke: #1a1a1a; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+    .box { fill: none; stroke: #1a1a1a; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .fill-green { fill: #d4edda; }
+    .fill-blue { fill: #d6eaf8; }
+    .fill-orange { fill: #fdebd0; }
+    .fill-gray { fill: #f0f0f0; }
+  </style>
+
+  <rect width="720" height="340" fill="white"/>
+
+  <!-- Title -->
+  <text x="360" y="32" text-anchor="middle" style="font-size:20px; font-weight:bold;">52/17 Rule — Flowchart</text>
+
+  <!-- Start node (rounded rect) -->
+  <rect class="box fill-gray" x="28" y="130" width="100" height="50" rx="24" ry="24"
+        d="M30,132 C29,131 127,129 128,131 L129,179 C128,181 30,180 29,179 Z"/>
+  <path class="box fill-gray" d="M30,155 Q28,131 78,130 Q130,129 129,155 Q131,181 78,182 Q27,181 30,155" />
+  <text x="78" y="161" text-anchor="middle" class="label">Start</text>
+
+  <!-- Arrow Start -> Work -->
+  <path class="arrow" d="M131,156 Q145,155 155,155" marker-end="url(#arrowhead)"/>
+
+  <!-- Work block -->
+  <path class="box fill-green" d="M170,118 L332,117 Q335,118 334,120 L335,192 Q334,195 332,194 L170,195 Q168,194 169,192 L168,120 Q169,117 170,118 Z"/>
+  <text x="252" y="153" text-anchor="middle" class="label">Work</text>
+  <text x="252" y="174" text-anchor="middle" class="sublabel">52 minutes</text>
+
+  <!-- Arrow Work -> Break -->
+  <path class="arrow" d="M336,156 Q350,155 360,155" marker-end="url(#arrowhead)"/>
+
+  <!-- Break block -->
+  <path class="box fill-blue" d="M375,118 L537,117 Q540,118 539,120 L540,192 Q539,195 537,194 L375,195 Q373,194 374,192 L373,120 Q374,117 375,118 Z"/>
+  <text x="457" y="153" text-anchor="middle" class="label">Break</text>
+  <text x="457" y="174" text-anchor="middle" class="sublabel">17 minutes</text>
+
+  <!-- Arrow Break -> Decision -->
+  <path class="arrow" d="M541,156 Q555,155 565,155" marker-end="url(#arrowhead)"/>
+
+  <!-- Decision diamond -->
+  <polygon class="box fill-orange" points="640,105 695,156 640,207 585,156"/>
+  <text x="640" y="152" text-anchor="middle" class="label" style="font-size:13px;">Done</text>
+  <text x="640" y="167" text-anchor="middle" class="label" style="font-size:13px;">?</text>
+
+  <!-- Arrow Decision -> loop back (No) -->
+  <path class="arrow" d="M640,207 Q641,245 640,265 Q639,285 457,286 Q252,287 252,230 L252,197" marker-end="url(#arrowhead)"/>
+  <text x="644" y="248" class="sublabel" style="font-size:13px; font-weight:bold;">No</text>
+
+  <!-- Arrow Decision -> End (Yes) -->
+  <path class="arrow" d="M640,105 L640,72" marker-end="url(#arrowhead)"/>
+  <text x="655" y="88" class="sublabel" style="font-size:13px; font-weight:bold;">Yes</text>
+
+  <!-- End node -->
+  <path class="box fill-gray" d="M612,47 Q610,23 640,22 Q672,23 670,47 Q672,73 640,72 Q610,73 612,47" />
+  <text x="640" y="52" text-anchor="middle" class="label" style="font-size:14px;">End</text>
+
+  <!-- Arrowhead marker -->
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <path d="M0,0 L0,7 L10,3.5 Z" fill="#1a1a1a"/>
+    </marker>
+  </defs>
+</svg>

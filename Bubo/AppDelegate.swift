@@ -22,6 +22,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                   let minutes = notification.userInfo?["minutesBefore"] as? Int else { return }
             self?.showAlert(event: event, minutesBefore: minutes)
         }
+
+        // Workaround for SwiftUI Settings window leaving the app in the Dock
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification,
+            object: nil,
+            queue: .main
+        ) { notification in
+            if let window = notification.object as? NSWindow {
+                if window.title.contains("Settings") || window.title.contains("Bubo") || window.identifier?.rawValue.contains("Settings") == true {
+                    DispatchQueue.main.async {
+                        NSApp.setActivationPolicy(.accessory)
+                        if NSApp.isActive {
+                            NSApp.hide(nil)
+                        }
+                    }
+                }
+            }
+        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -83,10 +101,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApplication.shared.activate()
         alertWindow = window
 
-        // Auto-dismiss after 60 seconds
+        // Auto-dismiss when the event starts (countdown reaches 0)
         autoDismissTask?.cancel()
+        let secondsUntilStart = max(event.startDate.timeIntervalSinceNow, 0)
         autoDismissTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(60))
+            try? await Task.sleep(for: .seconds(secondsUntilStart))
             self?.dismissAlert()
         }
     }
