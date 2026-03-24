@@ -82,7 +82,8 @@ struct BuboApp: App {
             NSGraphicsContext.saveGraphicsState()
             NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
             if let ctx = NSGraphicsContext.current?.cgContext {
-                drawOwl(in: ctx, size: CGFloat(pixelSize), color: color)
+                ctx.scaleBy(x: scale, y: scale)
+                drawOwl(in: ctx, size: pointSize, color: color)
             }
             NSGraphicsContext.restoreGraphicsState()
             image.addRepresentation(rep)
@@ -142,34 +143,34 @@ struct BuboApp: App {
             NSGraphicsContext.saveGraphicsState()
             NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
             if let ctx = NSGraphicsContext.current?.cgContext {
+                ctx.scaleBy(x: scale, y: scale)
+
                 // Determine icon color based on current appearance (light/dark menu bar)
                 let isDark = NSAppearance.current.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
                 let iconColor = isDark ? NSColor.white.cgColor : NSColor.black.cgColor
 
                 // Draw owl icon shifted up to make room for badge overflow at the bottom
                 ctx.saveGState()
-                ctx.translateBy(x: 0, y: (bottomOverflow + 2) * scale)
-                drawOwl(in: ctx, size: iconSize * scale, color: iconColor)
+                ctx.translateBy(x: 0, y: bottomOverflow + 2)
+                drawOwl(in: ctx, size: iconSize, color: iconColor)
                 ctx.restoreGState()
 
                 // Cut out a circular area from the owl where the badge will sit
-                let badgeX = (iconSize - overlapX) * scale
-                let badgeY = (bottomOverflow - overlapY + 1) * scale
-                let sBadgeWidth = badgeWidth * scale
-                let sBadgeDiameter = badgeDiameter * scale
-                let badgeRect = NSRect(x: badgeX, y: badgeY, width: sBadgeWidth, height: sBadgeDiameter)
-                let cutoutPadding: CGFloat = 1.5 * scale
+                let badgeX = iconSize - overlapX
+                let badgeY: CGFloat = bottomOverflow - overlapY + 1
+                let badgeRect = NSRect(x: badgeX, y: badgeY, width: badgeWidth, height: badgeDiameter)
+                let cutoutPadding: CGFloat = 1.5
                 let cutoutRect = badgeRect.insetBy(dx: -cutoutPadding, dy: -cutoutPadding)
                 ctx.saveGState()
                 ctx.setBlendMode(.clear)
-                let cutoutPath = NSBezierPath(roundedRect: cutoutRect, xRadius: (sBadgeDiameter / 2) + cutoutPadding, yRadius: (sBadgeDiameter / 2) + cutoutPadding)
+                let cutoutPath = NSBezierPath(roundedRect: cutoutRect, xRadius: (badgeDiameter / 2) + cutoutPadding, yRadius: (badgeDiameter / 2) + cutoutPadding)
                 cutoutPath.fill()
                 ctx.restoreGState()
 
                 // Badge shadow for depth
                 ctx.saveGState()
-                ctx.setShadow(offset: CGSize(width: 0, height: -0.5 * scale), blur: 1.5 * scale, color: NSColor.black.withAlphaComponent(0.25).cgColor)
-                let badgePath = NSBezierPath(roundedRect: badgeRect, xRadius: sBadgeDiameter / 2, yRadius: sBadgeDiameter / 2)
+                ctx.setShadow(offset: CGSize(width: 0, height: -0.5), blur: 1.5, color: NSColor.black.withAlphaComponent(0.25).cgColor)
+                let badgePath = NSBezierPath(roundedRect: badgeRect, xRadius: badgeDiameter / 2, yRadius: badgeDiameter / 2)
                 NSColor.systemBlue.setFill()
                 badgePath.fill()
                 ctx.restoreGState()
@@ -179,21 +180,15 @@ struct BuboApp: App {
                 badgePath.fill()
 
                 // Subtle inner highlight at top of badge
-                let highlightRect = NSRect(x: badgeX + 1.5 * scale, y: badgeY + sBadgeDiameter * 0.5, width: sBadgeWidth - 3 * scale, height: sBadgeDiameter * 0.4)
-                let highlightPath = NSBezierPath(roundedRect: highlightRect, xRadius: 3 * scale, yRadius: 3 * scale)
+                let highlightRect = NSRect(x: badgeX + 1.5, y: badgeY + badgeDiameter * 0.5, width: badgeWidth - 3, height: badgeDiameter * 0.4)
+                let highlightPath = NSBezierPath(roundedRect: highlightRect, xRadius: 3, yRadius: 3)
                 NSColor.white.withAlphaComponent(0.15).setFill()
                 highlightPath.fill()
 
                 // Draw count text centered in badge
-                let scaledFont = NSFont.monospacedSystemFont(ofSize: fontSize * scale, weight: .bold)
-                let scaledAttrs: [NSAttributedString.Key: Any] = [
-                    .font: scaledFont,
-                    .foregroundColor: NSColor.white,
-                ]
-                let scaledTextSize = badgeText.size(withAttributes: scaledAttrs)
-                let textX = badgeX + (sBadgeWidth - scaledTextSize.width) / 2
-                let textY = badgeY + (sBadgeDiameter - scaledTextSize.height) / 2
-                badgeText.draw(at: NSPoint(x: textX, y: textY), withAttributes: scaledAttrs)
+                let textX = badgeX + (badgeWidth - textSize.width) / 2
+                let textY = badgeY + (badgeDiameter - textSize.height) / 2
+                badgeText.draw(at: NSPoint(x: textX, y: textY), withAttributes: attrs)
             }
             NSGraphicsContext.restoreGraphicsState()
             image.addRepresentation(rep)
