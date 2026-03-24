@@ -78,18 +78,19 @@ struct BuboApp: App {
 
         let iconSize: CGFloat = 18
         let badgeText = (count > 99 ? "99+" : "\(count)") as NSString
-        let fontSize: CGFloat = 8
+        let fontSize: CGFloat = 8.5
         let font = NSFont.monospacedSystemFont(ofSize: fontSize, weight: .bold)
         let attrs: [NSAttributedString.Key: Any] = [
             .font: font,
             .foregroundColor: NSColor.white,
         ]
         let textSize = badgeText.size(withAttributes: attrs)
-        let badgeDiameter: CGFloat = 11
-        let badgeWidth = max(badgeDiameter, textSize.width + 5)
+        let badgeDiameter: CGFloat = 12
+        let badgeWidth = max(badgeDiameter, textSize.width + 6)
 
-        // Badge overlaps icon at top-right corner
-        let overlapX: CGFloat = badgeWidth * 0.35
+        // Badge at bottom-right, overlapping the icon
+        let overlapX: CGFloat = badgeWidth * 0.3
+        let overlapY: CGFloat = badgeDiameter * 0.35
         let totalWidth = iconSize + badgeWidth - overlapX
         let totalHeight = iconSize
 
@@ -100,16 +101,34 @@ struct BuboApp: App {
             let isDark = NSAppearance.current.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
             let iconColor = isDark ? NSColor.white.cgColor : NSColor.black.cgColor
 
-            // Draw owl icon at left
+            // Draw owl icon shifted up slightly to "open" it from the bottom
+            ctx.saveGState()
+            ctx.translateBy(x: 0, y: 2)
             self.drawOwl(in: ctx, size: iconSize, color: iconColor)
+            ctx.restoreGState()
 
-            // Draw red badge at top-right, overlapping the icon
+            // Draw badge at bottom-right, overlapping the icon
             let badgeX = iconSize - overlapX
-            let badgeY = rect.height - badgeDiameter
+            let badgeY: CGFloat = -overlapY + 1
             let badgeRect = NSRect(x: badgeX, y: badgeY, width: badgeWidth, height: badgeDiameter)
-            let path = NSBezierPath(roundedRect: badgeRect, xRadius: badgeDiameter / 2, yRadius: badgeDiameter / 2)
+
+            // Badge shadow for depth
+            ctx.saveGState()
+            ctx.setShadow(offset: CGSize(width: 0, height: -0.5), blur: 1.5, color: NSColor.black.withAlphaComponent(0.25).cgColor)
+            let badgePath = NSBezierPath(roundedRect: badgeRect, xRadius: badgeDiameter / 2, yRadius: badgeDiameter / 2)
             NSColor.systemBlue.setFill()
-            path.fill()
+            badgePath.fill()
+            ctx.restoreGState()
+
+            // Badge fill on top (crisp, no shadow)
+            NSColor.systemBlue.setFill()
+            badgePath.fill()
+
+            // Subtle inner highlight at top of badge
+            let highlightRect = NSRect(x: badgeX + 1.5, y: badgeY + badgeDiameter * 0.5, width: badgeWidth - 3, height: badgeDiameter * 0.4)
+            let highlightPath = NSBezierPath(roundedRect: highlightRect, xRadius: 3, yRadius: 3)
+            NSColor.white.withAlphaComponent(0.15).setFill()
+            highlightPath.fill()
 
             // Draw count text centered in badge
             let textX = badgeX + (badgeWidth - textSize.width) / 2
