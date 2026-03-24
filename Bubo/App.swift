@@ -14,6 +14,9 @@ struct BuboApp: App {
     }
 
     private func drawOwl(in ctx: CGContext, size s: CGFloat, color: CGColor) {
+        ctx.setShouldAntialias(true)
+        ctx.setAllowsAntialiasing(true)
+        ctx.setInterpolationQuality(.high)
         ctx.setFillColor(color)
 
         // Owl body (rounded rect)
@@ -22,17 +25,30 @@ struct BuboApp: App {
         ctx.addPath(bodyPath)
         ctx.fillPath()
 
-        // Ears (two triangles)
-        ctx.move(to: CGPoint(x: s * 0.15, y: s * 0.65))
-        ctx.addLine(to: CGPoint(x: s * 0.28, y: s * 0.92))
-        ctx.addLine(to: CGPoint(x: s * 0.38, y: s * 0.7))
-        ctx.closePath()
+        // Left ear (smooth curve)
+        let leftEar = CGMutablePath()
+        leftEar.move(to: CGPoint(x: s * 0.15, y: s * 0.65))
+        leftEar.addCurve(to: CGPoint(x: s * 0.28, y: s * 0.92),
+                         control1: CGPoint(x: s * 0.14, y: s * 0.78),
+                         control2: CGPoint(x: s * 0.20, y: s * 0.90))
+        leftEar.addCurve(to: CGPoint(x: s * 0.38, y: s * 0.7),
+                         control1: CGPoint(x: s * 0.34, y: s * 0.90),
+                         control2: CGPoint(x: s * 0.38, y: s * 0.78))
+        leftEar.closeSubpath()
+        ctx.addPath(leftEar)
         ctx.fillPath()
 
-        ctx.move(to: CGPoint(x: s * 0.85, y: s * 0.65))
-        ctx.addLine(to: CGPoint(x: s * 0.72, y: s * 0.92))
-        ctx.addLine(to: CGPoint(x: s * 0.62, y: s * 0.7))
-        ctx.closePath()
+        // Right ear (smooth curve)
+        let rightEar = CGMutablePath()
+        rightEar.move(to: CGPoint(x: s * 0.85, y: s * 0.65))
+        rightEar.addCurve(to: CGPoint(x: s * 0.72, y: s * 0.92),
+                          control1: CGPoint(x: s * 0.86, y: s * 0.78),
+                          control2: CGPoint(x: s * 0.80, y: s * 0.90))
+        rightEar.addCurve(to: CGPoint(x: s * 0.62, y: s * 0.7),
+                          control1: CGPoint(x: s * 0.66, y: s * 0.90),
+                          control2: CGPoint(x: s * 0.62, y: s * 0.78))
+        rightEar.closeSubpath()
+        ctx.addPath(rightEar)
         ctx.fillPath()
 
         // Eyes (cut out circles — clear)
@@ -60,11 +76,24 @@ struct BuboApp: App {
 
     private var menuBarIcon: NSImage {
         let size = NSSize(width: 18, height: 18)
-        let image = NSImage(size: size, flipped: false) { rect in
-            guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
-            drawOwl(in: ctx, size: rect.width, color: NSColor.black.cgColor)
-            return true
+        let scale: CGFloat = 2
+        let pixelW = Int(size.width * scale)
+        let pixelH = Int(size.height * scale)
+        let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: pixelW, pixelsHigh: pixelH,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+        )!
+        rep.size = size
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        if let ctx = NSGraphicsContext.current?.cgContext {
+            ctx.scaleBy(x: scale, y: scale)
+            drawOwl(in: ctx, size: size.width, color: NSColor.black.cgColor)
         }
+        NSGraphicsContext.restoreGraphicsState()
+        let image = NSImage(size: size)
+        image.addRepresentation(rep)
         image.isTemplate = true
         return image
     }
@@ -95,8 +124,20 @@ struct BuboApp: App {
         let bottomOverflow = max(0, overlapY - 1)
         let totalHeight = iconSize + bottomOverflow
 
-        let image = NSImage(size: NSSize(width: totalWidth, height: totalHeight), flipped: false) { rect in
-            guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
+        let imgSize = NSSize(width: totalWidth, height: totalHeight)
+        let scale: CGFloat = 2
+        let pixelW = Int(totalWidth * scale)
+        let pixelH = Int(totalHeight * scale)
+        let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: pixelW, pixelsHigh: pixelH,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+        )!
+        rep.size = imgSize
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        if let ctx = NSGraphicsContext.current?.cgContext {
+            ctx.scaleBy(x: scale, y: scale)
 
             // Determine icon color based on current appearance (light/dark menu bar)
             let isDark = NSAppearance.current.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
@@ -109,7 +150,6 @@ struct BuboApp: App {
             ctx.restoreGState()
 
             // Cut out a circular area from the owl where the badge will sit
-            // This creates the knockout/punch-out effect shown in the design
             let badgeX = iconSize - overlapX
             let badgeY: CGFloat = bottomOverflow - overlapY + 1
             let badgeRect = NSRect(x: badgeX, y: badgeY, width: badgeWidth, height: badgeDiameter)
@@ -143,9 +183,10 @@ struct BuboApp: App {
             let textX = badgeX + (badgeWidth - textSize.width) / 2
             let textY = badgeY + (badgeDiameter - textSize.height) / 2
             badgeText.draw(at: NSPoint(x: textX, y: textY), withAttributes: attrs)
-
-            return true
         }
+        NSGraphicsContext.restoreGraphicsState()
+        let image = NSImage(size: imgSize)
+        image.addRepresentation(rep)
         image.isTemplate = false
         return image
     }
