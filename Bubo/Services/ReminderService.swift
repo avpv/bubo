@@ -5,6 +5,9 @@ import AppKit
 @MainActor
 @Observable
 class ReminderService {
+    /// How many days ahead to fetch events. Used as the ceiling for badge time window.
+    static let fetchWindowDays = 7
+
     var upcomingEvents: [CalendarEvent] = []
     var localEvents: [CalendarEvent] = []
     var lastSyncDate: Date?
@@ -189,7 +192,7 @@ class ReminderService {
         syncError = nil
 
         let now = Date()
-        let endDate = Calendar.current.date(byAdding: .day, value: 7, to: now) ?? now
+        let endDate = Calendar.current.date(byAdding: .day, value: Self.fetchWindowDays, to: now) ?? now
 
         var events = AppleCalendarService.shared.fetchEvents(
             from: now,

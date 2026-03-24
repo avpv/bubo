@@ -58,7 +58,7 @@ struct GeneralTabView: View {
                         Stepper(
                             "Time window: \(settings.badgeTimeWindowHours) h",
                             value: $settings.badgeTimeWindowHours,
-                            in: 1...168
+                            in: 1...ReminderService.fetchWindowDays * 24
                         )
                     }
                 }
