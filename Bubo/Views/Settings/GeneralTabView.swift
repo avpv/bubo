@@ -1,6 +1,28 @@
 import ServiceManagement
 import SwiftUI
 
+struct ThemeColorPreview: View {
+    let colors: [Color]
+
+    var body: some View {
+        if colors.count == 1 {
+            Circle()
+                .fill(colors[0])
+                .frame(width: 12, height: 12)
+        } else {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: colors,
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 12, height: 12)
+        }
+    }
+}
+
 struct GeneralTabView: View {
     @Environment(ReminderSettings.self) var settings
     @Environment(ReminderService.self) var reminderService
@@ -67,7 +89,12 @@ struct GeneralTabView: View {
             SettingsPlatter("Appearance") {
                 Picker("Background", selection: $settings.backgroundStyle) {
                     ForEach(AppBackgroundStyle.allCases) { style in
-                        Text(style.displayName).tag(style)
+                        Label {
+                            Text(style.displayName)
+                        } icon: {
+                            ThemeColorPreview(colors: style.previewColors)
+                        }
+                        .tag(style)
                     }
                 }
             }
