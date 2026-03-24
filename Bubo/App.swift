@@ -71,6 +71,48 @@ struct BuboApp: App {
         reminderService.badgeCount
     }
 
+    private func menuBarIconWithBadge(count: Int) -> NSImage {
+        let icon = menuBarIcon
+        guard count > 0 else { return icon }
+
+        let badgeText = "\(count)" as NSString
+        let fontSize: CGFloat = 9
+        let font = NSFont.monospacedSystemFont(ofSize: fontSize, weight: .semibold)
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: NSColor.white,
+        ]
+        let textSize = badgeText.size(withAttributes: attrs)
+        let badgeHeight: CGFloat = 12
+        let badgeWidth = max(badgeHeight, textSize.width + 6)
+
+        let totalWidth = icon.size.width + 2 + badgeWidth
+        let totalHeight = max(icon.size.height, badgeHeight)
+
+        let image = NSImage(size: NSSize(width: totalWidth, height: totalHeight), flipped: false) { rect in
+            // Draw original icon aligned left-center
+            let iconY = (rect.height - icon.size.height) / 2
+            icon.draw(in: NSRect(x: 0, y: iconY, width: icon.size.width, height: icon.size.height))
+
+            // Draw badge pill to the right
+            let badgeX = icon.size.width + 2
+            let badgeY = (rect.height - badgeHeight) / 2
+            let badgeRect = NSRect(x: badgeX, y: badgeY, width: badgeWidth, height: badgeHeight)
+            let path = NSBezierPath(roundedRect: badgeRect, xRadius: badgeHeight / 2, yRadius: badgeHeight / 2)
+            NSColor.black.setFill()
+            path.fill()
+
+            // Draw text centered in badge
+            let textX = badgeX + (badgeWidth - textSize.width) / 2
+            let textY = badgeY + (badgeHeight - textSize.height) / 2
+            badgeText.draw(at: NSPoint(x: textX, y: textY), withAttributes: attrs)
+
+            return true
+        }
+        image.isTemplate = true
+        return image
+    }
+
     var body: some Scene {
         MenuBarExtra {
             MenuBarView(
@@ -79,15 +121,7 @@ struct BuboApp: App {
                 networkMonitor: networkMonitor
             )
         } label: {
-            if badgeCount > 0 {
-                Label {
-                    Text("\(badgeCount)")
-                } icon: {
-                    Image(nsImage: menuBarIcon)
-                }
-            } else {
-                Image(nsImage: menuBarIcon)
-            }
+            Image(nsImage: menuBarIconWithBadge(count: badgeCount))
         }
         .menuBarExtraStyle(.window)
 
