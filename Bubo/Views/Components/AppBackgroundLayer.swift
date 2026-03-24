@@ -26,6 +26,20 @@ enum AppBackgroundStyle: String, Codable, CaseIterable, Identifiable {
         case .goldenHour: return "Golden Hour"
         }
     }
+
+    var previewColors: [Color] {
+        switch self {
+        case .system: return [.gray]
+        case .accentGlow: return [.accentColor]
+        case .coolAmbient: return [.indigo, .blue]
+        case .warmAmbient: return [.orange, .red]
+        case .mintBreeze: return [.mint, .teal]
+        case .midnightPurple: return [.purple, .indigo]
+        case .blushPink: return [.pink, .orange]
+        case .oceanDepth: return [.cyan, .blue]
+        case .goldenHour: return [.yellow, .orange]
+        }
+    }
 }
 
 struct AppBackgroundLayer: View {
