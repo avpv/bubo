@@ -113,18 +113,16 @@ struct BuboApp: App {
 
         let imgSize = NSSize(width: totalWidth, height: totalHeight)
 
+        // Pre-render the template owl icon resolved for current menu bar appearance
+        let owlTemplate = menuBarIcon
+
         let image = NSImage(size: imgSize, flipped: false) { rect in
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
 
-            // Determine icon color based on current drawing appearance (light/dark menu bar)
-            let isDark = NSAppearance.currentDrawing().bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-            let iconColor = isDark ? NSColor.white.cgColor : NSColor.black.cgColor
-
-            // Draw owl icon shifted up to make room for badge overflow at the bottom
-            ctx.saveGState()
-            ctx.translateBy(x: 0, y: bottomOverflow + 2)
-            self.drawOwl(in: ctx, size: iconSize, color: iconColor)
-            ctx.restoreGState()
+            // Draw the template owl icon — the system resolves it for the current
+            // menu bar appearance (vibrancy, proper dark/light color & opacity)
+            let owlRect = NSRect(x: 0, y: bottomOverflow + 2, width: iconSize, height: iconSize)
+            owlTemplate.draw(in: owlRect, from: .zero, operation: .sourceOver, fraction: 1.0)
 
             // Cut out a circular area from the owl where the badge will sit
             let badgeX = iconSize - overlapX
