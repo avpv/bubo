@@ -92,7 +92,8 @@ struct BuboApp: App {
         let overlapX: CGFloat = badgeWidth * 0.3
         let overlapY: CGFloat = badgeDiameter * 0.35
         let totalWidth = iconSize + badgeWidth - overlapX
-        let totalHeight = iconSize
+        let bottomOverflow = max(0, overlapY - 1)
+        let totalHeight = iconSize + bottomOverflow
 
         let image = NSImage(size: NSSize(width: totalWidth, height: totalHeight), flipped: false) { rect in
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
@@ -101,16 +102,16 @@ struct BuboApp: App {
             let isDark = NSAppearance.current.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
             let iconColor = isDark ? NSColor.white.cgColor : NSColor.black.cgColor
 
-            // Draw owl icon shifted up slightly to "open" it from the bottom
+            // Draw owl icon shifted up to make room for badge overflow at the bottom
             ctx.saveGState()
-            ctx.translateBy(x: 0, y: 2)
+            ctx.translateBy(x: 0, y: bottomOverflow + 2)
             self.drawOwl(in: ctx, size: iconSize, color: iconColor)
             ctx.restoreGState()
 
             // Cut out a circular area from the owl where the badge will sit
             // This creates the knockout/punch-out effect shown in the design
             let badgeX = iconSize - overlapX
-            let badgeY: CGFloat = -overlapY + 1
+            let badgeY: CGFloat = bottomOverflow - overlapY + 1
             let badgeRect = NSRect(x: badgeX, y: badgeY, width: badgeWidth, height: badgeDiameter)
             let cutoutPadding: CGFloat = 1.5
             let cutoutRect = badgeRect.insetBy(dx: -cutoutPadding, dy: -cutoutPadding)
