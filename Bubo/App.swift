@@ -108,7 +108,7 @@ struct BuboApp: App {
             let badgeY = rect.height - badgeDiameter
             let badgeRect = NSRect(x: badgeX, y: badgeY, width: badgeWidth, height: badgeDiameter)
             let path = NSBezierPath(roundedRect: badgeRect, xRadius: badgeDiameter / 2, yRadius: badgeDiameter / 2)
-            NSColor.systemRed.setFill()
+            NSColor.systemBlue.setFill()
             path.fill()
 
             // Draw count text centered in badge
