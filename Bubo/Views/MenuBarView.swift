@@ -195,15 +195,6 @@ struct MenuBarView: View {
                     .transition(.scale.combined(with: .opacity))
             }
 
-            if settings.isDoNotDisturbActive {
-                Image(systemName: "moon.fill")
-                    .foregroundColor(.indigo)
-                    .font(.system(size: DS.Size.iconSmall))
-                    .help("Do Not Disturb")
-                    .accessibilityLabel("Do Not Disturb is active")
-                    .transition(.scale.combined(with: .opacity))
-            }
-
             if reminderService.isSyncing {
                 ProgressView()
                     .scaleEffect(0.5)
@@ -212,7 +203,6 @@ struct MenuBarView: View {
             }
         }
         .animation(DS.Animation.microInteraction, value: networkMonitor.isConnected)
-        .animation(DS.Animation.microInteraction, value: settings.isDoNotDisturbActive)
         .animation(DS.Animation.microInteraction, value: reminderService.isSyncing)
     }
 

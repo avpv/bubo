@@ -53,20 +53,6 @@ struct RemindersTabView: View {
                     .padding(.top, DS.Spacing.xs)
             }
 
-            SettingsPlatter("Do Not Disturb") {
-                Toggle("Enable Do Not Disturb", isOn: $settings.doNotDisturbEnabled)
-
-                if settings.doNotDisturbEnabled {
-                    DatePicker("From", selection: $settings.doNotDisturbFrom, displayedComponents: .hourAndMinute)
-                    DatePicker("To", selection: $settings.doNotDisturbTo, displayedComponents: .hourAndMinute)
-
-                    if settings.isDoNotDisturbActive {
-                        Label("Currently active", systemImage: "moon.fill")
-                            .foregroundColor(.indigo)
-                            .font(.caption)
-                    }
-                }
-            }
             }
             .padding(20)
         }

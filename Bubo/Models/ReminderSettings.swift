@@ -47,9 +47,6 @@ class ReminderSettings: Codable {
     var showFullScreenAlert: Bool { didSet { scheduleSave() } }
     var showSystemNotification: Bool { didSet { scheduleSave() } }
     var launchAtLogin: Bool
-    var doNotDisturbEnabled: Bool { didSet { scheduleSave() } }
-    var doNotDisturbFrom: Date { didSet { scheduleSave() } }
-    var doNotDisturbTo: Date { didSet { scheduleSave() } }
     var selectedCalendarIds: [String] { didSet { scheduleSave() } }
     var isCalendarSyncEnabled: Bool { didSet { scheduleSave() } }
     var backgroundStyle: AppBackgroundStyle { didSet { scheduleSave() } }
@@ -62,7 +59,6 @@ class ReminderSettings: Codable {
 
     enum CodingKeys: String, CodingKey {
         case intervals, syncIntervalMinutes, showFullScreenAlert, showSystemNotification
-        case doNotDisturbEnabled, doNotDisturbFrom, doNotDisturbTo
         case selectedCalendarIds, isCalendarSyncEnabled, backgroundStyle
         case showBadgeCount, badgeCountMode, badgeTimeWindowHours
     }
@@ -76,11 +72,6 @@ class ReminderSettings: Codable {
         self.showFullScreenAlert = true
         self.showSystemNotification = true
         self.launchAtLogin = false
-        self.doNotDisturbEnabled = false
-        // Default DND: 22:00 - 08:00
-        let calendar = Calendar.current
-        self.doNotDisturbFrom = calendar.date(from: DateComponents(hour: 22, minute: 0)) ?? Date()
-        self.doNotDisturbTo = calendar.date(from: DateComponents(hour: 8, minute: 0)) ?? Date()
         self.selectedCalendarIds = [] // empty = sync all
         self.isCalendarSyncEnabled = true
         self.backgroundStyle = .system
@@ -96,13 +87,6 @@ class ReminderSettings: Codable {
         showFullScreenAlert = try container.decode(Bool.self, forKey: .showFullScreenAlert)
         showSystemNotification = try container.decodeIfPresent(Bool.self, forKey: .showSystemNotification) ?? true
         launchAtLogin = false
-        doNotDisturbEnabled = try container.decodeIfPresent(Bool.self, forKey: .doNotDisturbEnabled) ?? false
-
-        let calendar = Calendar.current
-        doNotDisturbFrom = try container.decodeIfPresent(Date.self, forKey: .doNotDisturbFrom)
-            ?? calendar.date(from: DateComponents(hour: 22, minute: 0)) ?? Date()
-        doNotDisturbTo = try container.decodeIfPresent(Date.self, forKey: .doNotDisturbTo)
-            ?? calendar.date(from: DateComponents(hour: 8, minute: 0)) ?? Date()
         selectedCalendarIds = try container.decodeIfPresent([String].self, forKey: .selectedCalendarIds) ?? []
         isCalendarSyncEnabled = try container.decodeIfPresent(Bool.self, forKey: .isCalendarSyncEnabled) ?? true
         backgroundStyle = try container.decodeIfPresent(AppBackgroundStyle.self, forKey: .backgroundStyle) ?? .system
@@ -117,34 +101,12 @@ class ReminderSettings: Codable {
         try container.encode(syncIntervalMinutes, forKey: .syncIntervalMinutes)
         try container.encode(showFullScreenAlert, forKey: .showFullScreenAlert)
         try container.encode(showSystemNotification, forKey: .showSystemNotification)
-        try container.encode(doNotDisturbEnabled, forKey: .doNotDisturbEnabled)
-        try container.encode(doNotDisturbFrom, forKey: .doNotDisturbFrom)
-        try container.encode(doNotDisturbTo, forKey: .doNotDisturbTo)
         try container.encode(selectedCalendarIds, forKey: .selectedCalendarIds)
         try container.encode(isCalendarSyncEnabled, forKey: .isCalendarSyncEnabled)
         try container.encode(backgroundStyle, forKey: .backgroundStyle)
         try container.encode(showBadgeCount, forKey: .showBadgeCount)
         try container.encode(badgeCountMode, forKey: .badgeCountMode)
         try container.encode(badgeTimeWindowHours, forKey: .badgeTimeWindowHours)
-    }
-
-    /// Check if current time is within Do Not Disturb period
-    var isDoNotDisturbActive: Bool {
-        guard doNotDisturbEnabled else { return false }
-
-        let calendar = Calendar.current
-        let now = Date()
-        let currentMinutes = calendar.component(.hour, from: now) * 60 + calendar.component(.minute, from: now)
-        let fromMinutes = calendar.component(.hour, from: doNotDisturbFrom) * 60 + calendar.component(.minute, from: doNotDisturbFrom)
-        let toMinutes = calendar.component(.hour, from: doNotDisturbTo) * 60 + calendar.component(.minute, from: doNotDisturbTo)
-
-        if fromMinutes == toMinutes {
-            return false
-        } else if fromMinutes < toMinutes {
-            return currentMinutes >= fromMinutes && currentMinutes < toMinutes
-        } else {
-            return currentMinutes >= fromMinutes || currentMinutes < toMinutes
-        }
     }
 
     private func scheduleSave() {

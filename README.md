@@ -107,10 +107,6 @@ No confusing menus. No hidden preferences buried three screens deep. Just a list
 
 Not ready when the alert hits? Hit **Snooze** right from the full-screen overlay. Bubo steps back and comes again later. No judgment.
 
-### Do Not Disturb
-
-Sometimes you *want* silence. Set quiet hours — say, 10 PM to 7 AM — and Bubo goes completely dark. No reminders, no alerts, no full-screen takeovers. Just peace. Until the morning comes and the eagle-owl wakes up again.
-
 **Built like a Mac app should be.** Frosted glass. Spring animations. Haptic feedback. Bubo doesn't look like an Electron wrapper or a web view pretending to be native. It's Swift and SwiftUI from the first line to the last, designed to feel like it shipped with your Mac.
 
 ---
