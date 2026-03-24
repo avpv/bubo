@@ -76,24 +76,11 @@ struct BuboApp: App {
 
     private var menuBarIcon: NSImage {
         let size = NSSize(width: 18, height: 18)
-        let scale: CGFloat = 2
-        let pixelW = Int(size.width * scale)
-        let pixelH = Int(size.height * scale)
-        let rep = NSBitmapImageRep(
-            bitmapDataPlanes: nil, pixelsWide: pixelW, pixelsHigh: pixelH,
-            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
-            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
-        )!
-        rep.size = size
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
-        if let ctx = NSGraphicsContext.current?.cgContext {
-            ctx.scaleBy(x: scale, y: scale)
-            drawOwl(in: ctx, size: size.width, color: NSColor.black.cgColor)
+        let image = NSImage(size: size, flipped: false) { rect in
+            guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
+            self.drawOwl(in: ctx, size: rect.width, color: NSColor.black.cgColor)
+            return true
         }
-        NSGraphicsContext.restoreGraphicsState()
-        let image = NSImage(size: size)
-        image.addRepresentation(rep)
         image.isTemplate = true
         return image
     }
@@ -125,22 +112,12 @@ struct BuboApp: App {
         let totalHeight = iconSize + bottomOverflow
 
         let imgSize = NSSize(width: totalWidth, height: totalHeight)
-        let scale: CGFloat = 2
-        let pixelW = Int(totalWidth * scale)
-        let pixelH = Int(totalHeight * scale)
-        let rep = NSBitmapImageRep(
-            bitmapDataPlanes: nil, pixelsWide: pixelW, pixelsHigh: pixelH,
-            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
-            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
-        )!
-        rep.size = imgSize
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
-        if let ctx = NSGraphicsContext.current?.cgContext {
-            ctx.scaleBy(x: scale, y: scale)
 
-            // Determine icon color based on current appearance (light/dark menu bar)
-            let isDark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        let image = NSImage(size: imgSize, flipped: false) { rect in
+            guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
+
+            // Determine icon color based on current drawing appearance (light/dark menu bar)
+            let isDark = NSAppearance.currentDrawing().bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
             let iconColor = isDark ? NSColor.white.cgColor : NSColor.black.cgColor
 
             // Draw owl icon shifted up to make room for badge overflow at the bottom
@@ -183,10 +160,9 @@ struct BuboApp: App {
             let textX = badgeX + (badgeWidth - textSize.width) / 2
             let textY = badgeY + (badgeDiameter - textSize.height) / 2
             badgeText.draw(at: NSPoint(x: textX, y: textY), withAttributes: attrs)
+
+            return true
         }
-        NSGraphicsContext.restoreGraphicsState()
-        let image = NSImage(size: imgSize)
-        image.addRepresentation(rep)
         image.isTemplate = false
         return image
     }
