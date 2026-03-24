@@ -55,14 +55,11 @@ struct GeneralTabView: View {
                     }
 
                     if settings.badgeCountMode == .timeWindow {
-                        Picker("Time window", selection: $settings.badgeTimeWindowHours) {
-                            Text("1 hour").tag(1)
-                            Text("2 hours").tag(2)
-                            Text("4 hours").tag(4)
-                            Text("6 hours").tag(6)
-                            Text("8 hours").tag(8)
-                            Text("12 hours").tag(12)
-                        }
+                        Stepper(
+                            "Time window: \(settings.badgeTimeWindowHours) h",
+                            value: $settings.badgeTimeWindowHours,
+                            in: 1...24
+                        )
                     }
                 }
             }
