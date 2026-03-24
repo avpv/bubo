@@ -107,10 +107,18 @@ struct BuboApp: App {
             self.drawOwl(in: ctx, size: iconSize, color: iconColor)
             ctx.restoreGState()
 
-            // Draw badge at bottom-right, overlapping the icon
+            // Cut out a circular area from the owl where the badge will sit
+            // This creates the knockout/punch-out effect shown in the design
             let badgeX = iconSize - overlapX
             let badgeY: CGFloat = -overlapY + 1
             let badgeRect = NSRect(x: badgeX, y: badgeY, width: badgeWidth, height: badgeDiameter)
+            let cutoutPadding: CGFloat = 1.5
+            let cutoutRect = badgeRect.insetBy(dx: -cutoutPadding, dy: -cutoutPadding)
+            ctx.saveGState()
+            ctx.setBlendMode(.clear)
+            let cutoutPath = NSBezierPath(roundedRect: cutoutRect, xRadius: (badgeDiameter / 2) + cutoutPadding, yRadius: (badgeDiameter / 2) + cutoutPadding)
+            cutoutPath.fill()
+            ctx.restoreGState()
 
             // Badge shadow for depth
             ctx.saveGState()
