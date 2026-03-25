@@ -300,6 +300,7 @@ struct MenuBarView: View {
             .padding(.horizontal, DS.Spacing.md)
             .padding(.top, DS.Spacing.md)
             .padding(.bottom, DS.Spacing.xl)
+            .scrollTargetLayout()
             .id("eventListTop")
         }
         .scrollPosition(id: $scrollPositionID)
