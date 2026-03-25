@@ -238,16 +238,21 @@ struct MenuBarView: View {
     private var eventList: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: DS.Spacing.lg) {
-                    // Scroll offset sensor — pinned at the top of content
-                    GeometryReader { geo in
-                        Color.clear.preference(
-                            key: ScrollOffsetKey.self,
-                            value: geo.frame(in: .named("eventScroll")).minY
-                        )
-                    }
-                    .frame(height: 0)
-                    .id("scrollTop")
+                VStack(alignment: .leading, spacing: DS.Spacing.lg) {
+                    // Sentinel view — triggers onAppear/onDisappear as it enters/leaves viewport
+                    Color.clear
+                        .frame(height: 1)
+                        .id("scrollTop")
+                        .onAppear {
+                            withAnimation(DS.Animation.microInteraction) {
+                                isScrolledDown = false
+                            }
+                        }
+                        .onDisappear {
+                            withAnimation(DS.Animation.microInteraction) {
+                                isScrolledDown = true
+                            }
+                        }
 
                     ForEach(reminderService.eventsByDay, id: \.date) { dayGroup in
                         Section {
@@ -282,15 +287,6 @@ struct MenuBarView: View {
                 .padding(.horizontal, DS.Spacing.md)
                 .padding(.top, DS.Spacing.md)
                 .padding(.bottom, isScrolledDown ? DS.Spacing.xxxl + DS.Spacing.sm : DS.Spacing.xl)
-            }
-            .coordinateSpace(name: "eventScroll")
-            .onPreferenceChange(ScrollOffsetKey.self) { offset in
-                let scrolled = offset < -30
-                if scrolled != isScrolledDown {
-                    withAnimation(DS.Animation.microInteraction) {
-                        isScrolledDown = scrolled
-                    }
-                }
             }
             .scrollContentBackground(.hidden)
             .frame(maxHeight: DS.Popover.listMaxHeight)
@@ -373,15 +369,6 @@ private struct OpenSettingsButton: View {
         } label: {
             Label("Settings", systemImage: "gear")
         }
-    }
-}
-
-// MARK: - Scroll Offset Tracking
-
-private struct ScrollOffsetKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
     }
 }
 
