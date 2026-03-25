@@ -276,7 +276,7 @@ struct MenuBarView: View {
                 }
                 .padding(.horizontal, DS.Spacing.md)
                 .padding(.top, DS.Spacing.md)
-                .padding(.bottom, DS.Spacing.xl)
+                .padding(.bottom, isScrolledDown ? DS.Spacing.xxxl + DS.Spacing.sm : DS.Spacing.xl)
                 .background(
                     GeometryReader { geo in
                         Color.clear.preference(
