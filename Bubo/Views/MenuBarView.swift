@@ -239,10 +239,15 @@ struct MenuBarView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: DS.Spacing.lg) {
-                    // Invisible anchor at the top for programmatic scrolling
-                    Color.clear
-                        .frame(height: 0)
-                        .id("scrollTop")
+                    // Scroll offset sensor — pinned at the top of content
+                    GeometryReader { geo in
+                        Color.clear.preference(
+                            key: ScrollOffsetKey.self,
+                            value: geo.frame(in: .named("eventScroll")).minY
+                        )
+                    }
+                    .frame(height: 0)
+                    .id("scrollTop")
 
                     ForEach(reminderService.eventsByDay, id: \.date) { dayGroup in
                         Section {
@@ -277,18 +282,10 @@ struct MenuBarView: View {
                 .padding(.horizontal, DS.Spacing.md)
                 .padding(.top, DS.Spacing.md)
                 .padding(.bottom, isScrolledDown ? DS.Spacing.xxxl + DS.Spacing.sm : DS.Spacing.xl)
-                .background(
-                    GeometryReader { geo in
-                        Color.clear.preference(
-                            key: ScrollOffsetKey.self,
-                            value: geo.frame(in: .named("eventScroll")).minY
-                        )
-                    }
-                )
             }
             .coordinateSpace(name: "eventScroll")
             .onPreferenceChange(ScrollOffsetKey.self) { offset in
-                let scrolled = offset < -40
+                let scrolled = offset < -30
                 if scrolled != isScrolledDown {
                     withAnimation(DS.Animation.microInteraction) {
                         isScrolledDown = scrolled
