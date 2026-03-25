@@ -8,6 +8,7 @@ struct MenuBarView: View {
     @State private var navigation: Navigation = .list
     @State private var hasStartedSync = false
     @State private var toastState = ToastState()
+    @State private var isScrolledDown = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -235,44 +236,85 @@ struct MenuBarView: View {
     }
 
     private var eventList: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: DS.Spacing.lg) {
-                ForEach(reminderService.eventsByDay, id: \.date) { dayGroup in
-                    Section {
-                        VStack(spacing: DS.Spacing.md) {
-                            ForEach(dayGroup.events) { event in
-                                EventRowView(
-                                    event: event,
-                                    reminderService: reminderService,
-                                    onEdit: { event in resolveEdit(event) },
-                                    onDelete: { event in handleDelete(event) },
-                                    onDeleteOccurrence: { event in
-                                        reminderService.excludeOccurrence(occurrenceId: event.id)
-                                        toastState.showSuccess("Occurrence skipped", icon: "trash.fill")
-                                    },
-                                    onDeleteSeries: { event in
-                                        let seriesId = event.seriesId ?? event.id
-                                        reminderService.removeLocalEvent(id: seriesId)
-                                        toastState.showSuccess("All occurrences deleted", icon: "trash.fill")
-                                    },
-                                    onTap: { event in
-                                        navigation = .detail(event)
-                                    }
-                                )
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: DS.Spacing.lg) {
+                    // Invisible anchor at the top for programmatic scrolling
+                    Color.clear
+                        .frame(height: 0)
+                        .id("scrollTop")
+
+                    ForEach(reminderService.eventsByDay, id: \.date) { dayGroup in
+                        Section {
+                            VStack(spacing: DS.Spacing.md) {
+                                ForEach(dayGroup.events) { event in
+                                    EventRowView(
+                                        event: event,
+                                        reminderService: reminderService,
+                                        onEdit: { event in resolveEdit(event) },
+                                        onDelete: { event in handleDelete(event) },
+                                        onDeleteOccurrence: { event in
+                                            reminderService.excludeOccurrence(occurrenceId: event.id)
+                                            toastState.showSuccess("Occurrence skipped", icon: "trash.fill")
+                                        },
+                                        onDeleteSeries: { event in
+                                            let seriesId = event.seriesId ?? event.id
+                                            reminderService.removeLocalEvent(id: seriesId)
+                                            toastState.showSuccess("All occurrences deleted", icon: "trash.fill")
+                                        },
+                                        onTap: { event in
+                                            navigation = .detail(event)
+                                        }
+                                    )
+                                }
                             }
+                        } header: {
+                            DaySectionHeader(date: dayGroup.date, count: dayGroup.events.count)
+                                .padding(.horizontal, DS.Spacing.sm)
                         }
-                    } header: {
-                        DaySectionHeader(date: dayGroup.date, count: dayGroup.events.count)
-                            .padding(.horizontal, DS.Spacing.sm)
+                    }
+                }
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.top, DS.Spacing.md)
+                .padding(.bottom, isScrolledDown ? DS.Spacing.xxxl + DS.Spacing.sm : DS.Spacing.xl)
+                .background(
+                    GeometryReader { geo in
+                        Color.clear.preference(
+                            key: ScrollOffsetKey.self,
+                            value: geo.frame(in: .named("eventScroll")).minY
+                        )
+                    }
+                )
+            }
+            .coordinateSpace(name: "eventScroll")
+            .onPreferenceChange(ScrollOffsetKey.self) { offset in
+                let scrolled = offset < -40
+                if scrolled != isScrolledDown {
+                    withAnimation(DS.Animation.microInteraction) {
+                        isScrolledDown = scrolled
                     }
                 }
             }
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.top, DS.Spacing.md)
-            .padding(.bottom, DS.Spacing.xl)
+            .scrollContentBackground(.hidden)
+            .frame(maxHeight: DS.Popover.listMaxHeight)
+            .overlay(alignment: .bottomTrailing) {
+                if isScrolledDown {
+                    ScrollToTopButton {
+                        Haptics.tap()
+                        withAnimation(DS.Animation.smoothSpring) {
+                            proxy.scrollTo("scrollTop", anchor: .top)
+                        }
+                    }
+                    .padding(.trailing, DS.Spacing.md)
+                    .padding(.bottom, DS.Spacing.sm)
+                    .transition(
+                        reduceMotion
+                            ? .opacity
+                            : .scale(scale: 0.5).combined(with: .opacity)
+                    )
+                }
+            }
         }
-        .scrollContentBackground(.hidden)
-        .frame(maxHeight: DS.Popover.listMaxHeight)
     }
 
     private var footerActions: some View {
@@ -334,6 +376,44 @@ private struct OpenSettingsButton: View {
         } label: {
             Label("Settings", systemImage: "gear")
         }
+    }
+}
+
+// MARK: - Scroll Offset Tracking
+
+private struct ScrollOffsetKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+// MARK: - Scroll to Top Button
+
+private struct ScrollToTopButton: View {
+    var action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "chevron.up")
+                .font(.system(size: DS.Size.iconMedium, weight: .semibold))
+                .foregroundStyle(DS.Colors.textSecondary)
+                .frame(width: 28, height: 28)
+                .background(.thickMaterial)
+                .clipShape(Circle())
+                .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
+        }
+        .buttonStyle(.plain)
+        .scaleEffect(isHovered ? 1.08 : 1.0)
+        .onHover { hovering in
+            withAnimation(DS.Animation.microInteraction) {
+                isHovered = hovering
+            }
+        }
+        .help("Scroll to top")
+        .accessibilityLabel("Scroll to top")
     }
 }
 
