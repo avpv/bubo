@@ -8,6 +8,7 @@ struct MenuBarView: View {
     @State private var navigation: Navigation = .list
     @State private var hasStartedSync = false
     @State private var toastState = ToastState()
+    @State private var scrollPositionID: Date?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -107,6 +108,12 @@ struct MenuBarView: View {
 
     // MARK: - Helpers
 
+    private var isScrolledFromTop: Bool {
+        guard let pos = scrollPositionID,
+              let first = reminderService.eventsByDay.first?.date else { return false }
+        return pos != first
+    }
+
     private func resolveEdit(_ event: CalendarEvent) {
         if let seriesEvent = reminderService.seriesEvent(for: event) {
             navigation = .addEvent(editing: seriesEvent)
@@ -131,7 +138,7 @@ struct MenuBarView: View {
                     HStack(spacing: DS.Spacing.sm) {
                         statusIndicators
 
-                        if !reminderService.eventsByDay.isEmpty {
+                        if isScrolledFromTop {
                             Button {
                                 Haptics.tap()
                                 withAnimation(DS.Animation.smoothSpring) {
@@ -145,6 +152,7 @@ struct MenuBarView: View {
                             .buttonStyle(.borderless)
                             .help("Scroll to top")
                             .accessibilityLabel("Scroll to top")
+                            .transition(.scale.combined(with: .opacity))
                         }
                     }
                 )
@@ -294,6 +302,7 @@ struct MenuBarView: View {
             .padding(.bottom, DS.Spacing.xl)
             .id("eventListTop")
         }
+        .scrollPosition(id: $scrollPositionID)
         .scrollContentBackground(.hidden)
         .frame(maxHeight: DS.Popover.listMaxHeight)
     }
