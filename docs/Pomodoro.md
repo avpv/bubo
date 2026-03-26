@@ -1,130 +1,136 @@
-# The Pomodoro Technique with Bubo 🦉🍅
+# Pomodoro Focus Timer
 
-It was 2:47 PM on a Tuesday, and Alex was drowning.
+Bubo has a built-in Pomodoro timer that turns any event into a structured focus session. Toggle Pomodoro mode when creating or editing an event, and Bubo automatically generates work blocks, short breaks, and a long break — all visible on your timeline and blocked on your calendar.
 
-Three Slack threads. A pull request that needed reviewing. An inbox with 43 unread messages. A design doc due by end of day. The cursor blinked patiently on line 214 of a function that, an hour ago, had felt almost finished. Now it felt like a stranger's code.
+<p align="center">
+  <img src="../screenshots/ui_pomodoro.png" alt="Pomodoro session in Bubo" width="340">
+</p>
 
-Alex glanced at the clock — 3:12 PM. Twenty-five minutes had vanished into the void between tabs. Not a single line written. Not a single email answered. Just... drift.
+## How it works
 
-That evening, scrolling through dev Twitter, Alex stumbled across a name: **Francesco Cirillo**. An Italian university student who, in the late 1980s, faced the same invisible enemy — the shapeless, slippery nature of time. His weapon of choice? A tomato-shaped kitchen timer. *Pomodoro*, in Italian. He set it for 25 minutes, committed to a single task, and when the timer rang, he stopped. Took a break. Then did it again.
+1. **Create an event** and enable Pomodoro mode.
+2. **Pick a rhythm** (or keep the default Classic).
+3. **Start working.** A ring timer counts down in the menu bar.
+4. **Break when Bubo tells you.** A full-screen overlay appears — not a notification, but an unmissable signal to stop and rest.
+5. **Repeat** until all rounds are complete, then take the long break.
 
-Simple. Almost stupidly simple. And yet — it worked.
-
----
-
-## The Method
-
-The idea behind the Pomodoro Technique is deceptively elegant: your brain is not a marathon runner. It's a sprinter. Give it a short track, a clear finish line, and it will fly. Ask it to run forever, and it will wander.
-
-Here's how it works inside Bubo:
-
-1. **Pick a task** — right from the menu bar. Name it. Make it real.
-2. **Set the timer** — 25 minutes is the classic, but you'll find your own rhythm.
-3. **Work. Only work.** No tabs. No "quick checks." Just you and the task until the owl tells you to stop.
-4. **Take a short break** — 5 minutes. Stand up. Breathe. Look at something farther than a screen.
-5. **Repeat.** After several rounds, take a longer break — 15 to 30 minutes — and let your mind genuinely rest.
-
-Bubo handles the scaffolding. It generates the work sessions, the breaks, even the long breaks — all as calendar events, blocking your time so the world knows you're busy building something that matters.
+Work sessions, breaks, and long breaks are each created as separate calendar events so your colleagues see you as busy during the entire block.
 
 ---
 
-## Five Rhythms for Five Kinds of Days
+## Five rhythms
 
-Alex tried the classic 25/5 split for a week. It was revelatory — but not perfect for everything. Some tasks needed longer runway. Some days called for quick bursts. Over time, Alex discovered what productivity researchers already knew: there is no single ideal rhythm. There are several — each suited to a different kind of work, a different kind of energy.
+Bubo ships with five Pomodoro presets. Each one is designed for a different kind of work.
 
-Here are five that stuck.
+### Classic
 
----
+The original Pomodoro recipe. Four short sprints with brief pauses — ideal for a mixed workload of tasks, reviews, and emails.
 
-### 1. The Classic — "The One That Started It All"
+![Classic Pomodoro](images/classic-pomodoro-flowchart.svg)
 
-It was a Wednesday morning. Alex had a mixed bag ahead: update some tests, write a short RFC, reply to a few code reviews. Nothing that demanded deep immersion, but nothing trivial either. A day of medium-intensity cognitive juggling.
+| | |
+|---|---|
+| **Work** | 25 min |
+| **Break** | 5 min |
+| **Rounds** | 4 |
+| **Long break** | 15 min |
 
-The Classic was built for days exactly like this.
-
-![Classic Pomodoro Timer](images/classic-pomodoro-flowchart.svg)
-
-- **Work:** 25 min
-- **Rounds:** 4
-- **Break:** 5 min
-- **Long Break:** 15 min (after 4 rounds)
-
-Francesco Cirillo's original recipe. Four rounds of focused sprints, each followed by a brief palate cleanser. After the fourth, a proper 15-minute reset. Two hours, neatly packaged. No decision fatigue about *when* to stop — the timer decides. You just show up.
+Best for: everyday task lists, code reviews, email triage, writing.
 
 ---
 
-### 2. Deep Work — "The Flow State Guardian"
+### Deep Work
 
-Thursday. Alex was implementing a new caching layer — the kind of task where you need to hold an entire system's architecture in your head simultaneously. Interruptions aren't just annoying; they're destructive. Every context switch costs 20 minutes to recover from. A 5-minute break every 25 minutes? That's not a rest — that's sabotage.
+Longer sessions that let you load full context before the real progress begins. Use this when interruptions are destructive — architecture work, complex debugging, long-form writing.
 
-Deep Work mode was born for this.
+![Deep Work](images/deep-work-flowchart.svg)
 
-![Deep Work Flow State](images/deep-work-flowchart.svg)
+| | |
+|---|---|
+| **Work** | 50 min |
+| **Break** | 10 min |
+| **Rounds** | 2 |
+| **Long break** | 20 min |
 
-- **Work:** 50–60 min
-- **Rounds:** 2
-- **Break:** 10 min
-- **Long Break:** 20–30 min
-
-Longer focus periods let you sink into the problem. The first 15 minutes load the context. The next 35 are where the magic happens — where you see patterns, where elegant solutions surface from the noise. The 10-minute break is long enough to genuinely recover, short enough to keep the thread alive in your mind.
-
----
-
-### 3. The Sprinter — "Death to the Inbox"
-
-Friday afternoon. Energy reserves at maybe 30%. An inbox full of small, unrelated tasks: approve that access request, update the wiki, reply to the recruiter, file the expense report. None of them hard. All of them annoying. Together, they form a wall of procrastination so tall it blocks the sun.
-
-The Sprinter turns that wall into confetti.
-
-![Sprinter Tasks Loop](images/sprinter-flowchart.svg)
-
-- **Work:** 15 min
-- **Rounds:** 4
-- **Break:** 3–5 min
-- **Long Break:** 15 min
-
-Fifteen minutes. That's all you commit to. "I'll just clear three emails." The short timer creates urgency. The tiny break keeps you fresh. Before you know it, four rounds later, the inbox is empty and the wiki is updated and that expense report is finally filed. You didn't need motivation — you needed a short enough runway to start.
+Best for: system design, refactoring, research, any task that needs 15+ minutes just to "load in."
 
 ---
 
-### 4. The 52/17 Rule — "The One Science Found"
+### Sprinter
 
-A study by the time-tracking company DeskTime analyzed their most productive users — the top 10% — and discovered a peculiar pattern. They didn't work eight straight hours. They didn't even use the Pomodoro Technique. They worked for approximately 52 minutes, then took a 17-minute break. Consistently. Almost ritualistically.
+Ultra-short bursts that create urgency. The timer is so short you can't procrastinate — just pick one small thing and finish it before the bell.
 
-Alex was skeptical at first. Seventeen minutes felt oddly specific and strangely long for a break. But after trying it on a Monday packed with data pipeline work, the skepticism evaporated. The longer work window allowed for genuine depth. The 17-minute break — long enough to take a walk, make real coffee, or do a few stretches — meant coming back actually refreshed, not just paused.
+![Sprinter](images/sprinter-flowchart.svg)
 
-![52/17 Rule Flowchart](images/52-17-rule-flowchart.svg)
+| | |
+|---|---|
+| **Work** | 15 min |
+| **Break** | 3 min |
+| **Rounds** | 4 |
+| **Long break** | 15 min |
 
-- **Work:** 52 min
-- **Rounds:** 3–4
-- **Break:** 17 min
-- **Long Break:** 30 min (after all rounds)
-
-This rhythm sits in the sweet spot between the Classic and Deep Work. It's ideal for tasks that require sustained focus — coding, data analysis, strategic planning — but aren't so fragile that a break every hour would shatter them.
-
----
-
-### 5. The 90-Minute Ultradian — "Working With Your Biology"
-
-There's a rhythm older than any productivity hack. It's called the *ultradian cycle* — a roughly 90-minute wave of high and low alertness that your brain rides all day, every day, whether you notice it or not. Sleep researchers discovered it first (it's why your sleep cycles are ~90 minutes), but it governs waking hours too.
-
-Alex learned about it from a neuroscience podcast during one of those 17-minute breaks. The idea was simple: instead of fighting your biology with arbitrary timers, *align* with it. Work for 90 minutes — one full cycle of peak alertness — and then rest for 15–20 minutes as your brain naturally dips.
-
-It's not for every day. It demands real discipline — 90 minutes of genuine focus is a serious commitment. But for the days when you're writing something important, designing something complex, or solving something hard, nothing else comes close.
-
-![90-Minute Ultradian Rhythm Flowchart](images/ultradian-90min-flowchart.svg)
-
-- **Work:** 90 min
-- **Rounds:** 1
-- **Break:** 15–20 min
-- *(Take a natural, unplugged break before scheduling your next session.)*
+Best for: inbox zero, admin tasks, expense reports, quick fixes — anything small that keeps piling up.
 
 ---
 
-## The Owl Remembers
+### 52/17 Rule
 
-Months later, Alex barely thinks about the technique anymore. It's become muscle memory. Click the owl. Name the task. Set the rhythm. Work.
+Based on a study of the most productive workers: 52 minutes of focus followed by a 17-minute real break. The longer pause means you come back genuinely refreshed, not just paused.
 
-The meetings still come. The Slack threads still multiply. The inbox still fills. But somewhere between the first Pomodoro and the last, something shifted. Time stopped being the enemy. It became a tool — one shaped like a tomato, guarded by an owl.
+![52/17 Rule](images/52-17-rule-flowchart.svg)
 
-Happy focusing! 🦉
+| | |
+|---|---|
+| **Work** | 52 min |
+| **Break** | 17 min |
+| **Rounds** | 3 |
+| **Long break** | 30 min |
+
+Best for: data work, strategic planning, coding sessions that need sustained attention without the intensity of Deep Work.
+
+---
+
+### Ultradian
+
+One 90-minute block aligned with your body's natural alertness cycle. The most demanding rhythm — but nothing else matches it for the days when you need to go deep on a single problem.
+
+![Ultradian](images/ultradian-90min-flowchart.svg)
+
+| | |
+|---|---|
+| **Work** | 90 min |
+| **Break** | 20 min |
+| **Rounds** | 1 |
+
+Best for: hard problems, creative work, presentations, anything that rewards unbroken concentration.
+
+---
+
+## Choosing a rhythm
+
+| If your day looks like... | Try |
+|---|---|
+| A mix of small and medium tasks | **Classic** |
+| One large, complex task | **Deep Work** |
+| A pile of quick to-dos | **Sprinter** |
+| Steady project work, nothing urgent | **52/17 Rule** |
+| A single high-stakes deliverable | **Ultradian** |
+
+You can change the rhythm for each event independently. There's no need to commit to one style for the whole day.
+
+---
+
+## Full-screen break alerts
+
+When a work session ends, Bubo covers your screen with a break timer. This is intentional — the break is not optional. Research consistently shows that skipping breaks reduces performance across the remaining sessions. Bubo enforces the rhythm so you don't have to rely on willpower.
+
+The alert disappears automatically when the break is over, or you can dismiss it early and return to the next work session.
+
+---
+
+## Tips
+
+- **Name the task, not the time.** "Fix auth redirect" is better than "Pomodoro session." It keeps you accountable.
+- **Pick the rhythm before you start.** Deciding mid-session wastes the focus you're trying to protect.
+- **Honor the breaks.** Stand up. Look away from the screen. The timer is short — use every second of it.
+- **Use local-only events** if you don't want Pomodoro blocks appearing on your shared calendar.

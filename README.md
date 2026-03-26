@@ -1,151 +1,115 @@
 <p align="center">
-  <img src="screenshots/logo.png" alt="Bubo Logo" width="128">
+  <img src="screenshots/logo.png" alt="Bubo" width="128">
 </p>
 
 <h1 align="center">Bubo</h1>
 
 <p align="center">
-  <em>A silent guardian in your menu bar.</em>
+  <strong>The calendar that lives in your menu bar and protects your focus.</strong><br>
+  <sub>Native macOS app &middot; Requires macOS 13 Ventura or later</sub>
 </p>
 
 ---
 
-You're in the middle of writing the best code of your life. The flow state is real — ideas arrive faster than your fingers can type. Then a calendar notification punches through: *"Weekly Sync in 5 minutes."* You blink. You alt-tab. You open a bloated calendar app just to check if the meeting is actually important. By the time you return, the thought is gone. The flow is broken.
-
-**This happens twelve times a day.**
+Bubo is a menu bar calendar for macOS that combines your schedule, focus timer, and meeting reminders in one place — without ever opening a separate window.
 
 <p align="center">
-  <img src="screenshots/story_flow_broken.svg" alt="Flow state broken by notifications" width="700">
+  <img src="screenshots/ui_timeline.png" alt="Bubo — daily timeline in the menu bar" width="340">
 </p>
 
-Bubo was built for people who are tired of this cycle. It's a native macOS menu bar app that quietly watches your schedule, blocks your focus time, and only interrupts you when it truly matters — like an eagle-owl perched above, seeing everything, disturbing nothing.
+## Your day at a glance
 
----
+Click the icon in your menu bar. A frosted-glass panel drops down showing your full day: every meeting, every task, how long until the next one starts, and who's attending. No app to launch. No context switch.
 
-## The Moment You Click the Eagle-Owl
+Bubo sees every calendar your Mac already knows about — **iCloud, Google, Exchange, Outlook, CalDAV**. Connect an account once in System Settings, and it appears in Bubo automatically. No extra logins.
 
-<img src="screenshots/ui_timeline.png" alt="Daily Timeline" width="300" align="right">
+## Create events in seconds
 
-A frosted-glass panel drops down from your menu bar. No new window. No context switch. Just your day, laid out in a clean timeline — every meeting, every task, every block of time accounted for.
+<img src="screenshots/ui_new_event.png" alt="Quick event creation" width="300" align="right">
 
-Bubo pulls from **iCloud, Google, Exchange, Outlook, and CalDAV** — all through the calendars you've already connected in macOS. No extra logins. No OAuth dance. If your Mac knows about a calendar, Bubo knows about it too.
+Hit **+**, type a name, pick a time. Done. Events sync back to Apple Calendar, or you can keep them **local-only** — completely private blocks of time invisible to the outside world.
 
-The timeline shows what's next, how long until it starts, and who's attending. That's it. No noise. No clutter.
+Set up **recurring events** with full flexibility: daily, weekly on specific days, monthly by date or weekday ("second Tuesday"), yearly. Skip individual occurrences whenever plans change.
 
 <br clear="both"/>
 
-## Adding Something Takes Five Seconds
+## Built-in Pomodoro timer
 
-<img src="screenshots/ui_new_event.png" alt="Add Event Form" width="300" align="right">
+<img src="screenshots/ui_pomodoro.png" alt="Pomodoro focus session" width="300" align="right">
 
-Hit the **"+"** button. Type a name. Pick a time. Done.
+Toggle Pomodoro mode on any event, and Bubo splits it into focused work sessions with timed breaks. A ring timer appears in the menu bar. Your calendar blocks out. The world goes quiet.
 
-Events sync back to Apple Calendar by default, or you can keep them completely local — invisible to the outside world. Private blocks of time that exist only between you and Bubo.
-
-No heavy app to open. No loading spinner. Just a few keystrokes and you're back to work.
-
-<br clear="both"/>
-
-## Then There's The Pomodoro
-
-<img src="screenshots/ui_pomodoro.png" alt="Pomodoro Session" width="300" align="right">
-
-This is where Bubo becomes something different.
-
-Toggle Pomodoro mode when creating an event, and Bubo locks you into a focus session. A ring timer appears. Your calendar blocks out. The world goes quiet.
-
-When it's time to break, a full-screen alert rises — not a dismissible notification you'll ignore, but an unmissable signal that your brain needs rest.
-
-<p align="center">
-  <img src="screenshots/story_pomodoro.svg" alt="Pomodoro focus cycle" width="700">
-</p>
-
-Choose the rhythm that fits how you think:
+Choose the rhythm that matches your work:
 
 | Rhythm | Work | Break | Rounds |
 |---|---|---|---|
 | **Classic** | 25 min | 5 min | 4 |
 | **Deep Work** | 50 min | 10 min | 2 |
 | **Sprinter** | 15 min | 3 min | 4 |
+| **52/17 Rule** | 52 min | 17 min | 3 |
 | **Ultradian** | 90 min | 20 min | 1 |
 
-Read the full [Pomodoro & Workflow Guide →](docs/Pomodoro.md)
+When it's time to break, a full-screen overlay rises — not a notification you can swipe away, but a real signal to stop and rest. When the break ends, Bubo brings you back.
+
+Read the full [Pomodoro Guide &rarr;](docs/Pomodoro.md)
 
 <br clear="both"/>
 
----
-
-## You Will Not Miss a Meeting Again
-
-It's 2 AM. You're deep in a vibe coding session — the AI is generating, you're reviewing, the terminal is hot. Three tabs of docs, a half-finished refactor, and a Spotify playlist that hasn't changed in four hours. You are *in it*.
-
-And tomorrow at 9:00 you have a standup you've already missed twice.
-
-With any other calendar app, that meeting would announce itself as a shy little banner in the top-right corner. You'd swipe it away without reading it, the way you've done a thousand times before. Or worse — you'd never see it at all, because notifications were silenced for "Focus Mode."
-
-<p align="center">
-  <img src="screenshots/story_vibe_coding.svg" alt="Without vs With Bubo comparison" width="700">
-</p>
-
-**Bubo doesn't do that.** When your meeting is approaching, the entire screen goes dark. A countdown timer fills your display — the meeting title, the time remaining, ticking down second by second. You cannot miss it. You cannot accidentally dismiss it. It is *there*, demanding exactly one decision: go to the meeting, or snooze.
-
-This is the feature people didn't know they needed until they had it.
-
-### Reminders You Actually Configure
+## Reminders you won't miss
 
 <p align="center">
   <img src="screenshots/story_reminders.svg" alt="Stacking reminder intervals" width="650">
 </p>
 
-The beauty is in the setup. Open Settings, and you'll see a clean list of reminder intervals. Want to be nudged **30 minutes** before a big presentation, then again at **5 minutes**, then a final **1-minute** alert? Add all three. Want just a single 10-minute heads-up for daily standups? Done.
+Most apps remind you with a banner in the corner. You dismiss it without reading. Bubo takes a different approach: when a meeting is approaching, the **entire screen goes dark** with a countdown timer, the meeting title, and the time left. You cannot accidentally ignore it.
 
-Stack as many intervals as you want — 1, 2, 3, 5, 10, 15, 20, 30, 45, 60 minutes — in any combination. Each event can even have its own custom overrides, so your "Lunch with Dad" gets a gentle 15-minute nudge while your "Board Review" gets the full 60 → 30 → 10 → 5 → 1 escalation sequence.
+**Stack multiple intervals** — get a nudge at 30 minutes, again at 10, and a final alert at 1 minute. Each event can have its own custom set.
 
-No confusing menus. No hidden preferences buried three screens deep. Just a list of times, and a toggle.
+**Snooze** when you're not ready. Bubo steps back and returns later.
 
-### Snooze Without Guilt
+<p align="center">
+  <img src="screenshots/story_vibe_coding.svg" alt="Full-screen alert comparison" width="700">
+</p>
 
-Not ready when the alert hits? Hit **Snooze** right from the full-screen overlay. Bubo steps back and comes again later. No judgment.
+## Settings that stay out of the way
 
-**Built like a Mac app should be.** Frosted glass. Spring animations. Haptic feedback. Bubo doesn't look like an Electron wrapper or a web view pretending to be native. It's Swift and SwiftUI from the first line to the last, designed to feel like it shipped with your Mac.
+- **Launch at login** — Bubo starts quietly with your Mac
+- **Badge count** — see upcoming events on the menu bar icon (whole day or a custom time window)
+- **Calendar picker** — enable only the calendars you care about
+- **Reminder intervals** — add as many as you want from 1 to 120 minutes
+- **Full-screen alerts** or system notifications — your choice
+- **Light, Dark, or System** appearance
 
 ---
 
 ## Install
 
-**One command:**
-```bash
-curl -fsSL https://raw.githubusercontent.com/avpv/bubo/HEAD/scripts/install.sh | bash
-```
-
-**Or download the DMG** from [Releases](https://github.com/avpv/bubo/releases/latest), drag to Applications, and run:
+**Download the DMG** from [Releases](https://github.com/avpv/bubo/releases/latest), drag to Applications, and run:
 ```bash
 xattr -cr /Applications/Bubo.app
 ```
 
+**Or install from the command line:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/avpv/bubo/HEAD/scripts/install.sh | bash
+```
+
 **Or build from source:**
 ```bash
-git clone https://github.com/avpv/bubo.git
-cd bubo
+git clone https://github.com/avpv/bubo.git && cd bubo
 open -a Xcode Package.swift   # Cmd+R to run
 ```
 
-Requires **macOS 13.0 Ventura** or later.
+## Connect your calendars
 
-## Connect Your Calendars
-
-1. **System Settings → Internet Accounts** — add your Google, Outlook, or Exchange accounts and enable Calendars.
-2. Launch Bubo → **Settings** → **Calendars** → enable **Sync Apple Calendar Events**.
+1. **System Settings &rarr; Internet Accounts** — add your Google, Outlook, or Exchange account and enable Calendars.
+2. Launch Bubo &rarr; **Settings &rarr; Calendars** &rarr; enable **Sync Apple Calendar Events**.
 3. Grant the privacy permission when prompted.
 
-That's it. Every calendar your Mac can see, Bubo can see.
+Every calendar your Mac can see, Bubo can see.
 
 ---
 
 <p align="center">
   <em>Bubo doesn't want your attention. It wants to protect it.</em>
-</p>
-
-<p align="center">
-  <sub>Built with Swift & SwiftUI · MVVM Architecture · Zero dependencies</sub>
 </p>
