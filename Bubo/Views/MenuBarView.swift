@@ -109,9 +109,10 @@ struct MenuBarView: View {
     // MARK: - Helpers
 
     private var isScrolledFromTop: Bool {
-        guard let pos = scrollPositionID,
-              let first = reminderService.eventsByDay.first?.events.first else { return false }
-        return pos != first.id
+        guard let pos = scrollPositionID else { return false }
+        let allEvents = reminderService.eventsByDay.flatMap(\.events)
+        let topIDs = Set(allEvents.prefix(5).map(\.id))
+        return !topIDs.contains(pos)
     }
 
     private func resolveEdit(_ event: CalendarEvent) {
