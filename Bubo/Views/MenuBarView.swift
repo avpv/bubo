@@ -36,6 +36,7 @@ struct MenuBarView: View {
                 switch navigation {
                 case .list:
                     mainContent
+                        .onAppear { scrollPositionID = nil }
                         .transition(
                             reduceMotion ? .opacity : .asymmetric(
                                 insertion: .move(edge: .leading).combined(with: .opacity),
@@ -142,6 +143,7 @@ struct MenuBarView: View {
                         if isScrolledFromTop {
                             Button {
                                 Haptics.tap()
+                                scrollPositionID = nil
                                 withAnimation(DS.Animation.smoothSpring) {
                                     scrollProxy.scrollTo("eventListTop", anchor: .top)
                                 }
