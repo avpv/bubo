@@ -8,7 +8,7 @@ struct MenuBarView: View {
     @State private var navigation: Navigation = .list
     @State private var hasStartedSync = false
     @State private var toastState = ToastState()
-    @State private var scrollPositionID: Date?
+    @State private var scrollPositionID: String?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -109,9 +109,10 @@ struct MenuBarView: View {
     // MARK: - Helpers
 
     private var isScrolledFromTop: Bool {
-        guard let pos = scrollPositionID,
-              let first = reminderService.eventsByDay.first?.date else { return false }
-        return pos != first
+        guard let pos = scrollPositionID else { return false }
+        let allEvents = reminderService.eventsByDay.flatMap(\.events)
+        let topIDs = Set(allEvents.prefix(5).map(\.id))
+        return !topIDs.contains(pos)
     }
 
     private func resolveEdit(_ event: CalendarEvent) {
@@ -266,40 +267,38 @@ struct MenuBarView: View {
 
     private var eventList: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: DS.Spacing.lg) {
+            LazyVStack(alignment: .leading, spacing: DS.Spacing.md) {
                 ForEach(reminderService.eventsByDay, id: \.date) { dayGroup in
-                    Section {
-                        VStack(spacing: DS.Spacing.md) {
-                            ForEach(dayGroup.events) { event in
-                                EventRowView(
-                                    event: event,
-                                    reminderService: reminderService,
-                                    onEdit: { event in resolveEdit(event) },
-                                    onDelete: { event in handleDelete(event) },
-                                    onDeleteOccurrence: { event in
-                                        reminderService.excludeOccurrence(occurrenceId: event.id)
-                                        toastState.showSuccess("Occurrence skipped", icon: "trash.fill")
-                                    },
-                                    onDeleteSeries: { event in
-                                        let seriesId = event.seriesId ?? event.id
-                                        reminderService.removeLocalEvent(id: seriesId)
-                                        toastState.showSuccess("All occurrences deleted", icon: "trash.fill")
-                                    },
-                                    onTap: { event in
-                                        navigation = .detail(event)
-                                    }
-                                )
+                    DaySectionHeader(date: dayGroup.date, count: dayGroup.events.count)
+                        .padding(.horizontal, DS.Spacing.sm)
+                        .padding(.top, dayGroup.date == reminderService.eventsByDay.first?.date ? 0 : DS.Spacing.sm)
+
+                    ForEach(dayGroup.events) { event in
+                        EventRowView(
+                            event: event,
+                            reminderService: reminderService,
+                            onEdit: { event in resolveEdit(event) },
+                            onDelete: { event in handleDelete(event) },
+                            onDeleteOccurrence: { event in
+                                reminderService.excludeOccurrence(occurrenceId: event.id)
+                                toastState.showSuccess("Occurrence skipped", icon: "trash.fill")
+                            },
+                            onDeleteSeries: { event in
+                                let seriesId = event.seriesId ?? event.id
+                                reminderService.removeLocalEvent(id: seriesId)
+                                toastState.showSuccess("All occurrences deleted", icon: "trash.fill")
+                            },
+                            onTap: { event in
+                                navigation = .detail(event)
                             }
-                        }
-                    } header: {
-                        DaySectionHeader(date: dayGroup.date, count: dayGroup.events.count)
-                            .padding(.horizontal, DS.Spacing.sm)
+                        )
                     }
                 }
             }
             .padding(.horizontal, DS.Spacing.md)
             .padding(.top, DS.Spacing.md)
             .padding(.bottom, DS.Spacing.xl)
+            .scrollTargetLayout()
             .id("eventListTop")
         }
         .scrollPosition(id: $scrollPositionID)
