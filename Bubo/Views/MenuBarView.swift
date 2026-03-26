@@ -36,7 +36,13 @@ struct MenuBarView: View {
                 switch navigation {
                 case .list:
                     mainContent
-                        .onAppear { scrollPositionID = nil }
+                        .onAppear {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                withAnimation(DS.Animation.smoothSpring) {
+                                    scrollPositionID = nil
+                                }
+                            }
+                        }
                         .transition(
                             reduceMotion ? .opacity : .asymmetric(
                                 insertion: .move(edge: .leading).combined(with: .opacity),
@@ -143,9 +149,13 @@ struct MenuBarView: View {
                         if isScrolledFromTop {
                             Button {
                                 Haptics.tap()
-                                scrollPositionID = nil
                                 withAnimation(DS.Animation.smoothSpring) {
                                     scrollProxy.scrollTo("eventListTop", anchor: .top)
+                                }
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                                    withAnimation(DS.Animation.smoothSpring) {
+                                        scrollPositionID = nil
+                                    }
                                 }
                             } label: {
                                 Image(systemName: "arrow.up")
