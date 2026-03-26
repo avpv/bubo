@@ -9,6 +9,10 @@ on:
       tag:
         description: 'Existing tag to build from (e.g. v1.0.0)'
         required: true
+      stable:
+        description: 'Mark this release as stable (latest)'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -130,6 +134,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
+          prerelease: ${{ github.event.inputs.stable != 'true' }}
+          make_latest: ${{ github.event.inputs.stable == 'true' }}
           generate_release_notes: true
           append_body: true
           body: |
