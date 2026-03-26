@@ -3,37 +3,55 @@
 
   <style>
     text { font-family: 'Segoe Print', 'Comic Sans MS', 'Patrick Hand', cursive; }
+
+    @keyframes drawLine { 0% { stroke-dashoffset: 540; } 30% { stroke-dashoffset: 0; } }
+    @keyframes popPin1 { 0%, 25% { opacity: 0; transform: translateY(10px) scale(0.7); } 38% { opacity: 1; transform: translateY(0) scale(1); } }
+    @keyframes popPin2 { 0%, 35% { opacity: 0; transform: translateY(10px) scale(0.7); } 48% { opacity: 1; transform: translateY(0) scale(1); } }
+    @keyframes popPin3 { 0%, 45% { opacity: 0; transform: translateY(10px) scale(0.7); } 58% { opacity: 1; transform: translateY(0) scale(1); } }
+    @keyframes popPin4 { 0%, 55% { opacity: 0; transform: translateY(10px) scale(0.7); } 68% { opacity: 1; transform: translateY(0) scale(1); } }
+    @keyframes pulse4 { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+    @keyframes fadeEvent { 0%, 20% { opacity: 0; } 35% { opacity: 1; } }
+    @keyframes fadeEsc { 0%, 70% { opacity: 0; } 85% { opacity: 1; } }
+    @keyframes fadeNote { 0%, 80% { opacity: 0; } 95% { opacity: 1; } }
+
+    .timeline { stroke-dasharray: 540; animation: drawLine 5s ease-out both; }
+    .pin1 { animation: popPin1 5s ease-out both; }
+    .pin2 { animation: popPin2 5s ease-out both; }
+    .pin3 { animation: popPin3 5s ease-out both; }
+    .pin4 { animation: popPin4 5s ease-out both, pulse4 1.5s ease-in-out 3.5s infinite; }
+    .event { animation: fadeEvent 5s ease-out both; }
+    .esc { animation: fadeEsc 5s ease-out both; }
+    .note { animation: fadeNote 5s ease-out both; }
   </style>
 
   <!-- Title -->
   <text x="350" y="28" font-size="16" fill="#222" text-anchor="middle" font-weight="bold">stack your reminders, your way</text>
 
   <!-- Timeline arrow -->
-  <line x1="80" y1="100" x2="620" y2="100" stroke="#ddd" stroke-width="3" stroke-linecap="round"/>
+  <line x1="80" y1="100" x2="620" y2="100" stroke="#ddd" stroke-width="3" stroke-linecap="round" class="timeline"/>
   <polygon points="620,100 612,94 612,106" fill="#ddd"/>
 
-  <!-- Event marker at the end -->
-  <g transform="translate(600, 60)">
+  <!-- Event marker -->
+  <g transform="translate(600, 60)" class="event">
     <rect x="0" y="0" width="85" height="35" rx="6" fill="#fff4e0" stroke="#e8a030" stroke-width="2"/>
     <text x="42" y="15" font-size="10" fill="#b07020" text-anchor="middle" font-weight="bold">Board Review</text>
     <text x="42" y="28" font-size="9" fill="#b07020" text-anchor="middle">10:00 AM</text>
   </g>
 
   <!-- 60 min reminder -->
-  <g transform="translate(100, 75)">
+  <g transform="translate(100, 75)" class="pin1">
     <line x1="20" y1="25" x2="20" y2="10" stroke="#6c8ebf" stroke-width="2" stroke-linecap="round"/>
     <circle cx="20" cy="8" r="5" fill="#6c8ebf"/>
     <text x="20" y="11" font-size="7" fill="#fff" text-anchor="middle">60</text>
     <text x="20" y="55" font-size="10" fill="#6c8ebf" text-anchor="middle">60 min</text>
     <text x="20" y="68" font-size="9" fill="#999" text-anchor="middle">gentle</text>
     <text x="20" y="80" font-size="9" fill="#999" text-anchor="middle">nudge</text>
-    <!-- notification icon small -->
     <circle cx="36" cy="6" r="3" fill="none" stroke="#6c8ebf" stroke-width="1"/>
     <text x="36" y="9" font-size="5" fill="#6c8ebf" text-anchor="middle">~</text>
   </g>
 
   <!-- 30 min reminder -->
-  <g transform="translate(220, 75)">
+  <g transform="translate(220, 75)" class="pin2">
     <line x1="20" y1="25" x2="20" y2="7" stroke="#e8a030" stroke-width="2" stroke-linecap="round"/>
     <circle cx="20" cy="5" r="6" fill="#e8a030"/>
     <text x="20" y="8" font-size="8" fill="#fff" text-anchor="middle">30</text>
@@ -43,7 +61,7 @@
   </g>
 
   <!-- 10 min reminder -->
-  <g transform="translate(370, 75)">
+  <g transform="translate(370, 75)" class="pin3">
     <line x1="20" y1="25" x2="20" y2="3" stroke="#d46a4e" stroke-width="2.5" stroke-linecap="round"/>
     <circle cx="20" cy="0" r="8" fill="#d46a4e"/>
     <text x="20" y="4" font-size="9" fill="#fff" text-anchor="middle">10</text>
@@ -53,26 +71,27 @@
   </g>
 
   <!-- 1 min reminder - FULL SCREEN -->
-  <g transform="translate(520, 75)">
+  <g transform="translate(520, 75)" class="pin4">
     <line x1="20" y1="25" x2="20" y2="-5" stroke="#d44" stroke-width="3" stroke-linecap="round"/>
     <circle cx="20" cy="-8" r="10" fill="#d44"/>
     <text x="20" y="-4" font-size="11" fill="#fff" text-anchor="middle" font-weight="bold">1</text>
     <text x="20" y="55" font-size="12" fill="#d44" text-anchor="middle" font-weight="bold">1 min</text>
     <text x="20" y="70" font-size="10" fill="#d44" text-anchor="middle">FULL</text>
     <text x="20" y="82" font-size="10" fill="#d44" text-anchor="middle">SCREEN</text>
-    <!-- emphasis lines -->
     <line x1="4" y1="-12" x2="-2" y2="-16" stroke="#d44" stroke-width="1.5" stroke-linecap="round"/>
     <line x1="36" y1="-12" x2="42" y2="-16" stroke="#d44" stroke-width="1.5" stroke-linecap="round"/>
     <line x1="20" y1="-20" x2="20" y2="-26" stroke="#d44" stroke-width="1.5" stroke-linecap="round"/>
   </g>
 
   <!-- Escalation arrow -->
-  <path d="M130,200 Q350,230 550,200" fill="none" stroke="#999" stroke-width="1.5" stroke-dasharray="5,4" stroke-linecap="round"/>
-  <text x="350" y="235" font-size="12" fill="#999" text-anchor="middle">escalating intensity</text>
-  <polygon points="545,201 540,195 536,204" fill="#999"/>
+  <g class="esc">
+    <path d="M130,200 Q350,230 550,200" fill="none" stroke="#999" stroke-width="1.5" stroke-dasharray="5,4" stroke-linecap="round"/>
+    <text x="350" y="235" font-size="12" fill="#999" text-anchor="middle">escalating intensity</text>
+    <polygon points="545,201 540,195 536,204" fill="#999"/>
+  </g>
 
   <!-- Bottom note -->
-  <g transform="translate(100, 255)">
+  <g transform="translate(100, 255)" class="note">
     <text x="250" y="0" font-size="12" fill="#666" text-anchor="middle" font-style="italic">each event can have its own reminder schedule</text>
   </g>
 </svg>

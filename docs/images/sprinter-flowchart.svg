@@ -12,64 +12,89 @@
     .fill-gray { fill: #f0f0f0; }
     .fill-red { fill: #fadbd8; }
     .fill-yellow { fill: #fef9e7; }
+
+    @keyframes fadeN1 { 0% { opacity: 0; } 6% { opacity: 1; } }
+    @keyframes fadeN2 { 0%, 8% { opacity: 0; } 18% { opacity: 1; } }
+    @keyframes fadeN3 { 0%, 18% { opacity: 0; } 28% { opacity: 1; } }
+    @keyframes fadeN4 { 0%, 28% { opacity: 0; } 38% { opacity: 1; } }
+    @keyframes fadeN5 { 0%, 38% { opacity: 0; } 48% { opacity: 1; } }
+    @keyframes fadeN6 { 0%, 48% { opacity: 0; } 58% { opacity: 1; } }
+    @keyframes drawA1 { 0%, 6% { stroke-dashoffset: 30; } 14% { stroke-dashoffset: 0; } }
+    @keyframes drawA2 { 0%, 16% { stroke-dashoffset: 30; } 24% { stroke-dashoffset: 0; } }
+    @keyframes drawA3 { 0%, 26% { stroke-dashoffset: 30; } 34% { stroke-dashoffset: 0; } }
+    @keyframes drawA4 { 0%, 36% { stroke-dashoffset: 300; } 48% { stroke-dashoffset: 0; } }
+    @keyframes drawA5 { 0%, 46% { stroke-dashoffset: 30; } 54% { stroke-dashoffset: 0; } }
+    @keyframes drawA6 { 0%, 56% { stroke-dashoffset: 30; } 64% { stroke-dashoffset: 0; } }
+    @keyframes loopZap { 0%, 100% { stroke: #1a1a1a; stroke-width: 1.6; } 50% { stroke: #f39c12; stroke-width: 2.5; } }
+
+    .n1 { animation: fadeN1 4s ease-out both; }
+    .n2 { animation: fadeN2 4s ease-out both; }
+    .n3 { animation: fadeN3 4s ease-out both; }
+    .n4 { animation: fadeN4 4s ease-out both; }
+    .n5 { animation: fadeN5 4s ease-out both; }
+    .n6 { animation: fadeN6 4s ease-out both; }
+    .a1 { stroke-dasharray: 30; animation: drawA1 4s ease-out both; }
+    .a2 { stroke-dasharray: 30; animation: drawA2 4s ease-out both; }
+    .a3 { stroke-dasharray: 30; animation: drawA3 4s ease-out both; }
+    .a4 { stroke-dasharray: 300; animation: drawA4 4s ease-out both, loopZap 2s ease-in-out 2.5s infinite; }
+    .a5 { stroke-dasharray: 30; animation: drawA5 4s ease-out both; }
+    .a6 { stroke-dasharray: 30; animation: drawA6 4s ease-out both; }
   </style>
 
   <rect width="780" height="370" fill="white"/>
 
-  <!-- Title -->
   <text x="390" y="32" text-anchor="middle" style="font-size:20px; font-weight:bold;">The Sprinter — Flowchart</text>
 
-  <!-- Start node -->
-  <path class="box fill-gray" d="M22,165 Q20,141 58,140 Q98,139 97,165 Q99,191 58,192 Q19,191 22,165"/>
-  <text x="58" y="171" text-anchor="middle" class="label">Start</text>
+  <g class="n1">
+    <path class="box fill-gray" d="M22,165 Q20,141 58,140 Q98,139 97,165 Q99,191 58,192 Q19,191 22,165"/>
+    <text x="58" y="171" text-anchor="middle" class="label">Start</text>
+  </g>
 
-  <!-- Arrow Start -> Sprint -->
-  <path class="arrow" d="M99,166 Q110,165 120,165" marker-end="url(#ah3)"/>
+  <path class="arrow a1" d="M99,166 Q110,165 120,165" marker-end="url(#ah3)"/>
 
-  <!-- Sprint block -->
-  <path class="box fill-yellow" d="M135,128 L270,127 Q273,128 272,130 L273,202 Q272,205 270,204 L135,205 Q133,204 134,202 L133,130 Q134,127 135,128 Z"/>
-  <text x="203" y="157" text-anchor="middle" class="label">Sprint</text>
-  <text x="203" y="177" text-anchor="middle" class="sublabel">15 minutes</text>
-  <text x="203" y="195" text-anchor="middle" class="small">(rapid burst)</text>
+  <g class="n2">
+    <path class="box fill-yellow" d="M135,128 L270,127 Q273,128 272,130 L273,202 Q272,205 270,204 L135,205 Q133,204 134,202 L133,130 Q134,127 135,128 Z"/>
+    <text x="203" y="157" text-anchor="middle" class="label">Sprint</text>
+    <text x="203" y="177" text-anchor="middle" class="sublabel">15 minutes</text>
+    <text x="203" y="195" text-anchor="middle" class="small">(rapid burst)</text>
+  </g>
 
-  <!-- Arrow Sprint -> Quick Break -->
-  <path class="arrow" d="M274,166 Q285,165 295,165" marker-end="url(#ah3)"/>
+  <path class="arrow a2" d="M274,166 Q285,165 295,165" marker-end="url(#ah3)"/>
 
-  <!-- Quick Break block -->
-  <path class="box fill-blue" d="M310,128 L445,127 Q448,128 447,130 L448,202 Q447,205 445,204 L310,205 Q308,204 309,202 L308,130 Q309,127 310,128 Z"/>
-  <text x="378" y="155" text-anchor="middle" class="label">Quick Break</text>
-  <text x="378" y="175" text-anchor="middle" class="sublabel">3–5 minutes</text>
+  <g class="n3">
+    <path class="box fill-blue" d="M310,128 L445,127 Q448,128 447,130 L448,202 Q447,205 445,204 L310,205 Q308,204 309,202 L308,130 Q309,127 310,128 Z"/>
+    <text x="378" y="155" text-anchor="middle" class="label">Quick Break</text>
+    <text x="378" y="175" text-anchor="middle" class="sublabel">3-5 minutes</text>
+  </g>
 
-  <!-- Arrow Quick Break -> Round check -->
-  <path class="arrow" d="M449,166 Q460,165 470,165" marker-end="url(#ah3)"/>
+  <path class="arrow a3" d="M449,166 Q460,165 470,165" marker-end="url(#ah3)"/>
 
-  <!-- Round check diamond -->
-  <polygon class="box fill-orange" points="540,110 600,166 540,222 480,166"/>
-  <text x="540" y="158" text-anchor="middle" class="label" style="font-size:12px;">Round</text>
-  <text x="540" y="174" text-anchor="middle" class="label" style="font-size:12px;">4 of 4?</text>
+  <g class="n4">
+    <polygon class="box fill-orange" points="540,110 600,166 540,222 480,166"/>
+    <text x="540" y="158" text-anchor="middle" class="label" style="font-size:12px;">Round</text>
+    <text x="540" y="174" text-anchor="middle" class="label" style="font-size:12px;">4 of 4?</text>
+  </g>
 
-  <!-- Arrow loop back (No) -->
-  <path class="arrow" d="M540,222 Q541,255 540,270 Q539,290 378,291 Q203,292 203,240 L203,207" marker-end="url(#ah3)"/>
-  <text x="547" y="255" class="sublabel" style="font-size:13px; font-weight:bold;">No</text>
+  <path class="arrow a4" d="M540,222 Q541,255 540,270 Q539,290 378,291 Q203,292 203,240 L203,207" marker-end="url(#ah3)"/>
+  <text x="547" y="255" class="sublabel n4" style="font-size:13px; font-weight:bold;">No</text>
 
-  <!-- Arrow Round check -> Long Break (Yes) -->
-  <path class="arrow" d="M601,166 Q612,165 625,165" marker-end="url(#ah3)"/>
-  <text x="608" y="155" class="sublabel" style="font-size:13px; font-weight:bold;">Yes</text>
+  <path class="arrow a5" d="M601,166 Q612,165 625,165" marker-end="url(#ah3)"/>
+  <text x="608" y="155" class="sublabel n5" style="font-size:13px; font-weight:bold;">Yes</text>
 
-  <!-- Long Break block -->
-  <path class="box fill-red" d="M640,128 L755,127 Q758,128 757,130 L758,202 Q757,205 755,204 L640,205 Q638,204 639,202 L638,130 Q639,127 640,128 Z"/>
-  <text x="698" y="155" text-anchor="middle" class="label" style="font-size:13px;">Long Break</text>
-  <text x="698" y="175" text-anchor="middle" class="sublabel">15 minutes</text>
+  <g class="n5">
+    <path class="box fill-red" d="M640,128 L755,127 Q758,128 757,130 L758,202 Q757,205 755,204 L640,205 Q638,204 639,202 L638,130 Q639,127 640,128 Z"/>
+    <text x="698" y="155" text-anchor="middle" class="label" style="font-size:13px;">Long Break</text>
+    <text x="698" y="175" text-anchor="middle" class="sublabel">15 minutes</text>
+  </g>
 
-  <!-- Arrow Long Break -> End -->
-  <path class="arrow" d="M698,128 L698,90" marker-end="url(#ah3)"/>
+  <path class="arrow a6" d="M698,128 L698,90" marker-end="url(#ah3)"/>
 
-  <!-- End node -->
-  <path class="box fill-gray" d="M672,65 Q670,41 698,40 Q728,41 726,65 Q728,91 698,90 Q668,91 672,65"/>
-  <text x="698" y="71" text-anchor="middle" class="label" style="font-size:14px;">End</text>
+  <g class="n6">
+    <path class="box fill-gray" d="M672,65 Q670,41 698,40 Q728,41 726,65 Q728,91 698,90 Q668,91 672,65"/>
+    <text x="698" y="71" text-anchor="middle" class="label" style="font-size:14px;">End</text>
+  </g>
 
-  <!-- Counter label -->
-  <text x="203" y="305" text-anchor="middle" class="small">← repeat 4 rapid sprints</text>
+  <text x="203" y="305" text-anchor="middle" class="small n4">← repeat 4 rapid sprints</text>
 
   <defs>
     <marker id="ah3" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
