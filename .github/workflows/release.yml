@@ -143,7 +143,7 @@ jobs:
 
             One command in Terminal:
             ```
-            curl -fsSL https://raw.githubusercontent.com/avpv/bubo/HEAD/scripts/install.sh | bash
+            curl -fsSL https://raw.githubusercontent.com/avpv/bubo/HEAD/scripts/${{ github.event.inputs.stable == 'true' && 'install.sh' || 'install-prerelease.sh' }} | bash
             ```
 
             Or manually:
