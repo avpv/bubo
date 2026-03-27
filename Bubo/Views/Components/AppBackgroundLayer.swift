@@ -40,6 +40,20 @@ enum AppBackgroundStyle: String, Codable, CaseIterable, Identifiable {
         case .goldenHour: return [.yellow, .orange]
         }
     }
+
+    var previewGradient: AnyShapeStyle {
+        let colors = previewColors
+        if colors.count == 1 {
+            return AnyShapeStyle(colors[0])
+        }
+        return AnyShapeStyle(
+            LinearGradient(
+                colors: colors,
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+    }
 }
 
 struct AppBackgroundLayer: View {
