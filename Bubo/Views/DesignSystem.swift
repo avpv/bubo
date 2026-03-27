@@ -57,6 +57,7 @@ enum DS {
         static let accentBarWidth: CGFloat = 4
         static let accentBarHeight: CGFloat = 28
         static let eventRowMinHeight: CGFloat = 36
+        static let headerHeight: CGFloat = 48
         static let actionFooterHeight: CGFloat = 48
         static let timeColumnWidth: CGFloat = 50
         static let datePillWidth: CGFloat = 54
@@ -398,7 +399,7 @@ struct PopoverHeader: View {
                 }
             }
             .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.md)
+            .frame(height: DS.Size.headerHeight)
             .background(DS.Materials.headerBar)
 
             Divider()
