@@ -17,12 +17,14 @@ struct MenuBarView: View {
         case list
         case detail(CalendarEvent)
         case addEvent(editing: CalendarEvent? = nil)
+        case timer(CalendarEvent)
 
         static func == (lhs: Navigation, rhs: Navigation) -> Bool {
             switch (lhs, rhs) {
             case (.list, .list): return true
             case (.detail(let a), .detail(let b)): return a.id == b.id
             case (.addEvent(let a), .addEvent(let b)): return a?.id == b?.id
+            case (.timer(let a), .timer(let b)): return a.id == b.id
             default: return false
             }
         }
@@ -71,7 +73,22 @@ struct MenuBarView: View {
                             reminderService.excludeOccurrence(occurrenceId: event.id)
                             navigation = .list
                             toastState.showSuccess("Occurrence skipped", icon: "trash.fill")
+                        },
+                        onTimer: { event in
+                            navigation = .timer(event)
                         }
+                    )
+                    .transition(
+                        reduceMotion ? .opacity : .asymmetric(
+                            insertion: .move(edge: .trailing).combined(with: .opacity),
+                            removal: .move(edge: .trailing).combined(with: .opacity).combined(with: .scale(scale: 0.98))
+                        )
+                    )
+
+                case .timer(let event):
+                    TimerScreenView(
+                        event: event,
+                        onBack: { navigation = .detail(event) }
                     )
                     .transition(
                         reduceMotion ? .opacity : .asymmetric(
