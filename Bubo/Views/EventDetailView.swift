@@ -8,6 +8,7 @@ struct EventDetailView: View {
     var onDelete: ((CalendarEvent) -> Void)? = nil
     var onDeleteSeries: ((CalendarEvent) -> Void)? = nil
     var onDeleteOccurrence: ((CalendarEvent) -> Void)? = nil
+    var onTimer: ((CalendarEvent) -> Void)? = nil
 
     @State private var showDeleteConfirmation = false
     @State private var showSeriesDeleteChoice = false
@@ -71,8 +72,16 @@ struct EventDetailView: View {
                         }
                         .staggeredEntrance(index: 1)
 
-                        // Live countdown with seconds
+                        // Live countdown with seconds — tap to open timer screen
                         countdownSection
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                Haptics.tap()
+                                onTimer?(event)
+                            }
+                            .onHover { hovering in
+                                if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+                            }
                             .staggeredEntrance(index: 2)
 
                         // Location
