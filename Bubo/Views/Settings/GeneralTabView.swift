@@ -3,12 +3,13 @@ import SwiftUI
 
 struct ThemeColorPreview: View {
     let colors: [Color]
+    var size: CGFloat = 12
 
     var body: some View {
         if colors.count == 1 {
             Circle()
                 .fill(colors[0])
-                .frame(width: 12, height: 12)
+                .frame(width: size, height: size)
         } else {
             Circle()
                 .fill(
@@ -18,7 +19,7 @@ struct ThemeColorPreview: View {
                         endPoint: .bottomTrailing
                     )
                 )
-                .frame(width: 12, height: 12)
+                .frame(width: size, height: size)
         }
     }
 }
@@ -87,14 +88,35 @@ struct GeneralTabView: View {
             }
 
             SettingsPlatter("Appearance") {
-                Picker("Background", selection: $settings.backgroundStyle) {
-                    ForEach(AppBackgroundStyle.allCases) { style in
-                        Label {
-                            Text(style.displayName)
-                        } icon: {
-                            ThemeColorPreview(colors: style.previewColors)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Background")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: 8)], spacing: 8) {
+                        ForEach(AppBackgroundStyle.allCases) { style in
+                            let isSelected = settings.backgroundStyle == style
+                            Button {
+                                settings.backgroundStyle = style
+                            } label: {
+                                VStack(spacing: 4) {
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .fill(style.previewGradient)
+                                        .frame(height: 28)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 6)
+                                                .strokeBorder(
+                                                    isSelected ? Color.accentColor : Color.primary.opacity(0.1),
+                                                    lineWidth: isSelected ? 2 : 0.5
+                                                )
+                                        )
+                                    Text(style.displayName)
+                                        .font(.caption2)
+                                        .foregroundStyle(isSelected ? .primary : .secondary)
+                                        .lineLimit(1)
+                                }
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .tag(style)
                     }
                 }
             }
