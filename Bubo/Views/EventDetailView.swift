@@ -11,8 +11,11 @@ struct EventDetailView: View {
 
     @State private var showDeleteConfirmation = false
     @State private var showSeriesDeleteChoice = false
+    @State private var now = Date()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
+
+    private let everySecondTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     private func pomodoroBadge(_ text: String, icon: String, color: Color) -> some View {
         Label(text, systemImage: icon)
@@ -68,12 +71,16 @@ struct EventDetailView: View {
                         }
                         .staggeredEntrance(index: 1)
 
+                        // Live countdown with seconds
+                        countdownSection
+                            .staggeredEntrance(index: 2)
+
                         // Location
                         if let location = event.location, !location.isEmpty {
                             Label(location, systemImage: "location.fill")
                                 .font(.subheadline)
                                 .foregroundColor(DS.Colors.textSecondary)
-                                .staggeredEntrance(index: 2)
+                                .staggeredEntrance(index: 3)
                         }
                     }
                     .padding(DS.Spacing.lg)
@@ -81,6 +88,7 @@ struct EventDetailView: View {
                     .background(DS.Materials.platter)
                     .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
                     .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
+                    .onReceive(everySecondTimer) { _ in now = Date() }
 
                     // Description
                     if let description = event.description, !description.isEmpty {
@@ -233,6 +241,75 @@ struct EventDetailView: View {
         }
         .frame(width: DS.Popover.width)
         .frame(minHeight: DS.Popover.detailMinHeight)
+    }
+
+    // MARK: - Countdown Section
+
+    @ViewBuilder
+    private var countdownSection: some View {
+        let secondsUntilStart = Int(event.startDate.timeIntervalSince(now))
+        let secondsUntilEnd = Int(event.endDate.timeIntervalSince(now))
+
+        if secondsUntilStart > 0 {
+            // Event hasn't started yet
+            countdownDisplay(
+                label: "Starts in",
+                totalSeconds: secondsUntilStart,
+                color: DS.urgencyColor(minutesUntil: secondsUntilStart / 60)
+            )
+        } else if secondsUntilEnd > 0 {
+            // Event is in progress
+            countdownDisplay(
+                label: "Ends in",
+                totalSeconds: secondsUntilEnd,
+                color: DS.Colors.accent
+            )
+        } else {
+            // Event has ended
+            Label("Ended", systemImage: "checkmark.circle")
+                .font(.subheadline)
+                .foregroundColor(DS.Colors.textTertiary)
+        }
+    }
+
+    private func countdownDisplay(label: String, totalSeconds: Int, color: Color) -> some View {
+        let days = totalSeconds / 86400
+        let hours = (totalSeconds % 86400) / 3600
+        let minutes = (totalSeconds % 3600) / 60
+        let seconds = totalSeconds % 60
+
+        return HStack(spacing: DS.Spacing.md) {
+            Image(systemName: "timer")
+                .font(.system(size: DS.Size.iconMedium))
+                .foregroundColor(color)
+
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                Text(label)
+                    .font(.caption2)
+                    .foregroundColor(DS.Colors.textTertiary)
+
+                HStack(spacing: DS.Spacing.xs) {
+                    if days > 0 {
+                        countdownUnit(value: days, unit: "d")
+                    }
+                    countdownUnit(value: hours, unit: "h")
+                    countdownUnit(value: minutes, unit: "m")
+                    countdownUnit(value: seconds, unit: "s")
+                }
+            }
+        }
+    }
+
+    private func countdownUnit(value: Int, unit: String) -> some View {
+        HStack(spacing: 1) {
+            Text("\(value)")
+                .font(.system(.subheadline, design: .monospaced, weight: .semibold))
+                .foregroundColor(DS.Colors.textPrimary)
+                .contentTransition(.numericText())
+            Text(unit)
+                .font(.system(.caption, design: .monospaced))
+                .foregroundColor(DS.Colors.textSecondary)
+        }
     }
 
     // MARK: - Recurrence Section
