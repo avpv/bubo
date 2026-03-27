@@ -53,6 +53,7 @@ struct TimerScreenView: View {
     var body: some View {
         VStack(spacing: 0) {
             PopoverHeader(
+                title: "Timer",
                 showBack: true,
                 onBack: onBack
             )
