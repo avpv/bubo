@@ -53,107 +53,97 @@ struct TimerScreenView: View {
     var body: some View {
         VStack(spacing: 0) {
             PopoverHeader(
-                title: "Timer",
                 showBack: true,
                 onBack: onBack
             )
 
-            VStack(spacing: DS.Spacing.xl) {
-                Spacer(minLength: DS.Spacing.md)
-
-                // Timer ring
-                ZStack {
-                    // Track
-                    Circle()
-                        .stroke(accentColor.opacity(0.12), lineWidth: 5)
-                        .frame(width: 180, height: 180)
-
-                    // Progress arc (only when in progress)
-                    if isInProgress {
+            ScrollView {
+                VStack(spacing: DS.Spacing.xl) {
+                    // Timer ring
+                    ZStack {
+                        // Track
                         Circle()
-                            .trim(from: 0, to: progress)
-                            .stroke(
-                                accentColor,
-                                style: StrokeStyle(lineWidth: 5, lineCap: .round)
-                            )
+                            .stroke(accentColor.opacity(0.12), lineWidth: 4)
                             .frame(width: 180, height: 180)
-                            .rotationEffect(.degrees(-90))
-                            .animation(.linear(duration: 1), value: progress)
-                    }
 
-                    // Glow
-                    Circle()
-                        .stroke(accentColor.opacity(pulseRing ? 0.12 : 0.04), lineWidth: 14)
-                        .frame(width: 194, height: 194)
-                        .blur(radius: 10)
+                        // Progress arc (when in progress)
+                        if isInProgress {
+                            Circle()
+                                .trim(from: 0, to: progress)
+                                .stroke(
+                                    accentColor,
+                                    style: StrokeStyle(lineWidth: 4, lineCap: .round)
+                                )
+                                .frame(width: 180, height: 180)
+                                .rotationEffect(.degrees(-90))
+                                .animation(.linear(duration: 1), value: progress)
+                        }
 
-                    // Center content
-                    VStack(spacing: DS.Spacing.xs) {
-                        Text(statusLabel)
-                            .font(.system(size: 11, weight: .medium, design: .rounded))
-                            .foregroundStyle(DS.Colors.textTertiary)
-                            .textCase(.uppercase)
-                            .tracking(1.5)
+                        // Subtle glow
+                        Circle()
+                            .fill(accentColor.opacity(pulseRing ? 0.06 : 0.02))
+                            .frame(width: 170, height: 170)
+                            .blur(radius: 20)
 
-                        if hasEnded {
-                            Image(systemName: "checkmark.circle")
-                                .font(.system(size: 36, weight: .light))
+                        // Center content
+                        VStack(spacing: DS.Spacing.sm) {
+                            Text(statusLabel)
+                                .font(.system(size: 11, weight: .medium, design: .rounded))
                                 .foregroundStyle(DS.Colors.textTertiary)
-                        } else {
-                            // Countdown digits
-                            HStack(spacing: 0) {
-                                ForEach(timeComponents, id: \.id) { comp in
-                                    HStack(spacing: 1) {
-                                        Text(comp.value)
-                                            .font(.system(size: 32, weight: .bold, design: .monospaced))
-                                            .foregroundStyle(DS.Colors.textPrimary)
-                                            .contentTransition(.numericText())
-                                        Text(comp.unit)
-                                            .font(.system(size: 14, weight: .medium, design: .monospaced))
-                                            .foregroundStyle(DS.Colors.textTertiary)
-                                            .offset(y: 5)
-                                    }
-                                    .padding(.horizontal, 1)
+                                .textCase(.uppercase)
+                                .tracking(1.5)
+
+                            if hasEnded {
+                                Image(systemName: "checkmark.circle")
+                                    .font(.system(size: 36, weight: .light))
+                                    .foregroundStyle(DS.Colors.textTertiary)
+                            } else if hasDays {
+                                // Two-line layout for days
+                                VStack(spacing: DS.Spacing.xxs) {
+                                    timerRow(Array(timeComponents.prefix(2)), size: 28)
+                                    timerRow(Array(timeComponents.suffix(2)), size: 28)
                                 }
+                            } else {
+                                timerRow(timeComponents, size: 32)
                             }
                         }
                     }
-                }
-                .staggeredEntrance(index: 0)
+                    .staggeredEntrance(index: 0)
 
-                // Event info card
-                VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                    Text(event.title)
-                        .font(.system(.headline, design: .rounded, weight: .semibold))
-                        .lineLimit(2)
+                    // Event info card
+                    VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                        Text(event.title)
+                            .font(.system(.headline, design: .rounded, weight: .semibold))
+                            .lineLimit(2)
 
-                    HStack(spacing: DS.Spacing.md) {
-                        Label(event.formattedDate, systemImage: "calendar")
-                            .font(.caption)
-                            .foregroundStyle(DS.Colors.textSecondary)
+                        HStack(spacing: DS.Spacing.md) {
+                            Label(event.formattedDate, systemImage: "calendar")
+                                .font(.caption)
+                                .foregroundStyle(DS.Colors.textSecondary)
 
-                        Label(event.formattedTimeRange, systemImage: "clock")
-                            .font(.caption)
-                            .foregroundStyle(DS.Colors.textSecondary)
+                            Label(event.formattedTimeRange, systemImage: "clock")
+                                .font(.caption)
+                                .foregroundStyle(DS.Colors.textSecondary)
+                        }
+
+                        if let location = event.location, !location.isEmpty {
+                            Label(location, systemImage: "location.fill")
+                                .font(.caption)
+                                .foregroundStyle(DS.Colors.textSecondary)
+                                .lineLimit(1)
+                        }
                     }
-
-                    if let location = event.location, !location.isEmpty {
-                        Label(location, systemImage: "location.fill")
-                            .font(.caption)
-                            .foregroundStyle(DS.Colors.textSecondary)
-                            .lineLimit(1)
-                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(DS.Spacing.lg)
+                    .background(DS.Materials.platter)
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
+                    .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
+                    .staggeredEntrance(index: 1)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(DS.Spacing.lg)
-                .background(DS.Materials.platter)
-                .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
-                .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
-                .staggeredEntrance(index: 1)
-
-                Spacer(minLength: DS.Spacing.md)
+                .padding(.horizontal, DS.Spacing.xl)
+                .padding(.top, DS.Spacing.lg)
+                .padding(.bottom, DS.Spacing.xl)
             }
-            .padding(.horizontal, DS.Spacing.xl)
             .frame(maxHeight: DS.Popover.detailMaxHeight)
         }
         .frame(width: DS.Popover.width)
@@ -171,12 +161,34 @@ struct TimerScreenView: View {
         }
     }
 
+    // MARK: - Subviews
+
+    private func timerRow(_ components: [TimeComponent], size: CGFloat) -> some View {
+        HStack(spacing: DS.Spacing.xs) {
+            ForEach(components, id: \.id) { comp in
+                HStack(alignment: .firstTextBaseline, spacing: 1) {
+                    Text(comp.value)
+                        .font(.system(size: size, weight: .bold, design: .monospaced))
+                        .foregroundStyle(DS.Colors.textPrimary)
+                        .contentTransition(.numericText())
+                    Text(comp.unit)
+                        .font(.system(size: size * 0.45, weight: .medium, design: .rounded))
+                        .foregroundStyle(DS.Colors.textTertiary)
+                }
+            }
+        }
+    }
+
     // MARK: - Helpers
 
     private var statusLabel: String {
         if hasEnded { return "Ended" }
         if isInProgress { return "Ends in" }
         return "Starts in"
+    }
+
+    private var hasDays: Bool {
+        activeSeconds >= 86400
     }
 
     private struct TimeComponent: Identifiable {
