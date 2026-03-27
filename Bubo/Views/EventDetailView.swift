@@ -306,6 +306,12 @@ struct EventDetailView: View {
                     countdownUnit(value: seconds, unit: "s")
                 }
             }
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: DS.Size.iconSmall, weight: .semibold))
+                .foregroundStyle(DS.Colors.textQuaternary)
         }
     }
 

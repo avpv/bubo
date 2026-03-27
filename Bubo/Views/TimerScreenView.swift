@@ -34,14 +34,19 @@ struct TimerScreenView: View {
         isInProgress ? secondsUntilEnd : secondsUntilStart
     }
 
-    private var progress: Double {
+    /// Ring progress: drains from 1→0 before start, fills 0→1 during event.
+    private var ringProgress: Double {
         if hasEnded { return 1.0 }
         if isInProgress {
             guard totalDuration > 0 else { return 0 }
             let elapsed = totalDuration - Double(secondsUntilEnd)
             return min(elapsed / totalDuration, 1.0)
         }
-        return 0
+        // "Starts in" — show remaining fraction (drains toward zero)
+        // Cap at 24h so multi-day events still show a meaningful arc
+        let cap = 86400.0
+        let clamped = min(Double(secondsUntilStart), cap)
+        return clamped / cap
     }
 
     private var accentColor: Color {
@@ -67,17 +72,17 @@ struct TimerScreenView: View {
                             .stroke(accentColor.opacity(0.12), lineWidth: 4)
                             .frame(width: 180, height: 180)
 
-                        // Progress arc (when in progress)
-                        if isInProgress {
+                        // Progress arc
+                        if !hasEnded {
                             Circle()
-                                .trim(from: 0, to: progress)
+                                .trim(from: 0, to: ringProgress)
                                 .stroke(
                                     accentColor,
                                     style: StrokeStyle(lineWidth: 4, lineCap: .round)
                                 )
                                 .frame(width: 180, height: 180)
                                 .rotationEffect(.degrees(-90))
-                                .animation(.linear(duration: 1), value: progress)
+                                .animation(.linear(duration: 1), value: ringProgress)
                         }
 
                         // Subtle glow
