@@ -74,6 +74,7 @@ struct EventDetailView: View {
 
                         // Live countdown with seconds — tap to open timer screen
                         countdownSection
+                            .frame(maxWidth: .infinity, alignment: .leading)
                             .contentShape(Rectangle())
                             .onTapGesture {
                                 Haptics.tap()
