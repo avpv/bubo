@@ -151,7 +151,7 @@ struct EventDetailView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(DS.Spacing.xl)
             }
-            .frame(maxHeight: DS.Popover.detailMaxHeight)
+            .frame(minHeight: DS.Popover.detailMaxHeight, maxHeight: DS.Popover.detailMaxHeight)
 
             Spacer(minLength: 0)
 

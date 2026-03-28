@@ -150,7 +150,7 @@ struct TimerScreenView: View {
                 .padding(.top, DS.Spacing.lg)
                 .padding(.bottom, DS.Spacing.xl)
             }
-            .frame(maxHeight: DS.Popover.detailMaxHeight)
+            .frame(minHeight: DS.Popover.detailMaxHeight, maxHeight: DS.Popover.detailMaxHeight)
         }
         .frame(width: DS.Popover.width)
         .frame(minHeight: DS.Popover.detailMinHeight)

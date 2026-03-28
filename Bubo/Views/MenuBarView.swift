@@ -332,7 +332,7 @@ struct MenuBarView: View {
         }
         .scrollPosition(id: $scrollPositionID)
         .scrollContentBackground(.hidden)
-        .frame(maxHeight: DS.Popover.listMaxHeight)
+        .frame(minHeight: DS.Popover.listMaxHeight, maxHeight: DS.Popover.listMaxHeight)
     }
 
     private var footerActions: some View {
