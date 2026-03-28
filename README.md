@@ -42,6 +42,11 @@ Stack multiple reminder intervals — 30 min, 10 min, 1 min — so you get progr
   <sub>Stack multiple reminders per event — 30 min, 10 min, 2 min</sub>
 </p>
 
+<p align="center">
+  <img src="screenshots/settings_reminders.png" alt="Reminder settings" width="300"><br>
+  <sub>Choose full-screen alerts or system notifications</sub>
+</p>
+
 ### Problem: "Checking my calendar breaks my flow"
 
 Opening a calendar app means switching contexts. Bubo lives in the menu bar — click the icon, see your whole day in a frosted-glass panel, click away. No app launch, no window management.
@@ -57,11 +62,26 @@ Sometimes you need to block time for deep work without broadcasting it. Bubo let
   <sub>Create local-only events invisible to coworkers</sub>
 </p>
 
+<p align="center">
+  <img src="screenshots/local_only.png" alt="Local-only event" width="300"><br>
+  <sub>"Event will be stored locally in Bubo only" — completely private</sub>
+</p>
+
 Create events in seconds: hit **+**, type a name, pick a time. Set up **recurring events** — daily, weekly on specific days, monthly ("second Tuesday"), yearly. Skip individual occurrences when plans change.
+
+<p align="center">
+  <img src="screenshots/repeat_options.png" alt="Repeat options" width="300"><br>
+  <sub>Flexible repeat: daily, weekly, monthly, yearly</sub>
+</p>
 
 ### Problem: "I can't stay focused for long stretches"
 
 Toggle **Pomodoro mode** on any event and Bubo splits it into focused work sessions with timed breaks. A ring timer appears in the menu bar.
+
+<p align="center">
+  <img src="screenshots/new_pomodoro.png" alt="Pomodoro session setup" width="300"><br>
+  <sub>Visual work/break blocks — see your focus session before it starts</sub>
+</p>
 
 | Rhythm | Work | Break | Rounds |
 |---|---|---|---|
@@ -78,8 +98,10 @@ Read the full [Pomodoro Guide &rarr;](docs/Pomodoro.md)
 ### Settings that stay out of the way
 
 <p align="center">
-  <img src="screenshots/settings_calendars.png" alt="Settings" width="300"><br>
-  <sub>All your calendars in one place — iCloud, Google, Exchange, Outlook</sub>
+  <img src="screenshots/settings_calendars.png" alt="Settings — Calendars" width="300">
+  &nbsp;&nbsp;
+  <img src="screenshots/settings_general.png" alt="Settings — General" width="300"><br>
+  <sub>All your calendars in one place &middot; Launch at login &middot; Badge count &middot; Appearance</sub>
 </p>
 
 - **Launch at login** — Bubo starts quietly with your Mac
