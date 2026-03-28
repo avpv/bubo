@@ -116,7 +116,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let hostingView = NSHostingView(rootView: timerView)
 
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: DS.Popover.width, height: DS.Popover.height),
+            contentRect: NSRect(x: 0, y: 0, width: DS.Popover.width, height: DS.Popover.timerHeight),
             styleMask: [.titled, .closable, .nonactivatingPanel, .utilityWindow],
             backing: .buffered,
             defer: false
@@ -136,7 +136,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if let screen = NSScreen.main {
             let screenFrame = screen.visibleFrame
             let x = screenFrame.maxX - DS.Popover.width - 20
-            let y = screenFrame.maxY - DS.Popover.height - 20
+            let y = screenFrame.maxY - DS.Popover.timerHeight - 20
             panel.setFrameOrigin(NSPoint(x: x, y: y))
         }
 
