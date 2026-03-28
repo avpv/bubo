@@ -341,7 +341,7 @@ struct AddEventView: View {
                 .padding(.vertical, DS.Spacing.xl)
             }
             .scrollContentBackground(.hidden)
-            .frame(minHeight: DS.Popover.formMaxHeight, maxHeight: DS.Popover.formMaxHeight)
+            .frame(minHeight: DS.Popover.formMinHeight, maxHeight: DS.Popover.formMaxHeight)
             .onChange(of: selectedEventType) {
                 // Clear standard recurrence when switching to Pomodoro
                 if selectedEventType == .pomodoro {
