@@ -98,6 +98,7 @@ struct TimerScreenView: View {
                                 object: nil,
                                 userInfo: ["event": event]
                             )
+                            NSApp.keyWindow?.close()
                         }
                     } label: {
                         Image(systemName: isPinned ? "pin.fill" : "pin")
