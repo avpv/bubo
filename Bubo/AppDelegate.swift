@@ -6,6 +6,11 @@ private class KeyableWindow: NSWindow {
     override var canBecomeMain: Bool { true }
 }
 
+private class KeyablePanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { false }
+}
+
 @MainActor
 class AppDelegate: NSObject, NSApplicationDelegate {
     private var alertWindow: NSWindow?
@@ -130,7 +135,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             hostingView.trailingAnchor.constraint(equalTo: visualEffect.trailingAnchor),
         ])
 
-        let panel = NSPanel(
+        let panel = KeyablePanel(
             contentRect: NSRect(x: 0, y: 0, width: DS.Popover.width, height: DS.Popover.timerHeight),
             styleMask: [.titled, .closable, .fullSizeContentView, .nonactivatingPanel, .utilityWindow],
             backing: .buffered,
@@ -144,6 +149,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         panel.titlebarAppearsTransparent = true
         panel.titleVisibility = .hidden
         panel.isMovableByWindowBackground = true
+        panel.delegate = self
         panel.isOpaque = false
         panel.backgroundColor = .clear
 
@@ -207,6 +213,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         autoDismissTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(secondsUntilStart))
             self?.dismissAlert()
+        }
+    }
+}
+
+extension AppDelegate: NSWindowDelegate {
+    func windowWillClose(_ notification: Notification) {
+        if let window = notification.object as? NSPanel, window === pinnedTimerWindow {
+            pinnedTimerWindow = nil
         }
     }
 }
