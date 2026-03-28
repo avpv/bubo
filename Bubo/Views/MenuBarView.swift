@@ -364,7 +364,13 @@ struct MenuBarView: View {
                 .transition(.scale.combined(with: .opacity))
             }
         }
-        .padding(.horizontal, DS.Spacing.lg)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.sm)
+        .background(DS.Materials.platter)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
+        .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
+        .padding(.horizontal, DS.Spacing.md)
         .padding(.vertical, DS.Spacing.xs)
         .animation(DS.Animation.microInteraction, value: colorFilter)
     }
