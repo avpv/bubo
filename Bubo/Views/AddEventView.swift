@@ -18,6 +18,7 @@ struct AddEventView: View {
     @State private var recurrenceRule: RecurrenceRule? = nil
     @State private var selectedEventType: EventType = .standard
     @State private var addToCalendar = false
+    @State private var selectedColorTag: EventColorTag? = nil
 
     // MARK: - Pomodoro state
 
@@ -208,6 +209,46 @@ struct AddEventView: View {
                         }
                     }
 
+                    // Color
+                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                        Text("Color")
+                            .font(.headline)
+                            .foregroundColor(DS.Colors.textPrimary)
+
+                        HStack(spacing: DS.Spacing.sm) {
+                            ForEach(EventColorTag.allCases, id: \.self) { tag in
+                                Circle()
+                                    .fill(tag.color)
+                                    .frame(width: 28, height: 28)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(Color.white, lineWidth: selectedColorTag == tag ? 2.5 : 0)
+                                    )
+                                    .shadow(
+                                        color: selectedColorTag == tag ? tag.color.opacity(0.5) : .clear,
+                                        radius: selectedColorTag == tag ? 4 : 0
+                                    )
+                                    .scaleEffect(selectedColorTag == tag ? 1.15 : 1.0)
+                                    .animation(DS.Animation.microInteraction, value: selectedColorTag)
+                                    .onTapGesture {
+                                        Haptics.tap()
+                                        if selectedColorTag == tag {
+                                            selectedColorTag = nil
+                                        } else {
+                                            selectedColorTag = tag
+                                        }
+                                    }
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(DS.Spacing.md)
+                        .background(DS.Materials.platter)
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
+                        .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
+                    }
+                    .disabled(isExternal)
+                    .opacity(isExternal ? 0.6 : 1.0)
+
                     // Details
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                         Text("Details")
@@ -391,6 +432,7 @@ struct AddEventView: View {
                 }
                 recurrenceRule = event.recurrenceRule
                 selectedEventType = event.eventType
+                selectedColorTag = event.colorTag
                 // Load Pomodoro parameters when editing a Pomodoro event
                 if event.eventType == .pomodoro, let rule = event.recurrenceRule, rule.pomodoroMode {
                     if case .afterCount(let rounds) = rule.end {
@@ -734,7 +776,7 @@ struct AddEventView: View {
             ? date.addingTimeInterval(Double(pomodoroWork) * 60)
             : eventEndDate
 
-        let event = CalendarEvent(
+        var event = CalendarEvent(
             id: editingEvent?.id ?? UUID().uuidString,
             title: title,
             startDate: date,
@@ -746,6 +788,7 @@ struct AddEventView: View {
             recurrenceRule: finalRule,
             eventType: selectedEventType
         )
+        event.colorTag = selectedColorTag
         if isEditing {
             reminderService.updateLocalEvent(event)
         } else if addToCalendar {
