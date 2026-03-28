@@ -60,11 +60,8 @@ struct TimerScreenView: View {
         VStack(spacing: 0) {
             PopoverHeader(
                 title: "Timer",
-                showBack: true,
+                showBack: !isPinned,
                 onBack: {
-                    if isPinned {
-                        NotificationCenter.default.post(name: .unpinTimerWindow, object: nil)
-                    }
                     onBack()
                 },
                 trailing: AnyView(
@@ -179,7 +176,7 @@ struct TimerScreenView: View {
                 .padding(.bottom, DS.Spacing.xl)
             }
         }
-        .frame(width: DS.Popover.width, height: DS.Popover.timerHeight)
+        .frame(width: DS.Popover.width, height: isPinned ? DS.Popover.timerHeight : DS.Popover.height)
         .onReceive(timer) { _ in
             withAnimation(.linear(duration: 0.3)) {
                 now = Date()
