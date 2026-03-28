@@ -120,10 +120,18 @@ struct EventRowView: View {
 
     private var timeColumn: some View {
         VStack(spacing: DS.Spacing.xxs) {
-            Text(event.formattedTime)
-                .font(.system(.caption, design: .monospaced))
-                .fontWeight(.bold)
-                .foregroundColor(DS.Colors.textPrimary)
+            HStack(spacing: 2) {
+                Text(event.formattedTime)
+                    .font(.system(.caption, design: .monospaced))
+                    .fontWeight(.bold)
+                    .foregroundColor(DS.Colors.textPrimary)
+                Text("–")
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundColor(DS.Colors.textSecondary)
+                Text(event.formattedEndTime)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundColor(DS.Colors.textSecondary)
+            }
 
             Text(timeUntilText)
                 .font(.system(.caption2, design: .monospaced))
