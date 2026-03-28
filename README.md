@@ -11,35 +11,53 @@
 
 ---
 
-Bubo is a menu bar calendar for macOS that combines your schedule, focus timer, and meeting reminders in one place — without ever opening a separate window.
+## The problem
+
+You're deep in work. A meeting starts in 5 minutes. The tiny macOS notification pops up in the corner — you dismiss it without even reading. 15 minutes later you realize you missed the call.
+
+Or this: you open Apple Calendar just to check what's next, and suddenly you're reorganizing your week instead of doing actual work. Context switch. Focus gone.
+
+**Bubo fixes both.** It puts your schedule in the menu bar — one click, no app to launch, no window to manage. And when a meeting is approaching, it doesn't whisper — it **takes over the screen** so you can't accidentally ignore it.
 
 <p align="center">
-  <img src="screenshots/ui_timeline.png" alt="Bubo — daily timeline in the menu bar" width="340">
+  <img src="screenshots/ui_timeline.png" alt="Bubo — daily timeline in the menu bar" width="380">
 </p>
 
-## Your day at a glance
+## How Bubo solves it
 
-Click the icon in your menu bar. A frosted-glass panel drops down showing your full day: every meeting, every task, how long until the next one starts, and who's attending. No app to launch. No context switch.
+### Problem: "I keep missing meetings"
 
-Bubo sees every calendar your Mac already knows about — **iCloud, Google, Exchange, Outlook, CalDAV**. Connect an account once in System Settings, and it appears in Bubo automatically. No extra logins.
+Most calendar apps send a small notification banner. You swipe it away out of habit. Bubo does something different: **the entire screen goes dark** with a countdown timer and meeting title. You physically cannot miss it.
 
-## Create events in seconds
+<p align="center">
+  <img src="screenshots/fullscreen_alert.gif" alt="Full-screen meeting alert in action" width="600">
+</p>
 
-<img src="screenshots/ui_new_event.png" alt="Quick event creation" width="300" align="right">
+Stack multiple reminder intervals — 30 min, 10 min, 1 min — so you get progressively more urgent alerts. Each event can have its own set.
 
-Hit **+**, type a name, pick a time. Done. Events sync back to Apple Calendar, or you can keep them **local-only** — completely private blocks of time invisible to the outside world.
+<p align="center">
+  <img src="screenshots/pomodoro_reminders.gif" alt="Pomodoro timer and custom reminders" width="380">
+</p>
 
-Set up **recurring events** with full flexibility: daily, weekly on specific days, monthly by date or weekday ("second Tuesday"), yearly. Skip individual occurrences whenever plans change.
+### Problem: "Checking my calendar breaks my flow"
 
-<br clear="both"/>
+Opening a calendar app means switching contexts. Bubo lives in the menu bar — click the icon, see your whole day in a frosted-glass panel, click away. No app launch, no window management.
 
-## Built-in Pomodoro timer
+It sees every calendar your Mac already knows: **iCloud, Google, Exchange, Outlook, CalDAV**. Connect an account in System Settings once — Bubo picks it up automatically.
 
-<img src="screenshots/ui_pomodoro.png" alt="Pomodoro focus session" width="300" align="right">
+### Problem: "I need focus blocks but don't want coworkers to see them"
 
-Toggle Pomodoro mode on any event, and Bubo splits it into focused work sessions with timed breaks. A ring timer appears in the menu bar. Your calendar blocks out. The world goes quiet.
+Sometimes you need to block time for deep work without broadcasting it. Bubo lets you create **local-only events** — private time blocks stored only on your Mac, invisible to anyone else.
 
-Choose the rhythm that matches your work:
+<p align="center">
+  <img src="screenshots/event_creation.gif" alt="Creating events with repeat and local-only options" width="380">
+</p>
+
+Create events in seconds: hit **+**, type a name, pick a time. Set up **recurring events** — daily, weekly on specific days, monthly ("second Tuesday"), yearly. Skip individual occurrences when plans change.
+
+### Problem: "I can't stay focused for long stretches"
+
+Toggle **Pomodoro mode** on any event and Bubo splits it into focused work sessions with timed breaks. A ring timer appears in the menu bar.
 
 | Rhythm | Work | Break | Rounds |
 |---|---|---|---|
@@ -49,34 +67,20 @@ Choose the rhythm that matches your work:
 | **52/17 Rule** | 52 min | 17 min | 3 |
 | **Ultradian** | 90 min | 20 min | 1 |
 
-When it's time to break, a full-screen overlay rises — not a notification you can swipe away, but a real signal to stop and rest. When the break ends, Bubo brings you back.
+When it's time to break, a full-screen overlay rises — not a notification you can swipe away, but a real signal to stop and rest.
 
 Read the full [Pomodoro Guide &rarr;](docs/Pomodoro.md)
 
-<br clear="both"/>
-
-## Reminders you won't miss
+### Settings that stay out of the way
 
 <p align="center">
-  <img src="screenshots/story_reminders.svg" alt="Stacking reminder intervals" width="650">
+  <img src="screenshots/settings.gif" alt="Settings: calendars, reminders, general" width="380">
 </p>
-
-Most apps remind you with a banner in the corner. You dismiss it without reading. Bubo takes a different approach: when a meeting is approaching, the **entire screen goes dark** with a countdown timer, the meeting title, and the time left. You cannot accidentally ignore it.
-
-**Stack multiple intervals** — get a nudge at 30 minutes, again at 10, and a final alert at 1 minute. Each event can have its own custom set.
-
-**Snooze** when you're not ready. Bubo steps back and returns later.
-
-<p align="center">
-  <img src="screenshots/story_vibe_coding.svg" alt="Full-screen alert comparison" width="700">
-</p>
-
-## Settings that stay out of the way
 
 - **Launch at login** — Bubo starts quietly with your Mac
-- **Badge count** — see upcoming events on the menu bar icon (whole day or a custom time window)
+- **Badge count** — see upcoming events on the menu bar icon
 - **Calendar picker** — enable only the calendars you care about
-- **Reminder intervals** — add as many as you want from 1 to 120 minutes
+- **Reminder intervals** — stack as many as you want, from 1 to 120 minutes
 - **Full-screen alerts** or system notifications — your choice
 - **Light, Dark, or System** appearance
 
