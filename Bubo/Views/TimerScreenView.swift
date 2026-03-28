@@ -85,7 +85,8 @@ struct TimerScreenView: View {
                     .buttonStyle(.borderless)
                     .help(isPinned ? "Unpin window" : "Pin on top")
                     .accessibilityLabel(isPinned ? "Unpin timer window" : "Pin timer window on top")
-                )
+                ),
+                showOwlIcon: false
             )
 
             ScrollView {
