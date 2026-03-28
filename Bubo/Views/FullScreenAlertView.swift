@@ -83,6 +83,26 @@ struct FullScreenAlertView: View {
                     }
                     .buttonStyle(.plain)
 
+                    if let meetingURL = event.meetingLink, let serviceName = event.meetingServiceName {
+                        Button {
+                            Haptics.impact()
+                            NSWorkspace.shared.open(meetingURL)
+                            cleanup()
+                            onDismiss()
+                        } label: {
+                            Label("Join \(serviceName)", systemImage: "video.fill")
+                                .font(.title2)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 40)
+                                .padding(.vertical, 16)
+                                .background(Capsule().fill(Color.accentColor))
+                        }
+                        .buttonStyle(.plain)
+                        .keyboardShortcut(.return, modifiers: [])
+                        .accessibilityLabel("Join \(serviceName)")
+                    }
+
                     Button(action: {
                         Haptics.impact()
                         cleanup()
@@ -97,7 +117,7 @@ struct FullScreenAlertView: View {
                             .background(Capsule().fill(.white))
                     }
                     .buttonStyle(.plain)
-                    .keyboardShortcut(.return, modifiers: [])
+                    .keyboardShortcut(event.meetingLink != nil ? .escape : .return, modifiers: [])
                     .accessibilityLabel("Dismiss alert")
                     .accessibilityHint("Press Enter or click to dismiss")
                 }
