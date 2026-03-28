@@ -56,15 +56,20 @@ class ReminderService {
         }.count
     }
 
-    /// Events grouped by day for display
+    /// Events grouped by day for display, including days with no events
     var eventsByDay: [(date: Date, events: [CalendarEvent])] {
         let calendar = Calendar.current
         let grouped = Dictionary(grouping: allEvents) { event in
             calendar.startOfDay(for: event.startDate)
         }
-        return grouped
-            .sorted { $0.key < $1.key }
-            .map { (date: $0.key, events: $0.value) }
+        let today = calendar.startOfDay(for: Date())
+        var results: [(date: Date, events: [CalendarEvent])] = []
+        for offset in 0..<Self.fetchWindowDays {
+            guard let day = calendar.date(byAdding: .day, value: offset, to: today) else { continue }
+            let events = grouped[day] ?? []
+            results.append((date: day, events: events))
+        }
+        return results
     }
 
     init(settings: ReminderSettings) {
