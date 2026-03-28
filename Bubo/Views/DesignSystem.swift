@@ -392,11 +392,11 @@ struct PopoverHeader: View {
                 }
 
                 if showBack {
-                    if let trailing = trailing {
-                        trailing
-                    }
                     if showOwlIcon {
                         OwlIcon(size: DS.Size.headerIcon)
+                    }
+                    if let trailing = trailing {
+                        trailing
                     }
                 } else if let trailing = trailing {
                     trailing
