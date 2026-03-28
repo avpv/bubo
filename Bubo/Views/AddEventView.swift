@@ -18,7 +18,7 @@ struct AddEventView: View {
     @State private var recurrenceRule: RecurrenceRule? = nil
     @State private var selectedEventType: EventType = .standard
     @State private var addToCalendar = false
-    @State private var selectedColorTag: EventColorTag? = DS.defaultEventColorTag
+    @State private var selectedColorTag: EventColorTag? = nil
 
     // MARK: - Pomodoro state
 

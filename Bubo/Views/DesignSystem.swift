@@ -169,7 +169,7 @@ enum DS {
 
     // MARK: Event Color Tags
 
-    static let defaultEventColorTag: EventColorTag = .blue
+    static let defaultEventColor: Color = .gray
 
     // MARK: Urgency Colors
 
