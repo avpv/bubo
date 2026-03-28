@@ -25,7 +25,7 @@ enum DS {
     enum Popover {
         static let width: CGFloat = 360
         static let height: CGFloat = 600
-        static let timerHeight: CGFloat = 480
+        static let timerHeight: CGFloat = 440
     }
 
     // MARK: Settings Window
@@ -355,6 +355,7 @@ struct PopoverHeader: View {
     var showBack: Bool = false
     var onBack: (() -> Void)? = nil
     var trailing: AnyView? = nil
+    var showOwlIcon: Bool = true
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -391,10 +392,12 @@ struct PopoverHeader: View {
                 }
 
                 if showBack {
+                    if showOwlIcon {
+                        OwlIcon(size: DS.Size.headerIcon)
+                    }
                     if let trailing = trailing {
                         trailing
                     }
-                    OwlIcon(size: DS.Size.headerIcon)
                 } else if let trailing = trailing {
                     trailing
                 }

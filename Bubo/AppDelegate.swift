@@ -105,31 +105,47 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func showPinnedTimer(event: CalendarEvent) {
         dismissPinnedTimer()
 
+        let settings = ReminderSettings.load()
         let timerView = TimerScreenView(
             event: event,
             onBack: { [weak self] in
                 self?.dismissPinnedTimer()
             },
-            isPinned: true
+            isPinned: true,
+            backgroundStyle: settings.backgroundStyle
         )
 
         let hostingView = NSHostingView(rootView: timerView)
 
+        let visualEffect = NSVisualEffectView()
+        visualEffect.material = .popover
+        visualEffect.state = .active
+        visualEffect.blendingMode = .behindWindow
+        hostingView.translatesAutoresizingMaskIntoConstraints = false
+        visualEffect.addSubview(hostingView)
+        NSLayoutConstraint.activate([
+            hostingView.topAnchor.constraint(equalTo: visualEffect.topAnchor),
+            hostingView.bottomAnchor.constraint(equalTo: visualEffect.bottomAnchor),
+            hostingView.leadingAnchor.constraint(equalTo: visualEffect.leadingAnchor),
+            hostingView.trailingAnchor.constraint(equalTo: visualEffect.trailingAnchor),
+        ])
+
         let panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: DS.Popover.width, height: DS.Popover.timerHeight),
-            styleMask: [.titled, .closable, .fullSizeContentView, .nonactivatingPanel, .utilityWindow],
+            styleMask: [.titled, .closable, .nonactivatingPanel, .utilityWindow],
             backing: .buffered,
             defer: false
         )
         panel.isReleasedWhenClosed = false
-        panel.contentView = hostingView
+        panel.contentView = visualEffect
         panel.level = .floating
         panel.isFloatingPanel = true
         panel.hidesOnDeactivate = false
         panel.titlebarAppearsTransparent = true
         panel.titleVisibility = .hidden
         panel.isMovableByWindowBackground = true
-        panel.backgroundColor = .windowBackgroundColor
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
 
         // Position near top-right of screen
         if let screen = NSScreen.main {
