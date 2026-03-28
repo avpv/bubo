@@ -36,7 +36,7 @@ Most calendar apps send a small notification banner. You swipe it away out of ha
 Stack multiple reminder intervals — 30 min, 10 min, 1 min — so you get progressively more urgent alerts. Each event can have its own set.
 
 <p align="center">
-  <img src="screenshots/pomodoro_reminders.gif" alt="Pomodoro timer and custom reminders" width="380">
+  <img src="screenshots/custom_reminders.png" alt="Custom reminder intervals" width="300">
 </p>
 
 ### Problem: "Checking my calendar breaks my flow"
@@ -50,7 +50,7 @@ It sees every calendar your Mac already knows: **iCloud, Google, Exchange, Outlo
 Sometimes you need to block time for deep work without broadcasting it. Bubo lets you create **local-only events** — private time blocks stored only on your Mac, invisible to anyone else.
 
 <p align="center">
-  <img src="screenshots/event_creation.gif" alt="Creating events with repeat and local-only options" width="380">
+  <img src="screenshots/new_event.png" alt="Quick event creation" width="300">
 </p>
 
 Create events in seconds: hit **+**, type a name, pick a time. Set up **recurring events** — daily, weekly on specific days, monthly ("second Tuesday"), yearly. Skip individual occurrences when plans change.
@@ -74,7 +74,7 @@ Read the full [Pomodoro Guide &rarr;](docs/Pomodoro.md)
 ### Settings that stay out of the way
 
 <p align="center">
-  <img src="screenshots/settings.gif" alt="Settings: calendars, reminders, general" width="380">
+  <img src="screenshots/settings_calendars.png" alt="Settings" width="300">
 </p>
 
 - **Launch at login** — Bubo starts quietly with your Mac
