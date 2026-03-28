@@ -240,6 +240,7 @@ struct MenuBarView: View {
             if reminderService.eventsByDay.isEmpty {
                 emptyState
             } else if filteredEventsByDay.isEmpty {
+                Spacer()
                 VStack(spacing: DS.Spacing.sm) {
                     Text("No events with this color")
                         .font(.subheadline)
@@ -249,7 +250,7 @@ struct MenuBarView: View {
                         .controlSize(.small)
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, DS.Spacing.xxl)
+                Spacer()
             } else {
                 eventList
             }
