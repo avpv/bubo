@@ -219,14 +219,14 @@ struct AddEventView: View {
                             ForEach(EventColorTag.allCases, id: \.self) { tag in
                                 Circle()
                                     .fill(tag.color)
-                                    .frame(width: 28, height: 28)
+                                    .frame(width: 20, height: 20)
                                     .overlay(
                                         Circle()
-                                            .stroke(Color.white, lineWidth: selectedColorTag == tag ? 2.5 : 0)
+                                            .stroke(Color.white, lineWidth: selectedColorTag == tag ? 2 : 0)
                                     )
                                     .shadow(
                                         color: selectedColorTag == tag ? tag.color.opacity(0.5) : .clear,
-                                        radius: selectedColorTag == tag ? 4 : 0
+                                        radius: selectedColorTag == tag ? 3 : 0
                                     )
                                     .scaleEffect(selectedColorTag == tag ? 1.15 : 1.0)
                                     .animation(DS.Animation.microInteraction, value: selectedColorTag)
@@ -241,7 +241,8 @@ struct AddEventView: View {
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(DS.Spacing.md)
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.sm)
                         .background(DS.Materials.platter)
                         .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
                         .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
