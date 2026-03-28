@@ -106,7 +106,7 @@ struct EventRowView: View {
     // MARK: - Urgency Bar
 
     private var accentBarColor: Color {
-        event.colorTag?.color ?? DS.urgencyColor(minutesUntil: event.minutesUntilStart)
+        (event.colorTag ?? DS.defaultEventColorTag).color
     }
 
     private var urgencyBar: some View {
@@ -115,10 +115,8 @@ struct EventRowView: View {
             .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
             .padding(.trailing, DS.Spacing.md)
             .shadow(
-                color: event.colorTag != nil
-                    ? accentBarColor.opacity(0.4)
-                    : DS.urgencyColor(minutesUntil: event.minutesUntilStart).opacity(event.minutesUntilStart <= 15 ? 0.6 : 0.2),
-                radius: event.colorTag != nil ? 4 : (event.minutesUntilStart <= 5 ? 6 : 3)
+                color: accentBarColor.opacity(0.4),
+                radius: 4
             )
     }
 

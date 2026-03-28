@@ -167,6 +167,10 @@ enum DS {
         static let platter: Material = .regularMaterial
     }
 
+    // MARK: Event Color Tags
+
+    static let defaultEventColorTag: EventColorTag = .blue
+
     // MARK: Urgency Colors
 
     static func urgencyColor(minutesUntil: Int) -> Color {
