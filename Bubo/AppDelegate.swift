@@ -11,6 +11,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var alertWindow: NSWindow?
     private var alertObserver: Any?
     private var autoDismissTask: Task<Void, Never>?
+    private var pinnedTimerWindow: NSPanel?
+    private var pinObserver: Any?
+    private var unpinObserver: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         alertObserver = NotificationCenter.default.addObserver(
@@ -22,6 +25,27 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                   let minutes = notification.userInfo?["minutesBefore"] as? Int else { return }
             MainActor.assumeIsolated {
                 self?.showAlert(event: event, minutesBefore: minutes)
+            }
+        }
+
+        pinObserver = NotificationCenter.default.addObserver(
+            forName: .pinTimerWindow,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let event = notification.userInfo?["event"] as? CalendarEvent else { return }
+            MainActor.assumeIsolated {
+                self?.showPinnedTimer(event: event)
+            }
+        }
+
+        unpinObserver = NotificationCenter.default.addObserver(
+            forName: .unpinTimerWindow,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.dismissPinnedTimer()
             }
         }
 
@@ -52,6 +76,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if let observer = alertObserver {
             NotificationCenter.default.removeObserver(observer)
         }
+        if let observer = pinObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        if let observer = unpinObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
     }
 
     func dismissAlert() {
@@ -62,6 +92,59 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.orderOut(nil)
         window.close()
     }
+
+    // MARK: - Pinned Timer Window
+
+    func dismissPinnedTimer() {
+        guard let window = pinnedTimerWindow else { return }
+        pinnedTimerWindow = nil
+        window.orderOut(nil)
+        window.close()
+    }
+
+    private func showPinnedTimer(event: CalendarEvent) {
+        dismissPinnedTimer()
+
+        let timerView = TimerScreenView(
+            event: event,
+            onBack: { [weak self] in
+                self?.dismissPinnedTimer()
+            },
+            isPinned: true
+        )
+
+        let hostingView = NSHostingView(rootView: timerView)
+
+        let panel = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: DS.Popover.width, height: DS.Popover.height),
+            styleMask: [.titled, .closable, .nonactivatingPanel, .utilityWindow],
+            backing: .buffered,
+            defer: false
+        )
+        panel.isReleasedWhenClosed = false
+        panel.contentView = hostingView
+        panel.level = .floating
+        panel.isFloatingPanel = true
+        panel.hidesOnDeactivate = false
+        panel.titlebarAppearsTransparent = true
+        panel.titleVisibility = .hidden
+        panel.isMovableByWindowBackground = true
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+
+        // Position near top-right of screen
+        if let screen = NSScreen.main {
+            let screenFrame = screen.visibleFrame
+            let x = screenFrame.maxX - DS.Popover.width - 20
+            let y = screenFrame.maxY - DS.Popover.height - 20
+            panel.setFrameOrigin(NSPoint(x: x, y: y))
+        }
+
+        panel.makeKeyAndOrderFront(nil)
+        pinnedTimerWindow = panel
+    }
+
+    // MARK: - Full-Screen Alert
 
     private func showAlert(event: CalendarEvent, minutesBefore: Int) {
         dismissAlert()
@@ -115,4 +198,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
 extension Notification.Name {
     static let snoozeReminder = Notification.Name("snoozeReminder")
+    static let pinTimerWindow = Notification.Name("pinTimerWindow")
+    static let unpinTimerWindow = Notification.Name("unpinTimerWindow")
 }

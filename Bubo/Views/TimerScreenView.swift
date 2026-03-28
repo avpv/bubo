@@ -3,6 +3,7 @@ import SwiftUI
 struct TimerScreenView: View {
     let event: CalendarEvent
     var onBack: () -> Void
+    var isPinned: Bool = false
 
     @State private var now = Date()
     @State private var pulseRing = false
@@ -60,7 +61,34 @@ struct TimerScreenView: View {
             PopoverHeader(
                 title: "Timer",
                 showBack: true,
-                onBack: onBack
+                onBack: {
+                    if isPinned {
+                        NotificationCenter.default.post(name: .unpinTimerWindow, object: nil)
+                    }
+                    onBack()
+                },
+                trailing: AnyView(
+                    Button {
+                        Haptics.tap()
+                        if isPinned {
+                            NotificationCenter.default.post(name: .unpinTimerWindow, object: nil)
+                        } else {
+                            NotificationCenter.default.post(
+                                name: .pinTimerWindow,
+                                object: nil,
+                                userInfo: ["event": event]
+                            )
+                        }
+                    } label: {
+                        Image(systemName: isPinned ? "pin.fill" : "pin")
+                            .font(.system(size: DS.Size.iconMedium, weight: .medium))
+                            .foregroundStyle(isPinned ? DS.Colors.accent : DS.Colors.textSecondary)
+                            .rotationEffect(.degrees(isPinned ? 0 : 45))
+                    }
+                    .buttonStyle(.borderless)
+                    .help(isPinned ? "Unpin window" : "Pin on top")
+                    .accessibilityLabel(isPinned ? "Unpin timer window" : "Pin timer window on top")
+                )
             )
 
             ScrollView {
