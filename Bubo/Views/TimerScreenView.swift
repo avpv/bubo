@@ -4,6 +4,7 @@ struct TimerScreenView: View {
     let event: CalendarEvent
     var onBack: () -> Void
     var isPinned: Bool = false
+    var backgroundStyle: AppBackgroundStyle = .system
 
     @State private var now = Date()
     @State private var pulseRing = false
@@ -57,6 +58,28 @@ struct TimerScreenView: View {
     }
 
     var body: some View {
+        ZStack {
+            if isPinned {
+                AppBackgroundLayer(style: backgroundStyle)
+            }
+
+            timerContent
+        }
+        .frame(width: DS.Popover.width, height: DS.Popover.timerHeight)
+        .onReceive(timer) { _ in
+            withAnimation(.linear(duration: 0.3)) {
+                now = Date()
+            }
+        }
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.easeInOut(duration: 2).repeatForever(autoreverses: true)) {
+                pulseRing = true
+            }
+        }
+    }
+
+    private var timerContent: some View {
         VStack(spacing: 0) {
             PopoverHeader(
                 title: "Timer",
@@ -175,18 +198,6 @@ struct TimerScreenView: View {
                 .padding(.horizontal, DS.Spacing.xl)
                 .padding(.top, DS.Spacing.lg)
                 .padding(.bottom, DS.Spacing.xl)
-            }
-        }
-        .frame(width: DS.Popover.width, height: DS.Popover.timerHeight)
-        .onReceive(timer) { _ in
-            withAnimation(.linear(duration: 0.3)) {
-                now = Date()
-            }
-        }
-        .onAppear {
-            guard !reduceMotion else { return }
-            withAnimation(.easeInOut(duration: 2).repeatForever(autoreverses: true)) {
-                pulseRing = true
             }
         }
     }

@@ -105,12 +105,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func showPinnedTimer(event: CalendarEvent) {
         dismissPinnedTimer()
 
+        let settings = ReminderSettings.load()
         let timerView = TimerScreenView(
             event: event,
             onBack: { [weak self] in
                 self?.dismissPinnedTimer()
             },
-            isPinned: true
+            isPinned: true,
+            backgroundStyle: settings.backgroundStyle
         )
 
         let hostingView = NSHostingView(rootView: timerView)
