@@ -64,6 +64,10 @@ struct CalendarEvent: Identifiable, Codable, Hashable {
         Self.timeFormatter.string(from: startDate)
     }
 
+    var formattedEndTime: String {
+        Self.timeFormatter.string(from: endDate)
+    }
+
     var formattedDate: String {
         Self.dateFormatter.string(from: startDate)
     }

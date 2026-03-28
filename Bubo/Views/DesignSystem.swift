@@ -57,7 +57,7 @@ enum DS {
         static let eventRowMinHeight: CGFloat = 36
         static let headerHeight: CGFloat = 48
         static let actionFooterHeight: CGFloat = 48
-        static let timeColumnWidth: CGFloat = 50
+        static let timeColumnWidth: CGFloat = 110
         static let datePillWidth: CGFloat = 54
         static let timePillWidth: CGFloat = 52
         static let controlHeight: CGFloat = 28
