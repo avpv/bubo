@@ -29,6 +29,10 @@ Or this: you open Apple Calendar just to check what's next, and suddenly you're 
 
 Most calendar apps send a small notification banner. You swipe it away out of habit. Bubo does something different: **the entire screen goes dark** with a countdown timer and meeting title. You physically cannot miss it.
 
+<p align="center">
+  <img src="screenshots/fullscreen_alert.gif" alt="Full-screen meeting alert in action" width="600">
+</p>
+
 Stack multiple reminder intervals — 30 min, 10 min, 1 min — so you get progressively more urgent alerts. Each event can have its own set.
 
 <p align="center">
