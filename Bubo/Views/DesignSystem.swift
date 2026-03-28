@@ -24,10 +24,10 @@ enum DS {
 
     enum Popover {
         static let width: CGFloat = 360
-        static let listMaxHeight: CGFloat = 560
-        static let detailMaxHeight: CGFloat = 480
-        static let formMaxHeight: CGFloat = 480
-        static let detailMinHeight: CGFloat = 200
+        static let listMaxHeight: CGFloat = 420
+        static let detailMaxHeight: CGFloat = 420
+        static let formMaxHeight: CGFloat = 420
+        static let detailMinHeight: CGFloat = 420
     }
 
     // MARK: Settings Window
