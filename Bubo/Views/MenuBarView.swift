@@ -232,12 +232,12 @@ struct MenuBarView: View {
             }
 
             // Color filter
-            if !reminderService.eventsByDay.isEmpty {
+            if reminderService.allEvents.count > 0 {
                 colorFilterBar
             }
 
             // Events
-            if reminderService.eventsByDay.isEmpty {
+            if reminderService.allEvents.isEmpty {
                 emptyState
             } else if filteredEventsByDay.isEmpty {
                 VStack(spacing: DS.Spacing.sm) {
@@ -382,6 +382,14 @@ struct MenuBarView: View {
                     DaySectionHeader(date: dayGroup.date, count: dayGroup.events.count)
                         .padding(.horizontal, DS.Spacing.sm)
                         .padding(.top, dayGroup.date == reminderService.eventsByDay.first?.date ? 0 : DS.Spacing.sm)
+
+                    if dayGroup.events.isEmpty {
+                        Text("No events")
+                            .font(.subheadline)
+                            .foregroundColor(DS.Colors.textSecondary)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.vertical, DS.Spacing.sm)
+                    }
 
                     ForEach(dayGroup.events) { event in
                         EventRowView(
