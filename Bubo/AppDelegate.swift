@@ -137,7 +137,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let panel = KeyablePanel(
             contentRect: NSRect(x: 0, y: 0, width: DS.Popover.width, height: DS.Popover.timerHeight),
-            styleMask: [.titled, .closable, .fullSizeContentView, .nonactivatingPanel, .utilityWindow],
+            styleMask: [.titled, .closable, .nonactivatingPanel, .utilityWindow],
             backing: .buffered,
             defer: false
         )
@@ -150,8 +150,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         panel.titleVisibility = .hidden
         panel.isMovableByWindowBackground = true
         panel.delegate = self
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
 
         // Position near top-right of screen
         if let screen = NSScreen.main {
