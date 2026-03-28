@@ -19,6 +19,11 @@ struct MenuBarView: View {
         case addEvent(editing: CalendarEvent? = nil)
         case timer(CalendarEvent)
 
+        var isTimer: Bool {
+            if case .timer = self { return true }
+            return false
+        }
+
         static func == (lhs: Navigation, rhs: Navigation) -> Bool {
             switch (lhs, rhs) {
             case (.list, .list): return true
@@ -122,7 +127,7 @@ struct MenuBarView: View {
 
             ToastOverlay(toastState: toastState)
         }
-        .frame(width: DS.Popover.width, height: DS.Popover.height)
+        .frame(width: DS.Popover.width, height: navigation.isTimer ? DS.Popover.timerHeight : DS.Popover.height)
         .onAppear {
             guard !hasStartedSync else { return }
             hasStartedSync = true
