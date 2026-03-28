@@ -25,6 +25,7 @@ enum DS {
     enum Popover {
         static let width: CGFloat = 360
         static let height: CGFloat = 600
+        static let timerHeight: CGFloat = 440
     }
 
     // MARK: Settings Window
@@ -390,6 +391,9 @@ struct PopoverHeader: View {
                 }
 
                 if showBack {
+                    if let trailing = trailing {
+                        trailing
+                    }
                     OwlIcon(size: DS.Size.headerIcon)
                 } else if let trailing = trailing {
                     trailing
