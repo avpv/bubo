@@ -64,7 +64,6 @@ struct TimerScreenView: View {
             }
 
             timerContent
-                .padding(.top, isPinned ? 22 : 0)
         }
         .frame(width: DS.Popover.width, height: DS.Popover.timerHeight)
         .onReceive(timer) { _ in
