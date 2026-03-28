@@ -9,6 +9,7 @@ struct MenuBarView: View {
     @State private var hasStartedSync = false
     @State private var toastState = ToastState()
     @State private var scrollPositionID: String?
+    @State private var colorFilter: EventColorTag? = nil
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -136,6 +137,16 @@ struct MenuBarView: View {
         }
     }
 
+    // MARK: - Filtered Events
+
+    private var filteredEventsByDay: [(date: Date, events: [CalendarEvent])] {
+        guard let filter = colorFilter else { return reminderService.eventsByDay }
+        return reminderService.eventsByDay.compactMap { dayGroup in
+            let filtered = dayGroup.events.filter { $0.colorTag == filter }
+            return filtered.isEmpty ? nil : (date: dayGroup.date, events: filtered)
+        }
+    }
+
     // MARK: - Helpers
 
     private var isScrolledFromTop: Bool {
@@ -220,9 +231,25 @@ struct MenuBarView: View {
                 }
             }
 
+            // Color filter
+            if !reminderService.eventsByDay.isEmpty {
+                colorFilterBar
+            }
+
             // Events
             if reminderService.eventsByDay.isEmpty {
                 emptyState
+            } else if filteredEventsByDay.isEmpty {
+                VStack(spacing: DS.Spacing.sm) {
+                    Text("No events with this color")
+                        .font(.subheadline)
+                        .foregroundColor(DS.Colors.textSecondary)
+                    Button("Clear filter") { colorFilter = nil }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, DS.Spacing.xxl)
             } else {
                 eventList
             }
@@ -299,10 +326,54 @@ struct MenuBarView: View {
         .transition(.opacity.combined(with: .scale(scale: 0.95)))
     }
 
+    private var colorFilterBar: some View {
+        HStack(spacing: DS.Spacing.xs) {
+            ForEach(EventColorTag.allCases, id: \.self) { tag in
+                Circle()
+                    .fill(tag.color)
+                    .frame(width: 14, height: 14)
+                    .opacity(colorFilter == nil || colorFilter == tag ? 1.0 : 0.3)
+                    .scaleEffect(colorFilter == tag ? 1.2 : 1.0)
+                    .overlay(
+                        Circle()
+                            .stroke(Color.white, lineWidth: colorFilter == tag ? 1.5 : 0)
+                    )
+                    .shadow(
+                        color: colorFilter == tag ? tag.color.opacity(0.5) : .clear,
+                        radius: colorFilter == tag ? 3 : 0
+                    )
+                    .onTapGesture {
+                        Haptics.tap()
+                        withAnimation(DS.Animation.microInteraction) {
+                            colorFilter = colorFilter == tag ? nil : tag
+                        }
+                    }
+            }
+
+            if colorFilter != nil {
+                Button {
+                    Haptics.tap()
+                    withAnimation(DS.Animation.microInteraction) {
+                        colorFilter = nil
+                    }
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(DS.Colors.textTertiary)
+                }
+                .buttonStyle(.borderless)
+                .transition(.scale.combined(with: .opacity))
+            }
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.vertical, DS.Spacing.xs)
+        .animation(DS.Animation.microInteraction, value: colorFilter)
+    }
+
     private var eventList: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: DS.Spacing.md) {
-                ForEach(reminderService.eventsByDay, id: \.date) { dayGroup in
+                ForEach(filteredEventsByDay, id: \.date) { dayGroup in
                     DaySectionHeader(date: dayGroup.date, count: dayGroup.events.count)
                         .padding(.horizontal, DS.Spacing.sm)
                         .padding(.top, dayGroup.date == reminderService.eventsByDay.first?.date ? 0 : DS.Spacing.sm)
