@@ -137,7 +137,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let panel = KeyablePanel(
             contentRect: NSRect(x: 0, y: 0, width: DS.Popover.width, height: DS.Popover.timerHeight),
-            styleMask: [.titled, .closable, .nonactivatingPanel, .utilityWindow],
+            styleMask: [.titled, .closable, .fullSizeContentView, .nonactivatingPanel, .utilityWindow],
             backing: .buffered,
             defer: false
         )
