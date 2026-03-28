@@ -20,7 +20,8 @@ Or this: you open Apple Calendar just to check what's next, and suddenly you're 
 **Bubo fixes both.** It puts your schedule in the menu bar — one click, no app to launch, no window to manage. And when a meeting is approaching, it doesn't whisper — it **takes over the screen** so you can't accidentally ignore it.
 
 <p align="center">
-  <img src="screenshots/ui_timeline.png" alt="Bubo — daily timeline in the menu bar" width="380">
+  <img src="screenshots/ui_timeline.png" alt="Bubo — daily timeline in the menu bar" width="380"><br>
+  <sub>Your full day in the menu bar — one click, no app to launch</sub>
 </p>
 
 ## How Bubo solves it
@@ -30,13 +31,15 @@ Or this: you open Apple Calendar just to check what's next, and suddenly you're 
 Most calendar apps send a small notification banner. You swipe it away out of habit. Bubo does something different: **the entire screen goes dark** with a countdown timer and meeting title. You physically cannot miss it.
 
 <p align="center">
-  <img src="screenshots/fullscreen_alert.gif" alt="Full-screen meeting alert in action" width="600">
+  <img src="screenshots/fullscreen_alert.gif" alt="Full-screen meeting alert in action" width="600"><br>
+  <sub>Full-screen alert — you can't accidentally dismiss it</sub>
 </p>
 
 Stack multiple reminder intervals — 30 min, 10 min, 1 min — so you get progressively more urgent alerts. Each event can have its own set.
 
 <p align="center">
-  <img src="screenshots/pomodoro_reminders.gif" alt="Pomodoro timer and custom reminders" width="380">
+  <img src="screenshots/custom_reminders.png" alt="Custom reminder intervals" width="300"><br>
+  <sub>Stack multiple reminders per event — 30 min, 10 min, 2 min</sub>
 </p>
 
 ### Problem: "Checking my calendar breaks my flow"
@@ -50,7 +53,8 @@ It sees every calendar your Mac already knows: **iCloud, Google, Exchange, Outlo
 Sometimes you need to block time for deep work without broadcasting it. Bubo lets you create **local-only events** — private time blocks stored only on your Mac, invisible to anyone else.
 
 <p align="center">
-  <img src="screenshots/event_creation.gif" alt="Creating events with repeat and local-only options" width="380">
+  <img src="screenshots/new_event.png" alt="Quick event creation" width="300"><br>
+  <sub>Create local-only events invisible to coworkers</sub>
 </p>
 
 Create events in seconds: hit **+**, type a name, pick a time. Set up **recurring events** — daily, weekly on specific days, monthly ("second Tuesday"), yearly. Skip individual occurrences when plans change.
@@ -74,7 +78,8 @@ Read the full [Pomodoro Guide &rarr;](docs/Pomodoro.md)
 ### Settings that stay out of the way
 
 <p align="center">
-  <img src="screenshots/settings.gif" alt="Settings: calendars, reminders, general" width="380">
+  <img src="screenshots/settings_calendars.png" alt="Settings" width="300"><br>
+  <sub>All your calendars in one place — iCloud, Google, Exchange, Outlook</sub>
 </p>
 
 - **Launch at login** — Bubo starts quietly with your Mac
