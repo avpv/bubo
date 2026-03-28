@@ -341,7 +341,7 @@ struct AddEventView: View {
                 .padding(.vertical, DS.Spacing.xl)
             }
             .scrollContentBackground(.hidden)
-            .frame(minHeight: DS.Popover.formMinHeight, maxHeight: DS.Popover.formMaxHeight)
+            .frame(maxHeight: .infinity)
             .onChange(of: selectedEventType) {
                 // Clear standard recurrence when switching to Pomodoro
                 if selectedEventType == .pomodoro {
@@ -374,7 +374,7 @@ struct AddEventView: View {
             .frame(height: DS.Size.actionFooterHeight)
             .background(DS.Materials.headerBar)
         }
-        .frame(width: DS.Popover.width)
+        .frame(width: DS.Popover.width, height: DS.Popover.height)
         .onAppear {
             availableCalendars = AppleCalendarService.shared.listCalendars()
             selectedCalendarId = AppleCalendarService.shared.defaultCalendarId ?? availableCalendars.first?.id ?? ""
