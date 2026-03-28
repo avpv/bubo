@@ -1,4 +1,24 @@
 import Foundation
+import SwiftUI
+
+// MARK: - Event Color Tag
+
+/// Predefined color choices for events.
+enum EventColorTag: String, Codable, Hashable, CaseIterable {
+    case red, orange, yellow, green, blue, purple, pink
+
+    var color: Color {
+        switch self {
+        case .red: .red
+        case .orange: .orange
+        case .yellow: .yellow
+        case .green: .green
+        case .blue: .blue
+        case .purple: .purple
+        case .pink: .pink
+        }
+    }
+}
 
 // MARK: - Event Type
 
@@ -22,6 +42,8 @@ struct CalendarEvent: Identifiable, Codable, Hashable {
     var seriesId: String?
     /// The type of event — standard calendar event or Pomodoro session.
     var eventType: EventType
+    /// Optional user-chosen color for the event.
+    var colorTag: EventColorTag?
 
     // MARK: - Static formatters (avoid re-creation per call)
 
