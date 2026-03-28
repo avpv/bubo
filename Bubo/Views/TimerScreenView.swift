@@ -150,10 +150,8 @@ struct TimerScreenView: View {
                 .padding(.top, DS.Spacing.lg)
                 .padding(.bottom, DS.Spacing.xl)
             }
-            .frame(minHeight: DS.Popover.detailMinHeight, maxHeight: DS.Popover.detailMaxHeight)
         }
-        .frame(width: DS.Popover.width)
-        .frame(minHeight: DS.Popover.detailMinHeight)
+        .frame(width: DS.Popover.width, height: DS.Popover.height)
         .onReceive(timer) { _ in
             withAnimation(.linear(duration: 0.3)) {
                 now = Date()

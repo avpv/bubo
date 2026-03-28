@@ -122,6 +122,7 @@ struct MenuBarView: View {
 
             ToastOverlay(toastState: toastState)
         }
+        .frame(width: DS.Popover.width, height: DS.Popover.height)
         .onAppear {
             guard !hasStartedSync else { return }
             hasStartedSync = true
@@ -237,7 +238,6 @@ struct MenuBarView: View {
 
             footerActions
         }
-        .frame(width: DS.Popover.width)
         } // ScrollViewReader
     }
 
@@ -332,7 +332,6 @@ struct MenuBarView: View {
         }
         .scrollPosition(id: $scrollPositionID)
         .scrollContentBackground(.hidden)
-        .frame(minHeight: DS.Popover.listMinHeight, maxHeight: DS.Popover.listMaxHeight)
     }
 
     private var footerActions: some View {

@@ -151,7 +151,7 @@ struct EventDetailView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(DS.Spacing.xl)
             }
-            .frame(minHeight: DS.Popover.detailMinHeight, maxHeight: DS.Popover.detailMaxHeight)
+            .frame(maxHeight: .infinity)
 
             Spacer(minLength: 0)
 
@@ -249,8 +249,7 @@ struct EventDetailView: View {
             .frame(height: showSeriesDeleteChoice ? DS.Size.actionFooterHeight + 15 : DS.Size.actionFooterHeight)
             .background(DS.Materials.headerBar)
         }
-        .frame(width: DS.Popover.width)
-        .frame(minHeight: DS.Popover.detailMinHeight)
+        .frame(width: DS.Popover.width, height: DS.Popover.height)
     }
 
     // MARK: - Countdown Section
