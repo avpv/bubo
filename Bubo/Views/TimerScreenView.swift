@@ -93,12 +93,13 @@ struct TimerScreenView: View {
                         if isPinned {
                             NotificationCenter.default.post(name: .unpinTimerWindow, object: nil)
                         } else {
+                            let popover = NSApp.keyWindow
+                            popover?.close()
                             NotificationCenter.default.post(
                                 name: .pinTimerWindow,
                                 object: nil,
                                 userInfo: ["event": event]
                             )
-                            NSApp.keyWindow?.close()
                         }
                     } label: {
                         Image(systemName: isPinned ? "pin.fill" : "pin")
