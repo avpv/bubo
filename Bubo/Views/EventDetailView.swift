@@ -126,7 +126,7 @@ struct EventDetailView: View {
                                 .font(.caption)
                                 .fontWeight(.medium)
                                 .foregroundStyle(DS.Colors.textTertiary)
-                            Text(description)
+                            MarkdownText(text: description)
                                 .font(.subheadline)
                                 .foregroundColor(DS.Colors.textSecondary)
                                 .lineSpacing(DS.Typography.bodyLineSpacing)
