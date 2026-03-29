@@ -2,7 +2,7 @@
   "id": "minecraft",
   "displayName": "Minecraft",
   "author": "Bubo Community",
-  "accentColor": { "red": 0.45, "green": 0.75, "blue": 0.25 },
+  "accentColor": { "red": 0.3, "green": 0.55, "blue": 0.15 },
   "surfaceTint": { "red": 0.08, "green": 0.06, "blue": 0.02 },
   "surfaceTintOpacity": 0.3,
   "backgroundGradient": {
@@ -16,7 +16,7 @@
     "endPoint": "bottom"
   },
   "previewColors": [
-    { "red": 0.45, "green": 0.75, "blue": 0.25 },
+    { "red": 0.3, "green": 0.55, "blue": 0.15 },
     { "red": 0.4, "green": 0.25, "blue": 0.1 }
   ],
   "prefersDarkTint": false,

@@ -2,7 +2,7 @@
   "id": "blade_runner",
   "displayName": "Blade Runner",
   "author": "Bubo Community",
-  "accentColor": { "red": 1.0, "green": 0.55, "blue": 0.0 },
+  "accentColor": { "red": 0.8, "green": 0.4, "blue": 0.0 },
   "surfaceTint": { "red": 0.08, "green": 0.03, "blue": 0.0 },
   "surfaceTintOpacity": 0.4,
   "backgroundGradient": {
@@ -17,7 +17,7 @@
     "endRadius": 500
   },
   "previewColors": [
-    { "red": 1.0, "green": 0.55, "blue": 0.0 },
+    { "red": 0.8, "green": 0.4, "blue": 0.0 },
     { "red": 0.15, "green": 0.05, "blue": 0.2 }
   ],
   "prefersDarkTint": true,

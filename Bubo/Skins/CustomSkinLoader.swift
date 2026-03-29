@@ -54,6 +54,13 @@ struct CustomSkinJSON: Codable {
     let backgroundImage: JSONBackgroundImage?
 
     func toSkinDefinition(skinFileURL: URL? = nil) -> SkinDefinition {
+        // HIG: Validate accent color contrast — warn if luminance is too high
+        // for white button text (WCAG 2.1 AA requires 4.5:1 contrast ratio)
+        let accentLuminance = 0.2126 * accentColor.red + 0.7152 * accentColor.green + 0.0722 * accentColor.blue
+        if accentLuminance > 0.55 {
+            print("[Bubo] Warning: Skin '\(displayName)' accent color has high luminance (\(String(format: "%.2f", accentLuminance))). Button text may have insufficient contrast per Apple HIG.")
+        }
+
         var bgImage: SkinBackgroundImage? = nil
         if let imgSpec = backgroundImage, let skinURL = skinFileURL {
             let imageURL = skinURL.deletingLastPathComponent()
