@@ -137,9 +137,12 @@ struct SkinGradient: Equatable {
 /// 3. Add it to the `allSkins` array below
 ///
 /// That's it — your skin will appear in Settings automatically.
+///
+/// Users can also create custom `.buboskin` files (JSON) and import them
+/// via Settings — no code changes needed. See `CustomSkinLoader` for details.
 enum SkinCatalog {
-    /// All registered skins. Order here = order in the picker.
-    static let allSkins: [SkinDefinition] = [
+    /// All built-in skins. Order here = order in the picker.
+    static let builtInSkins: [SkinDefinition] = [
         system,
         classic,
         ampGreen,
@@ -151,6 +154,11 @@ enum SkinCatalog {
         retroTerminal,
         bubblegum,
     ]
+
+    /// All skins including user-imported custom skins.
+    static var allSkins: [SkinDefinition] {
+        builtInSkins + CustomSkinLoader.shared.customSkins
+    }
 
     /// Look up a skin by its ID. Falls back to Classic if not found.
     static func skin(forID id: String) -> SkinDefinition {

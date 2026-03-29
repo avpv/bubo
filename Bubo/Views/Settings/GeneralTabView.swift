@@ -1,5 +1,6 @@
 import ServiceManagement
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ThemeColorPreview: View {
     let colors: [Color]
@@ -97,6 +98,99 @@ struct SkinPreviewCard: View {
                         .lineLimit(1)
                 }
             }
+        }
+    }
+}
+
+// MARK: - Custom Skins Section
+
+struct CustomSkinsSection: View {
+    @Bindable var settings: ReminderSettings
+    @State private var customSkinLoader = CustomSkinLoader.shared
+    @State private var importError: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            Divider()
+
+            HStack {
+                Text("Community skins")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button {
+                    customSkinLoader.revealInFinder()
+                } label: {
+                    Label("Open folder", systemImage: "folder")
+                        .font(.caption2)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+            }
+
+            if !customSkinLoader.customSkins.isEmpty {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 94), spacing: 8)], spacing: 8) {
+                    ForEach(customSkinLoader.customSkins) { skin in
+                        let isSelected = settings.selectedSkinID == skin.id
+                        Button {
+                            withAnimation(DS.Animation.smoothSpring) {
+                                settings.selectedSkinID = skin.id
+                            }
+                        } label: {
+                            SkinPreviewCard(skin: skin, isSelected: isSelected)
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                if settings.selectedSkinID == skin.id {
+                                    settings.selectedSkinID = "system"
+                                }
+                                customSkinLoader.removeSkin(id: skin.id)
+                            } label: {
+                                Label("Remove skin", systemImage: "trash")
+                            }
+                        }
+                    }
+                }
+            }
+
+            Button {
+                importSkin()
+            } label: {
+                Label("Import .buboskin file\u{2026}", systemImage: "plus.circle")
+                    .font(.caption)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+        }
+        .alert("Import failed", isPresented: .init(
+            get: { importError != nil },
+            set: { if !$0 { importError = nil } }
+        )) {
+            Button("OK") { importError = nil }
+        } message: {
+            Text(importError ?? "")
+        }
+    }
+
+    private func importSkin() {
+        let panel = NSOpenPanel()
+        panel.title = "Import Bubo Skin"
+        panel.allowedContentTypes = [.json, UTType(filenameExtension: "buboskin") ?? .json]
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+
+        guard panel.runModal() == .OK else { return }
+
+        var importedCount = 0
+        for url in panel.urls {
+            if customSkinLoader.importSkin(from: url) != nil {
+                importedCount += 1
+            }
+        }
+
+        if importedCount == 0 {
+            importError = "Could not read the skin file. Make sure it is a valid .buboskin JSON file."
         }
     }
 }
@@ -252,7 +346,7 @@ struct GeneralTabView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 94), spacing: 8)], spacing: 8) {
-                        ForEach(SkinCatalog.allSkins) { skin in
+                        ForEach(SkinCatalog.builtInSkins) { skin in
                             let isSelected = settings.selectedSkinID == skin.id
                             Button {
                                 withAnimation(DS.Animation.smoothSpring) {
@@ -264,6 +358,8 @@ struct GeneralTabView: View {
                             .buttonStyle(.plain)
                         }
                     }
+
+                    CustomSkinsSection(settings: settings)
                 }
             }
 

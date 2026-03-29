@@ -98,7 +98,58 @@ Two gradient styles are available:
 Common `UnitPoint` values: `.top`, `.bottom`, `.topLeading`, `.topTrailing`,
 `.bottomLeading`, `.bottomTrailing`, `.center`.
 
+## Custom Skins (no PR needed)
+
+You can also create skins as `.buboskin` JSON files and import them directly
+in **Settings → Skin → Import .buboskin file**. No code, no Xcode, no PR.
+
+### Quick start
+
+1. Copy `Bubo/Skins/TEMPLATE.buboskin` and rename it (e.g. `MyTheme.buboskin`)
+2. Edit the JSON values — same properties as the Swift skins
+3. Open Bubo → Settings → Skin → **Import .buboskin file** and select your file
+4. Your skin appears in the picker immediately
+
+### JSON format
+
+```json
+{
+  "id": "my_skin_name",
+  "displayName": "My Skin Name",
+  "author": "@your_github",
+  "accentColor": { "red": 0.0, "green": 0.9, "blue": 0.0 },
+  "surfaceTint": { "red": 0.0, "green": 0.15, "blue": 0.0 },
+  "surfaceTintOpacity": 0.35,
+  "backgroundGradient": {
+    "colors": [
+      { "red": 0.0, "green": 0.18, "blue": 0.0, "opacity": 0.5 },
+      { "red": 0.0, "green": 0.08, "blue": 0.0, "opacity": 0.3 },
+      { "red": 0.0, "green": 0.0, "blue": 0.0, "opacity": 0.0 }
+    ],
+    "style": "linear",
+    "startPoint": "topLeading",
+    "endPoint": "bottomTrailing"
+  },
+  "previewColors": [
+    { "red": 0.0, "green": 0.7, "blue": 0.0 },
+    { "red": 0.1, "green": 0.2, "blue": 0.1 }
+  ],
+  "prefersDarkTint": true,
+  "secondaryAccent": { "red": 0.0, "green": 0.65, "blue": 0.15 },
+  "buttonStyle": "gradient"
+}
+```
+
+Colors use `red`, `green`, `blue` (0.0–1.0) with an optional `opacity`.
+Gradient style is `"linear"` or `"radial"`. Button style is `"solid"`,
+`"gradient"`, or `"glass"`.
+
+Skins are stored in `~/Library/Application Support/Bubo/Skins/`. You can
+also drop `.buboskin` files there directly and restart Bubo.
+
+Right-click a community skin in the picker to remove it.
+
 ## Example
 
 See any existing skin file (e.g., `AmpGreen.swift`) for a complete working
-example.
+example, or `TEMPLATE.buboskin` for the JSON format.
