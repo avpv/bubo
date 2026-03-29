@@ -160,19 +160,54 @@ struct WallpaperBackgroundLayer: View {
                 path2.addLine(to: CGPoint(x: offset + size.height, y: size.height))
                 context.stroke(path2, with: shading, lineWidth: 0.5)
             }
-        case .diamonds:
-            let diamondSize: CGFloat = 20
-            for row in stride(from: 0, through: size.height, by: diamondSize) {
-                for col in stride(from: 0, through: size.width, by: diamondSize) {
-                    let cx = col + diamondSize / 2
-                    let cy = row + diamondSize / 2
-                    var path = Path()
-                    path.move(to: CGPoint(x: cx, y: cy - diamondSize / 2))
-                    path.addLine(to: CGPoint(x: cx + diamondSize / 2, y: cy))
-                    path.addLine(to: CGPoint(x: cx, y: cy + diamondSize / 2))
-                    path.addLine(to: CGPoint(x: cx - diamondSize / 2, y: cy))
-                    path.closeSubpath()
-                    context.stroke(path, with: shading, lineWidth: 0.5)
+        case .bubo:
+            // Minimalist owl face tiled pattern
+            let cellSize: CGFloat = 48
+            for row in stride(from: 0, through: size.height, by: cellSize) {
+                for col in stride(from: 0, through: size.width, by: cellSize) {
+                    let isOffset = Int(row / cellSize) % 2 == 1
+                    let cx = col + (isOffset ? cellSize / 2 : 0) + cellSize / 2
+                    let cy = row + cellSize / 2
+
+                    // Head outline
+                    let headR: CGFloat = 14
+                    let headRect = CGRect(x: cx - headR, y: cy - headR, width: headR * 2, height: headR * 2)
+                    context.stroke(Circle().path(in: headRect), with: shading, lineWidth: 0.6)
+
+                    // Ear tufts
+                    var leftEar = Path()
+                    leftEar.move(to: CGPoint(x: cx - 9, y: cy - 11))
+                    leftEar.addLine(to: CGPoint(x: cx - 12, y: cy - 19))
+                    leftEar.addLine(to: CGPoint(x: cx - 5, y: cy - 14))
+                    context.stroke(leftEar, with: shading, lineWidth: 0.6)
+
+                    var rightEar = Path()
+                    rightEar.move(to: CGPoint(x: cx + 9, y: cy - 11))
+                    rightEar.addLine(to: CGPoint(x: cx + 12, y: cy - 19))
+                    rightEar.addLine(to: CGPoint(x: cx + 5, y: cy - 14))
+                    context.stroke(rightEar, with: shading, lineWidth: 0.6)
+
+                    // Eyes — two circles
+                    let eyeR: CGFloat = 4.5
+                    let eyeY = cy - 2
+                    let leftEyeRect = CGRect(x: cx - 7 - eyeR, y: eyeY - eyeR, width: eyeR * 2, height: eyeR * 2)
+                    let rightEyeRect = CGRect(x: cx + 7 - eyeR, y: eyeY - eyeR, width: eyeR * 2, height: eyeR * 2)
+                    context.stroke(Circle().path(in: leftEyeRect), with: shading, lineWidth: 0.5)
+                    context.stroke(Circle().path(in: rightEyeRect), with: shading, lineWidth: 0.5)
+
+                    // Pupils — small filled dots
+                    let pupilR: CGFloat = 1.5
+                    let leftPupil = CGRect(x: cx - 7 - pupilR, y: eyeY - pupilR, width: pupilR * 2, height: pupilR * 2)
+                    let rightPupil = CGRect(x: cx + 7 - pupilR, y: eyeY - pupilR, width: pupilR * 2, height: pupilR * 2)
+                    context.fill(Circle().path(in: leftPupil), with: shading)
+                    context.fill(Circle().path(in: rightPupil), with: shading)
+
+                    // Beak — small V
+                    var beak = Path()
+                    beak.move(to: CGPoint(x: cx - 2.5, y: cy + 3))
+                    beak.addLine(to: CGPoint(x: cx, y: cy + 7))
+                    beak.addLine(to: CGPoint(x: cx + 2.5, y: cy + 3))
+                    context.stroke(beak, with: shading, lineWidth: 0.5)
                 }
             }
         }
@@ -528,7 +563,7 @@ struct WallpaperPreviewCard: View {
         case .wave: "water.waves"
         case .honeycomb: "hexagon"
         case .crosshatch: "line.3.crossed.swirl.circle"
-        case .diamonds: "diamond"
+        case .bubo: "owl"
         case .none: "square.grid.3x3"
         }
     }

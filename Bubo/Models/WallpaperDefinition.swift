@@ -65,7 +65,7 @@ struct WallpaperDefinition: Identifiable, Equatable {
         case wave
         case honeycomb
         case crosshatch
-        case diamonds
+        case bubo
     }
 
     enum LiveWallpaperStyle: String, Equatable {
@@ -208,9 +208,9 @@ enum WallpaperCatalog {
         id: "pat_crosshatch", name: "Crosshatch",
         type: .crosshatch, foreground: Color.white.opacity(0.06), background: Color(white: 0.09)
     )
-    static let diamonds = WallpaperDefinition.pattern(
-        id: "pat_diamonds", name: "Diamonds",
-        type: .diamonds, foreground: Color.mint.opacity(0.08), background: Color(red: 0.06, green: 0.1, blue: 0.1)
+    static let buboOwl = WallpaperDefinition.pattern(
+        id: "pat_bubo", name: "Bubo",
+        type: .bubo, foreground: Color.white.opacity(0.07), background: Color(red: 0.07, green: 0.07, blue: 0.1)
     )
 
     // MARK: Live
@@ -230,7 +230,7 @@ enum WallpaperCatalog {
         // Gradient
         sunset, ocean, aurora, peach, nightSky, emerald, lavender, autumn,
         // Pattern
-        dotGrid, gridLines, diagonalStripes, chevrons, waves, honeycomb, crosshatch, diamonds,
+        dotGrid, gridLines, diagonalStripes, chevrons, waves, honeycomb, crosshatch, buboOwl,
         // Live
         liveAurora, liveParticles, livePulse, liveRain, liveFireflies, liveNebula, liveMatrix, liveRipple,
     ]
