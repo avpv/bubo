@@ -28,13 +28,27 @@ class ReminderService {
     private nonisolated(unsafe) var pendingAppleRefreshTask: Task<Void, Never>?
     private var hasCompletedLiveSync = false
 
+    /// IDs of events currently playing their disintegration animation.
+    /// These events are kept in the list briefly after ending so the dust effect can finish.
+    private(set) var disintegratingEventIDs: Set<String> = []
+
     var allEvents: [CalendarEvent] {
         let expandedLocal = localEvents.flatMap {
             RecurrenceExpander.expand($0, excludedIds: excludedOccurrences)
         }
         return (upcomingEvents + expandedLocal)
-            .filter { $0.isUpcoming }
+            .filter { $0.isUpcoming || disintegratingEventIDs.contains($0.id) }
             .sorted { $0.startDate < $1.startDate }
+    }
+
+    /// Mark an event as disintegrating (keeps it visible while animation plays).
+    func beginDisintegration(for eventID: String) {
+        disintegratingEventIDs.insert(eventID)
+    }
+
+    /// Remove an event after its disintegration animation completes.
+    func completeDisintegration(for eventID: String) {
+        disintegratingEventIDs.remove(eventID)
     }
 
     /// Number of remaining events to show as badge on the menu bar icon.
