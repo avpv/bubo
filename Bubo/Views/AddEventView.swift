@@ -263,10 +263,15 @@ struct AddEventView: View {
 
                             Divider()
 
-                            TextField("Notes", text: $description, prompt: Text("Notes"), axis: .vertical)
-                                .textFieldStyle(.plain)
-                                .focused($isNotesFocused)
-                                .lineLimit(3...8)
+                            HStack(alignment: .top, spacing: DS.Spacing.sm) {
+                                TextField("Notes", text: $description, prompt: Text("Notes"), axis: .vertical)
+                                    .textFieldStyle(.plain)
+                                    .focused($isNotesFocused)
+                                    .lineLimit(3...8)
+
+                                EmojiPickerButton(text: $description)
+                                    .padding(.top, DS.Spacing.xxs)
+                            }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(DS.Spacing.md)
