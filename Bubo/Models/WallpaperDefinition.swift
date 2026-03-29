@@ -132,14 +132,14 @@ enum WallpaperCatalog {
     static let none = WallpaperDefinition.solid(id: "none", name: "None", color: .clear)
 
     // MARK: Solid Colors
-    static let charcoal = WallpaperDefinition.solid(id: "solid_charcoal", name: "Charcoal", color: Color(white: 0.15))
-    static let navy = WallpaperDefinition.solid(id: "solid_navy", name: "Navy", color: Color(red: 0.1, green: 0.12, blue: 0.25))
-    static let forest = WallpaperDefinition.solid(id: "solid_forest", name: "Forest", color: Color(red: 0.08, green: 0.2, blue: 0.12))
-    static let wine = WallpaperDefinition.solid(id: "solid_wine", name: "Wine", color: Color(red: 0.25, green: 0.08, blue: 0.12))
-    static let slate = WallpaperDefinition.solid(id: "solid_slate", name: "Slate", color: Color(red: 0.2, green: 0.22, blue: 0.25))
-    static let coffee = WallpaperDefinition.solid(id: "solid_coffee", name: "Coffee", color: Color(red: 0.22, green: 0.16, blue: 0.1))
-    static let plum = WallpaperDefinition.solid(id: "solid_plum", name: "Plum", color: Color(red: 0.2, green: 0.08, blue: 0.22))
-    static let midnight = WallpaperDefinition.solid(id: "solid_midnight", name: "Midnight", color: Color(red: 0.05, green: 0.05, blue: 0.12))
+    static let charcoal = WallpaperDefinition.solid(id: "solid_charcoal", name: "Charcoal", color: Color(red: 0.13, green: 0.13, blue: 0.15))
+    static let navy = WallpaperDefinition.solid(id: "solid_navy", name: "Navy", color: Color(red: 0.08, green: 0.1, blue: 0.28))
+    static let forest = WallpaperDefinition.solid(id: "solid_forest", name: "Forest", color: Color(red: 0.06, green: 0.22, blue: 0.18))
+    static let wine = WallpaperDefinition.solid(id: "solid_wine", name: "Wine", color: Color(red: 0.32, green: 0.06, blue: 0.14))
+    static let slate = WallpaperDefinition.solid(id: "solid_slate", name: "Slate", color: Color(red: 0.16, green: 0.2, blue: 0.26))
+    static let coffee = WallpaperDefinition.solid(id: "solid_coffee", name: "Coffee", color: Color(red: 0.24, green: 0.16, blue: 0.1))
+    static let plum = WallpaperDefinition.solid(id: "solid_plum", name: "Plum", color: Color(red: 0.24, green: 0.08, blue: 0.3))
+    static let midnight = WallpaperDefinition.solid(id: "solid_midnight", name: "Midnight", color: Color(red: 0.04, green: 0.04, blue: 0.14))
 
     // MARK: Gradients
     static let sunset = WallpaperDefinition.gradient(
