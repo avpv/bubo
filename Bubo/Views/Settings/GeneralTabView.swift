@@ -27,7 +27,7 @@ struct ThemeColorPreview: View {
 // MARK: - Skin Preview Card
 
 struct SkinPreviewCard: View {
-    let skin: BuboSkin
+    let skin: SkinDefinition
     let isSelected: Bool
 
     @Environment(\.colorScheme) private var colorScheme
@@ -84,11 +84,19 @@ struct SkinPreviewCard: View {
                 radius: isSelected ? 4 : 0
             )
 
-            Text(skin.displayName)
-                .font(.caption2)
-                .fontWeight(isSelected ? .semibold : .regular)
-                .foregroundStyle(isSelected ? Color.primary : .secondary)
-                .lineLimit(1)
+            VStack(spacing: 0) {
+                Text(skin.displayName)
+                    .font(.caption2)
+                    .fontWeight(isSelected ? .semibold : .regular)
+                    .foregroundStyle(isSelected ? Color.primary : .secondary)
+                    .lineLimit(1)
+                if skin.author != "Bubo" {
+                    Text("by \(skin.author)")
+                        .font(.system(size: 8))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
+            }
         }
     }
 }
@@ -164,11 +172,11 @@ struct GeneralTabView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 94), spacing: 8)], spacing: 8) {
-                        ForEach(BuboSkin.allCases) { skin in
-                            let isSelected = settings.selectedSkin == skin
+                        ForEach(SkinCatalog.allSkins) { skin in
+                            let isSelected = settings.selectedSkinID == skin.id
                             Button {
                                 withAnimation(DS.Animation.smoothSpring) {
-                                    settings.selectedSkin = skin
+                                    settings.selectedSkinID = skin.id
                                 }
                             } label: {
                                 SkinPreviewCard(skin: skin, isSelected: isSelected)
@@ -179,7 +187,7 @@ struct GeneralTabView: View {
                 }
             }
 
-            if settings.selectedSkin == .classic {
+            if settings.selectedSkin.isClassic {
                 SettingsPlatter("Background") {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Gradient overlay")

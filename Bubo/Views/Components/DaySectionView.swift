@@ -47,7 +47,7 @@ struct DaySectionHeader: View {
     }
 
     private var skinAccent: Color {
-        skin == .classic ? DS.Colors.accent : skin.accentColor
+        skin.isClassic ? DS.Colors.accent : skin.accentColor
     }
 
     private var isToday: Bool {

@@ -121,7 +121,7 @@ struct EventRowView: View {
     // MARK: - Urgency Bar
 
     private var accentBarColor: Color {
-        event.colorTag?.color ?? (skin == .classic ? DS.defaultEventColor : skin.accentColor)
+        event.colorTag?.color ?? (skin.isClassic ? DS.defaultEventColor : skin.accentColor)
     }
 
     private var urgencyBar: some View {

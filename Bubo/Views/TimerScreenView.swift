@@ -5,7 +5,7 @@ struct TimerScreenView: View {
     var onBack: () -> Void
     var isPinned: Bool = false
     var backgroundStyle: AppBackgroundStyle = .system
-    var skin: BuboSkin = .classic
+    var skin: SkinDefinition = SkinCatalog.defaultSkin
 
     @State private var now = Date()
     @State private var pulseRing = false

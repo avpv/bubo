@@ -50,8 +50,13 @@ class ReminderSettings: Codable {
     var selectedCalendarIds: [String] { didSet { scheduleSave() } }
     var isCalendarSyncEnabled: Bool { didSet { scheduleSave() } }
     var backgroundStyle: AppBackgroundStyle { didSet { scheduleSave() } }
-    var selectedSkin: BuboSkin { didSet { scheduleSave() } }
+    var selectedSkinID: String { didSet { scheduleSave() } }
     var showBadgeCount: Bool { didSet { scheduleSave() } }
+
+    /// Resolved skin from catalog. Use this for reading the active skin.
+    var selectedSkin: SkinDefinition {
+        SkinCatalog.skin(forID: selectedSkinID)
+    }
     var badgeCountMode: BadgeCountMode { didSet { scheduleSave() } }
     var badgeTimeWindowHours: Int { didSet { scheduleSave() } }
 
@@ -60,7 +65,7 @@ class ReminderSettings: Codable {
 
     enum CodingKeys: String, CodingKey {
         case intervals, syncIntervalMinutes, showFullScreenAlert, showSystemNotification
-        case selectedCalendarIds, isCalendarSyncEnabled, backgroundStyle, selectedSkin
+        case selectedCalendarIds, isCalendarSyncEnabled, backgroundStyle, selectedSkinID
         case showBadgeCount, badgeCountMode, badgeTimeWindowHours
     }
 
@@ -76,7 +81,7 @@ class ReminderSettings: Codable {
         self.selectedCalendarIds = [] // empty = sync all
         self.isCalendarSyncEnabled = true
         self.backgroundStyle = .system
-        self.selectedSkin = .classic
+        self.selectedSkinID = "classic"
         self.showBadgeCount = true
         self.badgeCountMode = .wholeDay
         self.badgeTimeWindowHours = 8
@@ -92,7 +97,12 @@ class ReminderSettings: Codable {
         selectedCalendarIds = try container.decodeIfPresent([String].self, forKey: .selectedCalendarIds) ?? []
         isCalendarSyncEnabled = try container.decodeIfPresent(Bool.self, forKey: .isCalendarSyncEnabled) ?? true
         backgroundStyle = try container.decodeIfPresent(AppBackgroundStyle.self, forKey: .backgroundStyle) ?? .system
-        selectedSkin = try container.decodeIfPresent(BuboSkin.self, forKey: .selectedSkin) ?? .classic
+        // Support both old "selectedSkin" key (enum rawValue) and new "selectedSkinID" key
+        if let skinID = try container.decodeIfPresent(String.self, forKey: .selectedSkinID) {
+            selectedSkinID = skinID
+        } else {
+            selectedSkinID = "classic"
+        }
         showBadgeCount = try container.decodeIfPresent(Bool.self, forKey: .showBadgeCount) ?? true
         badgeCountMode = try container.decodeIfPresent(BadgeCountMode.self, forKey: .badgeCountMode) ?? .wholeDay
         badgeTimeWindowHours = try container.decodeIfPresent(Int.self, forKey: .badgeTimeWindowHours) ?? 8
@@ -107,7 +117,7 @@ class ReminderSettings: Codable {
         try container.encode(selectedCalendarIds, forKey: .selectedCalendarIds)
         try container.encode(isCalendarSyncEnabled, forKey: .isCalendarSyncEnabled)
         try container.encode(backgroundStyle, forKey: .backgroundStyle)
-        try container.encode(selectedSkin, forKey: .selectedSkin)
+        try container.encode(selectedSkinID, forKey: .selectedSkinID)
         try container.encode(showBadgeCount, forKey: .showBadgeCount)
         try container.encode(badgeCountMode, forKey: .badgeCountMode)
         try container.encode(badgeTimeWindowHours, forKey: .badgeTimeWindowHours)

@@ -58,13 +58,13 @@ enum AppBackgroundStyle: String, Codable, CaseIterable, Identifiable {
 
 struct AppBackgroundLayer: View {
     var style: AppBackgroundStyle
-    var skin: BuboSkin = .classic
+    var skin: SkinDefinition = SkinCatalog.defaultSkin
     @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
         ZStack {
             // Legacy background style (when skin is classic)
-            if skin == .classic {
+            if skin.isClassic {
                 legacyBackground
             }
 
@@ -72,7 +72,7 @@ struct AppBackgroundLayer: View {
             SkinBackgroundLayer(skin: skin)
 
             // Surface tint overlay
-            if skin != .classic {
+            if !skin.isClassic {
                 skin.surfaceTint
                     .opacity(skin.surfaceTintOpacity)
                     .blendMode(colorScheme == .dark ? .plusLighter : .plusDarker)

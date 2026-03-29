@@ -36,7 +36,7 @@ struct MenuBarView: View {
         }
     }
 
-    private var activeSkin: BuboSkin { settings.selectedSkin }
+    private var activeSkin: SkinDefinition { settings.selectedSkin }
 
     var body: some View {
         ZStack {
