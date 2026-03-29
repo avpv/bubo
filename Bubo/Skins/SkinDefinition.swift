@@ -181,14 +181,14 @@ enum SkinCatalog {
     static let builtInSkins: [SkinDefinition] = [
         system,
         classic,
-        ampGreen,
-        palmBeach,
-        toonPop,
-        slimDark,
-        cyberNeon,
-        sunsetRider,
-        retroTerminal,
-        bubblegum,
+        graphite,
+        ocean,
+        lavenderSkin,
+        roseGold,
+        midnight,
+        sierra,
+        arctic,
+        sage,
     ]
 
     /// All skins including user-imported custom skins.
