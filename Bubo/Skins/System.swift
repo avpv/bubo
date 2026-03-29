@@ -9,11 +9,11 @@ extension SkinCatalog {
         id: "system",
         displayName: "System",
         author: "Bubo",
-        accentColor: .accentColor,
+        accentColor: Color(red: 0.65, green: 0.58, blue: 0.50),
         surfaceTint: .clear,
         surfaceTintOpacity: 0,
         backgroundGradient: .clear,
-        previewColors: [Color(white: 0.5)],
+        previewColors: [Color(red: 0.65, green: 0.58, blue: 0.50)],
         prefersDarkTint: false,
         buttonStyle: .gradient
     )
