@@ -7,6 +7,7 @@ struct DaySectionHeader: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.activeSkin) private var skin
     @State private var appeared = false
 
     var body: some View {
@@ -14,10 +15,10 @@ struct DaySectionHeader: View {
             Text(dayTitle)
                 .font(.subheadline)
                 .fontWeight(.semibold)
-                .foregroundColor(isToday ? DS.Colors.accent : DS.Colors.textPrimary)
+                .foregroundColor(isToday ? skinAccent : DS.Colors.textPrimary)
             if isToday {
                 Circle()
-                    .fill(DS.Colors.accent)
+                    .fill(skinAccent)
                     .frame(width: DS.Size.todayDotSize, height: DS.Size.todayDotSize)
                     .scaleEffect(appeared ? 1 : 0)
             }
@@ -43,6 +44,10 @@ struct DaySectionHeader: View {
                 appeared = true
             }
         }
+    }
+
+    private var skinAccent: Color {
+        skin.isClassic ? DS.Colors.accent : skin.accentColor
     }
 
     private var isToday: Bool {

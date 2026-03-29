@@ -58,9 +58,31 @@ enum AppBackgroundStyle: String, Codable, CaseIterable, Identifiable {
 
 struct AppBackgroundLayer: View {
     var style: AppBackgroundStyle
+    var skin: SkinDefinition = SkinCatalog.defaultSkin
     @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
+        ZStack {
+            // Legacy background style (when skin is classic)
+            if skin.isClassic {
+                legacyBackground
+            }
+
+            // Skin background layer
+            SkinBackgroundLayer(skin: skin)
+
+            // Surface tint overlay
+            if !skin.isClassic {
+                skin.surfaceTint
+                    .opacity(skin.surfaceTintOpacity)
+                    .blendMode(colorScheme == .dark ? .plusLighter : .plusDarker)
+            }
+        }
+        .ignoresSafeArea()
+    }
+
+    @ViewBuilder
+    private var legacyBackground: some View {
         Group {
             switch style {
             case .system:
