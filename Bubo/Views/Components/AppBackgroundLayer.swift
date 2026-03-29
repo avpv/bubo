@@ -73,13 +73,16 @@ struct AppBackgroundLayer: View {
             // User's custom background photo
             if !customPhotoPath.isEmpty,
                let nsImage = NSImage(contentsOfFile: customPhotoPath) {
-                Image(nsImage: nsImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .opacity(customPhotoOpacity)
-                    .blur(radius: customPhotoBlur)
-                    .clipped()
-                    .ignoresSafeArea()
+                GeometryReader { geo in
+                    Image(nsImage: nsImage)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
+                }
+                .opacity(customPhotoOpacity)
+                .blur(radius: customPhotoBlur)
+                .ignoresSafeArea()
             }
 
             // Legacy background style (when skin is classic)
