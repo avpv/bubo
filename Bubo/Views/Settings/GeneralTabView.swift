@@ -195,6 +195,122 @@ struct CustomSkinsSection: View {
     }
 }
 
+// MARK: - Background Photo Section
+
+struct BackgroundPhotoSection: View {
+    @Bindable var settings: ReminderSettings
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            Text("Set your own photo as background")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if !settings.customBackgroundPhotoPath.isEmpty,
+               let nsImage = NSImage(contentsOfFile: settings.customBackgroundPhotoPath) {
+                // Preview
+                ZStack(alignment: .topTrailing) {
+                    Image(nsImage: nsImage)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(height: 80)
+                        .opacity(settings.customBackgroundPhotoOpacity)
+                        .blur(radius: settings.customBackgroundPhotoBlur)
+                        .clipped()
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5)
+                        )
+
+                    Button {
+                        withAnimation(DS.Animation.smoothSpring) {
+                            settings.customBackgroundPhotoPath = ""
+                        }
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.body)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(6)
+                }
+
+                // Controls
+                VStack(spacing: 4) {
+                    HStack {
+                        Text("Opacity")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 50, alignment: .leading)
+                        Slider(value: $settings.customBackgroundPhotoOpacity, in: 0.05...0.6, step: 0.05)
+                        Text("\(Int(settings.customBackgroundPhotoOpacity * 100))%")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 30, alignment: .trailing)
+                    }
+                    HStack {
+                        Text("Blur")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 50, alignment: .leading)
+                        Slider(value: $settings.customBackgroundPhotoBlur, in: 0...10, step: 0.5)
+                        Text(String(format: "%.1f", settings.customBackgroundPhotoBlur))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 30, alignment: .trailing)
+                    }
+                }
+            }
+
+            Button {
+                choosePhoto()
+            } label: {
+                Label(
+                    settings.customBackgroundPhotoPath.isEmpty
+                        ? "Choose photo\u{2026}"
+                        : "Change photo\u{2026}",
+                    systemImage: "photo"
+                )
+                .font(.caption)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private func choosePhoto() {
+        let panel = NSOpenPanel()
+        panel.title = "Choose Background Photo"
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        // Copy to App Support so it persists
+        let fileManager = FileManager.default
+        let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let photosDir = appSupport.appendingPathComponent("Bubo/Photos", isDirectory: true)
+        try? fileManager.createDirectory(at: photosDir, withIntermediateDirectories: true)
+
+        let destination = photosDir.appendingPathComponent("background.\(url.pathExtension)")
+        try? fileManager.removeItem(at: destination)
+
+        let accessing = url.startAccessingSecurityScopedResource()
+        defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+
+        do {
+            try fileManager.copyItem(at: url, to: destination)
+            withAnimation(DS.Animation.smoothSpring) {
+                settings.customBackgroundPhotoPath = destination.path
+            }
+        } catch {
+            // Silently fail — user can try again
+        }
+    }
+}
+
 // MARK: - Wallpaper Section
 
 struct WallpaperSectionView: View {
@@ -365,6 +481,10 @@ struct GeneralTabView: View {
 
             SettingsPlatter("Wallpaper") {
                 WallpaperSectionView()
+            }
+
+            SettingsPlatter("Background Photo") {
+                BackgroundPhotoSection(settings: settings)
             }
 
             if settings.selectedSkin.isClassic {

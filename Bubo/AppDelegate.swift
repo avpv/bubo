@@ -118,7 +118,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             },
             isPinned: true,
             backgroundStyle: settings.backgroundStyle,
-            skin: settings.selectedSkin
+            skin: settings.selectedSkin,
+            customPhotoPath: settings.customBackgroundPhotoPath,
+            customPhotoOpacity: settings.customBackgroundPhotoOpacity,
+            customPhotoBlur: settings.customBackgroundPhotoBlur
         )
 
         let hostingView = NSHostingView(rootView: timerView)
