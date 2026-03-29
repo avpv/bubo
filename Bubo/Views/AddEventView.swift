@@ -104,7 +104,7 @@ struct AddEventView: View {
                         if showValidation && !isTitleValid {
                             Label("Title is required", systemImage: "exclamationmark.triangle.fill")
                                 .font(.caption)
-                                .foregroundColor(DS.Colors.error)
+                                .foregroundStyle(DS.Colors.error)
                                 .transition(.move(edge: .top).combined(with: .opacity))
                         }
                     }
@@ -139,12 +139,12 @@ struct AddEventView: View {
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                         Text("Date & Time")
                             .font(.headline)
-                            .foregroundColor(DS.Colors.textPrimary)
+                            .foregroundStyle(DS.Colors.textPrimary)
                         
                         Grid(alignment: .leading, horizontalSpacing: DS.Spacing.sm, verticalSpacing: DS.Spacing.md) {
                             GridRow {
                                 Text("Starts")
-                                    .foregroundColor(DS.Colors.textSecondary)
+                                    .foregroundStyle(DS.Colors.textSecondary)
                                     .gridColumnAlignment(.trailing)
                                 
                                 HStack(spacing: DS.Spacing.xs) {
@@ -156,7 +156,7 @@ struct AddEventView: View {
                             if selectedEventType != .pomodoro {
                                 GridRow {
                                     Text("Ends")
-                                        .foregroundColor(DS.Colors.textSecondary)
+                                        .foregroundStyle(DS.Colors.textSecondary)
                                         .gridColumnAlignment(.trailing)
 
                                     HStack(spacing: DS.Spacing.xs) {
@@ -209,7 +209,7 @@ struct AddEventView: View {
                             if !addToCalendar {
                                 Text("Event will be stored locally in Bubo only")
                                     .font(.caption)
-                                    .foregroundColor(DS.Colors.textSecondary)
+                                    .foregroundStyle(DS.Colors.textSecondary)
                                     .padding(.horizontal, DS.Spacing.sm)
                             }
                         }
@@ -219,31 +219,35 @@ struct AddEventView: View {
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                         Text("Color")
                             .font(.headline)
-                            .foregroundColor(DS.Colors.textPrimary)
+                            .foregroundStyle(DS.Colors.textPrimary)
 
                         HStack(spacing: DS.Spacing.xs) {
                             ForEach(EventColorTag.allCases, id: \.self) { tag in
-                                Circle()
-                                    .fill(tag.color)
-                                    .frame(width: 14, height: 14)
-                                    .overlay(
-                                        Circle()
-                                            .stroke(Color.white, lineWidth: selectedColorTag == tag ? 1.5 : 0)
-                                    )
-                                    .shadow(
-                                        color: selectedColorTag == tag ? tag.color.opacity(0.5) : .clear,
-                                        radius: selectedColorTag == tag ? 3 : 0
-                                    )
-                                    .scaleEffect(selectedColorTag == tag ? 1.2 : 1.0)
-                                    .animation(DS.Animation.microInteraction, value: selectedColorTag)
-                                    .onTapGesture {
-                                        Haptics.tap()
-                                        if selectedColorTag == tag {
-                                            selectedColorTag = nil
-                                        } else {
-                                            selectedColorTag = tag
-                                        }
+                                Button {
+                                    Haptics.tap()
+                                    if selectedColorTag == tag {
+                                        selectedColorTag = nil
+                                    } else {
+                                        selectedColorTag = tag
                                     }
+                                } label: {
+                                    Circle()
+                                        .fill(tag.color)
+                                        .frame(width: 24, height: 24)
+                                        .overlay(
+                                            Circle()
+                                                .stroke(Color.white, lineWidth: selectedColorTag == tag ? 1.5 : 0)
+                                        )
+                                        .shadow(
+                                            color: selectedColorTag == tag ? tag.color.opacity(0.5) : .clear,
+                                            radius: selectedColorTag == tag ? 3 : 0
+                                        )
+                                        .scaleEffect(selectedColorTag == tag ? 1.1 : 1.0)
+                                        .animation(DS.Animation.microInteraction, value: selectedColorTag)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel(tag.rawValue)
+                                .accessibilityAddTraits(selectedColorTag == tag ? .isSelected : [])
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -260,7 +264,7 @@ struct AddEventView: View {
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                         Text("Details")
                             .font(.headline)
-                            .foregroundColor(DS.Colors.textPrimary)
+                            .foregroundStyle(DS.Colors.textPrimary)
                         
                         VStack(spacing: DS.Spacing.md) {
                             TextField("Location", text: $location, prompt: Text("Location"))
@@ -313,7 +317,7 @@ struct AddEventView: View {
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                         Text("Reminders")
                             .font(.headline)
-                            .foregroundColor(DS.Colors.textPrimary)
+                            .foregroundStyle(DS.Colors.textPrimary)
                         
                         VStack(alignment: .leading, spacing: DS.Spacing.md) {
                             Toggle("Custom reminders", isOn: $useCustomReminders)
@@ -368,7 +372,7 @@ struct AddEventView: View {
                                             .padding(.horizontal, DS.Spacing.sm)
                                             .frame(height: DS.Size.controlHeight)
                                             .background(Capsule().fill(DS.Colors.badgeFill(DS.Colors.textPrimary)))
-                                            .foregroundColor(DS.Colors.textPrimary)
+                                            .foregroundStyle(DS.Colors.textPrimary)
                                         }
                                     }
                                 }
@@ -378,7 +382,7 @@ struct AddEventView: View {
                                         systemImage: "bell.fill"
                                     )
                                     .font(.subheadline)
-                                    .foregroundColor(.secondary)
+                                    .foregroundStyle(.secondary)
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -463,7 +467,8 @@ struct AddEventView: View {
                 comps.minute = currentMins + (30 - (currentMins % 30))
                 date = cal.date(from: comps) ?? now
             }
-            Task {
+            // Focus title field after brief delay for popover to settle
+            Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(100))
                 isTitleFocused = true
             }
@@ -476,13 +481,13 @@ struct AddEventView: View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             Text("Pomodoro")
                 .font(.headline)
-                .foregroundColor(DS.Colors.textPrimary)
+                .foregroundStyle(DS.Colors.textPrimary)
 
             VStack(alignment: .leading, spacing: DS.Spacing.md) {
                 Grid(alignment: .leading, horizontalSpacing: DS.Spacing.md, verticalSpacing: DS.Spacing.sm) {
                     GridRow {
                         Label("Work: \(pomodoroWork) min", systemImage: "brain.head.profile")
-                            .foregroundColor(.primary)
+                            .foregroundStyle(.primary)
                             .gridColumnAlignment(.leading)
                         Stepper("", value: $pomodoroWork, in: 1...90)
                             .labelsHidden()
@@ -490,7 +495,7 @@ struct AddEventView: View {
 
                     GridRow {
                         Label("Rounds: \(pomodoroRounds)", systemImage: "arrow.trianglehead.2.counterclockwise")
-                            .foregroundColor(.primary)
+                            .foregroundStyle(.primary)
                         Stepper("", value: $pomodoroRounds, in: 1...12)
                             .labelsHidden()
                     }
@@ -498,7 +503,7 @@ struct AddEventView: View {
                     if pomodoroRounds > 1 {
                         GridRow {
                             Label("Break: \(pomodoroBreak) min", systemImage: "cup.and.saucer")
-                                .foregroundColor(.primary)
+                                .foregroundStyle(.primary)
                             Stepper("", value: $pomodoroBreak, in: 1...30)
                                 .labelsHidden()
                         }
@@ -506,7 +511,7 @@ struct AddEventView: View {
                         GridRow {
                             Toggle(isOn: $pomodoroLongBreakEnabled) {
                                 Label("Long break", systemImage: "moon.zzz")
-                                    .foregroundColor(.primary)
+                                    .foregroundStyle(.primary)
                             }
                             Color.clear
                         }
@@ -514,7 +519,7 @@ struct AddEventView: View {
                         if pomodoroLongBreakEnabled {
                             GridRow {
                                 Label("Duration: \(pomodoroLongBreak) min", systemImage: "moon.zzz")
-                                    .foregroundColor(.primary)
+                                    .foregroundStyle(.primary)
                                     .padding(.leading, DS.Spacing.lg)
                                 Stepper("", value: $pomodoroLongBreak, in: 5...60, step: 5)
                                     .labelsHidden()
@@ -538,13 +543,13 @@ struct AddEventView: View {
                         systemImage: "clock"
                     )
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
 
                     Spacer()
 
                     Link("Learn about Pomodoro combinations", destination: URL(string: "https://github.com/avpv/bubo/blob/HEAD/docs/Pomodoro.md")!)
                         .font(.caption)
-                        .foregroundColor(skin.accentColor)
+                        .foregroundStyle(skin.accentColor)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -740,7 +745,7 @@ struct AddEventView: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text("\(DS.timeFormatter.string(from: start)) – \(DS.timeFormatter.string(from: end))")
                     .font(.system(.caption, design: .monospaced, weight: .medium))
-                    .foregroundColor(.primary)
+                    .foregroundStyle(.primary)
                 Text("\(label) · \(segment.minutes) min")
                     .font(.caption2)
                     .foregroundStyle(.secondary)

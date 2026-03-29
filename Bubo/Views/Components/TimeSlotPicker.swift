@@ -23,7 +23,7 @@ struct TimeSlotPicker: View {
         if slots.isEmpty {
             Text("No slots left today")
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .padding(.horizontal, DS.Spacing.xs)
                 .task {
                     while !Task.isCancelled {
@@ -139,7 +139,7 @@ fileprivate struct TimeSlotChip: View {
         }) {
             Text(slot.label)
                 .font(.system(.body, design: .monospaced, weight: isSelected ? .bold : .regular))
-                .foregroundColor(isSelected ? .white : DS.Colors.textPrimary)
+                .foregroundStyle(isSelected ? .white : DS.Colors.textPrimary)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

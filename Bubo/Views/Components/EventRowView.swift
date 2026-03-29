@@ -10,19 +10,19 @@ struct EventRowView: View {
     var onTap: ((CalendarEvent) -> Void)? = nil
 
     @State private var isHovered = false
-    @State private var now = Date()
     @State private var isDisintegrating = false
     @State private var pendingDeleteAction: (() -> Void)?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.activeSkin) private var skin
-
-    private let everySecondTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     private var isLocal: Bool {
         event.isLocalEvent
     }
 
     var body: some View {
+        // HIG: Use TimelineView for time-based UI updates
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+        let now = context.date
         HStack(alignment: .center, spacing: 0) {
             // Urgency accent bar with glow for imminent events
             urgencyBar
@@ -48,13 +48,13 @@ struct EventRowView: View {
                 RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
                     .fill(DS.Materials.platter)
                 
-                if eventProgress > 0 {
+                if eventProgress(now) > 0 {
                     GeometryReader { geo in
                         RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
                             .fill(
                                 (skin.isClassic ? DS.Colors.accent : skin.accentColor).opacity(0.12)
                             )
-                            .frame(width: max(geo.size.width * eventProgress, DS.Size.cornerRadius * 2))
+                            .frame(width: max(geo.size.width * eventProgress(now), DS.Size.cornerRadius * 2))
                     }
                 }
                 
@@ -86,13 +86,12 @@ struct EventRowView: View {
         .accessibilityLabel("\(event.title)\(event.isRecurring ? ", recurring" : ""), \(event.formattedTimeRange)\(event.location.map { ", \($0)" } ?? "")")
         .accessibilityHint("Click to view details. Right-click to set reminder.")
         .accessibilityAddTraits(.isButton)
-        .onReceive(everySecondTimer) { _ in
-            now = Date()
+        .onChange(of: now) {
             // Detect event end and trigger disintegration
             if !event.isUpcoming && !isDisintegrating && !reminderService.disintegratingEventIDs.contains(event.id) {
                 reminderService.beginDisintegration(for: event.id)
-                // Small delay so the "now" label shows briefly before dust effect
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(300))
                     isDisintegrating = true
                 }
             }
@@ -124,6 +123,7 @@ struct EventRowView: View {
                 }
             }
         }
+        } // TimelineView
     }
 
     // MARK: - Urgency Bar
@@ -151,18 +151,18 @@ struct EventRowView: View {
                 Text(event.formattedTime)
                     .font(.system(.caption, design: .monospaced))
                     .fontWeight(.bold)
-                    .foregroundColor(DS.Colors.textPrimary)
+                    .foregroundStyle(DS.Colors.textPrimary)
                 Text("–")
                     .font(.system(.caption, design: .monospaced))
-                    .foregroundColor(DS.Colors.textSecondary)
+                    .foregroundStyle(DS.Colors.textSecondary)
                 Text(event.formattedEndTime)
                     .font(.system(.caption, design: .monospaced))
-                    .foregroundColor(DS.Colors.textSecondary)
+                    .foregroundStyle(DS.Colors.textSecondary)
             }
 
-            Text(timeUntilText)
+            Text(timeUntilText(now))
                 .font(.system(.caption2, design: .monospaced))
-                .foregroundColor(DS.Colors.textSecondary)
+                .foregroundStyle(DS.Colors.textSecondary)
                 .contentTransition(.numericText())
         }
         .frame(width: DS.Size.timeColumnWidth)
@@ -182,7 +182,7 @@ struct EventRowView: View {
                 if let segment = event.pomodoroSegment {
                     Image(systemName: segment.iconName)
                         .font(.system(size: DS.Size.iconSmall))
-                        .foregroundColor(pomodoroSegmentColor(segment))
+                        .foregroundStyle(pomodoroSegmentColor(segment))
                         .contentTransition(.symbolEffect(.replace))
                         .accessibilityLabel(segment.label)
                 }
@@ -192,19 +192,19 @@ struct EventRowView: View {
                 if event.meetingLink != nil, let serviceName = event.meetingServiceName {
                     Label(serviceName, systemImage: "video.fill")
                         .font(.caption2)
-                        .foregroundColor(skin.isClassic ? DS.Colors.accent : skin.accentColor)
+                        .foregroundStyle(skin.isClassic ? DS.Colors.accent : skin.accentColor)
                         .lineLimit(1)
                 } else if let location = event.location, !location.isEmpty {
                     Label(location, systemImage: "mappin")
                         .font(.caption2)
-                        .foregroundColor(DS.Colors.textSecondary)
+                        .foregroundStyle(DS.Colors.textSecondary)
                         .lineLimit(1)
                 }
 
                 if let calName = event.calendarName {
                     Text(calName)
                         .font(.caption2)
-                        .foregroundColor(DS.Colors.textTertiary)
+                        .foregroundStyle(DS.Colors.textTertiary)
                 }
             }
         }
@@ -287,7 +287,7 @@ struct EventRowView: View {
         )
     }
 
-    private var timeUntilText: String {
+    private func timeUntilText(_ now: Date) -> String {
         let secondsUntilStart = Int(event.startDate.timeIntervalSince(now))
         if secondsUntilStart > 0 {
             // Event hasn't started yet
@@ -336,7 +336,7 @@ struct EventRowView: View {
         isDisintegrating = true
     }
 
-    private var eventProgress: Double {
+    private func eventProgress(_ now: Date) -> Double {
         guard event.startDate <= now && event.endDate > now else { return 0 }
         let total = event.endDate.timeIntervalSince(event.startDate)
         guard total > 0 else { return 0 }

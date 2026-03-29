@@ -2,7 +2,7 @@
   "id": "cyberpunk_2077",
   "displayName": "Cyberpunk 2077",
   "author": "Bubo Community",
-  "accentColor": { "red": 1.0, "green": 0.95, "blue": 0.0 },
+  "accentColor": { "red": 0.75, "green": 0.7, "blue": 0.0 },
   "surfaceTint": { "red": 0.08, "green": 0.06, "blue": 0.0 },
   "surfaceTintOpacity": 0.35,
   "backgroundGradient": {
@@ -16,7 +16,7 @@
     "endPoint": "bottomTrailing"
   },
   "previewColors": [
-    { "red": 1.0, "green": 0.95, "blue": 0.0 },
+    { "red": 0.75, "green": 0.7, "blue": 0.0 },
     { "red": 0.0, "green": 0.55, "blue": 0.65 }
   ],
   "prefersDarkTint": true,

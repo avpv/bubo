@@ -2,7 +2,7 @@
   "id": "tron",
   "displayName": "Tron Legacy",
   "author": "Bubo Community",
-  "accentColor": { "red": 0.1, "green": 0.85, "blue": 1.0 },
+  "accentColor": { "red": 0.05, "green": 0.6, "blue": 0.75 },
   "surfaceTint": { "red": 0.0, "green": 0.04, "blue": 0.08 },
   "surfaceTintOpacity": 0.4,
   "backgroundGradient": {
@@ -16,7 +16,7 @@
     "endPoint": "top"
   },
   "previewColors": [
-    { "red": 0.1, "green": 0.85, "blue": 1.0 },
+    { "red": 0.05, "green": 0.6, "blue": 0.75 },
     { "red": 0.02, "green": 0.05, "blue": 0.1 }
   ],
   "prefersDarkTint": true,

@@ -60,7 +60,7 @@ struct RecurrencePickerView: View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             Text("Repeat")
                 .font(.headline)
-                .foregroundColor(DS.Colors.textPrimary)
+                .foregroundStyle(DS.Colors.textPrimary)
 
             modePicker
 
@@ -148,7 +148,7 @@ struct RecurrencePickerView: View {
             Color.clear.frame(height: 4)
             Label(built.displayText, systemImage: "repeat")
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -174,7 +174,7 @@ struct RecurrencePickerView: View {
                                 ? Color.accentColor
                                 : DS.Colors.badgeFill(.secondary)
                         )
-                        .foregroundColor(selectedWeekdays.contains(day) ? .white : .primary)
+                        .foregroundStyle(selectedWeekdays.contains(day) ? .white : .primary)
                         .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)

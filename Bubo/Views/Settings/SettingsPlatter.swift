@@ -14,7 +14,7 @@ struct SettingsPlatter<Content: View>: View {
             if let title {
                 Text(title)
                     .font(.headline)
-                    .foregroundColor(DS.Colors.textPrimary)
+                    .foregroundStyle(DS.Colors.textPrimary)
                     .padding(.bottom, DS.Spacing.xs)
             }
             content

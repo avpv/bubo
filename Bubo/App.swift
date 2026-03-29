@@ -109,7 +109,10 @@ struct BuboApp: App {
             self.drawOwl(in: ctx, size: rect.width, color: color)
             return true
         }
-        image.isTemplate = false
+        // HIG: Menu bar icons must be template images for automatic adaptation
+        // to vibrancy, Desktop Tinting, and all appearance states.
+        // Only use non-template when a skin explicitly tints the icon.
+        image.isTemplate = !useSkinIcon
         return image
     }
 

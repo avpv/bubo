@@ -52,31 +52,31 @@ struct FullScreenAlertView: View {
 
                 Text(headerText)
                     .font(.system(size: 48, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
 
                 // Live countdown timer
                 Text(countdownText)
                     .font(.system(size: 72, weight: .heavy, design: .monospaced))
-                    .foregroundColor(countdownDisplayColor)
+                    .foregroundStyle(countdownDisplayColor)
                     .shadow(color: countdownDisplayColor.opacity(0.5), radius: 12)
                     .contentTransition(.numericText())
                     .motionAwareAnimation(.linear(duration: 0.3), value: secondsRemaining, reduceMotion: reduceMotion)
 
                 Text(event.title)
                     .font(.system(size: 36, weight: .semibold, design: .rounded))
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 40)
 
                 HStack(spacing: 20) {
                     Label(event.formattedTimeRange, systemImage: "clock.fill")
                         .font(.title2)
-                        .foregroundColor(.white.opacity(0.9))
+                        .foregroundStyle(.white.opacity(0.9))
 
                     if let location = event.location, !location.isEmpty {
                         Label(location, systemImage: "location.fill")
                             .font(.title2)
-                            .foregroundColor(.white.opacity(0.9))
+                            .foregroundStyle(.white.opacity(0.9))
                     }
                 }
 
@@ -96,7 +96,7 @@ struct FullScreenAlertView: View {
                     } label: {
                         Text("Snooze")
                             .font(.system(.title3, design: .rounded, weight: .medium))
-                            .foregroundColor(.white)
+                            .foregroundStyle(.white)
                             .padding(.horizontal, 40)
                             .padding(.vertical, 14)
                             .background(
@@ -135,7 +135,7 @@ struct FullScreenAlertView: View {
                         } label: {
                             Label("Join \(serviceName)", systemImage: "video.fill")
                                 .font(.system(.title2, design: .rounded, weight: .semibold))
-                                .foregroundColor(.white)
+                                .foregroundStyle(.white)
                                 .padding(.horizontal, 40)
                                 .padding(.vertical, 16)
                                 .background(
@@ -170,7 +170,7 @@ struct FullScreenAlertView: View {
                     }) {
                         Text("Dismiss")
                             .font(.system(.title2, design: .rounded, weight: .semibold))
-                            .foregroundColor(dismissHovered ? skinAccent : .black)
+                            .foregroundStyle(dismissHovered ? skinAccent : .black)
                             .padding(.horizontal, 60)
                             .padding(.vertical, 16)
                             .background(
@@ -192,21 +192,21 @@ struct FullScreenAlertView: View {
                     .accessibilityHint("Press Enter or click to dismiss")
                 }
 
-                // Hidden Escape key handler
-                Button("") { cleanup(); onDismiss() }
-                    .keyboardShortcut(.escape, modifiers: [])
-                    .frame(width: 0, height: 0)
-                    .opacity(0)
-
                 Text("Press Enter or Esc to dismiss")
                     .font(.caption)
-                    .foregroundColor(.white.opacity(0.4))
+                    .foregroundStyle(.white.opacity(0.4))
                     .accessibilityHidden(true)
 
                 Spacer().frame(height: 60)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // HIG: Handle Escape key without hidden zero-size button hack
+        .onKeyPress(.escape) {
+            cleanup()
+            onDismiss()
+            return .handled
+        }
         .opacity(isVisible ? 1 : 0)
         .scaleEffect(isVisible ? 1 : (reduceMotion ? 1 : 0.92))
         .onAppear {
