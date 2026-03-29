@@ -11,6 +11,7 @@ struct EventRowView: View {
 
     @State private var isHovered = false
     @State private var now = Date()
+    @State private var isDisintegrating = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let everySecondTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -83,6 +84,17 @@ struct EventRowView: View {
         .accessibilityAddTraits(.isButton)
         .onReceive(everySecondTimer) { _ in
             now = Date()
+            // Detect event end and trigger disintegration
+            if !event.isUpcoming && !isDisintegrating && !reminderService.disintegratingEventIDs.contains(event.id) {
+                reminderService.beginDisintegration(for: event.id)
+                // Small delay so the "now" label shows briefly before dust effect
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    isDisintegrating = true
+                }
+            }
+        }
+        .disintegrate(when: isDisintegrating) {
+            reminderService.completeDisintegration(for: event.id)
         }
         .contextMenu {
             Section("Set Reminder") {
