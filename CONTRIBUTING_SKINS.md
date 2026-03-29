@@ -98,7 +98,85 @@ Two gradient styles are available:
 Common `UnitPoint` values: `.top`, `.bottom`, `.topLeading`, `.topTrailing`,
 `.bottomLeading`, `.bottomTrailing`, `.center`.
 
+## Custom Skins (no PR needed)
+
+You can also create skins as `.buboskin` JSON files and import them directly
+in **Settings → Skin → Import .buboskin file**. No code, no Xcode, no PR.
+
+### Quick start
+
+1. Copy `Bubo/Skins/TEMPLATE.buboskin` and rename it (e.g. `MyTheme.buboskin`)
+2. Edit the JSON values — same properties as the Swift skins
+3. Open Bubo → Settings → Skin → **Import .buboskin file** and select your file
+4. Your skin appears in the picker immediately
+
+### JSON format
+
+```json
+{
+  "id": "my_skin_name",
+  "displayName": "My Skin Name",
+  "author": "@your_github",
+  "accentColor": { "red": 0.0, "green": 0.9, "blue": 0.0 },
+  "surfaceTint": { "red": 0.0, "green": 0.15, "blue": 0.0 },
+  "surfaceTintOpacity": 0.35,
+  "backgroundGradient": {
+    "colors": [
+      { "red": 0.0, "green": 0.18, "blue": 0.0, "opacity": 0.5 },
+      { "red": 0.0, "green": 0.08, "blue": 0.0, "opacity": 0.3 },
+      { "red": 0.0, "green": 0.0, "blue": 0.0, "opacity": 0.0 }
+    ],
+    "style": "linear",
+    "startPoint": "topLeading",
+    "endPoint": "bottomTrailing"
+  },
+  "previewColors": [
+    { "red": 0.0, "green": 0.7, "blue": 0.0 },
+    { "red": 0.1, "green": 0.2, "blue": 0.1 }
+  ],
+  "prefersDarkTint": true,
+  "secondaryAccent": { "red": 0.0, "green": 0.65, "blue": 0.15 },
+  "buttonStyle": "gradient"
+}
+```
+
+Colors use `red`, `green`, `blue` (0.0–1.0) with an optional `opacity`.
+Gradient style is `"linear"` or `"radial"`. Button style is `"solid"`,
+`"gradient"`, or `"glass"`.
+
+### Background images
+
+You can add a custom background photo to your skin. Place the image file
+(`.jpg`, `.png`) in the same folder as the `.buboskin` file and add:
+
+```json
+"backgroundImage": {
+  "filename": "my-background.jpg",
+  "opacity": 0.25,
+  "fillMode": "fill",
+  "blur": 2
+}
+```
+
+| Property | Description | Default |
+|----------|-------------|---------|
+| `filename` | Image filename (must be in the same folder) | required |
+| `opacity` | 0.0–1.0, lower = more subtle | 0.3 |
+| `fillMode` | `"fill"` (crop to fit) or `"fit"` (letterbox) | `"fill"` |
+| `blur` | Blur radius, 0 = sharp | 0 |
+
+**Tip**: Keep opacity at 0.2–0.35 so text stays readable. A small blur
+(1–3) helps blend the image with the UI.
+
+When importing, Bubo copies both the `.buboskin` and the image file into
+`~/Library/Application Support/Bubo/Skins/`.
+
+Skins are stored in `~/Library/Application Support/Bubo/Skins/`. You can
+also drop `.buboskin` files and images there directly and restart Bubo.
+
+Right-click a community skin in the picker to remove it.
+
 ## Example
 
 See any existing skin file (e.g., `AmpGreen.swift`) for a complete working
-example.
+example, or `TEMPLATE.buboskin` for the JSON format.

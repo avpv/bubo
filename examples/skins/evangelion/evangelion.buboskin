@@ -1,0 +1,31 @@
+{
+  "id": "evangelion",
+  "displayName": "Evangelion",
+  "author": "Bubo Community",
+  "accentColor": { "red": 0.55, "green": 0.0, "blue": 0.85 },
+  "surfaceTint": { "red": 0.08, "green": 0.0, "blue": 0.12 },
+  "surfaceTintOpacity": 0.35,
+  "backgroundGradient": {
+    "colors": [
+      { "red": 0.4, "green": 0.0, "blue": 0.6, "opacity": 0.4 },
+      { "red": 0.0, "green": 0.5, "blue": 0.15, "opacity": 0.15 },
+      { "red": 0.0, "green": 0.0, "blue": 0.0, "opacity": 0.0 }
+    ],
+    "style": "linear",
+    "startPoint": "topLeading",
+    "endPoint": "bottomTrailing"
+  },
+  "previewColors": [
+    { "red": 0.55, "green": 0.0, "blue": 0.85 },
+    { "red": 0.0, "green": 0.6, "blue": 0.2 }
+  ],
+  "prefersDarkTint": true,
+  "secondaryAccent": { "red": 0.95, "green": 0.45, "blue": 0.0 },
+  "buttonStyle": "gradient",
+  "backgroundImage": {
+    "filename": "evangelion.jpg",
+    "opacity": 0.2,
+    "fillMode": "fill",
+    "blur": 2
+  }
+}

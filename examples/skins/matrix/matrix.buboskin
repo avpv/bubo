@@ -1,0 +1,31 @@
+{
+  "id": "matrix",
+  "displayName": "The Matrix",
+  "author": "Bubo Community",
+  "accentColor": { "red": 0.0, "green": 1.0, "blue": 0.0 },
+  "surfaceTint": { "red": 0.0, "green": 0.08, "blue": 0.0 },
+  "surfaceTintOpacity": 0.4,
+  "backgroundGradient": {
+    "colors": [
+      { "red": 0.0, "green": 0.25, "blue": 0.0, "opacity": 0.6 },
+      { "red": 0.0, "green": 0.1, "blue": 0.05, "opacity": 0.35 },
+      { "red": 0.0, "green": 0.0, "blue": 0.0, "opacity": 0.0 }
+    ],
+    "style": "linear",
+    "startPoint": "top",
+    "endPoint": "bottom"
+  },
+  "previewColors": [
+    { "red": 0.0, "green": 1.0, "blue": 0.0 },
+    { "red": 0.0, "green": 0.15, "blue": 0.0 }
+  ],
+  "prefersDarkTint": true,
+  "secondaryAccent": { "red": 0.0, "green": 0.7, "blue": 0.1 },
+  "buttonStyle": "solid",
+  "backgroundImage": {
+    "filename": "matrix.jpg",
+    "opacity": 0.25,
+    "fillMode": "fill",
+    "blur": 2
+  }
+}

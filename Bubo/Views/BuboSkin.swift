@@ -10,9 +10,17 @@ struct SkinBackgroundLayer: View {
         if skin.isClassic {
             Color.clear
         } else {
-            skinGradient
-                .blendMode(colorScheme == .dark ? .plusLighter : .plusDarker)
-                .ignoresSafeArea()
+            ZStack {
+                // Background image layer (custom skins only)
+                if let bgImage = skin.backgroundImage {
+                    SkinBackgroundImageView(spec: bgImage)
+                }
+
+                // Gradient overlay
+                skinGradient
+                    .blendMode(colorScheme == .dark ? .plusLighter : .plusDarker)
+            }
+            .ignoresSafeArea()
         }
     }
 
@@ -64,5 +72,22 @@ extension EnvironmentValues {
     var activeSkin: SkinDefinition {
         get { self[ActiveSkinKey.self] }
         set { self[ActiveSkinKey.self] = newValue }
+    }
+}
+
+// MARK: - Skin Background Image View
+
+struct SkinBackgroundImageView: View {
+    let spec: SkinBackgroundImage
+
+    var body: some View {
+        if let nsImage = NSImage(contentsOf: spec.imageURL) {
+            Image(nsImage: nsImage)
+                .resizable()
+                .aspectRatio(contentMode: spec.fillMode == .fill ? .fill : .fit)
+                .opacity(spec.opacity)
+                .blur(radius: spec.blurRadius)
+                .clipped()
+        }
     }
 }

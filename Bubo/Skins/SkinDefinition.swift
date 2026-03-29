@@ -53,6 +53,9 @@ struct SkinDefinition: Identifiable, Equatable {
     /// Button fill style — controls primary button appearance.
     let buttonStyle: SkinButtonStyle
 
+    /// Optional background image for custom skins.
+    let backgroundImage: SkinBackgroundImage?
+
     init(
         id: String,
         displayName: String,
@@ -64,7 +67,8 @@ struct SkinDefinition: Identifiable, Equatable {
         previewColors: [Color],
         prefersDarkTint: Bool,
         secondaryAccent: Color? = nil,
-        buttonStyle: SkinButtonStyle = .gradient
+        buttonStyle: SkinButtonStyle = .gradient,
+        backgroundImage: SkinBackgroundImage? = nil
     ) {
         self.id = id
         self.displayName = displayName
@@ -77,6 +81,7 @@ struct SkinDefinition: Identifiable, Equatable {
         self.prefersDarkTint = prefersDarkTint
         self.secondaryAccent = secondaryAccent
         self.buttonStyle = buttonStyle
+        self.backgroundImage = backgroundImage
     }
 
     // MARK: - Derived
@@ -112,6 +117,37 @@ struct SkinDefinition: Identifiable, Equatable {
     }
 }
 
+// MARK: - Background Image
+
+/// Background image specification for custom skins.
+struct SkinBackgroundImage: Equatable {
+    /// URL to the image file on disk.
+    let imageURL: URL
+
+    /// Opacity of the image (0.0–1.0). Lower values let the skin gradient show through.
+    let opacity: Double
+
+    /// How the image fills the background.
+    let fillMode: FillMode
+
+    /// Optional blur radius applied to the image.
+    let blurRadius: CGFloat
+
+    enum FillMode: String, Equatable {
+        /// Scale to fill entire area, cropping as needed.
+        case fill
+        /// Scale to fit within area, preserving aspect ratio.
+        case fit
+    }
+
+    static func == (lhs: SkinBackgroundImage, rhs: SkinBackgroundImage) -> Bool {
+        lhs.imageURL == rhs.imageURL &&
+        lhs.opacity == rhs.opacity &&
+        lhs.fillMode == rhs.fillMode &&
+        lhs.blurRadius == rhs.blurRadius
+    }
+}
+
 // MARK: - Gradient Specification
 
 struct SkinGradient: Equatable {
@@ -137,9 +173,12 @@ struct SkinGradient: Equatable {
 /// 3. Add it to the `allSkins` array below
 ///
 /// That's it — your skin will appear in Settings automatically.
+///
+/// Users can also create custom `.buboskin` files (JSON) and import them
+/// via Settings — no code changes needed. See `CustomSkinLoader` for details.
 enum SkinCatalog {
-    /// All registered skins. Order here = order in the picker.
-    static let allSkins: [SkinDefinition] = [
+    /// All built-in skins. Order here = order in the picker.
+    static let builtInSkins: [SkinDefinition] = [
         system,
         classic,
         ampGreen,
@@ -151,6 +190,11 @@ enum SkinCatalog {
         retroTerminal,
         bubblegum,
     ]
+
+    /// All skins including user-imported custom skins.
+    static var allSkins: [SkinDefinition] {
+        builtInSkins + CustomSkinLoader.shared.customSkins
+    }
 
     /// Look up a skin by its ID. Falls back to Classic if not found.
     static func skin(forID id: String) -> SkinDefinition {

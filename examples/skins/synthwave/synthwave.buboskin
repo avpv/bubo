@@ -1,0 +1,31 @@
+{
+  "id": "synthwave",
+  "displayName": "Synthwave",
+  "author": "Bubo Community",
+  "accentColor": { "red": 1.0, "green": 0.3, "blue": 0.85 },
+  "surfaceTint": { "red": 0.08, "green": 0.0, "blue": 0.1 },
+  "surfaceTintOpacity": 0.35,
+  "backgroundGradient": {
+    "colors": [
+      { "red": 0.7, "green": 0.1, "blue": 0.6, "opacity": 0.35 },
+      { "red": 0.1, "green": 0.0, "blue": 0.4, "opacity": 0.25 },
+      { "red": 0.0, "green": 0.0, "blue": 0.0, "opacity": 0.0 }
+    ],
+    "style": "linear",
+    "startPoint": "bottom",
+    "endPoint": "top"
+  },
+  "previewColors": [
+    { "red": 1.0, "green": 0.3, "blue": 0.85 },
+    { "red": 0.15, "green": 0.0, "blue": 0.4 }
+  ],
+  "prefersDarkTint": true,
+  "secondaryAccent": { "red": 0.3, "green": 0.7, "blue": 1.0 },
+  "buttonStyle": "gradient",
+  "backgroundImage": {
+    "filename": "synthwave.jpg",
+    "opacity": 0.25,
+    "fillMode": "fill",
+    "blur": 2
+  }
+}

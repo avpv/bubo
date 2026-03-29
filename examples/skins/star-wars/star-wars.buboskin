@@ -1,0 +1,32 @@
+{
+  "id": "star_wars",
+  "displayName": "Star Wars",
+  "author": "Bubo Community",
+  "accentColor": { "red": 0.9, "green": 0.1, "blue": 0.1 },
+  "surfaceTint": { "red": 0.1, "green": 0.0, "blue": 0.0 },
+  "surfaceTintOpacity": 0.35,
+  "backgroundGradient": {
+    "colors": [
+      { "red": 0.5, "green": 0.0, "blue": 0.0, "opacity": 0.35 },
+      { "red": 0.0, "green": 0.0, "blue": 0.05, "opacity": 0.2 },
+      { "red": 0.0, "green": 0.0, "blue": 0.0, "opacity": 0.0 }
+    ],
+    "style": "radial",
+    "center": "center",
+    "startRadius": 0,
+    "endRadius": 450
+  },
+  "previewColors": [
+    { "red": 0.9, "green": 0.1, "blue": 0.1 },
+    { "red": 0.05, "green": 0.02, "blue": 0.1 }
+  ],
+  "prefersDarkTint": true,
+  "secondaryAccent": { "red": 0.6, "green": 0.0, "blue": 0.0 },
+  "buttonStyle": "solid",
+  "backgroundImage": {
+    "filename": "star-wars.jpg",
+    "opacity": 0.2,
+    "fillMode": "fill",
+    "blur": 2
+  }
+}

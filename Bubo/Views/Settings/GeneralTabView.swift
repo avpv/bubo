@@ -1,5 +1,6 @@
 import ServiceManagement
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ThemeColorPreview: View {
     let colors: [Color]
@@ -97,6 +98,215 @@ struct SkinPreviewCard: View {
                         .lineLimit(1)
                 }
             }
+        }
+    }
+}
+
+// MARK: - Custom Skins Section
+
+struct CustomSkinsSection: View {
+    @Bindable var settings: ReminderSettings
+    @State private var customSkinLoader = CustomSkinLoader.shared
+    @State private var importError: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            Divider()
+
+            HStack {
+                Text("Community skins")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button {
+                    customSkinLoader.revealInFinder()
+                } label: {
+                    Label("Open folder", systemImage: "folder")
+                        .font(.caption2)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+            }
+
+            if !customSkinLoader.customSkins.isEmpty {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 94), spacing: 8)], spacing: 8) {
+                    ForEach(customSkinLoader.customSkins) { skin in
+                        let isSelected = settings.selectedSkinID == skin.id
+                        Button {
+                            withAnimation(DS.Animation.smoothSpring) {
+                                settings.selectedSkinID = skin.id
+                            }
+                        } label: {
+                            SkinPreviewCard(skin: skin, isSelected: isSelected)
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                if settings.selectedSkinID == skin.id {
+                                    settings.selectedSkinID = "system"
+                                }
+                                customSkinLoader.removeSkin(id: skin.id)
+                            } label: {
+                                Label("Remove skin", systemImage: "trash")
+                            }
+                        }
+                    }
+                }
+            }
+
+            Button {
+                importSkin()
+            } label: {
+                Label("Import .buboskin file\u{2026}", systemImage: "plus.circle")
+                    .font(.caption)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+        }
+        .alert("Import failed", isPresented: .init(
+            get: { importError != nil },
+            set: { if !$0 { importError = nil } }
+        )) {
+            Button("OK") { importError = nil }
+        } message: {
+            Text(importError ?? "")
+        }
+    }
+
+    private func importSkin() {
+        let panel = NSOpenPanel()
+        panel.title = "Import Bubo Skin"
+        panel.allowedContentTypes = [.json, UTType(filenameExtension: "buboskin") ?? .json]
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+
+        guard panel.runModal() == .OK else { return }
+
+        var importedCount = 0
+        for url in panel.urls {
+            if customSkinLoader.importSkin(from: url) != nil {
+                importedCount += 1
+            }
+        }
+
+        if importedCount == 0 {
+            importError = "Could not read the skin file. Make sure it is a valid .buboskin JSON file."
+        }
+    }
+}
+
+// MARK: - Background Photo Section
+
+struct BackgroundPhotoSection: View {
+    @Bindable var settings: ReminderSettings
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            Text("Set your own photo as background")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if !settings.customBackgroundPhotoPath.isEmpty,
+               let nsImage = NSImage(contentsOfFile: settings.customBackgroundPhotoPath) {
+                // Preview
+                ZStack(alignment: .topTrailing) {
+                    Image(nsImage: nsImage)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(height: 80)
+                        .opacity(settings.customBackgroundPhotoOpacity)
+                        .blur(radius: settings.customBackgroundPhotoBlur)
+                        .clipped()
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5)
+                        )
+
+                    Button {
+                        withAnimation(DS.Animation.smoothSpring) {
+                            settings.customBackgroundPhotoPath = ""
+                        }
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.body)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(6)
+                }
+
+                // Controls
+                VStack(spacing: 4) {
+                    HStack {
+                        Text("Opacity")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 50, alignment: .leading)
+                        Slider(value: $settings.customBackgroundPhotoOpacity, in: 0.05...0.6, step: 0.05)
+                        Text("\(Int(settings.customBackgroundPhotoOpacity * 100))%")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 30, alignment: .trailing)
+                    }
+                    HStack {
+                        Text("Blur")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 50, alignment: .leading)
+                        Slider(value: $settings.customBackgroundPhotoBlur, in: 0...10, step: 0.5)
+                        Text(String(format: "%.1f", settings.customBackgroundPhotoBlur))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 30, alignment: .trailing)
+                    }
+                }
+            }
+
+            Button {
+                choosePhoto()
+            } label: {
+                Label(
+                    settings.customBackgroundPhotoPath.isEmpty
+                        ? "Choose photo\u{2026}"
+                        : "Change photo\u{2026}",
+                    systemImage: "photo"
+                )
+                .font(.caption)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private func choosePhoto() {
+        let panel = NSOpenPanel()
+        panel.title = "Choose Background Photo"
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        // Copy to App Support so it persists
+        let fileManager = FileManager.default
+        let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let photosDir = appSupport.appendingPathComponent("Bubo/Photos", isDirectory: true)
+        try? fileManager.createDirectory(at: photosDir, withIntermediateDirectories: true)
+
+        let destination = photosDir.appendingPathComponent("background.\(url.pathExtension)")
+        try? fileManager.removeItem(at: destination)
+
+        let accessing = url.startAccessingSecurityScopedResource()
+        defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+
+        do {
+            try fileManager.copyItem(at: url, to: destination)
+            withAnimation(DS.Animation.smoothSpring) {
+                settings.customBackgroundPhotoPath = destination.path
+            }
+        } catch {
+            // Silently fail — user can try again
         }
     }
 }
@@ -252,7 +462,7 @@ struct GeneralTabView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 94), spacing: 8)], spacing: 8) {
-                        ForEach(SkinCatalog.allSkins) { skin in
+                        ForEach(SkinCatalog.builtInSkins) { skin in
                             let isSelected = settings.selectedSkinID == skin.id
                             Button {
                                 withAnimation(DS.Animation.smoothSpring) {
@@ -264,11 +474,17 @@ struct GeneralTabView: View {
                             .buttonStyle(.plain)
                         }
                     }
+
+                    CustomSkinsSection(settings: settings)
                 }
             }
 
             SettingsPlatter("Wallpaper") {
                 WallpaperSectionView()
+            }
+
+            SettingsPlatter("Background Photo") {
+                BackgroundPhotoSection(settings: settings)
             }
 
             if settings.selectedSkin.isClassic {

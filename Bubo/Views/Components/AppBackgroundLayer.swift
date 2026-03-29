@@ -60,12 +60,27 @@ struct AppBackgroundLayer: View {
     var style: AppBackgroundStyle
     var skin: SkinDefinition = SkinCatalog.defaultSkin
     var wallpaper: WallpaperDefinition = WallpaperCatalog.none
+    var customPhotoPath: String = ""
+    var customPhotoOpacity: Double = 0.25
+    var customPhotoBlur: Double = 2
     @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
         ZStack {
             // Wallpaper layer (rendered first, behind everything)
             WallpaperBackgroundLayer(wallpaper: wallpaper)
+
+            // User's custom background photo
+            if !customPhotoPath.isEmpty,
+               let nsImage = NSImage(contentsOfFile: customPhotoPath) {
+                Image(nsImage: nsImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .opacity(customPhotoOpacity)
+                    .blur(radius: customPhotoBlur)
+                    .clipped()
+                    .ignoresSafeArea()
+            }
 
             // Legacy background style (when skin is classic)
             if skin.isClassic && wallpaper.id == "none" {

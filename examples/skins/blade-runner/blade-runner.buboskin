@@ -1,0 +1,32 @@
+{
+  "id": "blade_runner",
+  "displayName": "Blade Runner",
+  "author": "Bubo Community",
+  "accentColor": { "red": 1.0, "green": 0.55, "blue": 0.0 },
+  "surfaceTint": { "red": 0.08, "green": 0.03, "blue": 0.0 },
+  "surfaceTintOpacity": 0.4,
+  "backgroundGradient": {
+    "colors": [
+      { "red": 0.7, "green": 0.25, "blue": 0.0, "opacity": 0.4 },
+      { "red": 0.15, "green": 0.05, "blue": 0.2, "opacity": 0.3 },
+      { "red": 0.0, "green": 0.0, "blue": 0.0, "opacity": 0.0 }
+    ],
+    "style": "radial",
+    "center": "bottom",
+    "startRadius": 0,
+    "endRadius": 500
+  },
+  "previewColors": [
+    { "red": 1.0, "green": 0.55, "blue": 0.0 },
+    { "red": 0.15, "green": 0.05, "blue": 0.2 }
+  ],
+  "prefersDarkTint": true,
+  "secondaryAccent": { "red": 0.9, "green": 0.3, "blue": 0.1 },
+  "buttonStyle": "solid",
+  "backgroundImage": {
+    "filename": "blade-runner.jpg",
+    "opacity": 0.2,
+    "fillMode": "fill",
+    "blur": 3
+  }
+}

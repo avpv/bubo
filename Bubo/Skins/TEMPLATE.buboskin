@@ -1,0 +1,33 @@
+{
+  "id": "my_skin_name",
+  "displayName": "My Skin Name",
+  "author": "@your_github",
+  "accentColor": { "red": 0.0, "green": 0.5, "blue": 1.0 },
+  "surfaceTint": { "red": 0.0, "green": 0.02, "blue": 0.08 },
+  "surfaceTintOpacity": 0.3,
+  "backgroundGradient": {
+    "colors": [
+      { "red": 0.0, "green": 0.3, "blue": 0.6, "opacity": 0.2 },
+      { "red": 0.1, "green": 0.0, "blue": 0.4, "opacity": 0.1 },
+      { "red": 0.0, "green": 0.0, "blue": 0.0, "opacity": 0.0 }
+    ],
+    "style": "linear",
+    "startPoint": "topLeading",
+    "endPoint": "bottomTrailing"
+  },
+  "previewColors": [
+    { "red": 0.0, "green": 0.5, "blue": 1.0 },
+    { "red": 0.3, "green": 0.0, "blue": 0.6 }
+  ],
+  "prefersDarkTint": false,
+  "secondaryAccent": { "red": 0.2, "green": 0.0, "blue": 0.5 },
+  "buttonStyle": "gradient",
+
+  "_comment": "Optional: add a background image. Place the image file next to this .buboskin file.",
+  "backgroundImage": {
+    "filename": "my-background.jpg",
+    "opacity": 0.25,
+    "fillMode": "fill",
+    "blur": 2
+  }
+}
