@@ -243,7 +243,7 @@ struct BackgroundPhotoSection: View {
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                             .frame(width: 50, alignment: .leading)
-                        Slider(value: $settings.customBackgroundPhotoOpacity, in: 0.05...0.6, step: 0.05)
+                        Slider(value: $settings.customBackgroundPhotoOpacity, in: 0.05...1.0, step: 0.05)
                         Text("\(Int(settings.customBackgroundPhotoOpacity * 100))%")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
