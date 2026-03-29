@@ -42,7 +42,7 @@ struct CalendarsTabView: View {
                 if viewModel.appleCalendarAccessGranted {
                     HStack {
                         Label("Access granted", systemImage: "checkmark.circle.fill")
-                            .foregroundColor(.green)
+                            .foregroundColor(DS.Colors.success)
                         Spacer()
                         Text("\(viewModel.availableAppleCalendars.count) calendars")
                             .foregroundColor(.secondary)
@@ -53,7 +53,7 @@ struct CalendarsTabView: View {
                     if status == .denied || status == .restricted {
                         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                             Label("Calendar access denied", systemImage: "xmark.circle.fill")
-                                .foregroundColor(.red)
+                                .foregroundColor(DS.Colors.error)
                             Text("Grant access in System Settings \u{2192} Privacy & Security \u{2192} Calendars")
                                 .font(.caption)
                                 .foregroundColor(.secondary)

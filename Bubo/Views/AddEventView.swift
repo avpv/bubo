@@ -544,7 +544,7 @@ struct AddEventView: View {
 
                     Link("Learn about Pomodoro combinations", destination: URL(string: "https://github.com/avpv/bubo/blob/HEAD/docs/Pomodoro.md")!)
                         .font(.caption)
-                        .foregroundColor(.accentColor)
+                        .foregroundColor(skin.accentColor)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -579,9 +579,9 @@ struct AddEventView: View {
 
     private func segmentColor(for type: String) -> Color {
         switch type {
-        case "work": .accentColor
-        case "long": .indigo
-        default: .green
+        case "work": skin.accentColor
+        case "long": DS.Colors.info
+        default: DS.Colors.success
         }
     }
 
@@ -607,10 +607,10 @@ struct AddEventView: View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             // Legend row (above bar for context)
             HStack(spacing: DS.Spacing.md) {
-                legendItem(color: .accentColor, icon: "brain.head.profile", label: "Work")
-                legendItem(color: .green, icon: "cup.and.saucer", label: "Break")
+                legendItem(color: skin.accentColor, icon: "brain.head.profile", label: "Work")
+                legendItem(color: DS.Colors.success, icon: "cup.and.saucer", label: "Break")
                 if pomodoroLongBreakEnabled {
-                    legendItem(color: .indigo, icon: "moon.zzz", label: "Long break")
+                    legendItem(color: DS.Colors.info, icon: "moon.zzz", label: "Long break")
                 }
                 Spacer()
                 // Work/break ratio

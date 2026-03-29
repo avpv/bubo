@@ -381,7 +381,7 @@ struct EventDetailView: View {
                     pomodoroBadge("\(workMin) min work", icon: "brain.head.profile", color: skinAccent)
                     pomodoroBadge("\(breakMin) min break", icon: "cup.and.saucer", color: DS.Colors.success)
                     if rule.pomodoroLongBreak > 0 {
-                        pomodoroBadge("\(rule.pomodoroLongBreak) min long break", icon: "moon.zzz", color: .indigo)
+                        pomodoroBadge("\(rule.pomodoroLongBreak) min long break", icon: "moon.zzz", color: DS.Colors.info)
                     }
                 }
             }

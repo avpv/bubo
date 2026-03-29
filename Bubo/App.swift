@@ -167,10 +167,10 @@ struct BuboApp: App {
             cutoutPath.fill()
             ctx.restoreGState()
 
-            // Badge color: skin accent or system blue
-            let badgeColor = self.useSkinIcon
-                ? NSColor(self.settings.selectedSkin.accentColor)
-                : NSColor.systemBlue
+            // Badge color: always system red per Apple HIG — badges must use a
+            // semantically distinct, high-contrast color that users instantly
+            // recognise as a notification indicator, never the same hue as the icon.
+            let badgeColor = NSColor.systemRed
 
             // Badge shadow for depth
             ctx.saveGState()

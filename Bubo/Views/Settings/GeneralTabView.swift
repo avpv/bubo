@@ -509,7 +509,7 @@ struct GeneralTabView: View {
 
                 if reminderService.isUsingCache {
                     Label("Using cached data", systemImage: "internaldrive")
-                        .foregroundColor(.orange)
+                        .foregroundColor(DS.Colors.warning)
                         .font(.caption)
                 }
             }

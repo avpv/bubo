@@ -131,90 +131,90 @@ extension WallpaperDefinition {
 enum WallpaperCatalog {
     static let none = WallpaperDefinition.solid(id: "none", name: "None", color: .clear)
 
-    // MARK: Solid Colors
-    static let charcoal = WallpaperDefinition.solid(id: "solid_charcoal", name: "Charcoal", color: Color(red: 0.13, green: 0.13, blue: 0.15))
-    static let navy = WallpaperDefinition.solid(id: "solid_navy", name: "Navy", color: Color(red: 0.08, green: 0.1, blue: 0.28))
-    static let forest = WallpaperDefinition.solid(id: "solid_forest", name: "Forest", color: Color(red: 0.06, green: 0.22, blue: 0.18))
-    static let wine = WallpaperDefinition.solid(id: "solid_wine", name: "Wine", color: Color(red: 0.32, green: 0.06, blue: 0.14))
-    static let slate = WallpaperDefinition.solid(id: "solid_slate", name: "Slate", color: Color(red: 0.16, green: 0.2, blue: 0.26))
-    static let coffee = WallpaperDefinition.solid(id: "solid_coffee", name: "Coffee", color: Color(red: 0.24, green: 0.16, blue: 0.1))
-    static let plum = WallpaperDefinition.solid(id: "solid_plum", name: "Plum", color: Color(red: 0.24, green: 0.08, blue: 0.3))
-    static let midnight = WallpaperDefinition.solid(id: "solid_midnight", name: "Midnight", color: Color(red: 0.04, green: 0.04, blue: 0.14))
+    // MARK: Solid Colors — Apple-inspired neutral tones
+    static let graphiteSolid = WallpaperDefinition.solid(id: "solid_graphite", name: "Graphite", color: Color(red: 0.14, green: 0.14, blue: 0.16))
+    static let obsidian = WallpaperDefinition.solid(id: "solid_obsidian", name: "Obsidian", color: Color(red: 0.06, green: 0.06, blue: 0.08))
+    static let denim = WallpaperDefinition.solid(id: "solid_denim", name: "Denim", color: Color(red: 0.12, green: 0.16, blue: 0.24))
+    static let stone = WallpaperDefinition.solid(id: "solid_stone", name: "Stone", color: Color(red: 0.18, green: 0.16, blue: 0.14))
+    static let pewter = WallpaperDefinition.solid(id: "solid_pewter", name: "Pewter", color: Color(red: 0.20, green: 0.20, blue: 0.22))
+    static let espresso = WallpaperDefinition.solid(id: "solid_espresso", name: "Espresso", color: Color(red: 0.16, green: 0.10, blue: 0.07))
+    static let ink = WallpaperDefinition.solid(id: "solid_ink", name: "Ink", color: Color(red: 0.05, green: 0.06, blue: 0.14))
+    static let fog = WallpaperDefinition.solid(id: "solid_fog", name: "Fog", color: Color(red: 0.22, green: 0.22, blue: 0.24))
 
-    // MARK: Gradients
-    static let sunset = WallpaperDefinition.gradient(
-        id: "grad_sunset", name: "Sunset",
-        colors: [Color(red: 0.95, green: 0.45, blue: 0.25), Color(red: 0.75, green: 0.15, blue: 0.35), Color(red: 0.3, green: 0.08, blue: 0.25)],
+    // MARK: Gradients — named after macOS releases, refined Apple palette
+    static let sequoia = WallpaperDefinition.gradient(
+        id: "grad_sequoia", name: "Sequoia",
+        colors: [Color(red: 0.48, green: 0.32, blue: 0.18), Color(red: 0.28, green: 0.16, blue: 0.10), Color(red: 0.10, green: 0.06, blue: 0.04)],
         style: .linear(startPoint: .topTrailing, endPoint: .bottomLeading)
     )
-    static let ocean = WallpaperDefinition.gradient(
-        id: "grad_ocean", name: "Ocean",
-        colors: [Color(red: 0.0, green: 0.45, blue: 0.65), Color(red: 0.05, green: 0.2, blue: 0.5), Color(red: 0.04, green: 0.08, blue: 0.22)],
-        style: .linear(startPoint: .top, endPoint: .bottom)
-    )
-    static let aurora = WallpaperDefinition.gradient(
-        id: "grad_aurora", name: "Aurora",
-        colors: [Color(red: 0.15, green: 0.65, blue: 0.55), Color(red: 0.25, green: 0.2, blue: 0.6), Color(red: 0.08, green: 0.05, blue: 0.2)],
+    static let monterey = WallpaperDefinition.gradient(
+        id: "grad_monterey", name: "Monterey",
+        colors: [Color(red: 0.22, green: 0.28, blue: 0.52), Color(red: 0.12, green: 0.14, blue: 0.32), Color(red: 0.04, green: 0.05, blue: 0.12)],
         style: .radial(center: .topLeading, startRadius: 0, endRadius: 500)
     )
-    static let peach = WallpaperDefinition.gradient(
-        id: "grad_peach", name: "Peach",
-        colors: [Color(red: 1.0, green: 0.7, blue: 0.5), Color(red: 0.9, green: 0.4, blue: 0.5), Color(red: 0.4, green: 0.15, blue: 0.3)],
-        style: .radial(center: .top, startRadius: 0, endRadius: 450)
+    static let sonoma = WallpaperDefinition.gradient(
+        id: "grad_sonoma", name: "Sonoma",
+        colors: [Color(red: 0.42, green: 0.32, blue: 0.58), Color(red: 0.22, green: 0.16, blue: 0.38), Color(red: 0.08, green: 0.05, blue: 0.14)],
+        style: .radial(center: .top, startRadius: 0, endRadius: 480)
     )
-    static let nightSky = WallpaperDefinition.gradient(
-        id: "grad_night_sky", name: "Night Sky",
-        colors: [Color(red: 0.12, green: 0.1, blue: 0.3), Color(red: 0.05, green: 0.04, blue: 0.14), Color(red: 0.02, green: 0.02, blue: 0.06)],
+    static let ventura = WallpaperDefinition.gradient(
+        id: "grad_ventura", name: "Ventura",
+        colors: [Color(red: 0.52, green: 0.38, blue: 0.28), Color(red: 0.32, green: 0.18, blue: 0.16), Color(red: 0.12, green: 0.06, blue: 0.06)],
         style: .linear(startPoint: .top, endPoint: .bottom)
     )
-    static let emerald = WallpaperDefinition.gradient(
-        id: "grad_emerald", name: "Emerald",
-        colors: [Color(red: 0.1, green: 0.55, blue: 0.4), Color(red: 0.05, green: 0.3, blue: 0.35), Color(red: 0.03, green: 0.1, blue: 0.12)],
+    static let bigSur = WallpaperDefinition.gradient(
+        id: "grad_big_sur", name: "Big Sur",
+        colors: [Color(red: 0.12, green: 0.38, blue: 0.42), Color(red: 0.08, green: 0.22, blue: 0.32), Color(red: 0.04, green: 0.08, blue: 0.14)],
         style: .linear(startPoint: .topLeading, endPoint: .bottomTrailing)
     )
-    static let lavender = WallpaperDefinition.gradient(
-        id: "grad_lavender", name: "Lavender",
-        colors: [Color(red: 0.55, green: 0.4, blue: 0.8), Color(red: 0.3, green: 0.2, blue: 0.55), Color(red: 0.1, green: 0.06, blue: 0.2)],
-        style: .radial(center: .center, startRadius: 0, endRadius: 400)
+    static let catalina = WallpaperDefinition.gradient(
+        id: "grad_catalina", name: "Catalina",
+        colors: [Color(red: 0.08, green: 0.28, blue: 0.48), Color(red: 0.05, green: 0.14, blue: 0.30), Color(red: 0.02, green: 0.06, blue: 0.14)],
+        style: .linear(startPoint: .top, endPoint: .bottom)
     )
-    static let autumn = WallpaperDefinition.gradient(
-        id: "grad_autumn", name: "Autumn",
-        colors: [Color(red: 0.85, green: 0.5, blue: 0.15), Color(red: 0.6, green: 0.2, blue: 0.15), Color(red: 0.2, green: 0.08, blue: 0.08)],
+    static let mojave = WallpaperDefinition.gradient(
+        id: "grad_mojave", name: "Mojave",
+        colors: [Color(red: 0.42, green: 0.26, blue: 0.16), Color(red: 0.22, green: 0.12, blue: 0.08), Color(red: 0.08, green: 0.04, blue: 0.04)],
+        style: .radial(center: .center, startRadius: 0, endRadius: 450)
+    )
+    static let tahoe = WallpaperDefinition.gradient(
+        id: "grad_tahoe", name: "Tahoe",
+        colors: [Color(red: 0.18, green: 0.32, blue: 0.42), Color(red: 0.10, green: 0.18, blue: 0.28), Color(red: 0.04, green: 0.06, blue: 0.10)],
         style: .linear(startPoint: .topTrailing, endPoint: .bottomLeading)
     )
 
-    // MARK: Patterns
+    // MARK: Patterns — subtle, texture-only, HIG-compliant
     static let dotGrid = WallpaperDefinition.pattern(
         id: "pat_dots", name: "Dots",
-        type: .dots, foreground: Color.white.opacity(0.06), background: Color(red: 0.08, green: 0.08, blue: 0.1)
+        type: .dots, foreground: Color.white.opacity(0.04), background: Color(red: 0.09, green: 0.09, blue: 0.10)
     )
     static let gridLines = WallpaperDefinition.pattern(
         id: "pat_grid", name: "Grid",
-        type: .grid, foreground: Color.white.opacity(0.04), background: Color(red: 0.06, green: 0.06, blue: 0.08)
+        type: .grid, foreground: Color.white.opacity(0.03), background: Color(red: 0.07, green: 0.07, blue: 0.08)
     )
     static let diagonalStripes = WallpaperDefinition.pattern(
         id: "pat_diagonal", name: "Diagonal",
-        type: .diagonal, foreground: Color(red: 0.3, green: 0.6, blue: 0.8).opacity(0.06), background: Color(red: 0.05, green: 0.06, blue: 0.1)
+        type: .diagonal, foreground: Color.white.opacity(0.04), background: Color(red: 0.06, green: 0.07, blue: 0.09)
     )
     static let chevrons = WallpaperDefinition.pattern(
         id: "pat_chevron", name: "Chevron",
-        type: .chevron, foreground: Color(red: 0.6, green: 0.4, blue: 0.8).opacity(0.07), background: Color(red: 0.07, green: 0.05, blue: 0.1)
+        type: .chevron, foreground: Color.white.opacity(0.04), background: Color(red: 0.08, green: 0.07, blue: 0.09)
     )
     static let waves = WallpaperDefinition.pattern(
         id: "pat_wave", name: "Waves",
-        type: .wave, foreground: Color(red: 0.2, green: 0.5, blue: 0.7).opacity(0.07), background: Color(red: 0.04, green: 0.06, blue: 0.1)
+        type: .wave, foreground: Color.white.opacity(0.04), background: Color(red: 0.06, green: 0.07, blue: 0.09)
     )
     static let honeycomb = WallpaperDefinition.pattern(
         id: "pat_honeycomb", name: "Honeycomb",
-        type: .honeycomb, foreground: Color(red: 0.9, green: 0.6, blue: 0.2).opacity(0.06), background: Color(red: 0.08, green: 0.06, blue: 0.04)
+        type: .honeycomb, foreground: Color.white.opacity(0.04), background: Color(red: 0.08, green: 0.07, blue: 0.06)
     )
     static let crosshatch = WallpaperDefinition.pattern(
         id: "pat_crosshatch", name: "Crosshatch",
-        type: .crosshatch, foreground: Color.white.opacity(0.04), background: Color(red: 0.07, green: 0.07, blue: 0.08)
+        type: .crosshatch, foreground: Color.white.opacity(0.03), background: Color(red: 0.07, green: 0.07, blue: 0.08)
     )
     static let buboOwl = WallpaperDefinition.pattern(
         id: "pat_bubo", name: "Bubo",
-        type: .bubo, foreground: Color.white.opacity(0.05), background: Color(red: 0.06, green: 0.06, blue: 0.09)
+        type: .bubo, foreground: Color.white.opacity(0.04), background: Color(red: 0.07, green: 0.07, blue: 0.09)
     )
 
     // MARK: Live
@@ -230,9 +230,9 @@ enum WallpaperCatalog {
     static let allWallpapers: [WallpaperDefinition] = [
         none,
         // Solid
-        charcoal, navy, forest, wine, slate, coffee, plum, midnight,
+        graphiteSolid, obsidian, denim, stone, pewter, espresso, ink, fog,
         // Gradient
-        sunset, ocean, aurora, peach, nightSky, emerald, lavender, autumn,
+        sequoia, monterey, sonoma, ventura, bigSur, catalina, mojave, tahoe,
         // Pattern
         dotGrid, gridLines, diagonalStripes, chevrons, waves, honeycomb, crosshatch, buboOwl,
         // Live

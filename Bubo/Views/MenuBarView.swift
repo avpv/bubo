@@ -231,13 +231,13 @@ struct MenuBarView: View {
                 StatusBanner(
                     icon: "wifi.slash",
                     text: "No internet — calendar data may be outdated",
-                    color: .orange
+                    color: DS.Colors.warning
                 )
             } else if reminderService.isUsingCache {
                 StatusBanner(
                     icon: "arrow.triangle.2.circlepath",
                     text: "Showing cached data",
-                    color: .yellow
+                    color: DS.Colors.warning
                 )
                 .frame(maxWidth: .infinity, alignment: .center)
             }
@@ -247,7 +247,7 @@ struct MenuBarView: View {
                     CalendarAccessBanner()
                         .frame(maxWidth: .infinity, alignment: .center)
                 } else if let error = reminderService.syncError, networkMonitor.isConnected {
-                    StatusBanner(icon: "exclamationmark.triangle.fill", text: error, color: .orange)
+                    StatusBanner(icon: "exclamationmark.triangle.fill", text: error, color: DS.Colors.warning)
                         .frame(maxWidth: .infinity, alignment: .center)
                 }
             }
