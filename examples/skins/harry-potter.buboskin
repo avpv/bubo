@@ -1,0 +1,26 @@
+{
+  "id": "harry_potter",
+  "displayName": "Harry Potter",
+  "author": "Bubo Community",
+  "accentColor": { "red": 0.85, "green": 0.65, "blue": 0.13 },
+  "surfaceTint": { "red": 0.15, "green": 0.08, "blue": 0.0 },
+  "surfaceTintOpacity": 0.35,
+  "backgroundGradient": {
+    "colors": [
+      { "red": 0.35, "green": 0.2, "blue": 0.05, "opacity": 0.4 },
+      { "red": 0.15, "green": 0.05, "blue": 0.2, "opacity": 0.25 },
+      { "red": 0.0, "green": 0.0, "blue": 0.0, "opacity": 0.0 }
+    ],
+    "style": "radial",
+    "center": "top",
+    "startRadius": 0,
+    "endRadius": 500
+  },
+  "previewColors": [
+    { "red": 0.85, "green": 0.65, "blue": 0.13 },
+    { "red": 0.25, "green": 0.08, "blue": 0.08 }
+  ],
+  "prefersDarkTint": true,
+  "secondaryAccent": { "red": 0.6, "green": 0.15, "blue": 0.15 },
+  "buttonStyle": "gradient"
+}
