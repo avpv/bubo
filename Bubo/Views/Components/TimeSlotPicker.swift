@@ -124,16 +124,21 @@ fileprivate struct TimeSlotChip: View {
     let slot: TimeSlotPicker.Slot
     let isSelected: Bool
     let action: () -> Void
-    
+
     @State private var isHovered = false
-    
+    @Environment(\.activeSkin) private var skin
+
+    private var chipAccent: Color {
+        skin.isClassic ? DS.Colors.accent : skin.accentColor
+    }
+
     var body: some View {
         Button(action: {
             Haptics.tap()
             action()
         }) {
             Text(slot.label)
-                .fontWeight(isSelected ? .semibold : .regular)
+                .font(.system(.body, design: .monospaced, weight: isSelected ? .bold : .regular))
                 .foregroundColor(isSelected ? .white : DS.Colors.textPrimary)
                 .contentShape(Rectangle())
         }
@@ -142,19 +147,38 @@ fileprivate struct TimeSlotChip: View {
         .frame(height: DS.Size.controlHeight)
         .background(
             ZStack {
-                Capsule()
-                    .fill(isSelected ? DS.Colors.accent : DS.Colors.badgeFill(DS.Colors.textPrimary))
-                
-                if isHovered && !isSelected {
+                if isSelected {
                     Capsule()
-                        .fill(DS.Colors.hoverFill)
+                        .fill(
+                            LinearGradient(
+                                colors: [chipAccent, skin.resolvedSecondaryAccent],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                } else {
+                    Capsule()
+                        .fill(DS.Materials.platter)
+                    if isHovered {
+                        Capsule()
+                            .fill(chipAccent.opacity(0.08))
+                    }
                 }
             }
         )
+        .overlay(
+            Capsule()
+                .strokeBorder(
+                    isSelected
+                        ? .white.opacity(0.2)
+                        : (isHovered ? chipAccent.opacity(0.3) : .clear),
+                    lineWidth: 0.5
+                )
+        )
         .shadow(
-            color: isHovered && !isSelected ? DS.Shadows.hoverColor : DS.Shadows.ambientColor,
-            radius: isHovered && !isSelected ? DS.Shadows.hoverRadius : 0,
-            y: isHovered && !isSelected ? DS.Shadows.hoverY : 0
+            color: isSelected ? chipAccent.opacity(0.3) : (isHovered ? DS.Shadows.hoverColor : .clear),
+            radius: isSelected ? 6 : (isHovered ? DS.Shadows.hoverRadius : 0),
+            y: isSelected ? 3 : (isHovered ? DS.Shadows.hoverY : 0)
         )
         .scaleEffect(isHovered && !isSelected ? 1.03 : 1.0)
         .animation(DS.Animation.microInteraction, value: isHovered)

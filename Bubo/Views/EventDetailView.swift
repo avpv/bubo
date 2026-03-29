@@ -15,6 +15,11 @@ struct EventDetailView: View {
     @State private var now = Date()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.activeSkin) private var skin
+
+    private var skinAccent: Color {
+        skin.isClassic ? DS.Colors.accent : skin.accentColor
+    }
 
     private let everySecondTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -97,7 +102,13 @@ struct EventDetailView: View {
                                     .foregroundColor(.white)
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, DS.Spacing.sm)
-                                    .background(DS.Colors.accent)
+                                    .background(
+                                        LinearGradient(
+                                            colors: [skinAccent, skin.resolvedSecondaryAccent],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
                                     .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
                             }
                             .buttonStyle(.plain)
@@ -290,7 +301,7 @@ struct EventDetailView: View {
             countdownDisplay(
                 label: "Ends in",
                 totalSeconds: secondsUntilEnd,
-                color: DS.Colors.accent
+                color: skinAccent
             )
         } else {
             // Event has ended
@@ -367,7 +378,7 @@ struct EventDetailView: View {
                 let workMin = Int(event.endDate.timeIntervalSince(event.startDate) / 60)
                 let breakMin = max(rule.interval - workMin, 0)
                 FlowLayout(spacing: DS.Spacing.xs) {
-                    pomodoroBadge("\(workMin) min work", icon: "brain.head.profile", color: DS.Colors.accent)
+                    pomodoroBadge("\(workMin) min work", icon: "brain.head.profile", color: skinAccent)
                     pomodoroBadge("\(breakMin) min break", icon: "cup.and.saucer", color: DS.Colors.success)
                     if rule.pomodoroLongBreak > 0 {
                         pomodoroBadge("\(rule.pomodoroLongBreak) min long break", icon: "moon.zzz", color: .indigo)
@@ -382,7 +393,7 @@ struct EventDetailView: View {
                             .font(.caption2)
                             .padding(.horizontal, DS.Spacing.md)
                             .padding(.vertical, DS.Spacing.xs)
-                            .background(DS.Colors.accentSubtle)
+                            .background(skinAccent.opacity(0.12))
                             .clipShape(Capsule())
                             .accessibilityLabel(day.fullName)
                     }

@@ -171,6 +171,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         guard let screen = NSScreen.main else { return }
 
+        let settings = ReminderSettings.load()
+        let activeSkin = settings.selectedSkin
+
         let alertView = FullScreenAlertView(
             event: event,
             minutesBefore: minutesBefore,
@@ -186,6 +189,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 )
             }
         )
+        .environment(\.activeSkin, activeSkin)
+        .skinTinted(activeSkin)
 
         let hostingView = NSHostingView(rootView: alertView)
 

@@ -50,7 +50,9 @@ struct EventRowView: View {
                 if eventProgress > 0 {
                     GeometryReader { geo in
                         RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                            .fill(DS.Colors.accentSubtle)
+                            .fill(
+                                (skin.isClassic ? DS.Colors.accent : skin.accentColor).opacity(0.12)
+                            )
                             .frame(width: max(geo.size.width * eventProgress, DS.Size.cornerRadius * 2))
                     }
                 }
@@ -184,7 +186,7 @@ struct EventRowView: View {
                 if event.meetingLink != nil, let serviceName = event.meetingServiceName {
                     Label(serviceName, systemImage: "video.fill")
                         .font(.caption2)
-                        .foregroundColor(DS.Colors.accent)
+                        .foregroundColor(skin.isClassic ? DS.Colors.accent : skin.accentColor)
                         .lineLimit(1)
                 } else if let location = event.location, !location.isEmpty {
                     Label(location, systemImage: "mappin")

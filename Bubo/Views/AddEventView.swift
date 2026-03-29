@@ -6,6 +6,12 @@ struct AddEventView: View {
     var onDismiss: () -> Void
     var onSave: (_ isEdit: Bool) -> Void
 
+    @Environment(\.activeSkin) private var skin
+
+    private var skinAccent: Color {
+        skin.isClassic ? DS.Colors.accent : skin.accentColor
+    }
+
     @State private var title = ""
     @State private var date = Date()
     @State private var duration: Double = 30
@@ -108,10 +114,10 @@ struct AddEventView: View {
                     .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                            .stroke(isTitleFocused ? DS.Colors.accent.opacity(0.8) : Color.clear, lineWidth: DS.Size.focusRingWidth)
+                            .stroke(isTitleFocused ? skinAccent.opacity(0.8) : Color.clear, lineWidth: DS.Size.focusRingWidth)
                     )
                     .shadow(
-                        color: isTitleFocused ? DS.Colors.accent.opacity(0.15) : DS.Shadows.ambientColor,
+                        color: isTitleFocused ? skinAccent.opacity(0.15) : DS.Shadows.ambientColor,
                         radius: isTitleFocused ? DS.Shadows.ambientRadius + 1 : DS.Shadows.ambientRadius,
                         y: DS.Shadows.ambientY
                     )
@@ -277,10 +283,10 @@ struct AddEventView: View {
                         .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
                         .overlay(
                             RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                                .stroke((isLocationFocused || isNotesFocused) ? DS.Colors.accent.opacity(0.8) : Color.clear, lineWidth: DS.Size.focusRingWidth)
+                                .stroke((isLocationFocused || isNotesFocused) ? skinAccent.opacity(0.8) : Color.clear, lineWidth: DS.Size.focusRingWidth)
                         )
                         .shadow(
-                            color: (isLocationFocused || isNotesFocused) ? DS.Colors.accent.opacity(0.15) : DS.Shadows.ambientColor,
+                            color: (isLocationFocused || isNotesFocused) ? skinAccent.opacity(0.15) : DS.Shadows.ambientColor,
                             radius: (isLocationFocused || isNotesFocused) ? DS.Shadows.ambientRadius + 1 : DS.Shadows.ambientRadius,
                             y: DS.Shadows.ambientY
                         )
