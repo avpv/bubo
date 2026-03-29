@@ -12,6 +12,7 @@ struct EventRowView: View {
     @State private var isHovered = false
     @State private var now = Date()
     @State private var isDisintegrating = false
+    @State private var pendingDeleteAction: (() -> Void)?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.activeSkin) private var skin
 
@@ -97,8 +98,13 @@ struct EventRowView: View {
             }
         }
         .disintegrate(when: isDisintegrating) {
-            withAnimation(DS.Animation.smoothSpring) {
-                reminderService.completeDisintegration(for: event.id)
+            if let action = pendingDeleteAction {
+                action()
+                pendingDeleteAction = nil
+            } else {
+                withAnimation(DS.Animation.smoothSpring) {
+                    reminderService.completeDisintegration(for: event.id)
+                }
             }
         }
         .contextMenu {
@@ -110,11 +116,11 @@ struct EventRowView: View {
                 Button("Edit") { onEdit?(event) }
                 if event.isRecurring {
                     Menu("Delete") {
-                        Button("Delete This Event Only", role: .destructive) { onDeleteOccurrence?(event) }
-                        Button("Delete All Events", role: .destructive) { onDeleteSeries?(event) }
+                        Button("Delete This Event Only", role: .destructive) { triggerDeleteWithDisintegration { onDeleteOccurrence?(event) } }
+                        Button("Delete All Events", role: .destructive) { triggerDeleteWithDisintegration { onDeleteSeries?(event) } }
                     }
                 } else {
-                    Button("Delete", role: .destructive) { onDelete?(event) }
+                    Button("Delete", role: .destructive) { triggerDeleteWithDisintegration { onDelete?(event) } }
                 }
             }
         }
@@ -242,11 +248,11 @@ struct EventRowView: View {
                     Menu {
                         Button("Delete This Event Only", role: .destructive) {
                             Haptics.impact()
-                            onDeleteOccurrence?(event)
+                            triggerDeleteWithDisintegration { onDeleteOccurrence?(event) }
                         }
                         Button("Delete All Events", role: .destructive) {
                             Haptics.impact()
-                            onDeleteSeries?(event)
+                            triggerDeleteWithDisintegration { onDeleteSeries?(event) }
                         }
                     } label: {
                         Image(systemName: "minus.circle.fill")
@@ -261,7 +267,7 @@ struct EventRowView: View {
                 } else {
                     Button {
                         Haptics.impact()
-                        onDelete?(event)
+                        triggerDeleteWithDisintegration { onDelete?(event) }
                     } label: {
                         Image(systemName: "minus.circle.fill")
                             .font(.system(size: DS.Size.iconLarge))
@@ -321,6 +327,13 @@ struct EventRowView: View {
         case .shortBreak: .green
         case .longBreak: .indigo
         }
+    }
+
+    private func triggerDeleteWithDisintegration(action: @escaping () -> Void) {
+        guard !isDisintegrating else { return }
+        pendingDeleteAction = action
+        reminderService.beginDisintegration(for: event.id)
+        isDisintegrating = true
     }
 
     private var eventProgress: Double {
