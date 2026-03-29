@@ -13,6 +13,7 @@ struct EventRowView: View {
     @State private var now = Date()
     @State private var isDisintegrating = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.activeSkin) private var skin
 
     private let everySecondTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -120,7 +121,7 @@ struct EventRowView: View {
     // MARK: - Urgency Bar
 
     private var accentBarColor: Color {
-        event.colorTag?.color ?? DS.defaultEventColor
+        event.colorTag?.color ?? (skin == .classic ? DS.defaultEventColor : skin.accentColor)
     }
 
     private var urgencyBar: some View {

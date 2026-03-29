@@ -117,7 +117,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.dismissPinnedTimer()
             },
             isPinned: true,
-            backgroundStyle: settings.backgroundStyle
+            backgroundStyle: settings.backgroundStyle,
+            skin: settings.selectedSkin
         )
 
         let hostingView = NSHostingView(rootView: timerView)

@@ -24,6 +24,77 @@ struct ThemeColorPreview: View {
     }
 }
 
+// MARK: - Skin Preview Card
+
+struct SkinPreviewCard: View {
+    let skin: BuboSkin
+    let isSelected: Bool
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        VStack(spacing: 4) {
+            // Mini preview showing skin's visual identity
+            ZStack {
+                // Background
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(colorScheme == .dark
+                        ? Color(white: 0.12)
+                        : Color(white: 0.95)
+                    )
+
+                // Skin gradient
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(skin.previewGradient)
+                    .opacity(0.8)
+
+                // Mini UI mockup
+                VStack(spacing: 2) {
+                    // Header bar
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(skin.accentColor.opacity(0.6))
+                        .frame(height: 4)
+                        .padding(.horizontal, 6)
+
+                    // Event rows
+                    ForEach(0..<3, id: \.self) { i in
+                        HStack(spacing: 3) {
+                            RoundedRectangle(cornerRadius: 1)
+                                .fill(skin.accentColor)
+                                .frame(width: 2, height: 5)
+                            RoundedRectangle(cornerRadius: 1)
+                                .fill(Color.primary.opacity(0.2 - Double(i) * 0.05))
+                                .frame(height: 5)
+                        }
+                        .padding(.horizontal, 6)
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+            .frame(height: 40)
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .strokeBorder(
+                        isSelected ? skin.accentColor : Color.primary.opacity(0.1),
+                        lineWidth: isSelected ? 2 : 0.5
+                    )
+            )
+            .shadow(
+                color: isSelected ? skin.accentColor.opacity(0.3) : .clear,
+                radius: isSelected ? 4 : 0
+            )
+
+            Text(skin.displayName)
+                .font(.caption2)
+                .fontWeight(isSelected ? .semibold : .regular)
+                .foregroundStyle(isSelected ? Color.primary : .secondary)
+                .lineLimit(1)
+        }
+    }
+}
+
+// MARK: - General Tab
+
 struct GeneralTabView: View {
     @Environment(ReminderSettings.self) var settings
     @Environment(ReminderService.self) var reminderService
@@ -87,35 +158,58 @@ struct GeneralTabView: View {
                 }
             }
 
-            SettingsPlatter("Appearance") {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Background")
-                        .font(.body)
+            SettingsPlatter("Skin") {
+                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                    Text("Choose a visual theme")
+                        .font(.caption)
                         .foregroundStyle(.secondary)
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: 8)], spacing: 8) {
-                        ForEach(AppBackgroundStyle.allCases) { style in
-                            let isSelected = settings.backgroundStyle == style
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 94), spacing: 8)], spacing: 8) {
+                        ForEach(BuboSkin.allCases) { skin in
+                            let isSelected = settings.selectedSkin == skin
                             Button {
-                                settings.backgroundStyle = style
-                            } label: {
-                                VStack(spacing: 4) {
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .fill(style.previewGradient)
-                                        .frame(height: 28)
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 6)
-                                                .strokeBorder(
-                                                    isSelected ? Color.accentColor : Color.primary.opacity(0.1),
-                                                    lineWidth: isSelected ? 2 : 0.5
-                                                )
-                                        )
-                                    Text(style.displayName)
-                                        .font(.caption2)
-                                        .foregroundStyle(isSelected ? .primary : .secondary)
-                                        .lineLimit(1)
+                                withAnimation(DS.Animation.smoothSpring) {
+                                    settings.selectedSkin = skin
                                 }
+                            } label: {
+                                SkinPreviewCard(skin: skin, isSelected: isSelected)
                             }
                             .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+
+            if settings.selectedSkin == .classic {
+                SettingsPlatter("Background") {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Gradient overlay")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: 8)], spacing: 8) {
+                            ForEach(AppBackgroundStyle.allCases) { style in
+                                let isSelected = settings.backgroundStyle == style
+                                Button {
+                                    settings.backgroundStyle = style
+                                } label: {
+                                    VStack(spacing: 4) {
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .fill(style.previewGradient)
+                                            .frame(height: 28)
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 6)
+                                                    .strokeBorder(
+                                                        isSelected ? Color.accentColor : Color.primary.opacity(0.1),
+                                                        lineWidth: isSelected ? 2 : 0.5
+                                                    )
+                                            )
+                                        Text(style.displayName)
+                                            .font(.caption2)
+                                            .foregroundStyle(isSelected ? .primary : .secondary)
+                                            .lineLimit(1)
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
                     }
                 }

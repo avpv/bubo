@@ -362,6 +362,7 @@ struct PopoverHeader: View {
     var showOwlIcon: Bool = true
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.activeSkin) private var skin
 
     var body: some View {
         VStack(spacing: 0) {

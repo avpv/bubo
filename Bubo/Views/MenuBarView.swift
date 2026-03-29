@@ -36,9 +36,11 @@ struct MenuBarView: View {
         }
     }
 
+    private var activeSkin: BuboSkin { settings.selectedSkin }
+
     var body: some View {
         ZStack {
-            AppBackgroundLayer(style: settings.backgroundStyle)
+            AppBackgroundLayer(style: settings.backgroundStyle, skin: activeSkin)
 
             Group {
                 switch navigation {
@@ -128,6 +130,8 @@ struct MenuBarView: View {
 
             ToastOverlay(toastState: toastState)
         }
+        .skinTinted(activeSkin)
+        .environment(\.activeSkin, activeSkin)
         .frame(width: DS.Popover.width, height: navigation.isTimer ? DS.Popover.timerHeight : DS.Popover.height)
         .onAppear {
             guard !hasStartedSync else { return }
