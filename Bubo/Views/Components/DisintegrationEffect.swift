@@ -26,6 +26,7 @@ struct DisintegrationModifier: ViewModifier {
     @State private var contentOpacity: CGFloat = 1
     @State private var hasTriggered = false
     @State private var viewSize: CGSize = .zero
+    @State private var collapsedHeight: CGFloat?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -40,7 +41,9 @@ struct DisintegrationModifier: ViewModifier {
                 GeometryReader { geo in
                     Color.clear
                         .onAppear { viewSize = geo.size }
-                        .onChange(of: geo.size) { _, newSize in viewSize = newSize }
+                        .onChange(of: geo.size) { _, newSize in
+                            if collapsedHeight == nil { viewSize = newSize }
+                        }
                 }
             }
             .overlay {
@@ -79,6 +82,8 @@ struct DisintegrationModifier: ViewModifier {
                     }
                 }
             }
+            .frame(height: collapsedHeight)
+            .clipped()
             .onChange(of: isDisintegrating) { _, newValue in
                 if newValue && !hasTriggered {
                     triggerDisintegration()
@@ -93,6 +98,7 @@ struct DisintegrationModifier: ViewModifier {
         if reduceMotion {
             withAnimation(.easeOut(duration: 0.3)) {
                 contentOpacity = 0
+                collapsedHeight = 0
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                 onComplete?()
@@ -108,8 +114,16 @@ struct DisintegrationModifier: ViewModifier {
             contentOpacity = 0
         }
 
-        // Remove after animation finishes
-        DispatchQueue.main.asyncAfter(deadline: .now() + animationDuration + 0.15) {
+        // Collapse height after particles have mostly scattered
+        let collapseDelay = animationDuration * 0.5
+        DispatchQueue.main.asyncAfter(deadline: .now() + collapseDelay) {
+            withAnimation(.easeInOut(duration: 0.35)) {
+                collapsedHeight = 0
+            }
+        }
+
+        // Remove from data source after full animation
+        DispatchQueue.main.asyncAfter(deadline: .now() + collapseDelay + 0.4) {
             onComplete?()
         }
     }

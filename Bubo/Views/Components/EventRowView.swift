@@ -94,7 +94,9 @@ struct EventRowView: View {
             }
         }
         .disintegrate(when: isDisintegrating) {
-            reminderService.completeDisintegration(for: event.id)
+            withAnimation(DS.Animation.smoothSpring) {
+                reminderService.completeDisintegration(for: event.id)
+            }
         }
         .contextMenu {
             Section("Set Reminder") {
