@@ -55,8 +55,8 @@ struct SkinDefinition: Identifiable, Equatable {
         accentColor.opacity(0.4)
     }
 
-    /// Whether this is the default/system skin.
-    var isClassic: Bool { id == "classic" }
+    /// Whether this skin uses no custom tinting (system-native appearance).
+    var isClassic: Bool { id == "classic" || id == "system" }
 
     static func == (lhs: SkinDefinition, rhs: SkinDefinition) -> Bool {
         lhs.id == rhs.id
@@ -91,6 +91,7 @@ struct SkinGradient: Equatable {
 enum SkinCatalog {
     /// All registered skins. Order here = order in the picker.
     static let allSkins: [SkinDefinition] = [
+        system,
         classic,
         ampGreen,
         palmBeach,
@@ -108,5 +109,5 @@ enum SkinCatalog {
     }
 
     /// The default skin.
-    static let defaultSkin = classic
+    static let defaultSkin = system
 }

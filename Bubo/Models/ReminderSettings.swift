@@ -81,7 +81,7 @@ class ReminderSettings: Codable {
         self.selectedCalendarIds = [] // empty = sync all
         self.isCalendarSyncEnabled = true
         self.backgroundStyle = .system
-        self.selectedSkinID = "classic"
+        self.selectedSkinID = "system"
         self.showBadgeCount = true
         self.badgeCountMode = .wholeDay
         self.badgeTimeWindowHours = 8
@@ -101,7 +101,7 @@ class ReminderSettings: Codable {
         if let skinID = try container.decodeIfPresent(String.self, forKey: .selectedSkinID) {
             selectedSkinID = skinID
         } else {
-            selectedSkinID = "classic"
+            selectedSkinID = "system"
         }
         showBadgeCount = try container.decodeIfPresent(Bool.self, forKey: .showBadgeCount) ?? true
         badgeCountMode = try container.decodeIfPresent(BadgeCountMode.self, forKey: .badgeCountMode) ?? .wholeDay
