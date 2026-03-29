@@ -232,26 +232,29 @@ struct MenuBarView: View {
             }
 
             // Color filter
-            if reminderService.allEvents.count > 0 {
+            if reminderService.nonDisintegratingEventCount > 0 {
                 colorFilterBar
             }
 
             // Events
-            if reminderService.allEvents.isEmpty {
-                emptyState
-            } else if filteredEventsByDay.isEmpty {
-                VStack(spacing: DS.Spacing.sm) {
-                    Text("No events with this color")
-                        .font(.subheadline)
-                        .foregroundColor(DS.Colors.textSecondary)
-                    Button("Clear filter") { colorFilter = nil }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
+            Group {
+                if reminderService.nonDisintegratingEventCount == 0 {
+                    emptyState
+                } else if filteredEventsByDay.isEmpty {
+                    VStack(spacing: DS.Spacing.sm) {
+                        Text("No events with this color")
+                            .font(.subheadline)
+                            .foregroundColor(DS.Colors.textSecondary)
+                        Button("Clear filter") { colorFilter = nil }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    eventList
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                eventList
             }
+            .animation(DS.Animation.smoothSpring, value: reminderService.nonDisintegratingEventCount == 0)
 
             Divider()
 
