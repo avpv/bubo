@@ -2,7 +2,7 @@ import SwiftUI
 
 // MARK: - System
 // Author: Bubo Team
-// Pure macOS system appearance — no tinting, wallpaper shows through vibrancy.
+// Modern macOS appearance — subtle accent glow, glass buttons, light tinting.
 
 extension SkinCatalog {
     static let system = SkinDefinition(
@@ -10,11 +10,19 @@ extension SkinCatalog {
         displayName: "System",
         author: "Bubo",
         accentColor: .accentColor,
-        surfaceTint: .clear,
-        surfaceTintOpacity: 0,
-        backgroundGradient: .clear,
-        previewColors: [Color(white: 0.5)],
+        surfaceTint: Color.accentColor,
+        surfaceTintOpacity: 0.06,
+        backgroundGradient: SkinGradient(
+            colors: [
+                Color.accentColor.opacity(0.12),
+                Color.accentColor.opacity(0.04),
+                .clear,
+            ],
+            style: .radial(center: .topLeading, startRadius: 0, endRadius: 500)
+        ),
+        previewColors: [Color.accentColor.opacity(0.6), Color.accentColor.opacity(0.3)],
         prefersDarkTint: false,
-        buttonStyle: .gradient
+        secondaryAccent: Color.accentColor.opacity(0.7),
+        buttonStyle: .glass
     )
 }

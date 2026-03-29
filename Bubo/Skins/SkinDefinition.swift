@@ -105,7 +105,7 @@ struct SkinDefinition: Identifiable, Equatable {
     }
 
     /// Whether this skin uses no custom tinting (system-native appearance).
-    var isClassic: Bool { id == "classic" || id == "system" }
+    var isClassic: Bool { id == "classic" }
 
     static func == (lhs: SkinDefinition, rhs: SkinDefinition) -> Bool {
         lhs.id == rhs.id
