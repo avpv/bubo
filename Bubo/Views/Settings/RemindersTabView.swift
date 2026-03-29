@@ -49,7 +49,7 @@ struct RemindersTabView: View {
                 Toggle("System notification", isOn: $settings.showSystemNotification)
                 Text("At least one notification type should be enabled to receive meeting alerts.")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .padding(.top, DS.Spacing.xs)
             }
 

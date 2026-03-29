@@ -7,14 +7,14 @@ struct SettingsView: View {
 
     var body: some View {
         TabView {
+            GeneralTabView()
+                .tabItem { Label("General", systemImage: "gear") }
+
             CalendarsTabView()
                 .tabItem { Label("Calendars", systemImage: "calendar") }
 
             RemindersTabView()
                 .tabItem { Label("Reminders", systemImage: "bell") }
-
-            GeneralTabView()
-                .tabItem { Label("General", systemImage: "gear") }
         }
         .environment(viewModel)
         .environment(settings)

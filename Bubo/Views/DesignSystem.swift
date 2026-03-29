@@ -374,8 +374,8 @@ struct PopoverHeader: View {
                     } label: {
                         Label("Back", systemImage: "chevron.left")
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.regular)
+                    // HIG: Back buttons should be borderless with chevron
+                    .buttonStyle(.borderless)
                     .keyboardShortcut(.escape, modifiers: [])
                 }
 
@@ -529,10 +529,24 @@ struct ActionButtonStyle: ButtonStyle {
     private var foregroundStyle: Color {
         switch role {
         case .primary:
-            return skin.buttonStyle == .glass ? skinAccent : .white
+            if skin.buttonStyle == .glass { return skinAccent }
+            // HIG: Ensure text contrast against accent background.
+            // Use white on dark accents, primary label on light accents.
+            return Self.contrastingForeground(for: skinAccent)
         case .secondary: return DS.Colors.textPrimary
         case .destructive: return DS.Colors.error
         }
+    }
+
+    /// Returns white or black depending on which contrasts better against the given color.
+    private static func contrastingForeground(for color: Color) -> Color {
+        let nsColor = NSColor(color).usingColorSpace(.sRGB) ?? NSColor(color)
+        let r = nsColor.redComponent
+        let g = nsColor.greenComponent
+        let b = nsColor.blueComponent
+        // Relative luminance (rec. 709)
+        let luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+        return luminance > 0.55 ? .black : .white
     }
 
     private func shadowColor(isPressed: Bool) -> Color {

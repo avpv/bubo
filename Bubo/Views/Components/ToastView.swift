@@ -67,11 +67,11 @@ struct ToastOverlay: View {
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: toast.icon)
                         .font(.caption)
-                        .foregroundColor(toast.color)
+                        .foregroundStyle(toast.color)
                         .contentTransition(.symbolEffect(.replace))
                     Text(toast.text)
                         .font(.caption)
-                        .foregroundColor(.primary)
+                        .foregroundStyle(.primary)
                 }
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.vertical, DS.Spacing.md)

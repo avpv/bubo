@@ -53,11 +53,10 @@ struct MenuBarView: View {
                 switch navigation {
                 case .list:
                     mainContent
-                        .onAppear {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                                withAnimation(DS.Animation.smoothSpring) {
-                                    scrollPositionID = nil
-                                }
+                        .task {
+                            try? await Task.sleep(for: .milliseconds(300))
+                            withAnimation(DS.Animation.smoothSpring) {
+                                scrollPositionID = nil
                             }
                         }
                         .transition(
@@ -207,7 +206,8 @@ struct MenuBarView: View {
                                 withAnimation(DS.Animation.smoothSpring) {
                                     scrollProxy.scrollTo("eventListTop", anchor: .top)
                                 }
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                                Task {
+                                    try? await Task.sleep(for: .milliseconds(400))
                                     withAnimation(DS.Animation.smoothSpring) {
                                         scrollPositionID = nil
                                     }
@@ -265,7 +265,7 @@ struct MenuBarView: View {
                     VStack(spacing: DS.Spacing.sm) {
                         Text("No events with this color")
                             .font(.subheadline)
-                            .foregroundColor(DS.Colors.textSecondary)
+                            .foregroundStyle(DS.Colors.textSecondary)
                         Button("Clear filter") { colorFilter = nil }
                             .buttonStyle(.bordered)
                             .controlSize(.small)
@@ -302,7 +302,7 @@ struct MenuBarView: View {
         HStack(spacing: DS.Spacing.sm) {
             if !networkMonitor.isConnected {
                 Image(systemName: "wifi.slash")
-                    .foregroundColor(DS.Colors.error)
+                    .foregroundStyle(DS.Colors.error)
                     .font(.system(size: DS.Size.iconSmall))
                     .symbolEffect(.pulse, options: .repeating.speed(0.5))
                     .help("No internet connection")
@@ -330,7 +330,7 @@ struct MenuBarView: View {
             Text("No upcoming meetings")
                 .font(.subheadline)
                 .fontWeight(.medium)
-                .foregroundColor(DS.Colors.textSecondary)
+                .foregroundStyle(DS.Colors.textSecondary)
             Text("Your schedule is clear")
                 .font(.caption)
                 .foregroundStyle(DS.Colors.textTertiary)
@@ -352,25 +352,29 @@ struct MenuBarView: View {
     private var colorFilterBar: some View {
         HStack(spacing: DS.Spacing.xs) {
             ForEach(EventColorTag.allCases, id: \.self) { tag in
-                Circle()
-                    .fill(tag.color)
-                    .frame(width: 14, height: 14)
-                    .opacity(colorFilter == nil || colorFilter == tag ? 1.0 : 0.3)
-                    .scaleEffect(colorFilter == tag ? 1.2 : 1.0)
-                    .overlay(
-                        Circle()
-                            .stroke(Color.white, lineWidth: colorFilter == tag ? 1.5 : 0)
-                    )
-                    .shadow(
-                        color: colorFilter == tag ? tag.color.opacity(0.5) : .clear,
-                        radius: colorFilter == tag ? 3 : 0
-                    )
-                    .onTapGesture {
-                        Haptics.tap()
-                        withAnimation(DS.Animation.microInteraction) {
-                            colorFilter = colorFilter == tag ? nil : tag
-                        }
+                Button {
+                    Haptics.tap()
+                    withAnimation(DS.Animation.microInteraction) {
+                        colorFilter = colorFilter == tag ? nil : tag
                     }
+                } label: {
+                    Circle()
+                        .fill(tag.color)
+                        .frame(width: 24, height: 24)
+                        .opacity(colorFilter == nil || colorFilter == tag ? 1.0 : 0.3)
+                        .scaleEffect(colorFilter == tag ? 1.1 : 1.0)
+                        .overlay(
+                            Circle()
+                                .stroke(Color.white, lineWidth: colorFilter == tag ? 1.5 : 0)
+                        )
+                        .shadow(
+                            color: colorFilter == tag ? tag.color.opacity(0.5) : .clear,
+                            radius: colorFilter == tag ? 3 : 0
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Filter by \(tag.rawValue)")
+                .accessibilityAddTraits(colorFilter == tag ? .isSelected : [])
             }
 
             if colorFilter != nil {
@@ -412,7 +416,7 @@ struct MenuBarView: View {
                     if dayGroup.events.isEmpty {
                         Text("No events")
                             .font(.subheadline)
-                            .foregroundColor(DS.Colors.textSecondary)
+                            .foregroundStyle(DS.Colors.textSecondary)
                             .frame(maxWidth: .infinity, alignment: .center)
                             .padding(.vertical, DS.Spacing.sm)
                     }
@@ -525,16 +529,16 @@ private struct CalendarAccessBanner: View {
         } label: {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "calendar.badge.exclamationmark")
-                    .foregroundColor(DS.Colors.warning)
+                    .foregroundStyle(DS.Colors.warning)
                     .font(.caption)
                     .symbolRenderingMode(.hierarchical)
                 Text("Calendar access not granted. Click to open Settings.")
                     .font(.caption)
-                    .foregroundColor(DS.Colors.textPrimary)
+                    .foregroundStyle(DS.Colors.textPrimary)
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.caption2)
-                    .foregroundColor(DS.Colors.textTertiary)
+                    .foregroundStyle(DS.Colors.textTertiary)
             }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.vertical, DS.Spacing.md)

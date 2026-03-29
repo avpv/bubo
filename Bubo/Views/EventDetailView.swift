@@ -12,7 +12,6 @@ struct EventDetailView: View {
 
     @State private var showDeleteConfirmation = false
     @State private var showSeriesDeleteChoice = false
-    @State private var now = Date()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.activeSkin) private var skin
@@ -20,8 +19,6 @@ struct EventDetailView: View {
     private var skinAccent: Color {
         skin.isClassic ? DS.Colors.accent : skin.accentColor
     }
-
-    private let everySecondTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     private func pomodoroBadge(_ text: String, icon: String, color: Color) -> some View {
         Label(text, systemImage: icon)
@@ -37,6 +34,9 @@ struct EventDetailView: View {
     }
 
     var body: some View {
+        // HIG: Use TimelineView for time-based UI updates instead of Timer.publish
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+        let now = context.date
         VStack(spacing: 0) {
             PopoverHeader(
                 title: isLocal ? (event.eventType == .pomodoro ? "Pomodoro" : "Event") : nil,
@@ -55,7 +55,7 @@ struct EventDetailView: View {
                         if event.isRecurring {
                             Image(systemName: "repeat")
                                 .font(.system(size: DS.Size.iconMedium))
-                                .foregroundColor(DS.Colors.textSecondary)
+                                .foregroundStyle(DS.Colors.textSecondary)
                                 .contentTransition(.symbolEffect(.replace))
                                 .accessibilityLabel("Recurring event")
                         }
@@ -67,28 +67,27 @@ struct EventDetailView: View {
                         VStack(alignment: .leading, spacing: DS.Spacing.md) {
                             Label(event.formattedDate, systemImage: "calendar")
                                 .font(.subheadline)
-                                .foregroundColor(DS.Colors.textSecondary)
+                                .foregroundStyle(DS.Colors.textSecondary)
                                 .accessibilityLabel("Date: \(event.formattedDate)")
 
                             Label(event.formattedTimeRange, systemImage: "clock")
                                 .font(.subheadline)
-                                .foregroundColor(DS.Colors.textSecondary)
+                                .foregroundStyle(DS.Colors.textSecondary)
                                 .accessibilityLabel("Time: \(event.formattedTimeRange)")
                         }
                         .staggeredEntrance(index: 1)
 
                         // Live countdown with seconds — tap to open timer screen
-                        countdownSection
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                Haptics.tap()
-                                onTimer?(event)
-                            }
-                            .onHover { hovering in
-                                if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
-                            }
-                            .staggeredEntrance(index: 2)
+                        Button {
+                            Haptics.tap()
+                            onTimer?(event)
+                        } label: {
+                            countdownSection(now: now)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .staggeredEntrance(index: 2)
 
                         // Meeting link — prominent Join button
                         if let meetingURL = event.meetingLink, let serviceName = event.meetingServiceName {
@@ -99,7 +98,7 @@ struct EventDetailView: View {
                                 Label("Join \(serviceName)", systemImage: "video.fill")
                                     .font(.subheadline)
                                     .fontWeight(.semibold)
-                                    .foregroundColor(.white)
+                                    .foregroundStyle(.white)
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, DS.Spacing.sm)
                                     .background(
@@ -119,7 +118,7 @@ struct EventDetailView: View {
                         if let location = event.location, !location.isEmpty {
                             Label(location, systemImage: "location.fill")
                                 .font(.subheadline)
-                                .foregroundColor(DS.Colors.textSecondary)
+                                .foregroundStyle(DS.Colors.textSecondary)
                                 .staggeredEntrance(index: 3)
                         }
                     }
@@ -128,7 +127,6 @@ struct EventDetailView: View {
                     .background(DS.Materials.platter)
                     .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
                     .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
-                    .onReceive(everySecondTimer) { _ in now = Date() }
 
                     // Description
                     if let description = event.description, !description.isEmpty {
@@ -139,7 +137,7 @@ struct EventDetailView: View {
                                 .foregroundStyle(DS.Colors.textTertiary)
                             MarkdownText(text: description)
                                 .font(.subheadline)
-                                .foregroundColor(DS.Colors.textSecondary)
+                                .foregroundStyle(DS.Colors.textSecondary)
                                 .lineSpacing(DS.Typography.bodyLineSpacing)
                                 .textSelection(.enabled)
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -155,7 +153,7 @@ struct EventDetailView: View {
                     if let calName = event.calendarName {
                         Label(calName, systemImage: "tray.full")
                             .font(.caption)
-                            .foregroundColor(DS.Colors.calendarLabel)
+                            .foregroundStyle(DS.Colors.calendarLabel)
                             .staggeredEntrance(index: 4)
                     }
 
@@ -192,7 +190,7 @@ struct EventDetailView: View {
                 if showDeleteConfirmation {
                     Text("Delete?")
                         .font(.subheadline)
-                        .foregroundColor(DS.Colors.error)
+                        .foregroundStyle(DS.Colors.error)
                         .fontWeight(.medium)
                         
                     Spacer()
@@ -216,7 +214,7 @@ struct EventDetailView: View {
                     VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                         Text("Delete recurring event?")
                             .font(.caption)
-                            .foregroundColor(DS.Colors.error)
+                            .foregroundStyle(DS.Colors.error)
                             .fontWeight(.medium)
                         
                         HStack(spacing: DS.Spacing.xs) {
@@ -280,12 +278,13 @@ struct EventDetailView: View {
             .background(DS.Materials.headerBar)
         }
         .frame(width: DS.Popover.width, height: DS.Popover.height)
+        } // TimelineView
     }
 
     // MARK: - Countdown Section
 
     @ViewBuilder
-    private var countdownSection: some View {
+    private func countdownSection(now: Date) -> some View {
         let secondsUntilStart = Int(event.startDate.timeIntervalSince(now))
         let secondsUntilEnd = Int(event.endDate.timeIntervalSince(now))
 
@@ -307,7 +306,7 @@ struct EventDetailView: View {
             // Event has ended
             Label("Ended", systemImage: "checkmark.circle")
                 .font(.subheadline)
-                .foregroundColor(DS.Colors.textTertiary)
+                .foregroundStyle(DS.Colors.textTertiary)
         }
     }
 
@@ -320,12 +319,12 @@ struct EventDetailView: View {
         return HStack(spacing: DS.Spacing.md) {
             Image(systemName: "timer")
                 .font(.system(size: DS.Size.iconMedium))
-                .foregroundColor(color)
+                .foregroundStyle(color)
 
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(label)
                     .font(.caption2)
-                    .foregroundColor(DS.Colors.textTertiary)
+                    .foregroundStyle(DS.Colors.textTertiary)
 
                 HStack(spacing: DS.Spacing.xs) {
                     if days > 0 {
@@ -349,11 +348,11 @@ struct EventDetailView: View {
         HStack(spacing: 1) {
             Text("\(value)")
                 .font(.system(.subheadline, design: .monospaced, weight: .semibold))
-                .foregroundColor(DS.Colors.textPrimary)
+                .foregroundStyle(DS.Colors.textPrimary)
                 .contentTransition(.numericText())
             Text(unit)
                 .font(.system(.caption, design: .monospaced))
-                .foregroundColor(DS.Colors.textSecondary)
+                .foregroundStyle(DS.Colors.textSecondary)
         }
     }
 
@@ -372,7 +371,7 @@ struct EventDetailView: View {
 
             Text(rule.displayText)
                 .font(.subheadline)
-                .foregroundColor(DS.Colors.textSecondary)
+                .foregroundStyle(DS.Colors.textSecondary)
 
             if event.eventType == .pomodoro {
                 let workMin = Int(event.endDate.timeIntervalSince(event.startDate) / 60)

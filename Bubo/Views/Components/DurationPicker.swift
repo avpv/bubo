@@ -129,7 +129,7 @@ struct DurationPicker: View {
             }
         } label: {
             Image(systemName: "hourglass")
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
         }
         .menuStyle(.borderlessButton)
         .fixedSize()

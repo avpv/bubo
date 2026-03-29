@@ -49,7 +49,7 @@ struct DateSuggestionsPopover: View {
                 VStack(alignment: .leading, spacing: 0) {
                     Text("Suggestions")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .padding(.horizontal, 16)
                         .padding(.top, 12)
                         .padding(.bottom, 8)
@@ -69,14 +69,14 @@ struct DateSuggestionsPopover: View {
                     Button(action: { showCustomCalendar = true }) {
                         HStack(spacing: 12) {
                             Image(systemName: "calendar")
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(.secondary)
                                 .font(.title3)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Custom...")
-                                    .foregroundColor(DS.Colors.textPrimary)
+                                    .foregroundStyle(DS.Colors.textPrimary)
                                 Text("Use the calendar to pick a date")
                                     .font(.caption)
-                                    .foregroundColor(.secondary)
+                                    .foregroundStyle(.secondary)
                             }
                             Spacer()
                         }
@@ -96,14 +96,14 @@ struct DateSuggestionsPopover: View {
         Button(action: action) {
             HStack(spacing: 12) {
                 Image(systemName: "calendar")
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .font(.title3)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .foregroundColor(DS.Colors.textPrimary)
+                        .foregroundStyle(DS.Colors.textPrimary)
                     Text(subtitle)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
                 Spacer()
             }

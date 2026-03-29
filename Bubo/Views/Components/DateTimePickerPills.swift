@@ -20,9 +20,9 @@ struct DateTimePickerPills: View {
             Button(action: { showDatePopover.toggle() }) {
                 HStack(spacing: 6) {
                     Image(systemName: "calendar")
-                        .foregroundColor(pillAccent)
+                        .foregroundStyle(pillAccent)
                     Text(formattedDate)
-                        .foregroundColor(DS.Colors.textPrimary)
+                        .foregroundStyle(DS.Colors.textPrimary)
                         .fixedSize(horizontal: true, vertical: false)
                         .frame(width: DS.Size.datePillWidth, alignment: .leading)
                         .mask(
@@ -66,10 +66,10 @@ struct DateTimePickerPills: View {
             Button(action: { showTimePopover.toggle() }) {
                 HStack(spacing: 6) {
                     Image(systemName: "clock")
-                        .foregroundColor(pillAccent.opacity(0.7))
+                        .foregroundStyle(pillAccent.opacity(0.7))
                     Text(formattedTime)
                         .font(.system(.body, design: .monospaced, weight: .medium))
-                        .foregroundColor(DS.Colors.textPrimary)
+                        .foregroundStyle(DS.Colors.textPrimary)
                         .fixedSize(horizontal: true, vertical: false)
                         .lineLimit(1)
                 }
@@ -98,7 +98,7 @@ struct DateTimePickerPills: View {
                 VStack(spacing: DS.Spacing.sm) {
                     Text("Select Time")
                         .font(.caption)
-                        .foregroundColor(DS.Colors.textSecondary)
+                        .foregroundStyle(DS.Colors.textSecondary)
 
                     if let range = range {
                         DatePicker("", selection: $date, in: range, displayedComponents: .hourAndMinute)
@@ -122,7 +122,7 @@ struct DateTimePickerPills: View {
                             }) {
                                 Text(formattedSlotTime(slot))
                                     .font(.system(.body, design: .monospaced, weight: isActive ? .bold : .regular))
-                                    .foregroundColor(isActive ? .white : DS.Colors.textPrimary)
+                                    .foregroundStyle(isActive ? .white : DS.Colors.textPrimary)
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, DS.Spacing.xs)
                                     .background(

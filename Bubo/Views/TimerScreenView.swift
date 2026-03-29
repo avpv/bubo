@@ -11,77 +11,70 @@ struct TimerScreenView: View {
     var customPhotoOpacity: Double = 0.25
     var customPhotoBlur: Double = 2
 
-    @State private var now = Date()
     @State private var pulseRing = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
-
-    private var secondsUntilStart: Int {
-        max(Int(event.startDate.timeIntervalSince(now)), 0)
-    }
-
-    private var secondsUntilEnd: Int {
-        max(Int(event.endDate.timeIntervalSince(now)), 0)
-    }
 
     private var totalDuration: TimeInterval {
         event.endDate.timeIntervalSince(event.startDate)
     }
 
-    private var isInProgress: Bool {
-        secondsUntilStart <= 0 && secondsUntilEnd > 0
+    private func secondsUntilStart(_ now: Date) -> Int {
+        max(Int(event.startDate.timeIntervalSince(now)), 0)
     }
 
-    private var hasEnded: Bool {
-        secondsUntilStart <= 0 && secondsUntilEnd <= 0
+    private func secondsUntilEnd(_ now: Date) -> Int {
+        max(Int(event.endDate.timeIntervalSince(now)), 0)
     }
 
-    private var activeSeconds: Int {
-        isInProgress ? secondsUntilEnd : secondsUntilStart
+    private func isInProgress(_ now: Date) -> Bool {
+        secondsUntilStart(now) <= 0 && secondsUntilEnd(now) > 0
     }
 
-    /// Ring progress: drains from 1→0 before start, fills 0→1 during event.
-    private var ringProgress: Double {
-        if hasEnded { return 1.0 }
-        if isInProgress {
+    private func hasEnded(_ now: Date) -> Bool {
+        secondsUntilStart(now) <= 0 && secondsUntilEnd(now) <= 0
+    }
+
+    private func activeSeconds(_ now: Date) -> Int {
+        isInProgress(now) ? secondsUntilEnd(now) : secondsUntilStart(now)
+    }
+
+    private func ringProgress(_ now: Date) -> Double {
+        if hasEnded(now) { return 1.0 }
+        if isInProgress(now) {
             guard totalDuration > 0 else { return 0 }
-            let elapsed = totalDuration - Double(secondsUntilEnd)
+            let elapsed = totalDuration - Double(secondsUntilEnd(now))
             return min(elapsed / totalDuration, 1.0)
         }
-        // "Starts in" — show remaining fraction (drains toward zero)
-        // Cap at 24h so multi-day events still show a meaningful arc
         let cap = 86400.0
-        let clamped = min(Double(secondsUntilStart), cap)
+        let clamped = min(Double(secondsUntilStart(now)), cap)
         return clamped / cap
     }
 
-    private var accentColor: Color {
-        if hasEnded { return DS.Colors.textTertiary }
-        if isInProgress { return DS.Colors.accent }
-        return DS.urgencyColor(minutesUntil: secondsUntilStart / 60)
+    private func accentColor(_ now: Date) -> Color {
+        if hasEnded(now) { return DS.Colors.textTertiary }
+        if isInProgress(now) { return DS.Colors.accent }
+        return DS.urgencyColor(minutesUntil: secondsUntilStart(now) / 60)
     }
 
     var body: some View {
-        ZStack {
-            if isPinned {
-                AppBackgroundLayer(
-                    style: backgroundStyle,
-                    skin: skin,
-                    wallpaper: wallpaper,
-                    customPhotoPath: customPhotoPath,
-                    customPhotoOpacity: customPhotoOpacity,
-                    customPhotoBlur: customPhotoBlur
-                )
-            }
+        // HIG: Use TimelineView for time-based UI updates
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            let now = context.date
+            ZStack {
+                if isPinned {
+                    AppBackgroundLayer(
+                        style: backgroundStyle,
+                        skin: skin,
+                        wallpaper: wallpaper,
+                        customPhotoPath: customPhotoPath,
+                        customPhotoOpacity: customPhotoOpacity,
+                        customPhotoBlur: customPhotoBlur
+                    )
+                }
 
-            timerContent
-        }
-        .frame(width: DS.Popover.width, height: DS.Popover.timerHeight)
-        .onReceive(timer) { _ in
-            withAnimation(.linear(duration: 0.3)) {
-                now = Date()
+                timerContent(now: now)
             }
+            .frame(width: DS.Popover.width, height: DS.Popover.timerHeight)
         }
         .onAppear {
             guard !reduceMotion else { return }
@@ -91,8 +84,14 @@ struct TimerScreenView: View {
         }
     }
 
-    private var timerContent: some View {
-        VStack(spacing: 0) {
+    private func timerContent(now: Date) -> some View {
+        let accent = accentColor(now)
+        let ended = hasEnded(now)
+        let progress = ringProgress(now)
+        let components = timeComponents(now)
+        let days = hasDays(now)
+
+        return VStack(spacing: 0) {
             PopoverHeader(
                 title: "Timer",
                 showBack: !isPinned,
@@ -132,48 +131,47 @@ struct TimerScreenView: View {
                     ZStack {
                         // Track
                         Circle()
-                            .stroke(accentColor.opacity(0.12), lineWidth: 4)
+                            .stroke(accent.opacity(0.12), lineWidth: 4)
                             .frame(width: 180, height: 180)
 
                         // Progress arc
-                        if !hasEnded {
+                        if !ended {
                             Circle()
-                                .trim(from: 0, to: ringProgress)
+                                .trim(from: 0, to: progress)
                                 .stroke(
-                                    accentColor,
+                                    accent,
                                     style: StrokeStyle(lineWidth: 4, lineCap: .round)
                                 )
                                 .frame(width: 180, height: 180)
                                 .rotationEffect(.degrees(-90))
-                                .animation(.linear(duration: 1), value: ringProgress)
+                                .animation(.linear(duration: 1), value: progress)
                         }
 
                         // Subtle glow
                         Circle()
-                            .fill(accentColor.opacity(pulseRing ? 0.06 : 0.02))
+                            .fill(accent.opacity(pulseRing ? 0.06 : 0.02))
                             .frame(width: 170, height: 170)
                             .blur(radius: 20)
 
                         // Center content
                         VStack(spacing: DS.Spacing.sm) {
-                            Text(statusLabel)
+                            Text(statusLabel(now))
                                 .font(.system(size: 11, weight: .medium, design: .rounded))
                                 .foregroundStyle(DS.Colors.textTertiary)
                                 .textCase(.uppercase)
                                 .tracking(1.5)
 
-                            if hasEnded {
+                            if ended {
                                 Image(systemName: "checkmark.circle")
                                     .font(.system(size: 36, weight: .light))
                                     .foregroundStyle(DS.Colors.textTertiary)
-                            } else if hasDays {
-                                // Two-line layout for days
+                            } else if days {
                                 VStack(spacing: DS.Spacing.xxs) {
-                                    timerRow(Array(timeComponents.prefix(2)), size: 28)
-                                    timerRow(Array(timeComponents.suffix(2)), size: 28)
+                                    timerRow(Array(components.prefix(2)), size: 28)
+                                    timerRow(Array(components.suffix(2)), size: 28)
                                 }
                             } else {
-                                timerRow(timeComponents, size: 32)
+                                timerRow(components, size: 32)
                             }
                         }
                     }
@@ -236,14 +234,14 @@ struct TimerScreenView: View {
 
     // MARK: - Helpers
 
-    private var statusLabel: String {
-        if hasEnded { return "Ended" }
-        if isInProgress { return "Ends in" }
+    private func statusLabel(_ now: Date) -> String {
+        if hasEnded(now) { return "Ended" }
+        if isInProgress(now) { return "Ends in" }
         return "Starts in"
     }
 
-    private var hasDays: Bool {
-        activeSeconds >= 86400
+    private func hasDays(_ now: Date) -> Bool {
+        activeSeconds(now) >= 86400
     }
 
     private struct TimeComponent: Identifiable {
@@ -252,8 +250,8 @@ struct TimerScreenView: View {
         let unit: String
     }
 
-    private var timeComponents: [TimeComponent] {
-        let total = activeSeconds
+    private func timeComponents(_ now: Date) -> [TimeComponent] {
+        let total = activeSeconds(now)
         let days = total / 86400
         let hours = (total % 86400) / 3600
         let minutes = (total % 3600) / 60

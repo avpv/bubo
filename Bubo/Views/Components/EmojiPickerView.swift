@@ -67,7 +67,7 @@ struct EmojiPickerView: View {
             // Search bar
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "magnifyingglass")
-                    .foregroundColor(DS.Colors.textTertiary)
+                    .foregroundStyle(DS.Colors.textTertiary)
                     .font(.caption)
                 TextField("Search emoji", text: $searchText)
                     .textFieldStyle(.plain)
@@ -77,7 +77,7 @@ struct EmojiPickerView: View {
                         searchText = ""
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(DS.Colors.textTertiary)
+                            .foregroundStyle(DS.Colors.textTertiary)
                             .font(.caption)
                     }
                     .buttonStyle(.plain)
@@ -101,7 +101,7 @@ struct EmojiPickerView: View {
                             } label: {
                                 Image(systemName: category.icon)
                                     .font(.system(size: 13))
-                                    .foregroundColor(selectedCategory == index ? DS.Colors.accent : DS.Colors.textTertiary)
+                                    .foregroundStyle(selectedCategory == index ? DS.Colors.accent : DS.Colors.textTertiary)
                                     .frame(width: 28, height: 24)
                                     .background(
                                         selectedCategory == index
@@ -121,7 +121,7 @@ struct EmojiPickerView: View {
                 // Category title
                 Text(Self.categories[selectedCategory].title.uppercased())
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(DS.Colors.textTertiary)
+                    .foregroundStyle(DS.Colors.textTertiary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, DS.Spacing.md)
                     .padding(.top, DS.Spacing.xs)
@@ -170,7 +170,7 @@ struct EmojiPickerButton: View {
         } label: {
             Image(systemName: "face.smiling")
                 .font(.system(size: 16))
-                .foregroundColor(showPicker ? DS.Colors.accent : DS.Colors.textTertiary)
+                .foregroundStyle(showPicker ? DS.Colors.accent : DS.Colors.textTertiary)
         }
         .buttonStyle(.plain)
         .help("Insert emoji")
