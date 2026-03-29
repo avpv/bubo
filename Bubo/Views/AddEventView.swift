@@ -264,10 +264,8 @@ struct AddEventView: View {
                             Divider()
 
                             HStack(alignment: .top, spacing: DS.Spacing.sm) {
-                                TextField("Notes", text: $description, prompt: Text("Notes"), axis: .vertical)
-                                    .textFieldStyle(.plain)
-                                    .focused($isNotesFocused)
-                                    .lineLimit(3...8)
+                                FormattableTextView(text: $description, prompt: "Notes")
+                                    .frame(minHeight: 60, maxHeight: 160)
 
                                 EmojiPickerButton(text: $description)
                                     .padding(.top, DS.Spacing.xxs)
