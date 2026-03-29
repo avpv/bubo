@@ -85,6 +85,25 @@ struct EventDetailView: View {
                             }
                             .staggeredEntrance(index: 2)
 
+                        // Meeting link — prominent Join button
+                        if let meetingURL = event.meetingLink, let serviceName = event.meetingServiceName {
+                            Button {
+                                Haptics.tap()
+                                NSWorkspace.shared.open(meetingURL)
+                            } label: {
+                                Label("Join \(serviceName)", systemImage: "video.fill")
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, DS.Spacing.sm)
+                                    .background(DS.Colors.accent)
+                                    .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
+                            .staggeredEntrance(index: 3)
+                        }
+
                         // Location
                         if let location = event.location, !location.isEmpty {
                             Label(location, systemImage: "location.fill")

@@ -98,6 +98,47 @@ struct CalendarEvent: Identifiable, Codable, Hashable {
         "\(Self.timeFormatter.string(from: startDate)) – \(Self.timeFormatter.string(from: endDate))"
     }
 
+    // MARK: - Meeting Link Detection
+
+    /// Extracts a meeting link (Zoom, Google Meet, Microsoft Teams, Webex) from
+    /// the event's description (notes) or location fields.
+    var meetingLink: URL? {
+        let patterns = [
+            // Zoom
+            "https?://[a-zA-Z0-9.-]*zoom\\.us/[^\\s<>\"']+",
+            // Google Meet
+            "https?://meet\\.google\\.com/[^\\s<>\"']+",
+            // Microsoft Teams
+            "https?://teams\\.microsoft\\.com/[^\\s<>\"']+",
+            // Webex
+            "https?://[a-zA-Z0-9.-]*webex\\.com/[^\\s<>\"']+",
+        ]
+        let combined = patterns.joined(separator: "|")
+        guard let regex = try? NSRegularExpression(pattern: combined, options: .caseInsensitive) else {
+            return nil
+        }
+
+        // Search location first (often contains the link directly), then description
+        for text in [location, description].compactMap({ $0 }) where !text.isEmpty {
+            let range = NSRange(text.startIndex..., in: text)
+            if let match = regex.firstMatch(in: text, range: range),
+               let matchRange = Range(match.range, in: text) {
+                return URL(string: String(text[matchRange]))
+            }
+        }
+        return nil
+    }
+
+    /// A short label for the meeting service, e.g. "Zoom", "Google Meet".
+    var meetingServiceName: String? {
+        guard let host = meetingLink?.host?.lowercased() else { return nil }
+        if host.contains("zoom.us") { return "Zoom" }
+        if host.contains("meet.google.com") { return "Google Meet" }
+        if host.contains("teams.microsoft.com") { return "Teams" }
+        if host.contains("webex.com") { return "Webex" }
+        return "Meeting"
+    }
+
     // MARK: - Pomodoro Segment
 
     /// The type of segment within a Pomodoro session.

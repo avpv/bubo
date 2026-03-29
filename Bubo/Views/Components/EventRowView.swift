@@ -166,7 +166,12 @@ struct EventRowView: View {
             }
 
             HStack(spacing: DS.Spacing.md) {
-                if let location = event.location, !location.isEmpty {
+                if event.meetingLink != nil, let serviceName = event.meetingServiceName {
+                    Label(serviceName, systemImage: "video.fill")
+                        .font(.caption2)
+                        .foregroundColor(DS.Colors.accent)
+                        .lineLimit(1)
+                } else if let location = event.location, !location.isEmpty {
                     Label(location, systemImage: "mappin")
                         .font(.caption2)
                         .foregroundColor(DS.Colors.textSecondary)
@@ -186,6 +191,20 @@ struct EventRowView: View {
 
     private var hoverActions: some View {
         HStack(spacing: DS.Spacing.xs) {
+            if let meetingURL = event.meetingLink {
+                Button {
+                    Haptics.tap()
+                    NSWorkspace.shared.open(meetingURL)
+                } label: {
+                    Image(systemName: "video.fill")
+                        .font(.system(size: DS.Size.iconMedium))
+                        .foregroundStyle(DS.Colors.accent)
+                }
+                .buttonStyle(.borderless)
+                .help("Join \(event.meetingServiceName ?? "meeting")")
+                .accessibilityLabel("Join \(event.meetingServiceName ?? "meeting")")
+            }
+
             if event.isUpcoming {
                 Menu {
                     reminderMenuItems
