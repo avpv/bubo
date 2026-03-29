@@ -130,6 +130,10 @@ jobs:
             "Bubo.app" \
             || test $? -eq 2
 
+      - name: Compute DMG SHA256
+        id: sha
+        run: echo "sha256=$(shasum -a 256 Bubo.dmg | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
@@ -146,8 +150,31 @@ jobs:
             curl -fsSL https://raw.githubusercontent.com/avpv/bubo/HEAD/scripts/${{ github.event.inputs.stable == 'true' && 'install.sh' || 'install-prerelease.sh' }} | bash
             ```
 
+            Or with Homebrew:
+            ```
+            brew tap avpv/bubo https://github.com/avpv/bubo
+            brew install --cask bubo
+            ```
+
             Or manually:
             1. Download **Bubo.dmg**
             2. Open the DMG and drag **Bubo** to **Applications**
             3. Run `xattr -cr /Applications/Bubo.app` and launch
           files: Bubo.dmg
+
+      - name: Update Homebrew Cask
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+          SHA256: ${{ steps.sha.outputs.sha256 }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout main
+
+          sed -i '' "s/version \".*\"/version \"${VERSION}\"/" Casks/bubo.rb
+          sed -i '' "s/sha256 \".*\"/sha256 \"${SHA256}\"/" Casks/bubo.rb
+
+          git add Casks/bubo.rb
+          git commit -m "Update Homebrew cask to v${VERSION}" || true
+          git push origin main

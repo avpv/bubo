@@ -115,7 +115,13 @@ Read the full [Pomodoro Guide &rarr;](docs/Pomodoro.md)
 
 ## Install
 
-**Download the DMG** from [Releases](https://github.com/avpv/bubo/releases/latest), drag to Applications, and run:
+**With Homebrew:**
+```bash
+brew tap avpv/bubo https://github.com/avpv/bubo
+brew install --cask bubo
+```
+
+**Or download the DMG** from [Releases](https://github.com/avpv/bubo/releases/latest), drag to Applications, and run:
 ```bash
 xattr -cr /Applications/Bubo.app
 ```
