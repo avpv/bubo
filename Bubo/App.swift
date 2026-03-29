@@ -62,14 +62,54 @@ struct BuboApp: App {
         ctx.fillPath()
     }
 
+    /// Whether the active skin should tint the menu bar icon.
+    private var useSkinIcon: Bool {
+        let skinID = settings.selectedSkinID
+        return skinID != "system" && skinID != "classic"
+    }
+
+    /// Resolves the skin accent color to a CGColor that is guaranteed to be
+    /// visible against the current menu bar appearance (light or dark).
+    private func resolvedIconColor(isDark: Bool) -> CGColor {
+        let base = NSColor(settings.selectedSkin.accentColor)
+            .usingColorSpace(.sRGB) ?? NSColor(settings.selectedSkin.accentColor)
+
+        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        base.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+
+        // Relative luminance approximation (rec. 709)
+        let r = base.redComponent, g = base.greenComponent, bl = base.blueComponent
+        let lum = 0.2126 * r + 0.7152 * g + 0.0722 * bl
+
+        if isDark {
+            // Dark menu bar → icon needs to be bright enough (lum > 0.25)
+            if lum < 0.25 {
+                let adjusted = NSColor(hue: h, saturation: s * 0.8, brightness: max(b, 0.65), alpha: a)
+                return adjusted.cgColor
+            }
+        } else {
+            // Light menu bar → icon needs to be dark enough (lum < 0.7)
+            if lum > 0.7 {
+                let adjusted = NSColor(hue: h, saturation: max(s, 0.5), brightness: min(b, 0.55), alpha: a)
+                return adjusted.cgColor
+            }
+        }
+        return base.cgColor
+    }
+
     private var menuBarIcon: NSImage {
         let size = NSSize(width: 18, height: 18)
+        let useCustom = useSkinIcon
         let image = NSImage(size: size, flipped: false) { rect in
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
-            self.drawOwl(in: ctx, size: rect.width, color: NSColor.black.cgColor)
+            let isDark = NSAppearance.current.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            let color: CGColor = useCustom
+                ? self.resolvedIconColor(isDark: isDark)
+                : (isDark ? NSColor.white.cgColor : NSColor.black.cgColor)
+            self.drawOwl(in: ctx, size: rect.width, color: color)
             return true
         }
-        image.isTemplate = true
+        image.isTemplate = false
         return image
     }
 
@@ -102,9 +142,11 @@ struct BuboApp: App {
         let image = NSImage(size: NSSize(width: totalWidth, height: totalHeight), flipped: false) { rect in
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
 
-            // Determine icon color based on current appearance (light/dark menu bar)
+            // Determine icon color with contrast safety
             let isDark = NSAppearance.current.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-            let iconColor = isDark ? NSColor.white.cgColor : NSColor.black.cgColor
+            let iconColor: CGColor = self.useSkinIcon
+                ? self.resolvedIconColor(isDark: isDark)
+                : (isDark ? NSColor.white.cgColor : NSColor.black.cgColor)
 
             // Draw owl icon shifted up to make room for badge overflow at the bottom
             ctx.saveGState()
@@ -125,16 +167,21 @@ struct BuboApp: App {
             cutoutPath.fill()
             ctx.restoreGState()
 
+            // Badge color: skin accent or system blue
+            let badgeColor = self.useSkinIcon
+                ? NSColor(self.settings.selectedSkin.accentColor)
+                : NSColor.systemBlue
+
             // Badge shadow for depth
             ctx.saveGState()
             ctx.setShadow(offset: CGSize(width: 0, height: -0.5), blur: 1.5, color: NSColor.black.withAlphaComponent(0.25).cgColor)
             let badgePath = NSBezierPath(roundedRect: badgeRect, xRadius: badgeDiameter / 2, yRadius: badgeDiameter / 2)
-            NSColor.systemBlue.setFill()
+            badgeColor.setFill()
             badgePath.fill()
             ctx.restoreGState()
 
             // Badge fill on top (crisp, no shadow)
-            NSColor.systemBlue.setFill()
+            badgeColor.setFill()
             badgePath.fill()
 
             // Subtle inner highlight at top of badge

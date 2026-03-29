@@ -381,6 +381,7 @@ struct PopoverHeader: View {
 
                 if !showBack {
                     OwlIcon(size: DS.Size.headerIcon)
+                        .foregroundStyle(skin.accentColor)
                 }
 
                 if let title = title, !showBack {
@@ -399,6 +400,7 @@ struct PopoverHeader: View {
                 if showBack {
                     if showOwlIcon {
                         OwlIcon(size: DS.Size.headerIcon)
+                            .foregroundStyle(skin.accentColor)
                     }
                     if let trailing = trailing {
                         trailing
