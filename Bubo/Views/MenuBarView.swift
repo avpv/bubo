@@ -40,7 +40,7 @@ struct MenuBarView: View {
 
     var body: some View {
         ZStack {
-            AppBackgroundLayer(style: settings.backgroundStyle, skin: activeSkin)
+            AppBackgroundLayer(style: settings.backgroundStyle, skin: activeSkin, wallpaper: settings.selectedWallpaper)
 
             Group {
                 switch navigation {

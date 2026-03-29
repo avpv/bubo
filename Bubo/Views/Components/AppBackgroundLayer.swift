@@ -59,12 +59,16 @@ enum AppBackgroundStyle: String, Codable, CaseIterable, Identifiable {
 struct AppBackgroundLayer: View {
     var style: AppBackgroundStyle
     var skin: SkinDefinition = SkinCatalog.defaultSkin
+    var wallpaper: WallpaperDefinition = WallpaperCatalog.none
     @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
         ZStack {
+            // Wallpaper layer (rendered first, behind everything)
+            WallpaperBackgroundLayer(wallpaper: wallpaper)
+
             // Legacy background style (when skin is classic)
-            if skin.isClassic {
+            if skin.isClassic && wallpaper.id == "none" {
                 legacyBackground
             }
 
