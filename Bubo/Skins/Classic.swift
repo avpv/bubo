@@ -14,6 +14,7 @@ extension SkinCatalog {
         surfaceTintOpacity: 0,
         backgroundGradient: .clear,
         previewColors: [.gray],
-        prefersDarkTint: false
+        prefersDarkTint: false,
+        buttonStyle: .solid
     )
 }

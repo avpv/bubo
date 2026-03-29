@@ -6,6 +6,13 @@ struct DateTimePickerPills: View {
 
     @State private var showDatePopover = false
     @State private var showTimePopover = false
+    @State private var isDateHovered = false
+    @State private var isTimeHovered = false
+    @Environment(\.activeSkin) private var skin
+
+    private var pillAccent: Color {
+        skin.isClassic ? DS.Colors.accent : skin.accentColor
+    }
 
     var body: some View {
         HStack(spacing: DS.Spacing.sm) {
@@ -13,7 +20,7 @@ struct DateTimePickerPills: View {
             Button(action: { showDatePopover.toggle() }) {
                 HStack(spacing: 6) {
                     Image(systemName: "calendar")
-                        .foregroundColor(DS.Colors.accent)
+                        .foregroundColor(pillAccent)
                     Text(formattedDate)
                         .foregroundColor(DS.Colors.textPrimary)
                         .fixedSize(horizontal: true, vertical: false)
@@ -33,20 +40,35 @@ struct DateTimePickerPills: View {
                 .frame(height: DS.Size.controlHeight)
                 .background(DS.Materials.platter)
                 .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
-                .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.pillRadius, y: DS.Shadows.pillY)
+                .overlay(
+                    RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                        .strokeBorder(
+                            isDateHovered ? pillAccent.opacity(0.4) : .white.opacity(0.08),
+                            lineWidth: 0.5
+                        )
+                )
+                .shadow(
+                    color: isDateHovered ? pillAccent.opacity(0.2) : DS.Shadows.ambientColor,
+                    radius: isDateHovered ? 6 : DS.Shadows.pillRadius,
+                    y: isDateHovered ? 3 : DS.Shadows.pillY
+                )
+                .scaleEffect(isDateHovered ? 1.02 : 1.0)
+                .animation(DS.Animation.microInteraction, value: isDateHovered)
             }
             .buttonStyle(.plain)
+            .onHover { isDateHovered = $0 }
             .popover(isPresented: $showDatePopover, arrowEdge: .bottom) {
                 DateSuggestionsPopover(date: $date, isPresented: $showDatePopover, range: range)
             }
             .layoutPriority(1)
-            
+
             // Time Pill
             Button(action: { showTimePopover.toggle() }) {
                 HStack(spacing: 6) {
                     Image(systemName: "clock")
-                        .foregroundColor(DS.Colors.textSecondary)
+                        .foregroundColor(pillAccent.opacity(0.7))
                     Text(formattedTime)
+                        .font(.system(.body, design: .monospaced, weight: .medium))
                         .foregroundColor(DS.Colors.textPrimary)
                         .fixedSize(horizontal: true, vertical: false)
                         .lineLimit(1)
@@ -55,9 +77,23 @@ struct DateTimePickerPills: View {
                 .frame(height: DS.Size.controlHeight)
                 .background(DS.Materials.platter)
                 .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
-                .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.pillRadius, y: DS.Shadows.pillY)
+                .overlay(
+                    RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                        .strokeBorder(
+                            isTimeHovered ? pillAccent.opacity(0.4) : .white.opacity(0.08),
+                            lineWidth: 0.5
+                        )
+                )
+                .shadow(
+                    color: isTimeHovered ? pillAccent.opacity(0.2) : DS.Shadows.ambientColor,
+                    radius: isTimeHovered ? 6 : DS.Shadows.pillRadius,
+                    y: isTimeHovered ? 3 : DS.Shadows.pillY
+                )
+                .scaleEffect(isTimeHovered ? 1.02 : 1.0)
+                .animation(DS.Animation.microInteraction, value: isTimeHovered)
             }
             .buttonStyle(.plain)
+            .onHover { isTimeHovered = $0 }
             .popover(isPresented: $showTimePopover, arrowEdge: .bottom) {
                 VStack(spacing: DS.Spacing.sm) {
                     Text("Select Time")
@@ -79,23 +115,26 @@ struct DateTimePickerPills: View {
                     let slots = nearestTimeSlots(around: date, count: 7, rangeStart: range?.lowerBound)
                     VStack(spacing: DS.Spacing.xs) {
                         ForEach(slots, id: \.self) { slot in
+                            let isActive = Calendar.current.compare(slot, to: date, toGranularity: .minute) == .orderedSame
                             Button(action: {
                                 Haptics.tap()
                                 date = slot
                             }) {
                                 Text(formattedSlotTime(slot))
-                                    .font(.body.monospacedDigit())
-                                    .foregroundColor(
-                                        Calendar.current.compare(slot, to: date, toGranularity: .minute) == .orderedSame
-                                            ? .white : DS.Colors.textPrimary
-                                    )
+                                    .font(.system(.body, design: .monospaced, weight: isActive ? .bold : .regular))
+                                    .foregroundColor(isActive ? .white : DS.Colors.textPrimary)
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, DS.Spacing.xs)
                                     .background(
                                         RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
                                             .fill(
-                                                Calendar.current.compare(slot, to: date, toGranularity: .minute) == .orderedSame
-                                                    ? DS.Colors.accent : Color.clear
+                                                isActive
+                                                    ? AnyShapeStyle(LinearGradient(
+                                                        colors: [pillAccent, skin.resolvedSecondaryAccent],
+                                                        startPoint: .leading,
+                                                        endPoint: .trailing
+                                                    ))
+                                                    : AnyShapeStyle(Color.clear)
                                             )
                                     )
                             }

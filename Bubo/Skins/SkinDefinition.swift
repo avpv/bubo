@@ -1,5 +1,17 @@
 import SwiftUI
 
+// MARK: - Button Style
+
+/// Controls how primary buttons render within a skin.
+enum SkinButtonStyle: Equatable {
+    /// Solid fill using accent color.
+    case solid
+    /// Subtle gradient from accentColor → secondaryAccent.
+    case gradient
+    /// Glass / frosted appearance with accent tint.
+    case glass
+}
+
 // MARK: - Skin Definition
 
 /// A complete visual theme for Bubo.
@@ -35,7 +47,44 @@ struct SkinDefinition: Identifiable, Equatable {
     /// Whether this skin has a dark-tinted mood (affects blend modes).
     let prefersDarkTint: Bool
 
+    /// Optional secondary accent (e.g. for gradients on buttons). Falls back to accentColor darkened.
+    let secondaryAccent: Color?
+
+    /// Button fill style — controls primary button appearance.
+    let buttonStyle: SkinButtonStyle
+
+    init(
+        id: String,
+        displayName: String,
+        author: String,
+        accentColor: Color,
+        surfaceTint: Color,
+        surfaceTintOpacity: Double,
+        backgroundGradient: SkinGradient,
+        previewColors: [Color],
+        prefersDarkTint: Bool,
+        secondaryAccent: Color? = nil,
+        buttonStyle: SkinButtonStyle = .gradient
+    ) {
+        self.id = id
+        self.displayName = displayName
+        self.author = author
+        self.accentColor = accentColor
+        self.surfaceTint = surfaceTint
+        self.surfaceTintOpacity = surfaceTintOpacity
+        self.backgroundGradient = backgroundGradient
+        self.previewColors = previewColors
+        self.prefersDarkTint = prefersDarkTint
+        self.secondaryAccent = secondaryAccent
+        self.buttonStyle = buttonStyle
+    }
+
     // MARK: - Derived
+
+    /// Resolved secondary accent, falling back to a darkened version of accentColor.
+    var resolvedSecondaryAccent: Color {
+        secondaryAccent ?? accentColor.opacity(0.85)
+    }
 
     var previewGradient: AnyShapeStyle {
         let colors = previewColors

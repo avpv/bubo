@@ -434,25 +434,37 @@ struct ActionButtonStyle: ButtonStyle {
     var role: ActionButtonRole = .primary
     var size: ActionButtonSize = .flexible
 
+    @Environment(\.activeSkin) private var skin
+    @Environment(\.colorScheme) private var colorScheme
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .fontWeight(.medium)
+            .fontWeight(.semibold)
+            .font(.system(.body, design: .rounded))
             .padding(.horizontal, horizontalPadding)
             .padding(.vertical, size == .compact ? 0 : verticalPadding)
             .frame(height: size == .compact ? DS.Size.controlHeight : nil)
             .frame(minWidth: size == .flexible ? 100 : nil)
             .fixedSize(horizontal: size == .regular, vertical: false)
-            .contentShape(Rectangle())
+            .contentShape(Capsule())
             .background(backgroundView(isPressed: configuration.isPressed))
-            .foregroundColor(foregroundColor)
+            .foregroundStyle(foregroundStyle)
             .clipShape(Capsule())
-            .shadow(
-                color: shadowColor,
-                radius: role == .primary ? 6 : 4,
-                y: role == .primary ? 3 : 2
+            .overlay(
+                Capsule()
+                    .strokeBorder(.white.opacity(role == .primary ? 0.15 : 0.06), lineWidth: 0.5)
             )
-            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
+            .shadow(
+                color: shadowColor(isPressed: configuration.isPressed),
+                radius: configuration.isPressed ? 2 : (role == .primary ? 8 : 4),
+                y: configuration.isPressed ? 1 : (role == .primary ? 4 : 2)
+            )
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
             .animation(DS.Animation.microInteraction, value: configuration.isPressed)
+    }
+
+    private var skinAccent: Color {
+        skin.isClassic ? DS.Colors.accent : skin.accentColor
     }
 
     private var horizontalPadding: CGFloat {
@@ -474,31 +486,57 @@ struct ActionButtonStyle: ButtonStyle {
     private func backgroundView(isPressed: Bool) -> some View {
         switch role {
         case .primary:
-            if isPressed {
-                Color.accentColor.opacity(0.8)
-            } else {
-                DS.Colors.accent
+            switch skin.buttonStyle {
+            case .gradient:
+                LinearGradient(
+                    colors: isPressed
+                        ? [skinAccent.opacity(0.75), skin.resolvedSecondaryAccent.opacity(0.75)]
+                        : [skinAccent, skin.resolvedSecondaryAccent],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            case .glass:
+                ZStack {
+                    Rectangle().fill(DS.Materials.platter)
+                    skinAccent.opacity(isPressed ? 0.2 : 0.3)
+                }
+            case .solid:
+                if isPressed {
+                    skinAccent.opacity(0.8)
+                } else {
+                    skinAccent
+                }
             }
-        case .secondary, .destructive:
-            if isPressed {
-                Color.black.opacity(0.12) // Hover/pressed dim
-            } else {
+        case .secondary:
+            ZStack {
                 Rectangle().fill(DS.Materials.platter)
+                if isPressed {
+                    Color.primary.opacity(0.06)
+                }
+            }
+        case .destructive:
+            ZStack {
+                Rectangle().fill(DS.Materials.platter)
+                if isPressed {
+                    DS.Colors.error.opacity(0.08)
+                }
             }
         }
     }
 
-    private var foregroundColor: Color {
+    private var foregroundStyle: Color {
         switch role {
-        case .primary: return .white
+        case .primary:
+            return skin.buttonStyle == .glass ? skinAccent : .white
         case .secondary: return DS.Colors.textPrimary
         case .destructive: return DS.Colors.error
         }
     }
 
-    private var shadowColor: Color {
+    private func shadowColor(isPressed: Bool) -> Color {
+        if isPressed { return .clear }
         switch role {
-        case .primary: return DS.Colors.accent.opacity(0.3)
+        case .primary: return skinAccent.opacity(0.35)
         case .secondary, .destructive: return DS.Shadows.ambientColor
         }
     }

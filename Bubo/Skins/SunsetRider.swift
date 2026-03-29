@@ -24,6 +24,8 @@ extension SkinCatalog {
             Color(red: 1.0, green: 0.5, blue: 0.2),
             Color(red: 0.8, green: 0.2, blue: 0.3),
         ],
-        prefersDarkTint: false
+        prefersDarkTint: false,
+        secondaryAccent: Color(red: 0.85, green: 0.25, blue: 0.3),
+        buttonStyle: .gradient
     )
 }

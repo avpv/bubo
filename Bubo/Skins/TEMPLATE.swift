@@ -55,7 +55,13 @@ extension SkinCatalog {
         ],
 
         // Set true if your skin has a dark/moody vibe.
-        prefersDarkTint: false
+        prefersDarkTint: false,
+
+        // Optional: secondary accent for button gradients. Omit to auto-derive.
+        // secondaryAccent: Color(red: 0.2, green: 0.0, blue: 0.5),
+
+        // Button fill style: .gradient (default), .solid, or .glass
+        buttonStyle: .gradient
     )
 }
 */
