@@ -6,6 +6,7 @@ struct TimerScreenView: View {
     var isPinned: Bool = false
     var backgroundStyle: AppBackgroundStyle = .system
     var skin: SkinDefinition = SkinCatalog.defaultSkin
+    var wallpaper: WallpaperDefinition = WallpaperCatalog.none
 
     @State private var now = Date()
     @State private var pulseRing = false
@@ -61,7 +62,7 @@ struct TimerScreenView: View {
     var body: some View {
         ZStack {
             if isPinned {
-                AppBackgroundLayer(style: backgroundStyle, skin: skin)
+                AppBackgroundLayer(style: backgroundStyle, skin: skin, wallpaper: wallpaper)
             }
 
             timerContent

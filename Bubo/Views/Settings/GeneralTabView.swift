@@ -101,6 +101,86 @@ struct SkinPreviewCard: View {
     }
 }
 
+// MARK: - Wallpaper Section
+
+struct WallpaperSectionView: View {
+    @Environment(ReminderSettings.self) var settings
+    @State private var selectedCategory: WallpaperCategory = .solidColor
+
+    var body: some View {
+        @Bindable var settings = settings
+
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            Text("Choose a background wallpaper")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            // Category picker
+            Picker("Category", selection: $selectedCategory) {
+                ForEach(WallpaperCategory.allCases) { category in
+                    Label(category.displayName, systemImage: category.systemImage)
+                        .tag(category)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+
+            // "None" option
+            let isNoneSelected = settings.selectedWallpaperID == "none"
+            Button {
+                withAnimation(DS.Animation.smoothSpring) {
+                    settings.selectedWallpaperID = "none"
+                }
+            } label: {
+                HStack(spacing: DS.Spacing.sm) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color(white: 0.12))
+                            .frame(width: 32, height: 32)
+                        Image(systemName: "xmark")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .strokeBorder(
+                                isNoneSelected ? Color.accentColor : Color.primary.opacity(0.1),
+                                lineWidth: isNoneSelected ? 2 : 0.5
+                            )
+                    )
+                    Text("No wallpaper")
+                        .font(.caption)
+                        .foregroundStyle(isNoneSelected ? .primary : .secondary)
+                    Spacer()
+                }
+            }
+            .buttonStyle(.plain)
+
+            // Wallpaper grid for selected category
+            let wallpapers = WallpaperCatalog.wallpapers(in: selectedCategory)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 94), spacing: 8)], spacing: 8) {
+                ForEach(wallpapers) { wallpaper in
+                    let isSelected = settings.selectedWallpaperID == wallpaper.id
+                    Button {
+                        withAnimation(DS.Animation.smoothSpring) {
+                            settings.selectedWallpaperID = wallpaper.id
+                        }
+                    } label: {
+                        WallpaperPreviewCard(wallpaper: wallpaper, isSelected: isSelected)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            if selectedCategory == .live {
+                Label("Live wallpapers use animation and may increase energy usage", systemImage: "bolt.fill")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+    }
+}
+
 // MARK: - General Tab
 
 struct GeneralTabView: View {
@@ -185,6 +265,10 @@ struct GeneralTabView: View {
                         }
                     }
                 }
+            }
+
+            SettingsPlatter("Wallpaper") {
+                WallpaperSectionView()
             }
 
             if settings.selectedSkin.isClassic {
