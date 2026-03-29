@@ -62,14 +62,25 @@ struct BuboApp: App {
         ctx.fillPath()
     }
 
+    private var skinIconColor: CGColor {
+        NSColor(settings.selectedSkin.accentColor).cgColor
+    }
+
+    private var useSkinIcon: Bool {
+        let skinID = settings.selectedSkinID
+        return skinID != "system" && skinID != "classic"
+    }
+
     private var menuBarIcon: NSImage {
         let size = NSSize(width: 18, height: 18)
+        let useCustomColor = useSkinIcon
+        let color = useCustomColor ? skinIconColor : NSColor.black.cgColor
         let image = NSImage(size: size, flipped: false) { rect in
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
-            self.drawOwl(in: ctx, size: rect.width, color: NSColor.black.cgColor)
+            self.drawOwl(in: ctx, size: rect.width, color: color)
             return true
         }
-        image.isTemplate = true
+        image.isTemplate = !useCustomColor
         return image
     }
 
@@ -102,9 +113,14 @@ struct BuboApp: App {
         let image = NSImage(size: NSSize(width: totalWidth, height: totalHeight), flipped: false) { rect in
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
 
-            // Determine icon color based on current appearance (light/dark menu bar)
-            let isDark = NSAppearance.current.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-            let iconColor = isDark ? NSColor.white.cgColor : NSColor.black.cgColor
+            // Determine icon color: use skin accent if a non-system skin is active
+            let iconColor: CGColor
+            if self.useSkinIcon {
+                iconColor = self.skinIconColor
+            } else {
+                let isDark = NSAppearance.current.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+                iconColor = isDark ? NSColor.white.cgColor : NSColor.black.cgColor
+            }
 
             // Draw owl icon shifted up to make room for badge overflow at the bottom
             ctx.saveGState()
