@@ -126,6 +126,55 @@ struct WallpaperBackgroundLayer: View {
                 }
                 context.stroke(path, with: shading, lineWidth: 0.5)
             }
+        case .honeycomb:
+            let hexRadius: CGFloat = 14
+            let hexWidth = hexRadius * 2
+            let hexHeight = hexRadius * sqrt(3)
+            for row in 0..<Int(size.height / hexHeight + 2) {
+                for col in 0..<Int(size.width / hexWidth + 2) {
+                    let offsetX = (row % 2 == 0) ? 0 : hexRadius
+                    let cx = CGFloat(col) * hexWidth + offsetX
+                    let cy = CGFloat(row) * hexHeight
+                    var path = Path()
+                    for i in 0..<6 {
+                        let angle = CGFloat(i) * .pi / 3 - .pi / 6
+                        let px = cx + hexRadius * cos(angle)
+                        let py = cy + hexRadius * sin(angle)
+                        if i == 0 { path.move(to: CGPoint(x: px, y: py)) }
+                        else { path.addLine(to: CGPoint(x: px, y: py)) }
+                    }
+                    path.closeSubpath()
+                    context.stroke(path, with: shading, lineWidth: 0.5)
+                }
+            }
+        case .crosshatch:
+            let spacing: CGFloat = 16
+            let total = size.width + size.height
+            for offset in stride(from: -size.height, through: total, by: spacing) {
+                var path1 = Path()
+                path1.move(to: CGPoint(x: offset, y: 0))
+                path1.addLine(to: CGPoint(x: offset - size.height, y: size.height))
+                context.stroke(path1, with: shading, lineWidth: 0.5)
+                var path2 = Path()
+                path2.move(to: CGPoint(x: offset, y: 0))
+                path2.addLine(to: CGPoint(x: offset + size.height, y: size.height))
+                context.stroke(path2, with: shading, lineWidth: 0.5)
+            }
+        case .diamonds:
+            let diamondSize: CGFloat = 20
+            for row in stride(from: 0, through: size.height, by: diamondSize) {
+                for col in stride(from: 0, through: size.width, by: diamondSize) {
+                    let cx = col + diamondSize / 2
+                    let cy = row + diamondSize / 2
+                    var path = Path()
+                    path.move(to: CGPoint(x: cx, y: cy - diamondSize / 2))
+                    path.addLine(to: CGPoint(x: cx + diamondSize / 2, y: cy))
+                    path.addLine(to: CGPoint(x: cx, y: cy + diamondSize / 2))
+                    path.addLine(to: CGPoint(x: cx - diamondSize / 2, y: cy))
+                    path.closeSubpath()
+                    context.stroke(path, with: shading, lineWidth: 0.5)
+                }
+            }
         }
     }
 
@@ -143,6 +192,14 @@ struct WallpaperBackgroundLayer: View {
                 LivePulseView()
             case .rain:
                 LiveRainView()
+            case .fireflies:
+                LiveFirefliesView()
+            case .nebula:
+                LiveNebulaView()
+            case .matrix:
+                LiveMatrixView()
+            case .ripple:
+                LiveRippleView()
             }
         }
     }
@@ -271,6 +328,122 @@ private struct LiveRainView: View {
     }
 }
 
+private struct LiveFirefliesView: View {
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 20)) { timeline in
+            Canvas { context, size in
+                let time = timeline.date.timeIntervalSinceReferenceDate
+
+                context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color(red: 0.02, green: 0.04, blue: 0.02)))
+
+                for i in 0..<25 {
+                    let fi = CGFloat(i)
+                    let seed1 = sin(fi * 2.1 + 0.7) * 0.5 + 0.5
+                    let seed2 = cos(fi * 1.9 + 1.3) * 0.5 + 0.5
+                    let x = seed1 * size.width + sin(time * 0.4 + fi * 0.8) * 30
+                    let y = seed2 * size.height + cos(time * 0.3 + fi * 1.1) * 25
+                    let glow = (sin(time * 1.5 + fi * 2.0) * 0.5 + 0.5)
+                    let radius = 2.0 + glow * 3.0
+                    let alpha = 0.05 + glow * 0.25
+                    let rect = CGRect(x: x - radius, y: y - radius, width: radius * 2, height: radius * 2)
+                    context.fill(Circle().path(in: rect), with: .color(Color(red: 0.9, green: 0.85, blue: 0.3).opacity(alpha)))
+                }
+            }
+        }
+        .ignoresSafeArea()
+    }
+}
+
+private struct LiveNebulaView: View {
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30)) { timeline in
+            Canvas { context, size in
+                let time = timeline.date.timeIntervalSinceReferenceDate
+                let w = size.width
+                let h = size.height
+
+                context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color(red: 0.02, green: 0.01, blue: 0.05)))
+
+                for i in 0..<4 {
+                    let fi = CGFloat(i)
+                    let cx = w * (0.3 + fi * 0.15) + sin(time * 0.15 + fi) * 40
+                    let cy = h * (0.3 + fi * 0.1) + cos(time * 0.12 + fi * 1.5) * 30
+                    let radius = 80 + fi * 30
+                    let hue = (fi * 0.2 + time * 0.01).truncatingRemainder(dividingBy: 1.0)
+                    let rect = CGRect(x: cx - radius, y: cy - radius, width: radius * 2, height: radius * 2)
+                    context.fill(
+                        Circle().path(in: rect),
+                        with: .color(Color(hue: hue, saturation: 0.6, brightness: 0.4).opacity(0.08))
+                    )
+                }
+            }
+        }
+        .ignoresSafeArea()
+    }
+}
+
+private struct LiveMatrixView: View {
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 15)) { timeline in
+            Canvas { context, size in
+                let time = timeline.date.timeIntervalSinceReferenceDate
+
+                context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color(red: 0.01, green: 0.03, blue: 0.01)))
+
+                let columns = 30
+                let colWidth = size.width / CGFloat(columns)
+                for col in 0..<columns {
+                    let seed = sin(CGFloat(col) * 3.14 + 0.5) * 0.5 + 0.5
+                    let speed = 40 + seed * 80
+                    let length = 4 + Int(seed * 6)
+                    for row in 0..<length {
+                        let x = CGFloat(col) * colWidth + colWidth / 2
+                        let baseY = (CGFloat(time * speed) + CGFloat(col) * 17).truncatingRemainder(dividingBy: size.height + 100) - 50
+                        let y = baseY - CGFloat(row) * 12
+                        let alpha = (1.0 - CGFloat(row) / CGFloat(length)) * 0.3
+                        let rect = CGRect(x: x - 2, y: y - 2, width: 4, height: 4)
+                        context.fill(Path(rect), with: .color(Color.green.opacity(alpha)))
+                    }
+                }
+            }
+        }
+        .ignoresSafeArea()
+    }
+}
+
+private struct LiveRippleView: View {
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30)) { timeline in
+            Canvas { context, size in
+                let time = timeline.date.timeIntervalSinceReferenceDate
+
+                context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color(red: 0.04, green: 0.06, blue: 0.12)))
+
+                let centers: [(CGFloat, CGFloat, CGFloat)] = [
+                    (0.3, 0.4, 0.0), (0.7, 0.6, 1.5), (0.5, 0.25, 3.0),
+                ]
+                for (fx, fy, offset) in centers {
+                    let cx = size.width * fx
+                    let cy = size.height * fy
+                    for ring in 0..<4 {
+                        let phase = (time * 0.6 + offset + CGFloat(ring) * 0.7).truncatingRemainder(dividingBy: 3.0)
+                        let maxRadius = max(size.width, size.height) * 0.35
+                        let radius = phase / 3.0 * maxRadius
+                        let alpha = (1.0 - phase / 3.0) * 0.1
+                        let rect = CGRect(x: cx - radius, y: cy - radius, width: radius * 2, height: radius * 2)
+                        context.stroke(
+                            Circle().path(in: rect),
+                            with: .color(Color(red: 0.3, green: 0.7, blue: 0.9).opacity(alpha)),
+                            lineWidth: 1.0
+                        )
+                    }
+                }
+            }
+        }
+        .ignoresSafeArea()
+    }
+}
+
 // MARK: - Wallpaper Preview
 
 struct WallpaperPreviewCard: View {
@@ -353,6 +526,9 @@ struct WallpaperPreviewCard: View {
         case .diagonal: "line.diagonal"
         case .chevron: "chevron.up"
         case .wave: "water.waves"
+        case .honeycomb: "hexagon"
+        case .crosshatch: "line.3.crossed.swirl.circle"
+        case .diamonds: "diamond"
         case .none: "square.grid.3x3"
         }
     }
@@ -375,6 +551,26 @@ struct WallpaperPreviewCard: View {
             AnyShapeStyle(LinearGradient(
                 colors: [Color(red: 0.1, green: 0.15, blue: 0.25), Color(red: 0.04, green: 0.06, blue: 0.1)],
                 startPoint: .top, endPoint: .bottom
+            ))
+        case .fireflies:
+            AnyShapeStyle(LinearGradient(
+                colors: [Color(red: 0.08, green: 0.12, blue: 0.04), Color(red: 0.02, green: 0.04, blue: 0.02)],
+                startPoint: .top, endPoint: .bottom
+            ))
+        case .nebula:
+            AnyShapeStyle(LinearGradient(
+                colors: [Color(red: 0.15, green: 0.08, blue: 0.25), Color(red: 0.02, green: 0.01, blue: 0.05)],
+                startPoint: .topLeading, endPoint: .bottomTrailing
+            ))
+        case .matrix:
+            AnyShapeStyle(LinearGradient(
+                colors: [Color(red: 0.02, green: 0.12, blue: 0.02), Color(red: 0.01, green: 0.03, blue: 0.01)],
+                startPoint: .top, endPoint: .bottom
+            ))
+        case .ripple:
+            AnyShapeStyle(LinearGradient(
+                colors: [Color(red: 0.1, green: 0.2, blue: 0.3), Color(red: 0.04, green: 0.06, blue: 0.12)],
+                startPoint: .center, endPoint: .bottom
             ))
         case .none:
             AnyShapeStyle(Color(white: 0.1))

@@ -63,6 +63,9 @@ struct WallpaperDefinition: Identifiable, Equatable {
         case diagonal
         case chevron
         case wave
+        case honeycomb
+        case crosshatch
+        case diamonds
     }
 
     enum LiveWallpaperStyle: String, Equatable {
@@ -70,6 +73,10 @@ struct WallpaperDefinition: Identifiable, Equatable {
         case particles
         case pulse
         case rain
+        case fireflies
+        case nebula
+        case matrix
+        case ripple
     }
 
     static func == (lhs: WallpaperDefinition, rhs: WallpaperDefinition) -> Bool {
@@ -131,6 +138,8 @@ enum WallpaperCatalog {
     static let wine = WallpaperDefinition.solid(id: "solid_wine", name: "Wine", color: Color(red: 0.25, green: 0.08, blue: 0.12))
     static let slate = WallpaperDefinition.solid(id: "solid_slate", name: "Slate", color: Color(red: 0.2, green: 0.22, blue: 0.25))
     static let coffee = WallpaperDefinition.solid(id: "solid_coffee", name: "Coffee", color: Color(red: 0.22, green: 0.16, blue: 0.1))
+    static let plum = WallpaperDefinition.solid(id: "solid_plum", name: "Plum", color: Color(red: 0.2, green: 0.08, blue: 0.22))
+    static let midnight = WallpaperDefinition.solid(id: "solid_midnight", name: "Midnight", color: Color(red: 0.05, green: 0.05, blue: 0.12))
 
     // MARK: Gradients
     static let sunset = WallpaperDefinition.gradient(
@@ -160,6 +169,15 @@ enum WallpaperCatalog {
         colors: [Color(red: 0.05, green: 0.35, blue: 0.25), Color(red: 0.1, green: 0.2, blue: 0.15)],
         style: .angular(center: .center)
     )
+    static let lavender = WallpaperDefinition.gradient(
+        id: "grad_lavender", name: "Lavender",
+        colors: [Color(red: 0.45, green: 0.3, blue: 0.7), Color(red: 0.2, green: 0.15, blue: 0.35)]
+    )
+    static let autumn = WallpaperDefinition.gradient(
+        id: "grad_autumn", name: "Autumn",
+        colors: [Color(red: 0.7, green: 0.35, blue: 0.1), Color(red: 0.35, green: 0.12, blue: 0.08)],
+        style: .linear(startPoint: .top, endPoint: .bottom)
+    )
 
     // MARK: Patterns
     static let dotGrid = WallpaperDefinition.pattern(
@@ -182,23 +200,39 @@ enum WallpaperCatalog {
         id: "pat_wave", name: "Waves",
         type: .wave, foreground: Color.blue.opacity(0.1), background: Color(red: 0.06, green: 0.08, blue: 0.16)
     )
+    static let honeycomb = WallpaperDefinition.pattern(
+        id: "pat_honeycomb", name: "Honeycomb",
+        type: .honeycomb, foreground: Color.orange.opacity(0.08), background: Color(red: 0.1, green: 0.08, blue: 0.05)
+    )
+    static let crosshatch = WallpaperDefinition.pattern(
+        id: "pat_crosshatch", name: "Crosshatch",
+        type: .crosshatch, foreground: Color.white.opacity(0.06), background: Color(white: 0.09)
+    )
+    static let diamonds = WallpaperDefinition.pattern(
+        id: "pat_diamonds", name: "Diamonds",
+        type: .diamonds, foreground: Color.mint.opacity(0.08), background: Color(red: 0.06, green: 0.1, blue: 0.1)
+    )
 
     // MARK: Live
     static let liveAurora = WallpaperDefinition.live(id: "live_aurora", name: "Aurora", style: .aurora)
     static let liveParticles = WallpaperDefinition.live(id: "live_particles", name: "Particles", style: .particles)
     static let livePulse = WallpaperDefinition.live(id: "live_pulse", name: "Pulse", style: .pulse)
     static let liveRain = WallpaperDefinition.live(id: "live_rain", name: "Rain", style: .rain)
+    static let liveFireflies = WallpaperDefinition.live(id: "live_fireflies", name: "Fireflies", style: .fireflies)
+    static let liveNebula = WallpaperDefinition.live(id: "live_nebula", name: "Nebula", style: .nebula)
+    static let liveMatrix = WallpaperDefinition.live(id: "live_matrix", name: "Matrix", style: .matrix)
+    static let liveRipple = WallpaperDefinition.live(id: "live_ripple", name: "Ripple", style: .ripple)
 
     static let allWallpapers: [WallpaperDefinition] = [
         none,
         // Solid
-        charcoal, navy, forest, wine, slate, coffee,
+        charcoal, navy, forest, wine, slate, coffee, plum, midnight,
         // Gradient
-        sunset, ocean, aurora, peach, nightSky, emerald,
+        sunset, ocean, aurora, peach, nightSky, emerald, lavender, autumn,
         // Pattern
-        dotGrid, gridLines, diagonalStripes, chevrons, waves,
+        dotGrid, gridLines, diagonalStripes, chevrons, waves, honeycomb, crosshatch, diamonds,
         // Live
-        liveAurora, liveParticles, livePulse, liveRain,
+        liveAurora, liveParticles, livePulse, liveRain, liveFireflies, liveNebula, liveMatrix, liveRipple,
     ]
 
     static func wallpaper(forID id: String) -> WallpaperDefinition {
