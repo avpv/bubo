@@ -13,9 +13,9 @@ struct ToastMessage: Equatable, Identifiable {
 
     var color: Color {
         switch style {
-        case .success: return .green
-        case .info: return .blue
-        case .warning: return .orange
+        case .success: return DS.Colors.success
+        case .info: return DS.Colors.info
+        case .warning: return DS.Colors.warning
         }
     }
 

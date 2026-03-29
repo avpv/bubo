@@ -323,9 +323,9 @@ struct EventRowView: View {
 
     private func pomodoroSegmentColor(_ segment: CalendarEvent.PomodoroSegment) -> Color {
         switch segment {
-        case .work: .accentColor
-        case .shortBreak: .green
-        case .longBreak: .indigo
+        case .work: skin.accentColor
+        case .shortBreak: DS.Colors.success
+        case .longBreak: DS.Colors.info
         }
     }
 
