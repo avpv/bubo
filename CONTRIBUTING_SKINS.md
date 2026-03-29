@@ -60,6 +60,7 @@ accent colors, background gradient, and surface tinting. Think of it like
 Bubo/Skins/
 ├── SkinDefinition.swift   # Core struct + catalog registry
 ├── TEMPLATE.swift         # Copy this to start a new skin
+├── System.swift           # Pure macOS system appearance
 ├── Classic.swift          # Default (no tinting)
 ├── AmpGreen.swift         # Winamp classic green
 ├── PalmBeach.swift        # Tropical coral
