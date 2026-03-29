@@ -24,6 +24,7 @@ struct MarkdownText: View {
         case codeBlock(String, language: String?)
         case blockquote(String)
         case horizontalRule
+        case taskItem(String, checked: Bool, depth: Int)
         case table(header: [String], alignments: [TableAlignment], rows: [[String]])
     }
 
@@ -58,6 +59,18 @@ struct MarkdownText: View {
                     .foregroundStyle(.tertiary)
                 Text(inlineMarkdown(content))
                     .lineSpacing(DS.Typography.bodyLineSpacing)
+            }
+            .padding(.leading, CGFloat(depth) * DS.Spacing.lg)
+
+        case .taskItem(let content, let checked, let depth):
+            HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.sm) {
+                Image(systemName: checked ? "checkmark.square.fill" : "square")
+                    .font(.system(size: DS.Size.iconMedium))
+                    .foregroundStyle(checked ? DS.Colors.accent : DS.Colors.textTertiary)
+                Text(inlineMarkdown(content))
+                    .lineSpacing(DS.Typography.bodyLineSpacing)
+                    .strikethrough(checked, color: DS.Colors.textTertiary)
+                    .foregroundStyle(checked ? DS.Colors.textTertiary : DS.Colors.textSecondary)
             }
             .padding(.leading, CGFloat(depth) * DS.Spacing.lg)
 
@@ -284,6 +297,19 @@ struct MarkdownText: View {
         let depth = indent / 2
 
         let trimmed = String(stripped)
+
+        // Task list: - [ ] unchecked, - [x] checked (also with * or +)
+        for prefix in ["- ", "* ", "+ "] {
+            if trimmed.hasPrefix(prefix) {
+                let afterPrefix = String(trimmed.dropFirst(prefix.count))
+                if afterPrefix.hasPrefix("[ ] ") {
+                    return .taskItem(String(afterPrefix.dropFirst(4)), checked: false, depth: depth)
+                }
+                if afterPrefix.hasPrefix("[x] ") || afterPrefix.hasPrefix("[X] ") {
+                    return .taskItem(String(afterPrefix.dropFirst(4)), checked: true, depth: depth)
+                }
+            }
+        }
 
         // Unordered: - item, * item, + item
         // Avoid matching horizontal rules like "---" or "***"
