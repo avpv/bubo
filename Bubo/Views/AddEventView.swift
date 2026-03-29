@@ -215,20 +215,20 @@ struct AddEventView: View {
                             .font(.headline)
                             .foregroundColor(DS.Colors.textPrimary)
 
-                        HStack(spacing: DS.Spacing.sm) {
+                        HStack(spacing: DS.Spacing.xs) {
                             ForEach(EventColorTag.allCases, id: \.self) { tag in
                                 Circle()
                                     .fill(tag.color)
-                                    .frame(width: 20, height: 20)
+                                    .frame(width: 14, height: 14)
                                     .overlay(
                                         Circle()
-                                            .stroke(Color.white, lineWidth: selectedColorTag == tag ? 2 : 0)
+                                            .stroke(Color.white, lineWidth: selectedColorTag == tag ? 1.5 : 0)
                                     )
                                     .shadow(
                                         color: selectedColorTag == tag ? tag.color.opacity(0.5) : .clear,
                                         radius: selectedColorTag == tag ? 3 : 0
                                     )
-                                    .scaleEffect(selectedColorTag == tag ? 1.15 : 1.0)
+                                    .scaleEffect(selectedColorTag == tag ? 1.2 : 1.0)
                                     .animation(DS.Animation.microInteraction, value: selectedColorTag)
                                     .onTapGesture {
                                         Haptics.tap()
