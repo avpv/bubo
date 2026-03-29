@@ -140,11 +140,21 @@ struct MenuBarView: View {
     // MARK: - Filtered Events
 
     private var filteredEventsByDay: [(date: Date, events: [CalendarEvent])] {
-        guard let filter = colorFilter else { return reminderService.eventsByDay }
-        return reminderService.eventsByDay.compactMap { dayGroup in
-            let filtered = dayGroup.events.filter { $0.colorTag == filter }
-            return filtered.isEmpty ? nil : (date: dayGroup.date, events: filtered)
+        let base: [(date: Date, events: [CalendarEvent])]
+        if let filter = colorFilter {
+            base = reminderService.eventsByDay.compactMap { dayGroup in
+                let filtered = dayGroup.events.filter { $0.colorTag == filter }
+                return filtered.isEmpty ? nil : (date: dayGroup.date, events: filtered)
+            }
+        } else {
+            base = reminderService.eventsByDay
         }
+        return base
+    }
+
+    /// Count of visible (non-disintegrating) events for a day group.
+    private func visibleEventCount(for events: [CalendarEvent]) -> Int {
+        events.filter { !reminderService.disintegratingEventIDs.contains($0.id) }.count
     }
 
     // MARK: - Helpers
@@ -232,26 +242,29 @@ struct MenuBarView: View {
             }
 
             // Color filter
-            if reminderService.allEvents.count > 0 {
+            if reminderService.nonDisintegratingEventCount > 0 {
                 colorFilterBar
             }
 
             // Events
-            if reminderService.allEvents.isEmpty {
-                emptyState
-            } else if filteredEventsByDay.isEmpty {
-                VStack(spacing: DS.Spacing.sm) {
-                    Text("No events with this color")
-                        .font(.subheadline)
-                        .foregroundColor(DS.Colors.textSecondary)
-                    Button("Clear filter") { colorFilter = nil }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
+            Group {
+                if reminderService.nonDisintegratingEventCount == 0 {
+                    emptyState
+                } else if filteredEventsByDay.isEmpty {
+                    VStack(spacing: DS.Spacing.sm) {
+                        Text("No events with this color")
+                            .font(.subheadline)
+                            .foregroundColor(DS.Colors.textSecondary)
+                        Button("Clear filter") { colorFilter = nil }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    eventList
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                eventList
             }
+            .animation(DS.Animation.smoothSpring, value: reminderService.nonDisintegratingEventCount == 0)
 
             Divider()
 
@@ -379,7 +392,9 @@ struct MenuBarView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: DS.Spacing.md) {
                 ForEach(filteredEventsByDay, id: \.date) { dayGroup in
-                    DaySectionHeader(date: dayGroup.date, count: dayGroup.events.count)
+                    let visibleCount = visibleEventCount(for: dayGroup.events)
+
+                    DaySectionHeader(date: dayGroup.date, count: visibleCount)
                         .padding(.horizontal, DS.Spacing.sm)
                         .padding(.top, dayGroup.date == reminderService.eventsByDay.first?.date ? 0 : DS.Spacing.sm)
 
@@ -418,6 +433,7 @@ struct MenuBarView: View {
             .padding(.bottom, DS.Spacing.xl)
             .scrollTargetLayout()
             .id("eventListTop")
+            .animation(DS.Animation.smoothSpring, value: reminderService.disintegratingEventIDs)
         }
         .scrollPosition(id: $scrollPositionID)
         .scrollContentBackground(.hidden)

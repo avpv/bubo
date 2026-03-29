@@ -51,6 +51,12 @@ class ReminderService {
         disintegratingEventIDs.remove(eventID)
     }
 
+    /// Count of real (non-disintegrating) upcoming events — used to decide
+    /// when to show the empty state so it appears before the dust settles.
+    var nonDisintegratingEventCount: Int {
+        allEvents.filter { !disintegratingEventIDs.contains($0.id) }.count
+    }
+
     /// Number of remaining events to show as badge on the menu bar icon.
     var badgeCount: Int {
         guard settings.showBadgeCount else { return 0 }
