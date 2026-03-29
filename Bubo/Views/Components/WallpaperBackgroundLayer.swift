@@ -69,14 +69,14 @@ struct WallpaperBackgroundLayer: View {
     }
 
     private func drawPattern(_ type: WallpaperDefinition.PatternType, in context: GraphicsContext, size: CGSize, color: Color) {
-        let resolved = context.resolve(Shading.color(color))
+        let shading = GraphicsContext.Shading.color(color)
         switch type {
         case .dots:
             let spacing: CGFloat = 20
             for x in stride(from: spacing / 2, through: size.width, by: spacing) {
                 for y in stride(from: spacing / 2, through: size.height, by: spacing) {
                     let rect = CGRect(x: x - 2, y: y - 2, width: 4, height: 4)
-                    context.fill(Circle().path(in: rect), with: resolved)
+                    context.fill(Circle().path(in: rect), with: shading)
                 }
             }
         case .grid:
@@ -85,13 +85,13 @@ struct WallpaperBackgroundLayer: View {
                 var path = Path()
                 path.move(to: CGPoint(x: x, y: 0))
                 path.addLine(to: CGPoint(x: x, y: size.height))
-                context.stroke(path, with: resolved, lineWidth: 0.5)
+                context.stroke(path, with: shading, lineWidth: 0.5)
             }
             for y in stride(from: 0, through: size.height, by: spacing) {
                 var path = Path()
                 path.move(to: CGPoint(x: 0, y: y))
                 path.addLine(to: CGPoint(x: size.width, y: y))
-                context.stroke(path, with: resolved, lineWidth: 0.5)
+                context.stroke(path, with: shading, lineWidth: 0.5)
             }
         case .diagonal:
             let spacing: CGFloat = 16
@@ -100,7 +100,7 @@ struct WallpaperBackgroundLayer: View {
                 var path = Path()
                 path.move(to: CGPoint(x: offset, y: 0))
                 path.addLine(to: CGPoint(x: offset - size.height, y: size.height))
-                context.stroke(path, with: resolved, lineWidth: 0.5)
+                context.stroke(path, with: shading, lineWidth: 0.5)
             }
         case .chevron:
             let spacing: CGFloat = 20
@@ -112,7 +112,7 @@ struct WallpaperBackgroundLayer: View {
                     path.addLine(to: CGPoint(x: x + amplitude, y: y - amplitude))
                     path.addLine(to: CGPoint(x: x + amplitude * 2, y: y))
                 }
-                context.stroke(path, with: resolved, lineWidth: 0.5)
+                context.stroke(path, with: shading, lineWidth: 0.5)
             }
         case .wave:
             let spacing: CGFloat = 24
@@ -124,7 +124,7 @@ struct WallpaperBackgroundLayer: View {
                     let yOffset = sin(x * .pi / 30) * amplitude
                     path.addLine(to: CGPoint(x: x, y: y + yOffset))
                 }
-                context.stroke(path, with: resolved, lineWidth: 0.5)
+                context.stroke(path, with: shading, lineWidth: 0.5)
             }
         }
     }
