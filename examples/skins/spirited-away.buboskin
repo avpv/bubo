@@ -21,5 +21,11 @@
   ],
   "prefersDarkTint": false,
   "secondaryAccent": { "red": 0.5, "green": 0.3, "blue": 0.6 },
-  "buttonStyle": "glass"
+  "buttonStyle": "glass",
+  "backgroundImage": {
+    "filename": "spirited-away.jpg",
+    "opacity": 0.25,
+    "fillMode": "fill",
+    "blur": 2
+  }
 }

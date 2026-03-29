@@ -49,8 +49,26 @@ struct CustomSkinJSON: Codable {
     let secondaryAccent: JSONColor?
     let buttonStyle: String?
 
-    func toSkinDefinition() -> SkinDefinition {
-        SkinDefinition(
+    /// Background image settings. The actual image file should be placed
+    /// next to the `.buboskin` file with the filename specified here.
+    let backgroundImage: JSONBackgroundImage?
+
+    func toSkinDefinition(skinFileURL: URL? = nil) -> SkinDefinition {
+        var bgImage: SkinBackgroundImage? = nil
+        if let imgSpec = backgroundImage, let skinURL = skinFileURL {
+            let imageURL = skinURL.deletingLastPathComponent()
+                .appendingPathComponent(imgSpec.filename)
+            if FileManager.default.fileExists(atPath: imageURL.path) {
+                bgImage = SkinBackgroundImage(
+                    imageURL: imageURL,
+                    opacity: imgSpec.opacity ?? 0.3,
+                    fillMode: imgSpec.resolvedFillMode,
+                    blurRadius: imgSpec.blur ?? 0
+                )
+            }
+        }
+
+        return SkinDefinition(
             id: "custom_\(id)",
             displayName: displayName,
             author: author,
@@ -61,7 +79,8 @@ struct CustomSkinJSON: Codable {
             previewColors: previewColors.map { $0.toColor() },
             prefersDarkTint: prefersDarkTint,
             secondaryAccent: secondaryAccent?.toColor(),
-            buttonStyle: resolvedButtonStyle
+            buttonStyle: resolvedButtonStyle,
+            backgroundImage: bgImage
         )
     }
 
@@ -70,6 +89,24 @@ struct CustomSkinJSON: Codable {
         case "solid": .solid
         case "glass": .glass
         default: .gradient
+        }
+    }
+}
+
+struct JSONBackgroundImage: Codable {
+    /// Image filename (e.g. "background.jpg"). Must be in the same folder as the .buboskin file.
+    let filename: String
+    /// Opacity 0.0–1.0. Default 0.3 to keep text readable.
+    var opacity: Double?
+    /// Fill mode: "fill" (crop to fill) or "fit" (letterbox). Default "fill".
+    var fillMode: String?
+    /// Blur radius. Default 0.
+    var blur: Double?
+
+    var resolvedFillMode: SkinBackgroundImage.FillMode {
+        switch fillMode?.lowercased() {
+        case "fit": .fit
+        default: .fill
         }
     }
 }
@@ -172,6 +209,7 @@ class CustomSkinLoader {
     }
 
     /// Import a `.buboskin` file by copying it into the skins directory.
+    /// If the skin specifies a `backgroundImage`, the image file is copied too.
     /// Returns the skin definition if successful.
     @discardableResult
     func importSkin(from sourceURL: URL) -> SkinDefinition? {
@@ -187,6 +225,17 @@ class CustomSkinLoader {
             defer { if accessing { sourceURL.stopAccessingSecurityScopedResource() } }
 
             try fileManager.copyItem(at: sourceURL, to: destination)
+
+            // If skin references a background image, copy it alongside
+            if let data = try? Data(contentsOf: sourceURL),
+               let json = try? JSONDecoder().decode(CustomSkinJSON.self, from: data),
+               let bgImage = json.backgroundImage {
+                let imageSource = sourceURL.deletingLastPathComponent()
+                    .appendingPathComponent(bgImage.filename)
+                let imageDest = skinsDirectory.appendingPathComponent(bgImage.filename)
+                try? fileManager.removeItem(at: imageDest)
+                try? fileManager.copyItem(at: imageSource, to: imageDest)
+            }
         } catch {
             return nil
         }
@@ -201,7 +250,7 @@ class CustomSkinLoader {
         return skin
     }
 
-    /// Remove a custom skin by its ID.
+    /// Remove a custom skin and its associated background image by ID.
     func removeSkin(id: String) {
         guard let files = try? fileManager.contentsOfDirectory(
             at: skinsDirectory,
@@ -209,7 +258,14 @@ class CustomSkinLoader {
         ) else { return }
 
         for file in files where file.pathExtension == "buboskin" {
-            if let skin = loadSkin(from: file), skin.id == id {
+            if let data = try? Data(contentsOf: file),
+               let json = try? JSONDecoder().decode(CustomSkinJSON.self, from: data),
+               "custom_\(json.id)" == id {
+                // Remove associated background image
+                if let bgImage = json.backgroundImage {
+                    let imageURL = skinsDirectory.appendingPathComponent(bgImage.filename)
+                    try? fileManager.removeItem(at: imageURL)
+                }
                 try? fileManager.removeItem(at: file)
                 break
             }
@@ -234,6 +290,6 @@ class CustomSkinLoader {
         guard let data = try? Data(contentsOf: url),
               let json = try? JSONDecoder().decode(CustomSkinJSON.self, from: data)
         else { return nil }
-        return json.toSkinDefinition()
+        return json.toSkinDefinition(skinFileURL: url)
     }
 }

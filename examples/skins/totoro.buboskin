@@ -22,5 +22,11 @@
   ],
   "prefersDarkTint": false,
   "secondaryAccent": { "red": 0.55, "green": 0.45, "blue": 0.3 },
-  "buttonStyle": "gradient"
+  "buttonStyle": "gradient",
+  "backgroundImage": {
+    "filename": "totoro.jpg",
+    "opacity": 0.25,
+    "fillMode": "fill",
+    "blur": 2
+  }
 }

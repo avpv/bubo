@@ -22,5 +22,11 @@
   ],
   "prefersDarkTint": true,
   "secondaryAccent": { "red": 0.6, "green": 0.15, "blue": 0.15 },
-  "buttonStyle": "gradient"
+  "buttonStyle": "gradient",
+  "backgroundImage": {
+    "filename": "harry-potter.jpg",
+    "opacity": 0.2,
+    "fillMode": "fill",
+    "blur": 3
+  }
 }
