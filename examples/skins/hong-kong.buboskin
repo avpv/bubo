@@ -1,0 +1,31 @@
+{
+  "id": "hong_kong",
+  "displayName": "Hong Kong Neon",
+  "author": "Bubo Community",
+  "accentColor": { "red": 1.0, "green": 0.2, "blue": 0.45 },
+  "surfaceTint": { "red": 0.12, "green": 0.02, "blue": 0.06 },
+  "surfaceTintOpacity": 0.35,
+  "backgroundGradient": {
+    "colors": [
+      { "red": 0.9, "green": 0.1, "blue": 0.4, "opacity": 0.35 },
+      { "red": 0.1, "green": 0.05, "blue": 0.35, "opacity": 0.25 },
+      { "red": 0.0, "green": 0.0, "blue": 0.0, "opacity": 0.0 }
+    ],
+    "style": "linear",
+    "startPoint": "top",
+    "endPoint": "bottom"
+  },
+  "previewColors": [
+    { "red": 1.0, "green": 0.2, "blue": 0.45 },
+    { "red": 0.15, "green": 0.05, "blue": 0.3 }
+  ],
+  "prefersDarkTint": true,
+  "secondaryAccent": { "red": 1.0, "green": 0.85, "blue": 0.0 },
+  "buttonStyle": "glass",
+  "backgroundImage": {
+    "filename": "hong-kong.jpg",
+    "opacity": 0.2,
+    "fillMode": "fill",
+    "blur": 2
+  }
+}

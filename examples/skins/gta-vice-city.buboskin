@@ -1,0 +1,31 @@
+{
+  "id": "gta_vice_city",
+  "displayName": "GTA Vice City",
+  "author": "Bubo Community",
+  "accentColor": { "red": 0.95, "green": 0.45, "blue": 0.7 },
+  "surfaceTint": { "red": 0.1, "green": 0.02, "blue": 0.06 },
+  "surfaceTintOpacity": 0.3,
+  "backgroundGradient": {
+    "colors": [
+      { "red": 0.95, "green": 0.5, "blue": 0.25, "opacity": 0.3 },
+      { "red": 0.6, "green": 0.15, "blue": 0.5, "opacity": 0.25 },
+      { "red": 0.0, "green": 0.0, "blue": 0.0, "opacity": 0.0 }
+    ],
+    "style": "linear",
+    "startPoint": "topTrailing",
+    "endPoint": "bottomLeading"
+  },
+  "previewColors": [
+    { "red": 0.95, "green": 0.45, "blue": 0.7 },
+    { "red": 0.95, "green": 0.55, "blue": 0.2 }
+  ],
+  "prefersDarkTint": false,
+  "secondaryAccent": { "red": 0.3, "green": 0.85, "blue": 0.85 },
+  "buttonStyle": "gradient",
+  "backgroundImage": {
+    "filename": "gta-vice-city.jpg",
+    "opacity": 0.25,
+    "fillMode": "fill",
+    "blur": 2
+  }
+}

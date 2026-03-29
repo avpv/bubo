@@ -1,0 +1,31 @@
+{
+  "id": "windows_xp",
+  "displayName": "Windows XP",
+  "author": "Bubo Community",
+  "accentColor": { "red": 0.0, "green": 0.5, "blue": 0.95 },
+  "surfaceTint": { "red": 0.0, "green": 0.2, "blue": 0.55 },
+  "surfaceTintOpacity": 0.2,
+  "backgroundGradient": {
+    "colors": [
+      { "red": 0.2, "green": 0.55, "blue": 0.95, "opacity": 0.3 },
+      { "red": 0.35, "green": 0.75, "blue": 0.35, "opacity": 0.15 },
+      { "red": 0.0, "green": 0.0, "blue": 0.0, "opacity": 0.0 }
+    ],
+    "style": "linear",
+    "startPoint": "top",
+    "endPoint": "bottom"
+  },
+  "previewColors": [
+    { "red": 0.2, "green": 0.55, "blue": 0.95 },
+    { "red": 0.35, "green": 0.75, "blue": 0.35 }
+  ],
+  "prefersDarkTint": false,
+  "secondaryAccent": { "red": 0.15, "green": 0.65, "blue": 0.3 },
+  "buttonStyle": "gradient",
+  "backgroundImage": {
+    "filename": "windows-xp.jpg",
+    "opacity": 0.3,
+    "fillMode": "fill",
+    "blur": 1
+  }
+}
