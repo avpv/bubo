@@ -5,7 +5,6 @@ import SwiftUI
 struct SkinBackgroundLayer: View {
     let skin: SkinDefinition
     var skinImageOverride: SkinImageOverride? = nil
-    @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
         if skin.isClassic {
@@ -26,7 +25,7 @@ struct SkinBackgroundLayer: View {
 
                 // Gradient overlay
                 skinGradient
-                    .blendMode(colorScheme == .dark ? .plusLighter : .plusDarker)
+                    .blendMode(skin.prefersDarkTint ? .plusLighter : .plusDarker)
             }
             .ignoresSafeArea()
         }
