@@ -1,6 +1,6 @@
 cask "bubo" do
-  version "1.9.21"
-  sha256 "d4a8dd52286979e2a175221198aed20eaf058f64e24cdb6fa732ce153885ad71"
+  version "1.9.22"
+  sha256 "48b61acd3b243044d640818d3e5c866061a82658c29c43ad1cbfc76996318bb0"
 
   url "https://github.com/avpv/bubo/releases/download/v#{version}/Bubo.dmg"
   name "Bubo"
