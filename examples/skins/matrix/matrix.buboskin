@@ -31,7 +31,7 @@
   "platterMaterial": "thin",
   "platterTint": "#002600",
   "platterTintOpacity": 0.12,
-  "fontDesign": "monospaced",
+  "fontDesign": "default",
   "fontWeight": "regular",
   "headlineFontWeight": "medium",
   "sfSymbolRendering": "monochrome",

@@ -84,7 +84,7 @@ struct CustomSkinJSON: Codable {
 
     // MARK: Typography & Symbols (HIG 2026)
 
-    /// Font design: "default", "rounded", "serif", "monospaced". Defaults to "rounded".
+    /// Font design: "default", "rounded". Defaults to "rounded".
     let fontDesign: String?
 
     /// Font weight for body/buttons: "regular", "medium", "semibold", "bold". Defaults to "semibold".

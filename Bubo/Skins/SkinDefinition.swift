@@ -28,19 +28,16 @@ enum SkinButtonShape: String, Equatable, CaseIterable {
 
 /// Controls which system font design is used throughout the skin.
 /// Apple HIG 2026 §Typography: "Never substitute the system font with a custom
-/// typeface in utility-class windows." All values map to SF Pro variants.
+/// typeface in utility-class windows." Only SF Pro and SF Rounded are appropriate
+/// for interface elements; serif and monospaced designs are excluded.
 enum SkinFontDesign: String, Equatable, CaseIterable, Codable {
     case `default`
     case rounded
-    case serif
-    case monospaced
 
     var swiftUIDesign: Font.Design {
         switch self {
         case .default:     .default
         case .rounded:     .rounded
-        case .serif:       .serif
-        case .monospaced:  .monospaced
         }
     }
 }
