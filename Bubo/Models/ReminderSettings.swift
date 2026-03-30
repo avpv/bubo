@@ -38,6 +38,21 @@ struct ReminderInterval: Identifiable, Codable, Hashable {
     }
 }
 
+/// User-chosen background image settings for a skin.
+struct SkinImageOverride: Codable, Equatable {
+    var imagePath: String
+    var opacity: Double
+    var blur: Double
+    var fillMode: String // "fill" or "fit"
+
+    init(imagePath: String, opacity: Double = 0.3, blur: Double = 0, fillMode: String = "fill") {
+        self.imagePath = imagePath
+        self.opacity = opacity
+        self.blur = blur
+        self.fillMode = fillMode
+    }
+}
+
 @Observable
 class ReminderSettings: Codable {
     static let settingsDidChange = Notification.Name("ReminderSettingsDidChange")
@@ -58,6 +73,8 @@ class ReminderSettings: Codable {
     var customBackgroundPhotoOpacity: Double { didSet { scheduleSave() } }
     /// Blur radius applied to the custom background photo.
     var customBackgroundPhotoBlur: Double { didSet { scheduleSave() } }
+    /// Per-skin user-chosen background images. Key = skin ID.
+    var skinImageOverrides: [String: SkinImageOverride] { didSet { scheduleSave() } }
     var showBadgeCount: Bool { didSet { scheduleSave() } }
 
     /// Resolved skin from catalog. Use this for reading the active skin.
@@ -80,6 +97,7 @@ class ReminderSettings: Codable {
         case selectedCalendarIds, isCalendarSyncEnabled, backgroundStyle, selectedSkinID
         case selectedWallpaperID
         case customBackgroundPhotoPath, customBackgroundPhotoOpacity, customBackgroundPhotoBlur
+        case skinImageOverrides
         case showBadgeCount, badgeCountMode, badgeTimeWindowHours
     }
 
@@ -100,6 +118,7 @@ class ReminderSettings: Codable {
         self.customBackgroundPhotoPath = ""
         self.customBackgroundPhotoOpacity = 0.25
         self.customBackgroundPhotoBlur = 2
+        self.skinImageOverrides = [:]
         self.showBadgeCount = true
         self.badgeCountMode = .wholeDay
         self.badgeTimeWindowHours = 8
@@ -125,6 +144,7 @@ class ReminderSettings: Codable {
         customBackgroundPhotoPath = try container.decodeIfPresent(String.self, forKey: .customBackgroundPhotoPath) ?? ""
         customBackgroundPhotoOpacity = try container.decodeIfPresent(Double.self, forKey: .customBackgroundPhotoOpacity) ?? 0.25
         customBackgroundPhotoBlur = try container.decodeIfPresent(Double.self, forKey: .customBackgroundPhotoBlur) ?? 2
+        skinImageOverrides = try container.decodeIfPresent([String: SkinImageOverride].self, forKey: .skinImageOverrides) ?? [:]
         showBadgeCount = try container.decodeIfPresent(Bool.self, forKey: .showBadgeCount) ?? true
         badgeCountMode = try container.decodeIfPresent(BadgeCountMode.self, forKey: .badgeCountMode) ?? .wholeDay
         badgeTimeWindowHours = try container.decodeIfPresent(Int.self, forKey: .badgeTimeWindowHours) ?? 8
@@ -144,6 +164,7 @@ class ReminderSettings: Codable {
         try container.encode(customBackgroundPhotoPath, forKey: .customBackgroundPhotoPath)
         try container.encode(customBackgroundPhotoOpacity, forKey: .customBackgroundPhotoOpacity)
         try container.encode(customBackgroundPhotoBlur, forKey: .customBackgroundPhotoBlur)
+        try container.encode(skinImageOverrides, forKey: .skinImageOverrides)
         try container.encode(showBadgeCount, forKey: .showBadgeCount)
         try container.encode(badgeCountMode, forKey: .badgeCountMode)
         try container.encode(badgeTimeWindowHours, forKey: .badgeTimeWindowHours)

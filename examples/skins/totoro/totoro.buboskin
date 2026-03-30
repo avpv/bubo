@@ -2,14 +2,37 @@
   "id": "totoro",
   "displayName": "My Neighbor Totoro",
   "author": "Bubo Community",
-  "accentColor": { "red": 0.25, "green": 0.55, "blue": 0.25 },
-  "surfaceTint": { "red": 0.05, "green": 0.1, "blue": 0.05 },
+  "accentColor": {
+    "red": 0.25,
+    "green": 0.55,
+    "blue": 0.25
+  },
+  "surfaceTint": {
+    "red": 0.05,
+    "green": 0.1,
+    "blue": 0.05
+  },
   "surfaceTintOpacity": 0.25,
   "backgroundGradient": {
     "colors": [
-      { "red": 0.3, "green": 0.55, "blue": 0.25, "opacity": 0.3 },
-      { "red": 0.45, "green": 0.6, "blue": 0.35, "opacity": 0.15 },
-      { "red": 0.0, "green": 0.0, "blue": 0.0, "opacity": 0.0 }
+      {
+        "red": 0.3,
+        "green": 0.55,
+        "blue": 0.25,
+        "opacity": 0.3
+      },
+      {
+        "red": 0.45,
+        "green": 0.6,
+        "blue": 0.35,
+        "opacity": 0.15
+      },
+      {
+        "red": 0.0,
+        "green": 0.0,
+        "blue": 0.0,
+        "opacity": 0.0
+      }
     ],
     "style": "radial",
     "center": "bottom",
@@ -17,16 +40,22 @@
     "endRadius": 450
   },
   "previewColors": [
-    { "red": 0.25, "green": 0.55, "blue": 0.25 },
-    { "red": 0.55, "green": 0.45, "blue": 0.3 }
+    {
+      "red": 0.25,
+      "green": 0.55,
+      "blue": 0.25
+    },
+    {
+      "red": 0.55,
+      "green": 0.45,
+      "blue": 0.3
+    }
   ],
   "prefersDarkTint": false,
-  "secondaryAccent": { "red": 0.55, "green": 0.45, "blue": 0.3 },
-  "buttonStyle": "gradient",
-  "backgroundImage": {
-    "filename": "totoro.jpg",
-    "opacity": 0.25,
-    "fillMode": "fill",
-    "blur": 2
-  }
+  "secondaryAccent": {
+    "red": 0.55,
+    "green": 0.45,
+    "blue": 0.3
+  },
+  "buttonStyle": "gradient"
 }

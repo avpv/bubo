@@ -111,6 +111,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         dismissPinnedTimer()
 
         let settings = ReminderSettings.load()
+        let activeSkin = settings.selectedSkin
         let timerView = TimerScreenView(
             event: event,
             onBack: { [weak self] in
@@ -118,10 +119,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             },
             isPinned: true,
             backgroundStyle: settings.backgroundStyle,
-            skin: settings.selectedSkin,
+            skin: activeSkin,
             customPhotoPath: settings.customBackgroundPhotoPath,
             customPhotoOpacity: settings.customBackgroundPhotoOpacity,
-            customPhotoBlur: settings.customBackgroundPhotoBlur
+            customPhotoBlur: settings.customBackgroundPhotoBlur,
+            skinImageOverride: settings.skinImageOverrides[activeSkin.id]
         )
 
         let hostingView = NSHostingView(rootView: timerView)

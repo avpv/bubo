@@ -53,9 +53,6 @@ struct SkinDefinition: Identifiable, Equatable {
     /// Button fill style — controls primary button appearance.
     let buttonStyle: SkinButtonStyle
 
-    /// Optional background image for custom skins.
-    let backgroundImage: SkinBackgroundImage?
-
     /// Tint color for toolbar/utility buttons (Refresh, Settings, Quit).
     /// Apple HIG: secondary actions use a subtler, complementary color to
     /// establish visual hierarchy — primary action (Add) stays bold, toolbar
@@ -74,7 +71,6 @@ struct SkinDefinition: Identifiable, Equatable {
         prefersDarkTint: Bool,
         secondaryAccent: Color? = nil,
         buttonStyle: SkinButtonStyle = .gradient,
-        backgroundImage: SkinBackgroundImage? = nil,
         toolbarTint: Color? = nil
     ) {
         self.id = id
@@ -88,7 +84,6 @@ struct SkinDefinition: Identifiable, Equatable {
         self.prefersDarkTint = prefersDarkTint
         self.secondaryAccent = secondaryAccent
         self.buttonStyle = buttonStyle
-        self.backgroundImage = backgroundImage
         self.toolbarTint = toolbarTint
     }
 
@@ -128,37 +123,6 @@ struct SkinDefinition: Identifiable, Equatable {
 
     static func == (lhs: SkinDefinition, rhs: SkinDefinition) -> Bool {
         lhs.id == rhs.id
-    }
-}
-
-// MARK: - Background Image
-
-/// Background image specification for custom skins.
-struct SkinBackgroundImage: Equatable {
-    /// URL to the image file on disk.
-    let imageURL: URL
-
-    /// Opacity of the image (0.0–1.0). Lower values let the skin gradient show through.
-    let opacity: Double
-
-    /// How the image fills the background.
-    let fillMode: FillMode
-
-    /// Optional blur radius applied to the image.
-    let blurRadius: CGFloat
-
-    enum FillMode: String, Equatable {
-        /// Scale to fill entire area, cropping as needed.
-        case fill
-        /// Scale to fit within area, preserving aspect ratio.
-        case fit
-    }
-
-    static func == (lhs: SkinBackgroundImage, rhs: SkinBackgroundImage) -> Bool {
-        lhs.imageURL == rhs.imageURL &&
-        lhs.opacity == rhs.opacity &&
-        lhs.fillMode == rhs.fillMode &&
-        lhs.blurRadius == rhs.blurRadius
     }
 }
 

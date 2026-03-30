@@ -195,6 +195,142 @@ struct CustomSkinsSection: View {
     }
 }
 
+// MARK: - Skin Image Section
+
+struct SkinImageSection: View {
+    @Bindable var settings: ReminderSettings
+
+    private var skinID: String { settings.selectedSkinID }
+    private var override: SkinImageOverride? { settings.skinImageOverrides[skinID] }
+    private var hasImage: Bool { override != nil && !(override!.imagePath.isEmpty) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            Divider()
+
+            Text("Skin background image")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if hasImage, let override = override,
+               let nsImage = NSImage(contentsOfFile: override.imagePath) {
+                // Preview
+                ZStack(alignment: .topTrailing) {
+                    Image(nsImage: nsImage)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(height: 80)
+                        .opacity(override.opacity)
+                        .blur(radius: override.blur)
+                        .clipped()
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5)
+                        )
+
+                    Button {
+                        withAnimation(DS.Animation.smoothSpring) {
+                            settings.skinImageOverrides.removeValue(forKey: skinID)
+                        }
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.body)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(6)
+                }
+
+                // Controls
+                VStack(spacing: 4) {
+                    HStack {
+                        Text("Opacity")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 50, alignment: .leading)
+                        Slider(
+                            value: Binding(
+                                get: { settings.skinImageOverrides[skinID]?.opacity ?? 0.3 },
+                                set: { settings.skinImageOverrides[skinID]?.opacity = $0 }
+                            ),
+                            in: 0.05...1.0, step: 0.05
+                        )
+                        Text("\(Int((override.opacity) * 100))%")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 30, alignment: .trailing)
+                    }
+                    HStack {
+                        Text("Blur")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 50, alignment: .leading)
+                        Slider(
+                            value: Binding(
+                                get: { settings.skinImageOverrides[skinID]?.blur ?? 0 },
+                                set: { settings.skinImageOverrides[skinID]?.blur = $0 }
+                            ),
+                            in: 0...10, step: 0.5
+                        )
+                        Text(String(format: "%.1f", override.blur))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 30, alignment: .trailing)
+                    }
+                }
+            }
+
+            Button {
+                chooseSkinImage()
+            } label: {
+                Label(
+                    hasImage ? "Change image\u{2026}" : "Choose image\u{2026}",
+                    systemImage: "photo"
+                )
+                .font(.caption)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private func chooseSkinImage() {
+        let panel = NSOpenPanel()
+        panel.title = "Choose Skin Background Image"
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        let fileManager = FileManager.default
+        let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let imagesDir = appSupport.appendingPathComponent("Bubo/SkinImages", isDirectory: true)
+        try? fileManager.createDirectory(at: imagesDir, withIntermediateDirectories: true)
+
+        let destination = imagesDir.appendingPathComponent("\(skinID).\(url.pathExtension)")
+        try? fileManager.removeItem(at: destination)
+
+        let accessing = url.startAccessingSecurityScopedResource()
+        defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+
+        do {
+            try fileManager.copyItem(at: url, to: destination)
+            let existing = settings.skinImageOverrides[skinID]
+            withAnimation(DS.Animation.smoothSpring) {
+                settings.skinImageOverrides[skinID] = SkinImageOverride(
+                    imagePath: destination.path,
+                    opacity: existing?.opacity ?? 0.3,
+                    blur: existing?.blur ?? 0
+                )
+            }
+        } catch {
+            // Silently fail — user can try again
+        }
+    }
+}
+
 // MARK: - Background Photo Section
 
 struct BackgroundPhotoSection: View {
@@ -449,6 +585,10 @@ struct GeneralTabView: View {
                     }
 
                     CustomSkinsSection(settings: settings)
+
+                    if !settings.selectedSkin.isClassic {
+                        SkinImageSection(settings: settings)
+                    }
                 }
             }
 

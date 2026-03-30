@@ -4,6 +4,7 @@ import SwiftUI
 
 struct SkinBackgroundLayer: View {
     let skin: SkinDefinition
+    var skinImageOverride: SkinImageOverride? = nil
     @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
@@ -11,9 +12,16 @@ struct SkinBackgroundLayer: View {
             Color.clear
         } else {
             ZStack {
-                // Background image layer (custom skins only)
-                if let bgImage = skin.backgroundImage {
-                    SkinBackgroundImageView(spec: bgImage)
+                // User-chosen background image for this skin
+                if let override = skinImageOverride,
+                   !override.imagePath.isEmpty,
+                   let nsImage = NSImage(contentsOfFile: override.imagePath) {
+                    Image(nsImage: nsImage)
+                        .resizable()
+                        .aspectRatio(contentMode: override.fillMode == "fit" ? .fit : .fill)
+                        .opacity(override.opacity)
+                        .blur(radius: override.blur)
+                        .clipped()
                 }
 
                 // Gradient overlay
@@ -75,19 +83,3 @@ extension EnvironmentValues {
     }
 }
 
-// MARK: - Skin Background Image View
-
-struct SkinBackgroundImageView: View {
-    let spec: SkinBackgroundImage
-
-    var body: some View {
-        if let nsImage = NSImage(contentsOf: spec.imageURL) {
-            Image(nsImage: nsImage)
-                .resizable()
-                .aspectRatio(contentMode: spec.fillMode == .fill ? .fill : .fit)
-                .opacity(spec.opacity)
-                .blur(radius: spec.blurRadius)
-                .clipped()
-        }
-    }
-}
