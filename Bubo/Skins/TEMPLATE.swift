@@ -95,6 +95,32 @@ extension SkinCatalog {
         // Optional: color overlay on platters.
         // platterTint: Color(red: 0.0, green: 0.1, blue: 0.2),
         // platterTintOpacity: 0.08
+
+        // -- Typography & Symbols (HIG 2026) --
+
+        // Font design: .default (SF Pro), .rounded (SF Rounded), .serif (New York), .monospaced (SF Mono)
+        // fontDesign: .rounded,
+
+        // Font weight for body/buttons: .regular, .medium, .semibold, .bold
+        // fontWeight: .semibold,
+
+        // Font weight for section headlines.
+        // headlineFontWeight: .bold,
+
+        // SF Symbol rendering: .monochrome, .hierarchical, .palette, .multicolor
+        // sfSymbolRendering: .hierarchical,
+
+        // SF Symbol weight: .ultraLight ... .black — should be close to fontWeight per HIG.
+        // sfSymbolWeight: .medium,
+
+        // Badge/pill style: .tinted (default), .filled, .outlined
+        // badgeStyle: .tinted,
+
+        // Separator style: .system, .subtle, .accent, .none
+        // separatorStyle: .system,
+
+        // Separator opacity (0–1). Floor at 0.15 when separatorStyle != .none.
+        // separatorOpacity: 0.5
     )
 }
 */
