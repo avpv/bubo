@@ -503,7 +503,9 @@ enum SkinCatalog {
         sierra,
         arctic,
         sage,
-        winXP,
+        winXPBlue,
+        winXPOlive,
+        winXPSilver,
     ]
 
     /// All skins including user-imported custom skins.
