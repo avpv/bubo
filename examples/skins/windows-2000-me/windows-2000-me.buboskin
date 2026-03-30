@@ -1,0 +1,68 @@
+{
+  "id": "windows_2000_me",
+  "displayName": "Windows 2000 & ME",
+  "author": "Bubo Community",
+  "accentColor": {
+    "red": 0.0,
+    "green": 0.45,
+    "blue": 0.72
+  },
+  "surfaceTint": {
+    "red": 0.12,
+    "green": 0.15,
+    "blue": 0.22
+  },
+  "surfaceTintOpacity": 0.18,
+  "backgroundGradient": {
+    "colors": [
+      {
+        "red": 0.0,
+        "green": 0.35,
+        "blue": 0.62,
+        "opacity": 0.25
+      },
+      {
+        "red": 0.55,
+        "green": 0.56,
+        "blue": 0.58,
+        "opacity": 0.12
+      },
+      {
+        "red": 0.0,
+        "green": 0.0,
+        "blue": 0.0,
+        "opacity": 0.0
+      }
+    ],
+    "style": "linear",
+    "startPoint": "topLeading",
+    "endPoint": "bottomTrailing"
+  },
+  "previewColors": [
+    {
+      "red": 0.0,
+      "green": 0.45,
+      "blue": 0.72
+    },
+    {
+      "red": 0.72,
+      "green": 0.73,
+      "blue": 0.75
+    }
+  ],
+  "prefersDarkTint": false,
+  "secondaryAccent": {
+    "red": 0.58,
+    "green": 0.60,
+    "blue": 0.64
+  },
+  "buttonStyle": "solid",
+  "buttonShape": "roundedRect",
+  "buttonColor": { "red": 1.0, "green": 1.0, "blue": 1.0 },
+  "toolbarTint": { "red": 0.50, "green": 0.52, "blue": 0.56 },
+  "barMaterial": "thick",
+  "barTint": { "red": 0.0, "green": 0.28, "blue": 0.52 },
+  "barTintOpacity": 0.15,
+  "platterTint": { "red": 0.68, "green": 0.70, "blue": 0.73 },
+  "platterTintOpacity": 0.06
+}
