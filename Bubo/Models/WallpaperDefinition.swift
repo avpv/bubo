@@ -66,6 +66,10 @@ struct WallpaperDefinition: Identifiable, Equatable {
         case honeycomb
         case crosshatch
         case bubo
+        case diamonds
+        case circles
+        case triangles
+        case zigzag
     }
 
     enum LiveWallpaperStyle: String, Equatable {
@@ -77,6 +81,10 @@ struct WallpaperDefinition: Identifiable, Equatable {
         case nebula
         case matrix
         case ripple
+        case lava
+        case snow
+        case gradient
+        case stars
     }
 
     static func == (lhs: WallpaperDefinition, rhs: WallpaperDefinition) -> Bool {
@@ -240,6 +248,22 @@ enum WallpaperCatalog {
         id: "pat_bubo", name: "Bubo",
         type: .bubo, foreground: Color(red: 0.45, green: 0.75, blue: 0.55).opacity(0.06), background: Color(red: 0.08, green: 0.14, blue: 0.10)
     )
+    static let diamonds = WallpaperDefinition.pattern(
+        id: "pat_diamonds", name: "Diamonds",
+        type: .diamonds, foreground: Color(red: 0.75, green: 0.55, blue: 0.80).opacity(0.07), background: Color(red: 0.16, green: 0.10, blue: 0.22)
+    )
+    static let circles = WallpaperDefinition.pattern(
+        id: "pat_circles", name: "Circles",
+        type: .circles, foreground: Color(red: 0.35, green: 0.65, blue: 0.80).opacity(0.06), background: Color(red: 0.08, green: 0.12, blue: 0.20)
+    )
+    static let triangles = WallpaperDefinition.pattern(
+        id: "pat_triangles", name: "Triangles",
+        type: .triangles, foreground: Color(red: 0.85, green: 0.45, blue: 0.35).opacity(0.07), background: Color(red: 0.20, green: 0.10, blue: 0.08)
+    )
+    static let zigzag = WallpaperDefinition.pattern(
+        id: "pat_zigzag", name: "Zigzag",
+        type: .zigzag, foreground: Color(red: 0.55, green: 0.80, blue: 0.40).opacity(0.07), background: Color(red: 0.10, green: 0.16, blue: 0.08)
+    )
 
     // MARK: Live
     static let liveAurora = WallpaperDefinition.live(id: "live_aurora", name: "Aurora", style: .aurora)
@@ -250,6 +274,10 @@ enum WallpaperCatalog {
     static let liveNebula = WallpaperDefinition.live(id: "live_nebula", name: "Nebula", style: .nebula)
     static let liveMatrix = WallpaperDefinition.live(id: "live_matrix", name: "Matrix", style: .matrix)
     static let liveRipple = WallpaperDefinition.live(id: "live_ripple", name: "Ripple", style: .ripple)
+    static let liveLava = WallpaperDefinition.live(id: "live_lava", name: "Lava", style: .lava)
+    static let liveSnow = WallpaperDefinition.live(id: "live_snow", name: "Snow", style: .snow)
+    static let liveGradient = WallpaperDefinition.live(id: "live_gradient", name: "Flow", style: .gradient)
+    static let liveStars = WallpaperDefinition.live(id: "live_stars", name: "Stars", style: .stars)
 
     static let allWallpapers: [WallpaperDefinition] = [
         none,
@@ -260,8 +288,10 @@ enum WallpaperCatalog {
         oceanBreeze, butterscotch, digitalLavender, neonTokyo,
         // Pattern
         dotGrid, gridLines, diagonalStripes, chevrons, waves, honeycomb, crosshatch, buboOwl,
+        diamonds, circles, triangles, zigzag,
         // Live
         liveAurora, liveParticles, livePulse, liveRain, liveFireflies, liveNebula, liveMatrix, liveRipple,
+        liveLava, liveSnow, liveGradient, liveStars,
     ]
 
     static func wallpaper(forID id: String) -> WallpaperDefinition {
