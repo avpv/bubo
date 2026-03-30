@@ -131,12 +131,7 @@ class ReminderSettings: Codable {
         launchAtLogin = false
         selectedCalendarIds = try container.decodeIfPresent([String].self, forKey: .selectedCalendarIds) ?? []
         isCalendarSyncEnabled = try container.decodeIfPresent(Bool.self, forKey: .isCalendarSyncEnabled) ?? true
-        // Support both old "selectedSkin" key (enum rawValue) and new "selectedSkinID" key
-        if let skinID = try container.decodeIfPresent(String.self, forKey: .selectedSkinID) {
-            selectedSkinID = skinID
-        } else {
-            selectedSkinID = "system"
-        }
+        selectedSkinID = try container.decodeIfPresent(String.self, forKey: .selectedSkinID) ?? "system"
         selectedWallpaperID = try container.decodeIfPresent(String.self, forKey: .selectedWallpaperID) ?? "none"
         customBackgroundPhotoPath = try container.decodeIfPresent(String.self, forKey: .customBackgroundPhotoPath) ?? ""
         customBackgroundPhotoOpacity = try container.decodeIfPresent(Double.self, forKey: .customBackgroundPhotoOpacity) ?? 0.25

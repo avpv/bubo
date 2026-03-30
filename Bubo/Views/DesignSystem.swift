@@ -454,7 +454,6 @@ struct ActionButtonStyle: ButtonStyle {
     var size: ActionButtonSize = .flexible
 
     @Environment(\.activeSkin) private var skin
-    @Environment(\.colorScheme) private var colorScheme
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label

@@ -7,7 +7,6 @@ struct AppBackgroundLayer: View {
     var customPhotoOpacity: Double = 0.25
     var customPhotoBlur: Double = 2
     var skinImageOverride: SkinImageOverride? = nil
-    @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
         ZStack {
@@ -36,7 +35,7 @@ struct AppBackgroundLayer: View {
             if !skin.isClassic {
                 skin.surfaceTint
                     .opacity(skin.surfaceTintOpacity)
-                    .blendMode(colorScheme == .dark ? .plusLighter : .plusDarker)
+                    .blendMode(skin.prefersDarkTint ? .plusLighter : .plusDarker)
             }
         }
         .ignoresSafeArea()
