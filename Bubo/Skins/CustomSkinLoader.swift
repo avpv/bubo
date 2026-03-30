@@ -1,12 +1,13 @@
 import Foundation
 import SwiftUI
 
-// MARK: - Custom Skin JSON Format
+// MARK: - Skin JSON Format
 
 /// JSON-serializable representation of a Bubo skin.
 ///
-/// Users create `.buboskin` files (JSON) with this structure and import them
-/// via Settings, just like Winamp `.wsz` skins — no code changes or PRs needed.
+/// Both built-in and custom skins use the same `.buboskin` JSON format.
+/// Colors are strings: hex (`"#0070FA"`), named (`"accentColor"`),
+/// named with opacity (`"accentColor:0.5"`), or keyword (`"clear"`).
 ///
 /// Example `.buboskin` file:
 /// ```json
@@ -14,38 +15,18 @@ import SwiftUI
 ///   "id": "my_cool_skin",
 ///   "displayName": "My Cool Skin",
 ///   "author": "@username",
-///   "accentColor": { "red": 0.0, "green": 0.9, "blue": 0.0 },
-///   "surfaceTint": { "red": 0.0, "green": 0.15, "blue": 0.0 },
+///   "accentColor": "#00E600",
+///   "surfaceTint": "#002600",
 ///   "surfaceTintOpacity": 0.35,
 ///   "backgroundGradient": {
-///     "colors": [
-///       { "red": 0.0, "green": 0.18, "blue": 0.0, "opacity": 0.5 },
-///       { "red": 0.0, "green": 0.08, "blue": 0.0, "opacity": 0.3 },
-///       { "red": 0.0, "green": 0.0, "blue": 0.0, "opacity": 0.0 }
-///     ],
+///     "colors": ["#002E0080", "#001A0D4C", "clear"],
 ///     "style": "linear",
 ///     "startPoint": "topLeading",
 ///     "endPoint": "bottomTrailing"
 ///   },
-///   "previewColors": [
-///     { "red": 0.0, "green": 0.7, "blue": 0.0 },
-///     { "red": 0.1, "green": 0.2, "blue": 0.1 }
-///   ],
+///   "previewColors": ["#00B200", "#1A3319"],
 ///   "prefersDarkTint": true,
-///   "secondaryAccent": { "red": 0.0, "green": 0.65, "blue": 0.15 },
-///   "buttonStyle": "gradient",
-///   "buttonShape": "capsule",
-///   "buttonColor": { "red": 1.0, "green": 1.0, "blue": 1.0 },
-///   "buttonMaterial": "regular",
-///   "buttonTint": { "red": 0.0, "green": 0.4, "blue": 0.8 },
-///   "buttonTintOpacity": 0.3,
-///   "toolbarTint": { "red": 0.3, "green": 0.5, "blue": 0.4 },
-///   "barMaterial": "thick",
-///   "barTint": { "red": 0.0, "green": 0.2, "blue": 0.4 },
-///   "barTintOpacity": 0.15,
-///   "platterMaterial": "regular",
-///   "platterTint": { "red": 0.0, "green": 0.1, "blue": 0.2 },
-///   "platterTintOpacity": 0.1
+///   "buttonStyle": "gradient"
 /// }
 /// ```
 struct CustomSkinJSON: Codable {
