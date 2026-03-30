@@ -63,6 +63,7 @@ struct AppBackgroundLayer: View {
     var customPhotoPath: String = ""
     var customPhotoOpacity: Double = 0.25
     var customPhotoBlur: Double = 2
+    var skinImageOverride: SkinImageOverride? = nil
     @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
@@ -91,7 +92,7 @@ struct AppBackgroundLayer: View {
             }
 
             // Skin background layer
-            SkinBackgroundLayer(skin: skin)
+            SkinBackgroundLayer(skin: skin, skinImageOverride: skinImageOverride)
 
             // Surface tint overlay
             if !skin.isClassic {

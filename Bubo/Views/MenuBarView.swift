@@ -46,7 +46,8 @@ struct MenuBarView: View {
                 wallpaper: settings.selectedWallpaper,
                 customPhotoPath: settings.customBackgroundPhotoPath,
                 customPhotoOpacity: settings.customBackgroundPhotoOpacity,
-                customPhotoBlur: settings.customBackgroundPhotoBlur
+                customPhotoBlur: settings.customBackgroundPhotoBlur,
+                skinImageOverride: settings.skinImageOverrides[activeSkin.id]
             )
 
             Group {

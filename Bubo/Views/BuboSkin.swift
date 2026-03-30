@@ -4,6 +4,7 @@ import SwiftUI
 
 struct SkinBackgroundLayer: View {
     let skin: SkinDefinition
+    var skinImageOverride: SkinImageOverride? = nil
     @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
@@ -11,8 +12,17 @@ struct SkinBackgroundLayer: View {
             Color.clear
         } else {
             ZStack {
-                // Background image layer (custom skins only)
-                if let bgImage = skin.backgroundImage {
+                // User-chosen image takes priority over skin's bundled image
+                if let override = skinImageOverride,
+                   !override.imagePath.isEmpty,
+                   let nsImage = NSImage(contentsOfFile: override.imagePath) {
+                    Image(nsImage: nsImage)
+                        .resizable()
+                        .aspectRatio(contentMode: override.fillMode == "fit" ? .fit : .fill)
+                        .opacity(override.opacity)
+                        .blur(radius: override.blur)
+                        .clipped()
+                } else if let bgImage = skin.backgroundImage {
                     SkinBackgroundImageView(spec: bgImage)
                 }
 

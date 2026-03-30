@@ -67,9 +67,9 @@ struct CustomSkinJSON: Codable {
         }
 
         var bgImage: SkinBackgroundImage? = nil
-        if let imgSpec = backgroundImage, let skinURL = skinFileURL {
+        if let imgSpec = backgroundImage, let filename = imgSpec.filename, let skinURL = skinFileURL {
             let imageURL = skinURL.deletingLastPathComponent()
-                .appendingPathComponent(imgSpec.filename)
+                .appendingPathComponent(filename)
             if FileManager.default.fileExists(atPath: imageURL.path) {
                 bgImage = SkinBackgroundImage(
                     imageURL: imageURL,
@@ -107,8 +107,8 @@ struct CustomSkinJSON: Codable {
 }
 
 struct JSONBackgroundImage: Codable {
-    /// Image filename (e.g. "background.jpg"). Must be in the same folder as the .buboskin file.
-    let filename: String
+    /// Image filename (e.g. "background.jpg"). Optional — user can choose their own image in Settings.
+    var filename: String?
     /// Opacity 0.0–1.0. Default 0.3 to keep text readable.
     var opacity: Double?
     /// Fill mode: "fill" (crop to fill) or "fit" (letterbox). Default "fill".
@@ -239,13 +239,14 @@ class CustomSkinLoader {
 
             try fileManager.copyItem(at: sourceURL, to: destination)
 
-            // If skin references a background image, copy it alongside
+            // If skin references a background image file, copy it alongside
             if let data = try? Data(contentsOf: sourceURL),
                let json = try? JSONDecoder().decode(CustomSkinJSON.self, from: data),
-               let bgImage = json.backgroundImage {
+               let bgImage = json.backgroundImage,
+               let filename = bgImage.filename {
                 let imageSource = sourceURL.deletingLastPathComponent()
-                    .appendingPathComponent(bgImage.filename)
-                let imageDest = skinsDirectory.appendingPathComponent(bgImage.filename)
+                    .appendingPathComponent(filename)
+                let imageDest = skinsDirectory.appendingPathComponent(filename)
                 try? fileManager.removeItem(at: imageDest)
                 try? fileManager.copyItem(at: imageSource, to: imageDest)
             }
@@ -275,8 +276,8 @@ class CustomSkinLoader {
                let json = try? JSONDecoder().decode(CustomSkinJSON.self, from: data),
                "custom_\(json.id)" == id {
                 // Remove associated background image
-                if let bgImage = json.backgroundImage {
-                    let imageURL = skinsDirectory.appendingPathComponent(bgImage.filename)
+                if let bgImage = json.backgroundImage, let filename = bgImage.filename {
+                    let imageURL = skinsDirectory.appendingPathComponent(filename)
                     try? fileManager.removeItem(at: imageURL)
                 }
                 try? fileManager.removeItem(at: file)
