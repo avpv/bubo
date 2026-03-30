@@ -15,6 +15,7 @@ let package = Package(
                 .copy("Resources/AppIcon.icns"),
                 .copy("Resources/MenuBarIcon.png"),
                 .copy("Resources/MenuBarIcon@2x.png"),
+                .copy("Skins/BuiltInSkins"),
             ]
         )
     ]

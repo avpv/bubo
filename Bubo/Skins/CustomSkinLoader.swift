@@ -562,17 +562,34 @@ enum BuiltInSkinLoader {
     }
 
     /// Searches multiple locations for built-in skin files:
-    /// 1. Bundle resources with "BuiltInSkins" subdirectory (standard Xcode setup)
-    /// 2. Bundle resources at top level (flat resource copy)
-    /// 3. "BuiltInSkins" directory next to the executable (dev/debug builds)
+    /// 1. SPM resource bundle (Bubo_Bubo.bundle)
+    /// 2. Bundle resources with "BuiltInSkins" subdirectory (standard Xcode setup)
+    /// 3. Bundle resources at top level (flat resource copy)
+    /// 4. "BuiltInSkins" directory next to the executable (dev/debug builds)
     private static func findBuiltInSkinURLs() -> [URL] {
-        // 1. Standard: bundled with subdirectory
+        // 1. SPM resource bundle
+        if let moduleBundle = Bundle.safeModule {
+            // SPM .copy preserves directory name inside the resource bundle
+            let builtInDir = moduleBundle.resourceURL?.appendingPathComponent("BuiltInSkins", isDirectory: true)
+            if let dir = builtInDir,
+               let urls = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil),
+               !urls.filter({ $0.pathExtension == "buboskin" }).isEmpty {
+                return urls.filter { $0.pathExtension == "buboskin" }
+            }
+            // Also try subdirectory API on the module bundle
+            if let urls = moduleBundle.urls(forResourcesWithExtension: "buboskin", subdirectory: "BuiltInSkins"),
+               !urls.isEmpty {
+                return urls
+            }
+        }
+
+        // 2. Standard: bundled with subdirectory
         if let urls = Bundle.main.urls(forResourcesWithExtension: "buboskin", subdirectory: "BuiltInSkins"),
            !urls.isEmpty {
             return urls
         }
 
-        // 2. Flat bundle resources (no subdirectory — files copied to Resources root)
+        // 3. Flat bundle resources (no subdirectory — files copied to Resources root)
         if let resourceURL = Bundle.main.resourceURL {
             let builtInDir = resourceURL.appendingPathComponent("BuiltInSkins", isDirectory: true)
             if let urls = try? FileManager.default.contentsOfDirectory(at: builtInDir, includingPropertiesForKeys: nil),
@@ -581,7 +598,7 @@ enum BuiltInSkinLoader {
             }
         }
 
-        // 3. Next to executable (development builds, SPM)
+        // 4. Next to executable (development builds, SPM)
         let executableURL = Bundle.main.executableURL?.deletingLastPathComponent()
         if let execDir = executableURL {
             let devDir = execDir.appendingPathComponent("BuiltInSkins", isDirectory: true)
