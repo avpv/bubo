@@ -231,7 +231,7 @@ struct SkinImageSection: View {
 
                     Button {
                         withAnimation(DS.Animation.smoothSpring) {
-                            settings.skinImageOverrides.removeValue(forKey: skinID)
+                            _ = settings.skinImageOverrides.removeValue(forKey: skinID)
                         }
                     } label: {
                         Image(systemName: "xmark.circle.fill")
