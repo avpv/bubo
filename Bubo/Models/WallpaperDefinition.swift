@@ -183,6 +183,48 @@ enum WallpaperCatalog {
         style: .linear(startPoint: .topTrailing, endPoint: .bottomLeading)
     )
 
+    // MARK: Gradients — ambient tones
+    static let accentGlow = WallpaperDefinition.gradient(
+        id: "grad_accent_glow", name: "Accent Glow",
+        colors: [Color.accentColor.opacity(0.5), Color(red: 0.08, green: 0.06, blue: 0.12), Color(red: 0.04, green: 0.03, blue: 0.06)],
+        style: .radial(center: .topLeading, startRadius: 0, endRadius: 500)
+    )
+    static let coolAmbient = WallpaperDefinition.gradient(
+        id: "grad_cool_ambient", name: "Cool Ambient",
+        colors: [Color(red: 0.18, green: 0.16, blue: 0.42), Color(red: 0.08, green: 0.12, blue: 0.32), Color(red: 0.03, green: 0.04, blue: 0.10)],
+        style: .linear(startPoint: .topLeading, endPoint: .bottomTrailing)
+    )
+    static let warmAmbient = WallpaperDefinition.gradient(
+        id: "grad_warm_ambient", name: "Warm Ambient",
+        colors: [Color(red: 0.48, green: 0.22, blue: 0.10), Color(red: 0.30, green: 0.10, blue: 0.08), Color(red: 0.10, green: 0.04, blue: 0.04)],
+        style: .linear(startPoint: .topTrailing, endPoint: .bottomLeading)
+    )
+    static let mintBreeze = WallpaperDefinition.gradient(
+        id: "grad_mint_breeze", name: "Mint Breeze",
+        colors: [Color(red: 0.12, green: 0.38, blue: 0.34), Color(red: 0.06, green: 0.22, blue: 0.24), Color(red: 0.03, green: 0.08, blue: 0.10)],
+        style: .linear(startPoint: .topLeading, endPoint: .bottomTrailing)
+    )
+    static let midnightPurple = WallpaperDefinition.gradient(
+        id: "grad_midnight_purple", name: "Midnight Purple",
+        colors: [Color(red: 0.32, green: 0.14, blue: 0.42), Color(red: 0.16, green: 0.08, blue: 0.28), Color(red: 0.06, green: 0.03, blue: 0.12)],
+        style: .radial(center: .bottomLeading, startRadius: 0, endRadius: 500)
+    )
+    static let blushPink = WallpaperDefinition.gradient(
+        id: "grad_blush_pink", name: "Blush Pink",
+        colors: [Color(red: 0.44, green: 0.18, blue: 0.24), Color(red: 0.30, green: 0.14, blue: 0.10), Color(red: 0.10, green: 0.04, blue: 0.04)],
+        style: .linear(startPoint: .topTrailing, endPoint: .bottomLeading)
+    )
+    static let oceanDepth = WallpaperDefinition.gradient(
+        id: "grad_ocean_depth", name: "Ocean Depth",
+        colors: [Color(red: 0.08, green: 0.28, blue: 0.38), Color(red: 0.05, green: 0.14, blue: 0.28), Color(red: 0.02, green: 0.05, blue: 0.12)],
+        style: .linear(startPoint: .bottomTrailing, endPoint: .topLeading)
+    )
+    static let goldenHour = WallpaperDefinition.gradient(
+        id: "grad_golden_hour", name: "Golden Hour",
+        colors: [Color(red: 0.50, green: 0.38, blue: 0.12), Color(red: 0.34, green: 0.22, blue: 0.08), Color(red: 0.10, green: 0.06, blue: 0.03)],
+        style: .radial(center: .top, startRadius: 0, endRadius: 400)
+    )
+
     // MARK: Patterns — subtle, texture-only, HIG-compliant
     static let dotGrid = WallpaperDefinition.pattern(
         id: "pat_dots", name: "Dots",
@@ -233,6 +275,7 @@ enum WallpaperCatalog {
         graphiteSolid, obsidian, denim, stone, pewter, espresso, ink, fog,
         // Gradient
         sequoia, monterey, sonoma, ventura, bigSur, catalina, mojave, tahoe,
+        accentGlow, coolAmbient, warmAmbient, mintBreeze, midnightPurple, blushPink, oceanDepth, goldenHour,
         // Pattern
         dotGrid, gridLines, diagonalStripes, chevrons, waves, honeycomb, crosshatch, buboOwl,
         // Live
