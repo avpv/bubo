@@ -82,14 +82,18 @@ system accent — see `System.buboskin` for an example.
 
 ## Gradients
 
+**Linear** — flows between two corners/edges:
 ```json
-// Linear — flows between two corners/edges
-{ "style": "linear", "colors": [...], "startPoint": "topLeading", "endPoint": "bottomTrailing" }
+{ "style": "linear", "colors": ["#0059BF38", "clear"], "startPoint": "topLeading", "endPoint": "bottomTrailing" }
+```
 
-// Radial — radiates from a center point
-{ "style": "radial", "colors": [...], "center": "top", "startRadius": 0, "endRadius": 500 }
+**Radial** — radiates from a center point:
+```json
+{ "style": "radial", "colors": ["#0059BF38", "clear"], "center": "top", "startRadius": 0, "endRadius": 500 }
+```
 
-// Clear — no gradient (transparent)
+**Clear** — no gradient (transparent):
+```json
 { "style": "clear" }
 ```
 
@@ -165,12 +169,26 @@ Valid point values: `top`, `bottom`, `leading`, `trailing`, `topLeading`,
 - **Test both light & dark mode** — skins use adaptive blend modes that work in
   both, but some color combos look better in one mode.
 
+## JSON Schema Validation
+
+A JSON Schema is available at `Bubo/Skins/buboskin.schema.json`. It validates
+all keys, types, enums, and required fields. VS Code users get automatic
+validation and autocomplete for `.buboskin` files (see `.vscode/settings.json`).
+
+To validate a skin manually:
+
+```sh
+pip install jsonschema
+python3 -c "import json,jsonschema; jsonschema.validate(json.load(open('MySkin.buboskin')), json.load(open('Bubo/Skins/buboskin.schema.json')))"
+```
+
 ## File Structure
 
 ```
 Bubo/Skins/
 ├── SkinDefinition.swift       # Core struct + catalog registry
 ├── CustomSkinLoader.swift     # JSON loading (built-in + custom)
+├── buboskin.schema.json       # JSON Schema for validation
 ├── TEMPLATE.buboskin          # Copy this to start a new skin
 └── BuiltInSkins/              # Bundled default skins (always present)
     ├── System.buboskin
