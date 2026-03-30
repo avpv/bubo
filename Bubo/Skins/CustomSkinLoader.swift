@@ -35,7 +35,9 @@ import SwiftUI
 ///   "secondaryAccent": { "red": 0.0, "green": 0.65, "blue": 0.15 },
 ///   "buttonStyle": "gradient",
 ///   "toolbarTint": { "red": 0.3, "green": 0.5, "blue": 0.4 },
-///   "barMaterial": "thick"
+///   "barMaterial": "thick",
+///   "barTint": { "red": 0.0, "green": 0.2, "blue": 0.4 },
+///   "barTintOpacity": 0.15
 /// }
 /// ```
 struct CustomSkinJSON: Codable {
@@ -60,6 +62,12 @@ struct CustomSkinJSON: Codable {
     /// Apple HIG: controls translucency level of toolbar areas. Defaults to "thick".
     let barMaterial: String?
 
+    /// Optional color overlay on top of bar material — creates a tinted-glass effect.
+    let barTint: JSONColor?
+
+    /// Opacity of the bar tint overlay (0–1, typically 0.05–0.25). Defaults to 0.
+    let barTintOpacity: Double?
+
     func toSkinDefinition(skinFileURL: URL? = nil) -> SkinDefinition {
         // HIG: Validate accent color contrast — warn if luminance is too high
         // for white button text (WCAG 2.1 AA requires 4.5:1 contrast ratio)
@@ -81,7 +89,9 @@ struct CustomSkinJSON: Codable {
             secondaryAccent: secondaryAccent?.toColor(),
             buttonStyle: resolvedButtonStyle,
             toolbarTint: toolbarTint?.toColor(),
-            barMaterial: resolvedBarMaterial
+            barMaterial: resolvedBarMaterial,
+            barTint: barTint?.toColor(),
+            barTintOpacity: barTintOpacity ?? 0
         )
     }
 

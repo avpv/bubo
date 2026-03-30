@@ -65,5 +65,12 @@
   },
   "_comment_barMaterial": "Optional: material for header/footer bars. Values: ultraThin, thin, regular, thick (default), ultraThick, bar.",
   "barMaterial": "thick",
+  "_comment_barTint": "Optional: color overlay on top of bar material for a tinted-glass effect. Use with barTintOpacity (0-1, typically 0.05-0.25).",
+  "barTint": {
+    "red": 0.0,
+    "green": 0.2,
+    "blue": 0.4
+  },
+  "barTintOpacity": 0.15,
   "_comment": "Optional: add a background image. Place the image file next to this .buboskin file."
 }

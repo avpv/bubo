@@ -409,7 +409,7 @@ struct PopoverHeader: View {
             }
             .padding(.horizontal, DS.Spacing.lg)
             .frame(height: DS.Size.headerHeight)
-            .background(skin.resolvedBarMaterial)
+            .skinBarBackground(skin)
 
             Divider()
         }

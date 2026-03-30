@@ -97,6 +97,13 @@ struct SkinDefinition: Identifiable, Equatable {
     /// Defaults to `.thick` for rich vibrancy.
     let barMaterial: SkinBarMaterial
 
+    /// Optional color overlay on top of the bar material.
+    /// Layered over the blur to give bars a custom tinted-glass look.
+    let barTint: Color?
+
+    /// Opacity of the bar tint overlay (0 = invisible, typically 0.05–0.25).
+    let barTintOpacity: Double
+
     init(
         id: String,
         displayName: String,
@@ -110,7 +117,9 @@ struct SkinDefinition: Identifiable, Equatable {
         secondaryAccent: Color? = nil,
         buttonStyle: SkinButtonStyle = .gradient,
         toolbarTint: Color? = nil,
-        barMaterial: SkinBarMaterial = .thick
+        barMaterial: SkinBarMaterial = .thick,
+        barTint: Color? = nil,
+        barTintOpacity: Double = 0
     ) {
         self.id = id
         self.displayName = displayName
@@ -125,6 +134,8 @@ struct SkinDefinition: Identifiable, Equatable {
         self.buttonStyle = buttonStyle
         self.toolbarTint = toolbarTint
         self.barMaterial = barMaterial
+        self.barTint = barTint
+        self.barTintOpacity = barTintOpacity
     }
 
     // MARK: - Derived
@@ -143,6 +154,11 @@ struct SkinDefinition: Identifiable, Equatable {
     /// Resolved SwiftUI `Material` for header/footer bars.
     var resolvedBarMaterial: Material {
         barMaterial.material
+    }
+
+    /// Whether this skin has a custom bar tint overlay.
+    var hasBarTint: Bool {
+        barTint != nil && barTintOpacity > 0
     }
 
     var previewGradient: AnyShapeStyle {
