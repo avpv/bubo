@@ -102,7 +102,7 @@ struct BuboApp: App {
         let useCustom = useSkinIcon
         let image = NSImage(size: size, flipped: false) { rect in
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
-            let isDark = NSAppearance.current.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            let isDark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
             let color: CGColor = useCustom
                 ? self.resolvedIconColor(isDark: isDark)
                 : (isDark ? NSColor.white.cgColor : NSColor.black.cgColor)
@@ -146,7 +146,7 @@ struct BuboApp: App {
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
 
             // Determine icon color with contrast safety
-            let isDark = NSAppearance.current.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            let isDark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
             let iconColor: CGColor = self.useSkinIcon
                 ? self.resolvedIconColor(isDark: isDark)
                 : (isDark ? NSColor.white.cgColor : NSColor.black.cgColor)
