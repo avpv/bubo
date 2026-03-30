@@ -31,10 +31,10 @@
   "platterTint": "#4C4C66",
   "platterTintOpacity": 0.06,
   "fontDesign": "default",
-  "fontWeight": "bold",
+  "fontWeight": "semibold",
   "headlineFontWeight": "bold",
   "sfSymbolRendering": "multicolor",
-  "sfSymbolWeight": "bold",
+  "sfSymbolWeight": "semibold",
   "badgeStyle": "filled",
   "separatorStyle": "system",
   "separatorOpacity": 0.65
