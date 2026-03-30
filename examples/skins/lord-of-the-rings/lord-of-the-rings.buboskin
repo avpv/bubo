@@ -30,7 +30,7 @@
   "barTintOpacity": 0.12,
   "platterTint": "#382608",
   "platterTintOpacity": 0.06,
-  "fontDesign": "serif",
+  "fontDesign": "default",
   "fontWeight": "regular",
   "headlineFontWeight": "bold",
   "sfSymbolRendering": "hierarchical",

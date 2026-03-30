@@ -136,7 +136,7 @@
     },
     "fontDesign": {
       "type": "string",
-      "enum": ["default", "rounded", "serif", "monospaced"],
+      "enum": ["default", "rounded"],
       "default": "rounded",
       "description": "System font design."
     },
