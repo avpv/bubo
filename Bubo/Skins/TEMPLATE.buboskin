@@ -98,5 +98,13 @@
     "blue": 0.2
   },
   "platterTintOpacity": 0.1,
+  "_comment_fontDesign": "Optional: font design. Values: default, rounded (default), serif, monospaced. HIG: must be system font family.",
+  "_comment_fontWeight": "Optional: body/button font weight. Values: regular, medium, semibold (default), bold.",
+  "_comment_headlineFontWeight": "Optional: headline font weight. Same values as fontWeight.",
+  "_comment_sfSymbolRendering": "Optional: SF Symbol rendering. Values: monochrome, hierarchical (default), palette, multicolor.",
+  "_comment_sfSymbolWeight": "Optional: SF Symbol weight. Values: ultraLight, thin, light, regular, medium (default), semibold, bold, heavy, black.",
+  "_comment_badgeStyle": "Optional: badge/pill style. Values: tinted (default), filled, outlined.",
+  "_comment_separatorStyle": "Optional: separator style. Values: system (default), subtle, accent, none.",
+  "_comment_separatorOpacity": "Optional: separator opacity (0-1, default 0.5). Floor at 0.15 when separatorStyle != none.",
   "_comment": "Optional: add a background image. Place the image file next to this .buboskin file."
 }

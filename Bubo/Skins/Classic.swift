@@ -2,7 +2,8 @@ import SwiftUI
 
 // MARK: - Classic (Default)
 // Author: Bubo Team
-// The default system appearance — no custom tinting.
+// Pure vanilla macOS — zero decoration, zero opinion.
+// For users who want Bubo to disappear into the OS.
 
 extension SkinCatalog {
     static let classic = SkinDefinition(
@@ -15,6 +16,14 @@ extension SkinCatalog {
         backgroundGradient: .clear,
         previewColors: [.gray],
         prefersDarkTint: false,
-        buttonStyle: .solid
+        buttonStyle: .solid,
+        // SF Pro, regular weight — pure system appearance
+        fontDesign: .default,
+        fontWeight: .regular,
+        headlineFontWeight: .medium,
+        sfSymbolRendering: .monochrome,
+        sfSymbolWeight: .regular,
+        badgeStyle: .tinted,
+        separatorStyle: .system
     )
 }

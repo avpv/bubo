@@ -2,46 +2,57 @@ import SwiftUI
 
 // MARK: - Rose Gold
 // Author: Bubo Team
-// Warm copper luxury — inspired by Apple hardware finishes and iPhone Rose Gold.
-// Apple HIG: warmth and approachability through refined material tones.
-// Personality: elegant, premium. Gradient buttons for a polished
-// jewel-like quality — copper fading to blush pink.
+// Luxury atelier — brushed copper and rose, like an Apple Watch Edition
+// paired with a Hermès band. New York serif font elevates every label
+// into something you'd see on a perfume box. Understated opulence.
 
 extension SkinCatalog {
     static let roseGold = SkinDefinition(
         id: "rose_gold",
         displayName: "Rose Gold",
         author: "Bubo",
-        // Rich copper-rose — warmer, more saturated
-        accentColor: Color(red: 0.82, green: 0.48, blue: 0.44),
-        // Warm dark surface — like brushed copper in shadow
-        surfaceTint: Color(red: 0.16, green: 0.06, blue: 0.04),
-        surfaceTintOpacity: 0.20,
-        // Diagonal warm gradient — luxury, movement
+        // Warm copper-rose — richer, more jewelry-like
+        accentColor: Color(red: 0.84, green: 0.50, blue: 0.46),
+        // Warm shadow — brushed copper in low light
+        surfaceTint: Color(red: 0.18, green: 0.07, blue: 0.05),
+        surfaceTintOpacity: 0.22,
+        // Diagonal warm gradient — luxury movement
         backgroundGradient: SkinGradient(
             colors: [
-                Color(red: 0.75, green: 0.38, blue: 0.32).opacity(0.12),
-                Color(red: 0.45, green: 0.20, blue: 0.18).opacity(0.07),
+                Color(red: 0.78, green: 0.40, blue: 0.35).opacity(0.14),
+                Color(red: 0.48, green: 0.22, blue: 0.20).opacity(0.08),
                 .clear,
             ],
             style: .linear(startPoint: .topLeading, endPoint: .bottomTrailing)
         ),
         previewColors: [
-            Color(red: 0.82, green: 0.48, blue: 0.44),
-            Color(red: 0.92, green: 0.65, blue: 0.55),
+            Color(red: 0.84, green: 0.50, blue: 0.46),
+            Color(red: 0.94, green: 0.68, blue: 0.58),
         ],
         prefersDarkTint: false,
-        // Blush pink for button gradient — copper to pink shimmer
-        secondaryAccent: Color(red: 0.90, green: 0.60, blue: 0.52),
-        // HIG: gradient — premium feel, jewel-like shimmer
+        // Blush pink — copper→pink shimmer on buttons
+        secondaryAccent: Color(red: 0.92, green: 0.62, blue: 0.54),
+        // Gradient — jewel shimmer, polished surface
         buttonStyle: .gradient,
-        // Warm gold toolbar — like gold jewelry paired with rose gold
-        toolbarTint: Color(red: 0.75, green: 0.62, blue: 0.38),
-        // Warm copper-tinted bars — brushed metal feel
-        barTint: Color(red: 0.60, green: 0.35, blue: 0.28),
-        barTintOpacity: 0.10,
-        // Rose-tinted platters — subtle luxury on surfaces
-        platterTint: Color(red: 0.55, green: 0.30, blue: 0.25),
-        platterTintOpacity: 0.05
+        // Gold toolbar — like gold paired with rose gold
+        toolbarTint: Color(red: 0.78, green: 0.65, blue: 0.40),
+        // Copper-tinted bars — brushed metal feel
+        barTint: Color(red: 0.62, green: 0.38, blue: 0.30),
+        barTintOpacity: 0.12,
+        platterTint: Color(red: 0.58, green: 0.32, blue: 0.28),
+        platterTintOpacity: 0.06,
+        // New York serif — luxury, editorial, fashion-forward
+        fontDesign: .serif,
+        fontWeight: .medium,
+        // Bold headlines — magazine cover energy
+        headlineFontWeight: .bold,
+        // Hierarchical — elegant depth in icons
+        sfSymbolRendering: .hierarchical,
+        sfSymbolWeight: .regular,
+        // Outlined — thin elegant borders, like filigree
+        badgeStyle: .outlined,
+        // Accent — warm copper separator lines, decorative
+        separatorStyle: .accent,
+        separatorOpacity: 0.18
     )
 }

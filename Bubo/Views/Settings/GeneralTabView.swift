@@ -111,7 +111,7 @@ struct CustomSkinsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            Divider()
+            SkinSeparator()
 
             HStack {
                 Text("Community skins")
@@ -206,7 +206,7 @@ struct SkinImageSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            Divider()
+            SkinSeparator()
 
             Text("Skin background image")
                 .font(.caption)

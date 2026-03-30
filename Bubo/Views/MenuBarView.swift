@@ -138,6 +138,7 @@ struct MenuBarView: View {
             ToastOverlay(toastState: toastState)
         }
         .skinTinted(activeSkin)
+        .skinTypography(activeSkin)
         .environment(\.activeSkin, activeSkin)
         .frame(width: DS.Popover.width, height: navigation.isTimer ? DS.Popover.timerHeight : DS.Popover.height)
         .onAppear {
@@ -278,7 +279,7 @@ struct MenuBarView: View {
             }
             .animation(DS.Animation.smoothSpring, value: reminderService.nonDisintegratingEventCount == 0)
 
-            Divider()
+            SkinSeparator()
 
             if let lastSync = reminderService.lastSyncDate {
                 HStack(spacing: DS.Spacing.xs) {

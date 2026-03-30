@@ -328,16 +328,32 @@ extension View {
 
 // MARK: - Adaptive Badge Background
 
-/// A badge background that automatically adapts to High Contrast accessibility setting.
+/// A badge background that automatically adapts to High Contrast accessibility setting
+/// and respects the active skin's badge style.
 struct AdaptiveBadgeFill: ViewModifier {
     let tint: Color
 
     @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.activeSkin) private var skin
 
     func body(content: Content) -> some View {
-        content.background(
-            DS.Colors.badgeFill(tint, highContrast: contrast == .increased)
-        )
+        switch skin.badgeStyle {
+        case .tinted:
+            content.background(
+                DS.Colors.badgeFill(tint, highContrast: contrast == .increased)
+            )
+        case .filled:
+            content
+                .foregroundStyle(.white)
+                .background(tint.opacity(contrast == .increased ? 0.9 : 0.75))
+        case .outlined:
+            content
+                .background(Color.clear)
+                .overlay(
+                    Capsule()
+                        .strokeBorder(tint.opacity(contrast == .increased ? 0.8 : 0.5), lineWidth: 1)
+                )
+        }
     }
 }
 
@@ -384,6 +400,8 @@ struct PopoverHeader: View {
                 if let title = title, !showBack {
                     Text(title)
                         .font(.headline)
+                        .fontWeight(skin.resolvedHeadlineFontWeight)
+                        .fontDesign(skin.resolvedFontDesign)
                 }
 
                 Spacer()
@@ -391,6 +409,8 @@ struct PopoverHeader: View {
                 if let title = title, showBack {
                     Text(title)
                         .font(.headline)
+                        .fontWeight(skin.resolvedHeadlineFontWeight)
+                        .fontDesign(skin.resolvedFontDesign)
                     Spacer()
                 }
 
@@ -410,7 +430,7 @@ struct PopoverHeader: View {
             .frame(height: DS.Size.headerHeight)
             .skinBarBackground(skin)
 
-            Divider()
+            SkinSeparator()
         }
     }
 }
@@ -438,8 +458,8 @@ struct ActionButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .fontWeight(.semibold)
-            .font(.system(.body, design: .rounded))
+            .fontWeight(skin.resolvedFontWeight)
+            .font(.system(.body, design: skin.resolvedFontDesign))
             .padding(.horizontal, horizontalPadding)
             .padding(.vertical, size == .compact ? 0 : verticalPadding)
             .frame(height: size == .compact ? DS.Size.controlHeight : nil)

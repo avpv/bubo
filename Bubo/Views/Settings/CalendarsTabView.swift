@@ -37,7 +37,7 @@ struct CalendarsTabView: View {
             .toggleStyle(.switch)
 
             if settings.isCalendarSyncEnabled {
-                Divider().padding(.vertical, DS.Spacing.xs)
+                SkinSeparator().padding(.vertical, DS.Spacing.xs)
 
                 if viewModel.appleCalendarAccessGranted {
                     HStack {
@@ -116,7 +116,7 @@ struct CalendarsTabView: View {
             Grid(alignment: .leading, horizontalSpacing: DS.Spacing.sm, verticalSpacing: DS.Spacing.sm) {
                 ForEach(viewModel.appleCalendarsByAccount, id: \.account) { group in
                     GridRow {
-                        Divider().padding(.vertical, DS.Spacing.xs)
+                        SkinSeparator().padding(.vertical, DS.Spacing.xs)
                     }
                     GridRow {
                         Text(group.account).font(.subheadline).foregroundStyle(.secondary)

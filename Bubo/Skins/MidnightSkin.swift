@@ -2,50 +2,58 @@ import SwiftUI
 
 // MARK: - Midnight
 // Author: Bubo Team
-// Deep immersive black — Apple Midnight hardware color brought to UI.
-// Apple HIG: immersive dark experience with subtle depth.
-// Personality: cinematic, stark. Solid buttons for high contrast
-// against the deep void — maximum focus on content.
+// Cinematic void — Apple Midnight hardware color brought to UI.
+// Sharp brutalist corners, ultra-thin materials, no separators.
+// Content floats in a near-black abyss. Maximum drama, minimum chrome.
 
 extension SkinCatalog {
     static let midnight = SkinDefinition(
         id: "midnight",
         displayName: "Midnight",
         author: "Bubo",
-        // Muted indigo — visible but not bright, like stars through haze
-        accentColor: Color(red: 0.32, green: 0.44, blue: 0.72),
-        // Almost-black with blue shift — deep void
-        surfaceTint: Color(red: 0.01, green: 0.02, blue: 0.06),
-        surfaceTintOpacity: 0.30,
-        // Bottom glow — like city lights on the horizon at midnight
+        // Muted indigo — stars through atmospheric haze
+        accentColor: Color(red: 0.35, green: 0.46, blue: 0.75),
+        // Near-black with blue shift — deep void
+        surfaceTint: Color(red: 0.01, green: 0.02, blue: 0.08),
+        surfaceTintOpacity: 0.35,
+        // Bottom glow — city lights on the horizon
         backgroundGradient: SkinGradient(
             colors: [
                 .clear,
-                Color(red: 0.08, green: 0.10, blue: 0.22).opacity(0.10),
-                Color(red: 0.14, green: 0.16, blue: 0.32).opacity(0.16),
+                Color(red: 0.10, green: 0.12, blue: 0.25).opacity(0.12),
+                Color(red: 0.16, green: 0.18, blue: 0.35).opacity(0.18),
             ],
             style: .linear(startPoint: .top, endPoint: .bottom)
         ),
         previewColors: [
-            Color(red: 0.08, green: 0.10, blue: 0.18),
-            Color(red: 0.22, green: 0.30, blue: 0.52),
+            Color(red: 0.08, green: 0.10, blue: 0.20),
+            Color(red: 0.25, green: 0.32, blue: 0.55),
         ],
         prefersDarkTint: true,
-        secondaryAccent: Color(red: 0.25, green: 0.35, blue: 0.58),
-        // HIG: solid — stark, minimal chrome in the darkness
+        secondaryAccent: Color(red: 0.28, green: 0.38, blue: 0.62),
+        // Solid — stark, minimal chrome in darkness
         buttonStyle: .solid,
-        // Sharp corners — cinematic, stark, brutalist
+        // Rectangle — cinematic, brutalist, Kubrick-esque
         buttonShape: .rectangle,
-        // Dim warm amber toolbar — like a candle in the dark, complementary warmth
-        toolbarTint: Color(red: 0.62, green: 0.52, blue: 0.38),
-        // Ultra-thin bars — maximum darkness, minimal frosting
+        // Warm amber toolbar — a candle in the dark
+        toolbarTint: Color(red: 0.65, green: 0.55, blue: 0.40),
+        // Ultra-thin — maximum darkness, minimum frosting
         barMaterial: .ultraThin,
-        // Deep indigo bar tint — barely visible structure
-        barTint: Color(red: 0.08, green: 0.10, blue: 0.22),
-        barTintOpacity: 0.12,
-        // Thin platters — near-invisible cards in the void
+        barTint: Color(red: 0.10, green: 0.12, blue: 0.25),
+        barTintOpacity: 0.14,
         platterMaterial: .thin,
-        platterTint: Color(red: 0.06, green: 0.08, blue: 0.18),
-        platterTintOpacity: 0.08
+        platterTint: Color(red: 0.08, green: 0.10, blue: 0.20),
+        platterTintOpacity: 0.10,
+        // SF Pro — neutral, disappears in the dark
+        fontDesign: .default,
+        fontWeight: .regular,
+        headlineFontWeight: .semibold,
+        // Monochrome — no color noise, just light and shadow
+        sfSymbolRendering: .monochrome,
+        sfSymbolWeight: .light,
+        // Outlined — thin glowing outlines in the void
+        badgeStyle: .outlined,
+        // None — borders dissolve in darkness
+        separatorStyle: .none
     )
 }

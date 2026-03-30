@@ -24,6 +24,140 @@ enum SkinButtonShape: String, Equatable, CaseIterable {
     case rectangle
 }
 
+// MARK: - Font Design
+
+/// Controls which system font design is used throughout the skin.
+/// Apple HIG 2026 §Typography: "Never substitute the system font with a custom
+/// typeface in utility-class windows." All values map to SF Pro variants.
+enum SkinFontDesign: String, Equatable, CaseIterable, Codable {
+    case `default`
+    case rounded
+    case serif
+    case monospaced
+
+    var swiftUIDesign: Font.Design {
+        switch self {
+        case .default:     .default
+        case .rounded:     .rounded
+        case .serif:       .serif
+        case .monospaced:  .monospaced
+        }
+    }
+}
+
+// MARK: - Font Weight
+
+/// Allowed font weights for skins. Excludes ultraLight/thin per HIG legibility rules.
+enum SkinFontWeight: String, Equatable, CaseIterable, Codable {
+    case regular
+    case medium
+    case semibold
+    case bold
+
+    var swiftUIWeight: Font.Weight {
+        switch self {
+        case .regular:  .regular
+        case .medium:   .medium
+        case .semibold: .semibold
+        case .bold:     .bold
+        }
+    }
+}
+
+// MARK: - SF Symbol Rendering
+
+/// Controls how SF Symbols are rendered within a skin.
+/// Apple HIG 2026 §Symbols: prefers hierarchical for utility apps.
+enum SkinSymbolRendering: String, Equatable, CaseIterable, Codable {
+    case monochrome
+    case hierarchical
+    case palette
+    case multicolor
+
+    var swiftUIMode: SymbolRenderingMode {
+        switch self {
+        case .monochrome:   .monochrome
+        case .hierarchical: .hierarchical
+        case .palette:      .palette
+        case .multicolor:   .multicolor
+        }
+    }
+}
+
+// MARK: - SF Symbol Weight
+
+/// Controls the weight of SF Symbols. Should match adjacent text weight
+/// per HIG 2026 §Symbols: "Match symbol weight to adjacent text weight."
+enum SkinSymbolWeight: String, Equatable, CaseIterable, Codable {
+    case ultraLight
+    case thin
+    case light
+    case regular
+    case medium
+    case semibold
+    case bold
+    case heavy
+    case black
+
+    var swiftUIWeight: Font.Weight {
+        switch self {
+        case .ultraLight: .ultraLight
+        case .thin:       .thin
+        case .light:      .light
+        case .regular:    .regular
+        case .medium:     .medium
+        case .semibold:   .semibold
+        case .bold:       .bold
+        case .heavy:      .heavy
+        case .black:      .black
+        }
+    }
+
+    /// Numeric index for computing weight distance (HIG warns if delta > 2).
+    var weightIndex: Int {
+        switch self {
+        case .ultraLight: 0
+        case .thin:       1
+        case .light:      2
+        case .regular:    3
+        case .medium:     4
+        case .semibold:   5
+        case .bold:       6
+        case .heavy:      7
+        case .black:      8
+        }
+    }
+}
+
+// MARK: - Badge Style
+
+/// Controls how badges and pills are rendered.
+/// Apple HIG 2026 §Color: "Tinted backgrounds must maintain ≥ 3:1 contrast."
+enum SkinBadgeStyle: String, Equatable, CaseIterable, Codable {
+    /// Solid fill with accent color.
+    case filled
+    /// Outline stroke with no fill.
+    case outlined
+    /// Subtle tinted background (default, current behavior).
+    case tinted
+}
+
+// MARK: - Separator Style
+
+/// Controls how dividers/separators appear.
+/// Apple HIG 2026 §Layout: "Omit dividers only when spatial grouping
+/// provides sufficient separation."
+enum SkinSeparatorStyle: String, Equatable, CaseIterable, Codable {
+    /// Standard system separator.
+    case system
+    /// Thinner, lower-contrast separator.
+    case subtle
+    /// Accent-colored separator.
+    case accent
+    /// No separator (use only with card-style layouts).
+    case none
+}
+
 // MARK: - Bar Material
 
 /// Controls which SwiftUI `Material` is used for header/footer bars.
@@ -146,6 +280,32 @@ struct SkinDefinition: Identifiable, Equatable {
     /// Opacity of the platter tint overlay (0 = invisible, typically 0.05–0.2).
     let platterTintOpacity: Double
 
+    // MARK: Typography & Symbols (HIG 2026)
+
+    /// System font design — SF Pro, SF Rounded, New York, or SF Mono.
+    let fontDesign: SkinFontDesign
+
+    /// Font weight for body text and buttons.
+    let fontWeight: SkinFontWeight
+
+    /// Font weight for section headers / headlines.
+    let headlineFontWeight: SkinFontWeight
+
+    /// SF Symbol rendering mode.
+    let sfSymbolRendering: SkinSymbolRendering
+
+    /// SF Symbol weight — should be close to fontWeight per HIG.
+    let sfSymbolWeight: SkinSymbolWeight
+
+    /// Badge/pill appearance style.
+    let badgeStyle: SkinBadgeStyle
+
+    /// Separator/divider appearance style.
+    let separatorStyle: SkinSeparatorStyle
+
+    /// Separator opacity (floor 0.15 when separatorStyle != .none).
+    let separatorOpacity: Double
+
     init(
         id: String,
         displayName: String,
@@ -169,7 +329,15 @@ struct SkinDefinition: Identifiable, Equatable {
         barTintOpacity: Double = 0,
         platterMaterial: SkinBarMaterial = .regular,
         platterTint: Color? = nil,
-        platterTintOpacity: Double = 0
+        platterTintOpacity: Double = 0,
+        fontDesign: SkinFontDesign = .rounded,
+        fontWeight: SkinFontWeight = .semibold,
+        headlineFontWeight: SkinFontWeight = .semibold,
+        sfSymbolRendering: SkinSymbolRendering = .hierarchical,
+        sfSymbolWeight: SkinSymbolWeight = .medium,
+        badgeStyle: SkinBadgeStyle = .tinted,
+        separatorStyle: SkinSeparatorStyle = .system,
+        separatorOpacity: Double = 0.5
     ) {
         self.id = id
         self.displayName = displayName
@@ -194,6 +362,15 @@ struct SkinDefinition: Identifiable, Equatable {
         self.platterMaterial = platterMaterial
         self.platterTint = platterTint
         self.platterTintOpacity = platterTintOpacity
+        self.fontDesign = fontDesign
+        self.fontWeight = fontWeight
+        self.headlineFontWeight = headlineFontWeight
+        self.sfSymbolRendering = sfSymbolRendering
+        self.sfSymbolWeight = sfSymbolWeight
+        self.badgeStyle = badgeStyle
+        self.separatorStyle = separatorStyle
+        // HIG: floor at 0.15 when separators are visible
+        self.separatorOpacity = separatorStyle != .none ? max(0.15, separatorOpacity) : separatorOpacity
     }
 
     // MARK: - Derived
@@ -232,6 +409,31 @@ struct SkinDefinition: Identifiable, Equatable {
     /// Resolved SwiftUI `Material` for platter/card surfaces.
     var resolvedPlatterMaterial: Material {
         platterMaterial.material
+    }
+
+    /// Resolved SwiftUI Font.Design for body text.
+    var resolvedFontDesign: Font.Design {
+        fontDesign.swiftUIDesign
+    }
+
+    /// Resolved SwiftUI Font.Weight for body/buttons.
+    var resolvedFontWeight: Font.Weight {
+        fontWeight.swiftUIWeight
+    }
+
+    /// Resolved SwiftUI Font.Weight for headlines.
+    var resolvedHeadlineFontWeight: Font.Weight {
+        headlineFontWeight.swiftUIWeight
+    }
+
+    /// Resolved SF Symbol rendering mode.
+    var resolvedSymbolRendering: SymbolRenderingMode {
+        sfSymbolRendering.swiftUIMode
+    }
+
+    /// Resolved SF Symbol weight.
+    var resolvedSymbolWeight: Font.Weight {
+        sfSymbolWeight.swiftUIWeight
     }
 
     var previewGradient: AnyShapeStyle {

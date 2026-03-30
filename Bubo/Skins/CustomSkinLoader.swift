@@ -101,6 +101,32 @@ struct CustomSkinJSON: Codable {
     /// Opacity of the platter tint overlay (0–1, typically 0.05–0.2). Defaults to 0.
     let platterTintOpacity: Double?
 
+    // MARK: Typography & Symbols (HIG 2026)
+
+    /// Font design: "default", "rounded", "serif", "monospaced". Defaults to "rounded".
+    let fontDesign: String?
+
+    /// Font weight for body/buttons: "regular", "medium", "semibold", "bold". Defaults to "semibold".
+    let fontWeight: String?
+
+    /// Font weight for headlines. Same values as fontWeight. Defaults to "semibold".
+    let headlineFontWeight: String?
+
+    /// SF Symbol rendering: "monochrome", "hierarchical", "palette", "multicolor". Defaults to "hierarchical".
+    let sfSymbolRendering: String?
+
+    /// SF Symbol weight: "ultraLight"–"black". Defaults to "medium".
+    let sfSymbolWeight: String?
+
+    /// Badge style: "filled", "outlined", "tinted". Defaults to "tinted".
+    let badgeStyle: String?
+
+    /// Separator style: "system", "subtle", "accent", "none". Defaults to "system".
+    let separatorStyle: String?
+
+    /// Separator opacity (0–1). Floor at 0.15 when separatorStyle != "none". Defaults to 0.5.
+    let separatorOpacity: Double?
+
     func toSkinDefinition(skinFileURL: URL? = nil) -> SkinDefinition {
         // HIG: Validate accent color contrast — warn if luminance is too high
         // for white button text (WCAG 2.1 AA requires 4.5:1 contrast ratio)
@@ -132,7 +158,15 @@ struct CustomSkinJSON: Codable {
             barTintOpacity: barTintOpacity ?? 0,
             platterMaterial: resolvedPlatterMaterial,
             platterTint: platterTint?.toColor(),
-            platterTintOpacity: platterTintOpacity ?? 0
+            platterTintOpacity: platterTintOpacity ?? 0,
+            fontDesign: resolvedFontDesign,
+            fontWeight: resolvedFontWeight,
+            headlineFontWeight: resolvedHeadlineFontWeight,
+            sfSymbolRendering: resolvedSymbolRendering,
+            sfSymbolWeight: resolvedSymbolWeight,
+            badgeStyle: resolvedBadgeStyle,
+            separatorStyle: resolvedSeparatorStyle,
+            separatorOpacity: separatorOpacity ?? 0.5
         )
     }
 
@@ -163,6 +197,65 @@ struct CustomSkinJSON: Codable {
         if let exact = SkinBarMaterial(rawValue: value) { return exact }
         let lower = value.lowercased()
         return SkinBarMaterial.allCases.first { $0.rawValue.lowercased() == lower } ?? .regular
+    }
+
+    private var resolvedFontDesign: SkinFontDesign {
+        guard let value = fontDesign else { return .rounded }
+        return SkinFontDesign(rawValue: value)
+            ?? SkinFontDesign.allCases.first { $0.rawValue.lowercased() == value.lowercased() }
+            ?? .rounded
+    }
+
+    private var resolvedFontWeight: SkinFontWeight {
+        guard let value = fontWeight else { return .semibold }
+        return SkinFontWeight(rawValue: value)
+            ?? SkinFontWeight.allCases.first { $0.rawValue.lowercased() == value.lowercased() }
+            ?? .semibold
+    }
+
+    private var resolvedHeadlineFontWeight: SkinFontWeight {
+        guard let value = headlineFontWeight else { return .semibold }
+        return SkinFontWeight(rawValue: value)
+            ?? SkinFontWeight.allCases.first { $0.rawValue.lowercased() == value.lowercased() }
+            ?? .semibold
+    }
+
+    private var resolvedSymbolRendering: SkinSymbolRendering {
+        guard let value = sfSymbolRendering else { return .hierarchical }
+        return SkinSymbolRendering(rawValue: value)
+            ?? SkinSymbolRendering.allCases.first { $0.rawValue.lowercased() == value.lowercased() }
+            ?? .hierarchical
+    }
+
+    private var resolvedSymbolWeight: SkinSymbolWeight {
+        guard let value = sfSymbolWeight else { return .medium }
+        let resolved = SkinSymbolWeight(rawValue: value)
+            ?? SkinSymbolWeight.allCases.first { $0.rawValue.lowercased() == value.lowercased() }
+            ?? .medium
+        // HIG 2026: warn if symbol weight diverges > 2 steps from font weight
+        let fontIdx = resolvedFontWeight.swiftUIWeight == .regular ? 3
+            : resolvedFontWeight.swiftUIWeight == .medium ? 4
+            : resolvedFontWeight.swiftUIWeight == .semibold ? 5
+            : 6 // bold
+        let delta = abs(resolved.weightIndex - fontIdx)
+        if delta > 2 {
+            print("[Bubo] Warning: Skin '\(displayName)' sfSymbolWeight (\(value)) diverges > 2 steps from fontWeight. HIG recommends matching symbol and text weights.")
+        }
+        return resolved
+    }
+
+    private var resolvedBadgeStyle: SkinBadgeStyle {
+        guard let value = badgeStyle else { return .tinted }
+        return SkinBadgeStyle(rawValue: value)
+            ?? SkinBadgeStyle.allCases.first { $0.rawValue.lowercased() == value.lowercased() }
+            ?? .tinted
+    }
+
+    private var resolvedSeparatorStyle: SkinSeparatorStyle {
+        guard let value = separatorStyle else { return .system }
+        return SkinSeparatorStyle(rawValue: value)
+            ?? SkinSeparatorStyle.allCases.first { $0.rawValue.lowercased() == value.lowercased() }
+            ?? .system
     }
 
     private var resolvedBarMaterial: SkinBarMaterial {

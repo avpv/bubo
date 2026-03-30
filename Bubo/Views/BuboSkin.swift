@@ -61,12 +61,60 @@ struct SkinTintModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .tint(skin.accentColor)
+            .symbolRenderingMode(skin.resolvedSymbolRendering)
     }
 }
 
 extension View {
     func skinTinted(_ skin: SkinDefinition) -> some View {
         modifier(SkinTintModifier(skin: skin))
+    }
+}
+
+// MARK: - Skin Typography Modifier
+
+/// Applies the skin's font design and weight to body text.
+struct SkinTypographyModifier: ViewModifier {
+    let skin: SkinDefinition
+
+    func body(content: Content) -> some View {
+        content
+            .fontDesign(skin.resolvedFontDesign)
+            .fontWeight(skin.resolvedFontWeight)
+    }
+}
+
+extension View {
+    /// Applies the skin's typography (font design + weight) to this view hierarchy.
+    func skinTypography(_ skin: SkinDefinition) -> some View {
+        modifier(SkinTypographyModifier(skin: skin))
+    }
+}
+
+// MARK: - Skin Separator
+
+/// A separator that respects the active skin's separator style and opacity.
+struct SkinSeparator: View {
+    @Environment(\.activeSkin) private var skin
+
+    var body: some View {
+        switch skin.separatorStyle {
+        case .system:
+            Divider()
+                .opacity(skin.separatorOpacity)
+        case .subtle:
+            Rectangle()
+                .fill(Color(nsColor: .separatorColor))
+                .frame(height: 0.5)
+                .opacity(skin.separatorOpacity * 0.6)
+        case .accent:
+            Rectangle()
+                .fill(skin.accentColor)
+                .frame(height: 1)
+                .opacity(skin.separatorOpacity)
+        case .none:
+            EmptyView()
+        }
     }
 }
 
