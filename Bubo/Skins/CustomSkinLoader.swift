@@ -33,7 +33,8 @@ import SwiftUI
 ///   ],
 ///   "prefersDarkTint": true,
 ///   "secondaryAccent": { "red": 0.0, "green": 0.65, "blue": 0.15 },
-///   "buttonStyle": "gradient"
+///   "buttonStyle": "gradient",
+///   "toolbarTint": { "red": 0.3, "green": 0.5, "blue": 0.4 }
 /// }
 /// ```
 struct CustomSkinJSON: Codable {
@@ -48,6 +49,10 @@ struct CustomSkinJSON: Codable {
     let prefersDarkTint: Bool
     let secondaryAccent: JSONColor?
     let buttonStyle: String?
+
+    /// Toolbar button tint color (Refresh, Settings, Quit).
+    /// Apple HIG: secondary actions use a subtler color for visual hierarchy.
+    let toolbarTint: JSONColor?
 
     /// Background image settings. The actual image file should be placed
     /// next to the `.buboskin` file with the filename specified here.
@@ -87,7 +92,8 @@ struct CustomSkinJSON: Codable {
             prefersDarkTint: prefersDarkTint,
             secondaryAccent: secondaryAccent?.toColor(),
             buttonStyle: resolvedButtonStyle,
-            backgroundImage: bgImage
+            backgroundImage: bgImage,
+            toolbarTint: toolbarTint?.toColor()
         )
     }
 

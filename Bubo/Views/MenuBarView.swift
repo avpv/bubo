@@ -490,6 +490,7 @@ struct MenuBarView: View {
                 .keyboardShortcut("q", modifiers: .command)
             }
             .buttonStyle(.borderless)
+            .tint(activeSkin.resolvedToolbarTint)
         }
         .font(.system(size: 13, weight: .medium))
         .padding(.horizontal, DS.Spacing.lg)

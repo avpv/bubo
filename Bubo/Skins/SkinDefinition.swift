@@ -56,6 +56,12 @@ struct SkinDefinition: Identifiable, Equatable {
     /// Optional background image for custom skins.
     let backgroundImage: SkinBackgroundImage?
 
+    /// Tint color for toolbar/utility buttons (Refresh, Settings, Quit).
+    /// Apple HIG: secondary actions use a subtler, complementary color to
+    /// establish visual hierarchy — primary action (Add) stays bold, toolbar
+    /// buttons recede. Falls back to accent color if nil.
+    let toolbarTint: Color?
+
     init(
         id: String,
         displayName: String,
@@ -68,7 +74,8 @@ struct SkinDefinition: Identifiable, Equatable {
         prefersDarkTint: Bool,
         secondaryAccent: Color? = nil,
         buttonStyle: SkinButtonStyle = .gradient,
-        backgroundImage: SkinBackgroundImage? = nil
+        backgroundImage: SkinBackgroundImage? = nil,
+        toolbarTint: Color? = nil
     ) {
         self.id = id
         self.displayName = displayName
@@ -82,6 +89,7 @@ struct SkinDefinition: Identifiable, Equatable {
         self.secondaryAccent = secondaryAccent
         self.buttonStyle = buttonStyle
         self.backgroundImage = backgroundImage
+        self.toolbarTint = toolbarTint
     }
 
     // MARK: - Derived
@@ -89,6 +97,12 @@ struct SkinDefinition: Identifiable, Equatable {
     /// Resolved secondary accent, falling back to a darkened version of accentColor.
     var resolvedSecondaryAccent: Color {
         secondaryAccent ?? accentColor.opacity(0.85)
+    }
+
+    /// Resolved toolbar tint, falling back to accent color at reduced opacity.
+    /// Apple HIG: toolbar buttons should be visually subordinate to primary actions.
+    var resolvedToolbarTint: Color {
+        toolbarTint ?? accentColor.opacity(0.7)
     }
 
     var previewGradient: AnyShapeStyle {
@@ -189,6 +203,7 @@ enum SkinCatalog {
         sierra,
         arctic,
         sage,
+        winXP,
     ]
 
     /// All skins including user-imported custom skins.
