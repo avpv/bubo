@@ -4,7 +4,6 @@ struct TimerScreenView: View {
     let event: CalendarEvent
     var onBack: () -> Void
     var isPinned: Bool = false
-    var backgroundStyle: AppBackgroundStyle = .system
     var skin: SkinDefinition = SkinCatalog.defaultSkin
     var wallpaper: WallpaperDefinition = WallpaperCatalog.none
     var customPhotoPath: String = ""
@@ -64,7 +63,6 @@ struct TimerScreenView: View {
             ZStack {
                 if isPinned {
                     AppBackgroundLayer(
-                        style: backgroundStyle,
                         skin: skin,
                         wallpaper: wallpaper,
                         customPhotoPath: customPhotoPath,
