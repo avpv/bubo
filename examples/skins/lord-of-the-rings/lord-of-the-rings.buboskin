@@ -2,37 +2,14 @@
   "id": "lord_of_the_rings",
   "displayName": "Lord of the Rings",
   "author": "Bubo Community",
-  "accentColor": {
-    "red": 0.65,
-    "green": 0.5,
-    "blue": 0.15
-  },
-  "surfaceTint": {
-    "red": 0.1,
-    "green": 0.08,
-    "blue": 0.02
-  },
+  "accentColor": "#A68026",
+  "surfaceTint": "#1A1405",
   "surfaceTintOpacity": 0.3,
   "backgroundGradient": {
     "colors": [
-      {
-        "red": 0.35,
-        "green": 0.25,
-        "blue": 0.05,
-        "opacity": 0.35
-      },
-      {
-        "red": 0.05,
-        "green": 0.2,
-        "blue": 0.08,
-        "opacity": 0.2
-      },
-      {
-        "red": 0.0,
-        "green": 0.0,
-        "blue": 0.0,
-        "opacity": 0.0
-      }
+      "#59400D59",
+      "#0D331433",
+      "#00000000"
     ],
     "style": "radial",
     "center": "center",
@@ -40,42 +17,18 @@
     "endRadius": 500
   },
   "previewColors": [
-    {
-      "red": 0.65,
-      "green": 0.5,
-      "blue": 0.15
-    },
-    {
-      "red": 0.1,
-      "green": 0.25,
-      "blue": 0.1
-    }
+    "#A68026",
+    "#1A401A"
   ],
   "prefersDarkTint": true,
-  "secondaryAccent": {
-    "red": 0.6,
-    "green": 0.45,
-    "blue": 0.15
-  },
+  "secondaryAccent": "#997326",
   "buttonStyle": "gradient",
   "buttonShape": "roundedRect",
-  "toolbarTint": {
-    "red": 0.15,
-    "green": 0.35,
-    "blue": 0.15
-  },
+  "toolbarTint": "#265926",
   "barMaterial": "thick",
-  "barTint": {
-    "red": 0.28,
-    "green": 0.2,
-    "blue": 0.05
-  },
+  "barTint": "#47330D",
   "barTintOpacity": 0.12,
-  "platterTint": {
-    "red": 0.22,
-    "green": 0.15,
-    "blue": 0.03
-  },
+  "platterTint": "#382608",
   "platterTintOpacity": 0.06,
   "fontDesign": "serif",
   "fontWeight": "regular",

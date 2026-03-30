@@ -2,37 +2,14 @@
   "id": "akira",
   "displayName": "Akira",
   "author": "Bubo Community",
-  "accentColor": {
-    "red": 0.95,
-    "green": 0.2,
-    "blue": 0.2
-  },
-  "surfaceTint": {
-    "red": 0.12,
-    "green": 0.02,
-    "blue": 0.02
-  },
+  "accentColor": "#F23333",
+  "surfaceTint": "#1F0505",
   "surfaceTintOpacity": 0.35,
   "backgroundGradient": {
     "colors": [
-      {
-        "red": 0.7,
-        "green": 0.1,
-        "blue": 0.1,
-        "opacity": 0.4
-      },
-      {
-        "red": 0.1,
-        "green": 0.0,
-        "blue": 0.25,
-        "opacity": 0.25
-      },
-      {
-        "red": 0.0,
-        "green": 0.0,
-        "blue": 0.0,
-        "opacity": 0.0
-      }
+      "#B21A1A66",
+      "#1A004040",
+      "#00000000"
     ],
     "style": "radial",
     "center": "bottomTrailing",
@@ -40,42 +17,18 @@
     "endRadius": 550
   },
   "previewColors": [
-    {
-      "red": 0.95,
-      "green": 0.2,
-      "blue": 0.2
-    },
-    {
-      "red": 0.1,
-      "green": 0.0,
-      "blue": 0.25
-    }
+    "#F23333",
+    "#1A0040"
   ],
   "prefersDarkTint": true,
-  "secondaryAccent": {
-    "red": 0.95,
-    "green": 0.75,
-    "blue": 0.0
-  },
+  "secondaryAccent": "#F2BF00",
   "buttonStyle": "solid",
   "buttonShape": "rectangle",
-  "toolbarTint": {
-    "red": 0.85,
-    "green": 0.65,
-    "blue": 0.0
-  },
+  "toolbarTint": "#D9A600",
   "barMaterial": "thin",
-  "barTint": {
-    "red": 0.5,
-    "green": 0.06,
-    "blue": 0.06
-  },
+  "barTint": "#800F0F",
   "barTintOpacity": 0.18,
-  "platterTint": {
-    "red": 0.35,
-    "green": 0.04,
-    "blue": 0.04
-  },
+  "platterTint": "#590A0A",
   "platterTintOpacity": 0.1,
   "fontDesign": "default",
   "fontWeight": "bold",

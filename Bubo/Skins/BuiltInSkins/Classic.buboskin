@@ -2,14 +2,14 @@
   "id": "classic",
   "displayName": "Classic",
   "author": "Bubo",
-  "accentColor": { "name": "accentColor" },
-  "surfaceTint": { "name": "clear" },
+  "accentColor": "accentColor",
+  "surfaceTint": "clear",
   "surfaceTintOpacity": 0,
   "backgroundGradient": {
     "style": "clear"
   },
   "previewColors": [
-    { "name": "gray" }
+    "gray"
   ],
   "prefersDarkTint": false,
   "buttonStyle": "solid",

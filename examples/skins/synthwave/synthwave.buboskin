@@ -2,79 +2,32 @@
   "id": "synthwave",
   "displayName": "Synthwave",
   "author": "Bubo Community",
-  "accentColor": {
-    "red": 1.0,
-    "green": 0.3,
-    "blue": 0.85
-  },
-  "surfaceTint": {
-    "red": 0.08,
-    "green": 0.0,
-    "blue": 0.1
-  },
+  "accentColor": "#FF4CD9",
+  "surfaceTint": "#14001A",
   "surfaceTintOpacity": 0.35,
   "backgroundGradient": {
     "colors": [
-      {
-        "red": 0.7,
-        "green": 0.1,
-        "blue": 0.6,
-        "opacity": 0.35
-      },
-      {
-        "red": 0.1,
-        "green": 0.0,
-        "blue": 0.4,
-        "opacity": 0.25
-      },
-      {
-        "red": 0.0,
-        "green": 0.0,
-        "blue": 0.0,
-        "opacity": 0.0
-      }
+      "#B21A9959",
+      "#1A006640",
+      "#00000000"
     ],
     "style": "linear",
     "startPoint": "bottom",
     "endPoint": "top"
   },
   "previewColors": [
-    {
-      "red": 1.0,
-      "green": 0.3,
-      "blue": 0.85
-    },
-    {
-      "red": 0.15,
-      "green": 0.0,
-      "blue": 0.4
-    }
+    "#FF4CD9",
+    "#260066"
   ],
   "prefersDarkTint": true,
-  "secondaryAccent": {
-    "red": 0.3,
-    "green": 0.7,
-    "blue": 1.0
-  },
+  "secondaryAccent": "#4CB2FF",
   "buttonStyle": "gradient",
   "buttonShape": "roundedRect",
-  "toolbarTint": {
-    "red": 0.3,
-    "green": 0.6,
-    "blue": 1.0
-  },
+  "toolbarTint": "#4C99FF",
   "barMaterial": "thin",
-  "barTint": {
-    "red": 0.5,
-    "green": 0.05,
-    "blue": 0.4
-  },
+  "barTint": "#800D66",
   "barTintOpacity": 0.18,
-  "platterTint": {
-    "red": 0.35,
-    "green": 0.0,
-    "blue": 0.3
-  },
+  "platterTint": "#59004C",
   "platterTintOpacity": 0.08,
   "fontDesign": "rounded",
   "fontWeight": "semibold",

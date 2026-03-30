@@ -2,85 +2,34 @@
   "id": "matrix",
   "displayName": "The Matrix",
   "author": "Bubo Community",
-  "accentColor": {
-    "red": 0.0,
-    "green": 0.7,
-    "blue": 0.0
-  },
-  "surfaceTint": {
-    "red": 0.0,
-    "green": 0.08,
-    "blue": 0.0
-  },
+  "accentColor": "#00B200",
+  "surfaceTint": "#001400",
   "surfaceTintOpacity": 0.4,
   "backgroundGradient": {
     "colors": [
-      {
-        "red": 0.0,
-        "green": 0.25,
-        "blue": 0.0,
-        "opacity": 0.4
-      },
-      {
-        "red": 0.0,
-        "green": 0.1,
-        "blue": 0.05,
-        "opacity": 0.35
-      },
-      {
-        "red": 0.0,
-        "green": 0.0,
-        "blue": 0.0,
-        "opacity": 0.0
-      }
+      "#00400066",
+      "#001A0D59",
+      "#00000000"
     ],
     "style": "linear",
     "startPoint": "top",
     "endPoint": "bottom"
   },
   "previewColors": [
-    {
-      "red": 0.0,
-      "green": 0.7,
-      "blue": 0.0
-    },
-    {
-      "red": 0.0,
-      "green": 0.15,
-      "blue": 0.0
-    }
+    "#00B200",
+    "#002600"
   ],
   "prefersDarkTint": true,
-  "secondaryAccent": {
-    "red": 0.0,
-    "green": 0.7,
-    "blue": 0.1
-  },
+  "secondaryAccent": "#00B21A",
   "buttonStyle": "solid",
   "buttonShape": "rectangle",
-  "buttonColor": {
-    "red": 0.0,
-    "green": 0.9,
-    "blue": 0.0
-  },
-  "toolbarTint": {
-    "red": 0.0,
-    "green": 0.5,
-    "blue": 0.15
-  },
+  "buttonColor": "#00E600",
+  "toolbarTint": "#008026",
   "barMaterial": "ultraThin",
-  "barTint": {
-    "red": 0.0,
-    "green": 0.2,
-    "blue": 0.0
-  },
+  "barTint": "#003300",
   "barTintOpacity": 0.18,
   "platterMaterial": "thin",
-  "platterTint": {
-    "red": 0.0,
-    "green": 0.15,
-    "blue": 0.0
-  },
+  "platterTint": "#002600",
   "platterTintOpacity": 0.12,
   "fontDesign": "monospaced",
   "fontWeight": "regular",

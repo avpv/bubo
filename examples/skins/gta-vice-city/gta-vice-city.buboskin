@@ -2,79 +2,32 @@
   "id": "gta_vice_city",
   "displayName": "GTA Vice City",
   "author": "Bubo Community",
-  "accentColor": {
-    "red": 0.8,
-    "green": 0.3,
-    "blue": 0.55
-  },
-  "surfaceTint": {
-    "red": 0.1,
-    "green": 0.02,
-    "blue": 0.06
-  },
+  "accentColor": "#CC4C8C",
+  "surfaceTint": "#1A050F",
   "surfaceTintOpacity": 0.3,
   "backgroundGradient": {
     "colors": [
-      {
-        "red": 0.95,
-        "green": 0.5,
-        "blue": 0.25,
-        "opacity": 0.3
-      },
-      {
-        "red": 0.6,
-        "green": 0.15,
-        "blue": 0.5,
-        "opacity": 0.25
-      },
-      {
-        "red": 0.0,
-        "green": 0.0,
-        "blue": 0.0,
-        "opacity": 0.0
-      }
+      "#F280404C",
+      "#99268040",
+      "#00000000"
     ],
     "style": "linear",
     "startPoint": "topTrailing",
     "endPoint": "bottomLeading"
   },
   "previewColors": [
-    {
-      "red": 0.8,
-      "green": 0.3,
-      "blue": 0.55
-    },
-    {
-      "red": 0.95,
-      "green": 0.55,
-      "blue": 0.2
-    }
+    "#CC4C8C",
+    "#F28C33"
   ],
   "prefersDarkTint": false,
-  "secondaryAccent": {
-    "red": 0.3,
-    "green": 0.85,
-    "blue": 0.85
-  },
+  "secondaryAccent": "#4CD9D9",
   "buttonStyle": "gradient",
   "buttonShape": "roundedRect",
-  "toolbarTint": {
-    "red": 0.3,
-    "green": 0.8,
-    "blue": 0.8
-  },
+  "toolbarTint": "#4CCCCC",
   "barMaterial": "regular",
-  "barTint": {
-    "red": 0.6,
-    "green": 0.18,
-    "blue": 0.4
-  },
+  "barTint": "#992E66",
   "barTintOpacity": 0.15,
-  "platterTint": {
-    "red": 0.45,
-    "green": 0.1,
-    "blue": 0.3
-  },
+  "platterTint": "#731A4C",
   "platterTintOpacity": 0.08,
   "fontDesign": "rounded",
   "fontWeight": "semibold",

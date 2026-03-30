@@ -15,7 +15,7 @@ One unified approach for everything.
    cp Bubo/Skins/TEMPLATE.buboskin MyNewSkin.buboskin
    ```
 
-2. **Edit the JSON values** — each field is documented in the template.
+2. **Edit the JSON values** — each field is documented below.
    The key properties:
 
    | Property | What it does |
@@ -46,75 +46,112 @@ One unified approach for everything.
   "id": "my_skin_name",
   "displayName": "My Skin Name",
   "author": "@your_github",
-  "accentColor": { "red": 0.0, "green": 0.9, "blue": 0.0 },
-  "surfaceTint": { "red": 0.0, "green": 0.15, "blue": 0.0 },
+  "accentColor": "#00E600",
+  "surfaceTint": "#002600",
   "surfaceTintOpacity": 0.35,
   "backgroundGradient": {
-    "colors": [
-      { "red": 0.0, "green": 0.18, "blue": 0.0, "opacity": 0.5 },
-      { "red": 0.0, "green": 0.08, "blue": 0.0, "opacity": 0.3 },
-      { "red": 0.0, "green": 0.0, "blue": 0.0, "opacity": 0.0 }
-    ],
+    "colors": ["#002E0080", "#001A0D4C", "clear"],
     "style": "linear",
     "startPoint": "topLeading",
     "endPoint": "bottomTrailing"
   },
-  "previewColors": [
-    { "red": 0.0, "green": 0.7, "blue": 0.0 },
-    { "red": 0.1, "green": 0.2, "blue": 0.1 }
-  ],
+  "previewColors": ["#00B200", "#1A3319"],
   "prefersDarkTint": true,
-  "secondaryAccent": { "red": 0.0, "green": 0.65, "blue": 0.15 },
+  "secondaryAccent": "#00A626",
   "buttonStyle": "gradient"
 }
 ```
 
-### Colors
+## Colors
 
-Colors use `red`, `green`, `blue` (0.0–1.0) with an optional `opacity`.
+Every color field accepts any of these formats:
 
-You can also use named system colors with the `name` field:
+| Format | Example | Notes |
+|--------|---------|-------|
+| Hex RGB | `"#0070FA"` | 6-digit, fully opaque |
+| Hex RGBA | `"#0070FA80"` | 8-digit, last byte = alpha (80 ≈ 50%) |
+| Named color | `"accentColor"` | Follows the user's system accent |
+| Named + opacity | `"accentColor:0.5"` | Named color at 50% opacity |
+| Keyword | `"clear"`, `"white"`, `"black"`, `"gray"` | Common colors |
+| Legacy object | `{ "red": 0.0, "green": 0.44, "blue": 0.98 }` | Still supported |
 
-```json
-{ "name": "accentColor" }
-{ "name": "accentColor", "opacity": 0.5 }
-{ "name": "clear" }
-{ "name": "gray" }
-{ "name": "white" }
-```
+**Hex is the recommended format** — compact and universally understood.
+Use any color picker to get the hex value.
 
-When `name` is set, `red`/`green`/`blue` are ignored.
+Named colors (`"accentColor"`) are useful for skins that adapt to the user's
+system accent — see `System.buboskin` for an example.
 
-### Gradients
-
-Two gradient styles are available:
+## Gradients
 
 ```json
 // Linear — flows between two corners/edges
-{ "style": "linear", "startPoint": "topLeading", "endPoint": "bottomTrailing" }
+{ "style": "linear", "colors": [...], "startPoint": "topLeading", "endPoint": "bottomTrailing" }
 
 // Radial — radiates from a center point
-{ "style": "radial", "center": "top", "startRadius": 0, "endRadius": 500 }
+{ "style": "radial", "colors": [...], "center": "top", "startRadius": 0, "endRadius": 500 }
 
 // Clear — no gradient (transparent)
 { "style": "clear" }
 ```
 
+Gradient color stops support hex with alpha for transparency:
+`"#0059BF38"` (the `38` = ~22% opacity). Use `"clear"` for a fully transparent stop.
+
 Valid point values: `top`, `bottom`, `leading`, `trailing`, `topLeading`,
 `topTrailing`, `bottomLeading`, `bottomTrailing`, `center`.
 
-### Button & Typography Options
+## All Properties
+
+### Required
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `id` | string | Unique ID (lowercase_snake_case). Permanent. |
+| `displayName` | string | Display name in the skin picker |
+| `author` | string | Author name or `@github_handle` |
+| `accentColor` | color | Primary accent color |
+| `surfaceTint` | color | Mood overlay on surfaces |
+| `surfaceTintOpacity` | 0–1 | Surface tint intensity |
+| `backgroundGradient` | gradient | Ambient background glow |
+| `previewColors` | color[] | 1–2 colors for picker thumbnail |
+| `prefersDarkTint` | bool | `true` for dark/moody skins |
+
+### Optional — Buttons
 
 | Property | Values | Default |
 |----------|--------|---------|
 | `buttonStyle` | `"solid"`, `"gradient"`, `"glass"` | `"gradient"` |
 | `buttonShape` | `"capsule"`, `"roundedRect"`, `"rectangle"` | `"capsule"` |
+| `buttonColor` | color | Auto-derived from accent luminance |
+| `buttonMaterial` | material | `"regular"` |
+| `buttonTint` | color | Falls back to accentColor |
+| `buttonTintOpacity` | 0–1 | `0.3` |
+| `secondaryAccent` | color | Falls back to darkened accentColor |
+
+### Optional — Bars & Surfaces
+
+| Property | Values | Default |
+|----------|--------|---------|
 | `barMaterial` | `"ultraThin"`, `"thin"`, `"regular"`, `"thick"`, `"ultraThick"`, `"bar"` | `"thick"` |
+| `barTint` | color | None |
+| `barTintOpacity` | 0–1 | `0` |
+| `platterMaterial` | material (same values) | `"regular"` |
+| `platterTint` | color | None |
+| `platterTintOpacity` | 0–1 | `0` |
+| `toolbarTint` | color | Falls back to accentColor at 70% |
+
+### Optional — Typography & Symbols
+
+| Property | Values | Default |
+|----------|--------|---------|
 | `fontDesign` | `"default"`, `"rounded"`, `"serif"`, `"monospaced"` | `"rounded"` |
 | `fontWeight` | `"regular"`, `"medium"`, `"semibold"`, `"bold"` | `"semibold"` |
+| `headlineFontWeight` | same as fontWeight | `"semibold"` |
 | `sfSymbolRendering` | `"monochrome"`, `"hierarchical"`, `"palette"`, `"multicolor"` | `"hierarchical"` |
+| `sfSymbolWeight` | `"ultraLight"` – `"black"` | `"medium"` |
 | `badgeStyle` | `"tinted"`, `"filled"`, `"outlined"` | `"tinted"` |
 | `separatorStyle` | `"system"`, `"subtle"`, `"accent"`, `"none"` | `"system"` |
+| `separatorOpacity` | 0–1 | `0.5` |
 
 ## Design Tips
 
@@ -157,8 +194,9 @@ Bubo/Skins/
 - **Skin IDs are permanent** — once merged, never rename the `id` field.
   Users' settings reference this string.
 - **One file per skin** — keeps diffs clean and avoids merge conflicts.
-- **Use `{ "red": ..., "green": ..., "blue": ... }` for custom colors** —
-  avoid named colors unless you specifically need system-dynamic behavior.
+- **Use hex for custom colors** (`"#0070FA"`) — compact, universal, easy to
+  pick from any color tool. Reserve named colors (`"accentColor"`) for skins
+  that intentionally follow the system accent.
 
 ## Background Images
 

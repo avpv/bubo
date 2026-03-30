@@ -2,109 +2,43 @@
   "id": "my_skin_name",
   "displayName": "My Skin Name",
   "author": "@your_github",
-  "accentColor": {
-    "red": 0.0,
-    "green": 0.5,
-    "blue": 1.0
-  },
-  "surfaceTint": {
-    "red": 0.0,
-    "green": 0.02,
-    "blue": 0.08
-  },
+
+  "accentColor": "#0080FF",
+  "surfaceTint": "#000514",
   "surfaceTintOpacity": 0.3,
+
   "backgroundGradient": {
-    "colors": [
-      {
-        "red": 0.0,
-        "green": 0.3,
-        "blue": 0.6,
-        "opacity": 0.2
-      },
-      {
-        "red": 0.1,
-        "green": 0.0,
-        "blue": 0.4,
-        "opacity": 0.1
-      },
-      {
-        "red": 0.0,
-        "green": 0.0,
-        "blue": 0.0,
-        "opacity": 0.0
-      }
-    ],
+    "colors": ["#004C9933", "#1A006619", "clear"],
     "style": "linear",
     "startPoint": "topLeading",
     "endPoint": "bottomTrailing"
   },
-  "previewColors": [
-    {
-      "red": 0.0,
-      "green": 0.5,
-      "blue": 1.0
-    },
-    {
-      "red": 0.3,
-      "green": 0.0,
-      "blue": 0.6
-    }
-  ],
+
+  "previewColors": ["#0080FF", "#4C0099"],
   "prefersDarkTint": false,
-  "secondaryAccent": {
-    "red": 0.2,
-    "green": 0.0,
-    "blue": 0.5
-  },
+
+  "secondaryAccent": "#330080",
   "buttonStyle": "gradient",
-  "_comment_buttonShape": "Optional: button shape. Values: capsule (default), roundedRect, rectangle.",
   "buttonShape": "capsule",
-  "_comment_buttonColor": "Optional: explicit foreground color for primary buttons. Omit to auto-derive from accent luminance.",
-  "buttonColor": {
-    "red": 1.0,
-    "green": 1.0,
-    "blue": 1.0
-  },
-  "_comment_buttonMaterial": "Optional: material for glass/secondary buttons. Same values as barMaterial. Defaults to regular.",
+  "buttonColor": "#FFFFFF",
   "buttonMaterial": "regular",
-  "_comment_buttonTint": "Optional: color overlay on button material (glass-style). Omit to use accentColor. Use with buttonTintOpacity (0-1, typically 0.15-0.35).",
-  "buttonTint": {
-    "red": 0.0,
-    "green": 0.4,
-    "blue": 0.8
-  },
+  "buttonTint": "#0066CC",
   "buttonTintOpacity": 0.3,
-  "_comment_toolbar": "Optional: toolbar button tint (Refresh, Settings, Quit). Omit to auto-derive from accentColor.",
-  "toolbarTint": {
-    "red": 0.3,
-    "green": 0.5,
-    "blue": 0.4
-  },
-  "_comment_barMaterial": "Optional: material for header/footer bars. Values: ultraThin, thin, regular, thick (default), ultraThick, bar.",
+
+  "toolbarTint": "#4C8066",
   "barMaterial": "thick",
-  "_comment_barTint": "Optional: color overlay on top of bar material for a tinted-glass effect. Use with barTintOpacity (0-1, typically 0.05-0.25).",
-  "barTint": {
-    "red": 0.0,
-    "green": 0.2,
-    "blue": 0.4
-  },
+  "barTint": "#003366",
   "barTintOpacity": 0.15,
-  "_comment_platterMaterial": "Optional: material for card/platter surfaces (event rows, form sections, pickers). Same values as barMaterial. Defaults to regular.",
   "platterMaterial": "regular",
-  "_comment_platterTint": "Optional: color overlay on platter surfaces. Use with platterTintOpacity (0-1, typically 0.05-0.2).",
-  "platterTint": {
-    "red": 0.0,
-    "green": 0.1,
-    "blue": 0.2
-  },
+  "platterTint": "#001A33",
   "platterTintOpacity": 0.1,
-  "_comment_fontDesign": "Optional: font design. Values: default, rounded (default), serif, monospaced. HIG: must be system font family.",
-  "_comment_fontWeight": "Optional: body/button font weight. Values: regular, medium, semibold (default), bold.",
-  "_comment_headlineFontWeight": "Optional: headline font weight. Same values as fontWeight.",
-  "_comment_sfSymbolRendering": "Optional: SF Symbol rendering. Values: monochrome, hierarchical (default), palette, multicolor.",
-  "_comment_sfSymbolWeight": "Optional: SF Symbol weight. Values: ultraLight, thin, light, regular, medium (default), semibold, bold, heavy, black.",
-  "_comment_badgeStyle": "Optional: badge/pill style. Values: tinted (default), filled, outlined.",
-  "_comment_separatorStyle": "Optional: separator style. Values: system (default), subtle, accent, none.",
-  "_comment_separatorOpacity": "Optional: separator opacity (0-1, default 0.5). Floor at 0.15 when separatorStyle != none.",
-  "_comment": "Optional: add a background image. Place the image file next to this .buboskin file."
+
+  "fontDesign": "rounded",
+  "fontWeight": "semibold",
+  "headlineFontWeight": "bold",
+  "sfSymbolRendering": "hierarchical",
+  "sfSymbolWeight": "medium",
+  "badgeStyle": "tinted",
+  "separatorStyle": "system",
+  "separatorOpacity": 0.5
 }

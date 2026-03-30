@@ -269,29 +269,150 @@ struct CustomSkinJSON: Codable {
     }
 }
 
+/// A flexible color type that decodes from multiple JSON representations.
+///
+/// **Supported formats** (all fields that expect a color accept any of these):
+///
+/// | Format | Example | Notes |
+/// |--------|---------|-------|
+/// | Hex RGB | `"#0070FA"` | 6-digit hex, opacity = 1.0 |
+/// | Hex RGBA | `"#0070FA80"` | 8-digit hex, last byte = alpha |
+/// | Named color | `"accentColor"` | System/semantic color |
+/// | Named + opacity | `"accentColor:0.5"` | Named color at 50% opacity |
+/// | Keyword | `"clear"`, `"white"`, `"black"` | Common colors |
+/// | Legacy object | `{ "red": 0.0, "green": 0.44, "blue": 0.98 }` | Backward compat |
+/// | Legacy named | `{ "name": "accentColor", "opacity": 0.5 }` | Backward compat |
 struct JSONColor: Codable {
     var red: Double?
     var green: Double?
     var blue: Double?
     var opacity: Double?
-    /// Named system color: "accentColor", "clear", "gray", "white", "black".
-    /// When set, red/green/blue are ignored.
     var name: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case red, green, blue, opacity, name
+    }
+
+    init(from decoder: Decoder) throws {
+        // 1. Try string first (new short format)
+        if let container = try? decoder.singleValueContainer(),
+           let string = try? container.decode(String.self) {
+            self = JSONColor.parse(string)
+            return
+        }
+
+        // 2. Fall back to keyed container (legacy object format)
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        red = try container.decodeIfPresent(Double.self, forKey: .red)
+        green = try container.decodeIfPresent(Double.self, forKey: .green)
+        blue = try container.decodeIfPresent(Double.self, forKey: .blue)
+        opacity = try container.decodeIfPresent(Double.self, forKey: .opacity)
+        name = try container.decodeIfPresent(String.self, forKey: .name)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        // Prefer short string form when encoding
+        if let name {
+            var container = encoder.singleValueContainer()
+            if let opacity {
+                try container.encode("\(name):\(opacity)")
+            } else {
+                try container.encode(name)
+            }
+            return
+        }
+        if let r = red, let g = green, let b = blue {
+            var container = encoder.singleValueContainer()
+            let ri = Int(round(r * 255)), gi = Int(round(g * 255)), bi = Int(round(b * 255))
+            if let a = opacity, a < 1.0 {
+                let ai = Int(round(a * 255))
+                try container.encode(String(format: "#%02X%02X%02X%02X", ri, gi, bi, ai))
+            } else {
+                try container.encode(String(format: "#%02X%02X%02X", ri, gi, bi))
+            }
+            return
+        }
+        // Fallback: encode as object
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(red, forKey: .red)
+        try container.encodeIfPresent(green, forKey: .green)
+        try container.encodeIfPresent(blue, forKey: .blue)
+        try container.encodeIfPresent(opacity, forKey: .opacity)
+        try container.encodeIfPresent(name, forKey: .name)
+    }
+
+    // MARK: - String Parsing
+
+    /// Parse a color string: hex (`#RRGGBB`, `#RRGGBBAA`), named (`"accentColor"`),
+    /// or named with opacity (`"accentColor:0.5"`).
+    private static func parse(_ string: String) -> JSONColor {
+        let trimmed = string.trimmingCharacters(in: .whitespaces)
+
+        // Hex color
+        if trimmed.hasPrefix("#") {
+            return parseHex(trimmed)
+        }
+
+        // Named color with opacity: "accentColor:0.5"
+        if trimmed.contains(":") {
+            let parts = trimmed.split(separator: ":", maxSplits: 1)
+            return JSONColor(
+                red: nil, green: nil, blue: nil,
+                opacity: Double(parts[1]),
+                name: String(parts[0])
+            )
+        }
+
+        // Plain named color
+        return JSONColor(red: nil, green: nil, blue: nil, opacity: nil, name: trimmed)
+    }
+
+    private static func parseHex(_ hex: String) -> JSONColor {
+        var h = hex.trimmingCharacters(in: .whitespaces)
+        if h.hasPrefix("#") { h.removeFirst() }
+
+        var int: UInt64 = 0
+        Scanner(string: h).scanHexInt64(&int)
+
+        if h.count == 8 {
+            // #RRGGBBAA
+            return JSONColor(
+                red: Double((int >> 24) & 0xFF) / 255.0,
+                green: Double((int >> 16) & 0xFF) / 255.0,
+                blue: Double((int >> 8) & 0xFF) / 255.0,
+                opacity: Double(int & 0xFF) / 255.0,
+                name: nil
+            )
+        } else {
+            // #RRGGBB
+            return JSONColor(
+                red: Double((int >> 16) & 0xFF) / 255.0,
+                green: Double((int >> 8) & 0xFF) / 255.0,
+                blue: Double(int & 0xFF) / 255.0,
+                opacity: nil,
+                name: nil
+            )
+        }
+    }
+
+    // MARK: - To SwiftUI Color
 
     func toColor() -> Color {
         if let name {
             let base: Color = switch name.lowercased() {
-            case "accentcolor": .accentColor
-            case "clear":       .clear
-            case "gray", "grey": .gray
-            case "white":       .white
-            case "black":       .black
-            default:            .accentColor
+            case "accentcolor":             .accentColor
+            case "clear", "transparent":    .clear
+            case "gray", "grey":            .gray
+            case "white":                   .white
+            case "black":                   .black
+            default:                        .accentColor
             }
             if let opacity { return base.opacity(opacity) }
             return base
         }
-        return Color(red: red ?? 0, green: green ?? 0, blue: blue ?? 0).opacity(opacity ?? 1.0)
+        let color = Color(red: red ?? 0, green: green ?? 0, blue: blue ?? 0)
+        if let opacity { return color.opacity(opacity) }
+        return color
     }
 }
 
