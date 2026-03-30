@@ -2,56 +2,57 @@ import SwiftUI
 
 // MARK: - Ocean
 // Author: Bubo Team
-// Deep vivid blue — bold confidence, ocean depth.
-// Apple HIG: clarity through color, functional elegance.
-// Personality: energetic, bold. Gradient buttons for vibrancy,
-// strong tinting for an immersive "underwater" atmosphere.
+// Deep bioluminescent ocean — bold cobalt blues with aqua highlights,
+// like diving into a kelp forest at twilight. Strong tinting creates
+// a fully immersive underwater atmosphere.
 
 extension SkinCatalog {
     static let ocean = SkinDefinition(
         id: "ocean",
         displayName: "Ocean",
         author: "Bubo",
-        // Vivid cobalt blue — bolder than system blue
-        accentColor: Color(red: 0.0, green: 0.42, blue: 0.95),
-        // Deep ocean surface
-        surfaceTint: Color(red: 0.01, green: 0.04, blue: 0.14),
-        surfaceTintOpacity: 0.25,
-        // Strong diagonal gradient — sense of depth and movement
+        // Vivid cobalt — electric, deep
+        accentColor: Color(red: 0.0, green: 0.44, blue: 0.98),
+        // Deep abyss surface tint
+        surfaceTint: Color(red: 0.01, green: 0.05, blue: 0.16),
+        surfaceTintOpacity: 0.30,
+        // Strong diagonal — light filtering through surface waves
         backgroundGradient: SkinGradient(
             colors: [
-                Color(red: 0.0, green: 0.30, blue: 0.70).opacity(0.18),
-                Color(red: 0.02, green: 0.08, blue: 0.30).opacity(0.10),
+                Color(red: 0.0, green: 0.35, blue: 0.75).opacity(0.22),
+                Color(red: 0.02, green: 0.10, blue: 0.35).opacity(0.12),
                 .clear,
             ],
             style: .linear(startPoint: .topTrailing, endPoint: .bottomLeading)
         ),
         previewColors: [
-            Color(red: 0.0, green: 0.42, blue: 0.95),
-            Color(red: 0.05, green: 0.18, blue: 0.48),
+            Color(red: 0.0, green: 0.44, blue: 0.98),
+            Color(red: 0.05, green: 0.20, blue: 0.52),
         ],
         prefersDarkTint: true,
-        // Lighter sky blue for button gradient — surface-to-depth feel
-        secondaryAccent: Color(red: 0.15, green: 0.55, blue: 1.0),
-        // HIG: gradient buttons — vivid, energetic primary actions
+        // Sky blue — surface light breaking through
+        secondaryAccent: Color(red: 0.18, green: 0.58, blue: 1.0),
+        // Gradient — vivid, energetic like bioluminescence
         buttonStyle: .gradient,
-        // Aqua/cyan toolbar — like sunlight hitting water surface
-        toolbarTint: Color(red: 0.0, green: 0.68, blue: 0.72),
-        // Thinner bars — let the ocean gradient show through
+        // Aqua/cyan toolbar — sunlight on water surface
+        toolbarTint: Color(red: 0.0, green: 0.72, blue: 0.75),
+        // Regular bars — let the ocean gradient show through
         barMaterial: .regular,
-        // Deep blue bar tint — like looking through water surface
-        barTint: Color(red: 0.0, green: 0.15, blue: 0.40),
-        barTintOpacity: 0.15,
-        // Ocean-tinted platters — immersive underwater feel
-        platterTint: Color(red: 0.0, green: 0.10, blue: 0.30),
-        platterTintOpacity: 0.08,
+        barTint: Color(red: 0.0, green: 0.18, blue: 0.45),
+        barTintOpacity: 0.18,
+        platterTint: Color(red: 0.0, green: 0.12, blue: 0.35),
+        platterTintOpacity: 0.10,
+        // Rounded + semibold — friendly but bold, like ocean waves
         fontDesign: .rounded,
         fontWeight: .semibold,
         headlineFontWeight: .bold,
+        // Hierarchical — depth layers like underwater light
         sfSymbolRendering: .hierarchical,
         sfSymbolWeight: .semibold,
+        // Filled — bold, saturated, like fish scales catching light
         badgeStyle: .filled,
+        // Accent — cobalt blue separator lines, ocean current
         separatorStyle: .accent,
-        separatorOpacity: 0.25
+        separatorOpacity: 0.2
     )
 }

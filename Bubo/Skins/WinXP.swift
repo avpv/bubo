@@ -2,65 +2,59 @@ import SwiftUI
 
 // MARK: - Windows XP Luna
 // Author: Bubo Team
-// Nostalgic tribute to the Windows XP Luna theme — bold blue taskbar,
-// green Start button energy, and that unmistakable Bliss gradient sky.
+// Pure nostalgia — the unmistakable bold blue taskbar, green Start button,
+// and Bliss wallpaper sky. Bold type, multicolor icons, chunky separators.
+// Everything is saturated, confident, and unapologetically colorful.
 
 extension SkinCatalog {
     static let winXP = SkinDefinition(
         id: "win_xp",
         displayName: "XP Luna",
         author: "Bubo",
-
-        // XP taskbar / title bar blue
-        accentColor: Color(red: 0.0, green: 0.33, blue: 0.89),
-
-        // Deep navy surface mood — mimics XP's dark taskbar base
-        surfaceTint: Color(red: 0.02, green: 0.05, blue: 0.18),
-        surfaceTintOpacity: 0.22,
-
-        // Sky-blue gradient reminiscent of XP's Bliss wallpaper horizon
+        // XP taskbar blue — iconic
+        accentColor: Color(red: 0.0, green: 0.35, blue: 0.92),
+        // Deep navy — dark taskbar base
+        surfaceTint: Color(red: 0.02, green: 0.06, blue: 0.20),
+        surfaceTintOpacity: 0.25,
+        // Sky gradient — Bliss wallpaper horizon
         backgroundGradient: SkinGradient(
             colors: [
-                Color(red: 0.14, green: 0.36, blue: 0.86).opacity(0.14),
-                Color(red: 0.0, green: 0.20, blue: 0.55).opacity(0.08),
+                Color(red: 0.16, green: 0.38, blue: 0.88).opacity(0.16),
+                Color(red: 0.0, green: 0.22, blue: 0.58).opacity(0.10),
                 .clear,
             ],
             style: .linear(startPoint: .top, endPoint: .bottom)
         ),
-
         previewColors: [
-            Color(red: 0.0, green: 0.33, blue: 0.89),
-            Color(red: 0.22, green: 0.60, blue: 0.18),
+            Color(red: 0.0, green: 0.35, blue: 0.92),
+            Color(red: 0.24, green: 0.62, blue: 0.20),
         ],
         prefersDarkTint: true,
-
         // Lighter XP blue for button gradient
-        secondaryAccent: Color(red: 0.10, green: 0.45, blue: 0.95),
-
-        // XP used bold gradient fills on buttons and title bars
+        secondaryAccent: Color(red: 0.12, green: 0.48, blue: 0.98),
+        // Gradient — bold Luna fills on buttons and title bars
         buttonStyle: .gradient,
-        // XP buttons were rounded rectangles — classic Win32 controls
         buttonShape: .roundedRect,
-        // White button text — XP's high-contrast button labels
         buttonColor: .white,
-
-        // XP Start button green for toolbar — the iconic contrast
-        toolbarTint: Color(red: 0.22, green: 0.60, blue: 0.18),
-        // Thick opaque bars — XP's chunky title bars and taskbar
+        // XP Start button green — the iconic contrast
+        toolbarTint: Color(red: 0.24, green: 0.62, blue: 0.20),
+        // Ultra-thick bars — chunky XP taskbar weight
         barMaterial: .ultraThick,
-        // Bold blue bar tint — iconic Luna taskbar color
-        barTint: Color(red: 0.0, green: 0.22, blue: 0.65),
-        barTintOpacity: 0.20,
-        // Light blue platters — XP window body feel
-        platterTint: Color(red: 0.08, green: 0.20, blue: 0.50),
-        platterTintOpacity: 0.06,
+        barTint: Color(red: 0.0, green: 0.24, blue: 0.68),
+        barTintOpacity: 0.22,
+        platterTint: Color(red: 0.10, green: 0.22, blue: 0.52),
+        platterTintOpacity: 0.08,
+        // SF Pro + bold — chunky, confident, Windows UI energy
         fontDesign: .default,
         fontWeight: .bold,
         headlineFontWeight: .bold,
+        // Multicolor — XP loved saturated, colorful icons
         sfSymbolRendering: .multicolor,
         sfSymbolWeight: .bold,
+        // Filled — bold saturated badges, primary-color confidence
         badgeStyle: .filled,
+        // System — classic visible separators, thick and present
         separatorStyle: .system,
-        separatorOpacity: 0.6
+        separatorOpacity: 0.65
     )
 }

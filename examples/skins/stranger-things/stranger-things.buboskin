@@ -59,11 +59,31 @@
   },
   "buttonStyle": "solid",
   "buttonShape": "roundedRect",
-  "toolbarTint": { "red": 0.8, "green": 0.6, "blue": 0.2 },
+  "toolbarTint": {
+    "red": 0.8,
+    "green": 0.6,
+    "blue": 0.2
+  },
   "barMaterial": "ultraThin",
-  "barTint": { "red": 0.45, "green": 0.02, "blue": 0.02 },
+  "barTint": {
+    "red": 0.45,
+    "green": 0.02,
+    "blue": 0.02
+  },
   "barTintOpacity": 0.18,
   "platterMaterial": "thin",
-  "platterTint": { "red": 0.35, "green": 0.0, "blue": 0.02 },
-  "platterTintOpacity": 0.10
+  "platterTint": {
+    "red": 0.35,
+    "green": 0.0,
+    "blue": 0.02
+  },
+  "platterTintOpacity": 0.1,
+  "fontDesign": "serif",
+  "fontWeight": "semibold",
+  "headlineFontWeight": "bold",
+  "sfSymbolRendering": "monochrome",
+  "sfSymbolWeight": "medium",
+  "badgeStyle": "outlined",
+  "separatorStyle": "system",
+  "separatorOpacity": 0.5
 }

@@ -2,56 +2,59 @@ import SwiftUI
 
 // MARK: - Arctic
 // Author: Bubo Team
-// Crisp ice-blue — airy, bright, and spacious like fresh snowfall.
-// Apple HIG: lightness and clarity, emphasizing content over chrome.
-// Personality: clean, bright, minimal. Glass buttons with very low
-// tint — like frosted glass on a winter morning.
+// Fresh snowfall — crisp ice-blue, maximum brightness, minimal chrome.
+// Glass surfaces are frosted windowpanes. Everything is lightweight,
+// transparent, crystalline. The opposite of Midnight.
 
 extension SkinCatalog {
     static let arctic = SkinDefinition(
         id: "arctic",
         displayName: "Arctic",
         author: "Bubo",
-        // Bright cyan-blue — icy, crisp
-        accentColor: Color(red: 0.20, green: 0.62, blue: 0.85),
-        // Almost invisible tint — Arctic is about brightness and openness
-        surfaceTint: Color(red: 0.05, green: 0.10, blue: 0.14),
-        surfaceTintOpacity: 0.06,
-        // Very subtle top-down linear — like overcast arctic sky
+        // Bright cyan — icy, electric, crisp
+        accentColor: Color(red: 0.22, green: 0.65, blue: 0.88),
+        // Near-invisible tint — Arctic is about openness
+        surfaceTint: Color(red: 0.06, green: 0.12, blue: 0.16),
+        surfaceTintOpacity: 0.05,
+        // Very subtle top-down — overcast arctic sky
         backgroundGradient: SkinGradient(
             colors: [
-                Color(red: 0.18, green: 0.48, blue: 0.68).opacity(0.06),
-                Color(red: 0.10, green: 0.28, blue: 0.42).opacity(0.03),
+                Color(red: 0.20, green: 0.50, blue: 0.72).opacity(0.08),
+                Color(red: 0.12, green: 0.30, blue: 0.45).opacity(0.04),
             ],
             style: .linear(startPoint: .top, endPoint: .bottom)
         ),
         previewColors: [
-            Color(red: 0.20, green: 0.62, blue: 0.85),
-            Color(red: 0.60, green: 0.82, blue: 0.95),
+            Color(red: 0.22, green: 0.65, blue: 0.88),
+            Color(red: 0.62, green: 0.85, blue: 0.96),
         ],
         prefersDarkTint: false,
-        // Light frost blue for subtle button glass
-        secondaryAccent: Color(red: 0.35, green: 0.70, blue: 0.88),
-        // HIG: glass — frosted, airy, light
+        // Light frost blue for glass
+        secondaryAccent: Color(red: 0.38, green: 0.72, blue: 0.90),
+        // Glass — frosted, airy, crystalline
         buttonStyle: .glass,
-        // Cool lavender-ice toolbar — triadic complement to cyan
-        toolbarTint: Color(red: 0.52, green: 0.48, blue: 0.72),
-        // Thin bars — icy, crystalline, minimal weight
+        buttonTint: Color(red: 0.18, green: 0.55, blue: 0.78),
+        buttonTintOpacity: 0.18,
+        // Lavender-ice toolbar — triadic complement
+        toolbarTint: Color(red: 0.55, green: 0.50, blue: 0.75),
+        // Thin bars — icy, minimal weight
         barMaterial: .thin,
-        // Faint ice-blue bar tint — frosted window pane
-        barTint: Color(red: 0.15, green: 0.40, blue: 0.55),
-        barTintOpacity: 0.05,
-        // Thin platters — delicate frost surfaces
+        barTint: Color(red: 0.18, green: 0.42, blue: 0.58),
+        barTintOpacity: 0.06,
         platterMaterial: .thin,
-        platterTint: Color(red: 0.12, green: 0.35, blue: 0.50),
-        platterTintOpacity: 0.03,
+        platterTint: Color(red: 0.14, green: 0.38, blue: 0.52),
+        platterTintOpacity: 0.04,
+        // Rounded + light weight — delicate ice crystals
         fontDesign: .rounded,
         fontWeight: .regular,
         headlineFontWeight: .medium,
+        // Hierarchical + light — crystalline, translucent icons
         sfSymbolRendering: .hierarchical,
         sfSymbolWeight: .light,
+        // Tinted — soft frost badges
         badgeStyle: .tinted,
+        // Subtle — barely-visible ice lines
         separatorStyle: .subtle,
-        separatorOpacity: 0.3
+        separatorOpacity: 0.2
     )
 }
