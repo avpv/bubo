@@ -38,7 +38,7 @@ struct DateTimePickerPills: View {
                 }
                 .padding(.horizontal, DS.Spacing.pillHorizontal)
                 .frame(height: DS.Size.controlHeight)
-                .background(DS.Materials.platter)
+                .skinPlatter(skin)
                 .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
@@ -75,7 +75,7 @@ struct DateTimePickerPills: View {
                 }
                 .padding(.horizontal, DS.Spacing.pillHorizontal)
                 .frame(height: DS.Size.controlHeight)
-                .background(DS.Materials.platter)
+                .skinPlatter(skin)
                 .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)

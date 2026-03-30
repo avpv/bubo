@@ -70,6 +70,52 @@ extension View {
     }
 }
 
+// MARK: - Bar Background
+
+/// Composable background for header/footer bars: base material + optional color tint overlay.
+struct SkinBarBackground: View {
+    let skin: SkinDefinition
+
+    var body: some View {
+        ZStack {
+            Rectangle().fill(skin.resolvedBarMaterial)
+            if let tint = skin.barTint, skin.barTintOpacity > 0 {
+                tint.opacity(skin.barTintOpacity)
+            }
+        }
+    }
+}
+
+extension View {
+    /// Applies the skin's bar background (material + optional tint) as a background layer.
+    func skinBarBackground(_ skin: SkinDefinition) -> some View {
+        background(SkinBarBackground(skin: skin))
+    }
+}
+
+// MARK: - Platter Background
+
+/// Composable background for card/platter surfaces: base material + optional color tint overlay.
+struct SkinPlatterBackground: View {
+    let skin: SkinDefinition
+
+    var body: some View {
+        ZStack {
+            Rectangle().fill(skin.resolvedPlatterMaterial)
+            if let tint = skin.platterTint, skin.platterTintOpacity > 0 {
+                tint.opacity(skin.platterTintOpacity)
+            }
+        }
+    }
+}
+
+extension View {
+    /// Applies the skin's platter background (material + optional tint) as a background layer.
+    func skinPlatter(_ skin: SkinDefinition) -> some View {
+        background(SkinPlatterBackground(skin: skin))
+    }
+}
+
 // MARK: - Environment Key
 
 private struct ActiveSkinKey: EnvironmentKey {

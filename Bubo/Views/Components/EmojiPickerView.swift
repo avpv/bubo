@@ -6,6 +6,7 @@ struct EmojiPickerView: View {
 
     @State private var searchText = ""
     @State private var selectedCategory = 0
+    @Environment(\.activeSkin) private var skin
 
     private static let categories: [(icon: String, title: String, emojis: [String])] = [
         ("clock", "Recent", ["👍", "❤️", "😂", "🔥", "✅", "👀", "🎉", "💯"]),
@@ -85,7 +86,7 @@ struct EmojiPickerView: View {
             }
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, DS.Spacing.xs)
-            .background(DS.Materials.platter)
+            .skinPlatter(skin)
             .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.top, DS.Spacing.sm)
@@ -101,11 +102,11 @@ struct EmojiPickerView: View {
                             } label: {
                                 Image(systemName: category.icon)
                                     .font(.system(size: 13))
-                                    .foregroundStyle(selectedCategory == index ? DS.Colors.accent : DS.Colors.textTertiary)
+                                    .foregroundStyle(selectedCategory == index ? skin.accentColor : DS.Colors.textTertiary)
                                     .frame(width: 28, height: 24)
                                     .background(
                                         selectedCategory == index
-                                            ? DS.Colors.accent.opacity(0.15)
+                                            ? skin.accentColor.opacity(0.15)
                                             : Color.clear
                                     )
                                     .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
@@ -155,7 +156,7 @@ struct EmojiPickerView: View {
             }
         }
         .frame(width: 280, height: 320)
-        .background(DS.Materials.platter)
+        .skinPlatter(skin)
     }
 }
 
@@ -163,6 +164,7 @@ struct EmojiPickerView: View {
 struct EmojiPickerButton: View {
     @Binding var text: String
     @State private var showPicker = false
+    @Environment(\.activeSkin) private var skin
 
     var body: some View {
         Button {
@@ -170,7 +172,7 @@ struct EmojiPickerButton: View {
         } label: {
             Image(systemName: "face.smiling")
                 .font(.system(size: 16))
-                .foregroundStyle(showPicker ? DS.Colors.accent : DS.Colors.textTertiary)
+                .foregroundStyle(showPicker ? skin.accentColor : DS.Colors.textTertiary)
         }
         .buttonStyle(.plain)
         .help("Insert emoji")

@@ -34,7 +34,18 @@ import SwiftUI
 ///   "prefersDarkTint": true,
 ///   "secondaryAccent": { "red": 0.0, "green": 0.65, "blue": 0.15 },
 ///   "buttonStyle": "gradient",
-///   "toolbarTint": { "red": 0.3, "green": 0.5, "blue": 0.4 }
+///   "buttonShape": "capsule",
+///   "buttonColor": { "red": 1.0, "green": 1.0, "blue": 1.0 },
+///   "buttonMaterial": "regular",
+///   "buttonTint": { "red": 0.0, "green": 0.4, "blue": 0.8 },
+///   "buttonTintOpacity": 0.3,
+///   "toolbarTint": { "red": 0.3, "green": 0.5, "blue": 0.4 },
+///   "barMaterial": "thick",
+///   "barTint": { "red": 0.0, "green": 0.2, "blue": 0.4 },
+///   "barTintOpacity": 0.15,
+///   "platterMaterial": "regular",
+///   "platterTint": { "red": 0.0, "green": 0.1, "blue": 0.2 },
+///   "platterTintOpacity": 0.1
 /// }
 /// ```
 struct CustomSkinJSON: Codable {
@@ -50,9 +61,45 @@ struct CustomSkinJSON: Codable {
     let secondaryAccent: JSONColor?
     let buttonStyle: String?
 
+    /// Button clip shape. Values: "capsule" (default), "roundedRect", "rectangle".
+    let buttonShape: String?
+
+    /// Explicit foreground color for primary buttons. Overrides auto-contrast logic.
+    let buttonColor: JSONColor?
+
+    /// Material used as the base for glass-style and secondary buttons.
+    /// Same values as barMaterial. Defaults to "regular".
+    let buttonMaterial: String?
+
+    /// Optional color overlay on button material (glass-style). Falls back to accentColor.
+    let buttonTint: JSONColor?
+
+    /// Opacity of button tint overlay (0–1, typically 0.15–0.35). Defaults to 0.3.
+    let buttonTintOpacity: Double?
+
     /// Toolbar button tint color (Refresh, Settings, Quit).
     /// Apple HIG: secondary actions use a subtler color for visual hierarchy.
     let toolbarTint: JSONColor?
+
+    /// Material for header/footer bars.
+    /// Valid values: "ultraThin", "thin", "regular", "thick", "ultraThick", "bar".
+    /// Apple HIG: controls translucency level of toolbar areas. Defaults to "thick".
+    let barMaterial: String?
+
+    /// Optional color overlay on top of bar material — creates a tinted-glass effect.
+    let barTint: JSONColor?
+
+    /// Opacity of the bar tint overlay (0–1, typically 0.05–0.25). Defaults to 0.
+    let barTintOpacity: Double?
+
+    /// Material for card/platter surfaces. Same values as barMaterial. Defaults to "regular".
+    let platterMaterial: String?
+
+    /// Optional color overlay on platter surfaces.
+    let platterTint: JSONColor?
+
+    /// Opacity of the platter tint overlay (0–1, typically 0.05–0.2). Defaults to 0.
+    let platterTintOpacity: Double?
 
     func toSkinDefinition(skinFileURL: URL? = nil) -> SkinDefinition {
         // HIG: Validate accent color contrast — warn if luminance is too high
@@ -74,7 +121,18 @@ struct CustomSkinJSON: Codable {
             prefersDarkTint: prefersDarkTint,
             secondaryAccent: secondaryAccent?.toColor(),
             buttonStyle: resolvedButtonStyle,
-            toolbarTint: toolbarTint?.toColor()
+            buttonShape: resolvedButtonShape,
+            buttonColor: buttonColor?.toColor(),
+            buttonMaterial: resolvedButtonMaterial,
+            buttonTint: buttonTint?.toColor(),
+            buttonTintOpacity: buttonTintOpacity ?? 0.3,
+            toolbarTint: toolbarTint?.toColor(),
+            barMaterial: resolvedBarMaterial,
+            barTint: barTint?.toColor(),
+            barTintOpacity: barTintOpacity ?? 0,
+            platterMaterial: resolvedPlatterMaterial,
+            platterTint: platterTint?.toColor(),
+            platterTintOpacity: platterTintOpacity ?? 0
         )
     }
 
@@ -84,6 +142,35 @@ struct CustomSkinJSON: Codable {
         case "glass": .glass
         default: .gradient
         }
+    }
+
+    private var resolvedButtonShape: SkinButtonShape {
+        guard let value = buttonShape else { return .capsule }
+        if let exact = SkinButtonShape(rawValue: value) { return exact }
+        let lower = value.lowercased()
+        return SkinButtonShape.allCases.first { $0.rawValue.lowercased() == lower } ?? .capsule
+    }
+
+    private var resolvedButtonMaterial: SkinBarMaterial {
+        guard let value = buttonMaterial else { return .regular }
+        if let exact = SkinBarMaterial(rawValue: value) { return exact }
+        let lower = value.lowercased()
+        return SkinBarMaterial.allCases.first { $0.rawValue.lowercased() == lower } ?? .regular
+    }
+
+    private var resolvedPlatterMaterial: SkinBarMaterial {
+        guard let value = platterMaterial else { return .regular }
+        if let exact = SkinBarMaterial(rawValue: value) { return exact }
+        let lower = value.lowercased()
+        return SkinBarMaterial.allCases.first { $0.rawValue.lowercased() == lower } ?? .regular
+    }
+
+    private var resolvedBarMaterial: SkinBarMaterial {
+        guard let value = barMaterial else { return .thick }
+        // Try exact match first, then case-insensitive lookup
+        if let exact = SkinBarMaterial(rawValue: value) { return exact }
+        let lower = value.lowercased()
+        return SkinBarMaterial.allCases.first { $0.rawValue.lowercased() == lower } ?? .thick
     }
 }
 

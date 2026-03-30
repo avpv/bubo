@@ -57,11 +57,46 @@
     "blue": 0.5
   },
   "buttonStyle": "gradient",
+  "_comment_buttonShape": "Optional: button shape. Values: capsule (default), roundedRect, rectangle.",
+  "buttonShape": "capsule",
+  "_comment_buttonColor": "Optional: explicit foreground color for primary buttons. Omit to auto-derive from accent luminance.",
+  "buttonColor": {
+    "red": 1.0,
+    "green": 1.0,
+    "blue": 1.0
+  },
+  "_comment_buttonMaterial": "Optional: material for glass/secondary buttons. Same values as barMaterial. Defaults to regular.",
+  "buttonMaterial": "regular",
+  "_comment_buttonTint": "Optional: color overlay on button material (glass-style). Omit to use accentColor. Use with buttonTintOpacity (0-1, typically 0.15-0.35).",
+  "buttonTint": {
+    "red": 0.0,
+    "green": 0.4,
+    "blue": 0.8
+  },
+  "buttonTintOpacity": 0.3,
   "_comment_toolbar": "Optional: toolbar button tint (Refresh, Settings, Quit). Omit to auto-derive from accentColor.",
   "toolbarTint": {
     "red": 0.3,
     "green": 0.5,
     "blue": 0.4
   },
+  "_comment_barMaterial": "Optional: material for header/footer bars. Values: ultraThin, thin, regular, thick (default), ultraThick, bar.",
+  "barMaterial": "thick",
+  "_comment_barTint": "Optional: color overlay on top of bar material for a tinted-glass effect. Use with barTintOpacity (0-1, typically 0.05-0.25).",
+  "barTint": {
+    "red": 0.0,
+    "green": 0.2,
+    "blue": 0.4
+  },
+  "barTintOpacity": 0.15,
+  "_comment_platterMaterial": "Optional: material for card/platter surfaces (event rows, form sections, pickers). Same values as barMaterial. Defaults to regular.",
+  "platterMaterial": "regular",
+  "_comment_platterTint": "Optional: color overlay on platter surfaces. Use with platterTintOpacity (0-1, typically 0.05-0.2).",
+  "platterTint": {
+    "red": 0.0,
+    "green": 0.1,
+    "blue": 0.2
+  },
+  "platterTintOpacity": 0.1,
   "_comment": "Optional: add a background image. Place the image file next to this .buboskin file."
 }

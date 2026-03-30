@@ -12,6 +12,51 @@ enum SkinButtonStyle: Equatable {
     case glass
 }
 
+// MARK: - Button Shape
+
+/// Controls the clip/content shape used for primary and secondary buttons.
+enum SkinButtonShape: String, Equatable, CaseIterable {
+    /// Fully rounded ends — the default pill shape.
+    case capsule
+    /// Rounded rectangle with the standard corner radius.
+    case roundedRect
+    /// Sharp-cornered rectangle.
+    case rectangle
+}
+
+// MARK: - Bar Material
+
+/// Controls which SwiftUI `Material` is used for header/footer bars.
+///
+/// Maps 1:1 to Apple's `ShapeStyle` material variants. See Apple HIG
+/// "Materials" for guidance on when to use each level.
+enum SkinBarMaterial: String, Equatable, CaseIterable {
+    /// Very subtle translucency — maximum content visibility.
+    case ultraThin
+    /// Light translucency.
+    case thin
+    /// Balanced translucency (system default for many controls).
+    case regular
+    /// Rich translucency — good default for bars.
+    case thick
+    /// Maximum translucency — most frosted/opaque.
+    case ultraThick
+    /// System bar material — adaptive, designed for toolbars and tab bars.
+    case bar
+
+    /// The corresponding SwiftUI `Material` value.
+    var material: Material {
+        switch self {
+        case .ultraThin:  .ultraThinMaterial
+        case .thin:       .thinMaterial
+        case .regular:    .regularMaterial
+        case .thick:      .thickMaterial
+        case .ultraThick: .ultraThickMaterial
+        case .bar:        .bar
+        }
+    }
+}
+
 // MARK: - Skin Definition
 
 /// A complete visual theme for Bubo.
@@ -53,11 +98,53 @@ struct SkinDefinition: Identifiable, Equatable {
     /// Button fill style — controls primary button appearance.
     let buttonStyle: SkinButtonStyle
 
+    /// Shape used for button clipping and hit-testing.
+    let buttonShape: SkinButtonShape
+
+    /// Explicit foreground color for primary buttons.
+    /// Overrides the automatic luminance-based contrast logic when set.
+    let buttonColor: Color?
+
+    /// Material used as the base layer for glass-style and secondary buttons.
+    /// Defaults to `.regular`.
+    let buttonMaterial: SkinBarMaterial
+
+    /// Optional color overlay on button material (glass-style primary buttons).
+    /// Falls back to accentColor when nil.
+    let buttonTint: Color?
+
+    /// Opacity of the button tint overlay (0 = invisible, typically 0.15–0.35).
+    /// Defaults to 0.3 for glass buttons.
+    let buttonTintOpacity: Double
+
     /// Tint color for toolbar/utility buttons (Refresh, Settings, Quit).
     /// Apple HIG: secondary actions use a subtler, complementary color to
     /// establish visual hierarchy — primary action (Add) stays bold, toolbar
     /// buttons recede. Falls back to accent color if nil.
     let toolbarTint: Color?
+
+    /// Material used for header and footer bars.
+    /// Apple HIG: different material levels control translucency/vibrancy.
+    /// Defaults to `.thick` for rich vibrancy.
+    let barMaterial: SkinBarMaterial
+
+    /// Optional color overlay on top of the bar material.
+    /// Layered over the blur to give bars a custom tinted-glass look.
+    let barTint: Color?
+
+    /// Opacity of the bar tint overlay (0 = invisible, typically 0.05–0.25).
+    let barTintOpacity: Double
+
+    /// Material used for card/platter surfaces (form sections, event rows, pickers).
+    /// Apple HIG: content surfaces should use a consistent material layer beneath bars.
+    /// Defaults to `.regular`.
+    let platterMaterial: SkinBarMaterial
+
+    /// Optional color overlay on platter surfaces.
+    let platterTint: Color?
+
+    /// Opacity of the platter tint overlay (0 = invisible, typically 0.05–0.2).
+    let platterTintOpacity: Double
 
     init(
         id: String,
@@ -71,7 +158,18 @@ struct SkinDefinition: Identifiable, Equatable {
         prefersDarkTint: Bool,
         secondaryAccent: Color? = nil,
         buttonStyle: SkinButtonStyle = .gradient,
-        toolbarTint: Color? = nil
+        buttonShape: SkinButtonShape = .capsule,
+        buttonColor: Color? = nil,
+        buttonMaterial: SkinBarMaterial = .regular,
+        buttonTint: Color? = nil,
+        buttonTintOpacity: Double = 0.3,
+        toolbarTint: Color? = nil,
+        barMaterial: SkinBarMaterial = .thick,
+        barTint: Color? = nil,
+        barTintOpacity: Double = 0,
+        platterMaterial: SkinBarMaterial = .regular,
+        platterTint: Color? = nil,
+        platterTintOpacity: Double = 0
     ) {
         self.id = id
         self.displayName = displayName
@@ -84,7 +182,18 @@ struct SkinDefinition: Identifiable, Equatable {
         self.prefersDarkTint = prefersDarkTint
         self.secondaryAccent = secondaryAccent
         self.buttonStyle = buttonStyle
+        self.buttonShape = buttonShape
+        self.buttonColor = buttonColor
+        self.buttonMaterial = buttonMaterial
+        self.buttonTint = buttonTint
+        self.buttonTintOpacity = buttonTintOpacity
         self.toolbarTint = toolbarTint
+        self.barMaterial = barMaterial
+        self.barTint = barTint
+        self.barTintOpacity = barTintOpacity
+        self.platterMaterial = platterMaterial
+        self.platterTint = platterTint
+        self.platterTintOpacity = platterTintOpacity
     }
 
     // MARK: - Derived
@@ -98,6 +207,31 @@ struct SkinDefinition: Identifiable, Equatable {
     /// Apple HIG: toolbar buttons should be visually subordinate to primary actions.
     var resolvedToolbarTint: Color {
         toolbarTint ?? accentColor.opacity(0.7)
+    }
+
+    /// Resolved SwiftUI `Material` for header/footer bars.
+    var resolvedBarMaterial: Material {
+        barMaterial.material
+    }
+
+    /// Resolved SwiftUI `Material` for button backgrounds (glass/secondary/destructive).
+    var resolvedButtonMaterial: Material {
+        buttonMaterial.material
+    }
+
+    /// Resolved button tint color, falling back to accentColor.
+    var resolvedButtonTint: Color {
+        buttonTint ?? accentColor
+    }
+
+    /// Whether this skin has a custom bar tint overlay.
+    var hasBarTint: Bool {
+        barTint != nil && barTintOpacity > 0
+    }
+
+    /// Resolved SwiftUI `Material` for platter/card surfaces.
+    var resolvedPlatterMaterial: Material {
+        platterMaterial.material
     }
 
     var previewGradient: AnyShapeStyle {

@@ -4,6 +4,8 @@ struct SettingsPlatter<Content: View>: View {
     var title: String?
     let content: Content
 
+    @Environment(\.activeSkin) private var skin
+
     init(_ title: String? = nil, @ViewBuilder content: () -> Content) {
         self.title = title
         self.content = content()
@@ -21,7 +23,7 @@ struct SettingsPlatter<Content: View>: View {
         }
         .padding(DS.Spacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DS.Materials.platter)
+        .skinPlatter(skin)
         .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
         .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
     }
