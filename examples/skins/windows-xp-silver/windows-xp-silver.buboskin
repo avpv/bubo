@@ -1,31 +1,31 @@
 {
-  "id": "windows_xp_blue",
-  "displayName": "Windows XP Luna Blue",
+  "id": "windows_xp_silver",
+  "displayName": "Windows XP Luna Silver",
   "author": "Bubo Community",
   "accentColor": {
-    "red": 0.0,
-    "green": 0.33,
-    "blue": 0.84
+    "red": 0.46,
+    "green": 0.47,
+    "blue": 0.56
   },
   "surfaceTint": {
-    "red": 0.02,
-    "green": 0.06,
-    "blue": 0.20
+    "red": 0.08,
+    "green": 0.08,
+    "blue": 0.12
   },
-  "surfaceTintOpacity": 0.25,
+  "surfaceTintOpacity": 0.20,
   "backgroundGradient": {
     "colors": [
       {
-        "red": 0.16,
-        "green": 0.38,
-        "blue": 0.88,
-        "opacity": 0.16
+        "red": 0.50,
+        "green": 0.51,
+        "blue": 0.60,
+        "opacity": 0.12
       },
       {
-        "red": 0.0,
-        "green": 0.22,
-        "blue": 0.58,
-        "opacity": 0.10
+        "red": 0.38,
+        "green": 0.38,
+        "blue": 0.46,
+        "opacity": 0.07
       },
       {
         "red": 0.0,
@@ -40,21 +40,21 @@
   },
   "previewColors": [
     {
-      "red": 0.0,
-      "green": 0.33,
-      "blue": 0.84
+      "red": 0.46,
+      "green": 0.47,
+      "blue": 0.56
     },
     {
-      "red": 0.22,
-      "green": 0.54,
-      "blue": 0.16
+      "red": 0.66,
+      "green": 0.67,
+      "blue": 0.74
     }
   ],
   "prefersDarkTint": true,
   "secondaryAccent": {
-    "red": 0.12,
-    "green": 0.48,
-    "blue": 0.98
+    "red": 0.60,
+    "green": 0.61,
+    "blue": 0.70
   },
   "buttonStyle": "gradient",
   "buttonShape": "roundedRect",
@@ -64,23 +64,23 @@
     "blue": 1.0
   },
   "toolbarTint": {
-    "red": 0.22,
-    "green": 0.54,
-    "blue": 0.16
+    "red": 0.37,
+    "green": 0.38,
+    "blue": 0.50
   },
   "barMaterial": "ultraThick",
   "barTint": {
-    "red": 0.0,
-    "green": 0.24,
-    "blue": 0.68
+    "red": 0.38,
+    "green": 0.38,
+    "blue": 0.50
   },
-  "barTintOpacity": 0.22,
+  "barTintOpacity": 0.18,
   "platterTint": {
-    "red": 0.10,
-    "green": 0.22,
-    "blue": 0.52
+    "red": 0.30,
+    "green": 0.30,
+    "blue": 0.40
   },
-  "platterTintOpacity": 0.08,
+  "platterTintOpacity": 0.06,
   "fontDesign": "default",
   "fontWeight": "bold",
   "headlineFontWeight": "bold",
