@@ -2,6 +2,7 @@ import SwiftUI
 
 /// Reusable recurrence configuration picker for standard calendar recurrence.
 struct RecurrencePickerView: View {
+    @Environment(\.activeSkin) private var skin
     @Binding var rule: RecurrenceRule?
     @Binding var eventDuration: Double
     let eventStartDate: Date
@@ -60,7 +61,7 @@ struct RecurrencePickerView: View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             Text("Repeat")
                 .font(.headline)
-                .foregroundStyle(DS.Colors.textPrimary)
+                .foregroundStyle(skin.resolvedTextPrimary)
 
             modePicker
 

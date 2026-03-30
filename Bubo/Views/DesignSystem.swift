@@ -475,7 +475,7 @@ struct ActionButtonStyle: ButtonStyle {
                 y: configuration.isPressed ? 1 : (role == .primary ? 4 : 2)
             )
             .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
-            .animation(DS.Animation.microInteraction, value: configuration.isPressed)
+            .animation(skin.resolvedMicroAnimation, value: configuration.isPressed)
     }
 
     private var skinAccent: Color {
@@ -487,7 +487,7 @@ struct ActionButtonStyle: ButtonStyle {
     private var buttonContentShape: AnyShape {
         switch skin.buttonShape {
         case .capsule:     AnyShape(Capsule())
-        case .roundedRect: AnyShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius))
+        case .roundedRect: AnyShape(RoundedRectangle(cornerRadius: skin.cornerRadius))
         case .rectangle:   AnyShape(Rectangle())
         }
     }
@@ -502,7 +502,7 @@ struct ActionButtonStyle: ButtonStyle {
             Capsule()
                 .strokeBorder(.white.opacity(opacity), lineWidth: 0.5)
         case .roundedRect:
-            RoundedRectangle(cornerRadius: DS.Size.cornerRadius)
+            RoundedRectangle(cornerRadius: skin.cornerRadius)
                 .strokeBorder(.white.opacity(opacity), lineWidth: 0.5)
         case .rectangle:
             Rectangle()
@@ -576,7 +576,7 @@ struct ActionButtonStyle: ButtonStyle {
             // HIG: Ensure text contrast against accent background.
             // Use white on dark accents, primary label on light accents.
             return Self.contrastingForeground(for: skinAccent)
-        case .secondary: return DS.Colors.textPrimary
+        case .secondary: return skin.resolvedTextPrimary
         case .destructive: return DS.Colors.error
         }
     }
@@ -596,7 +596,7 @@ struct ActionButtonStyle: ButtonStyle {
         if isPressed { return .clear }
         switch role {
         case .primary: return skinAccent.opacity(0.35)
-        case .secondary, .destructive: return DS.Shadows.ambientColor
+        case .secondary, .destructive: return skin.resolvedShadowColor
         }
     }
 }

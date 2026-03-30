@@ -45,7 +45,7 @@
       "type": "number",
       "minimum": 0,
       "maximum": 1,
-      "description": "Opacity of the surface tint overlay (0 = none, 0.2–0.4 = typical)."
+      "description": "Opacity of the surface tint overlay (0 = none, 0.2\u20130.4 = typical)."
     },
     "backgroundGradient": {
       "$ref": "#/$defs/gradient",
@@ -53,10 +53,12 @@
     },
     "previewColors": {
       "type": "array",
-      "items": { "$ref": "#/$defs/color" },
+      "items": {
+        "$ref": "#/$defs/color"
+      },
       "minItems": 1,
       "maxItems": 2,
-      "description": "1–2 colors for the skin picker thumbnail."
+      "description": "1\u20132 colors for the skin picker thumbnail."
     },
     "prefersDarkTint": {
       "type": "boolean",
@@ -68,13 +70,21 @@
     },
     "buttonStyle": {
       "type": "string",
-      "enum": ["solid", "gradient", "glass"],
+      "enum": [
+        "solid",
+        "gradient",
+        "glass"
+      ],
       "default": "gradient",
       "description": "Button fill style."
     },
     "buttonShape": {
       "type": "string",
-      "enum": ["capsule", "roundedRect", "rectangle"],
+      "enum": [
+        "capsule",
+        "roundedRect",
+        "rectangle"
+      ],
       "default": "capsule",
       "description": "Button clip shape."
     },
@@ -134,9 +144,43 @@
       "default": 0,
       "description": "Opacity of the platter tint overlay."
     },
+    "cornerRadius": {
+      "type": "number",
+      "minimum": 0,
+      "default": 12,
+      "description": "Global corner radius for card/platter surfaces."
+    },
+    "shadowOpacity": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "default": 0.06,
+      "description": "Ambient shadow opacity for elevated surfaces."
+    },
+    "shadowRadius": {
+      "type": "number",
+      "minimum": 0,
+      "default": 8,
+      "description": "Ambient shadow blur radius."
+    },
+    "shadowY": {
+      "type": "number",
+      "default": 4,
+      "description": "Vertical offset for the ambient shadow."
+    },
+    "platterBorderOpacity": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "default": 0,
+      "description": "Opacity of a 1px intrinsic inner border (glass highlight)."
+    },
     "fontDesign": {
       "type": "string",
-      "enum": ["default", "rounded"],
+      "enum": [
+        "default",
+        "rounded"
+      ],
       "default": "rounded",
       "description": "System font design."
     },
@@ -152,25 +196,49 @@
     },
     "sfSymbolRendering": {
       "type": "string",
-      "enum": ["monochrome", "hierarchical", "palette", "multicolor"],
+      "enum": [
+        "monochrome",
+        "hierarchical",
+        "palette",
+        "multicolor"
+      ],
       "default": "hierarchical",
       "description": "SF Symbol rendering mode."
     },
     "sfSymbolWeight": {
       "type": "string",
-      "enum": ["ultraLight", "thin", "light", "regular", "medium", "semibold", "bold", "heavy", "black"],
+      "enum": [
+        "ultraLight",
+        "thin",
+        "light",
+        "regular",
+        "medium",
+        "semibold",
+        "bold",
+        "heavy",
+        "black"
+      ],
       "default": "medium",
       "description": "SF Symbol weight."
     },
     "badgeStyle": {
       "type": "string",
-      "enum": ["filled", "outlined", "tinted"],
+      "enum": [
+        "filled",
+        "outlined",
+        "tinted"
+      ],
       "default": "tinted",
       "description": "Badge/pill appearance style."
     },
     "separatorStyle": {
       "type": "string",
-      "enum": ["system", "subtle", "accent", "none"],
+      "enum": [
+        "system",
+        "subtle",
+        "accent",
+        "none"
+      ],
       "default": "system",
       "description": "Separator/divider appearance style."
     },
@@ -180,6 +248,44 @@
       "maximum": 1,
       "default": 0.5,
       "description": "Separator opacity."
+    },
+    "textPrimary": {
+      "type": "string",
+      "description": "Semantic text primary color"
+    },
+    "textSecondary": {
+      "type": "string",
+      "description": "Semantic text secondary color"
+    },
+    "textTertiary": {
+      "type": "string",
+      "description": "Semantic text tertiary color"
+    },
+    "animationStyle": {
+      "type": "string",
+      "enum": [
+        "bouncy",
+        "smooth",
+        "snappy"
+      ],
+      "description": "Animation physics style"
+    },
+    "hoverShadowOpacity": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "hoverShadowRadius": {
+      "type": "number",
+      "minimum": 0
+    },
+    "hoverShadowY": {
+      "type": "number"
+    },
+    "hoverFillOpacity": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
     }
   },
   "$defs": {
@@ -188,31 +294,57 @@
       "minLength": 1,
       "pattern": "^(#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?|[a-zA-Z]+(:([0-9]*\\.?[0-9]+))?)$",
       "description": "Hex (#RRGGBB or #RRGGBBAA), named (accentColor), named:opacity (accentColor:0.5), or keyword (clear, white, black, gray).",
-      "examples": ["#0070FA", "#0070FA80", "accentColor", "accentColor:0.5", "clear"]
+      "examples": [
+        "#0070FA",
+        "#0070FA80",
+        "accentColor",
+        "accentColor:0.5",
+        "clear"
+      ]
     },
     "material": {
       "type": "string",
-      "enum": ["ultraThin", "thin", "regular", "thick", "ultraThick", "bar"],
+      "enum": [
+        "ultraThin",
+        "thin",
+        "regular",
+        "thick",
+        "ultraThick",
+        "bar"
+      ],
       "description": "SwiftUI Material level controlling translucency."
     },
     "fontWeight": {
       "type": "string",
-      "enum": ["regular", "medium", "semibold", "bold"],
+      "enum": [
+        "regular",
+        "medium",
+        "semibold",
+        "bold"
+      ],
       "description": "Font weight."
     },
     "gradient": {
       "type": "object",
-      "required": ["style"],
+      "required": [
+        "style"
+      ],
       "additionalProperties": false,
       "properties": {
         "colors": {
           "type": "array",
-          "items": { "$ref": "#/$defs/color" },
+          "items": {
+            "$ref": "#/$defs/color"
+          },
           "description": "Gradient color stops."
         },
         "style": {
           "type": "string",
-          "enum": ["linear", "radial", "clear"],
+          "enum": [
+            "linear",
+            "radial",
+            "clear"
+          ],
           "description": "Gradient type."
         },
         "startPoint": {
@@ -240,18 +372,48 @@
       },
       "allOf": [
         {
-          "if": { "properties": { "style": { "const": "linear" } } },
-          "then": { "required": ["colors"] }
+          "if": {
+            "properties": {
+              "style": {
+                "const": "linear"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "colors"
+            ]
+          }
         },
         {
-          "if": { "properties": { "style": { "const": "radial" } } },
-          "then": { "required": ["colors"] }
+          "if": {
+            "properties": {
+              "style": {
+                "const": "radial"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "colors"
+            ]
+          }
         }
       ]
     },
     "unitPoint": {
       "type": "string",
-      "enum": ["top", "bottom", "leading", "trailing", "topLeading", "topTrailing", "bottomLeading", "bottomTrailing", "center"],
+      "enum": [
+        "top",
+        "bottom",
+        "leading",
+        "trailing",
+        "topLeading",
+        "topTrailing",
+        "bottomLeading",
+        "bottomTrailing",
+        "center"
+      ],
       "description": "A point in the unit coordinate space."
     }
   }

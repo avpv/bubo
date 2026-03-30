@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct DateSuggestionsPopover: View {
+    @Environment(\.activeSkin) private var skin
     @Binding var date: Date
     @Binding var isPresented: Bool
     var range: PartialRangeFrom<Date>?
@@ -73,7 +74,7 @@ struct DateSuggestionsPopover: View {
                                 .font(.title3)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Custom...")
-                                    .foregroundStyle(DS.Colors.textPrimary)
+                                    .foregroundStyle(skin.resolvedTextPrimary)
                                 Text("Use the calendar to pick a date")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
@@ -100,7 +101,7 @@ struct DateSuggestionsPopover: View {
                     .font(.title3)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .foregroundStyle(DS.Colors.textPrimary)
+                        .foregroundStyle(skin.resolvedTextPrimary)
                     Text(subtitle)
                         .font(.caption)
                         .foregroundStyle(.secondary)

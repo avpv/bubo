@@ -55,7 +55,7 @@ struct EventDetailView: View {
                         if event.isRecurring {
                             Image(systemName: "repeat")
                                 .font(.system(size: DS.Size.iconMedium))
-                                .foregroundStyle(DS.Colors.textSecondary)
+                                .foregroundStyle(skin.resolvedTextSecondary)
                                 .contentTransition(.symbolEffect(.replace))
                                 .accessibilityLabel("Recurring event")
                         }
@@ -67,12 +67,12 @@ struct EventDetailView: View {
                         VStack(alignment: .leading, spacing: DS.Spacing.md) {
                             Label(event.formattedDate, systemImage: "calendar")
                                 .font(.subheadline)
-                                .foregroundStyle(DS.Colors.textSecondary)
+                                .foregroundStyle(skin.resolvedTextSecondary)
                                 .accessibilityLabel("Date: \(event.formattedDate)")
 
                             Label(event.formattedTimeRange, systemImage: "clock")
                                 .font(.subheadline)
-                                .foregroundStyle(DS.Colors.textSecondary)
+                                .foregroundStyle(skin.resolvedTextSecondary)
                                 .accessibilityLabel("Time: \(event.formattedTimeRange)")
                         }
                         .staggeredEntrance(index: 1)
@@ -108,7 +108,7 @@ struct EventDetailView: View {
                                             endPoint: .trailing
                                         )
                                     )
-                                    .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
+                                    .clipShape(RoundedRectangle(cornerRadius: skin.cornerRadius, style: .continuous))
                             }
                             .buttonStyle(.plain)
                             .staggeredEntrance(index: 3)
@@ -118,15 +118,14 @@ struct EventDetailView: View {
                         if let location = event.location, !location.isEmpty {
                             Label(location, systemImage: "location.fill")
                                 .font(.subheadline)
-                                .foregroundStyle(DS.Colors.textSecondary)
+                                .foregroundStyle(skin.resolvedTextSecondary)
                                 .staggeredEntrance(index: 3)
                         }
                     }
                     .padding(DS.Spacing.lg)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .skinPlatter(skin)
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
-                    .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
+                    .skinPlatterDepth(skin)
 
                     // Description
                     if let description = event.description, !description.isEmpty {
@@ -134,18 +133,17 @@ struct EventDetailView: View {
                             Label("Notes", systemImage: "note.text")
                                 .font(.caption)
                                 .fontWeight(.medium)
-                                .foregroundStyle(DS.Colors.textTertiary)
+                                .foregroundStyle(skin.resolvedTextTertiary)
                             MarkdownText(text: description)
                                 .font(.subheadline)
-                                .foregroundStyle(DS.Colors.textSecondary)
+                                .foregroundStyle(skin.resolvedTextSecondary)
                                 .lineSpacing(DS.Typography.bodyLineSpacing)
                                 .textSelection(.enabled)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .padding(DS.Spacing.lg)
                         .skinPlatter(skin)
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
-                        .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
+                        .skinPlatterDepth(skin)
                         .staggeredEntrance(index: 3)
                     }
 
@@ -165,7 +163,7 @@ struct EventDetailView: View {
                         Label("Pomodoro", systemImage: "timer")
                             .font(.caption)
                             .fontWeight(.medium)
-                            .foregroundStyle(DS.Colors.textTertiary)
+                            .foregroundStyle(skin.resolvedTextTertiary)
                             .staggeredEntrance(index: 5)
                     }
 
@@ -306,7 +304,7 @@ struct EventDetailView: View {
             // Event has ended
             Label("Ended", systemImage: "checkmark.circle")
                 .font(.subheadline)
-                .foregroundStyle(DS.Colors.textTertiary)
+                .foregroundStyle(skin.resolvedTextTertiary)
         }
     }
 
@@ -324,7 +322,7 @@ struct EventDetailView: View {
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(label)
                     .font(.caption2)
-                    .foregroundStyle(DS.Colors.textTertiary)
+                    .foregroundStyle(skin.resolvedTextTertiary)
 
                 HStack(spacing: DS.Spacing.xs) {
                     if days > 0 {
@@ -348,11 +346,11 @@ struct EventDetailView: View {
         HStack(spacing: 1) {
             Text("\(value)")
                 .font(.system(.subheadline, design: .monospaced, weight: .semibold))
-                .foregroundStyle(DS.Colors.textPrimary)
+                .foregroundStyle(skin.resolvedTextPrimary)
                 .contentTransition(.numericText())
             Text(unit)
                 .font(.system(.caption, design: .monospaced))
-                .foregroundStyle(DS.Colors.textSecondary)
+                .foregroundStyle(skin.resolvedTextSecondary)
         }
     }
 
@@ -367,11 +365,11 @@ struct EventDetailView: View {
             )
             .font(.caption)
             .fontWeight(.medium)
-            .foregroundStyle(DS.Colors.textTertiary)
+            .foregroundStyle(skin.resolvedTextTertiary)
 
             Text(rule.displayText)
                 .font(.subheadline)
-                .foregroundStyle(DS.Colors.textSecondary)
+                .foregroundStyle(skin.resolvedTextSecondary)
 
             if event.eventType == .pomodoro {
                 let workMin = Int(event.endDate.timeIntervalSince(event.startDate) / 60)
@@ -409,7 +407,7 @@ struct EventDetailView: View {
             Label("Reminders", systemImage: "bell.fill")
                 .font(.caption)
                 .fontWeight(.medium)
-                .foregroundStyle(DS.Colors.textTertiary)
+                .foregroundStyle(skin.resolvedTextTertiary)
 
             HStack(spacing: DS.Spacing.xs) {
                 ForEach(reminders.sorted(), id: \.self) { min in
@@ -417,7 +415,7 @@ struct EventDetailView: View {
                         .font(.caption)
                         .padding(.horizontal, DS.Spacing.md)
                         .padding(.vertical, DS.Spacing.xs)
-                        .adaptiveBadgeFill(DS.Colors.textSecondary)
+                        .adaptiveBadgeFill(skin.resolvedTextSecondary)
                         .clipShape(Capsule())
                 }
             }

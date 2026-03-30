@@ -4,6 +4,7 @@ import SwiftUI
 /// headings, paragraphs, lists, code blocks, blockquotes, horizontal rules, and tables.
 /// Inline formatting (bold, italic, code, links, strikethrough) is supported within all text blocks.
 struct MarkdownText: View {
+    @Environment(\.activeSkin) private var skin
     let text: String
 
     var body: some View {
@@ -66,11 +67,11 @@ struct MarkdownText: View {
             HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.sm) {
                 Image(systemName: checked ? "checkmark.square.fill" : "square")
                     .font(.system(size: DS.Size.iconMedium))
-                    .foregroundStyle(checked ? DS.Colors.accent : DS.Colors.textTertiary)
+                    .foregroundStyle(checked ? DS.Colors.accent : skin.resolvedTextTertiary)
                 Text(inlineMarkdown(content))
                     .lineSpacing(DS.Typography.bodyLineSpacing)
-                    .strikethrough(checked, color: DS.Colors.textTertiary)
-                    .foregroundStyle(checked ? DS.Colors.textTertiary : DS.Colors.textSecondary)
+                    .strikethrough(checked, color: skin.resolvedTextTertiary)
+                    .foregroundStyle(checked ? skin.resolvedTextTertiary : skin.resolvedTextSecondary)
             }
             .padding(.leading, CGFloat(depth) * DS.Spacing.lg)
 
@@ -79,7 +80,7 @@ struct MarkdownText: View {
                 .font(.system(.caption, design: .monospaced))
                 .padding(DS.Spacing.md)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(DS.Colors.hoverFill)
+                .background(skin.resolvedHoverFill)
                 .clipShape(RoundedRectangle(cornerRadius: DS.Spacing.sm, style: .continuous))
 
         case .blockquote(let content):
@@ -88,7 +89,7 @@ struct MarkdownText: View {
                     .fill(DS.Colors.accent.opacity(0.5))
                     .frame(width: DS.Spacing.xxs)
                 Text(inlineMarkdown(content))
-                    .foregroundStyle(DS.Colors.textSecondary)
+                    .foregroundStyle(skin.resolvedTextSecondary)
                     .lineSpacing(DS.Typography.bodyLineSpacing)
             }
 
@@ -153,7 +154,7 @@ struct MarkdownText: View {
             }
         }
         .padding(DS.Spacing.md)
-        .background(DS.Colors.hoverFill)
+        .background(skin.resolvedHoverFill)
         .clipShape(RoundedRectangle(cornerRadius: DS.Spacing.sm, style: .continuous))
     }
 

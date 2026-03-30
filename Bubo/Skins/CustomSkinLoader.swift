@@ -82,6 +82,37 @@ struct CustomSkinJSON: Codable {
     /// Opacity of the platter tint overlay (0–1, typically 0.05–0.2). Defaults to 0.
     let platterTintOpacity: Double?
 
+    // MARK: Layout & Depth (HIG 2026)
+
+    /// Corner radius for platters and popovers. Defaults to 12.
+    let cornerRadius: CGFloat?
+
+    /// Ambient shadow opacity for depth. Defaults to 0.06.
+    let shadowOpacity: Double?
+
+    /// Ambient shadow blur radius. Defaults to 8.
+    let shadowRadius: CGFloat?
+
+    /// Ambient shadow vertical offset. Defaults to 4.
+    let shadowY: CGFloat?
+
+    /// Opacity of intrinsic 1px inner border on platters (glass edge highlight). Defaults to 0.
+    let platterBorderOpacity: Double?
+
+    // MARK: Advanced Interactions & Text (HIG 2026+)
+
+    let textPrimary: JSONColor?
+    let textSecondary: JSONColor?
+    let textTertiary: JSONColor?
+    
+    /// Animation style: "bouncy", "smooth", "snappy". Defaults to "smooth".
+    let animationStyle: String?
+
+    let hoverShadowOpacity: Double?
+    let hoverShadowRadius: CGFloat?
+    let hoverShadowY: CGFloat?
+    let hoverFillOpacity: Double?
+
     // MARK: Typography & Symbols (HIG 2026)
 
     /// Font design: "default", "rounded". Defaults to "rounded".
@@ -133,6 +164,19 @@ struct CustomSkinJSON: Codable {
             platterMaterial: resolvedPlatterMaterial,
             platterTint: platterTint?.toColor(),
             platterTintOpacity: platterTintOpacity ?? 0,
+            cornerRadius: cornerRadius ?? 12,
+            shadowOpacity: shadowOpacity ?? 0.06,
+            shadowRadius: shadowRadius ?? 8,
+            shadowY: shadowY ?? 4,
+            platterBorderOpacity: platterBorderOpacity ?? 0,
+            textPrimary: textPrimary?.toColor(),
+            textSecondary: textSecondary?.toColor(),
+            textTertiary: textTertiary?.toColor(),
+            animationStyle: resolvedAnimationStyle,
+            hoverShadowOpacity: hoverShadowOpacity ?? 0.12,
+            hoverShadowRadius: hoverShadowRadius ?? 12,
+            hoverShadowY: hoverShadowY ?? 6,
+            hoverFillOpacity: hoverFillOpacity ?? 0.06,
             fontDesign: resolvedFontDesign,
             fontWeight: resolvedFontWeight,
             headlineFontWeight: resolvedHeadlineFontWeight,
@@ -142,6 +186,11 @@ struct CustomSkinJSON: Codable {
             separatorStyle: resolvedSeparatorStyle,
             separatorOpacity: separatorOpacity ?? 0.5
         )
+    }
+
+    private var resolvedAnimationStyle: SkinAnimationStyle {
+        guard let value = animationStyle?.lowercased() else { return .smooth }
+        return SkinAnimationStyle(rawValue: value) ?? .smooth
     }
 
     private var resolvedButtonStyle: SkinButtonStyle {

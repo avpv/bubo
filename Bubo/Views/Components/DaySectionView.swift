@@ -15,7 +15,7 @@ struct DaySectionHeader: View {
             Text(dayTitle)
                 .font(.subheadline)
                 .fontWeight(.semibold)
-                .foregroundStyle(isToday ? skinAccent : DS.Colors.textPrimary)
+                .foregroundStyle(isToday ? skinAccent : skin.resolvedTextPrimary)
             if isToday {
                 Circle()
                     .fill(skinAccent)
@@ -25,10 +25,10 @@ struct DaySectionHeader: View {
             Spacer()
             Text("\(count)")
                 .font(.caption)
-                .foregroundStyle(DS.Colors.textSecondary)
+                .foregroundStyle(skin.resolvedTextSecondary)
                 .padding(.horizontal, DS.Spacing.md)
                 .padding(.vertical, DS.Spacing.xs)
-                .adaptiveBadgeFill(DS.Colors.textSecondary)
+                .adaptiveBadgeFill(skin.resolvedTextSecondary)
                 .clipShape(Capsule())
                 .contentTransition(.numericText())
         }

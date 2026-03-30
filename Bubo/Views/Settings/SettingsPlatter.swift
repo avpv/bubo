@@ -16,7 +16,7 @@ struct SettingsPlatter<Content: View>: View {
             if let title {
                 Text(title)
                     .font(.headline)
-                    .foregroundStyle(DS.Colors.textPrimary)
+                    .foregroundStyle(skin.resolvedTextPrimary)
                     .padding(.bottom, DS.Spacing.xs)
             }
             content
@@ -24,7 +24,6 @@ struct SettingsPlatter<Content: View>: View {
         .padding(DS.Spacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
         .skinPlatter(skin)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
-        .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
+        .skinPlatterDepth(skin)
     }
 }

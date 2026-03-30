@@ -22,7 +22,7 @@ struct DateTimePickerPills: View {
                     Image(systemName: "calendar")
                         .foregroundStyle(pillAccent)
                     Text(formattedDate)
-                        .foregroundStyle(DS.Colors.textPrimary)
+                        .foregroundStyle(skin.resolvedTextPrimary)
                         .fixedSize(horizontal: true, vertical: false)
                         .frame(width: DS.Size.datePillWidth, alignment: .leading)
                         .mask(
@@ -39,21 +39,21 @@ struct DateTimePickerPills: View {
                 .padding(.horizontal, DS.Spacing.pillHorizontal)
                 .frame(height: DS.Size.controlHeight)
                 .skinPlatter(skin)
-                .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: skin.cornerRadius, style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                    RoundedRectangle(cornerRadius: skin.cornerRadius, style: .continuous)
                         .strokeBorder(
                             isDateHovered ? pillAccent.opacity(0.4) : .white.opacity(0.08),
                             lineWidth: 0.5
                         )
                 )
                 .shadow(
-                    color: isDateHovered ? pillAccent.opacity(0.2) : DS.Shadows.ambientColor,
-                    radius: isDateHovered ? 6 : DS.Shadows.pillRadius,
-                    y: isDateHovered ? 3 : DS.Shadows.pillY
+                    color: isDateHovered ? pillAccent.opacity(0.2) : skin.resolvedShadowColor,
+                    radius: isDateHovered ? 6 : skin.shadowRadius,
+                    y: isDateHovered ? 3 : skin.shadowY
                 )
                 .scaleEffect(isDateHovered ? 1.02 : 1.0)
-                .animation(DS.Animation.microInteraction, value: isDateHovered)
+                .animation(skin.resolvedMicroAnimation, value: isDateHovered)
             }
             .buttonStyle(.plain)
             .onHover { isDateHovered = $0 }
@@ -69,28 +69,28 @@ struct DateTimePickerPills: View {
                         .foregroundStyle(pillAccent.opacity(0.7))
                     Text(formattedTime)
                         .font(.system(.body, design: .monospaced, weight: .medium))
-                        .foregroundStyle(DS.Colors.textPrimary)
+                        .foregroundStyle(skin.resolvedTextPrimary)
                         .fixedSize(horizontal: true, vertical: false)
                         .lineLimit(1)
                 }
                 .padding(.horizontal, DS.Spacing.pillHorizontal)
                 .frame(height: DS.Size.controlHeight)
                 .skinPlatter(skin)
-                .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: skin.cornerRadius, style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                    RoundedRectangle(cornerRadius: skin.cornerRadius, style: .continuous)
                         .strokeBorder(
                             isTimeHovered ? pillAccent.opacity(0.4) : .white.opacity(0.08),
                             lineWidth: 0.5
                         )
                 )
                 .shadow(
-                    color: isTimeHovered ? pillAccent.opacity(0.2) : DS.Shadows.ambientColor,
-                    radius: isTimeHovered ? 6 : DS.Shadows.pillRadius,
-                    y: isTimeHovered ? 3 : DS.Shadows.pillY
+                    color: isTimeHovered ? pillAccent.opacity(0.2) : skin.resolvedShadowColor,
+                    radius: isTimeHovered ? 6 : skin.shadowRadius,
+                    y: isTimeHovered ? 3 : skin.shadowY
                 )
                 .scaleEffect(isTimeHovered ? 1.02 : 1.0)
-                .animation(DS.Animation.microInteraction, value: isTimeHovered)
+                .animation(skin.resolvedMicroAnimation, value: isTimeHovered)
             }
             .buttonStyle(.plain)
             .onHover { isTimeHovered = $0 }
@@ -98,7 +98,7 @@ struct DateTimePickerPills: View {
                 VStack(spacing: DS.Spacing.sm) {
                     Text("Select Time")
                         .font(.caption)
-                        .foregroundStyle(DS.Colors.textSecondary)
+                        .foregroundStyle(skin.resolvedTextSecondary)
 
                     if let range = range {
                         DatePicker("", selection: $date, in: range, displayedComponents: .hourAndMinute)
@@ -122,11 +122,11 @@ struct DateTimePickerPills: View {
                             }) {
                                 Text(formattedSlotTime(slot))
                                     .font(.system(.body, design: .monospaced, weight: isActive ? .bold : .regular))
-                                    .foregroundStyle(isActive ? .white : DS.Colors.textPrimary)
+                                    .foregroundStyle(isActive ? .white : skin.resolvedTextPrimary)
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, DS.Spacing.xs)
                                     .background(
-                                        RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                                        RoundedRectangle(cornerRadius: skin.cornerRadius, style: .continuous)
                                             .fill(
                                                 isActive
                                                     ? AnyShapeStyle(LinearGradient(

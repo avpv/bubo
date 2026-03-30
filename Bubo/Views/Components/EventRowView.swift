@@ -46,26 +46,26 @@ struct EventRowView: View {
         .background(
             ZStack(alignment: .leading) {
                 SkinPlatterBackground(skin: skin)
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: skin.cornerRadius, style: .continuous))
                 
                 if eventProgress(now) > 0 {
                     GeometryReader { geo in
-                        RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                        RoundedRectangle(cornerRadius: skin.cornerRadius, style: .continuous)
                             .fill(
                                 (skin.isClassic ? DS.Colors.accent : skin.accentColor).opacity(0.12)
                             )
-                            .frame(width: max(geo.size.width * eventProgress(now), DS.Size.cornerRadius * 2))
+                            .frame(width: max(geo.size.width * eventProgress(now), skin.cornerRadius * 2))
                     }
                 }
                 
-                RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                    .fill(isHovered ? DS.Colors.hoverFill : Color.clear)
+                RoundedRectangle(cornerRadius: skin.cornerRadius, style: .continuous)
+                    .fill(isHovered ? skin.resolvedHoverFill : Color.clear)
             }
         )
         .shadow(
-            color: isHovered ? DS.Shadows.hoverColor : DS.Shadows.ambientColor,
-            radius: isHovered ? DS.Shadows.hoverRadius : DS.Shadows.ambientRadius,
-            y: isHovered ? DS.Shadows.hoverY : DS.Shadows.ambientY
+            color: isHovered ? skin.resolvedHoverShadowColor : skin.resolvedShadowColor,
+            radius: isHovered ? DS.Shadows.hoverRadius : skin.shadowRadius,
+            y: isHovered ? DS.Shadows.hoverY : skin.shadowY
         )
         // Hover scale — slightly more pronounced for tactile feel
         .scaleEffect(isHovered ? 1.02 : 1.0)
@@ -75,7 +75,7 @@ struct EventRowView: View {
             onTap?(event)
         }
         .onHover { hovering in
-            withAnimation(DS.Animation.microInteraction) {
+            withAnimation(skin.resolvedMicroAnimation) {
                 isHovered = hovering
             }
             if hovering { Haptics.generic() }
@@ -151,18 +151,18 @@ struct EventRowView: View {
                 Text(event.formattedTime)
                     .font(.system(.caption, design: .monospaced))
                     .fontWeight(.bold)
-                    .foregroundStyle(DS.Colors.textPrimary)
+                    .foregroundStyle(skin.resolvedTextPrimary)
                 Text("–")
                     .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(DS.Colors.textSecondary)
+                    .foregroundStyle(skin.resolvedTextSecondary)
                 Text(event.formattedEndTime)
                     .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(DS.Colors.textSecondary)
+                    .foregroundStyle(skin.resolvedTextSecondary)
             }
 
             Text(timeUntilText(now))
                 .font(.system(.caption2, design: .monospaced))
-                .foregroundStyle(DS.Colors.textSecondary)
+                .foregroundStyle(skin.resolvedTextSecondary)
                 .contentTransition(.numericText())
         }
         .frame(width: DS.Size.timeColumnWidth)
@@ -197,14 +197,14 @@ struct EventRowView: View {
                 } else if let location = event.location, !location.isEmpty {
                     Label(location, systemImage: "mappin")
                         .font(.caption2)
-                        .foregroundStyle(DS.Colors.textSecondary)
+                        .foregroundStyle(skin.resolvedTextSecondary)
                         .lineLimit(1)
                 }
 
                 if let calName = event.calendarName {
                     Text(calName)
                         .font(.caption2)
-                        .foregroundStyle(DS.Colors.textTertiary)
+                        .foregroundStyle(skin.resolvedTextTertiary)
                 }
             }
         }
@@ -234,7 +234,7 @@ struct EventRowView: View {
                 } label: {
                     Image(systemName: "bell.badge")
                         .font(.system(size: DS.Size.iconMedium))
-                        .foregroundStyle(DS.Colors.textSecondary)
+                        .foregroundStyle(skin.resolvedTextSecondary)
                 }
                 .buttonStyle(.borderless)
                 .menuStyle(.borderlessButton)

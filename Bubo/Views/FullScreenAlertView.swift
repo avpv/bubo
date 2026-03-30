@@ -120,7 +120,7 @@ struct FullScreenAlertView: View {
                             )
                             .shadow(color: skinAccent.opacity(snoozeHovered ? 0.3 : 0.0), radius: 12, y: 4)
                             .scaleEffect(snoozeHovered ? 1.03 : 1.0)
-                            .animation(DS.Animation.microInteraction, value: snoozeHovered)
+                            .animation(skin.resolvedMicroAnimation, value: snoozeHovered)
                     }
                     .buttonStyle(.plain)
                     .onHover { snoozeHovered = $0 }
@@ -154,7 +154,7 @@ struct FullScreenAlertView: View {
                                 )
                                 .shadow(color: skinAccent.opacity(0.5), radius: joinHovered ? 16 : 10, y: joinHovered ? 6 : 4)
                                 .scaleEffect(joinHovered ? 1.04 : 1.0)
-                                .animation(DS.Animation.microInteraction, value: joinHovered)
+                                .animation(skin.resolvedMicroAnimation, value: joinHovered)
                         }
                         .buttonStyle(.plain)
                         .onHover { joinHovered = $0 }
@@ -183,7 +183,7 @@ struct FullScreenAlertView: View {
                             )
                             .shadow(color: .white.opacity(dismissHovered ? 0.3 : 0.15), radius: dismissHovered ? 14 : 8, y: dismissHovered ? 5 : 3)
                             .scaleEffect(dismissHovered ? 1.03 : 1.0)
-                            .animation(DS.Animation.microInteraction, value: dismissHovered)
+                            .animation(skin.resolvedMicroAnimation, value: dismissHovered)
                     }
                     .buttonStyle(.plain)
                     .onHover { dismissHovered = $0 }

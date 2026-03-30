@@ -111,9 +111,9 @@ struct AddEventView: View {
                     .padding(.horizontal, DS.Spacing.md)
                     .padding(.vertical, DS.Spacing.sm)
                     .skinPlatter(skin)
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
+                    .skinPlatterDepth(skin)
                     .overlay(
-                        RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                        RoundedRectangle(cornerRadius: skin.cornerRadius, style: .continuous)
                             .stroke(isTitleFocused ? skinAccent.opacity(0.8) : Color.clear, lineWidth: DS.Size.focusRingWidth)
                     )
                     .shadow(
@@ -121,7 +121,7 @@ struct AddEventView: View {
                         radius: isTitleFocused ? DS.Shadows.ambientRadius + 1 : DS.Shadows.ambientRadius,
                         y: DS.Shadows.ambientY
                     )
-                    .animation(DS.Animation.microInteraction, value: isTitleFocused)
+                    .animation(skin.resolvedMicroAnimation, value: isTitleFocused)
                     .disabled(isExternal)
                     .opacity(isExternal ? 0.6 : 1.0)
 
@@ -139,12 +139,12 @@ struct AddEventView: View {
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                         Text("Date & Time")
                             .font(.headline)
-                            .foregroundStyle(DS.Colors.textPrimary)
+                            .foregroundStyle(skin.resolvedTextPrimary)
                         
                         Grid(alignment: .leading, horizontalSpacing: DS.Spacing.sm, verticalSpacing: DS.Spacing.md) {
                             GridRow {
                                 Text("Starts")
-                                    .foregroundStyle(DS.Colors.textSecondary)
+                                    .foregroundStyle(skin.resolvedTextSecondary)
                                     .gridColumnAlignment(.trailing)
                                 
                                 HStack(spacing: DS.Spacing.xs) {
@@ -156,7 +156,7 @@ struct AddEventView: View {
                             if selectedEventType != .pomodoro {
                                 GridRow {
                                     Text("Ends")
-                                        .foregroundStyle(DS.Colors.textSecondary)
+                                        .foregroundStyle(skin.resolvedTextSecondary)
                                         .gridColumnAlignment(.trailing)
 
                                     HStack(spacing: DS.Spacing.xs) {
@@ -169,8 +169,7 @@ struct AddEventView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(DS.Spacing.md)
                         .skinPlatter(skin)
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
-                        .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
+                        .skinPlatterDepth(skin)
                     }
                     .disabled(isExternal)
                     .opacity(isExternal ? 0.6 : 1.0)
@@ -203,13 +202,12 @@ struct AddEventView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(DS.Spacing.md)
                             .skinPlatter(skin)
-                            .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
-                            .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
+                            .skinPlatterDepth(skin)
 
                             if !addToCalendar {
                                 Text("Event will be stored locally in Bubo only")
                                     .font(.caption)
-                                    .foregroundStyle(DS.Colors.textSecondary)
+                                    .foregroundStyle(skin.resolvedTextSecondary)
                                     .padding(.horizontal, DS.Spacing.sm)
                             }
                         }
@@ -219,7 +217,7 @@ struct AddEventView: View {
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                         Text("Color")
                             .font(.headline)
-                            .foregroundStyle(DS.Colors.textPrimary)
+                            .foregroundStyle(skin.resolvedTextPrimary)
 
                         HStack(spacing: DS.Spacing.xs) {
                             ForEach(EventColorTag.allCases, id: \.self) { tag in
@@ -243,7 +241,7 @@ struct AddEventView: View {
                                             radius: selectedColorTag == tag ? 3 : 0
                                         )
                                         .scaleEffect(selectedColorTag == tag ? 1.1 : 1.0)
-                                        .animation(DS.Animation.microInteraction, value: selectedColorTag)
+                                        .animation(skin.resolvedMicroAnimation, value: selectedColorTag)
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityLabel(tag.rawValue)
@@ -254,8 +252,7 @@ struct AddEventView: View {
                         .padding(.horizontal, DS.Spacing.md)
                         .padding(.vertical, DS.Spacing.sm)
                         .skinPlatter(skin)
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
-                        .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
+                        .skinPlatterDepth(skin)
                     }
                     .disabled(isExternal)
                     .opacity(isExternal ? 0.6 : 1.0)
@@ -264,7 +261,7 @@ struct AddEventView: View {
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                         Text("Details")
                             .font(.headline)
-                            .foregroundStyle(DS.Colors.textPrimary)
+                            .foregroundStyle(skin.resolvedTextPrimary)
                         
                         VStack(spacing: DS.Spacing.md) {
                             TextField("Location", text: $location, prompt: Text("Location"))
@@ -284,9 +281,9 @@ struct AddEventView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(DS.Spacing.md)
                         .skinPlatter(skin)
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
+                        .skinPlatterDepth(skin)
                         .overlay(
-                            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                            RoundedRectangle(cornerRadius: skin.cornerRadius, style: .continuous)
                                 .stroke((isLocationFocused || isNotesFocused) ? skinAccent.opacity(0.8) : Color.clear, lineWidth: DS.Size.focusRingWidth)
                         )
                         .shadow(
@@ -294,7 +291,7 @@ struct AddEventView: View {
                             radius: (isLocationFocused || isNotesFocused) ? DS.Shadows.ambientRadius + 1 : DS.Shadows.ambientRadius,
                             y: DS.Shadows.ambientY
                         )
-                        .animation(DS.Animation.microInteraction, value: isLocationFocused || isNotesFocused)
+                        .animation(skin.resolvedMicroAnimation, value: isLocationFocused || isNotesFocused)
                     }
                     .disabled(isExternal)
                     .opacity(isExternal ? 0.6 : 1.0)
@@ -306,8 +303,7 @@ struct AddEventView: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(DS.Spacing.md)
                                 .skinPlatter(skin)
-                                .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
-                                .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
+                                .skinPlatterDepth(skin)
                         }
                         .disabled(isExternal)
                         .opacity(isExternal ? 0.6 : 1.0)
@@ -317,7 +313,7 @@ struct AddEventView: View {
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                         Text("Reminders")
                             .font(.headline)
-                            .foregroundStyle(DS.Colors.textPrimary)
+                            .foregroundStyle(skin.resolvedTextPrimary)
                         
                         VStack(alignment: .leading, spacing: DS.Spacing.md) {
                             Toggle("Custom reminders", isOn: $useCustomReminders)
@@ -371,8 +367,8 @@ struct AddEventView: View {
                                             .buttonStyle(.plain)
                                             .padding(.horizontal, DS.Spacing.sm)
                                             .frame(height: DS.Size.controlHeight)
-                                            .background(Capsule().fill(DS.Colors.badgeFill(DS.Colors.textPrimary)))
-                                            .foregroundStyle(DS.Colors.textPrimary)
+                                            .background(Capsule().fill(DS.Colors.badgeFill(skin.resolvedTextPrimary)))
+                                            .foregroundStyle(skin.resolvedTextPrimary)
                                         }
                                     }
                                 }
@@ -388,8 +384,7 @@ struct AddEventView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(DS.Spacing.md)
                         .skinPlatter(skin)
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
-                        .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
+                        .skinPlatterDepth(skin)
                     }
                 }
                 .padding(.horizontal, DS.Spacing.lg)
@@ -481,7 +476,7 @@ struct AddEventView: View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             Text("Pomodoro")
                 .font(.headline)
-                .foregroundStyle(DS.Colors.textPrimary)
+                .foregroundStyle(skin.resolvedTextPrimary)
 
             VStack(alignment: .leading, spacing: DS.Spacing.md) {
                 Grid(alignment: .leading, horizontalSpacing: DS.Spacing.md, verticalSpacing: DS.Spacing.sm) {
@@ -555,8 +550,7 @@ struct AddEventView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(DS.Spacing.md)
             .skinPlatter(skin)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
-            .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
+            .skinPlatterDepth(skin)
         }
     }
 

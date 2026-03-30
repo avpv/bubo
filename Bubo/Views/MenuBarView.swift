@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct MenuBarView: View {
+    @Environment(\.activeSkin) private var skin
     var settings: ReminderSettings
     var reminderService: ReminderService
     var networkMonitor: NetworkMonitor
@@ -216,7 +217,7 @@ struct MenuBarView: View {
                             } label: {
                                 Image(systemName: "arrow.up")
                                     .font(.system(size: DS.Size.iconSmall, weight: .semibold))
-                                    .foregroundStyle(DS.Colors.textSecondary)
+                                    .foregroundStyle(skin.resolvedTextSecondary)
                             }
                             .buttonStyle(.borderless)
                             .help("Scroll to top")
@@ -266,7 +267,7 @@ struct MenuBarView: View {
                     VStack(spacing: DS.Spacing.sm) {
                         Text("No events with this color")
                             .font(.subheadline)
-                            .foregroundStyle(DS.Colors.textSecondary)
+                            .foregroundStyle(skin.resolvedTextSecondary)
                         Button("Clear filter") { colorFilter = nil }
                             .buttonStyle(.bordered)
                             .controlSize(.small)
@@ -318,23 +319,23 @@ struct MenuBarView: View {
                     .transition(.scale.combined(with: .opacity))
             }
         }
-        .animation(DS.Animation.microInteraction, value: networkMonitor.isConnected)
-        .animation(DS.Animation.microInteraction, value: reminderService.isSyncing)
+        .animation(skin.resolvedMicroAnimation, value: networkMonitor.isConnected)
+        .animation(skin.resolvedMicroAnimation, value: reminderService.isSyncing)
     }
 
     private var emptyState: some View {
         VStack(spacing: DS.EmptyState.spacing) {
             Image(systemName: "calendar.badge.checkmark")
                 .font(.system(size: DS.EmptyState.iconSize))
-                .foregroundStyle(DS.Colors.accent, DS.Colors.textSecondary)
+                .foregroundStyle(DS.Colors.accent, skin.resolvedTextSecondary)
                 .symbolEffect(.pulse, options: .repeating.speed(0.2))
             Text("No upcoming meetings")
                 .font(.subheadline)
                 .fontWeight(.medium)
-                .foregroundStyle(DS.Colors.textSecondary)
+                .foregroundStyle(skin.resolvedTextSecondary)
             Text("Your schedule is clear")
                 .font(.caption)
-                .foregroundStyle(DS.Colors.textTertiary)
+                .foregroundStyle(skin.resolvedTextTertiary)
             Button {
                 Haptics.tap()
                 navigation = .addEvent()
@@ -355,7 +356,7 @@ struct MenuBarView: View {
             ForEach(EventColorTag.allCases, id: \.self) { tag in
                 Button {
                     Haptics.tap()
-                    withAnimation(DS.Animation.microInteraction) {
+                    withAnimation(skin.resolvedMicroAnimation) {
                         colorFilter = colorFilter == tag ? nil : tag
                     }
                 } label: {
@@ -381,13 +382,13 @@ struct MenuBarView: View {
             if colorFilter != nil {
                 Button {
                     Haptics.tap()
-                    withAnimation(DS.Animation.microInteraction) {
+                    withAnimation(skin.resolvedMicroAnimation) {
                         colorFilter = nil
                     }
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 12))
-                        .foregroundStyle(DS.Colors.textTertiary)
+                        .foregroundStyle(skin.resolvedTextTertiary)
                 }
                 .buttonStyle(.borderless)
                 .transition(.scale.combined(with: .opacity))
@@ -397,11 +398,10 @@ struct MenuBarView: View {
         .padding(.horizontal, DS.Spacing.md)
         .padding(.vertical, DS.Spacing.sm)
         .skinPlatter(activeSkin)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
-        .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
+        .skinPlatterDepth(skin)
         .padding(.horizontal, DS.Spacing.md)
         .padding(.vertical, DS.Spacing.xs)
-        .animation(DS.Animation.microInteraction, value: colorFilter)
+        .animation(skin.resolvedMicroAnimation, value: colorFilter)
     }
 
     private var eventList: some View {
@@ -417,7 +417,7 @@ struct MenuBarView: View {
                     if dayGroup.events.isEmpty {
                         Text("No events")
                             .font(.subheadline)
-                            .foregroundStyle(DS.Colors.textSecondary)
+                            .foregroundStyle(skin.resolvedTextSecondary)
                             .frame(maxWidth: .infinity, alignment: .center)
                             .padding(.vertical, DS.Spacing.sm)
                     }
@@ -537,17 +537,17 @@ private struct CalendarAccessBanner: View {
                     .symbolRenderingMode(.hierarchical)
                 Text("Calendar access not granted. Click to open Settings.")
                     .font(.caption)
-                    .foregroundStyle(DS.Colors.textPrimary)
+                    .foregroundStyle(skin.resolvedTextPrimary)
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.caption2)
-                    .foregroundStyle(DS.Colors.textTertiary)
+                    .foregroundStyle(skin.resolvedTextTertiary)
             }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.vertical, DS.Spacing.md)
             .adaptiveBadgeFill(DS.Colors.warning)
             .clipShape(Capsule())
-            .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
+            .shadow(color: skin.resolvedShadowColor, radius: skin.shadowRadius, y: skin.shadowY)
         }
         .padding(.horizontal, DS.Spacing.md)
         .padding(.vertical, DS.Spacing.xs)

@@ -13,6 +13,7 @@ import SwiftUI
 /// }
 /// ```
 struct DurationPicker: View {
+    @Environment(\.activeSkin) private var skin
     /// Duration in minutes (as `Double` to match existing event model).
     @Binding var minutes: Double
 
@@ -100,7 +101,7 @@ struct DurationPicker: View {
         isEditing = false
         if let value = Int(text.trimmingCharacters(in: .whitespaces)), value > 0 {
             let clamped = max(5, min(480, value))
-            withAnimation(DS.Animation.microInteraction) {
+            withAnimation(skin.resolvedMicroAnimation) {
                 minutes = Double(clamped)
             }
         }
@@ -114,7 +115,7 @@ struct DurationPicker: View {
         return Menu {
             ForEach(Self.presets, id: \.self) { value in
                 Button {
-                    withAnimation(DS.Animation.microInteraction) {
+                    withAnimation(skin.resolvedMicroAnimation) {
                         minutes = Double(value)
                     }
                     Haptics.tap()

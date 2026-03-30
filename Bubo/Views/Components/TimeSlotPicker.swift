@@ -54,7 +54,7 @@ struct TimeSlotPicker: View {
                     }
                     .onChange(of: selection) {
                         if let nearestId = nearestAvailableSlotID(in: slots) {
-                            withAnimation(DS.Animation.microInteraction) {
+                            withAnimation(skin.resolvedMicroAnimation) {
                                 proxy.scrollTo(nearestId, anchor: .center)
                             }
                         }
@@ -139,7 +139,7 @@ fileprivate struct TimeSlotChip: View {
         }) {
             Text(slot.label)
                 .font(.system(.body, design: .monospaced, weight: isSelected ? .bold : .regular))
-                .foregroundStyle(isSelected ? .white : DS.Colors.textPrimary)
+                .foregroundStyle(isSelected ? .white : skin.resolvedTextPrimary)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -176,17 +176,17 @@ fileprivate struct TimeSlotChip: View {
                 )
         )
         .shadow(
-            color: isSelected ? chipAccent.opacity(0.3) : (isHovered ? DS.Shadows.hoverColor : .clear),
+            color: isSelected ? chipAccent.opacity(0.3) : (isHovered ? skin.resolvedHoverShadowColor : .clear),
             radius: isSelected ? 6 : (isHovered ? DS.Shadows.hoverRadius : 0),
             y: isSelected ? 3 : (isHovered ? DS.Shadows.hoverY : 0)
         )
         .scaleEffect(isHovered && !isSelected ? 1.03 : 1.0)
-        .animation(DS.Animation.microInteraction, value: isHovered)
-        .animation(DS.Animation.microInteraction, value: isSelected)
+        .animation(skin.resolvedMicroAnimation, value: isHovered)
+        .animation(skin.resolvedMicroAnimation, value: isSelected)
         .contentShape(Capsule())
         #if os(macOS)
         .onHover { hovering in
-            withAnimation(DS.Animation.microInteraction) {
+            withAnimation(skin.resolvedMicroAnimation) {
                 isHovered = hovering
             }
             if hovering && !isSelected {

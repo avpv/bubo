@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct TimerScreenView: View {
+    @Environment(\.activeSkin) private var skin
     let event: CalendarEvent
     var onBack: () -> Void
     var isPinned: Bool = false
@@ -51,7 +52,7 @@ struct TimerScreenView: View {
     }
 
     private func accentColor(_ now: Date) -> Color {
-        if hasEnded(now) { return DS.Colors.textTertiary }
+        if hasEnded(now) { return skin.resolvedTextTertiary }
         if isInProgress(now) { return DS.Colors.accent }
         return DS.urgencyColor(minutesUntil: secondsUntilStart(now) / 60)
     }
@@ -115,7 +116,7 @@ struct TimerScreenView: View {
                     } label: {
                         Image(systemName: isPinned ? "pin.fill" : "pin")
                             .font(.system(size: DS.Size.iconMedium, weight: .medium))
-                            .foregroundStyle(isPinned ? DS.Colors.accent : DS.Colors.textSecondary)
+                            .foregroundStyle(isPinned ? DS.Colors.accent : skin.resolvedTextSecondary)
                             .rotationEffect(.degrees(isPinned ? 0 : 45))
                     }
                     .buttonStyle(.borderless)
@@ -157,14 +158,14 @@ struct TimerScreenView: View {
                         VStack(spacing: DS.Spacing.sm) {
                             Text(statusLabel(now))
                                 .font(.system(size: 11, weight: .medium, design: .rounded))
-                                .foregroundStyle(DS.Colors.textTertiary)
+                                .foregroundStyle(skin.resolvedTextTertiary)
                                 .textCase(.uppercase)
                                 .tracking(1.5)
 
                             if ended {
                                 Image(systemName: "checkmark.circle")
                                     .font(.system(size: 36, weight: .light))
-                                    .foregroundStyle(DS.Colors.textTertiary)
+                                    .foregroundStyle(skin.resolvedTextTertiary)
                             } else if days {
                                 VStack(spacing: DS.Spacing.xxs) {
                                     timerRow(Array(components.prefix(2)), size: 28)
@@ -186,25 +187,24 @@ struct TimerScreenView: View {
                         HStack(spacing: DS.Spacing.md) {
                             Label(event.formattedDate, systemImage: "calendar")
                                 .font(.caption)
-                                .foregroundStyle(DS.Colors.textSecondary)
+                                .foregroundStyle(skin.resolvedTextSecondary)
 
                             Label(event.formattedTimeRange, systemImage: "clock")
                                 .font(.caption)
-                                .foregroundStyle(DS.Colors.textSecondary)
+                                .foregroundStyle(skin.resolvedTextSecondary)
                         }
 
                         if let location = event.location, !location.isEmpty {
                             Label(location, systemImage: "location.fill")
                                 .font(.caption)
-                                .foregroundStyle(DS.Colors.textSecondary)
+                                .foregroundStyle(skin.resolvedTextSecondary)
                                 .lineLimit(1)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(DS.Spacing.lg)
                     .skinPlatter(skin)
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
-                    .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
+                    .skinPlatterDepth(skin)
                     .staggeredEntrance(index: 1)
                 }
                 .padding(.horizontal, DS.Spacing.xl)
@@ -222,11 +222,11 @@ struct TimerScreenView: View {
                 HStack(alignment: .firstTextBaseline, spacing: 1) {
                     Text(comp.value)
                         .font(.system(size: size, weight: .bold, design: .monospaced))
-                        .foregroundStyle(DS.Colors.textPrimary)
+                        .foregroundStyle(skin.resolvedTextPrimary)
                         .contentTransition(.numericText())
                     Text(comp.unit)
                         .font(.system(size: size * 0.45, weight: .medium, design: .rounded))
-                        .foregroundStyle(DS.Colors.textTertiary)
+                        .foregroundStyle(skin.resolvedTextTertiary)
                 }
             }
         }

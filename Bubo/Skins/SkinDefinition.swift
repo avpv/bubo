@@ -12,6 +12,23 @@ enum SkinButtonStyle: Equatable {
     case glass
 }
 
+// MARK: - Animation Style
+
+/// Controls the physics and feeling of micro-interactions within the skin.
+enum SkinAnimationStyle: String, Equatable, CaseIterable, Codable {
+    case bouncy
+    case smooth
+    case snappy
+
+    var swiftUIAnimation: Animation {
+        switch self {
+        case .bouncy: return .spring(duration: 0.35, bounce: 0.4)
+        case .smooth: return .spring(duration: 0.4, bounce: 0.2)
+        case .snappy: return .spring(duration: 0.25, bounce: 0.1)
+        }
+    }
+}
+
 // MARK: - Button Shape
 
 /// Controls the clip/content shape used for primary and secondary buttons.
@@ -277,6 +294,49 @@ struct SkinDefinition: Identifiable, Equatable {
     /// Opacity of the platter tint overlay (0 = invisible, typically 0.05–0.2).
     let platterTintOpacity: Double
 
+    // MARK: Layout & Depth (HIG 2026)
+
+    /// Global corner radius for card/platter surfaces (default 12).
+    let cornerRadius: CGFloat
+
+    /// Ambient shadow opacity for elevated surfaces like popovers and tooltips.
+    let shadowOpacity: Double
+
+    /// Ambient shadow blur radius.
+    let shadowRadius: CGFloat
+
+    /// Vertical offset for the ambient shadow.
+    let shadowY: CGFloat
+
+    /// Opacity of a 1px intrinsic inner border (highlights glass materials).
+    let platterBorderOpacity: Double
+
+    // MARK: Advanced Interactions & Text (HIG 2026+)
+
+    /// Semantic text primary color override.
+    let textPrimary: Color?
+
+    /// Semantic text secondary color override.
+    let textSecondary: Color?
+
+    /// Semantic text tertiary color override.
+    let textTertiary: Color?
+
+    /// Physics style for micro-interactions and modally-animated elements.
+    let animationStyle: SkinAnimationStyle
+
+    /// Hover shadow opacity (overrides ambient depth dynamically on mouse over).
+    let hoverShadowOpacity: Double
+
+    /// Hover shadow blur radius.
+    let hoverShadowRadius: CGFloat
+
+    /// Hover shadow vertical drop.
+    let hoverShadowY: CGFloat
+
+    /// Hover background fill layer opacity on interactive elements.
+    let hoverFillOpacity: Double
+
     // MARK: Typography & Symbols (HIG 2026)
 
     /// System font design — SF Pro, SF Rounded, New York, or SF Mono.
@@ -327,6 +387,19 @@ struct SkinDefinition: Identifiable, Equatable {
         platterMaterial: SkinBarMaterial = .regular,
         platterTint: Color? = nil,
         platterTintOpacity: Double = 0,
+        cornerRadius: CGFloat = 12,
+        shadowOpacity: Double = 0.06,
+        shadowRadius: CGFloat = 8,
+        shadowY: CGFloat = 4,
+        platterBorderOpacity: Double = 0,
+        textPrimary: Color? = nil,
+        textSecondary: Color? = nil,
+        textTertiary: Color? = nil,
+        animationStyle: SkinAnimationStyle = .smooth,
+        hoverShadowOpacity: Double = 0.12,
+        hoverShadowRadius: CGFloat = 12,
+        hoverShadowY: CGFloat = 6,
+        hoverFillOpacity: Double = 0.06,
         fontDesign: SkinFontDesign = .rounded,
         fontWeight: SkinFontWeight = .semibold,
         headlineFontWeight: SkinFontWeight = .semibold,
@@ -359,6 +432,19 @@ struct SkinDefinition: Identifiable, Equatable {
         self.platterMaterial = platterMaterial
         self.platterTint = platterTint
         self.platterTintOpacity = platterTintOpacity
+        self.cornerRadius = cornerRadius
+        self.shadowOpacity = shadowOpacity
+        self.shadowRadius = shadowRadius
+        self.shadowY = shadowY
+        self.platterBorderOpacity = platterBorderOpacity
+        self.textPrimary = textPrimary
+        self.textSecondary = textSecondary
+        self.textTertiary = textTertiary
+        self.animationStyle = animationStyle
+        self.hoverShadowOpacity = hoverShadowOpacity
+        self.hoverShadowRadius = hoverShadowRadius
+        self.hoverShadowY = hoverShadowY
+        self.hoverFillOpacity = hoverFillOpacity
         self.fontDesign = fontDesign
         self.fontWeight = fontWeight
         self.headlineFontWeight = headlineFontWeight
@@ -406,6 +492,43 @@ struct SkinDefinition: Identifiable, Equatable {
     /// Resolved SwiftUI `Material` for platter/card surfaces.
     var resolvedPlatterMaterial: Material {
         platterMaterial.material
+    }
+
+    /// Primary ambient shadow color for elevated components.
+    var resolvedShadowColor: Color {
+        Color.black.opacity(shadowOpacity)
+    }
+
+    /// Primary hover shadow color for elevated components.
+    var resolvedHoverShadowColor: Color {
+        Color.black.opacity(hoverShadowOpacity)
+    }
+
+    /// Resolved hover fill layer overlay (used for rows and interactive elements).
+    var resolvedHoverFill: Color {
+        if prefersDarkTint {
+            return Color.white.opacity(hoverFillOpacity)
+        } else {
+            return Color.black.opacity(hoverFillOpacity)
+        }
+    }
+
+    /// Resolved semantic properties matching `DS.Colors` defaults if unmodified.
+    var resolvedTextPrimary: Color {
+        textPrimary ?? Color(nsColor: .labelColor)
+    }
+
+    var resolvedTextSecondary: Color {
+        textSecondary ?? Color(nsColor: .secondaryLabelColor)
+    }
+
+    var resolvedTextTertiary: Color {
+        textTertiary ?? Color(nsColor: .tertiaryLabelColor)
+    }
+
+    /// Resolved animation matching the skin's physical properties.
+    var resolvedMicroAnimation: Animation {
+        animationStyle.swiftUIAnimation
     }
 
     /// Resolved SwiftUI Font.Design for body text.

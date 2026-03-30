@@ -164,6 +164,35 @@ extension View {
     }
 }
 
+// MARK: - Platter Shape & Depth (HIG 2026)
+
+/// Encapsulates corner radius, inner glass borders, and ambient drop shadows for
+/// platters and elevated components using the skin's layout configuration.
+struct SkinPlatterDepthModifier: ViewModifier {
+    let skin: SkinDefinition
+
+    func body(content: Content) -> some View {
+        content
+            .clipShape(RoundedRectangle(cornerRadius: skin.cornerRadius, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: skin.cornerRadius, style: .continuous)
+                    .strokeBorder(.white.opacity(skin.platterBorderOpacity), lineWidth: 1)
+            )
+            .shadow(
+                color: skin.resolvedShadowColor,
+                radius: skin.shadowRadius,
+                y: skin.shadowY
+            )
+    }
+}
+
+extension View {
+    /// Applies the skin's corner radius, inner glass border, and ambient shadow.
+    func skinPlatterDepth(_ skin: SkinDefinition) -> some View {
+        modifier(SkinPlatterDepthModifier(skin: skin))
+    }
+}
+
 // MARK: - Environment Key
 
 private struct ActiveSkinKey: EnvironmentKey {
