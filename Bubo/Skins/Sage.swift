@@ -2,33 +2,39 @@ import SwiftUI
 
 // MARK: - Sage
 // Author: Bubo Team
-// Natural muted green — calm, organic, inspired by Apple's environmental ethos.
+// Natural forest green — calm, organic, grounded.
 // Apple HIG: biophilic color, reducing visual tension.
+// Personality: zen, organic. Solid buttons for a grounded,
+// no-frills feel — like a well-worn leather journal.
 
 extension SkinCatalog {
     static let sage = SkinDefinition(
         id: "sage",
         displayName: "Sage",
         author: "Bubo",
-        accentColor: Color(red: 0.42, green: 0.62, blue: 0.45),
-        surfaceTint: Color(red: 0.05, green: 0.10, blue: 0.06),
-        surfaceTintOpacity: 0.14,
+        // Deeper forest green — more saturated, more character
+        accentColor: Color(red: 0.32, green: 0.58, blue: 0.38),
+        // Dark moss surface — forest floor
+        surfaceTint: Color(red: 0.04, green: 0.10, blue: 0.05),
+        surfaceTintOpacity: 0.18,
+        // Radial from bottom-leading — like light filtering through canopy
         backgroundGradient: SkinGradient(
             colors: [
-                Color(red: 0.28, green: 0.48, blue: 0.30).opacity(0.09),
-                Color(red: 0.15, green: 0.30, blue: 0.18).opacity(0.05),
                 .clear,
+                Color(red: 0.18, green: 0.35, blue: 0.20).opacity(0.06),
+                Color(red: 0.22, green: 0.42, blue: 0.25).opacity(0.10),
             ],
-            style: .radial(center: .topLeading, startRadius: 0, endRadius: 480)
+            style: .radial(center: .bottomLeading, startRadius: 0, endRadius: 450)
         ),
         previewColors: [
-            Color(red: 0.42, green: 0.62, blue: 0.45),
-            Color(red: 0.30, green: 0.48, blue: 0.34),
+            Color(red: 0.32, green: 0.58, blue: 0.38),
+            Color(red: 0.22, green: 0.38, blue: 0.25),
         ],
-        prefersDarkTint: false,
-        secondaryAccent: Color(red: 0.35, green: 0.52, blue: 0.38),
-        buttonStyle: .glass,
-        // HIG: earthy olive complement to fresh green accent
-        toolbarTint: Color(red: 0.50, green: 0.55, blue: 0.40)
+        prefersDarkTint: true,
+        secondaryAccent: Color(red: 0.28, green: 0.48, blue: 0.32),
+        // HIG: solid — grounded, organic, simple
+        buttonStyle: .solid,
+        // Warm brown toolbar — like tree bark, earth complement to green
+        toolbarTint: Color(red: 0.58, green: 0.48, blue: 0.35)
     )
 }
