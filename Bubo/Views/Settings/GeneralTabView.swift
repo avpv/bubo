@@ -276,6 +276,10 @@ struct BackgroundPhotoSection: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
+
+            Text("Recommended size: 720\u{00D7}1200 px (3:5)")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
         }
     }
 
