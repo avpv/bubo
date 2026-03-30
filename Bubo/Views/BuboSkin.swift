@@ -61,6 +61,7 @@ struct SkinTintModifier: ViewModifier {
         content
             .tint(skin.accentColor)
             .symbolRenderingMode(skin.resolvedSymbolRendering)
+            .fontWeight(skin.resolvedSymbolWeight)
     }
 }
 
