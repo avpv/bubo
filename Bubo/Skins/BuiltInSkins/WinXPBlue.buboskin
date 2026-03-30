@@ -24,7 +24,7 @@
   "buttonStyle": "gradient",
   "buttonShape": "roundedRect",
   "buttonColor": "white",
-  "toolbarTint": "#388A29",
+  "toolbarTint": "#FFFFFF",
   "barMaterial": "ultraThick",
   "barTint": "#003DAD",
   "barTintOpacity": 0.22,
