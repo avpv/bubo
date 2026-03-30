@@ -11,6 +11,7 @@ import SwiftUI
 struct TimeSlotPicker: View {
     @Binding var selection: Date
     var step: Int = 30
+    @Environment(\.activeSkin) private var skin
 
     /// Re-evaluated every minute so past slots disappear in real time.
     @State private var now = Date()
