@@ -12,6 +12,39 @@ enum SkinButtonStyle: Equatable {
     case glass
 }
 
+// MARK: - Bar Material
+
+/// Controls which SwiftUI `Material` is used for header/footer bars.
+///
+/// Maps 1:1 to Apple's `ShapeStyle` material variants. See Apple HIG
+/// "Materials" for guidance on when to use each level.
+enum SkinBarMaterial: String, Equatable, CaseIterable {
+    /// Very subtle translucency — maximum content visibility.
+    case ultraThin
+    /// Light translucency.
+    case thin
+    /// Balanced translucency (system default for many controls).
+    case regular
+    /// Rich translucency — good default for bars.
+    case thick
+    /// Maximum translucency — most frosted/opaque.
+    case ultraThick
+    /// System bar material — adaptive, designed for toolbars and tab bars.
+    case bar
+
+    /// The corresponding SwiftUI `Material` value.
+    var material: Material {
+        switch self {
+        case .ultraThin:  .ultraThinMaterial
+        case .thin:       .thinMaterial
+        case .regular:    .regularMaterial
+        case .thick:      .thickMaterial
+        case .ultraThick: .ultraThickMaterial
+        case .bar:        .bar
+        }
+    }
+}
+
 // MARK: - Skin Definition
 
 /// A complete visual theme for Bubo.
@@ -59,6 +92,11 @@ struct SkinDefinition: Identifiable, Equatable {
     /// buttons recede. Falls back to accent color if nil.
     let toolbarTint: Color?
 
+    /// Material used for header and footer bars.
+    /// Apple HIG: different material levels control translucency/vibrancy.
+    /// Defaults to `.thick` for rich vibrancy.
+    let barMaterial: SkinBarMaterial
+
     init(
         id: String,
         displayName: String,
@@ -71,7 +109,8 @@ struct SkinDefinition: Identifiable, Equatable {
         prefersDarkTint: Bool,
         secondaryAccent: Color? = nil,
         buttonStyle: SkinButtonStyle = .gradient,
-        toolbarTint: Color? = nil
+        toolbarTint: Color? = nil,
+        barMaterial: SkinBarMaterial = .thick
     ) {
         self.id = id
         self.displayName = displayName
@@ -85,6 +124,7 @@ struct SkinDefinition: Identifiable, Equatable {
         self.secondaryAccent = secondaryAccent
         self.buttonStyle = buttonStyle
         self.toolbarTint = toolbarTint
+        self.barMaterial = barMaterial
     }
 
     // MARK: - Derived
@@ -98,6 +138,11 @@ struct SkinDefinition: Identifiable, Equatable {
     /// Apple HIG: toolbar buttons should be visually subordinate to primary actions.
     var resolvedToolbarTint: Color {
         toolbarTint ?? accentColor.opacity(0.7)
+    }
+
+    /// Resolved SwiftUI `Material` for header/footer bars.
+    var resolvedBarMaterial: Material {
+        barMaterial.material
     }
 
     var previewGradient: AnyShapeStyle {

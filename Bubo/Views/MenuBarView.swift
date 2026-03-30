@@ -497,7 +497,7 @@ struct MenuBarView: View {
         .padding(.horizontal, DS.Spacing.lg)
         .frame(maxWidth: .infinity)
         .frame(height: DS.Size.actionFooterHeight)
-        .background(DS.Materials.headerBar)
+        .background(activeSkin.resolvedBarMaterial)
     }
 }
 

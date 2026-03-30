@@ -34,7 +34,8 @@ import SwiftUI
 ///   "prefersDarkTint": true,
 ///   "secondaryAccent": { "red": 0.0, "green": 0.65, "blue": 0.15 },
 ///   "buttonStyle": "gradient",
-///   "toolbarTint": { "red": 0.3, "green": 0.5, "blue": 0.4 }
+///   "toolbarTint": { "red": 0.3, "green": 0.5, "blue": 0.4 },
+///   "barMaterial": "thick"
 /// }
 /// ```
 struct CustomSkinJSON: Codable {
@@ -53,6 +54,11 @@ struct CustomSkinJSON: Codable {
     /// Toolbar button tint color (Refresh, Settings, Quit).
     /// Apple HIG: secondary actions use a subtler color for visual hierarchy.
     let toolbarTint: JSONColor?
+
+    /// Material for header/footer bars.
+    /// Valid values: "ultraThin", "thin", "regular", "thick", "ultraThick", "bar".
+    /// Apple HIG: controls translucency level of toolbar areas. Defaults to "thick".
+    let barMaterial: String?
 
     func toSkinDefinition(skinFileURL: URL? = nil) -> SkinDefinition {
         // HIG: Validate accent color contrast — warn if luminance is too high
@@ -74,7 +80,8 @@ struct CustomSkinJSON: Codable {
             prefersDarkTint: prefersDarkTint,
             secondaryAccent: secondaryAccent?.toColor(),
             buttonStyle: resolvedButtonStyle,
-            toolbarTint: toolbarTint?.toColor()
+            toolbarTint: toolbarTint?.toColor(),
+            barMaterial: resolvedBarMaterial
         )
     }
 
@@ -84,6 +91,14 @@ struct CustomSkinJSON: Codable {
         case "glass": .glass
         default: .gradient
         }
+    }
+
+    private var resolvedBarMaterial: SkinBarMaterial {
+        guard let value = barMaterial else { return .thick }
+        // Try exact match first, then case-insensitive lookup
+        if let exact = SkinBarMaterial(rawValue: value) { return exact }
+        let lower = value.lowercased()
+        return SkinBarMaterial.allCases.first { $0.rawValue.lowercased() == lower } ?? .thick
     }
 }
 

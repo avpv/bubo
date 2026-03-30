@@ -275,7 +275,7 @@ struct EventDetailView: View {
             }
             .padding(.horizontal, DS.Spacing.lg)
             .frame(height: showSeriesDeleteChoice ? DS.Size.actionFooterHeight + 15 : DS.Size.actionFooterHeight)
-            .background(DS.Materials.headerBar)
+            .background(skin.resolvedBarMaterial)
         }
         .frame(width: DS.Popover.width, height: DS.Popover.height)
         } // TimelineView

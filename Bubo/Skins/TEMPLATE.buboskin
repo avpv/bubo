@@ -63,5 +63,7 @@
     "green": 0.5,
     "blue": 0.4
   },
+  "_comment_barMaterial": "Optional: material for header/footer bars. Values: ultraThin, thin, regular, thick (default), ultraThick, bar.",
+  "barMaterial": "thick",
   "_comment": "Optional: add a background image. Place the image file next to this .buboskin file."
 }

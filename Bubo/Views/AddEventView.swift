@@ -427,7 +427,7 @@ struct AddEventView: View {
             }
             .padding(.horizontal, DS.Spacing.lg)
             .frame(height: DS.Size.actionFooterHeight)
-            .background(DS.Materials.headerBar)
+            .background(skin.resolvedBarMaterial)
         }
         .frame(width: DS.Popover.width, height: DS.Popover.height)
         .onAppear {

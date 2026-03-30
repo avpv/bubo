@@ -162,8 +162,6 @@ enum DS {
         static let toast: Material = .regularMaterial
         static let overlay: Material = .ultraThinMaterial
         static let hud: Material = .thickMaterial
-        /// Header/footer bars — use thickMaterial for richer vibrancy than `.bar`
-        static let headerBar: Material = .thickMaterial
         static let platter: Material = .regularMaterial
     }
 
@@ -353,7 +351,7 @@ extension View {
 // MARK: - Reusable Header
 
 /// Standard header bar used across popover views.
-/// Uses `.thickMaterial` for rich vibrancy instead of plain `.bar`.
+/// Material is determined by the active skin's `barMaterial` setting.
 struct PopoverHeader: View {
     var title: String? = nil
     var showBack: Bool = false
@@ -411,7 +409,7 @@ struct PopoverHeader: View {
             }
             .padding(.horizontal, DS.Spacing.lg)
             .frame(height: DS.Size.headerHeight)
-            .background(DS.Materials.headerBar)
+            .background(skin.resolvedBarMaterial)
 
             Divider()
         }
