@@ -31,15 +31,13 @@ struct SkinPreviewCard: View {
     let skin: SkinDefinition
     let isSelected: Bool
 
-    @Environment(\.colorScheme) private var colorScheme
-
     var body: some View {
         VStack(spacing: 4) {
             // Mini preview showing skin's visual identity
             ZStack {
                 // Background
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(colorScheme == .dark
+                    .fill(skin.prefersDarkTint
                         ? Color(white: 0.12)
                         : Color(white: 0.95)
                     )

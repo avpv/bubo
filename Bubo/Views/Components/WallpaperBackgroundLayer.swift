@@ -4,7 +4,6 @@ import SwiftUI
 
 struct WallpaperBackgroundLayer: View {
     let wallpaper: WallpaperDefinition
-    @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
         if wallpaper.id == "none" {
@@ -760,8 +759,6 @@ private struct LiveStarsView: View {
 struct WallpaperPreviewCard: View {
     let wallpaper: WallpaperDefinition
     let isSelected: Bool
-
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(spacing: 4) {
