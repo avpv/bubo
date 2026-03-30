@@ -27,6 +27,8 @@ extension SkinCatalog {
         ],
         prefersDarkTint: false,
         secondaryAccent: Color(red: 0.65, green: 0.45, blue: 0.25),
-        buttonStyle: .glass
+        buttonStyle: .glass,
+        // HIG: desert clay complement to golden-amber accent
+        toolbarTint: Color(red: 0.65, green: 0.48, blue: 0.38)
     )
 }

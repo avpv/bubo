@@ -27,6 +27,8 @@ extension SkinCatalog {
         ],
         prefersDarkTint: false,
         secondaryAccent: Color(red: 0.72, green: 0.44, blue: 0.40),
-        buttonStyle: .glass
+        buttonStyle: .glass,
+        // HIG: warm amber complement to rose-copper accent
+        toolbarTint: Color(red: 0.78, green: 0.62, blue: 0.42)
     )
 }

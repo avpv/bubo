@@ -27,6 +27,8 @@ extension SkinCatalog {
         ],
         prefersDarkTint: false,
         secondaryAccent: Color(red: 0.45, green: 0.32, blue: 0.72),
-        buttonStyle: .glass
+        buttonStyle: .glass,
+        // HIG: soft pink complement to violet accent — analogous harmony
+        toolbarTint: Color(red: 0.72, green: 0.48, blue: 0.68)
     )
 }

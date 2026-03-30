@@ -23,6 +23,7 @@ extension SkinCatalog {
         previewColors: [Color.accentColor.opacity(0.6), Color.accentColor.opacity(0.3)],
         prefersDarkTint: false,
         secondaryAccent: Color.accentColor.opacity(0.7),
-        buttonStyle: .glass
+        buttonStyle: .glass,
+        toolbarTint: Color.accentColor.opacity(0.55)
     )
 }

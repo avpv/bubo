@@ -61,7 +61,12 @@ extension SkinCatalog {
         // secondaryAccent: Color(red: 0.2, green: 0.0, blue: 0.5),
 
         // Button fill style: .gradient (default), .solid, or .glass
-        buttonStyle: .gradient
+        buttonStyle: .gradient,
+
+        // Optional: toolbar button tint (Refresh, Settings, Quit).
+        // Use a complementary color to differentiate from primary accent.
+        // Omit to auto-derive from accentColor.
+        // toolbarTint: Color(red: 0.3, green: 0.5, blue: 0.4)
     )
 }
 */

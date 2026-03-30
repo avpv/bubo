@@ -27,6 +27,8 @@ extension SkinCatalog {
         ],
         prefersDarkTint: false,
         secondaryAccent: Color(red: 0.38, green: 0.58, blue: 0.75),
-        buttonStyle: .glass
+        buttonStyle: .glass,
+        // HIG: cool slate complement to ice-blue accent
+        toolbarTint: Color(red: 0.45, green: 0.55, blue: 0.62)
     )
 }

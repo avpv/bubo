@@ -27,6 +27,8 @@ extension SkinCatalog {
         ],
         prefersDarkTint: true,
         secondaryAccent: Color(red: 0.15, green: 0.38, blue: 0.80),
-        buttonStyle: .glass
+        buttonStyle: .glass,
+        // HIG: cool teal complement to deep blue accent — distinct but harmonious
+        toolbarTint: Color(red: 0.30, green: 0.65, blue: 0.78)
     )
 }

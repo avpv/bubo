@@ -23,6 +23,9 @@
   "secondaryAccent": { "red": 0.2, "green": 0.0, "blue": 0.5 },
   "buttonStyle": "gradient",
 
+  "_comment_toolbar": "Optional: toolbar button tint (Refresh, Settings, Quit). Omit to auto-derive from accentColor.",
+  "toolbarTint": { "red": 0.3, "green": 0.5, "blue": 0.4 },
+
   "_comment": "Optional: add a background image. Place the image file next to this .buboskin file.",
   "backgroundImage": {
     "filename": "my-background.jpg",
