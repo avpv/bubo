@@ -33,7 +33,17 @@ extension SkinCatalog {
         secondaryAccent: Color(red: 0.40, green: 0.40, blue: 0.46),
         // HIG: solid buttons — utilitarian, no decoration
         buttonStyle: .solid,
+        // Sharp corners — utilitarian, form follows function
+        buttonShape: .roundedRect,
         // Warm taupe toolbar — temperature contrast against cool gray
-        toolbarTint: Color(red: 0.55, green: 0.52, blue: 0.48)
+        toolbarTint: Color(red: 0.55, green: 0.52, blue: 0.48),
+        // Maximum frosted glass — editorial, heavy chrome
+        barMaterial: .ultraThick,
+        // Steel tint on bars — reinforces monochrome identity
+        barTint: Color(red: 0.30, green: 0.30, blue: 0.36),
+        barTintOpacity: 0.08,
+        // Subtle steel platters — cohesive neutral surface
+        platterTint: Color(red: 0.25, green: 0.25, blue: 0.30),
+        platterTintOpacity: 0.05
     )
 }

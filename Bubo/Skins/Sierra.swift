@@ -36,6 +36,12 @@ extension SkinCatalog {
         // HIG: gradient — warm sunset energy on buttons
         buttonStyle: .gradient,
         // Terracotta/rust toolbar — earthy complement to golden accent
-        toolbarTint: Color(red: 0.70, green: 0.42, blue: 0.28)
+        toolbarTint: Color(red: 0.70, green: 0.42, blue: 0.28),
+        // Warm earth-tinted bars — adobe wall feel
+        barTint: Color(red: 0.45, green: 0.25, blue: 0.10),
+        barTintOpacity: 0.10,
+        // Terracotta platters — sun-baked clay surfaces
+        platterTint: Color(red: 0.40, green: 0.22, blue: 0.08),
+        platterTintOpacity: 0.05
     )
 }

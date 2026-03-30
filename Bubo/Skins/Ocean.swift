@@ -36,6 +36,14 @@ extension SkinCatalog {
         // HIG: gradient buttons — vivid, energetic primary actions
         buttonStyle: .gradient,
         // Aqua/cyan toolbar — like sunlight hitting water surface
-        toolbarTint: Color(red: 0.0, green: 0.68, blue: 0.72)
+        toolbarTint: Color(red: 0.0, green: 0.68, blue: 0.72),
+        // Thinner bars — let the ocean gradient show through
+        barMaterial: .regular,
+        // Deep blue bar tint — like looking through water surface
+        barTint: Color(red: 0.0, green: 0.15, blue: 0.40),
+        barTintOpacity: 0.15,
+        // Ocean-tinted platters — immersive underwater feel
+        platterTint: Color(red: 0.0, green: 0.10, blue: 0.30),
+        platterTintOpacity: 0.08
     )
 }

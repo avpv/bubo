@@ -34,7 +34,18 @@ extension SkinCatalog {
         secondaryAccent: Color(red: 0.42, green: 0.25, blue: 0.75),
         // HIG: glass — ethereal, spatial feel
         buttonStyle: .glass,
+        // Violet tint on glass buttons — dreamy nebula glow
+        buttonTint: Color(red: 0.45, green: 0.28, blue: 0.75),
+        buttonTintOpacity: 0.25,
         // Warm pink toolbar — split-complementary to violet
-        toolbarTint: Color(red: 0.78, green: 0.42, blue: 0.62)
+        toolbarTint: Color(red: 0.78, green: 0.42, blue: 0.62),
+        // Thin bars — ethereal, airy, visionOS-inspired
+        barMaterial: .thin,
+        // Purple-tinted bars — nebula atmosphere
+        barTint: Color(red: 0.35, green: 0.18, blue: 0.55),
+        barTintOpacity: 0.12,
+        // Violet mist platters — soft, dreamy surfaces
+        platterTint: Color(red: 0.30, green: 0.15, blue: 0.50),
+        platterTintOpacity: 0.06
     )
 }
