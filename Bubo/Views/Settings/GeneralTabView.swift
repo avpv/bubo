@@ -592,16 +592,13 @@ struct GeneralTabView: View {
                 }
             }
 
-            SettingsPlatter("Wallpaper") {
+            SettingsPlatter("Background") {
                 WallpaperSectionView()
-            }
 
-            SettingsPlatter("Background Photo") {
-                BackgroundPhotoSection(settings: settings)
-            }
+                if settings.selectedSkin.isClassic {
+                    Divider()
+                        .padding(.vertical, 4)
 
-            if settings.selectedSkin.isClassic {
-                SettingsPlatter("Background") {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Gradient overlay")
                             .font(.caption)
@@ -634,6 +631,11 @@ struct GeneralTabView: View {
                         }
                     }
                 }
+
+                Divider()
+                    .padding(.vertical, 4)
+
+                BackgroundPhotoSection(settings: settings)
             }
 
             SettingsPlatter("Status") {
