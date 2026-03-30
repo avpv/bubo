@@ -2,30 +2,59 @@
   "id": "minecraft",
   "displayName": "Minecraft",
   "author": "Bubo Community",
-  "accentColor": { "red": 0.3, "green": 0.55, "blue": 0.15 },
-  "surfaceTint": { "red": 0.08, "green": 0.06, "blue": 0.02 },
+  "accentColor": {
+    "red": 0.3,
+    "green": 0.55,
+    "blue": 0.15
+  },
+  "surfaceTint": {
+    "red": 0.08,
+    "green": 0.06,
+    "blue": 0.02
+  },
   "surfaceTintOpacity": 0.3,
   "backgroundGradient": {
     "colors": [
-      { "red": 0.25, "green": 0.55, "blue": 0.85, "opacity": 0.3 },
-      { "red": 0.3, "green": 0.5, "blue": 0.15, "opacity": 0.2 },
-      { "red": 0.0, "green": 0.0, "blue": 0.0, "opacity": 0.0 }
+      {
+        "red": 0.25,
+        "green": 0.55,
+        "blue": 0.85,
+        "opacity": 0.3
+      },
+      {
+        "red": 0.3,
+        "green": 0.5,
+        "blue": 0.15,
+        "opacity": 0.2
+      },
+      {
+        "red": 0.0,
+        "green": 0.0,
+        "blue": 0.0,
+        "opacity": 0.0
+      }
     ],
     "style": "linear",
     "startPoint": "top",
     "endPoint": "bottom"
   },
   "previewColors": [
-    { "red": 0.3, "green": 0.55, "blue": 0.15 },
-    { "red": 0.4, "green": 0.25, "blue": 0.1 }
+    {
+      "red": 0.3,
+      "green": 0.55,
+      "blue": 0.15
+    },
+    {
+      "red": 0.4,
+      "green": 0.25,
+      "blue": 0.1
+    }
   ],
   "prefersDarkTint": false,
-  "secondaryAccent": { "red": 0.5, "green": 0.35, "blue": 0.15 },
-  "buttonStyle": "solid",
-  "backgroundImage": {
-    "filename": "minecraft.jpg",
-    "opacity": 0.25,
-    "fillMode": "fill",
-    "blur": 1
-  }
+  "secondaryAccent": {
+    "red": 0.5,
+    "green": 0.35,
+    "blue": 0.15
+  },
+  "buttonStyle": "solid"
 }

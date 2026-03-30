@@ -2,30 +2,59 @@
   "id": "rammstein",
   "displayName": "Rammstein",
   "author": "Bubo Community",
-  "accentColor": { "red": 0.9, "green": 0.15, "blue": 0.0 },
-  "surfaceTint": { "red": 0.12, "green": 0.02, "blue": 0.0 },
+  "accentColor": {
+    "red": 0.9,
+    "green": 0.15,
+    "blue": 0.0
+  },
+  "surfaceTint": {
+    "red": 0.12,
+    "green": 0.02,
+    "blue": 0.0
+  },
   "surfaceTintOpacity": 0.4,
   "backgroundGradient": {
     "colors": [
-      { "red": 0.5, "green": 0.05, "blue": 0.0, "opacity": 0.5 },
-      { "red": 0.25, "green": 0.0, "blue": 0.0, "opacity": 0.3 },
-      { "red": 0.0, "green": 0.0, "blue": 0.0, "opacity": 0.0 }
+      {
+        "red": 0.5,
+        "green": 0.05,
+        "blue": 0.0,
+        "opacity": 0.5
+      },
+      {
+        "red": 0.25,
+        "green": 0.0,
+        "blue": 0.0,
+        "opacity": 0.3
+      },
+      {
+        "red": 0.0,
+        "green": 0.0,
+        "blue": 0.0,
+        "opacity": 0.0
+      }
     ],
     "style": "linear",
     "startPoint": "bottom",
     "endPoint": "top"
   },
   "previewColors": [
-    { "red": 0.9, "green": 0.15, "blue": 0.0 },
-    { "red": 0.15, "green": 0.02, "blue": 0.0 }
+    {
+      "red": 0.9,
+      "green": 0.15,
+      "blue": 0.0
+    },
+    {
+      "red": 0.15,
+      "green": 0.02,
+      "blue": 0.0
+    }
   ],
   "prefersDarkTint": true,
-  "secondaryAccent": { "red": 0.95, "green": 0.4, "blue": 0.0 },
-  "buttonStyle": "solid",
-  "backgroundImage": {
-    "filename": "rammstein.jpg",
-    "opacity": 0.2,
-    "fillMode": "fill",
-    "blur": 1
-  }
+  "secondaryAccent": {
+    "red": 0.95,
+    "green": 0.4,
+    "blue": 0.0
+  },
+  "buttonStyle": "solid"
 }

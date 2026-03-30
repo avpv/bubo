@@ -12,7 +12,7 @@ struct SkinBackgroundLayer: View {
             Color.clear
         } else {
             ZStack {
-                // User-chosen image takes priority over skin's bundled image
+                // User-chosen background image for this skin
                 if let override = skinImageOverride,
                    !override.imagePath.isEmpty,
                    let nsImage = NSImage(contentsOfFile: override.imagePath) {
@@ -22,8 +22,6 @@ struct SkinBackgroundLayer: View {
                         .opacity(override.opacity)
                         .blur(radius: override.blur)
                         .clipped()
-                } else if let bgImage = skin.backgroundImage {
-                    SkinBackgroundImageView(spec: bgImage)
                 }
 
                 // Gradient overlay
@@ -85,19 +83,3 @@ extension EnvironmentValues {
     }
 }
 
-// MARK: - Skin Background Image View
-
-struct SkinBackgroundImageView: View {
-    let spec: SkinBackgroundImage
-
-    var body: some View {
-        if let nsImage = NSImage(contentsOf: spec.imageURL) {
-            Image(nsImage: nsImage)
-                .resizable()
-                .aspectRatio(contentMode: spec.fillMode == .fill ? .fill : .fit)
-                .opacity(spec.opacity)
-                .blur(radius: spec.blurRadius)
-                .clipped()
-        }
-    }
-}

@@ -146,33 +146,12 @@ Gradient style is `"linear"` or `"radial"`. Button style is `"solid"`,
 
 ### Background images
 
-You can add a custom background photo to your skin. Place the image file
-(`.jpg`, `.png`) in the same folder as the `.buboskin` file and add:
-
-```json
-"backgroundImage": {
-  "filename": "my-background.jpg",
-  "opacity": 0.25,
-  "fillMode": "fill",
-  "blur": 2
-}
-```
-
-| Property | Description | Default |
-|----------|-------------|---------|
-| `filename` | Image filename (must be in the same folder) | required |
-| `opacity` | 0.0–1.0, lower = more subtle | 0.3 |
-| `fillMode` | `"fill"` (crop to fit) or `"fit"` (letterbox) | `"fill"` |
-| `blur` | Blur radius, 0 = sharp | 0 |
-
-**Tip**: Keep opacity at 0.2–0.35 so text stays readable. A small blur
-(1–3) helps blend the image with the UI.
-
-When importing, Bubo copies both the `.buboskin` and the image file into
-`~/Library/Application Support/Bubo/Skins/`.
+Users can set a custom background image for any skin directly in Settings.
+Select a skin, then use the "Choose image..." button to pick a photo.
+Opacity and blur can be adjusted per skin.
 
 Skins are stored in `~/Library/Application Support/Bubo/Skins/`. You can
-also drop `.buboskin` files and images there directly and restart Bubo.
+also drop `.buboskin` files there directly and restart Bubo.
 
 Right-click a community skin in the picker to remove it.
 
