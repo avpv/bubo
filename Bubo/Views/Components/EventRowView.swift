@@ -28,7 +28,7 @@ struct EventRowView: View {
             urgencyBar
 
             // Time indicator
-            timeColumn
+            timeColumn(now)
 
             // Event details
             eventDetails
@@ -145,7 +145,7 @@ struct EventRowView: View {
 
     // MARK: - Time Column
 
-    private var timeColumn: some View {
+    private func timeColumn(_ now: Date) -> some View {
         VStack(spacing: DS.Spacing.xxs) {
             HStack(spacing: 2) {
                 Text(event.formattedTime)
