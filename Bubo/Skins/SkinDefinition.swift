@@ -492,7 +492,7 @@ struct SkinGradient: Equatable {
 /// via Settings — no code changes needed. See `CustomSkinLoader` for details.
 enum SkinCatalog {
     /// All built-in skins loaded from bundled `.buboskin` JSON files.
-    /// Order is determined by `BuiltInSkinLoader`.
+    /// Guaranteed to contain at least one skin (Classic fallback).
     static let builtInSkins: [SkinDefinition] = BuiltInSkinLoader.skins
 
     /// All skins including user-imported custom skins.
@@ -500,15 +500,16 @@ enum SkinCatalog {
         builtInSkins + CustomSkinLoader.shared.customSkins
     }
 
-    /// Look up a skin by its ID. Falls back to "classic" if not found.
+    /// Look up a skin by its ID. Falls back to "classic", then first available.
     static func skin(forID id: String) -> SkinDefinition {
         allSkins.first { $0.id == id }
             ?? builtInSkins.first { $0.id == "classic" }
-            ?? builtInSkins.first!
+            ?? builtInSkins[0]  // safe: BuiltInSkinLoader guarantees ≥ 1
     }
 
     /// The default skin.
     static var defaultSkin: SkinDefinition {
-        builtInSkins.first { $0.id == "system" } ?? builtInSkins.first!
+        builtInSkins.first { $0.id == "system" }
+            ?? builtInSkins[0]  // safe: BuiltInSkinLoader guarantees ≥ 1
     }
 }

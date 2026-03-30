@@ -459,10 +459,21 @@ class CustomSkinLoader {
 /// Loads built-in skins from bundled `.buboskin` JSON files in the app's
 /// `BuiltInSkins` resource directory. This gives built-in skins the same
 /// JSON-based configuration as custom skins — a unified approach.
+///
+/// If no JSON files can be found or all fail to decode, a hardcoded
+/// fallback Classic skin is returned so the app never launches with zero skins.
 enum BuiltInSkinLoader {
     /// All built-in skins loaded from bundled JSON files.
     /// Order is determined by the `order` array; skins not listed appear at the end.
-    static let skins: [SkinDefinition] = loadBuiltInSkins()
+    /// Guaranteed to contain at least one skin (Classic fallback).
+    static let skins: [SkinDefinition] = {
+        let loaded = loadBuiltInSkins()
+        if loaded.isEmpty {
+            print("[Bubo] Warning: No built-in skins loaded from JSON. Using hardcoded Classic fallback.")
+            return [fallbackClassic]
+        }
+        return loaded
+    }()
 
     /// Preferred display order (by skin ID).
     private static let order = [
@@ -471,18 +482,41 @@ enum BuiltInSkinLoader {
         "win_xp_blue", "win_xp_olive", "win_xp_silver",
     ]
 
+    /// Hardcoded fallback so the app always has at least one skin,
+    /// even if the bundle is misconfigured or all JSON files are corrupt.
+    private static let fallbackClassic = SkinDefinition(
+        id: "classic",
+        displayName: "Classic",
+        author: "Bubo",
+        accentColor: .accentColor,
+        surfaceTint: .clear,
+        surfaceTintOpacity: 0,
+        backgroundGradient: .clear,
+        previewColors: [.gray],
+        prefersDarkTint: false,
+        buttonStyle: .solid,
+        fontDesign: .default,
+        fontWeight: .regular,
+        headlineFontWeight: .medium,
+        sfSymbolRendering: .monochrome,
+        sfSymbolWeight: .regular
+    )
+
     private static func loadBuiltInSkins() -> [SkinDefinition] {
-        guard let urls = Bundle.main.urls(forResourcesWithExtension: "buboskin", subdirectory: "BuiltInSkins") else {
-            print("[Bubo] Warning: No built-in skin files found in BuiltInSkins bundle directory.")
+        let urls = findBuiltInSkinURLs()
+        if urls.isEmpty {
+            print("[Bubo] Warning: No built-in skin files found.")
             return []
         }
 
         var loaded: [SkinDefinition] = []
         for url in urls {
-            guard let data = try? Data(contentsOf: url),
-                  let json = try? JSONDecoder().decode(CustomSkinJSON.self, from: data)
-            else {
-                print("[Bubo] Warning: Failed to load built-in skin from \(url.lastPathComponent)")
+            guard let data = try? Data(contentsOf: url) else {
+                print("[Bubo] Warning: Cannot read built-in skin file \(url.lastPathComponent)")
+                continue
+            }
+            guard let json = try? JSONDecoder().decode(CustomSkinJSON.self, from: data) else {
+                print("[Bubo] Warning: Invalid JSON in built-in skin \(url.lastPathComponent)")
                 continue
             }
             loaded.append(json.toSkinDefinition(skinFileURL: url, isBuiltIn: true))
@@ -494,5 +528,38 @@ enum BuiltInSkinLoader {
             let idxB = order.firstIndex(of: b.id) ?? Int.max
             return idxA < idxB
         }
+    }
+
+    /// Searches multiple locations for built-in skin files:
+    /// 1. Bundle resources with "BuiltInSkins" subdirectory (standard Xcode setup)
+    /// 2. Bundle resources at top level (flat resource copy)
+    /// 3. "BuiltInSkins" directory next to the executable (dev/debug builds)
+    private static func findBuiltInSkinURLs() -> [URL] {
+        // 1. Standard: bundled with subdirectory
+        if let urls = Bundle.main.urls(forResourcesWithExtension: "buboskin", subdirectory: "BuiltInSkins"),
+           !urls.isEmpty {
+            return urls
+        }
+
+        // 2. Flat bundle resources (no subdirectory — files copied to Resources root)
+        if let resourceURL = Bundle.main.resourceURL {
+            let builtInDir = resourceURL.appendingPathComponent("BuiltInSkins", isDirectory: true)
+            if let urls = try? FileManager.default.contentsOfDirectory(at: builtInDir, includingPropertiesForKeys: nil),
+               !urls.filter({ $0.pathExtension == "buboskin" }).isEmpty {
+                return urls.filter { $0.pathExtension == "buboskin" }
+            }
+        }
+
+        // 3. Next to executable (development builds, SPM)
+        let executableURL = Bundle.main.executableURL?.deletingLastPathComponent()
+        if let execDir = executableURL {
+            let devDir = execDir.appendingPathComponent("BuiltInSkins", isDirectory: true)
+            if let urls = try? FileManager.default.contentsOfDirectory(at: devDir, includingPropertiesForKeys: nil),
+               !urls.filter({ $0.pathExtension == "buboskin" }).isEmpty {
+                return urls.filter { $0.pathExtension == "buboskin" }
+            }
+        }
+
+        return []
     }
 }
