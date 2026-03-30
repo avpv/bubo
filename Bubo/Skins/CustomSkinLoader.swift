@@ -37,6 +37,8 @@ import SwiftUI
 ///   "buttonShape": "capsule",
 ///   "buttonColor": { "red": 1.0, "green": 1.0, "blue": 1.0 },
 ///   "buttonMaterial": "regular",
+///   "buttonTint": { "red": 0.0, "green": 0.4, "blue": 0.8 },
+///   "buttonTintOpacity": 0.3,
 ///   "toolbarTint": { "red": 0.3, "green": 0.5, "blue": 0.4 },
 ///   "barMaterial": "thick",
 ///   "barTint": { "red": 0.0, "green": 0.2, "blue": 0.4 },
@@ -68,6 +70,12 @@ struct CustomSkinJSON: Codable {
     /// Material used as the base for glass-style and secondary buttons.
     /// Same values as barMaterial. Defaults to "regular".
     let buttonMaterial: String?
+
+    /// Optional color overlay on button material (glass-style). Falls back to accentColor.
+    let buttonTint: JSONColor?
+
+    /// Opacity of button tint overlay (0–1, typically 0.15–0.35). Defaults to 0.3.
+    let buttonTintOpacity: Double?
 
     /// Toolbar button tint color (Refresh, Settings, Quit).
     /// Apple HIG: secondary actions use a subtler color for visual hierarchy.
@@ -116,6 +124,8 @@ struct CustomSkinJSON: Codable {
             buttonShape: resolvedButtonShape,
             buttonColor: buttonColor?.toColor(),
             buttonMaterial: resolvedButtonMaterial,
+            buttonTint: buttonTint?.toColor(),
+            buttonTintOpacity: buttonTintOpacity ?? 0.3,
             toolbarTint: toolbarTint?.toColor(),
             barMaterial: resolvedBarMaterial,
             barTint: barTint?.toColor(),

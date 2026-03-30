@@ -522,7 +522,7 @@ struct ActionButtonStyle: ButtonStyle {
             case .glass:
                 ZStack {
                     Rectangle().fill(skin.resolvedButtonMaterial)
-                    skinAccent.opacity(isPressed ? 0.2 : 0.3)
+                    skin.resolvedButtonTint.opacity(isPressed ? skin.buttonTintOpacity * 0.67 : skin.buttonTintOpacity)
                 }
             case .solid:
                 if isPressed {

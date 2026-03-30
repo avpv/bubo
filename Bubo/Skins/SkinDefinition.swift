@@ -106,8 +106,16 @@ struct SkinDefinition: Identifiable, Equatable {
     let buttonColor: Color?
 
     /// Material used as the base layer for glass-style and secondary buttons.
-    /// Defaults to `.regular` (DS.Materials.platter equivalent).
+    /// Defaults to `.regular`.
     let buttonMaterial: SkinBarMaterial
+
+    /// Optional color overlay on button material (glass-style primary buttons).
+    /// Falls back to accentColor when nil.
+    let buttonTint: Color?
+
+    /// Opacity of the button tint overlay (0 = invisible, typically 0.15–0.35).
+    /// Defaults to 0.3 for glass buttons.
+    let buttonTintOpacity: Double
 
     /// Tint color for toolbar/utility buttons (Refresh, Settings, Quit).
     /// Apple HIG: secondary actions use a subtler, complementary color to
@@ -153,6 +161,8 @@ struct SkinDefinition: Identifiable, Equatable {
         buttonShape: SkinButtonShape = .capsule,
         buttonColor: Color? = nil,
         buttonMaterial: SkinBarMaterial = .regular,
+        buttonTint: Color? = nil,
+        buttonTintOpacity: Double = 0.3,
         toolbarTint: Color? = nil,
         barMaterial: SkinBarMaterial = .thick,
         barTint: Color? = nil,
@@ -175,6 +185,8 @@ struct SkinDefinition: Identifiable, Equatable {
         self.buttonShape = buttonShape
         self.buttonColor = buttonColor
         self.buttonMaterial = buttonMaterial
+        self.buttonTint = buttonTint
+        self.buttonTintOpacity = buttonTintOpacity
         self.toolbarTint = toolbarTint
         self.barMaterial = barMaterial
         self.barTint = barTint
@@ -205,6 +217,11 @@ struct SkinDefinition: Identifiable, Equatable {
     /// Resolved SwiftUI `Material` for button backgrounds (glass/secondary/destructive).
     var resolvedButtonMaterial: Material {
         buttonMaterial.material
+    }
+
+    /// Resolved button tint color, falling back to accentColor.
+    var resolvedButtonTint: Color {
+        buttonTint ?? accentColor
     }
 
     /// Whether this skin has a custom bar tint overlay.

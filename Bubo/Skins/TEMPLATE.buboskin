@@ -67,6 +67,13 @@
   },
   "_comment_buttonMaterial": "Optional: material for glass/secondary buttons. Same values as barMaterial. Defaults to regular.",
   "buttonMaterial": "regular",
+  "_comment_buttonTint": "Optional: color overlay on button material (glass-style). Omit to use accentColor. Use with buttonTintOpacity (0-1, typically 0.15-0.35).",
+  "buttonTint": {
+    "red": 0.0,
+    "green": 0.4,
+    "blue": 0.8
+  },
+  "buttonTintOpacity": 0.3,
   "_comment_toolbar": "Optional: toolbar button tint (Refresh, Settings, Quit). Omit to auto-derive from accentColor.",
   "toolbarTint": {
     "red": 0.3,
