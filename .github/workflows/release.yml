@@ -26,14 +26,18 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           INPUT_TAG: ${{ github.event.inputs.tag }}
+          INPUT_STABLE: ${{ github.event.inputs.stable }}
         run: |
           if [ "${EVENT_NAME}" = "workflow_dispatch" ]; then
             TAG="${INPUT_TAG}"
+            IS_STABLE="${INPUT_STABLE}"
           else
             TAG="${GITHUB_REF_NAME}"
+            IS_STABLE="false"
           fi
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "is_stable=${IS_STABLE}" >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@v4
         with:
@@ -138,8 +142,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
-          prerelease: ${{ github.event.inputs.stable != 'true' }}
-          make_latest: ${{ github.event.inputs.stable == 'true' }}
+          prerelease: ${{ steps.tag.outputs.is_stable != 'true' }}
+          make_latest: ${{ steps.tag.outputs.is_stable == 'true' }}
           generate_release_notes: true
           append_body: true
           body: |
@@ -147,7 +151,7 @@ jobs:
 
             One command in Terminal:
             ```
-            curl -fsSL https://raw.githubusercontent.com/avpv/bubo/HEAD/scripts/${{ github.event.inputs.stable == 'true' && 'install.sh' || 'install-prerelease.sh' }} | bash
+            curl -fsSL https://raw.githubusercontent.com/avpv/bubo/HEAD/scripts/${{ steps.tag.outputs.is_stable == 'true' && 'install.sh' || 'install-prerelease.sh' }} | bash
             ```
 
             Or with Homebrew:
