@@ -203,6 +203,7 @@ enum SkinCatalog {
         sierra,
         arctic,
         sage,
+        winXP,
     ]
 
     /// All skins including user-imported custom skins.
