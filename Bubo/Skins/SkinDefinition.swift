@@ -127,6 +127,17 @@ struct SkinDefinition: Identifiable, Equatable {
     /// Opacity of the bar tint overlay (0 = invisible, typically 0.05–0.25).
     let barTintOpacity: Double
 
+    /// Material used for card/platter surfaces (form sections, event rows, pickers).
+    /// Apple HIG: content surfaces should use a consistent material layer beneath bars.
+    /// Defaults to `.regular`.
+    let platterMaterial: SkinBarMaterial
+
+    /// Optional color overlay on platter surfaces.
+    let platterTint: Color?
+
+    /// Opacity of the platter tint overlay (0 = invisible, typically 0.05–0.2).
+    let platterTintOpacity: Double
+
     init(
         id: String,
         displayName: String,
@@ -145,7 +156,10 @@ struct SkinDefinition: Identifiable, Equatable {
         toolbarTint: Color? = nil,
         barMaterial: SkinBarMaterial = .thick,
         barTint: Color? = nil,
-        barTintOpacity: Double = 0
+        barTintOpacity: Double = 0,
+        platterMaterial: SkinBarMaterial = .regular,
+        platterTint: Color? = nil,
+        platterTintOpacity: Double = 0
     ) {
         self.id = id
         self.displayName = displayName
@@ -165,6 +179,9 @@ struct SkinDefinition: Identifiable, Equatable {
         self.barMaterial = barMaterial
         self.barTint = barTint
         self.barTintOpacity = barTintOpacity
+        self.platterMaterial = platterMaterial
+        self.platterTint = platterTint
+        self.platterTintOpacity = platterTintOpacity
     }
 
     // MARK: - Derived
@@ -193,6 +210,11 @@ struct SkinDefinition: Identifiable, Equatable {
     /// Whether this skin has a custom bar tint overlay.
     var hasBarTint: Bool {
         barTint != nil && barTintOpacity > 0
+    }
+
+    /// Resolved SwiftUI `Material` for platter/card surfaces.
+    var resolvedPlatterMaterial: Material {
+        platterMaterial.material
     }
 
     var previewGradient: AnyShapeStyle {

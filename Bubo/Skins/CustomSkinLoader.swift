@@ -40,7 +40,10 @@ import SwiftUI
 ///   "toolbarTint": { "red": 0.3, "green": 0.5, "blue": 0.4 },
 ///   "barMaterial": "thick",
 ///   "barTint": { "red": 0.0, "green": 0.2, "blue": 0.4 },
-///   "barTintOpacity": 0.15
+///   "barTintOpacity": 0.15,
+///   "platterMaterial": "regular",
+///   "platterTint": { "red": 0.0, "green": 0.1, "blue": 0.2 },
+///   "platterTintOpacity": 0.1
 /// }
 /// ```
 struct CustomSkinJSON: Codable {
@@ -81,6 +84,15 @@ struct CustomSkinJSON: Codable {
     /// Opacity of the bar tint overlay (0–1, typically 0.05–0.25). Defaults to 0.
     let barTintOpacity: Double?
 
+    /// Material for card/platter surfaces. Same values as barMaterial. Defaults to "regular".
+    let platterMaterial: String?
+
+    /// Optional color overlay on platter surfaces.
+    let platterTint: JSONColor?
+
+    /// Opacity of the platter tint overlay (0–1, typically 0.05–0.2). Defaults to 0.
+    let platterTintOpacity: Double?
+
     func toSkinDefinition(skinFileURL: URL? = nil) -> SkinDefinition {
         // HIG: Validate accent color contrast — warn if luminance is too high
         // for white button text (WCAG 2.1 AA requires 4.5:1 contrast ratio)
@@ -107,7 +119,10 @@ struct CustomSkinJSON: Codable {
             toolbarTint: toolbarTint?.toColor(),
             barMaterial: resolvedBarMaterial,
             barTint: barTint?.toColor(),
-            barTintOpacity: barTintOpacity ?? 0
+            barTintOpacity: barTintOpacity ?? 0,
+            platterMaterial: resolvedPlatterMaterial,
+            platterTint: platterTint?.toColor(),
+            platterTintOpacity: platterTintOpacity ?? 0
         )
     }
 
@@ -128,6 +143,13 @@ struct CustomSkinJSON: Codable {
 
     private var resolvedButtonMaterial: SkinBarMaterial {
         guard let value = buttonMaterial else { return .regular }
+        if let exact = SkinBarMaterial(rawValue: value) { return exact }
+        let lower = value.lowercased()
+        return SkinBarMaterial.allCases.first { $0.rawValue.lowercased() == lower } ?? .regular
+    }
+
+    private var resolvedPlatterMaterial: SkinBarMaterial {
+        guard let value = platterMaterial else { return .regular }
         if let exact = SkinBarMaterial(rawValue: value) { return exact }
         let lower = value.lowercased()
         return SkinBarMaterial.allCases.first { $0.rawValue.lowercased() == lower } ?? .regular

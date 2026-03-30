@@ -157,8 +157,8 @@ fileprivate struct TimeSlotChip: View {
                             )
                         )
                 } else {
-                    Capsule()
-                        .fill(DS.Materials.platter)
+                    SkinPlatterBackground(skin: skin)
+                        .clipShape(Capsule())
                     if isHovered {
                         Capsule()
                             .fill(chipAccent.opacity(0.08))

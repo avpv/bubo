@@ -45,8 +45,8 @@ struct EventRowView: View {
         .padding(.horizontal, DS.Spacing.sm)
         .background(
             ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                    .fill(DS.Materials.platter)
+                SkinPlatterBackground(skin: skin)
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
                 
                 if eventProgress(now) > 0 {
                     GeometryReader { geo in

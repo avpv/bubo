@@ -82,5 +82,14 @@
     "blue": 0.4
   },
   "barTintOpacity": 0.15,
+  "_comment_platterMaterial": "Optional: material for card/platter surfaces (event rows, form sections, pickers). Same values as barMaterial. Defaults to regular.",
+  "platterMaterial": "regular",
+  "_comment_platterTint": "Optional: color overlay on platter surfaces. Use with platterTintOpacity (0-1, typically 0.05-0.2).",
+  "platterTint": {
+    "red": 0.0,
+    "green": 0.1,
+    "blue": 0.2
+  },
+  "platterTintOpacity": 0.1,
   "_comment": "Optional: add a background image. Place the image file next to this .buboskin file."
 }

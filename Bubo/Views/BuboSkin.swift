@@ -93,6 +93,29 @@ extension View {
     }
 }
 
+// MARK: - Platter Background
+
+/// Composable background for card/platter surfaces: base material + optional color tint overlay.
+struct SkinPlatterBackground: View {
+    let skin: SkinDefinition
+
+    var body: some View {
+        ZStack {
+            Rectangle().fill(skin.resolvedPlatterMaterial)
+            if let tint = skin.platterTint, skin.platterTintOpacity > 0 {
+                tint.opacity(skin.platterTintOpacity)
+            }
+        }
+    }
+}
+
+extension View {
+    /// Applies the skin's platter background (material + optional tint) as a background layer.
+    func skinPlatter(_ skin: SkinDefinition) -> some View {
+        background(SkinPlatterBackground(skin: skin))
+    }
+}
+
 // MARK: - Environment Key
 
 private struct ActiveSkinKey: EnvironmentKey {

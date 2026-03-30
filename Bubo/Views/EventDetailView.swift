@@ -124,7 +124,7 @@ struct EventDetailView: View {
                     }
                     .padding(DS.Spacing.lg)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(DS.Materials.platter)
+                    .skinPlatter(skin)
                     .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
                     .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
 
@@ -143,7 +143,7 @@ struct EventDetailView: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .padding(DS.Spacing.lg)
-                        .background(DS.Materials.platter)
+                        .skinPlatter(skin)
                         .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
                         .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
                         .staggeredEntrance(index: 3)

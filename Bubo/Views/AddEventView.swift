@@ -110,7 +110,7 @@ struct AddEventView: View {
                     }
                     .padding(.horizontal, DS.Spacing.md)
                     .padding(.vertical, DS.Spacing.sm)
-                    .background(DS.Materials.platter)
+                    .skinPlatter(skin)
                     .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
@@ -168,7 +168,7 @@ struct AddEventView: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(DS.Spacing.md)
-                        .background(DS.Materials.platter)
+                        .skinPlatter(skin)
                         .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
                         .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
                     }
@@ -202,7 +202,7 @@ struct AddEventView: View {
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(DS.Spacing.md)
-                            .background(DS.Materials.platter)
+                            .skinPlatter(skin)
                             .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
                             .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
 
@@ -253,7 +253,7 @@ struct AddEventView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, DS.Spacing.md)
                         .padding(.vertical, DS.Spacing.sm)
-                        .background(DS.Materials.platter)
+                        .skinPlatter(skin)
                         .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
                         .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
                     }
@@ -283,7 +283,7 @@ struct AddEventView: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(DS.Spacing.md)
-                        .background(DS.Materials.platter)
+                        .skinPlatter(skin)
                         .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
                         .overlay(
                             RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
@@ -305,7 +305,7 @@ struct AddEventView: View {
                             RecurrencePickerView(rule: $recurrenceRule, eventDuration: $duration, eventStartDate: date)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(DS.Spacing.md)
-                                .background(DS.Materials.platter)
+                                .skinPlatter(skin)
                                 .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
                                 .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
                         }
@@ -387,7 +387,7 @@ struct AddEventView: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(DS.Spacing.md)
-                        .background(DS.Materials.platter)
+                        .skinPlatter(skin)
                         .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
                         .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
                     }
@@ -554,7 +554,7 @@ struct AddEventView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(DS.Spacing.md)
-            .background(DS.Materials.platter)
+            .skinPlatter(skin)
             .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
             .shadow(color: DS.Shadows.ambientColor, radius: DS.Shadows.ambientRadius, y: DS.Shadows.ambientY)
         }

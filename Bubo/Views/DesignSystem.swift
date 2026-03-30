@@ -162,7 +162,6 @@ enum DS {
         static let toast: Material = .regularMaterial
         static let overlay: Material = .ultraThinMaterial
         static let hud: Material = .thickMaterial
-        static let platter: Material = .regularMaterial
     }
 
     // MARK: Event Color Tags
