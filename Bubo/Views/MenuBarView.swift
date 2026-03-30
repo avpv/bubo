@@ -344,7 +344,7 @@ struct MenuBarView: View {
             .buttonStyle(.bordered)
             .controlSize(.small)
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.vertical, DS.Spacing.xxl)
         .transition(.opacity.combined(with: .scale(scale: 0.95)))
     }
