@@ -1,0 +1,38 @@
+{
+  "id": "rose_gold",
+  "displayName": "Rose Gold",
+  "author": "Bubo",
+  "accentColor": { "red": 0.84, "green": 0.50, "blue": 0.46 },
+  "surfaceTint": { "red": 0.18, "green": 0.07, "blue": 0.05 },
+  "surfaceTintOpacity": 0.22,
+  "backgroundGradient": {
+    "colors": [
+      { "red": 0.78, "green": 0.40, "blue": 0.35, "opacity": 0.14 },
+      { "red": 0.48, "green": 0.22, "blue": 0.20, "opacity": 0.08 },
+      { "name": "clear" }
+    ],
+    "style": "linear",
+    "startPoint": "topLeading",
+    "endPoint": "bottomTrailing"
+  },
+  "previewColors": [
+    { "red": 0.84, "green": 0.50, "blue": 0.46 },
+    { "red": 0.94, "green": 0.68, "blue": 0.58 }
+  ],
+  "prefersDarkTint": false,
+  "secondaryAccent": { "red": 0.92, "green": 0.62, "blue": 0.54 },
+  "buttonStyle": "gradient",
+  "toolbarTint": { "red": 0.78, "green": 0.65, "blue": 0.40 },
+  "barTint": { "red": 0.62, "green": 0.38, "blue": 0.30 },
+  "barTintOpacity": 0.12,
+  "platterTint": { "red": 0.58, "green": 0.32, "blue": 0.28 },
+  "platterTintOpacity": 0.06,
+  "fontDesign": "serif",
+  "fontWeight": "medium",
+  "headlineFontWeight": "bold",
+  "sfSymbolRendering": "hierarchical",
+  "sfSymbolWeight": "regular",
+  "badgeStyle": "outlined",
+  "separatorStyle": "accent",
+  "separatorOpacity": 0.18
+}

@@ -1,0 +1,39 @@
+{
+  "id": "graphite",
+  "displayName": "Graphite",
+  "author": "Bubo",
+  "accentColor": { "red": 0.52, "green": 0.52, "blue": 0.58 },
+  "surfaceTint": { "red": 0.10, "green": 0.10, "blue": 0.12 },
+  "surfaceTintOpacity": 0.22,
+  "backgroundGradient": {
+    "colors": [
+      { "red": 0.32, "green": 0.32, "blue": 0.38, "opacity": 0.10 },
+      { "red": 0.15, "green": 0.15, "blue": 0.18, "opacity": 0.05 }
+    ],
+    "style": "linear",
+    "startPoint": "top",
+    "endPoint": "bottom"
+  },
+  "previewColors": [
+    { "red": 0.52, "green": 0.52, "blue": 0.58 },
+    { "red": 0.25, "green": 0.25, "blue": 0.30 }
+  ],
+  "prefersDarkTint": true,
+  "secondaryAccent": { "red": 0.42, "green": 0.42, "blue": 0.48 },
+  "buttonStyle": "solid",
+  "buttonShape": "roundedRect",
+  "toolbarTint": { "red": 0.58, "green": 0.54, "blue": 0.48 },
+  "barMaterial": "ultraThick",
+  "barTint": { "red": 0.32, "green": 0.32, "blue": 0.38 },
+  "barTintOpacity": 0.10,
+  "platterTint": { "red": 0.28, "green": 0.28, "blue": 0.32 },
+  "platterTintOpacity": 0.06,
+  "fontDesign": "default",
+  "fontWeight": "medium",
+  "headlineFontWeight": "bold",
+  "sfSymbolRendering": "monochrome",
+  "sfSymbolWeight": "regular",
+  "badgeStyle": "outlined",
+  "separatorStyle": "subtle",
+  "separatorOpacity": 0.25
+}

@@ -127,16 +127,18 @@ struct CustomSkinJSON: Codable {
     /// Separator opacity (0–1). Floor at 0.15 when separatorStyle != "none". Defaults to 0.5.
     let separatorOpacity: Double?
 
-    func toSkinDefinition(skinFileURL: URL? = nil) -> SkinDefinition {
+    func toSkinDefinition(skinFileURL: URL? = nil, isBuiltIn: Bool = false) -> SkinDefinition {
         // HIG: Validate accent color contrast — warn if luminance is too high
         // for white button text (WCAG 2.1 AA requires 4.5:1 contrast ratio)
-        let accentLuminance = 0.2126 * accentColor.red + 0.7152 * accentColor.green + 0.0722 * accentColor.blue
-        if accentLuminance > 0.55 {
-            print("[Bubo] Warning: Skin '\(displayName)' accent color has high luminance (\(String(format: "%.2f", accentLuminance))). Button text may have insufficient contrast per Apple HIG.")
+        if accentColor.name == nil {
+            let accentLuminance = 0.2126 * (accentColor.red ?? 0) + 0.7152 * (accentColor.green ?? 0) + 0.0722 * (accentColor.blue ?? 0)
+            if accentLuminance > 0.55 {
+                print("[Bubo] Warning: Skin '\(displayName)' accent color has high luminance (\(String(format: "%.2f", accentLuminance))). Button text may have insufficient contrast per Apple HIG.")
+            }
         }
 
         return SkinDefinition(
-            id: "custom_\(id)",
+            id: isBuiltIn ? id : "custom_\(id)",
             displayName: displayName,
             author: author,
             accentColor: accentColor.toColor(),
@@ -268,19 +270,34 @@ struct CustomSkinJSON: Codable {
 }
 
 struct JSONColor: Codable {
-    let red: Double
-    let green: Double
-    let blue: Double
+    var red: Double?
+    var green: Double?
+    var blue: Double?
     var opacity: Double?
+    /// Named system color: "accentColor", "clear", "gray", "white", "black".
+    /// When set, red/green/blue are ignored.
+    var name: String?
 
     func toColor() -> Color {
-        Color(red: red, green: green, blue: blue).opacity(opacity ?? 1.0)
+        if let name {
+            let base: Color = switch name.lowercased() {
+            case "accentcolor": .accentColor
+            case "clear":       .clear
+            case "gray", "grey": .gray
+            case "white":       .white
+            case "black":       .black
+            default:            .accentColor
+            }
+            if let opacity { return base.opacity(opacity) }
+            return base
+        }
+        return Color(red: red ?? 0, green: green ?? 0, blue: blue ?? 0).opacity(opacity ?? 1.0)
     }
 }
 
 struct JSONGradient: Codable {
-    let colors: [JSONColor]
-    let style: String  // "linear" or "radial"
+    var colors: [JSONColor]?
+    var style: String?  // "linear", "radial", or "clear"
     // Linear
     var startPoint: String?
     var endPoint: String?
@@ -290,9 +307,13 @@ struct JSONGradient: Codable {
     var endRadius: CGFloat?
 
     func toSkinGradient() -> SkinGradient {
-        let swiftColors = colors.map { $0.toColor() }
+        let styleValue = style ?? "clear"
+        if styleValue.lowercased() == "clear" || (colors ?? []).isEmpty {
+            return .clear
+        }
+        let swiftColors = (colors ?? []).map { $0.toColor() }
         let gradientStyle: SkinGradient.Style
-        if style.lowercased() == "radial" {
+        if styleValue.lowercased() == "radial" {
             gradientStyle = .radial(
                 center: unitPoint(from: center ?? "top"),
                 startRadius: startRadius ?? 0,
@@ -430,5 +451,48 @@ class CustomSkinLoader {
               let json = try? JSONDecoder().decode(CustomSkinJSON.self, from: data)
         else { return nil }
         return json.toSkinDefinition(skinFileURL: url)
+    }
+}
+
+// MARK: - Built-In Skin Loader
+
+/// Loads built-in skins from bundled `.buboskin` JSON files in the app's
+/// `BuiltInSkins` resource directory. This gives built-in skins the same
+/// JSON-based configuration as custom skins — a unified approach.
+enum BuiltInSkinLoader {
+    /// All built-in skins loaded from bundled JSON files.
+    /// Order is determined by the `order` array; skins not listed appear at the end.
+    static let skins: [SkinDefinition] = loadBuiltInSkins()
+
+    /// Preferred display order (by skin ID).
+    private static let order = [
+        "system", "classic", "graphite", "ocean", "lavender",
+        "rose_gold", "midnight", "sierra", "arctic", "sage",
+        "win_xp_blue", "win_xp_olive", "win_xp_silver",
+    ]
+
+    private static func loadBuiltInSkins() -> [SkinDefinition] {
+        guard let urls = Bundle.main.urls(forResourcesWithExtension: "buboskin", subdirectory: "BuiltInSkins") else {
+            print("[Bubo] Warning: No built-in skin files found in BuiltInSkins bundle directory.")
+            return []
+        }
+
+        var loaded: [SkinDefinition] = []
+        for url in urls {
+            guard let data = try? Data(contentsOf: url),
+                  let json = try? JSONDecoder().decode(CustomSkinJSON.self, from: data)
+            else {
+                print("[Bubo] Warning: Failed to load built-in skin from \(url.lastPathComponent)")
+                continue
+            }
+            loaded.append(json.toSkinDefinition(skinFileURL: url, isBuiltIn: true))
+        }
+
+        // Sort by preferred order
+        return loaded.sorted { a, b in
+            let idxA = order.firstIndex(of: a.id) ?? Int.max
+            let idxB = order.firstIndex(of: b.id) ?? Int.max
+            return idxA < idxB
+        }
     }
 }

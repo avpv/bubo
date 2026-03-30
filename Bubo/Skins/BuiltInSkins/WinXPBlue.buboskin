@@ -1,0 +1,41 @@
+{
+  "id": "win_xp_blue",
+  "displayName": "XP Luna Blue",
+  "author": "Bubo",
+  "accentColor": { "red": 0.0, "green": 0.33, "blue": 0.84 },
+  "surfaceTint": { "red": 0.02, "green": 0.06, "blue": 0.20 },
+  "surfaceTintOpacity": 0.25,
+  "backgroundGradient": {
+    "colors": [
+      { "red": 0.16, "green": 0.38, "blue": 0.88, "opacity": 0.16 },
+      { "red": 0.0, "green": 0.22, "blue": 0.58, "opacity": 0.10 },
+      { "name": "clear" }
+    ],
+    "style": "linear",
+    "startPoint": "top",
+    "endPoint": "bottom"
+  },
+  "previewColors": [
+    { "red": 0.0, "green": 0.33, "blue": 0.84 },
+    { "red": 0.22, "green": 0.54, "blue": 0.16 }
+  ],
+  "prefersDarkTint": true,
+  "secondaryAccent": { "red": 0.12, "green": 0.48, "blue": 0.98 },
+  "buttonStyle": "gradient",
+  "buttonShape": "roundedRect",
+  "buttonColor": { "name": "white" },
+  "toolbarTint": { "red": 0.22, "green": 0.54, "blue": 0.16 },
+  "barMaterial": "ultraThick",
+  "barTint": { "red": 0.0, "green": 0.24, "blue": 0.68 },
+  "barTintOpacity": 0.22,
+  "platterTint": { "red": 0.10, "green": 0.22, "blue": 0.52 },
+  "platterTintOpacity": 0.08,
+  "fontDesign": "default",
+  "fontWeight": "bold",
+  "headlineFontWeight": "bold",
+  "sfSymbolRendering": "multicolor",
+  "sfSymbolWeight": "bold",
+  "badgeStyle": "filled",
+  "separatorStyle": "system",
+  "separatorOpacity": 0.65
+}

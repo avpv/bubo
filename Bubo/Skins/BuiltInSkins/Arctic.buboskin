@@ -1,0 +1,41 @@
+{
+  "id": "arctic",
+  "displayName": "Arctic",
+  "author": "Bubo",
+  "accentColor": { "red": 0.22, "green": 0.65, "blue": 0.88 },
+  "surfaceTint": { "red": 0.06, "green": 0.12, "blue": 0.16 },
+  "surfaceTintOpacity": 0.05,
+  "backgroundGradient": {
+    "colors": [
+      { "red": 0.20, "green": 0.50, "blue": 0.72, "opacity": 0.08 },
+      { "red": 0.12, "green": 0.30, "blue": 0.45, "opacity": 0.04 }
+    ],
+    "style": "linear",
+    "startPoint": "top",
+    "endPoint": "bottom"
+  },
+  "previewColors": [
+    { "red": 0.22, "green": 0.65, "blue": 0.88 },
+    { "red": 0.62, "green": 0.85, "blue": 0.96 }
+  ],
+  "prefersDarkTint": false,
+  "secondaryAccent": { "red": 0.38, "green": 0.72, "blue": 0.90 },
+  "buttonStyle": "glass",
+  "buttonTint": { "red": 0.18, "green": 0.55, "blue": 0.78 },
+  "buttonTintOpacity": 0.18,
+  "toolbarTint": { "red": 0.55, "green": 0.50, "blue": 0.75 },
+  "barMaterial": "thin",
+  "barTint": { "red": 0.18, "green": 0.42, "blue": 0.58 },
+  "barTintOpacity": 0.06,
+  "platterMaterial": "thin",
+  "platterTint": { "red": 0.14, "green": 0.38, "blue": 0.52 },
+  "platterTintOpacity": 0.04,
+  "fontDesign": "rounded",
+  "fontWeight": "regular",
+  "headlineFontWeight": "medium",
+  "sfSymbolRendering": "hierarchical",
+  "sfSymbolWeight": "light",
+  "badgeStyle": "tinted",
+  "separatorStyle": "subtle",
+  "separatorOpacity": 0.2
+}

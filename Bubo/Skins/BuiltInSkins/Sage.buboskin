@@ -1,0 +1,40 @@
+{
+  "id": "sage",
+  "displayName": "Sage",
+  "author": "Bubo",
+  "accentColor": { "red": 0.34, "green": 0.60, "blue": 0.40 },
+  "surfaceTint": { "red": 0.05, "green": 0.12, "blue": 0.06 },
+  "surfaceTintOpacity": 0.20,
+  "backgroundGradient": {
+    "colors": [
+      { "name": "clear" },
+      { "red": 0.20, "green": 0.38, "blue": 0.22, "opacity": 0.08 },
+      { "red": 0.24, "green": 0.45, "blue": 0.28, "opacity": 0.12 }
+    ],
+    "style": "radial",
+    "center": "bottomLeading",
+    "startRadius": 0,
+    "endRadius": 450
+  },
+  "previewColors": [
+    { "red": 0.34, "green": 0.60, "blue": 0.40 },
+    { "red": 0.24, "green": 0.40, "blue": 0.28 }
+  ],
+  "prefersDarkTint": true,
+  "secondaryAccent": { "red": 0.30, "green": 0.50, "blue": 0.34 },
+  "buttonStyle": "solid",
+  "buttonShape": "roundedRect",
+  "toolbarTint": { "red": 0.60, "green": 0.50, "blue": 0.38 },
+  "barTint": { "red": 0.18, "green": 0.30, "blue": 0.18 },
+  "barTintOpacity": 0.10,
+  "platterTint": { "red": 0.14, "green": 0.26, "blue": 0.16 },
+  "platterTintOpacity": 0.06,
+  "fontDesign": "serif",
+  "fontWeight": "regular",
+  "headlineFontWeight": "semibold",
+  "sfSymbolRendering": "monochrome",
+  "sfSymbolWeight": "regular",
+  "badgeStyle": "tinted",
+  "separatorStyle": "system",
+  "separatorOpacity": 0.4
+}

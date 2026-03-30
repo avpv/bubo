@@ -4,16 +4,19 @@ Bubo supports community-contributed skins — visual themes that change the app'
 accent colors, background gradient, and surface tinting. Think of it like
 [Winamp skins](https://skins.webamp.org/) but for a calendar app.
 
+All skins — both built-in and custom — use the same `.buboskin` JSON format.
+One unified approach for everything.
+
 ## Quick Start
 
 1. **Copy the template**
 
    ```
-   cp Bubo/Skins/TEMPLATE.swift Bubo/Skins/YourSkinName.swift
+   cp Bubo/Skins/TEMPLATE.buboskin MyNewSkin.buboskin
    ```
 
-2. **Uncomment and fill in the values** — each field is documented in the
-   template. The key properties:
+2. **Edit the JSON values** — each field is documented in the template.
+   The key properties:
 
    | Property | What it does |
    |----------|-------------|
@@ -27,90 +30,16 @@ accent colors, background gradient, and surface tinting. Think of it like
    | `previewColors` | 1–2 colors for the thumbnail in the picker |
    | `prefersDarkTint` | `true` for dark/moody skins |
 
-3. **Register your skin** — open `Bubo/Skins/SkinDefinition.swift` and add
-   your skin to the `allSkins` array:
+3. **For built-in skins** — place the `.buboskin` file in
+   `Bubo/Skins/BuiltInSkins/` and add the skin's `id` to the `order` array
+   in `BuiltInSkinLoader` (inside `CustomSkinLoader.swift`).
 
-   ```swift
-   static let allSkins: [SkinDefinition] = [
-       classic,
-       ampGreen,
-       // ...existing skins...
-       yourSkinName,  // ← add here
-   ]
-   ```
+   **For personal skins** — import via Settings → Skin → Import .buboskin file
+   (no code changes needed).
 
-4. **Open a PR** with your new skin file + the catalog edit. That's it!
+4. **Open a PR** with your new `.buboskin` file. That's it!
 
-## Design Tips
-
-- **Accent color**: Pick one strong, saturated color. This drives the entire
-  visual identity.
-- **Surface tint**: Use a very dark, desaturated version of your accent. High
-  opacity here overwhelms the UI — keep it subtle (0.2–0.35).
-- **Background gradient**: Use 2–3 stops fading to `.clear`. Opacity should be
-  0.10–0.25 so the gradient doesn't overpower content.
-- **Preview colors**: The first color should be your accent; the second a
-  complementary dark tone.
-- **Test both light & dark mode** — skins use adaptive blend modes that work in
-  both, but some color combos look better in one mode.
-
-## File Structure
-
-```
-Bubo/Skins/
-├── SkinDefinition.swift   # Core struct + catalog registry
-├── TEMPLATE.swift         # Copy this to start a new skin
-├── System.swift           # Pure macOS system appearance
-├── Classic.swift          # Default (no tinting)
-├── AmpGreen.swift         # Winamp classic green
-├── PalmBeach.swift        # Tropical coral
-├── ToonPop.swift          # Cartoon bold
-├── SlimDark.swift         # Moody purple
-├── CyberNeon.swift        # Cyberpunk cyan
-├── SunsetRider.swift      # Warm sunset
-├── RetroTerminal.swift    # Matrix green
-└── Bubblegum.swift        # Pink candy
-```
-
-## Rules
-
-- **Skin IDs are permanent** — once merged, never rename the `id` field.
-  Users' settings reference this string.
-- **One file per skin** — keeps diffs clean and avoids merge conflicts.
-- **No code outside your extension** — skins are pure data. Don't add view
-  modifiers, new components, or other logic in your skin file.
-- **Use `Color(red:green:blue:)` for custom colors** — avoid named colors like
-  `.blue` since they vary across macOS versions.
-- **Keep the file header comment** with your name and a brief description.
-
-## Gradient Styles
-
-Two gradient styles are available:
-
-```swift
-// Linear — flows between two corners/edges
-.linear(startPoint: .topLeading, endPoint: .bottomTrailing)
-
-// Radial — radiates from a center point
-.radial(center: .top, startRadius: 0, endRadius: 500)
-```
-
-Common `UnitPoint` values: `.top`, `.bottom`, `.topLeading`, `.topTrailing`,
-`.bottomLeading`, `.bottomTrailing`, `.center`.
-
-## Custom Skins (no PR needed)
-
-You can also create skins as `.buboskin` JSON files and import them directly
-in **Settings → Skin → Import .buboskin file**. No code, no Xcode, no PR.
-
-### Quick start
-
-1. Copy `Bubo/Skins/TEMPLATE.buboskin` and rename it (e.g. `MyTheme.buboskin`)
-2. Edit the JSON values — same properties as the Swift skins
-3. Open Bubo → Settings → Skin → **Import .buboskin file** and select your file
-4. Your skin appears in the picker immediately
-
-### JSON format
+## JSON Format
 
 ```json
 {
@@ -140,22 +69,109 @@ in **Settings → Skin → Import .buboskin file**. No code, no Xcode, no PR.
 }
 ```
 
-Colors use `red`, `green`, `blue` (0.0–1.0) with an optional `opacity`.
-Gradient style is `"linear"` or `"radial"`. Button style is `"solid"`,
-`"gradient"`, or `"glass"`.
+### Colors
 
-### Background images
+Colors use `red`, `green`, `blue` (0.0–1.0) with an optional `opacity`.
+
+You can also use named system colors with the `name` field:
+
+```json
+{ "name": "accentColor" }
+{ "name": "accentColor", "opacity": 0.5 }
+{ "name": "clear" }
+{ "name": "gray" }
+{ "name": "white" }
+```
+
+When `name` is set, `red`/`green`/`blue` are ignored.
+
+### Gradients
+
+Two gradient styles are available:
+
+```json
+// Linear — flows between two corners/edges
+{ "style": "linear", "startPoint": "topLeading", "endPoint": "bottomTrailing" }
+
+// Radial — radiates from a center point
+{ "style": "radial", "center": "top", "startRadius": 0, "endRadius": 500 }
+
+// Clear — no gradient (transparent)
+{ "style": "clear" }
+```
+
+Valid point values: `top`, `bottom`, `leading`, `trailing`, `topLeading`,
+`topTrailing`, `bottomLeading`, `bottomTrailing`, `center`.
+
+### Button & Typography Options
+
+| Property | Values | Default |
+|----------|--------|---------|
+| `buttonStyle` | `"solid"`, `"gradient"`, `"glass"` | `"gradient"` |
+| `buttonShape` | `"capsule"`, `"roundedRect"`, `"rectangle"` | `"capsule"` |
+| `barMaterial` | `"ultraThin"`, `"thin"`, `"regular"`, `"thick"`, `"ultraThick"`, `"bar"` | `"thick"` |
+| `fontDesign` | `"default"`, `"rounded"`, `"serif"`, `"monospaced"` | `"rounded"` |
+| `fontWeight` | `"regular"`, `"medium"`, `"semibold"`, `"bold"` | `"semibold"` |
+| `sfSymbolRendering` | `"monochrome"`, `"hierarchical"`, `"palette"`, `"multicolor"` | `"hierarchical"` |
+| `badgeStyle` | `"tinted"`, `"filled"`, `"outlined"` | `"tinted"` |
+| `separatorStyle` | `"system"`, `"subtle"`, `"accent"`, `"none"` | `"system"` |
+
+## Design Tips
+
+- **Accent color**: Pick one strong, saturated color. This drives the entire
+  visual identity.
+- **Surface tint**: Use a very dark, desaturated version of your accent. High
+  opacity here overwhelms the UI — keep it subtle (0.2–0.35).
+- **Background gradient**: Use 2–3 stops fading to clear. Opacity should be
+  0.10–0.25 so the gradient doesn't overpower content.
+- **Preview colors**: The first color should be your accent; the second a
+  complementary dark tone.
+- **Test both light & dark mode** — skins use adaptive blend modes that work in
+  both, but some color combos look better in one mode.
+
+## File Structure
+
+```
+Bubo/Skins/
+├── SkinDefinition.swift       # Core struct + catalog registry
+├── CustomSkinLoader.swift     # JSON loading (built-in + custom)
+├── TEMPLATE.buboskin          # Copy this to start a new skin
+└── BuiltInSkins/              # Bundled default skins (always present)
+    ├── System.buboskin
+    ├── Classic.buboskin
+    ├── Graphite.buboskin
+    ├── Ocean.buboskin
+    ├── Lavender.buboskin
+    ├── RoseGold.buboskin
+    ├── Midnight.buboskin
+    ├── Sierra.buboskin
+    ├── Arctic.buboskin
+    ├── Sage.buboskin
+    ├── WinXPBlue.buboskin
+    ├── WinXPOlive.buboskin
+    └── WinXPSilver.buboskin
+```
+
+## Rules
+
+- **Skin IDs are permanent** — once merged, never rename the `id` field.
+  Users' settings reference this string.
+- **One file per skin** — keeps diffs clean and avoids merge conflicts.
+- **Use `{ "red": ..., "green": ..., "blue": ... }` for custom colors** —
+  avoid named colors unless you specifically need system-dynamic behavior.
+
+## Background Images
 
 Users can set a custom background image for any skin directly in Settings.
 Select a skin, then use the "Choose image..." button to pick a photo.
 Opacity and blur can be adjusted per skin.
 
-Skins are stored in `~/Library/Application Support/Bubo/Skins/`. You can
-also drop `.buboskin` files there directly and restart Bubo.
+Custom skins are stored in `~/Library/Application Support/Bubo/Skins/`.
+You can also drop `.buboskin` files there directly and restart Bubo.
 
 Right-click a community skin in the picker to remove it.
 
 ## Example
 
-See any existing skin file (e.g., `AmpGreen.swift`) for a complete working
-example, or `TEMPLATE.buboskin` for the JSON format.
+See any built-in skin in `Bubo/Skins/BuiltInSkins/` for a complete working
+example, or `TEMPLATE.buboskin` for the format.

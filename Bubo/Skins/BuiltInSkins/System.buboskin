@@ -1,0 +1,38 @@
+{
+  "id": "system",
+  "displayName": "System",
+  "author": "Bubo",
+  "accentColor": { "name": "accentColor" },
+  "surfaceTint": { "name": "accentColor" },
+  "surfaceTintOpacity": 0.08,
+  "backgroundGradient": {
+    "colors": [
+      { "name": "accentColor", "opacity": 0.14 },
+      { "name": "accentColor", "opacity": 0.05 },
+      { "name": "clear" }
+    ],
+    "style": "radial",
+    "center": "topLeading",
+    "startRadius": 0,
+    "endRadius": 500
+  },
+  "previewColors": [
+    { "name": "accentColor", "opacity": 0.6 },
+    { "name": "accentColor", "opacity": 0.3 }
+  ],
+  "prefersDarkTint": false,
+  "secondaryAccent": { "name": "accentColor", "opacity": 0.7 },
+  "buttonStyle": "glass",
+  "toolbarTint": { "name": "accentColor", "opacity": 0.55 },
+  "barMaterial": "thick",
+  "barTint": { "name": "accentColor" },
+  "barTintOpacity": 0.04,
+  "fontDesign": "rounded",
+  "fontWeight": "medium",
+  "headlineFontWeight": "semibold",
+  "sfSymbolRendering": "hierarchical",
+  "sfSymbolWeight": "medium",
+  "badgeStyle": "tinted",
+  "separatorStyle": "subtle",
+  "separatorOpacity": 0.35
+}

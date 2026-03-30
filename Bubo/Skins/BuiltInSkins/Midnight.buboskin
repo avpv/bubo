@@ -1,0 +1,40 @@
+{
+  "id": "midnight",
+  "displayName": "Midnight",
+  "author": "Bubo",
+  "accentColor": { "red": 0.35, "green": 0.46, "blue": 0.75 },
+  "surfaceTint": { "red": 0.01, "green": 0.02, "blue": 0.08 },
+  "surfaceTintOpacity": 0.35,
+  "backgroundGradient": {
+    "colors": [
+      { "name": "clear" },
+      { "red": 0.10, "green": 0.12, "blue": 0.25, "opacity": 0.12 },
+      { "red": 0.16, "green": 0.18, "blue": 0.35, "opacity": 0.18 }
+    ],
+    "style": "linear",
+    "startPoint": "top",
+    "endPoint": "bottom"
+  },
+  "previewColors": [
+    { "red": 0.08, "green": 0.10, "blue": 0.20 },
+    { "red": 0.25, "green": 0.32, "blue": 0.55 }
+  ],
+  "prefersDarkTint": true,
+  "secondaryAccent": { "red": 0.28, "green": 0.38, "blue": 0.62 },
+  "buttonStyle": "solid",
+  "buttonShape": "rectangle",
+  "toolbarTint": { "red": 0.65, "green": 0.55, "blue": 0.40 },
+  "barMaterial": "ultraThin",
+  "barTint": { "red": 0.10, "green": 0.12, "blue": 0.25 },
+  "barTintOpacity": 0.14,
+  "platterMaterial": "thin",
+  "platterTint": { "red": 0.08, "green": 0.10, "blue": 0.20 },
+  "platterTintOpacity": 0.10,
+  "fontDesign": "default",
+  "fontWeight": "regular",
+  "headlineFontWeight": "semibold",
+  "sfSymbolRendering": "monochrome",
+  "sfSymbolWeight": "light",
+  "badgeStyle": "outlined",
+  "separatorStyle": "none"
+}
