@@ -483,6 +483,7 @@ struct MenuBarView: View {
                 OpenSettingsButton()
                     .keyboardShortcut(",", modifiers: .command)
                     .help("Open settings (\u{2318},)")
+                    .tint(activeSkin.resolvedToolbarTint)
 
                 Button(action: { NSApplication.shared.terminate(nil) }) {
                     Label("Quit", systemImage: "power")
