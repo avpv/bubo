@@ -34,6 +34,9 @@ import SwiftUI
 ///   "prefersDarkTint": true,
 ///   "secondaryAccent": { "red": 0.0, "green": 0.65, "blue": 0.15 },
 ///   "buttonStyle": "gradient",
+///   "buttonShape": "capsule",
+///   "buttonColor": { "red": 1.0, "green": 1.0, "blue": 1.0 },
+///   "buttonMaterial": "regular",
 ///   "toolbarTint": { "red": 0.3, "green": 0.5, "blue": 0.4 },
 ///   "barMaterial": "thick",
 ///   "barTint": { "red": 0.0, "green": 0.2, "blue": 0.4 },
@@ -52,6 +55,16 @@ struct CustomSkinJSON: Codable {
     let prefersDarkTint: Bool
     let secondaryAccent: JSONColor?
     let buttonStyle: String?
+
+    /// Button clip shape. Values: "capsule" (default), "roundedRect", "rectangle".
+    let buttonShape: String?
+
+    /// Explicit foreground color for primary buttons. Overrides auto-contrast logic.
+    let buttonColor: JSONColor?
+
+    /// Material used as the base for glass-style and secondary buttons.
+    /// Same values as barMaterial. Defaults to "regular".
+    let buttonMaterial: String?
 
     /// Toolbar button tint color (Refresh, Settings, Quit).
     /// Apple HIG: secondary actions use a subtler color for visual hierarchy.
@@ -88,6 +101,9 @@ struct CustomSkinJSON: Codable {
             prefersDarkTint: prefersDarkTint,
             secondaryAccent: secondaryAccent?.toColor(),
             buttonStyle: resolvedButtonStyle,
+            buttonShape: resolvedButtonShape,
+            buttonColor: buttonColor?.toColor(),
+            buttonMaterial: resolvedButtonMaterial,
             toolbarTint: toolbarTint?.toColor(),
             barMaterial: resolvedBarMaterial,
             barTint: barTint?.toColor(),
@@ -101,6 +117,20 @@ struct CustomSkinJSON: Codable {
         case "glass": .glass
         default: .gradient
         }
+    }
+
+    private var resolvedButtonShape: SkinButtonShape {
+        guard let value = buttonShape else { return .capsule }
+        if let exact = SkinButtonShape(rawValue: value) { return exact }
+        let lower = value.lowercased()
+        return SkinButtonShape.allCases.first { $0.rawValue.lowercased() == lower } ?? .capsule
+    }
+
+    private var resolvedButtonMaterial: SkinBarMaterial {
+        guard let value = buttonMaterial else { return .regular }
+        if let exact = SkinBarMaterial(rawValue: value) { return exact }
+        let lower = value.lowercased()
+        return SkinBarMaterial.allCases.first { $0.rawValue.lowercased() == lower } ?? .regular
     }
 
     private var resolvedBarMaterial: SkinBarMaterial {

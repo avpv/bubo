@@ -446,14 +446,11 @@ struct ActionButtonStyle: ButtonStyle {
             .frame(height: size == .compact ? DS.Size.controlHeight : nil)
             .frame(minWidth: size == .flexible ? 100 : nil)
             .fixedSize(horizontal: size == .regular, vertical: false)
-            .contentShape(Capsule())
+            .contentShape(buttonContentShape)
             .background(backgroundView(isPressed: configuration.isPressed))
             .foregroundStyle(foregroundStyle)
-            .clipShape(Capsule())
-            .overlay(
-                Capsule()
-                    .strokeBorder(.white.opacity(role == .primary ? 0.15 : 0.06), lineWidth: 0.5)
-            )
+            .clipShape(buttonClipShape)
+            .overlay(buttonStrokeOverlay)
             .shadow(
                 color: shadowColor(isPressed: configuration.isPressed),
                 radius: configuration.isPressed ? 2 : (role == .primary ? 8 : 4),
@@ -465,6 +462,34 @@ struct ActionButtonStyle: ButtonStyle {
 
     private var skinAccent: Color {
         skin.isClassic ? DS.Colors.accent : skin.accentColor
+    }
+
+    // MARK: Shape
+
+    private var buttonContentShape: AnyShape {
+        switch skin.buttonShape {
+        case .capsule:     AnyShape(Capsule())
+        case .roundedRect: AnyShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius))
+        case .rectangle:   AnyShape(Rectangle())
+        }
+    }
+
+    private var buttonClipShape: AnyShape { buttonContentShape }
+
+    @ViewBuilder
+    private var buttonStrokeOverlay: some View {
+        let opacity = role == .primary ? 0.15 : 0.06
+        switch skin.buttonShape {
+        case .capsule:
+            Capsule()
+                .strokeBorder(.white.opacity(opacity), lineWidth: 0.5)
+        case .roundedRect:
+            RoundedRectangle(cornerRadius: DS.Size.cornerRadius)
+                .strokeBorder(.white.opacity(opacity), lineWidth: 0.5)
+        case .rectangle:
+            Rectangle()
+                .strokeBorder(.white.opacity(opacity), lineWidth: 0.5)
+        }
     }
 
     private var horizontalPadding: CGFloat {
@@ -497,7 +522,7 @@ struct ActionButtonStyle: ButtonStyle {
                 )
             case .glass:
                 ZStack {
-                    Rectangle().fill(DS.Materials.platter)
+                    Rectangle().fill(skin.resolvedButtonMaterial)
                     skinAccent.opacity(isPressed ? 0.2 : 0.3)
                 }
             case .solid:
@@ -509,14 +534,14 @@ struct ActionButtonStyle: ButtonStyle {
             }
         case .secondary:
             ZStack {
-                Rectangle().fill(DS.Materials.platter)
+                Rectangle().fill(skin.resolvedButtonMaterial)
                 if isPressed {
                     Color.primary.opacity(0.06)
                 }
             }
         case .destructive:
             ZStack {
-                Rectangle().fill(DS.Materials.platter)
+                Rectangle().fill(skin.resolvedButtonMaterial)
                 if isPressed {
                     DS.Colors.error.opacity(0.08)
                 }
@@ -527,6 +552,8 @@ struct ActionButtonStyle: ButtonStyle {
     private var foregroundStyle: Color {
         switch role {
         case .primary:
+            // Explicit button color from skin takes priority
+            if let custom = skin.buttonColor { return custom }
             if skin.buttonStyle == .glass { return skinAccent }
             // HIG: Ensure text contrast against accent background.
             // Use white on dark accents, primary label on light accents.

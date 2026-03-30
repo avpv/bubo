@@ -12,6 +12,18 @@ enum SkinButtonStyle: Equatable {
     case glass
 }
 
+// MARK: - Button Shape
+
+/// Controls the clip/content shape used for primary and secondary buttons.
+enum SkinButtonShape: String, Equatable, CaseIterable {
+    /// Fully rounded ends — the default pill shape.
+    case capsule
+    /// Rounded rectangle with the standard corner radius.
+    case roundedRect
+    /// Sharp-cornered rectangle.
+    case rectangle
+}
+
 // MARK: - Bar Material
 
 /// Controls which SwiftUI `Material` is used for header/footer bars.
@@ -86,6 +98,17 @@ struct SkinDefinition: Identifiable, Equatable {
     /// Button fill style — controls primary button appearance.
     let buttonStyle: SkinButtonStyle
 
+    /// Shape used for button clipping and hit-testing.
+    let buttonShape: SkinButtonShape
+
+    /// Explicit foreground color for primary buttons.
+    /// Overrides the automatic luminance-based contrast logic when set.
+    let buttonColor: Color?
+
+    /// Material used as the base layer for glass-style and secondary buttons.
+    /// Defaults to `.regular` (DS.Materials.platter equivalent).
+    let buttonMaterial: SkinBarMaterial
+
     /// Tint color for toolbar/utility buttons (Refresh, Settings, Quit).
     /// Apple HIG: secondary actions use a subtler, complementary color to
     /// establish visual hierarchy — primary action (Add) stays bold, toolbar
@@ -116,6 +139,9 @@ struct SkinDefinition: Identifiable, Equatable {
         prefersDarkTint: Bool,
         secondaryAccent: Color? = nil,
         buttonStyle: SkinButtonStyle = .gradient,
+        buttonShape: SkinButtonShape = .capsule,
+        buttonColor: Color? = nil,
+        buttonMaterial: SkinBarMaterial = .regular,
         toolbarTint: Color? = nil,
         barMaterial: SkinBarMaterial = .thick,
         barTint: Color? = nil,
@@ -132,6 +158,9 @@ struct SkinDefinition: Identifiable, Equatable {
         self.prefersDarkTint = prefersDarkTint
         self.secondaryAccent = secondaryAccent
         self.buttonStyle = buttonStyle
+        self.buttonShape = buttonShape
+        self.buttonColor = buttonColor
+        self.buttonMaterial = buttonMaterial
         self.toolbarTint = toolbarTint
         self.barMaterial = barMaterial
         self.barTint = barTint
@@ -154,6 +183,11 @@ struct SkinDefinition: Identifiable, Equatable {
     /// Resolved SwiftUI `Material` for header/footer bars.
     var resolvedBarMaterial: Material {
         barMaterial.material
+    }
+
+    /// Resolved SwiftUI `Material` for button backgrounds (glass/secondary/destructive).
+    var resolvedButtonMaterial: Material {
+        buttonMaterial.material
     }
 
     /// Whether this skin has a custom bar tint overlay.

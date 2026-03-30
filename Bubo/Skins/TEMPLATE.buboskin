@@ -57,6 +57,16 @@
     "blue": 0.5
   },
   "buttonStyle": "gradient",
+  "_comment_buttonShape": "Optional: button shape. Values: capsule (default), roundedRect, rectangle.",
+  "buttonShape": "capsule",
+  "_comment_buttonColor": "Optional: explicit foreground color for primary buttons. Omit to auto-derive from accent luminance.",
+  "buttonColor": {
+    "red": 1.0,
+    "green": 1.0,
+    "blue": 1.0
+  },
+  "_comment_buttonMaterial": "Optional: material for glass/secondary buttons. Same values as barMaterial. Defaults to regular.",
+  "buttonMaterial": "regular",
   "_comment_toolbar": "Optional: toolbar button tint (Refresh, Settings, Quit). Omit to auto-derive from accentColor.",
   "toolbarTint": {
     "red": 0.3,
