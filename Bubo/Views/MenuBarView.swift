@@ -491,6 +491,7 @@ struct MenuBarView: View {
                 .keyboardShortcut("q", modifiers: .command)
             }
             .buttonStyle(.borderless)
+            .symbolRenderingMode(.monochrome)
             .tint(activeSkin.resolvedToolbarTint)
         }
         .font(.system(size: 13, weight: .medium))
