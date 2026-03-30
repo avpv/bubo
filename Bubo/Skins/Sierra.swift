@@ -42,6 +42,14 @@ extension SkinCatalog {
         barTintOpacity: 0.10,
         // Terracotta platters — sun-baked clay surfaces
         platterTint: Color(red: 0.40, green: 0.22, blue: 0.08),
-        platterTintOpacity: 0.05
+        platterTintOpacity: 0.05,
+        fontDesign: .rounded,
+        fontWeight: .semibold,
+        headlineFontWeight: .bold,
+        sfSymbolRendering: .hierarchical,
+        sfSymbolWeight: .medium,
+        badgeStyle: .filled,
+        separatorStyle: .subtle,
+        separatorOpacity: 0.4
     )
 }

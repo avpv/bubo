@@ -271,7 +271,7 @@ struct AddEventView: View {
                                 .textFieldStyle(.plain)
                                 .focused($isLocationFocused)
 
-                            Divider()
+                            SkinSeparator()
 
                             HStack(alignment: .top, spacing: DS.Spacing.sm) {
                                 FormattableTextView(text: $description, prompt: "Notes")
@@ -404,7 +404,7 @@ struct AddEventView: View {
                 }
             }
 
-            Divider()
+            SkinSeparator()
 
             HStack {
                 Spacer()

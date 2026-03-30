@@ -44,6 +44,14 @@ extension SkinCatalog {
         barTintOpacity: 0.15,
         // Ocean-tinted platters — immersive underwater feel
         platterTint: Color(red: 0.0, green: 0.10, blue: 0.30),
-        platterTintOpacity: 0.08
+        platterTintOpacity: 0.08,
+        fontDesign: .rounded,
+        fontWeight: .semibold,
+        headlineFontWeight: .bold,
+        sfSymbolRendering: .hierarchical,
+        sfSymbolWeight: .semibold,
+        badgeStyle: .filled,
+        separatorStyle: .accent,
+        separatorOpacity: 0.25
     )
 }

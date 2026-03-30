@@ -53,6 +53,14 @@ extension SkinCatalog {
         barTintOpacity: 0.20,
         // Light blue platters — XP window body feel
         platterTint: Color(red: 0.08, green: 0.20, blue: 0.50),
-        platterTintOpacity: 0.06
+        platterTintOpacity: 0.06,
+        fontDesign: .default,
+        fontWeight: .bold,
+        headlineFontWeight: .bold,
+        sfSymbolRendering: .multicolor,
+        sfSymbolWeight: .bold,
+        badgeStyle: .filled,
+        separatorStyle: .system,
+        separatorOpacity: 0.6
     )
 }

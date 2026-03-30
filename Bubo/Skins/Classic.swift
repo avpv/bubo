@@ -15,6 +15,13 @@ extension SkinCatalog {
         backgroundGradient: .clear,
         previewColors: [.gray],
         prefersDarkTint: false,
-        buttonStyle: .solid
+        buttonStyle: .solid,
+        fontDesign: .default,
+        fontWeight: .regular,
+        headlineFontWeight: .semibold,
+        sfSymbolRendering: .monochrome,
+        sfSymbolWeight: .regular,
+        badgeStyle: .tinted,
+        separatorStyle: .system
     )
 }

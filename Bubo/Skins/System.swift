@@ -24,6 +24,14 @@ extension SkinCatalog {
         prefersDarkTint: false,
         secondaryAccent: Color.accentColor.opacity(0.7),
         buttonStyle: .glass,
-        toolbarTint: Color.accentColor.opacity(0.55)
+        toolbarTint: Color.accentColor.opacity(0.55),
+        fontDesign: .rounded,
+        fontWeight: .medium,
+        headlineFontWeight: .semibold,
+        sfSymbolRendering: .hierarchical,
+        sfSymbolWeight: .medium,
+        badgeStyle: .tinted,
+        separatorStyle: .subtle,
+        separatorOpacity: 0.4
     )
 }

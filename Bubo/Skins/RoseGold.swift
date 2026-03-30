@@ -42,6 +42,14 @@ extension SkinCatalog {
         barTintOpacity: 0.10,
         // Rose-tinted platters — subtle luxury on surfaces
         platterTint: Color(red: 0.55, green: 0.30, blue: 0.25),
-        platterTintOpacity: 0.05
+        platterTintOpacity: 0.05,
+        fontDesign: .serif,
+        fontWeight: .medium,
+        headlineFontWeight: .bold,
+        sfSymbolRendering: .hierarchical,
+        sfSymbolWeight: .regular,
+        badgeStyle: .outlined,
+        separatorStyle: .accent,
+        separatorOpacity: 0.2
     )
 }

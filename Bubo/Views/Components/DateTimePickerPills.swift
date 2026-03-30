@@ -110,7 +110,7 @@ struct DateTimePickerPills: View {
                             .datePickerStyle(.stepperField)
                     }
 
-                    Divider()
+                    SkinSeparator()
 
                     let slots = nearestTimeSlots(around: date, count: 7, rangeStart: range?.lowerBound)
                     VStack(spacing: DS.Spacing.xs) {

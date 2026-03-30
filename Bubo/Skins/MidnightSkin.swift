@@ -46,6 +46,13 @@ extension SkinCatalog {
         // Thin platters — near-invisible cards in the void
         platterMaterial: .thin,
         platterTint: Color(red: 0.06, green: 0.08, blue: 0.18),
-        platterTintOpacity: 0.08
+        platterTintOpacity: 0.08,
+        fontDesign: .default,
+        fontWeight: .regular,
+        headlineFontWeight: .semibold,
+        sfSymbolRendering: .monochrome,
+        sfSymbolWeight: .light,
+        badgeStyle: .outlined,
+        separatorStyle: .none
     )
 }

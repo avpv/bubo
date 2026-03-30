@@ -184,7 +184,7 @@ struct EventDetailView: View {
             Spacer(minLength: 0)
 
             // Actions (only for local events)
-            Divider()
+            SkinSeparator()
 
             HStack {
                 if showDeleteConfirmation {

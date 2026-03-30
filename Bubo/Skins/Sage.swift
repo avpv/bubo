@@ -43,6 +43,14 @@ extension SkinCatalog {
         barTintOpacity: 0.08,
         // Green platters — dappled forest floor
         platterTint: Color(red: 0.12, green: 0.24, blue: 0.14),
-        platterTintOpacity: 0.05
+        platterTintOpacity: 0.05,
+        fontDesign: .serif,
+        fontWeight: .regular,
+        headlineFontWeight: .semibold,
+        sfSymbolRendering: .monochrome,
+        sfSymbolWeight: .regular,
+        badgeStyle: .tinted,
+        separatorStyle: .system,
+        separatorOpacity: 0.4
     )
 }

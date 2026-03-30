@@ -44,6 +44,14 @@ extension SkinCatalog {
         // Thin platters — delicate frost surfaces
         platterMaterial: .thin,
         platterTint: Color(red: 0.12, green: 0.35, blue: 0.50),
-        platterTintOpacity: 0.03
+        platterTintOpacity: 0.03,
+        fontDesign: .rounded,
+        fontWeight: .regular,
+        headlineFontWeight: .medium,
+        sfSymbolRendering: .hierarchical,
+        sfSymbolWeight: .light,
+        badgeStyle: .tinted,
+        separatorStyle: .subtle,
+        separatorOpacity: 0.3
     )
 }

@@ -46,6 +46,14 @@ extension SkinCatalog {
         barTintOpacity: 0.12,
         // Violet mist platters — soft, dreamy surfaces
         platterTint: Color(red: 0.30, green: 0.15, blue: 0.50),
-        platterTintOpacity: 0.06
+        platterTintOpacity: 0.06,
+        fontDesign: .rounded,
+        fontWeight: .medium,
+        headlineFontWeight: .semibold,
+        sfSymbolRendering: .hierarchical,
+        sfSymbolWeight: .light,
+        badgeStyle: .tinted,
+        separatorStyle: .subtle,
+        separatorOpacity: 0.35
     )
 }

@@ -23,7 +23,7 @@ struct DateSuggestionsPopover: View {
                     .padding(.horizontal, DS.Spacing.lg)
                     .padding(.vertical, DS.Spacing.md)
 
-                    Divider()
+                    SkinSeparator()
                         .padding(.bottom, DS.Spacing.sm)
 
                     if let range = range {
@@ -64,7 +64,7 @@ struct DateSuggestionsPopover: View {
                         }
                     }
                     
-                    Divider().padding(.vertical, 4)
+                    SkinSeparator().padding(.vertical, 4)
                     
                     Button(action: { showCustomCalendar = true }) {
                         HStack(spacing: 12) {

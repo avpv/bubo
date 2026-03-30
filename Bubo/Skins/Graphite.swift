@@ -44,6 +44,14 @@ extension SkinCatalog {
         barTintOpacity: 0.08,
         // Subtle steel platters — cohesive neutral surface
         platterTint: Color(red: 0.25, green: 0.25, blue: 0.30),
-        platterTintOpacity: 0.05
+        platterTintOpacity: 0.05,
+        fontDesign: .default,
+        fontWeight: .medium,
+        headlineFontWeight: .bold,
+        sfSymbolRendering: .monochrome,
+        sfSymbolWeight: .regular,
+        badgeStyle: .outlined,
+        separatorStyle: .subtle,
+        separatorOpacity: 0.3
     )
 }
