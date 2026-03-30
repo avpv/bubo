@@ -248,27 +248,27 @@ private struct LiveAuroraView: View {
                 let w = size.width
                 let h = size.height
 
-                context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color(red: 0.01, green: 0.02, blue: 0.06)))
+                context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color(red: 0.02, green: 0.04, blue: 0.10)))
 
-                // Soft fluid aurora blobs
+                // Vivid fluid aurora blobs
                 for i in 0..<5 {
                     let fi = CGFloat(i)
                     let xCenter = w * (0.15 + fi * 0.18) + sin(time * 0.08 + fi * 1.2) * w * 0.1
                     let yCenter = h * (0.15 + fi * 0.08) + cos(time * 0.06 + fi * 0.9) * h * 0.08
                     let radius = min(w, h) * (0.25 + fi * 0.05)
-                    let hue = (0.45 + fi * 0.08 + time * 0.008).truncatingRemainder(dividingBy: 1.0)
+                    let hue = (0.30 + fi * 0.12 + time * 0.008).truncatingRemainder(dividingBy: 1.0)
                     let rect = CGRect(x: xCenter - radius, y: yCenter - radius, width: radius * 2, height: radius * 2)
                     context.fill(
                         Circle().path(in: rect),
-                        with: .color(Color(hue: hue, saturation: 0.65, brightness: 0.55).opacity(0.06))
+                        with: .color(Color(hue: hue, saturation: 0.80, brightness: 0.70).opacity(0.09))
                     )
                 }
 
-                // Aurora ribbons
+                // Aurora ribbons — vivid greens, teals, purples
                 for i in 0..<3 {
                     let fi = CGFloat(i)
                     let yBase = h * (0.2 + fi * 0.12)
-                    let hue = (0.4 + fi * 0.12 + time * 0.012).truncatingRemainder(dividingBy: 1.0)
+                    let hue = (0.30 + fi * 0.15 + time * 0.012).truncatingRemainder(dividingBy: 1.0)
 
                     var path = Path()
                     path.move(to: CGPoint(x: 0, y: yBase))
@@ -281,7 +281,7 @@ private struct LiveAuroraView: View {
                     path.addLine(to: CGPoint(x: w, y: yBase + 60))
                     path.addLine(to: CGPoint(x: 0, y: yBase + 60))
                     path.closeSubpath()
-                    context.fill(path, with: .color(Color(hue: hue, saturation: 0.6, brightness: 0.5).opacity(0.08)))
+                    context.fill(path, with: .color(Color(hue: hue, saturation: 0.75, brightness: 0.65).opacity(0.12)))
                 }
             }
         }
@@ -295,20 +295,21 @@ private struct LiveParticlesView: View {
             Canvas { context, size in
                 let time = timeline.date.timeIntervalSinceReferenceDate
 
-                context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color(red: 0.04, green: 0.04, blue: 0.06)))
+                context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color(red: 0.06, green: 0.04, blue: 0.12)))
 
-                // Soft ambient glow spots
-                for i in 0..<3 {
+                // Colorful ambient glow spots — coral, teal, gold
+                let glowHues: [CGFloat] = [0.05, 0.48, 0.12, 0.75]
+                for i in 0..<4 {
                     let fi = CGFloat(i)
-                    let cx = size.width * (0.25 + fi * 0.25) + sin(time * 0.05 + fi * 2) * 30
-                    let cy = size.height * (0.3 + fi * 0.15) + cos(time * 0.04 + fi) * 20
-                    let r = min(size.width, size.height) * 0.3
+                    let cx = size.width * (0.2 + fi * 0.22) + sin(time * 0.05 + fi * 2) * 30
+                    let cy = size.height * (0.25 + fi * 0.15) + cos(time * 0.04 + fi) * 20
+                    let r = min(size.width, size.height) * 0.28
                     let rect = CGRect(x: cx - r, y: cy - r, width: r * 2, height: r * 2)
-                    let hue = (fi * 0.3 + time * 0.005).truncatingRemainder(dividingBy: 1.0)
-                    context.fill(Circle().path(in: rect), with: .color(Color(hue: hue, saturation: 0.3, brightness: 0.3).opacity(0.04)))
+                    let hue = (glowHues[i] + time * 0.005).truncatingRemainder(dividingBy: 1.0)
+                    context.fill(Circle().path(in: rect), with: .color(Color(hue: hue, saturation: 0.65, brightness: 0.55).opacity(0.07)))
                 }
 
-                // Floating particles
+                // Floating particles — warm white & colored
                 for i in 0..<30 {
                     let fi = CGFloat(i)
                     let seed1 = sin(fi * 1.7 + 0.3) * 0.5 + 0.5
@@ -317,9 +318,10 @@ private struct LiveParticlesView: View {
                     let x = seed1 * size.width + sin(time * speed * 0.8 + fi * 0.5) * 40
                     let y = (seed2 * size.height + CGFloat(time * speed * 8)).truncatingRemainder(dividingBy: size.height)
                     let radius = 1.0 + seed2 * 1.5
-                    let alpha = 0.1 + seed1 * 0.15
+                    let alpha = 0.12 + seed1 * 0.18
+                    let hue = (seed1 * 0.15 + 0.08).truncatingRemainder(dividingBy: 1.0)
                     let rect = CGRect(x: x - radius, y: y - radius, width: radius * 2, height: radius * 2)
-                    context.fill(Circle().path(in: rect), with: .color(Color.white.opacity(alpha)))
+                    context.fill(Circle().path(in: rect), with: .color(Color(hue: hue, saturation: 0.25, brightness: 1.0).opacity(alpha)))
                 }
             }
         }
@@ -334,25 +336,26 @@ private struct LivePulseView: View {
                 let time = timeline.date.timeIntervalSinceReferenceDate
                 let center = CGPoint(x: size.width / 2, y: size.height * 0.45)
 
-                context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color(red: 0.03, green: 0.03, blue: 0.08)))
+                context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color(red: 0.06, green: 0.04, blue: 0.14)))
 
-                // Central glow
+                // Central glow — warm coral-pink
                 let glowR = min(size.width, size.height) * 0.25
-                let glowPulse = 0.03 + sin(time * 0.4) * 0.015
+                let glowPulse = 0.05 + sin(time * 0.4) * 0.025
                 let glowRect = CGRect(x: center.x - glowR, y: center.y - glowR, width: glowR * 2, height: glowR * 2)
-                context.fill(Circle().path(in: glowRect), with: .color(Color(red: 0.2, green: 0.35, blue: 0.9).opacity(glowPulse)))
+                context.fill(Circle().path(in: glowRect), with: .color(Color(red: 0.85, green: 0.35, blue: 0.55).opacity(glowPulse)))
 
-                // Expanding rings
+                // Expanding rings — shifting coral to violet
                 for i in 0..<6 {
                     let fi = CGFloat(i)
                     let phase = (time * 0.35 + fi * 0.9).truncatingRemainder(dividingBy: 5.5)
                     let maxRadius = max(size.width, size.height) * 0.45
                     let radius = phase / 5.5 * maxRadius
-                    let alpha = (1.0 - phase / 5.5) * 0.08
+                    let alpha = (1.0 - phase / 5.5) * 0.12
+                    let hue = (0.92 + fi * 0.04).truncatingRemainder(dividingBy: 1.0)
                     let rect = CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2)
                     context.stroke(
                         Circle().path(in: rect),
-                        with: .color(Color(red: 0.35, green: 0.5, blue: 1.0).opacity(alpha)),
+                        with: .color(Color(hue: hue, saturation: 0.65, brightness: 0.85).opacity(alpha)),
                         lineWidth: 1.0
                     )
                 }
@@ -632,42 +635,42 @@ struct WallpaperPreviewCard: View {
         switch wallpaper.liveStyle {
         case .aurora:
             AnyShapeStyle(LinearGradient(
-                colors: [Color(red: 0.15, green: 0.55, blue: 0.45), Color(red: 0.08, green: 0.12, blue: 0.35), Color(red: 0.01, green: 0.02, blue: 0.06)],
+                colors: [Color(red: 0.18, green: 0.60, blue: 0.48), Color(red: 0.10, green: 0.18, blue: 0.40), Color(red: 0.02, green: 0.04, blue: 0.10)],
                 startPoint: .top, endPoint: .bottom
             ))
         case .particles:
             AnyShapeStyle(LinearGradient(
-                colors: [Color(red: 0.08, green: 0.08, blue: 0.12), Color(red: 0.04, green: 0.04, blue: 0.06)],
+                colors: [Color(red: 0.22, green: 0.14, blue: 0.32), Color(red: 0.06, green: 0.04, blue: 0.12)],
                 startPoint: .top, endPoint: .bottom
             ))
         case .pulse:
             AnyShapeStyle(RadialGradient(
-                colors: [Color(red: 0.12, green: 0.18, blue: 0.4), Color(red: 0.03, green: 0.03, blue: 0.08)],
+                colors: [Color(red: 0.55, green: 0.22, blue: 0.38), Color(red: 0.06, green: 0.04, blue: 0.14)],
                 center: .center, startRadius: 0, endRadius: 30
             ))
         case .rain:
             AnyShapeStyle(LinearGradient(
-                colors: [Color(red: 0.08, green: 0.1, blue: 0.18), Color(red: 0.03, green: 0.04, blue: 0.08)],
+                colors: [Color(red: 0.12, green: 0.18, blue: 0.32), Color(red: 0.03, green: 0.04, blue: 0.08)],
                 startPoint: .top, endPoint: .bottom
             ))
         case .fireflies:
             AnyShapeStyle(LinearGradient(
-                colors: [Color(red: 0.05, green: 0.08, blue: 0.04), Color(red: 0.02, green: 0.03, blue: 0.02)],
+                colors: [Color(red: 0.12, green: 0.18, blue: 0.06), Color(red: 0.02, green: 0.03, blue: 0.02)],
                 startPoint: .bottom, endPoint: .top
             ))
         case .nebula:
             AnyShapeStyle(LinearGradient(
-                colors: [Color(red: 0.18, green: 0.1, blue: 0.3), Color(red: 0.06, green: 0.04, blue: 0.15), Color(red: 0.01, green: 0.01, blue: 0.03)],
+                colors: [Color(red: 0.28, green: 0.14, blue: 0.42), Color(red: 0.08, green: 0.04, blue: 0.18), Color(red: 0.01, green: 0.01, blue: 0.03)],
                 startPoint: .topLeading, endPoint: .bottomTrailing
             ))
         case .matrix:
             AnyShapeStyle(LinearGradient(
-                colors: [Color(red: 0.03, green: 0.14, blue: 0.05), Color(red: 0.01, green: 0.02, blue: 0.01)],
+                colors: [Color(red: 0.05, green: 0.22, blue: 0.08), Color(red: 0.01, green: 0.02, blue: 0.01)],
                 startPoint: .top, endPoint: .bottom
             ))
         case .ripple:
             AnyShapeStyle(LinearGradient(
-                colors: [Color(red: 0.08, green: 0.15, blue: 0.25), Color(red: 0.03, green: 0.04, blue: 0.08)],
+                colors: [Color(red: 0.12, green: 0.22, blue: 0.35), Color(red: 0.03, green: 0.04, blue: 0.08)],
                 startPoint: .top, endPoint: .bottom
             ))
         case .none:
