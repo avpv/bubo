@@ -522,6 +522,7 @@ private struct OpenSettingsButton: View {
 private struct CalendarAccessBanner: View {
     @Environment(\.openSettings) private var openSettings
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.activeSkin) private var skin
 
     var body: some View {
         Button {

@@ -5,7 +5,7 @@ struct TimerScreenView: View {
     let event: CalendarEvent
     var onBack: () -> Void
     var isPinned: Bool = false
-    var skin: SkinDefinition = SkinCatalog.defaultSkin
+
     var wallpaper: WallpaperDefinition = WallpaperCatalog.none
     var customPhotoPath: String = ""
     var customPhotoOpacity: Double = 0.25

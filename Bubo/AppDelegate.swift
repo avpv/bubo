@@ -118,7 +118,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.dismissPinnedTimer()
             },
             isPinned: true,
-            skin: activeSkin,
             customPhotoPath: settings.customBackgroundPhotoPath,
             customPhotoOpacity: settings.customBackgroundPhotoOpacity,
             customPhotoBlur: settings.customBackgroundPhotoBlur,
