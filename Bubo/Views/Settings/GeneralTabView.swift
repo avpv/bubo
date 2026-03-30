@@ -595,43 +595,6 @@ struct GeneralTabView: View {
             SettingsPlatter("Background") {
                 WallpaperSectionView()
 
-                if settings.selectedSkin.isClassic {
-                    Divider()
-                        .padding(.vertical, 4)
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Gradient overlay")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: 8)], spacing: 8) {
-                            ForEach(AppBackgroundStyle.allCases) { style in
-                                let isSelected = settings.backgroundStyle == style
-                                Button {
-                                    settings.backgroundStyle = style
-                                } label: {
-                                    VStack(spacing: 4) {
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .fill(style.previewGradient)
-                                            .frame(height: 28)
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 6)
-                                                    .strokeBorder(
-                                                        isSelected ? Color.accentColor : Color.primary.opacity(0.1),
-                                                        lineWidth: isSelected ? 2 : 0.5
-                                                    )
-                                            )
-                                        Text(style.displayName)
-                                            .font(.caption2)
-                                            .foregroundStyle(isSelected ? .primary : .secondary)
-                                            .lineLimit(1)
-                                    }
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-                }
-
                 Divider()
                     .padding(.vertical, 4)
 

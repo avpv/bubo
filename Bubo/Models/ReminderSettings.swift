@@ -64,7 +64,6 @@ class ReminderSettings: Codable {
     var launchAtLogin: Bool
     var selectedCalendarIds: [String] { didSet { scheduleSave() } }
     var isCalendarSyncEnabled: Bool { didSet { scheduleSave() } }
-    var backgroundStyle: AppBackgroundStyle { didSet { scheduleSave() } }
     var selectedSkinID: String { didSet { scheduleSave() } }
     var selectedWallpaperID: String { didSet { scheduleSave() } }
     /// Path to a user-chosen background photo (empty = no custom photo).
@@ -94,7 +93,7 @@ class ReminderSettings: Codable {
 
     enum CodingKeys: String, CodingKey {
         case intervals, syncIntervalMinutes, showFullScreenAlert, showSystemNotification
-        case selectedCalendarIds, isCalendarSyncEnabled, backgroundStyle, selectedSkinID
+        case selectedCalendarIds, isCalendarSyncEnabled, selectedSkinID
         case selectedWallpaperID
         case customBackgroundPhotoPath, customBackgroundPhotoOpacity, customBackgroundPhotoBlur
         case skinImageOverrides
@@ -112,7 +111,6 @@ class ReminderSettings: Codable {
         self.launchAtLogin = false
         self.selectedCalendarIds = [] // empty = sync all
         self.isCalendarSyncEnabled = true
-        self.backgroundStyle = .system
         self.selectedSkinID = "system"
         self.selectedWallpaperID = "none"
         self.customBackgroundPhotoPath = ""
@@ -133,7 +131,6 @@ class ReminderSettings: Codable {
         launchAtLogin = false
         selectedCalendarIds = try container.decodeIfPresent([String].self, forKey: .selectedCalendarIds) ?? []
         isCalendarSyncEnabled = try container.decodeIfPresent(Bool.self, forKey: .isCalendarSyncEnabled) ?? true
-        backgroundStyle = try container.decodeIfPresent(AppBackgroundStyle.self, forKey: .backgroundStyle) ?? .system
         // Support both old "selectedSkin" key (enum rawValue) and new "selectedSkinID" key
         if let skinID = try container.decodeIfPresent(String.self, forKey: .selectedSkinID) {
             selectedSkinID = skinID
@@ -158,7 +155,6 @@ class ReminderSettings: Codable {
         try container.encode(showSystemNotification, forKey: .showSystemNotification)
         try container.encode(selectedCalendarIds, forKey: .selectedCalendarIds)
         try container.encode(isCalendarSyncEnabled, forKey: .isCalendarSyncEnabled)
-        try container.encode(backgroundStyle, forKey: .backgroundStyle)
         try container.encode(selectedSkinID, forKey: .selectedSkinID)
         try container.encode(selectedWallpaperID, forKey: .selectedWallpaperID)
         try container.encode(customBackgroundPhotoPath, forKey: .customBackgroundPhotoPath)
