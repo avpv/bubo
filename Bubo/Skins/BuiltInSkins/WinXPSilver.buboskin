@@ -1,35 +1,35 @@
 {
-  "id": "windows_xp_olive",
-  "displayName": "Windows XP Luna Olive",
-  "author": "Bubo Community",
-  "accentColor": "#758A3D",
-  "surfaceTint": "#141A0A",
-  "surfaceTintOpacity": 0.22,
+  "id": "win_xp_silver",
+  "displayName": "XP Luna Silver",
+  "author": "Bubo",
+  "accentColor": "#75788F",
+  "surfaceTint": "#14141F",
+  "surfaceTintOpacity": 0.2,
   "backgroundGradient": {
     "colors": [
-      "#80944C24",
-      "#5C6B2E14",
-      "#00000000"
+      "#8082991F",
+      "#61617512",
+      "clear"
     ],
     "style": "linear",
     "startPoint": "top",
     "endPoint": "bottom"
   },
   "previewColors": [
-    "#758A3D",
-    "#9EA86B"
+    "#75788F",
+    "#A8ABBD"
   ],
   "prefersDarkTint": true,
-  "secondaryAccent": "#9EA86B",
+  "secondaryAccent": "#999CB2",
   "buttonStyle": "gradient",
   "buttonShape": "roundedRect",
-  "buttonColor": "#FFFFFF",
-  "toolbarTint": "#5C7538",
+  "buttonColor": "white",
+  "toolbarTint": "#5E6180",
   "barMaterial": "ultraThick",
-  "barTint": "#5C6B2E",
-  "barTintOpacity": 0.2,
-  "platterTint": "#475224",
-  "platterTintOpacity": 0.07,
+  "barTint": "#616180",
+  "barTintOpacity": 0.18,
+  "platterTint": "#4C4C66",
+  "platterTintOpacity": 0.06,
   "fontDesign": "default",
   "fontWeight": "bold",
   "headlineFontWeight": "bold",

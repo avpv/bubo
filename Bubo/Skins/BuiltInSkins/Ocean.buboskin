@@ -1,0 +1,39 @@
+{
+  "id": "ocean",
+  "displayName": "Ocean",
+  "author": "Bubo",
+  "accentColor": "#0070FA",
+  "surfaceTint": "#030D29",
+  "surfaceTintOpacity": 0.3,
+  "backgroundGradient": {
+    "colors": [
+      "#0059BF38",
+      "#051A591F",
+      "clear"
+    ],
+    "style": "linear",
+    "startPoint": "topTrailing",
+    "endPoint": "bottomLeading"
+  },
+  "previewColors": [
+    "#0070FA",
+    "#0D3385"
+  ],
+  "prefersDarkTint": true,
+  "secondaryAccent": "#2E94FF",
+  "buttonStyle": "gradient",
+  "toolbarTint": "#00B8BF",
+  "barMaterial": "regular",
+  "barTint": "#002E73",
+  "barTintOpacity": 0.18,
+  "platterTint": "#001F59",
+  "platterTintOpacity": 0.1,
+  "fontDesign": "rounded",
+  "fontWeight": "semibold",
+  "headlineFontWeight": "bold",
+  "sfSymbolRendering": "hierarchical",
+  "sfSymbolWeight": "semibold",
+  "badgeStyle": "filled",
+  "separatorStyle": "accent",
+  "separatorOpacity": 0.2
+}

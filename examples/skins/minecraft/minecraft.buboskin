@@ -2,84 +2,33 @@
   "id": "minecraft",
   "displayName": "Minecraft",
   "author": "Bubo Community",
-  "accentColor": {
-    "red": 0.3,
-    "green": 0.55,
-    "blue": 0.15
-  },
-  "surfaceTint": {
-    "red": 0.08,
-    "green": 0.06,
-    "blue": 0.02
-  },
+  "accentColor": "#4C8C26",
+  "surfaceTint": "#140F05",
   "surfaceTintOpacity": 0.3,
   "backgroundGradient": {
     "colors": [
-      {
-        "red": 0.25,
-        "green": 0.55,
-        "blue": 0.85,
-        "opacity": 0.3
-      },
-      {
-        "red": 0.3,
-        "green": 0.5,
-        "blue": 0.15,
-        "opacity": 0.2
-      },
-      {
-        "red": 0.0,
-        "green": 0.0,
-        "blue": 0.0,
-        "opacity": 0.0
-      }
+      "#408CD94C",
+      "#4C802633",
+      "#00000000"
     ],
     "style": "linear",
     "startPoint": "top",
     "endPoint": "bottom"
   },
   "previewColors": [
-    {
-      "red": 0.3,
-      "green": 0.55,
-      "blue": 0.15
-    },
-    {
-      "red": 0.4,
-      "green": 0.25,
-      "blue": 0.1
-    }
+    "#4C8C26",
+    "#66401A"
   ],
   "prefersDarkTint": false,
-  "secondaryAccent": {
-    "red": 0.5,
-    "green": 0.35,
-    "blue": 0.15
-  },
+  "secondaryAccent": "#805926",
   "buttonStyle": "solid",
   "buttonShape": "rectangle",
-  "buttonColor": {
-    "red": 1.0,
-    "green": 1.0,
-    "blue": 1.0
-  },
-  "toolbarTint": {
-    "red": 0.45,
-    "green": 0.3,
-    "blue": 0.12
-  },
+  "buttonColor": "#FFFFFF",
+  "toolbarTint": "#734C1F",
   "barMaterial": "ultraThick",
-  "barTint": {
-    "red": 0.2,
-    "green": 0.35,
-    "blue": 0.1
-  },
+  "barTint": "#33591A",
   "barTintOpacity": 0.15,
-  "platterTint": {
-    "red": 0.15,
-    "green": 0.25,
-    "blue": 0.08
-  },
+  "platterTint": "#264014",
   "platterTintOpacity": 0.08,
   "fontDesign": "default",
   "fontWeight": "bold",

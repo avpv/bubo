@@ -195,9 +195,9 @@ enum SkinBarMaterial: String, Equatable, CaseIterable {
 
 /// A complete visual theme for Bubo.
 ///
-/// To create a new skin, add a new Swift file in `Bubo/Skins/` and register
-/// it in `SkinCatalog.allSkins`. See `TEMPLATE.swift` for a starting point
-/// and `CONTRIBUTING_SKINS.md` in the repo root for full instructions.
+/// All skins — both built-in and custom — are defined as `.buboskin` JSON files.
+/// See `TEMPLATE.buboskin` for the format and `CONTRIBUTING_SKINS.md` for full
+/// instructions. Built-in skins live in `Bubo/Skins/BuiltInSkins/`.
 struct SkinDefinition: Identifiable, Equatable {
     /// Unique identifier — used for persistence. Must be stable across versions.
     let id: String
@@ -481,43 +481,35 @@ struct SkinGradient: Equatable {
 
 /// Central registry of all available skins.
 ///
-/// **To add a new skin:**
-/// 1. Create a new file in `Bubo/Skins/` (copy `TEMPLATE.swift`)
-/// 2. Define your skin as a `static let` on `SkinCatalog`
-/// 3. Add it to the `allSkins` array below
+/// **To add a new built-in skin:**
+/// 1. Create a `.buboskin` JSON file in `Bubo/Skins/BuiltInSkins/`
+///    (copy `TEMPLATE.buboskin` as a starting point)
+/// 2. Add its ID to the `order` array in `BuiltInSkinLoader`
 ///
 /// That's it — your skin will appear in Settings automatically.
 ///
-/// Users can also create custom `.buboskin` files (JSON) and import them
+/// Users can also create custom `.buboskin` files and import them
 /// via Settings — no code changes needed. See `CustomSkinLoader` for details.
 enum SkinCatalog {
-    /// All built-in skins. Order here = order in the picker.
-    static let builtInSkins: [SkinDefinition] = [
-        system,
-        classic,
-        graphite,
-        ocean,
-        lavenderSkin,
-        roseGold,
-        midnight,
-        sierra,
-        arctic,
-        sage,
-        winXPBlue,
-        winXPOlive,
-        winXPSilver,
-    ]
+    /// All built-in skins loaded from bundled `.buboskin` JSON files.
+    /// Guaranteed to contain at least one skin (Classic fallback).
+    static let builtInSkins: [SkinDefinition] = BuiltInSkinLoader.skins
 
     /// All skins including user-imported custom skins.
     static var allSkins: [SkinDefinition] {
         builtInSkins + CustomSkinLoader.shared.customSkins
     }
 
-    /// Look up a skin by its ID. Falls back to Classic if not found.
+    /// Look up a skin by its ID. Falls back to "classic", then first available.
     static func skin(forID id: String) -> SkinDefinition {
-        allSkins.first { $0.id == id } ?? classic
+        allSkins.first { $0.id == id }
+            ?? builtInSkins.first { $0.id == "classic" }
+            ?? builtInSkins[0]  // safe: BuiltInSkinLoader guarantees ≥ 1
     }
 
     /// The default skin.
-    static let defaultSkin = system
+    static var defaultSkin: SkinDefinition {
+        builtInSkins.first { $0.id == "system" }
+            ?? builtInSkins[0]  // safe: BuiltInSkinLoader guarantees ≥ 1
+    }
 }

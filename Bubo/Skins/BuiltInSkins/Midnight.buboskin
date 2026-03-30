@@ -1,0 +1,40 @@
+{
+  "id": "midnight",
+  "displayName": "Midnight",
+  "author": "Bubo",
+  "accentColor": "#5975BF",
+  "surfaceTint": "#030514",
+  "surfaceTintOpacity": 0.35,
+  "backgroundGradient": {
+    "colors": [
+      "clear",
+      "#1A1F401F",
+      "#292E592E"
+    ],
+    "style": "linear",
+    "startPoint": "top",
+    "endPoint": "bottom"
+  },
+  "previewColors": [
+    "#141A33",
+    "#40528C"
+  ],
+  "prefersDarkTint": true,
+  "secondaryAccent": "#47619E",
+  "buttonStyle": "solid",
+  "buttonShape": "rectangle",
+  "toolbarTint": "#A68C66",
+  "barMaterial": "ultraThin",
+  "barTint": "#1A1F40",
+  "barTintOpacity": 0.14,
+  "platterMaterial": "thin",
+  "platterTint": "#141A33",
+  "platterTintOpacity": 0.1,
+  "fontDesign": "default",
+  "fontWeight": "regular",
+  "headlineFontWeight": "semibold",
+  "sfSymbolRendering": "monochrome",
+  "sfSymbolWeight": "light",
+  "badgeStyle": "outlined",
+  "separatorStyle": "none"
+}

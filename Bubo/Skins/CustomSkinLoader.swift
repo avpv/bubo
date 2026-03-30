@@ -1,12 +1,13 @@
 import Foundation
 import SwiftUI
 
-// MARK: - Custom Skin JSON Format
+// MARK: - Skin JSON Format
 
 /// JSON-serializable representation of a Bubo skin.
 ///
-/// Users create `.buboskin` files (JSON) with this structure and import them
-/// via Settings, just like Winamp `.wsz` skins — no code changes or PRs needed.
+/// Both built-in and custom skins use the same `.buboskin` JSON format.
+/// Colors are strings: hex (`"#0070FA"`), named (`"accentColor"`),
+/// named with opacity (`"accentColor:0.5"`), or keyword (`"clear"`).
 ///
 /// Example `.buboskin` file:
 /// ```json
@@ -14,38 +15,18 @@ import SwiftUI
 ///   "id": "my_cool_skin",
 ///   "displayName": "My Cool Skin",
 ///   "author": "@username",
-///   "accentColor": { "red": 0.0, "green": 0.9, "blue": 0.0 },
-///   "surfaceTint": { "red": 0.0, "green": 0.15, "blue": 0.0 },
+///   "accentColor": "#00E600",
+///   "surfaceTint": "#002600",
 ///   "surfaceTintOpacity": 0.35,
 ///   "backgroundGradient": {
-///     "colors": [
-///       { "red": 0.0, "green": 0.18, "blue": 0.0, "opacity": 0.5 },
-///       { "red": 0.0, "green": 0.08, "blue": 0.0, "opacity": 0.3 },
-///       { "red": 0.0, "green": 0.0, "blue": 0.0, "opacity": 0.0 }
-///     ],
+///     "colors": ["#002E0080", "#001A0D4C", "clear"],
 ///     "style": "linear",
 ///     "startPoint": "topLeading",
 ///     "endPoint": "bottomTrailing"
 ///   },
-///   "previewColors": [
-///     { "red": 0.0, "green": 0.7, "blue": 0.0 },
-///     { "red": 0.1, "green": 0.2, "blue": 0.1 }
-///   ],
+///   "previewColors": ["#00B200", "#1A3319"],
 ///   "prefersDarkTint": true,
-///   "secondaryAccent": { "red": 0.0, "green": 0.65, "blue": 0.15 },
-///   "buttonStyle": "gradient",
-///   "buttonShape": "capsule",
-///   "buttonColor": { "red": 1.0, "green": 1.0, "blue": 1.0 },
-///   "buttonMaterial": "regular",
-///   "buttonTint": { "red": 0.0, "green": 0.4, "blue": 0.8 },
-///   "buttonTintOpacity": 0.3,
-///   "toolbarTint": { "red": 0.3, "green": 0.5, "blue": 0.4 },
-///   "barMaterial": "thick",
-///   "barTint": { "red": 0.0, "green": 0.2, "blue": 0.4 },
-///   "barTintOpacity": 0.15,
-///   "platterMaterial": "regular",
-///   "platterTint": { "red": 0.0, "green": 0.1, "blue": 0.2 },
-///   "platterTintOpacity": 0.1
+///   "buttonStyle": "gradient"
 /// }
 /// ```
 struct CustomSkinJSON: Codable {
@@ -127,16 +108,9 @@ struct CustomSkinJSON: Codable {
     /// Separator opacity (0–1). Floor at 0.15 when separatorStyle != "none". Defaults to 0.5.
     let separatorOpacity: Double?
 
-    func toSkinDefinition(skinFileURL: URL? = nil) -> SkinDefinition {
-        // HIG: Validate accent color contrast — warn if luminance is too high
-        // for white button text (WCAG 2.1 AA requires 4.5:1 contrast ratio)
-        let accentLuminance = 0.2126 * accentColor.red + 0.7152 * accentColor.green + 0.0722 * accentColor.blue
-        if accentLuminance > 0.55 {
-            print("[Bubo] Warning: Skin '\(displayName)' accent color has high luminance (\(String(format: "%.2f", accentLuminance))). Button text may have insufficient contrast per Apple HIG.")
-        }
-
+    func toSkinDefinition(skinFileURL: URL? = nil, isBuiltIn: Bool = false) -> SkinDefinition {
         return SkinDefinition(
-            id: "custom_\(id)",
+            id: isBuiltIn ? id : "custom_\(id)",
             displayName: displayName,
             author: author,
             accentColor: accentColor.toColor(),
@@ -267,20 +241,94 @@ struct CustomSkinJSON: Codable {
     }
 }
 
+/// A color string that decodes from JSON.
+///
+/// **Supported formats:**
+///
+/// | Format | Example | Notes |
+/// |--------|---------|-------|
+/// | Hex RGB | `"#0070FA"` | 6-digit hex, fully opaque |
+/// | Hex RGBA | `"#0070FA80"` | 8-digit hex, last byte = alpha |
+/// | Named color | `"accentColor"` | System/semantic color |
+/// | Named + opacity | `"accentColor:0.5"` | Named color at 50% opacity |
+/// | Keyword | `"clear"`, `"white"`, `"black"`, `"gray"` | Common colors |
 struct JSONColor: Codable {
-    let red: Double
-    let green: Double
-    let blue: Double
-    var opacity: Double?
+    private let value: String
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        value = try container.decode(String.self)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(value)
+    }
+
+    // MARK: - To SwiftUI Color
 
     func toColor() -> Color {
-        Color(red: red, green: green, blue: blue).opacity(opacity ?? 1.0)
+        let trimmed = value.trimmingCharacters(in: .whitespaces)
+
+        // Hex color
+        if trimmed.hasPrefix("#") {
+            return hexToColor(trimmed)
+        }
+
+        // Named color with opacity: "accentColor:0.5"
+        if trimmed.contains(":") {
+            let parts = trimmed.split(separator: ":", maxSplits: 1)
+            let base = namedColor(String(parts[0]))
+            if let opacity = Double(parts[1]) {
+                return base.opacity(opacity)
+            }
+            return base
+        }
+
+        // Plain named color
+        return namedColor(trimmed)
+    }
+
+    // MARK: - Private
+
+    private func namedColor(_ name: String) -> Color {
+        switch name.lowercased() {
+        case "accentcolor":          .accentColor
+        case "clear", "transparent": .clear
+        case "gray", "grey":         .gray
+        case "white":                .white
+        case "black":                .black
+        default:                     .accentColor
+        }
+    }
+
+    private func hexToColor(_ hex: String) -> Color {
+        var h = hex
+        if h.hasPrefix("#") { h.removeFirst() }
+
+        var int: UInt64 = 0
+        Scanner(string: h).scanHexInt64(&int)
+
+        if h.count == 8 {
+            // #RRGGBBAA
+            let r = Double((int >> 24) & 0xFF) / 255.0
+            let g = Double((int >> 16) & 0xFF) / 255.0
+            let b = Double((int >> 8) & 0xFF) / 255.0
+            let a = Double(int & 0xFF) / 255.0
+            return Color(red: r, green: g, blue: b).opacity(a)
+        } else {
+            // #RRGGBB
+            let r = Double((int >> 16) & 0xFF) / 255.0
+            let g = Double((int >> 8) & 0xFF) / 255.0
+            let b = Double(int & 0xFF) / 255.0
+            return Color(red: r, green: g, blue: b)
+        }
     }
 }
 
 struct JSONGradient: Codable {
-    let colors: [JSONColor]
-    let style: String  // "linear" or "radial"
+    var colors: [JSONColor]?
+    var style: String?  // "linear", "radial", or "clear"
     // Linear
     var startPoint: String?
     var endPoint: String?
@@ -290,9 +338,13 @@ struct JSONGradient: Codable {
     var endRadius: CGFloat?
 
     func toSkinGradient() -> SkinGradient {
-        let swiftColors = colors.map { $0.toColor() }
+        let styleValue = style ?? "clear"
+        if styleValue.lowercased() == "clear" || (colors ?? []).isEmpty {
+            return .clear
+        }
+        let swiftColors = (colors ?? []).map { $0.toColor() }
         let gradientStyle: SkinGradient.Style
-        if style.lowercased() == "radial" {
+        if styleValue.lowercased() == "radial" {
             gradientStyle = .radial(
                 center: unitPoint(from: center ?? "top"),
                 startRadius: startRadius ?? 0,
@@ -430,5 +482,115 @@ class CustomSkinLoader {
               let json = try? JSONDecoder().decode(CustomSkinJSON.self, from: data)
         else { return nil }
         return json.toSkinDefinition(skinFileURL: url)
+    }
+}
+
+// MARK: - Built-In Skin Loader
+
+/// Loads built-in skins from bundled `.buboskin` JSON files in the app's
+/// `BuiltInSkins` resource directory. This gives built-in skins the same
+/// JSON-based configuration as custom skins — a unified approach.
+///
+/// If no JSON files can be found or all fail to decode, a hardcoded
+/// fallback Classic skin is returned so the app never launches with zero skins.
+enum BuiltInSkinLoader {
+    /// All built-in skins loaded from bundled JSON files.
+    /// Order is determined by the `order` array; skins not listed appear at the end.
+    /// Guaranteed to contain at least one skin (Classic fallback).
+    static let skins: [SkinDefinition] = {
+        let loaded = loadBuiltInSkins()
+        if loaded.isEmpty {
+            print("[Bubo] Warning: No built-in skins loaded from JSON. Using hardcoded Classic fallback.")
+            return [fallbackClassic]
+        }
+        return loaded
+    }()
+
+    /// Preferred display order (by skin ID).
+    private static let order = [
+        "system", "classic", "graphite", "ocean", "lavender",
+        "rose_gold", "midnight", "sierra", "arctic", "sage",
+        "win_xp_blue", "win_xp_olive", "win_xp_silver",
+    ]
+
+    /// Hardcoded fallback so the app always has at least one skin,
+    /// even if the bundle is misconfigured or all JSON files are corrupt.
+    private static let fallbackClassic = SkinDefinition(
+        id: "classic",
+        displayName: "Classic",
+        author: "Bubo",
+        accentColor: .accentColor,
+        surfaceTint: .clear,
+        surfaceTintOpacity: 0,
+        backgroundGradient: .clear,
+        previewColors: [.gray],
+        prefersDarkTint: false,
+        buttonStyle: .solid,
+        fontDesign: .default,
+        fontWeight: .regular,
+        headlineFontWeight: .medium,
+        sfSymbolRendering: .monochrome,
+        sfSymbolWeight: .regular
+    )
+
+    private static func loadBuiltInSkins() -> [SkinDefinition] {
+        let urls = findBuiltInSkinURLs()
+        if urls.isEmpty {
+            print("[Bubo] Warning: No built-in skin files found.")
+            return []
+        }
+
+        var loaded: [SkinDefinition] = []
+        for url in urls {
+            guard let data = try? Data(contentsOf: url) else {
+                print("[Bubo] Warning: Cannot read built-in skin file \(url.lastPathComponent)")
+                continue
+            }
+            guard let json = try? JSONDecoder().decode(CustomSkinJSON.self, from: data) else {
+                print("[Bubo] Warning: Invalid JSON in built-in skin \(url.lastPathComponent)")
+                continue
+            }
+            loaded.append(json.toSkinDefinition(skinFileURL: url, isBuiltIn: true))
+        }
+
+        // Sort by preferred order
+        return loaded.sorted { a, b in
+            let idxA = order.firstIndex(of: a.id) ?? Int.max
+            let idxB = order.firstIndex(of: b.id) ?? Int.max
+            return idxA < idxB
+        }
+    }
+
+    /// Searches multiple locations for built-in skin files:
+    /// 1. Bundle resources with "BuiltInSkins" subdirectory (standard Xcode setup)
+    /// 2. Bundle resources at top level (flat resource copy)
+    /// 3. "BuiltInSkins" directory next to the executable (dev/debug builds)
+    private static func findBuiltInSkinURLs() -> [URL] {
+        // 1. Standard: bundled with subdirectory
+        if let urls = Bundle.main.urls(forResourcesWithExtension: "buboskin", subdirectory: "BuiltInSkins"),
+           !urls.isEmpty {
+            return urls
+        }
+
+        // 2. Flat bundle resources (no subdirectory — files copied to Resources root)
+        if let resourceURL = Bundle.main.resourceURL {
+            let builtInDir = resourceURL.appendingPathComponent("BuiltInSkins", isDirectory: true)
+            if let urls = try? FileManager.default.contentsOfDirectory(at: builtInDir, includingPropertiesForKeys: nil),
+               !urls.filter({ $0.pathExtension == "buboskin" }).isEmpty {
+                return urls.filter { $0.pathExtension == "buboskin" }
+            }
+        }
+
+        // 3. Next to executable (development builds, SPM)
+        let executableURL = Bundle.main.executableURL?.deletingLastPathComponent()
+        if let execDir = executableURL {
+            let devDir = execDir.appendingPathComponent("BuiltInSkins", isDirectory: true)
+            if let urls = try? FileManager.default.contentsOfDirectory(at: devDir, includingPropertiesForKeys: nil),
+               !urls.filter({ $0.pathExtension == "buboskin" }).isEmpty {
+                return urls.filter { $0.pathExtension == "buboskin" }
+            }
+        }
+
+        return []
     }
 }

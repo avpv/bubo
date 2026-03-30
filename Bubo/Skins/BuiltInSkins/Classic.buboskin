@@ -1,0 +1,23 @@
+{
+  "id": "classic",
+  "displayName": "Classic",
+  "author": "Bubo",
+  "accentColor": "accentColor",
+  "surfaceTint": "clear",
+  "surfaceTintOpacity": 0,
+  "backgroundGradient": {
+    "style": "clear"
+  },
+  "previewColors": [
+    "gray"
+  ],
+  "prefersDarkTint": false,
+  "buttonStyle": "solid",
+  "fontDesign": "default",
+  "fontWeight": "regular",
+  "headlineFontWeight": "medium",
+  "sfSymbolRendering": "monochrome",
+  "sfSymbolWeight": "regular",
+  "badgeStyle": "tinted",
+  "separatorStyle": "system"
+}

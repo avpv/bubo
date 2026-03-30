@@ -1,0 +1,42 @@
+{
+  "id": "lavender",
+  "displayName": "Lavender",
+  "author": "Bubo",
+  "accentColor": "#9461EB",
+  "surfaceTint": "#1F0F33",
+  "surfaceTintOpacity": 0.25,
+  "backgroundGradient": {
+    "colors": [
+      "#6B3DBF2E",
+      "#381F7A1A",
+      "clear"
+    ],
+    "style": "radial",
+    "center": "center",
+    "startRadius": 0,
+    "endRadius": 400
+  },
+  "previewColors": [
+    "#9461EB",
+    "#CC7ABF"
+  ],
+  "prefersDarkTint": false,
+  "secondaryAccent": "#7347C7",
+  "buttonStyle": "glass",
+  "buttonTint": "#7A4CC7",
+  "buttonTintOpacity": 0.28,
+  "toolbarTint": "#CC73A6",
+  "barMaterial": "thin",
+  "barTint": "#613394",
+  "barTintOpacity": 0.14,
+  "platterTint": "#522E85",
+  "platterTintOpacity": 0.07,
+  "fontDesign": "rounded",
+  "fontWeight": "medium",
+  "headlineFontWeight": "semibold",
+  "sfSymbolRendering": "hierarchical",
+  "sfSymbolWeight": "light",
+  "badgeStyle": "tinted",
+  "separatorStyle": "subtle",
+  "separatorOpacity": 0.25
+}

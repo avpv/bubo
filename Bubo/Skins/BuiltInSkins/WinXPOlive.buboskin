@@ -1,7 +1,7 @@
 {
-  "id": "windows_xp_olive",
-  "displayName": "Windows XP Luna Olive",
-  "author": "Bubo Community",
+  "id": "win_xp_olive",
+  "displayName": "XP Luna Olive",
+  "author": "Bubo",
   "accentColor": "#758A3D",
   "surfaceTint": "#141A0A",
   "surfaceTintOpacity": 0.22,
@@ -9,7 +9,7 @@
     "colors": [
       "#80944C24",
       "#5C6B2E14",
-      "#00000000"
+      "clear"
     ],
     "style": "linear",
     "startPoint": "top",
@@ -23,7 +23,7 @@
   "secondaryAccent": "#9EA86B",
   "buttonStyle": "gradient",
   "buttonShape": "roundedRect",
-  "buttonColor": "#FFFFFF",
+  "buttonColor": "white",
   "toolbarTint": "#5C7538",
   "barMaterial": "ultraThick",
   "barTint": "#5C6B2E",

@@ -2,84 +2,33 @@
   "id": "hong_kong",
   "displayName": "Hong Kong Neon",
   "author": "Bubo Community",
-  "accentColor": {
-    "red": 1.0,
-    "green": 0.2,
-    "blue": 0.45
-  },
-  "surfaceTint": {
-    "red": 0.12,
-    "green": 0.02,
-    "blue": 0.06
-  },
+  "accentColor": "#FF3373",
+  "surfaceTint": "#1F050F",
   "surfaceTintOpacity": 0.35,
   "backgroundGradient": {
     "colors": [
-      {
-        "red": 0.9,
-        "green": 0.1,
-        "blue": 0.4,
-        "opacity": 0.35
-      },
-      {
-        "red": 0.1,
-        "green": 0.05,
-        "blue": 0.35,
-        "opacity": 0.25
-      },
-      {
-        "red": 0.0,
-        "green": 0.0,
-        "blue": 0.0,
-        "opacity": 0.0
-      }
+      "#E61A6659",
+      "#1A0D5940",
+      "#00000000"
     ],
     "style": "linear",
     "startPoint": "top",
     "endPoint": "bottom"
   },
   "previewColors": [
-    {
-      "red": 1.0,
-      "green": 0.2,
-      "blue": 0.45
-    },
-    {
-      "red": 0.15,
-      "green": 0.05,
-      "blue": 0.3
-    }
+    "#FF3373",
+    "#260D4C"
   ],
   "prefersDarkTint": true,
-  "secondaryAccent": {
-    "red": 1.0,
-    "green": 0.85,
-    "blue": 0.0
-  },
+  "secondaryAccent": "#FFD900",
   "buttonStyle": "glass",
-  "buttonTint": {
-    "red": 0.9,
-    "green": 0.1,
-    "blue": 0.35
-  },
+  "buttonTint": "#E61A59",
   "buttonTintOpacity": 0.3,
-  "toolbarTint": {
-    "red": 1.0,
-    "green": 0.75,
-    "blue": 0.0
-  },
+  "toolbarTint": "#FFBF00",
   "barMaterial": "thin",
-  "barTint": {
-    "red": 0.7,
-    "green": 0.08,
-    "blue": 0.3
-  },
+  "barTint": "#B2144C",
   "barTintOpacity": 0.18,
-  "platterTint": {
-    "red": 0.5,
-    "green": 0.05,
-    "blue": 0.22
-  },
+  "platterTint": "#800D38",
   "platterTintOpacity": 0.1,
   "fontDesign": "rounded",
   "fontWeight": "semibold",

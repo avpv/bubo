@@ -1,0 +1,41 @@
+{
+  "id": "arctic",
+  "displayName": "Arctic",
+  "author": "Bubo",
+  "accentColor": "#38A6E0",
+  "surfaceTint": "#0F1F29",
+  "surfaceTintOpacity": 0.05,
+  "backgroundGradient": {
+    "colors": [
+      "#3380B814",
+      "#1F4C730A"
+    ],
+    "style": "linear",
+    "startPoint": "top",
+    "endPoint": "bottom"
+  },
+  "previewColors": [
+    "#38A6E0",
+    "#9ED9F5"
+  ],
+  "prefersDarkTint": false,
+  "secondaryAccent": "#61B8E6",
+  "buttonStyle": "glass",
+  "buttonTint": "#2E8CC7",
+  "buttonTintOpacity": 0.18,
+  "toolbarTint": "#8C80BF",
+  "barMaterial": "thin",
+  "barTint": "#2E6B94",
+  "barTintOpacity": 0.06,
+  "platterMaterial": "thin",
+  "platterTint": "#246185",
+  "platterTintOpacity": 0.04,
+  "fontDesign": "rounded",
+  "fontWeight": "regular",
+  "headlineFontWeight": "medium",
+  "sfSymbolRendering": "hierarchical",
+  "sfSymbolWeight": "light",
+  "badgeStyle": "tinted",
+  "separatorStyle": "subtle",
+  "separatorOpacity": 0.2
+}

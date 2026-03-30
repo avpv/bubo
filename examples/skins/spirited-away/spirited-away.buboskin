@@ -2,84 +2,33 @@
   "id": "spirited_away",
   "displayName": "Spirited Away",
   "author": "Bubo Community",
-  "accentColor": {
-    "red": 0.35,
-    "green": 0.55,
-    "blue": 0.85
-  },
-  "surfaceTint": {
-    "red": 0.05,
-    "green": 0.05,
-    "blue": 0.15
-  },
+  "accentColor": "#598CD9",
+  "surfaceTint": "#0D0D26",
   "surfaceTintOpacity": 0.3,
   "backgroundGradient": {
     "colors": [
-      {
-        "red": 0.2,
-        "green": 0.35,
-        "blue": 0.6,
-        "opacity": 0.35
-      },
-      {
-        "red": 0.4,
-        "green": 0.25,
-        "blue": 0.5,
-        "opacity": 0.2
-      },
-      {
-        "red": 0.0,
-        "green": 0.0,
-        "blue": 0.0,
-        "opacity": 0.0
-      }
+      "#33599959",
+      "#66408033",
+      "#00000000"
     ],
     "style": "linear",
     "startPoint": "top",
     "endPoint": "bottom"
   },
   "previewColors": [
-    {
-      "red": 0.35,
-      "green": 0.55,
-      "blue": 0.85
-    },
-    {
-      "red": 0.4,
-      "green": 0.25,
-      "blue": 0.5
-    }
+    "#598CD9",
+    "#664080"
   ],
   "prefersDarkTint": false,
-  "secondaryAccent": {
-    "red": 0.5,
-    "green": 0.3,
-    "blue": 0.6
-  },
+  "secondaryAccent": "#804C99",
   "buttonStyle": "glass",
-  "buttonTint": {
-    "red": 0.28,
-    "green": 0.42,
-    "blue": 0.7
-  },
+  "buttonTint": "#476BB2",
   "buttonTintOpacity": 0.22,
-  "toolbarTint": {
-    "red": 0.45,
-    "green": 0.28,
-    "blue": 0.55
-  },
+  "toolbarTint": "#73478C",
   "barMaterial": "thin",
-  "barTint": {
-    "red": 0.18,
-    "green": 0.28,
-    "blue": 0.5
-  },
+  "barTint": "#2E4780",
   "barTintOpacity": 0.12,
-  "platterTint": {
-    "red": 0.14,
-    "green": 0.22,
-    "blue": 0.4
-  },
+  "platterTint": "#243866",
   "platterTintOpacity": 0.06,
   "fontDesign": "rounded",
   "fontWeight": "regular",

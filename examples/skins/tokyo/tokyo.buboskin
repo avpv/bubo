@@ -2,84 +2,33 @@
   "id": "tokyo",
   "displayName": "Tokyo Night",
   "author": "Bubo Community",
-  "accentColor": {
-    "red": 0.95,
-    "green": 0.3,
-    "blue": 0.55
-  },
-  "surfaceTint": {
-    "red": 0.06,
-    "green": 0.02,
-    "blue": 0.12
-  },
+  "accentColor": "#F24C8C",
+  "surfaceTint": "#0F051F",
   "surfaceTintOpacity": 0.35,
   "backgroundGradient": {
     "colors": [
-      {
-        "red": 0.6,
-        "green": 0.15,
-        "blue": 0.45,
-        "opacity": 0.35
-      },
-      {
-        "red": 0.05,
-        "green": 0.1,
-        "blue": 0.35,
-        "opacity": 0.25
-      },
-      {
-        "red": 0.0,
-        "green": 0.0,
-        "blue": 0.0,
-        "opacity": 0.0
-      }
+      "#99267359",
+      "#0D1A5940",
+      "#00000000"
     ],
     "style": "linear",
     "startPoint": "topLeading",
     "endPoint": "bottomTrailing"
   },
   "previewColors": [
-    {
-      "red": 0.95,
-      "green": 0.3,
-      "blue": 0.55
-    },
-    {
-      "red": 0.1,
-      "green": 0.05,
-      "blue": 0.3
-    }
+    "#F24C8C",
+    "#1A0D4C"
   ],
   "prefersDarkTint": true,
-  "secondaryAccent": {
-    "red": 0.3,
-    "green": 0.8,
-    "blue": 1.0
-  },
+  "secondaryAccent": "#4CCCFF",
   "buttonStyle": "glass",
-  "buttonTint": {
-    "red": 0.7,
-    "green": 0.2,
-    "blue": 0.42
-  },
+  "buttonTint": "#B2336B",
   "buttonTintOpacity": 0.25,
-  "toolbarTint": {
-    "red": 0.3,
-    "green": 0.7,
-    "blue": 0.9
-  },
+  "toolbarTint": "#4CB2E6",
   "barMaterial": "thin",
-  "barTint": {
-    "red": 0.4,
-    "green": 0.08,
-    "blue": 0.3
-  },
+  "barTint": "#66144C",
   "barTintOpacity": 0.15,
-  "platterTint": {
-    "red": 0.25,
-    "green": 0.05,
-    "blue": 0.2
-  },
+  "platterTint": "#400D33",
   "platterTintOpacity": 0.08,
   "fontDesign": "rounded",
   "fontWeight": "medium",

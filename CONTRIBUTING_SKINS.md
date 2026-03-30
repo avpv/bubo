@@ -4,16 +4,19 @@ Bubo supports community-contributed skins — visual themes that change the app'
 accent colors, background gradient, and surface tinting. Think of it like
 [Winamp skins](https://skins.webamp.org/) but for a calendar app.
 
+All skins — both built-in and custom — use the same `.buboskin` JSON format.
+One unified approach for everything.
+
 ## Quick Start
 
 1. **Copy the template**
 
    ```
-   cp Bubo/Skins/TEMPLATE.swift Bubo/Skins/YourSkinName.swift
+   cp Bubo/Skins/TEMPLATE.buboskin MyNewSkin.buboskin
    ```
 
-2. **Uncomment and fill in the values** — each field is documented in the
-   template. The key properties:
+2. **Edit the JSON values** — each field is documented below.
+   The key properties:
 
    | Property | What it does |
    |----------|-------------|
@@ -27,19 +30,131 @@ accent colors, background gradient, and surface tinting. Think of it like
    | `previewColors` | 1–2 colors for the thumbnail in the picker |
    | `prefersDarkTint` | `true` for dark/moody skins |
 
-3. **Register your skin** — open `Bubo/Skins/SkinDefinition.swift` and add
-   your skin to the `allSkins` array:
+3. **For built-in skins** — place the `.buboskin` file in
+   `Bubo/Skins/BuiltInSkins/` and add the skin's `id` to the `order` array
+   in `BuiltInSkinLoader` (inside `CustomSkinLoader.swift`).
 
-   ```swift
-   static let allSkins: [SkinDefinition] = [
-       classic,
-       ampGreen,
-       // ...existing skins...
-       yourSkinName,  // ← add here
-   ]
-   ```
+   **For personal skins** — import via Settings → Skin → Import .buboskin file
+   (no code changes needed).
 
-4. **Open a PR** with your new skin file + the catalog edit. That's it!
+4. **Open a PR** with your new `.buboskin` file. That's it!
+
+## JSON Format
+
+```json
+{
+  "id": "my_skin_name",
+  "displayName": "My Skin Name",
+  "author": "@your_github",
+  "accentColor": "#00E600",
+  "surfaceTint": "#002600",
+  "surfaceTintOpacity": 0.35,
+  "backgroundGradient": {
+    "colors": ["#002E0080", "#001A0D4C", "clear"],
+    "style": "linear",
+    "startPoint": "topLeading",
+    "endPoint": "bottomTrailing"
+  },
+  "previewColors": ["#00B200", "#1A3319"],
+  "prefersDarkTint": true,
+  "secondaryAccent": "#00A626",
+  "buttonStyle": "gradient"
+}
+```
+
+## Colors
+
+Every color field accepts any of these formats:
+
+| Format | Example | Notes |
+|--------|---------|-------|
+| Hex RGB | `"#0070FA"` | 6-digit, fully opaque |
+| Hex RGBA | `"#0070FA80"` | 8-digit, last byte = alpha (80 ≈ 50%) |
+| Named color | `"accentColor"` | Follows the user's system accent |
+| Named + opacity | `"accentColor:0.5"` | Named color at 50% opacity |
+| Keyword | `"clear"`, `"white"`, `"black"`, `"gray"` | Common colors |
+
+**Hex is the recommended format** — compact and universally understood.
+Use any color picker to get the hex value.
+
+Named colors (`"accentColor"`) are useful for skins that adapt to the user's
+system accent — see `System.buboskin` for an example.
+
+## Gradients
+
+**Linear** — flows between two corners/edges:
+```json
+{ "style": "linear", "colors": ["#0059BF38", "clear"], "startPoint": "topLeading", "endPoint": "bottomTrailing" }
+```
+
+**Radial** — radiates from a center point:
+```json
+{ "style": "radial", "colors": ["#0059BF38", "clear"], "center": "top", "startRadius": 0, "endRadius": 500 }
+```
+
+**Clear** — no gradient (transparent):
+```json
+{ "style": "clear" }
+```
+
+Gradient color stops support hex with alpha for transparency:
+`"#0059BF38"` (the `38` = ~22% opacity). Use `"clear"` for a fully transparent stop.
+
+Valid point values: `top`, `bottom`, `leading`, `trailing`, `topLeading`,
+`topTrailing`, `bottomLeading`, `bottomTrailing`, `center`.
+
+## All Properties
+
+### Required
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `id` | string | Unique ID (lowercase_snake_case). Permanent. |
+| `displayName` | string | Display name in the skin picker |
+| `author` | string | Author name or `@github_handle` |
+| `accentColor` | color | Primary accent color |
+| `surfaceTint` | color | Mood overlay on surfaces |
+| `surfaceTintOpacity` | 0–1 | Surface tint intensity |
+| `backgroundGradient` | gradient | Ambient background glow |
+| `previewColors` | color[] | 1–2 colors for picker thumbnail |
+| `prefersDarkTint` | bool | `true` for dark/moody skins |
+
+### Optional — Buttons
+
+| Property | Values | Default |
+|----------|--------|---------|
+| `buttonStyle` | `"solid"`, `"gradient"`, `"glass"` | `"gradient"` |
+| `buttonShape` | `"capsule"`, `"roundedRect"`, `"rectangle"` | `"capsule"` |
+| `buttonColor` | color | Auto-derived from accent luminance |
+| `buttonMaterial` | material | `"regular"` |
+| `buttonTint` | color | Falls back to accentColor |
+| `buttonTintOpacity` | 0–1 | `0.3` |
+| `secondaryAccent` | color | Falls back to darkened accentColor |
+
+### Optional — Bars & Surfaces
+
+| Property | Values | Default |
+|----------|--------|---------|
+| `barMaterial` | `"ultraThin"`, `"thin"`, `"regular"`, `"thick"`, `"ultraThick"`, `"bar"` | `"thick"` |
+| `barTint` | color | None |
+| `barTintOpacity` | 0–1 | `0` |
+| `platterMaterial` | material (same values) | `"regular"` |
+| `platterTint` | color | None |
+| `platterTintOpacity` | 0–1 | `0` |
+| `toolbarTint` | color | Falls back to accentColor at 70% |
+
+### Optional — Typography & Symbols
+
+| Property | Values | Default |
+|----------|--------|---------|
+| `fontDesign` | `"default"`, `"rounded"`, `"serif"`, `"monospaced"` | `"rounded"` |
+| `fontWeight` | `"regular"`, `"medium"`, `"semibold"`, `"bold"` | `"semibold"` |
+| `headlineFontWeight` | same as fontWeight | `"semibold"` |
+| `sfSymbolRendering` | `"monochrome"`, `"hierarchical"`, `"palette"`, `"multicolor"` | `"hierarchical"` |
+| `sfSymbolWeight` | `"ultraLight"` – `"black"` | `"medium"` |
+| `badgeStyle` | `"tinted"`, `"filled"`, `"outlined"` | `"tinted"` |
+| `separatorStyle` | `"system"`, `"subtle"`, `"accent"`, `"none"` | `"system"` |
+| `separatorOpacity` | 0–1 | `0.5` |
 
 ## Design Tips
 
@@ -47,29 +162,48 @@ accent colors, background gradient, and surface tinting. Think of it like
   visual identity.
 - **Surface tint**: Use a very dark, desaturated version of your accent. High
   opacity here overwhelms the UI — keep it subtle (0.2–0.35).
-- **Background gradient**: Use 2–3 stops fading to `.clear`. Opacity should be
+- **Background gradient**: Use 2–3 stops fading to clear. Opacity should be
   0.10–0.25 so the gradient doesn't overpower content.
 - **Preview colors**: The first color should be your accent; the second a
   complementary dark tone.
 - **Test both light & dark mode** — skins use adaptive blend modes that work in
   both, but some color combos look better in one mode.
 
+## JSON Schema Validation
+
+A JSON Schema is available at `Bubo/Skins/buboskin.schema.json`. It validates
+all keys, types, enums, and required fields. VS Code users get automatic
+validation and autocomplete for `.buboskin` files (see `.vscode/settings.json`).
+
+To validate a skin manually:
+
+```sh
+pip install jsonschema
+python3 -c "import json,jsonschema; jsonschema.validate(json.load(open('MySkin.buboskin')), json.load(open('Bubo/Skins/buboskin.schema.json')))"
+```
+
 ## File Structure
 
 ```
 Bubo/Skins/
-├── SkinDefinition.swift   # Core struct + catalog registry
-├── TEMPLATE.swift         # Copy this to start a new skin
-├── System.swift           # Pure macOS system appearance
-├── Classic.swift          # Default (no tinting)
-├── AmpGreen.swift         # Winamp classic green
-├── PalmBeach.swift        # Tropical coral
-├── ToonPop.swift          # Cartoon bold
-├── SlimDark.swift         # Moody purple
-├── CyberNeon.swift        # Cyberpunk cyan
-├── SunsetRider.swift      # Warm sunset
-├── RetroTerminal.swift    # Matrix green
-└── Bubblegum.swift        # Pink candy
+├── SkinDefinition.swift       # Core struct + catalog registry
+├── CustomSkinLoader.swift     # JSON loading (built-in + custom)
+├── buboskin.schema.json       # JSON Schema for validation
+├── TEMPLATE.buboskin          # Copy this to start a new skin
+└── BuiltInSkins/              # Bundled default skins (always present)
+    ├── System.buboskin
+    ├── Classic.buboskin
+    ├── Graphite.buboskin
+    ├── Ocean.buboskin
+    ├── Lavender.buboskin
+    ├── RoseGold.buboskin
+    ├── Midnight.buboskin
+    ├── Sierra.buboskin
+    ├── Arctic.buboskin
+    ├── Sage.buboskin
+    ├── WinXPBlue.buboskin
+    ├── WinXPOlive.buboskin
+    └── WinXPSilver.buboskin
 ```
 
 ## Rules
@@ -77,85 +211,22 @@ Bubo/Skins/
 - **Skin IDs are permanent** — once merged, never rename the `id` field.
   Users' settings reference this string.
 - **One file per skin** — keeps diffs clean and avoids merge conflicts.
-- **No code outside your extension** — skins are pure data. Don't add view
-  modifiers, new components, or other logic in your skin file.
-- **Use `Color(red:green:blue:)` for custom colors** — avoid named colors like
-  `.blue` since they vary across macOS versions.
-- **Keep the file header comment** with your name and a brief description.
+- **Use hex for custom colors** (`"#0070FA"`) — compact, universal, easy to
+  pick from any color tool. Reserve named colors (`"accentColor"`) for skins
+  that intentionally follow the system accent.
 
-## Gradient Styles
-
-Two gradient styles are available:
-
-```swift
-// Linear — flows between two corners/edges
-.linear(startPoint: .topLeading, endPoint: .bottomTrailing)
-
-// Radial — radiates from a center point
-.radial(center: .top, startRadius: 0, endRadius: 500)
-```
-
-Common `UnitPoint` values: `.top`, `.bottom`, `.topLeading`, `.topTrailing`,
-`.bottomLeading`, `.bottomTrailing`, `.center`.
-
-## Custom Skins (no PR needed)
-
-You can also create skins as `.buboskin` JSON files and import them directly
-in **Settings → Skin → Import .buboskin file**. No code, no Xcode, no PR.
-
-### Quick start
-
-1. Copy `Bubo/Skins/TEMPLATE.buboskin` and rename it (e.g. `MyTheme.buboskin`)
-2. Edit the JSON values — same properties as the Swift skins
-3. Open Bubo → Settings → Skin → **Import .buboskin file** and select your file
-4. Your skin appears in the picker immediately
-
-### JSON format
-
-```json
-{
-  "id": "my_skin_name",
-  "displayName": "My Skin Name",
-  "author": "@your_github",
-  "accentColor": { "red": 0.0, "green": 0.9, "blue": 0.0 },
-  "surfaceTint": { "red": 0.0, "green": 0.15, "blue": 0.0 },
-  "surfaceTintOpacity": 0.35,
-  "backgroundGradient": {
-    "colors": [
-      { "red": 0.0, "green": 0.18, "blue": 0.0, "opacity": 0.5 },
-      { "red": 0.0, "green": 0.08, "blue": 0.0, "opacity": 0.3 },
-      { "red": 0.0, "green": 0.0, "blue": 0.0, "opacity": 0.0 }
-    ],
-    "style": "linear",
-    "startPoint": "topLeading",
-    "endPoint": "bottomTrailing"
-  },
-  "previewColors": [
-    { "red": 0.0, "green": 0.7, "blue": 0.0 },
-    { "red": 0.1, "green": 0.2, "blue": 0.1 }
-  ],
-  "prefersDarkTint": true,
-  "secondaryAccent": { "red": 0.0, "green": 0.65, "blue": 0.15 },
-  "buttonStyle": "gradient"
-}
-```
-
-Colors use `red`, `green`, `blue` (0.0–1.0) with an optional `opacity`.
-Gradient style is `"linear"` or `"radial"`. Button style is `"solid"`,
-`"gradient"`, or `"glass"`.
-
-### Background images
+## Background Images
 
 Users can set a custom background image for any skin directly in Settings.
 Select a skin, then use the "Choose image..." button to pick a photo.
 Opacity and blur can be adjusted per skin.
 
-Skins are stored in `~/Library/Application Support/Bubo/Skins/`. You can
-also drop `.buboskin` files there directly and restart Bubo.
+Custom skins are stored in `~/Library/Application Support/Bubo/Skins/`.
+You can also drop `.buboskin` files there directly and restart Bubo.
 
 Right-click a community skin in the picker to remove it.
 
 ## Example
 
-See any existing skin file (e.g., `AmpGreen.swift`) for a complete working
-example, or `TEMPLATE.buboskin` for the JSON format.
+See any built-in skin in `Bubo/Skins/BuiltInSkins/` for a complete working
+example, or `TEMPLATE.buboskin` for the format.
