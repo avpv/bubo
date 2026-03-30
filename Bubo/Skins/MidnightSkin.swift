@@ -34,7 +34,18 @@ extension SkinCatalog {
         secondaryAccent: Color(red: 0.25, green: 0.35, blue: 0.58),
         // HIG: solid — stark, minimal chrome in the darkness
         buttonStyle: .solid,
+        // Sharp corners — cinematic, stark, brutalist
+        buttonShape: .rectangle,
         // Dim warm amber toolbar — like a candle in the dark, complementary warmth
-        toolbarTint: Color(red: 0.62, green: 0.52, blue: 0.38)
+        toolbarTint: Color(red: 0.62, green: 0.52, blue: 0.38),
+        // Ultra-thin bars — maximum darkness, minimal frosting
+        barMaterial: .ultraThin,
+        // Deep indigo bar tint — barely visible structure
+        barTint: Color(red: 0.08, green: 0.10, blue: 0.22),
+        barTintOpacity: 0.12,
+        // Thin platters — near-invisible cards in the void
+        platterMaterial: .thin,
+        platterTint: Color(red: 0.06, green: 0.08, blue: 0.18),
+        platterTintOpacity: 0.08
     )
 }

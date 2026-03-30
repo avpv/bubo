@@ -36,6 +36,12 @@ extension SkinCatalog {
         // HIG: gradient — premium feel, jewel-like shimmer
         buttonStyle: .gradient,
         // Warm gold toolbar — like gold jewelry paired with rose gold
-        toolbarTint: Color(red: 0.75, green: 0.62, blue: 0.38)
+        toolbarTint: Color(red: 0.75, green: 0.62, blue: 0.38),
+        // Warm copper-tinted bars — brushed metal feel
+        barTint: Color(red: 0.60, green: 0.35, blue: 0.28),
+        barTintOpacity: 0.10,
+        // Rose-tinted platters — subtle luxury on surfaces
+        platterTint: Color(red: 0.55, green: 0.30, blue: 0.25),
+        platterTintOpacity: 0.05
     )
 }

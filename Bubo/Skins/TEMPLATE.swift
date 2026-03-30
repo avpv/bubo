@@ -63,10 +63,38 @@ extension SkinCatalog {
         // Button fill style: .gradient (default), .solid, or .glass
         buttonStyle: .gradient,
 
+        // Button shape: .capsule (default), .roundedRect, or .rectangle
+        // buttonShape: .roundedRect,
+
+        // Optional: explicit foreground color for buttons. Omit to auto-derive.
+        // buttonColor: .white,
+
+        // Optional: material for glass/secondary buttons. Defaults to .regular.
+        // buttonMaterial: .regular,
+
+        // Optional: color overlay on glass-style buttons. Omit to use accentColor.
+        // buttonTint: Color(red: 0.0, green: 0.4, blue: 0.8),
+        // buttonTintOpacity: 0.25,
+
         // Optional: toolbar button tint (Refresh, Settings, Quit).
         // Use a complementary color to differentiate from primary accent.
         // Omit to auto-derive from accentColor.
-        // toolbarTint: Color(red: 0.3, green: 0.5, blue: 0.4)
+        // toolbarTint: Color(red: 0.3, green: 0.5, blue: 0.4),
+
+        // Optional: material for header/footer bars. Defaults to .thick.
+        // Values: .ultraThin, .thin, .regular, .thick, .ultraThick, .bar
+        // barMaterial: .thin,
+
+        // Optional: color overlay on bars for tinted-glass look.
+        // barTint: Color(red: 0.0, green: 0.2, blue: 0.4),
+        // barTintOpacity: 0.15,
+
+        // Optional: material for card/platter surfaces. Defaults to .regular.
+        // platterMaterial: .regular,
+
+        // Optional: color overlay on platters.
+        // platterTint: Color(red: 0.0, green: 0.1, blue: 0.2),
+        // platterTintOpacity: 0.08
     )
 }
 */

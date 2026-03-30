@@ -56,5 +56,12 @@
     "green": 0.7,
     "blue": 1.0
   },
-  "buttonStyle": "gradient"
+  "buttonStyle": "gradient",
+  "buttonShape": "roundedRect",
+  "toolbarTint": { "red": 0.3, "green": 0.6, "blue": 1.0 },
+  "barMaterial": "thin",
+  "barTint": { "red": 0.5, "green": 0.05, "blue": 0.4 },
+  "barTintOpacity": 0.18,
+  "platterTint": { "red": 0.35, "green": 0.0, "blue": 0.30 },
+  "platterTintOpacity": 0.08
 }

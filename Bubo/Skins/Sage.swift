@@ -34,7 +34,15 @@ extension SkinCatalog {
         secondaryAccent: Color(red: 0.28, green: 0.48, blue: 0.32),
         // HIG: solid — grounded, organic, simple
         buttonStyle: .solid,
+        // Rounded rect — organic, natural, like a river stone
+        buttonShape: .roundedRect,
         // Warm brown toolbar — like tree bark, earth complement to green
-        toolbarTint: Color(red: 0.58, green: 0.48, blue: 0.35)
+        toolbarTint: Color(red: 0.58, green: 0.48, blue: 0.35),
+        // Moss-tinted bars — forest canopy overhead
+        barTint: Color(red: 0.15, green: 0.28, blue: 0.16),
+        barTintOpacity: 0.08,
+        // Green platters — dappled forest floor
+        platterTint: Color(red: 0.12, green: 0.24, blue: 0.14),
+        platterTintOpacity: 0.05
     )
 }

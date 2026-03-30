@@ -56,5 +56,15 @@
     "green": 0.55,
     "blue": 0.0
   },
-  "buttonStyle": "glass"
+  "buttonStyle": "glass",
+  "buttonShape": "rectangle",
+  "buttonTint": { "red": 0.0, "green": 0.45, "blue": 0.6 },
+  "buttonTintOpacity": 0.30,
+  "toolbarTint": { "red": 0.9, "green": 0.5, "blue": 0.0 },
+  "barMaterial": "ultraThin",
+  "barTint": { "red": 0.0, "green": 0.30, "blue": 0.45 },
+  "barTintOpacity": 0.20,
+  "platterMaterial": "thin",
+  "platterTint": { "red": 0.0, "green": 0.20, "blue": 0.30 },
+  "platterTintOpacity": 0.10
 }

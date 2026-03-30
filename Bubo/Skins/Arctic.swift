@@ -35,6 +35,15 @@ extension SkinCatalog {
         // HIG: glass — frosted, airy, light
         buttonStyle: .glass,
         // Cool lavender-ice toolbar — triadic complement to cyan
-        toolbarTint: Color(red: 0.52, green: 0.48, blue: 0.72)
+        toolbarTint: Color(red: 0.52, green: 0.48, blue: 0.72),
+        // Thin bars — icy, crystalline, minimal weight
+        barMaterial: .thin,
+        // Faint ice-blue bar tint — frosted window pane
+        barTint: Color(red: 0.15, green: 0.40, blue: 0.55),
+        barTintOpacity: 0.05,
+        // Thin platters — delicate frost surfaces
+        platterMaterial: .thin,
+        platterTint: Color(red: 0.12, green: 0.35, blue: 0.50),
+        platterTintOpacity: 0.03
     )
 }
