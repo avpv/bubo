@@ -73,7 +73,6 @@ Every color field accepts any of these formats:
 | Named color | `"accentColor"` | Follows the user's system accent |
 | Named + opacity | `"accentColor:0.5"` | Named color at 50% opacity |
 | Keyword | `"clear"`, `"white"`, `"black"`, `"gray"` | Common colors |
-| Legacy object | `{ "red": 0.0, "green": 0.44, "blue": 0.98 }` | Still supported |
 
 **Hex is the recommended format** — compact and universally understood.
 Use any color picker to get the hex value.
