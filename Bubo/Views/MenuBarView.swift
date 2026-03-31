@@ -128,7 +128,8 @@ struct MenuBarView: View {
                         onSave: { isEdit in
                             navigation = .list
                             toastState.showSuccess(isEdit ? "Event updated" : "Event added")
-                        }
+                        },
+                        settings: settings
                     )
                     .transition(
                         reduceMotion ? .opacity : .asymmetric(
@@ -280,6 +281,9 @@ struct MenuBarView: View {
             if reminderService.nonDisintegratingEventCount > 0 {
                 colorFilterBar
             }
+
+            // World Clock
+            WorldClockStripView(settings: settings)
 
             // Events
             Group {

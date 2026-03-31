@@ -88,6 +88,10 @@ class ReminderSettings: Codable {
     var badgeCountMode: BadgeCountMode { didSet { scheduleSave() } }
     var badgeTimeWindowHours: Int { didSet { scheduleSave() } }
 
+    // World Clock
+    var isWorldClockEnabled: Bool { didSet { scheduleSave() } }
+    var worldClockCityIDs: [String] { didSet { scheduleSave() } }
+
     // Task-based debounced save — replaces Combine pipeline
     private var saveTask: Task<Void, Never>?
 
@@ -98,6 +102,7 @@ class ReminderSettings: Codable {
         case customBackgroundPhotoPath, customBackgroundPhotoOpacity, customBackgroundPhotoBlur
         case skinImageOverrides
         case showBadgeCount, badgeCountMode, badgeTimeWindowHours
+        case isWorldClockEnabled, worldClockCityIDs
     }
 
     init() {
@@ -120,6 +125,8 @@ class ReminderSettings: Codable {
         self.showBadgeCount = true
         self.badgeCountMode = .wholeDay
         self.badgeTimeWindowHours = 8
+        self.isWorldClockEnabled = false
+        self.worldClockCityIDs = []
     }
 
     required init(from decoder: Decoder) throws {
@@ -140,6 +147,8 @@ class ReminderSettings: Codable {
         showBadgeCount = try container.decodeIfPresent(Bool.self, forKey: .showBadgeCount) ?? true
         badgeCountMode = try container.decodeIfPresent(BadgeCountMode.self, forKey: .badgeCountMode) ?? .wholeDay
         badgeTimeWindowHours = try container.decodeIfPresent(Int.self, forKey: .badgeTimeWindowHours) ?? 8
+        isWorldClockEnabled = try container.decodeIfPresent(Bool.self, forKey: .isWorldClockEnabled) ?? false
+        worldClockCityIDs = try container.decodeIfPresent([String].self, forKey: .worldClockCityIDs) ?? []
     }
 
     func encode(to encoder: Encoder) throws {
@@ -159,6 +168,8 @@ class ReminderSettings: Codable {
         try container.encode(showBadgeCount, forKey: .showBadgeCount)
         try container.encode(badgeCountMode, forKey: .badgeCountMode)
         try container.encode(badgeTimeWindowHours, forKey: .badgeTimeWindowHours)
+        try container.encode(isWorldClockEnabled, forKey: .isWorldClockEnabled)
+        try container.encode(worldClockCityIDs, forKey: .worldClockCityIDs)
     }
 
     private func scheduleSave() {
