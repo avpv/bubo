@@ -22,7 +22,7 @@
   "secondaryAccent": "#6B6B7A",
   "buttonStyle": "solid",
   "buttonShape": "roundedRect",
-  "toolbarTint": "#948A7A",
+  "toolbarTint": "#E8E6E2",
   "barMaterial": "regular",
   "barTint": "#525261",
   "barTintOpacity": 0.05,

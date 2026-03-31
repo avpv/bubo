@@ -24,7 +24,7 @@
   "secondaryAccent": "accentColor:0.7",
   "buttonStyle": "glass",
   "buttonShape": "capsule",
-  "toolbarTint": "accentColor:0.4",
+  "toolbarTint": "accentColor:0.85",
   "barMaterial": "regular",
   "barTint": "accentColor",
   "barTintOpacity": 0.05,

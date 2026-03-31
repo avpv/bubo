@@ -23,7 +23,7 @@
   "secondaryAccent": "#EB9E8A",
   "buttonStyle": "gradient",
   "buttonShape": "capsule",
-  "toolbarTint": "#C7A666",
+  "toolbarTint": "#FFF0E0",
   "barMaterial": "ultraThin",
   "barTint": "#9E614C",
   "barTintOpacity": 0.08,
