@@ -46,7 +46,7 @@ struct SettingsView: View {
                     OptimizerTabView()
                 }
             }
-            .navigationTitle(selectedPane?.rawValue ?? "General")
+            .toolbar(.hidden)
         }
         .environment(viewModel)
         .environment(settings)
