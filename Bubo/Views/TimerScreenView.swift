@@ -54,7 +54,7 @@ struct TimerScreenView: View {
     private func accentColor(_ now: Date) -> Color {
         if hasEnded(now) { return skin.resolvedTextTertiary }
         if isInProgress(now) { return DS.Colors.accent }
-        return DS.urgencyColor(minutesUntil: secondsUntilStart(now) / 60)
+        return DS.urgencyColor(minutesUntil: secondsUntilStart(now) / 60, skin: skin)
     }
 
     var body: some View {

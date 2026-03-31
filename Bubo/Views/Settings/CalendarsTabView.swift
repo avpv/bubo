@@ -3,6 +3,7 @@ import SwiftUI
 struct CalendarsTabView: View {
     @Environment(ReminderSettings.self) var settings
     @Environment(SettingsViewModel.self) var viewModel
+    @Environment(\.activeSkin) private var skin
 
     var body: some View {
         @Bindable var settings = settings
@@ -42,7 +43,7 @@ struct CalendarsTabView: View {
                 if viewModel.appleCalendarAccessGranted {
                     HStack {
                         Label("Access granted", systemImage: "checkmark.circle.fill")
-                            .foregroundStyle(DS.Colors.success)
+                            .foregroundStyle(skin.resolvedSuccessColor)
                         Spacer()
                         Text("\(viewModel.availableAppleCalendars.count) calendars")
                             .foregroundStyle(.secondary)
@@ -53,7 +54,7 @@ struct CalendarsTabView: View {
                     if status == .denied || status == .restricted {
                         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                             Label("Calendar access denied", systemImage: "xmark.circle.fill")
-                                .foregroundStyle(DS.Colors.error)
+                                .foregroundStyle(skin.resolvedDestructiveColor)
                             Text("Grant access in System Settings \u{2192} Privacy & Security \u{2192} Calendars")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)

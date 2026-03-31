@@ -188,7 +188,7 @@ struct EventDetailView: View {
                 if showDeleteConfirmation {
                     Text("Delete?")
                         .font(.subheadline)
-                        .foregroundStyle(DS.Colors.error)
+                        .foregroundStyle(skin.resolvedDestructiveColor)
                         .fontWeight(.medium)
                         
                     Spacer()
@@ -212,7 +212,7 @@ struct EventDetailView: View {
                     VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                         Text("Delete recurring event?")
                             .font(.caption)
-                            .foregroundStyle(DS.Colors.error)
+                            .foregroundStyle(skin.resolvedDestructiveColor)
                             .fontWeight(.medium)
                         
                         HStack(spacing: DS.Spacing.xs) {
@@ -291,7 +291,7 @@ struct EventDetailView: View {
             countdownDisplay(
                 label: "Starts in",
                 totalSeconds: secondsUntilStart,
-                color: DS.urgencyColor(minutesUntil: secondsUntilStart / 60)
+                color: DS.urgencyColor(minutesUntil: secondsUntilStart / 60, skin: skin)
             )
         } else if secondsUntilEnd > 0 {
             // Event is in progress
@@ -376,7 +376,7 @@ struct EventDetailView: View {
                 let breakMin = max(rule.interval - workMin, 0)
                 FlowLayout(spacing: DS.Spacing.xs) {
                     pomodoroBadge("\(workMin) min work", icon: "brain.head.profile", color: skinAccent)
-                    pomodoroBadge("\(breakMin) min break", icon: "cup.and.saucer", color: DS.Colors.success)
+                    pomodoroBadge("\(breakMin) min break", icon: "cup.and.saucer", color: skin.resolvedSuccessColor)
                     if rule.pomodoroLongBreak > 0 {
                         pomodoroBadge("\(rule.pomodoroLongBreak) min long break", icon: "moon.zzz", color: DS.Colors.info)
                     }

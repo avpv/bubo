@@ -258,7 +258,7 @@ struct EventRowView: View {
                         Image(systemName: "minus.circle.fill")
                             .font(.system(size: DS.Size.iconLarge))
                             .symbolRenderingMode(.hierarchical)
-                            .foregroundStyle(DS.Colors.error)
+                            .foregroundStyle(skin.resolvedDestructiveColor)
                     }
                     .buttonStyle(.borderless)
                     .menuStyle(.borderlessButton)
@@ -272,7 +272,7 @@ struct EventRowView: View {
                         Image(systemName: "minus.circle.fill")
                             .font(.system(size: DS.Size.iconLarge))
                             .symbolRenderingMode(.hierarchical)
-                            .foregroundStyle(DS.Colors.error)
+                            .foregroundStyle(skin.resolvedDestructiveColor)
                     }
                     .buttonStyle(.borderless)
                     .help("Delete event")
@@ -324,7 +324,7 @@ struct EventRowView: View {
     private func pomodoroSegmentColor(_ segment: CalendarEvent.PomodoroSegment) -> Color {
         switch segment {
         case .work: skin.accentColor
-        case .shortBreak: DS.Colors.success
+        case .shortBreak: skin.resolvedSuccessColor
         case .longBreak: DS.Colors.info
         }
     }

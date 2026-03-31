@@ -514,6 +514,7 @@ struct WallpaperSectionView: View {
 struct GeneralTabView: View {
     @Environment(ReminderSettings.self) var settings
     @Environment(ReminderService.self) var reminderService
+    @Environment(\.activeSkin) private var skin
     @State private var loginItemError: String?
 
     private var launchAtLoginBinding: Binding<Bool> {
@@ -627,7 +628,7 @@ struct GeneralTabView: View {
 
                 if reminderService.isUsingCache {
                     Label("Using cached data", systemImage: "internaldrive")
-                        .foregroundStyle(DS.Colors.warning)
+                        .foregroundStyle(skin.resolvedWarningColor)
                         .font(.caption)
                 }
             }
