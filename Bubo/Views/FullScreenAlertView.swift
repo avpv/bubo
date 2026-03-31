@@ -51,20 +51,22 @@ struct FullScreenAlertView: View {
 
                 bellIcon
 
+                // HIG: Use semantic text styles that scale with Dynamic Type
                 Text(headerText(secondsRemaining))
-                    .font(.system(size: 48, weight: .bold, design: .rounded))
+                    .font(.system(.largeTitle, design: .rounded, weight: .bold))
                     .foregroundStyle(.white)
 
                 // Live countdown timer
                 Text(countdownText(secondsRemaining))
-                    .font(.system(size: 72, weight: .heavy, design: .monospaced))
+                    .font(.system(.largeTitle, design: .monospaced, weight: .heavy))
+                    .scaleEffect(1.5)
                     .foregroundStyle(countdownDisplayColor(secondsRemaining))
                     .shadow(color: countdownDisplayColor(secondsRemaining).opacity(0.5), radius: 12)
                     .contentTransition(.numericText())
                     .motionAwareAnimation(.linear(duration: 0.3), value: secondsRemaining, reduceMotion: reduceMotion)
 
                 Text(event.title)
-                    .font(.system(size: 36, weight: .semibold, design: .rounded))
+                    .font(.system(.title, design: .rounded, weight: .semibold))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 40)

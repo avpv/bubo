@@ -26,6 +26,7 @@ struct AddEventView: View {
     @State private var selectedEventType: EventType = .standard
     @State private var addToCalendar = false
     @State private var selectedColorTag: EventColorTag? = nil
+    @State private var showDiscardConfirmation = false
 
     // MARK: - Pomodoro state
 
@@ -48,6 +49,11 @@ struct AddEventView: View {
 
     private var isTitleValid: Bool {
         !title.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    /// HIG: Detect unsaved changes to warn before data loss.
+    private var hasUnsavedChanges: Bool {
+        !title.isEmpty || !location.isEmpty || !description.isEmpty
     }
 
     private var eventEndDate: Date {
@@ -256,6 +262,8 @@ struct AddEventView: View {
                                         .contentShape(Circle())
                                 }
                                 .buttonStyle(.plain)
+                                // HIG: Don't use color as the only differentiator — show name on hover
+                                .help(tag.rawValue)
                                 .accessibilityLabel(tag.rawValue)
                                 .accessibilityAddTraits(selectedColorTag == tag ? .isSelected : [])
                             }
@@ -415,7 +423,14 @@ struct AddEventView: View {
 
             HStack {
                 Spacer()
-                Button(action: { onDismiss() }) {
+                Button(action: {
+                    // HIG: Warn before discarding unsaved changes
+                    if hasUnsavedChanges && !isEditing {
+                        showDiscardConfirmation = true
+                    } else {
+                        onDismiss()
+                    }
+                }) {
                     Text("Cancel")
                 }
                 .keyboardShortcut(.cancelAction)
@@ -435,6 +450,12 @@ struct AddEventView: View {
             .padding(.horizontal, DS.Spacing.lg)
             .frame(height: DS.Size.actionFooterHeight)
             .skinBarBackground(skin)
+            .confirmationDialog("Discard Changes?", isPresented: $showDiscardConfirmation, titleVisibility: .visible) {
+                Button("Discard", role: .destructive) { onDismiss() }
+                Button("Keep Editing", role: .cancel) {}
+            } message: {
+                Text("You have unsaved changes that will be lost.")
+            }
         }
         .frame(width: DS.Popover.width, height: DS.Popover.height)
         .onAppear {
@@ -665,7 +686,7 @@ struct AddEventView: View {
                         .overlay {
                             if segWidth > 30 {
                                 Text("\(segment.minutes)m")
-                                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                    .font(.system(.caption2, design: .rounded, weight: .semibold))
                                     .foregroundStyle(.white)
                             }
                         }

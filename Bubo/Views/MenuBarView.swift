@@ -426,6 +426,8 @@ struct MenuBarView: View {
                         .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
+                // HIG: Don't use color as the only differentiator — show name on hover
+                .help(tag.rawValue)
                 .accessibilityLabel("Filter by \(tag.rawValue)")
                 .accessibilityAddTraits(isActive ? .isSelected : [])
             }

@@ -14,6 +14,7 @@ struct TimerScreenView: View {
 
     @State private var pulseRing = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var contrast
 
     private var totalDuration: TimeInterval {
         event.endDate.timeIntervalSince(event.startDate)
@@ -130,9 +131,9 @@ struct TimerScreenView: View {
                 VStack(spacing: DS.Spacing.xl) {
                     // Timer ring
                     ZStack {
-                        // Track
+                        // Track — HIG: adapt opacity for Increase Contrast mode
                         Circle()
-                            .stroke(accent.opacity(0.12), lineWidth: 4)
+                            .stroke(accent.opacity(contrast == .increased ? 0.35 : 0.12), lineWidth: 4)
                             .frame(width: 180, height: 180)
 
                         // Progress arc
@@ -148,11 +149,13 @@ struct TimerScreenView: View {
                                 .animation(.linear(duration: 1), value: progress)
                         }
 
-                        // Subtle glow
-                        Circle()
-                            .fill(accent.opacity(pulseRing ? 0.06 : 0.02))
-                            .frame(width: 170, height: 170)
-                            .blur(radius: 20)
+                        // Subtle glow — hidden in Increase Contrast to reduce visual noise
+                        if contrast != .increased {
+                            Circle()
+                                .fill(accent.opacity(pulseRing ? 0.06 : 0.02))
+                                .frame(width: 170, height: 170)
+                                .blur(radius: 20)
+                        }
 
                         // Center content
                         VStack(spacing: DS.Spacing.sm) {

@@ -13,6 +13,7 @@ struct EventRowView: View {
     @State private var isDisintegrating = false
     @State private var pendingDeleteAction: (() -> Void)?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.activeSkin) private var skin
 
     private var isLocal: Bool {
@@ -52,7 +53,8 @@ struct EventRowView: View {
                     GeometryReader { geo in
                         RoundedRectangle(cornerRadius: skin.cornerRadius, style: .continuous)
                             .fill(
-                                (skin.isClassic ? DS.Colors.accent : skin.accentColor).opacity(0.12)
+                                (skin.isClassic ? DS.Colors.accent : skin.accentColor)
+                                    .opacity(contrast == .increased ? 0.25 : 0.12)
                             )
                             .frame(width: max(geo.size.width * eventProgress(now), skin.cornerRadius * 2))
                     }
