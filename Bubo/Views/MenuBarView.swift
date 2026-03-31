@@ -380,34 +380,39 @@ struct MenuBarView: View {
     }
 
     private var colorFilterBar: some View {
-        HStack(spacing: DS.Spacing.xs) {
+        let selected = colorFilter
+        return HStack(spacing: DS.Spacing.xs) {
             ForEach(usedColorTags, id: \.self) { tag in
+                let isActive = selected == tag
                 Button {
                     Haptics.tap()
                     withAnimation(skin.resolvedMicroAnimation) {
-                        colorFilter = colorFilter == tag ? nil : tag
+                        colorFilter = isActive ? nil : tag
                     }
                 } label: {
                     Circle()
                         .fill(tag.color)
                         .frame(width: 24, height: 24)
-                        .opacity(colorFilter == nil || colorFilter == tag ? 1.0 : 0.3)
-                        .scaleEffect(colorFilter == tag ? 1.1 : 1.0)
+                        .opacity(selected == nil || isActive ? 1.0 : 0.3)
+                        .scaleEffect(isActive ? 1.1 : 1.0)
                         .overlay(
                             Circle()
-                                .stroke(Color.white, lineWidth: colorFilter == tag ? 1.5 : 0)
+                                .strokeBorder(
+                                    skin.resolvedTextPrimary.opacity(isActive ? 0.8 : 0),
+                                    lineWidth: isActive ? 1.5 : 0
+                                )
                         )
                         .shadow(
-                            color: colorFilter == tag ? tag.color.opacity(0.5) : .clear,
-                            radius: colorFilter == tag ? 3 : 0
+                            color: isActive ? tag.color.opacity(skin.shadowOpacity * 6) : .clear,
+                            radius: isActive ? skin.shadowRadius * 0.4 : 0
                         )
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Filter by \(tag.rawValue)")
-                .accessibilityAddTraits(colorFilter == tag ? .isSelected : [])
+                .accessibilityAddTraits(isActive ? .isSelected : [])
             }
 
-            if colorFilter != nil {
+            if selected != nil {
                 Button {
                     Haptics.tap()
                     withAnimation(skin.resolvedMicroAnimation) {
@@ -415,7 +420,8 @@ struct MenuBarView: View {
                     }
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 12))
+                        .font(.system(size: 12, weight: skin.resolvedSymbolWeight, design: skin.resolvedFontDesign))
+                        .symbolRenderingMode(skin.resolvedSymbolRendering)
                         .foregroundStyle(skin.resolvedTextTertiary)
                 }
                 .buttonStyle(.borderless)
