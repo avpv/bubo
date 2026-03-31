@@ -146,7 +146,7 @@ private struct WorldClockPill: View {
         guard let tz = city.timeZone else { return "--:--" }
         let formatter = DateFormatter()
         formatter.timeZone = tz
-        formatter.dateFormat = "HH:mm"
+        formatter.timeStyle = .short
         return formatter.string(from: now)
     }
 
@@ -165,10 +165,9 @@ private struct WorldClockPill: View {
 
     private var isNighttime: Bool {
         guard let tz = city.timeZone else { return false }
-        let formatter = DateFormatter()
-        formatter.timeZone = tz
-        formatter.dateFormat = "HH"
-        let hour = Int(formatter.string(from: now)) ?? 12
+        var cal = Calendar.current
+        cal.timeZone = tz
+        let hour = cal.component(.hour, from: now)
         return hour < 6 || hour >= 22
     }
 

@@ -410,6 +410,9 @@ struct MenuBarView: View {
                             color: isActive ? tag.color.opacity(skin.shadowOpacity * 6) : .clear,
                             radius: isActive ? skin.shadowRadius * 0.4 : 0
                         )
+                        // HIG: Expand hit area to minimum comfortable target size
+                        .padding(DS.Spacing.xs)
+                        .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Filter by \(tag.rawValue)")

@@ -32,7 +32,7 @@ final class ToastState {
 
     func show(_ message: ToastMessage, duration: TimeInterval = 2.5) {
         dismissTask?.cancel()
-        Haptics.generic()
+        Haptics.tap()
         withAnimation(DS.Animation.standard) {
             current = message
         }

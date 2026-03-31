@@ -25,6 +25,8 @@ struct RemindersTabView: View {
                             Image(systemName: "trash")
                         }
                         .buttonStyle(.borderless)
+                        .accessibilityLabel("Delete \(interval.displayText) reminder")
+                        .help("Delete reminder")
                     }
                 }
 

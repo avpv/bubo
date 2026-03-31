@@ -67,6 +67,8 @@ struct WorldClockTabView: View {
                                                 .foregroundStyle(.red)
                                         }
                                         .buttonStyle(.plain)
+                                        .accessibilityLabel("Remove \(city.city)")
+                                        .help("Remove \(city.city) from world clock")
                                     }
                                     .padding(.vertical, DS.Spacing.xxs)
 

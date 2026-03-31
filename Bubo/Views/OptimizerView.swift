@@ -15,11 +15,7 @@ struct OptimizerView: View {
     @State private var selectedScenarioIndex = 0
     @State private var appliedScenarioIndex: Int? = nil
 
-    private static let timeFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "HH:mm"
-        return f
-    }()
+    private static let timeFormatter = DS.timeFormatter
 
     enum OptimizerAction: String, CaseIterable {
         case focusBlocks = "Focus Blocks"
@@ -379,6 +375,8 @@ struct OptimizerView: View {
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.regular)
+                    .accessibilityLabel("Reject this schedule")
+                    .help("Reject this schedule")
                 }
             }
             .padding(.top, DS.Spacing.sm)

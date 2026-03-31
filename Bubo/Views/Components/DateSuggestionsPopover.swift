@@ -117,15 +117,15 @@ struct DateSuggestionsPopover: View {
     
     private func formatted(_ date: Date) -> String {
         let formatter = DateFormatter()
-        formatter.dateFormat = "dd.MM.yyyy"
+        formatter.dateStyle = .short
         return formatter.string(from: date)
     }
-    
+
     private func titleForDate(_ date: Date, offset: Int) -> String {
         if offset == 0 { return "Today" }
         if offset == 1 { return "Tomorrow" }
         let formatter = DateFormatter()
-        formatter.dateFormat = "EEEE"
+        formatter.setLocalizedDateFormatFromTemplate("EEEE")
         return formatter.string(from: date)
     }
     

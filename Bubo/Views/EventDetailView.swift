@@ -11,7 +11,6 @@ struct EventDetailView: View {
     var onTimer: ((CalendarEvent) -> Void)? = nil
 
     @State private var showDeleteConfirmation = false
-    @State private var showSeriesDeleteChoice = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.activeSkin) private var skin
@@ -185,95 +184,56 @@ struct EventDetailView: View {
             SkinSeparator()
 
             HStack {
-                if showDeleteConfirmation {
-                    Text("Delete?")
-                        .font(.subheadline)
-                        .foregroundStyle(skin.resolvedDestructiveColor)
-                        .fontWeight(.medium)
-                        
-                    Spacer()
-                    
-                    Button {
-                        withAnimation { showDeleteConfirmation = false }
-                        Haptics.tap()
-                    } label: {
-                        Text("Cancel")
-                    }
-                    .buttonStyle(.action(role: .secondary, size: .regular))
-                    
-                    Button {
+                if isLocal {
+                    Button(role: .destructive) {
                         Haptics.impact()
-                        onDelete?(event)
+                        showDeleteConfirmation = true
                     } label: {
-                        Text("Delete")
+                        Label("Delete", systemImage: "trash")
                     }
-                    .buttonStyle(.action(role: .destructive, size: .regular))
-                } else if showSeriesDeleteChoice {
-                    VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                        Text("Delete recurring event?")
-                            .font(.caption)
-                            .foregroundStyle(skin.resolvedDestructiveColor)
-                            .fontWeight(.medium)
-                        
-                        HStack(spacing: DS.Spacing.xs) {
-                            Button {
-                                Haptics.impact()
-                                onDeleteOccurrence?(event)
-                            } label: {
-                                Text("Only This")
-                            }
-                            .buttonStyle(.action(role: .secondary, size: .compact))
-                            
-                            Button {
-                                Haptics.impact()
-                                onDeleteSeries?(event)
-                            } label: {
-                                Text("All Events")
-                            }
-                            .buttonStyle(.action(role: .destructive, size: .compact))
-                            
-                            Spacer()
-                            
-                            Button {
-                                withAnimation { showSeriesDeleteChoice = false }
-                                Haptics.tap()
-                            } label: {
-                                Text("Cancel")
-                            }
-                            .buttonStyle(.action(role: .secondary, size: .compact))
-                        }
-                    }
-                } else {
-                    if isLocal {
-                        Button(role: .destructive) {
-                            Haptics.impact()
-                            withAnimation {
-                                if event.isRecurring {
-                                    showSeriesDeleteChoice = true
-                                } else {
-                                    showDeleteConfirmation = true
-                                }
-                            }
-                        } label: {
-                            Label("Delete", systemImage: "trash")
-                        }
-                        .buttonStyle(.action(role: .destructive))
-                    }
-                    
-                    Spacer()
-                    
-                    Button {
-                        Haptics.tap()
-                        onEdit?(event)
-                    } label: {
-                        Label("Edit", systemImage: "pencil")
-                    }
-                    .buttonStyle(.action(role: .primary))
+                    .buttonStyle(.action(role: .destructive))
                 }
+
+                Spacer()
+
+                Button {
+                    Haptics.tap()
+                    onEdit?(event)
+                } label: {
+                    Label("Edit", systemImage: "pencil")
+                }
+                .buttonStyle(.action(role: .primary))
             }
             .padding(.horizontal, DS.Spacing.lg)
-            .frame(height: showSeriesDeleteChoice ? DS.Size.actionFooterHeight + 15 : DS.Size.actionFooterHeight)
+            .frame(height: DS.Size.actionFooterHeight)
             .skinBarBackground(skin)
+            // HIG: Use confirmationDialog for destructive actions
+            .confirmationDialog(
+                event.isRecurring ? "Delete Recurring Event" : "Delete Event",
+                isPresented: $showDeleteConfirmation,
+                titleVisibility: .visible
+            ) {
+                if event.isRecurring {
+                    Button("Delete This Event Only", role: .destructive) {
+                        Haptics.impact()
+                        onDeleteOccurrence?(event)
+                    }
+                    Button("Delete All Events", role: .destructive) {
+                        Haptics.impact()
+                        onDeleteSeries?(event)
+                    }
+                } else {
+                    Button("Delete", role: .destructive) {
+                        Haptics.impact()
+                        onDelete?(event)
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text(event.isRecurring
+                    ? "This event repeats. Do you want to delete just this occurrence or all events in the series?"
+                    : "Are you sure you want to delete \u{201C}\(event.title)\u{201D}?")
+            }
         }
         .frame(width: DS.Popover.width, height: DS.Popover.height)
         } // TimelineView

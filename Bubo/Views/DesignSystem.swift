@@ -227,25 +227,31 @@ enum DS {
 
     // MARK: Shared Formatters
 
+    /// HIG: Respect user's locale time format (12h vs 24h).
     static let timeFormatter: DateFormatter = {
         let f = DateFormatter()
-        f.dateFormat = "HH:mm"
+        f.timeStyle = .short
         return f
     }()
 
+    /// HIG: Use locale-aware formatting for day section headers.
     static let daySectionFormatter: DateFormatter = {
         let f = DateFormatter()
-        f.dateFormat = "EEEE, MMM d"
+        f.setLocalizedDateFormatFromTemplate("EEEEMMMd")
         return f
     }()
 }
 
 // MARK: - Haptic Feedback (macOS Force Touch Trackpad)
 
+/// HIG: Use appropriate haptic feedback patterns.
+/// - `tap()`: Light feedback for standard button actions (generic pattern).
+/// - `impact()`: Stronger feedback for significant state changes (levelChange).
+/// - `alignment()`: For drag/alignment guides only (alignment pattern).
 enum Haptics {
     static func tap() {
         NSHapticFeedbackManager.defaultPerformer.perform(
-            .alignment, performanceTime: .default
+            .generic, performanceTime: .default
         )
     }
 
@@ -255,9 +261,9 @@ enum Haptics {
         )
     }
 
-    static func generic() {
+    static func alignment() {
         NSHapticFeedbackManager.defaultPerformer.perform(
-            .generic, performanceTime: .default
+            .alignment, performanceTime: .default
         )
     }
 }
@@ -377,53 +383,50 @@ struct PopoverHeader: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.activeSkin) private var skin
 
+    /// HIG: Navigation bar pattern — back button leading, title centered, trailing items trailing.
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: DS.Spacing.xs) {
-                if showBack {
-                    Button {
-                        Haptics.tap()
-                        onBack?()
-                    } label: {
-                        Label("Back", systemImage: "chevron.left")
+            ZStack {
+                // Center: title (only when in navigation / back mode)
+                if let title, showBack {
+                    Text(title)
+                        .font(.headline)
+                        .fontWeight(skin.resolvedHeadlineFontWeight)
+                        .fontDesign(skin.resolvedFontDesign)
+                }
+
+                HStack(spacing: DS.Spacing.xs) {
+                    if showBack {
+                        Button {
+                            Haptics.tap()
+                            onBack?()
+                        } label: {
+                            Label("Back", systemImage: "chevron.left")
+                        }
+                        .buttonStyle(.borderless)
+                        .keyboardShortcut(.escape, modifiers: [])
+                    } else {
+                        OwlIcon(size: DS.Size.headerIcon)
+                            .foregroundStyle(skin.accentColor)
+
+                        if let title {
+                            Text(title)
+                                .font(.headline)
+                                .fontWeight(skin.resolvedHeadlineFontWeight)
+                                .fontDesign(skin.resolvedFontDesign)
+                        }
                     }
-                    // HIG: Back buttons should be borderless with chevron
-                    .buttonStyle(.borderless)
-                    .keyboardShortcut(.escape, modifiers: [])
-                }
 
-                if !showBack {
-                    OwlIcon(size: DS.Size.headerIcon)
-                        .foregroundStyle(skin.accentColor)
-                }
-
-                if let title = title, !showBack {
-                    Text(title)
-                        .font(.headline)
-                        .fontWeight(skin.resolvedHeadlineFontWeight)
-                        .fontDesign(skin.resolvedFontDesign)
-                }
-
-                Spacer()
-
-                if let title = title, showBack {
-                    Text(title)
-                        .font(.headline)
-                        .fontWeight(skin.resolvedHeadlineFontWeight)
-                        .fontDesign(skin.resolvedFontDesign)
                     Spacer()
-                }
 
-                if showBack {
-                    if showOwlIcon {
+                    if showBack && showOwlIcon {
                         OwlIcon(size: DS.Size.headerIcon)
                             .foregroundStyle(skin.accentColor)
                     }
-                    if let trailing = trailing {
+
+                    if let trailing {
                         trailing
                     }
-                } else if let trailing = trailing {
-                    trailing
                 }
             }
             .padding(.horizontal, DS.Spacing.lg)

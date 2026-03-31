@@ -240,7 +240,10 @@ struct AddEventView: View {
                                         .frame(width: 24, height: 24)
                                         .overlay(
                                             Circle()
-                                                .stroke(Color.white, lineWidth: selectedColorTag == tag ? 1.5 : 0)
+                                                .strokeBorder(
+                                                    skin.resolvedTextPrimary.opacity(selectedColorTag == tag ? 0.8 : 0),
+                                                    lineWidth: selectedColorTag == tag ? 2 : 0
+                                                )
                                         )
                                         .shadow(
                                             color: selectedColorTag == tag ? tag.color.opacity(0.5) : .clear,
@@ -248,6 +251,9 @@ struct AddEventView: View {
                                         )
                                         .scaleEffect(selectedColorTag == tag ? 1.1 : 1.0)
                                         .animation(skin.resolvedMicroAnimation, value: selectedColorTag)
+                                        // HIG: Expand hit area to minimum comfortable target size
+                                        .padding(DS.Spacing.xs)
+                                        .contentShape(Circle())
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityLabel(tag.rawValue)

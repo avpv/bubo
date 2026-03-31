@@ -206,7 +206,7 @@ struct DateTimePickerPills: View {
         } else if cal.isDateInTomorrow(date) {
             return "Tomorrow"
         } else {
-            formatter.dateFormat = "MMM d, yyyy"
+            formatter.dateStyle = .medium
             return formatter.string(from: date)
         }
     }

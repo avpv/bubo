@@ -63,7 +63,7 @@ struct OwlIcon: View {
         .scaleEffect(isBouncing ? 0.75 : 1.0)
         .rotationEffect(.degrees(isBouncing ? 12 : 0))
         .onTapGesture {
-            Haptics.generic()
+            Haptics.tap()
             withAnimation(.spring(response: 0.2, dampingFraction: 0.4)) {
                 isBouncing = true
             }

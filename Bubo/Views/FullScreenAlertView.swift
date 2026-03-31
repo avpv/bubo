@@ -6,8 +6,6 @@ struct FullScreenAlertView: View {
     let onDismiss: () -> Void
     let onSnooze: (Int) -> Void
 
-    @State private var secondsRemaining: Int = 0
-    @State private var countdownTimer: Timer?
     @State private var isVisible = false
     @State private var snoozeHovered = false
     @State private var joinHovered = false
@@ -25,6 +23,9 @@ struct FullScreenAlertView: View {
     }
 
     var body: some View {
+        // HIG: Use TimelineView for time-based UI updates instead of Timer.publish
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+        let secondsRemaining = max(Int(event.startDate.timeIntervalSince(context.date)), 0)
         ZStack {
             // Background: material + skin-tinted overlay
             Rectangle()
@@ -50,15 +51,15 @@ struct FullScreenAlertView: View {
 
                 bellIcon
 
-                Text(headerText)
+                Text(headerText(secondsRemaining))
                     .font(.system(size: 48, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
 
                 // Live countdown timer
-                Text(countdownText)
+                Text(countdownText(secondsRemaining))
                     .font(.system(size: 72, weight: .heavy, design: .monospaced))
-                    .foregroundStyle(countdownDisplayColor)
-                    .shadow(color: countdownDisplayColor.opacity(0.5), radius: 12)
+                    .foregroundStyle(countdownDisplayColor(secondsRemaining))
+                    .shadow(color: countdownDisplayColor(secondsRemaining).opacity(0.5), radius: 12)
                     .contentTransition(.numericText())
                     .motionAwareAnimation(.linear(duration: 0.3), value: secondsRemaining, reduceMotion: reduceMotion)
 
@@ -89,7 +90,6 @@ struct FullScreenAlertView: View {
                         ForEach(DS.snoozeOptions) { option in
                             Button("In \(option.label)") {
                                 Haptics.tap()
-                                cleanup()
                                 onSnooze(option.minutes)
                             }
                         }
@@ -130,7 +130,6 @@ struct FullScreenAlertView: View {
                         Button {
                             Haptics.impact()
                             NSWorkspace.shared.open(meetingURL)
-                            cleanup()
                             onDismiss()
                         } label: {
                             Label("Join \(serviceName)", systemImage: "video.fill")
@@ -165,7 +164,6 @@ struct FullScreenAlertView: View {
                     // Dismiss button — white pill with skin accent on hover
                     Button(action: {
                         Haptics.impact()
-                        cleanup()
                         onDismiss()
                     }) {
                         Text("Dismiss")
@@ -189,10 +187,10 @@ struct FullScreenAlertView: View {
                     .onHover { dismissHovered = $0 }
                     .keyboardShortcut(event.meetingLink != nil ? .escape : .return, modifiers: [])
                     .accessibilityLabel("Dismiss alert")
-                    .accessibilityHint("Press Enter or click to dismiss")
+                    .accessibilityHint(event.meetingLink != nil ? "Press Escape to dismiss" : "Press Enter to dismiss")
                 }
 
-                Text("Press Enter or Esc to dismiss")
+                Text(event.meetingLink != nil ? "Enter to join \u{00B7} Esc to dismiss" : "Press Enter or Esc to dismiss")
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.4))
                     .accessibilityHidden(true)
@@ -203,15 +201,14 @@ struct FullScreenAlertView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // HIG: Handle Escape key without hidden zero-size button hack
         .onKeyPress(.escape) {
-            cleanup()
             onDismiss()
             return .handled
         }
+        } // TimelineView
         .opacity(isVisible ? 1 : 0)
         .scaleEffect(isVisible ? 1 : (reduceMotion ? 1 : 0.92))
         .onAppear {
             Haptics.impact()
-            startCountdown()
             if reduceMotion {
                 isVisible = true
             } else {
@@ -220,12 +217,11 @@ struct FullScreenAlertView: View {
                 }
             }
         }
-        .onDisappear { cleanup() }
     }
 
     /// Countdown color: uses skin accent when plenty of time remains,
     /// falls back to urgency colors (warning/error) when imminent.
-    private var countdownDisplayColor: Color {
+    private func countdownDisplayColor(_ secondsRemaining: Int) -> Color {
         if secondsRemaining <= 120 { return skin.resolvedDestructiveColor }
         if secondsRemaining <= 300 { return skin.resolvedWarningColor }
         return skinAccent
@@ -253,24 +249,7 @@ struct FullScreenAlertView: View {
 
     // MARK: - Countdown
 
-    private func startCountdown() {
-        updateSecondsRemaining()
-        countdownTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
-            updateSecondsRemaining()
-        }
-    }
-
-    private func updateSecondsRemaining() {
-        let remaining = Int(event.startDate.timeIntervalSinceNow)
-        secondsRemaining = max(remaining, 0)
-    }
-
-    private func cleanup() {
-        countdownTimer?.invalidate()
-        countdownTimer = nil
-    }
-
-    private var countdownText: String {
+    private func countdownText(_ secondsRemaining: Int) -> String {
         if secondsRemaining <= 0 {
             return "00:00"
         }
@@ -284,7 +263,7 @@ struct FullScreenAlertView: View {
         return String(format: "%02d:%02d", minutes, seconds)
     }
 
-    private var headerText: String {
+    private func headerText(_ secondsRemaining: Int) -> String {
         if secondsRemaining <= 0 {
             return "Meeting started!"
         }

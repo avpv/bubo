@@ -80,13 +80,13 @@ struct CalendarEvent: Identifiable, Codable, Hashable, Sendable {
 
     private static let timeFormatter: DateFormatter = {
         let f = DateFormatter()
-        f.dateFormat = "HH:mm"
+        f.timeStyle = .short
         return f
     }()
 
     private static let dateFormatter: DateFormatter = {
         let f = DateFormatter()
-        f.dateFormat = "d MMMM, EEEE"
+        f.setLocalizedDateFormatFromTemplate("dMMMEEEE")
         return f
     }()
 

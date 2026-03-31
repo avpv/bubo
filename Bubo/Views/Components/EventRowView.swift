@@ -78,7 +78,7 @@ struct EventRowView: View {
             withAnimation(skin.resolvedMicroAnimation) {
                 isHovered = hovering
             }
-            if hovering { Haptics.generic() }
+            if hovering { Haptics.tap() }
         }
         // Scroll-aware transition: fade/scale as items enter/exit viewport
         .eventScrollTransition()
@@ -276,6 +276,7 @@ struct EventRowView: View {
                     }
                     .buttonStyle(.borderless)
                     .help("Delete event")
+                    .accessibilityLabel("Delete event")
                 }
             }
         }

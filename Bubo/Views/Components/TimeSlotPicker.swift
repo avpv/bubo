@@ -192,7 +192,7 @@ fileprivate struct TimeSlotChip: View {
             }
             if hovering && !isSelected {
                 NSCursor.pointingHand.push()
-                Haptics.generic()
+                Haptics.tap()
             } else {
                 NSCursor.pop()
             }
