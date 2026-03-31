@@ -65,7 +65,8 @@ struct PomodoroFitObjective: FitnessObjective {
         guard config.rounds > 0 else { return 0 }
         let workTime = Double(config.workMinutes * config.rounds) * 60
         let breakTime = Double(config.breakMinutes * max(0, config.rounds - 1)) * 60
-        let longBreak = Double(config.longBreakMinutes) * 60
+        // Long break only applies after a full set of rounds (>1), not after a single round
+        let longBreak = config.rounds > 1 ? Double(config.longBreakMinutes) * 60 : 0
         return workTime + breakTime + longBreak
     }
 

@@ -57,7 +57,7 @@ struct MultiPersonObjective: FitnessObjective {
             // Bonus for reasonable meeting times (not too early/late)
             let cal = context.calendar
             let hour = cal.component(.hour, from: gene.startTime)
-            let reasonableHours = 9...17
+            let reasonableHours = context.workingHours
             let timeBonus: Double = reasonableHours.contains(hour) ? 0.1 : 0.0
 
             totalScore += min(1.0, avgScore + timeBonus)

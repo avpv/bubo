@@ -35,9 +35,8 @@ struct WeekBalanceObjective: FitnessObjective {
         ).day ?? 1
         for dayOffset in 0..<daysInHorizon {
             guard let day = cal.date(byAdding: .day, value: dayOffset, to: context.planningHorizon.start) else { continue }
-            let weekday = cal.component(.weekday, from: day)
-            // Only count weekdays (Mon-Fri = 2-6)
-            if (2...6).contains(weekday) {
+            // Exclude weekends using locale-safe check
+            if !cal.isDateInWeekend(day) {
                 let startOfDay = cal.startOfDay(for: day)
                 if minutesByDay[startOfDay] == nil {
                     minutesByDay[startOfDay] = 0
