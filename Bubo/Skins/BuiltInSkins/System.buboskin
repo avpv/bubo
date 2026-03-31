@@ -4,7 +4,7 @@
   "author": "Bubo",
   "accentColor": "accentColor",
   "surfaceTint": "accentColor",
-  "surfaceTintOpacity": 0.04,
+  "surfaceTintOpacity": 0.07,
   "backgroundGradient": {
     "colors": [
       "accentColor:0.10",
@@ -24,7 +24,7 @@
   "secondaryAccent": "accentColor:0.7",
   "buttonStyle": "glass",
   "buttonShape": "capsule",
-  "toolbarTint": "accentColor:0.55",
+  "toolbarTint": "accentColor:0.4",
   "barMaterial": "regular",
   "barTint": "accentColor",
   "barTintOpacity": 0.05,
@@ -43,7 +43,7 @@
   "shadowOpacity": 0.12,
   "shadowRadius": 10,
   "shadowY": 5,
-  "platterBorderOpacity": 0.1,
+  "platterBorderOpacity": 0.15,
   "animationStyle": "smooth",
   "hoverShadowOpacity": 0.2,
   "hoverShadowRadius": 16,

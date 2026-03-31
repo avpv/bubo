@@ -87,7 +87,7 @@ struct EmojiPickerView: View {
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, DS.Spacing.xs)
             .skinPlatter(skin)
-            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: skin.cornerRadius, style: .continuous))
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.top, DS.Spacing.sm)
             .padding(.bottom, DS.Spacing.xs)
@@ -109,7 +109,7 @@ struct EmojiPickerView: View {
                                             ? skin.accentColor.opacity(0.15)
                                             : Color.clear
                                     )
-                                    .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                                    .clipShape(RoundedRectangle(cornerRadius: max(skin.cornerRadius - 3, 3), style: .continuous))
                             }
                             .buttonStyle(.plain)
                             .help(category.title)

@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct AddEventView: View {
     var reminderService: ReminderService
@@ -95,7 +96,7 @@ struct AddEventView: View {
                     
                     // Title section
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                        TextField("Title", text: $title, prompt: Text("Event title"))
+                        TextField("Title", text: $title, prompt: Text("Event title").foregroundStyle(skin.resolvedTextTertiary))
                             .textFieldStyle(.plain)
                             .font(.headline)
                             .focused($isTitleFocused)
@@ -264,14 +265,14 @@ struct AddEventView: View {
                             .foregroundStyle(skin.resolvedTextPrimary)
                         
                         VStack(spacing: DS.Spacing.md) {
-                            TextField("Location", text: $location, prompt: Text("Location"))
+                            TextField("Location", text: $location, prompt: Text("Location").foregroundStyle(skin.resolvedTextTertiary))
                                 .textFieldStyle(.plain)
                                 .focused($isLocationFocused)
 
                             SkinSeparator()
 
                             HStack(alignment: .top, spacing: DS.Spacing.sm) {
-                                FormattableTextView(text: $description, prompt: "Notes")
+                                FormattableTextView(text: $description, prompt: "Notes", promptColor: NSColor(skin.resolvedTextTertiary))
                                     .frame(minHeight: 60, maxHeight: 160)
 
                                 EmojiPickerButton(text: $description)
@@ -638,7 +639,7 @@ struct AddEventView: View {
                         let isLast = idx == pomodoroSegments.count - 1
 
                         RoundedRectangle(
-                            cornerRadius: (isFirst || isLast) ? 5 : 3,
+                            cornerRadius: (isFirst || isLast) ? max(skin.cornerRadius - 3, 3) : max(skin.cornerRadius - 5, 2),
                             style: .continuous
                         )
                         .fill(
