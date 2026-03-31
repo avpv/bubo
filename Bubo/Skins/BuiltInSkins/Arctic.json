@@ -24,7 +24,7 @@
   "buttonShape": "capsule",
   "buttonTint": "#2E8CC7",
   "buttonTintOpacity": 0.12,
-  "toolbarTint": "#8C80BF",
+  "toolbarTint": "#FFFFFF",
   "barMaterial": "ultraThin",
   "barTint": "#2E6B94",
   "barTintOpacity": 0.04,

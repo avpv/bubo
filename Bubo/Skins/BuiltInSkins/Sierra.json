@@ -24,7 +24,7 @@
   "secondaryAccent": "#B86B33",
   "buttonStyle": "gradient",
   "buttonShape": "capsule",
-  "toolbarTint": "#B8734C",
+  "toolbarTint": "#FFEEDD",
   "barMaterial": "thin",
   "barTint": "#7A471F",
   "barTintOpacity": 0.08,
