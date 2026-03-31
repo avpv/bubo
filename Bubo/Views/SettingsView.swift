@@ -74,5 +74,11 @@ struct SettingsView: View {
         .environment(optimizerService)
         .frame(width: DS.Settings.width, height: DS.Settings.idealHeight)
         .toolbar(removing: .sidebarToggle)
+        .onAppear {
+            if let pending = SettingsViewModel.pendingPane {
+                selectedPane = pending
+                SettingsViewModel.pendingPane = nil
+            }
+        }
     }
 }

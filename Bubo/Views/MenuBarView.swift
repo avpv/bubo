@@ -562,6 +562,7 @@ private struct CalendarAccessBanner: View {
         Button {
             Haptics.tap()
             NSApp.keyWindow?.close()
+            SettingsViewModel.pendingPane = .calendars
             openSettings()
             NSApp.activate()
         } label: {

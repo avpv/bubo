@@ -5,6 +5,9 @@ import Foundation
 @MainActor
 @Observable
 class SettingsViewModel {
+    /// Set before opening Settings to navigate to a specific pane.
+    static var pendingPane: SettingsView.SettingsPane?
+
     // MARK: - Reminders Tab
     var newIntervalMinutes = 10
 
