@@ -81,6 +81,8 @@ struct AddEventView: View {
         return workTotal + shortBreakTotal + longBreak
     }
 
+    var settings: ReminderSettings? = nil
+
     var body: some View {
         VStack(spacing: 0) {
             PopoverHeader(
@@ -90,6 +92,10 @@ struct AddEventView: View {
                 showBack: true,
                 onBack: onDismiss
             )
+
+            if let settings {
+                WorldClockStripView(settings: settings)
+            }
 
             ScrollView {
                 VStack(spacing: DS.Spacing.lg) {

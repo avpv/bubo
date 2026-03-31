@@ -11,6 +11,7 @@ struct SettingsView: View {
         case general = "General"
         case calendars = "Calendars"
         case reminders = "Reminders"
+        case worldClock = "World Clock"
         case optimizer = "Optimizer"
 
         var icon: String {
@@ -18,6 +19,7 @@ struct SettingsView: View {
             case .general: "gear"
             case .calendars: "calendar"
             case .reminders: "bell"
+            case .worldClock: "globe"
             case .optimizer: "wand.and.stars"
             }
         }
@@ -62,6 +64,8 @@ struct SettingsView: View {
                     CalendarsTabView()
                 case .reminders:
                     RemindersTabView()
+                case .worldClock:
+                    WorldClockTabView()
                 case .optimizer:
                     OptimizerTabView()
                 }
