@@ -105,7 +105,7 @@ struct AddEventView: View {
                         if showValidation && !isTitleValid {
                             Label("Title is required", systemImage: "exclamationmark.triangle.fill")
                                 .font(.caption)
-                                .foregroundStyle(DS.Colors.error)
+                                .foregroundStyle(skin.resolvedDestructiveColor)
                                 .transition(.move(edge: .top).combined(with: .opacity))
                         }
                     }
@@ -580,7 +580,7 @@ struct AddEventView: View {
         switch type {
         case "work": skin.accentColor
         case "long": DS.Colors.info
-        default: DS.Colors.success
+        default: skin.resolvedSuccessColor
         }
     }
 
@@ -607,7 +607,7 @@ struct AddEventView: View {
             // Legend row (above bar for context)
             HStack(spacing: DS.Spacing.md) {
                 legendItem(color: skin.accentColor, icon: "brain.head.profile", label: "Work")
-                legendItem(color: DS.Colors.success, icon: "cup.and.saucer", label: "Break")
+                legendItem(color: skin.resolvedSuccessColor, icon: "cup.and.saucer", label: "Break")
                 if pomodoroLongBreakEnabled {
                     legendItem(color: DS.Colors.info, icon: "moon.zzz", label: "Long break")
                 }

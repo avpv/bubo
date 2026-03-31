@@ -335,11 +335,11 @@ struct OptimizerView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Warnings:")
                         .font(.caption.weight(.medium))
-                        .foregroundStyle(DS.Colors.warning)
+                        .foregroundStyle(skin.resolvedWarningColor)
                     ForEach(scenario.constraintViolations, id: \.self) { v in
                         Text("  \(v)")
                             .font(.caption2)
-                            .foregroundStyle(DS.Colors.warning)
+                            .foregroundStyle(skin.resolvedWarningColor)
                     }
                 }
             }

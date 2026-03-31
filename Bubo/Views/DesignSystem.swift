@@ -170,17 +170,17 @@ enum DS {
 
     // MARK: Urgency Colors
 
-    static func urgencyColor(minutesUntil: Int) -> Color {
-        if minutesUntil <= 5 { return Colors.error }
-        if minutesUntil <= 15 { return Colors.warning }
-        return Colors.success
+    static func urgencyColor(minutesUntil: Int, skin: SkinDefinition) -> Color {
+        if minutesUntil <= 5 { return skin.resolvedDestructiveColor }
+        if minutesUntil <= 15 { return skin.resolvedWarningColor }
+        return skin.resolvedSuccessColor
     }
 
     // MARK: Countdown Colors
 
-    static func countdownColor(secondsRemaining: Int) -> Color {
-        if secondsRemaining <= 120 { return Colors.error }
-        if secondsRemaining <= 300 { return Colors.warning }
+    static func countdownColor(secondsRemaining: Int, skin: SkinDefinition) -> Color {
+        if secondsRemaining <= 120 { return skin.resolvedDestructiveColor }
+        if secondsRemaining <= 300 { return skin.resolvedWarningColor }
         return .white
     }
 
@@ -561,7 +561,7 @@ struct ActionButtonStyle: ButtonStyle {
             ZStack {
                 Rectangle().fill(skin.resolvedButtonMaterial)
                 if isPressed {
-                    DS.Colors.error.opacity(0.08)
+                    skin.resolvedDestructiveColor.opacity(0.08)
                 }
             }
         }
@@ -577,7 +577,7 @@ struct ActionButtonStyle: ButtonStyle {
             // Use white on dark accents, primary label on light accents.
             return Self.contrastingForeground(for: skinAccent)
         case .secondary: return skin.resolvedTextPrimary
-        case .destructive: return DS.Colors.error
+        case .destructive: return skin.resolvedDestructiveColor
         }
     }
 

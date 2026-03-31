@@ -226,8 +226,8 @@ struct FullScreenAlertView: View {
     /// Countdown color: uses skin accent when plenty of time remains,
     /// falls back to urgency colors (warning/error) when imminent.
     private var countdownDisplayColor: Color {
-        if secondsRemaining <= 120 { return DS.Colors.error }
-        if secondsRemaining <= 300 { return DS.Colors.warning }
+        if secondsRemaining <= 120 { return skin.resolvedDestructiveColor }
+        if secondsRemaining <= 300 { return skin.resolvedWarningColor }
         return skinAccent
     }
 

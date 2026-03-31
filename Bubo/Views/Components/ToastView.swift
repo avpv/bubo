@@ -11,11 +11,11 @@ struct ToastMessage: Equatable, Identifiable {
         case success, info, warning
     }
 
-    var color: Color {
+    func color(for skin: SkinDefinition) -> Color {
         switch style {
-        case .success: return DS.Colors.success
+        case .success: return skin.resolvedSuccessColor
         case .info: return DS.Colors.info
-        case .warning: return DS.Colors.warning
+        case .warning: return skin.resolvedWarningColor
         }
     }
 
@@ -59,6 +59,7 @@ struct ToastOverlay: View {
     let toastState: ToastState
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.activeSkin) private var skin
 
     var body: some View {
         VStack {
@@ -67,7 +68,7 @@ struct ToastOverlay: View {
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: toast.icon)
                         .font(.caption)
-                        .foregroundStyle(toast.color)
+                        .foregroundStyle(toast.color(for: skin))
                         .contentTransition(.symbolEffect(.replace))
                     Text(toast.text)
                         .font(.caption)

@@ -326,7 +326,7 @@ struct MenuBarView: View {
         HStack(spacing: DS.Spacing.sm) {
             if !networkMonitor.isConnected {
                 Image(systemName: "wifi.slash")
-                    .foregroundStyle(DS.Colors.error)
+                    .foregroundStyle(skin.resolvedDestructiveColor)
                     .font(.system(size: DS.Size.iconSmall))
                     .symbolEffect(.pulse, options: .repeating.speed(0.5))
                     .help("No internet connection")
