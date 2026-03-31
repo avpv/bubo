@@ -104,6 +104,7 @@ enum Mutation {
         calendar: Calendar
     ) {
         let allEvents = chromosome.genes.sorted { $0.startTime < $1.startTime }
+        guard allEvents.count > 1 else { return }
 
         for i in 0..<(allEvents.count - 1) {
             if allEvents[i].endTime > allEvents[i + 1].startTime {

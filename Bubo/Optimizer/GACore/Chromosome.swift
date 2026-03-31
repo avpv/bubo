@@ -117,10 +117,10 @@ struct ScheduleChromosome: Chromosome {
                 let dayOffset = Int.random(in: 0..<daysInHorizon)
                 let newDay = cal.date(byAdding: .day, value: dayOffset, to: context.planningHorizon.start)!
                 let hour = event?.preferredHourRange?.randomElement() ?? Int.random(in: context.workingHours)
-                let newStart = cal.date(bySettingHour: hour, minute: Int.random(in: 0...3) * 15, second: 0, of: newDay)!
+                let rawStart = cal.date(bySettingHour: hour, minute: Int.random(in: 0...3) * 15, second: 0, of: newDay)!
                 genes[i] = ScheduleGene(
                     eventId: genes[i].eventId,
-                    startTime: newStart,
+                    startTime: clampToWorkingHours(rawStart, duration: genes[i].duration, workingHours: context.workingHours, calendar: cal),
                     duration: genes[i].duration,
                     context: genes[i].context,
                     energyCost: genes[i].energyCost,
@@ -131,9 +131,10 @@ struct ScheduleChromosome: Chromosome {
                 // Snap to nearest half-hour
                 let timeInterval = genes[i].startTime.timeIntervalSinceReferenceDate
                 let rounded = (timeInterval / 1800).rounded() * 1800
+                let snapped = Date(timeIntervalSinceReferenceDate: rounded)
                 genes[i] = ScheduleGene(
                     eventId: genes[i].eventId,
-                    startTime: Date(timeIntervalSinceReferenceDate: rounded),
+                    startTime: clampToWorkingHours(snapped, duration: genes[i].duration, workingHours: context.workingHours, calendar: cal),
                     duration: genes[i].duration,
                     context: genes[i].context,
                     energyCost: genes[i].energyCost,
@@ -174,16 +175,23 @@ func clampToWorkingHours(
     workingHours: ClosedRange<Int>,
     calendar: Calendar
 ) -> Date {
-    let hour = calendar.component(.hour, from: date)
-    let endHour = hour + Int(duration / 3600)
+    let day = calendar.startOfDay(for: date)
+    guard let workStart = calendar.date(bySettingHour: workingHours.lowerBound, minute: 0, second: 0, of: day),
+          let workEnd = calendar.date(bySettingHour: workingHours.upperBound, minute: 0, second: 0, of: day) else {
+        return date
+    }
 
-    if hour < workingHours.lowerBound {
-        return calendar.date(bySettingHour: workingHours.lowerBound, minute: 0, second: 0, of: date) ?? date
+    // Clamp start so event doesn't begin before working hours
+    var clamped = max(date, workStart)
+
+    // Clamp start so event doesn't end after working hours
+    let latestStart = workEnd.addingTimeInterval(-duration)
+    if latestStart >= workStart {
+        clamped = min(clamped, latestStart)
+    } else {
+        // Duration exceeds working hours — start at workStart
+        clamped = workStart
     }
-    if endHour > workingHours.upperBound {
-        let maxStart = workingHours.upperBound - Int(duration / 3600)
-        let clampedHour = max(workingHours.lowerBound, maxStart)
-        return calendar.date(bySettingHour: clampedHour, minute: 0, second: 0, of: date) ?? date
-    }
-    return date
+
+    return clamped
 }

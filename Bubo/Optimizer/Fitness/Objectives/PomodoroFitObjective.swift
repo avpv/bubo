@@ -50,7 +50,7 @@ struct PomodoroFitObjective: FitnessObjective {
 
             // 3. Check that break durations match the rhythm
             // (breaks should have enough buffer)
-            let hasBuffer = !hasAdjacentEvent(at: sessionEnd, chromosome: chromosome, context: context, bufferMinutes: config.breakMinutes)
+            let hasBuffer = !hasAdjacentEvent(at: sessionEnd, excludingEventId: pomEvent.id, chromosome: chromosome, context: context, bufferMinutes: config.breakMinutes)
             score += hasBuffer ? 0.3 : 0.1
 
             totalScore += score
@@ -62,8 +62,9 @@ struct PomodoroFitObjective: FitnessObjective {
     // MARK: - Helpers
 
     private func pomodoroTotalDuration(_ config: PomodoroConfig) -> TimeInterval {
+        guard config.rounds > 0 else { return 0 }
         let workTime = Double(config.workMinutes * config.rounds) * 60
-        let breakTime = Double(config.breakMinutes * (config.rounds - 1)) * 60
+        let breakTime = Double(config.breakMinutes * max(0, config.rounds - 1)) * 60
         let longBreak = Double(config.longBreakMinutes) * 60
         return workTime + breakTime + longBreak
     }
@@ -93,6 +94,7 @@ struct PomodoroFitObjective: FitnessObjective {
 
     private func hasAdjacentEvent(
         at time: Date,
+        excludingEventId: String,
         chromosome: ScheduleChromosome,
         context: OptimizerContext,
         bufferMinutes: Int
@@ -103,7 +105,7 @@ struct PomodoroFitObjective: FitnessObjective {
                 return true
             }
         }
-        for gene in chromosome.genes {
+        for gene in chromosome.genes where gene.eventId != excludingEventId {
             if abs(gene.startTime.timeIntervalSince(time)) < bufferWindow {
                 return true
             }

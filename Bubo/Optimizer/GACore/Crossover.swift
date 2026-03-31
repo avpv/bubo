@@ -36,7 +36,7 @@ enum Crossover {
         _ p1: ScheduleChromosome,
         _ p2: ScheduleChromosome
     ) -> (ScheduleChromosome, ScheduleChromosome) {
-        guard p1.genes.count > 2 else { return (p1, p2) }
+        guard p1.genes.count > 2, p1.genes.count == p2.genes.count else { return (p1, p2) }
 
         var point1 = Int.random(in: 0..<p1.genes.count)
         var point2 = Int.random(in: 0..<p1.genes.count)
@@ -64,6 +64,7 @@ enum Crossover {
         _ p2: ScheduleChromosome,
         swapProbability: Double
     ) -> (ScheduleChromosome, ScheduleChromosome) {
+        guard p1.genes.count == p2.genes.count else { return (p1, p2) }
         var child1Genes = p1.genes
         var child2Genes = p2.genes
 

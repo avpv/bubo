@@ -59,16 +59,19 @@ struct WorkingHoursConstraint: ScheduleConstraint {
         var totalViolation = 0.0
 
         for gene in chromosome.genes {
-            let startHour = cal.component(.hour, from: gene.startTime)
-            let endHour = cal.component(.hour, from: gene.endTime)
-            let endMinute = cal.component(.minute, from: gene.endTime)
-            let effectiveEndHour = endMinute > 0 ? endHour + 1 : endHour
-
-            if startHour < context.workingHours.lowerBound {
-                totalViolation += Double(context.workingHours.lowerBound - startHour) * 60
+            let day = cal.startOfDay(for: gene.startTime)
+            guard let workStart = cal.date(bySettingHour: context.workingHours.lowerBound, minute: 0, second: 0, of: day),
+                  let workEnd = cal.date(bySettingHour: context.workingHours.upperBound, minute: 0, second: 0, of: day) else {
+                continue
             }
-            if effectiveEndHour > context.workingHours.upperBound {
-                totalViolation += Double(effectiveEndHour - context.workingHours.upperBound) * 60
+
+            // Minutes before working hours start
+            if gene.startTime < workStart {
+                totalViolation += workStart.timeIntervalSince(gene.startTime) / 60
+            }
+            // Minutes after working hours end
+            if gene.endTime > workEnd {
+                totalViolation += gene.endTime.timeIntervalSince(workEnd) / 60
             }
         }
         return totalViolation

@@ -94,86 +94,7 @@ final class GeneticAlgorithm<C: Chromosome> {
             eliteCount: config.eliteCount,
             context: context
         )
-
-        // Evaluate initial population
-        population.evaluateAll(using: evaluate)
-        bestEver = population.best
-
-        var staleGenerations = 0
-        var lastBestFitness = bestEver?.fitness ?? 0
-
-        for generation in 0..<config.maxGenerations {
-            // Create next generation
-            var offspring: [C] = []
-
-            while offspring.count < config.populationSize - config.eliteCount {
-                let (parent1, parent2) = Selection.selectPair(
-                    from: population,
-                    strategy: config.selectionStrategy
-                )
-
-                var child1: C
-                var child2: C
-
-                if Double.random(in: 0...1) < config.crossoverRate {
-                    (child1, child2) = parent1.crossover(with: parent2, context: context)
-                } else {
-                    child1 = parent1
-                    child2 = parent2
-                }
-
-                // Mutation
-                let rate = config.adaptiveMutation
-                    ? config.mutationRate * max(0.1, 1.0 - Double(generation) / Double(config.maxGenerations))
-                    : config.mutationRate
-
-                child1.mutate(rate: rate, context: context)
-                child2.mutate(rate: rate, context: context)
-
-                offspring.append(child1)
-                offspring.append(child2)
-            }
-
-            // Evaluate offspring
-            for i in offspring.indices {
-                evaluate(&offspring[i])
-            }
-
-            // Replace generation (elitism handled by Population)
-            population.replaceGeneration(with: offspring)
-
-            // Track best
-            if let currentBest = population.best {
-                if bestEver == nil || currentBest.fitness > bestEver!.fitness {
-                    bestEver = currentBest
-                }
-            }
-
-            // Progress callback
-            onProgress?(GAProgress(
-                generation: generation,
-                bestFitness: bestEver?.fitness ?? 0,
-                averageFitness: population.averageFitness,
-                diversity: population.fitnessDiversity
-            ))
-
-            // Convergence check
-            let improvement = abs((bestEver?.fitness ?? 0) - lastBestFitness)
-            if improvement < config.convergenceThreshold {
-                staleGenerations += 1
-            } else {
-                staleGenerations = 0
-                convergenceGeneration = generation
-            }
-            lastBestFitness = bestEver?.fitness ?? 0
-
-            if staleGenerations >= config.convergencePatience {
-                convergenceGeneration = generation - config.convergencePatience
-                break
-            }
-        }
-
-        return population.sortedByFitness
+        return evolve(&population)
     }
 
     /// Run the GA seeded with an existing population (for incremental re-optimization).
@@ -190,6 +111,12 @@ final class GeneticAlgorithm<C: Chromosome> {
             population.individuals.append(individual)
         }
 
+        return evolve(&population)
+    }
+
+    // MARK: - Core Evolution Loop
+
+    private func evolve(_ population: inout Population<C>) -> [C] {
         population.evaluateAll(using: evaluate)
         bestEver = population.best
 
@@ -198,8 +125,9 @@ final class GeneticAlgorithm<C: Chromosome> {
 
         for generation in 0..<config.maxGenerations {
             var offspring: [C] = []
+            let targetCount = config.populationSize - config.eliteCount
 
-            while offspring.count < config.populationSize - config.eliteCount {
+            while offspring.count < targetCount {
                 let (parent1, parent2) = Selection.selectPair(
                     from: population,
                     strategy: config.selectionStrategy
@@ -218,11 +146,17 @@ final class GeneticAlgorithm<C: Chromosome> {
                 let rate = config.adaptiveMutation
                     ? config.mutationRate * max(0.1, 1.0 - Double(generation) / Double(config.maxGenerations))
                     : config.mutationRate
+
                 child1.mutate(rate: rate, context: context)
                 child2.mutate(rate: rate, context: context)
 
                 offspring.append(child1)
                 offspring.append(child2)
+            }
+
+            // Trim excess offspring (loop appends 2 at a time, may overshoot by 1)
+            if offspring.count > targetCount {
+                offspring.removeLast(offspring.count - targetCount)
             }
 
             for i in offspring.indices {
@@ -237,6 +171,13 @@ final class GeneticAlgorithm<C: Chromosome> {
                 }
             }
 
+            onProgress?(GAProgress(
+                generation: generation,
+                bestFitness: bestEver?.fitness ?? 0,
+                averageFitness: population.averageFitness,
+                diversity: population.fitnessDiversity
+            ))
+
             let improvement = abs((bestEver?.fitness ?? 0) - lastBestFitness)
             if improvement < config.convergenceThreshold {
                 staleGenerations += 1
@@ -247,6 +188,7 @@ final class GeneticAlgorithm<C: Chromosome> {
             lastBestFitness = bestEver?.fitness ?? 0
 
             if staleGenerations >= config.convergencePatience {
+                convergenceGeneration = generation - config.convergencePatience
                 break
             }
         }

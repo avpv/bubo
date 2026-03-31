@@ -242,7 +242,7 @@ final class BuboOptimizer {
         workingHours: ClosedRange<Int> = 9...18
     ) async -> OptimizerResult {
         let totalMinutes = config.workMinutes * config.rounds
-            + config.breakMinutes * (config.rounds - 1)
+            + config.breakMinutes * max(0, config.rounds - 1)
             + config.longBreakMinutes
 
         let pomodoroEvent = OptimizableEvent(

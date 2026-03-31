@@ -223,8 +223,8 @@ struct StabilityAwareFitnessEvaluator {
             }
         }
 
-        let stabilityPenalty = totalDeviation * stabilityWeight * 0.01
-
-        return baseFitness - stabilityPenalty
+        // Apply stability as multiplicative factor to keep fitness positive
+        let stabilityFactor = 1.0 / (1.0 + totalDeviation * stabilityWeight * 0.01)
+        return baseFitness * stabilityFactor
     }
 }

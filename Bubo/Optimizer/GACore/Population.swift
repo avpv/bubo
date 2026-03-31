@@ -39,12 +39,12 @@ struct Population<C: Chromosome> {
     mutating func replaceGeneration(with newIndividuals: [C]) {
         let currentElites = elites
         var next = currentElites
-        // Fill remaining slots from new individuals (skip duplicates of elites)
+        // Fill remaining slots from new individuals
         let remaining = size - currentElites.count
         next.append(contentsOf: newIndividuals.prefix(remaining))
-        // If we still don't have enough, pad with random from new
-        while next.count < size, let last = newIndividuals.last {
-            next.append(last)
+        // If we still don't have enough, pad with random picks from newIndividuals to maintain diversity
+        while next.count < size, !newIndividuals.isEmpty {
+            next.append(newIndividuals.randomElement()!)
         }
         individuals = next
     }

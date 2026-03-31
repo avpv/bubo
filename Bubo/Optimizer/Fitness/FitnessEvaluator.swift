@@ -57,9 +57,13 @@ final class FitnessEvaluator {
         // but we still give a tiny gradient based on violation magnitude
         // so the GA can evolve toward feasibility.
         if !constraintEngine.isValid(chromosome, context: context) {
-            let hardPenalty = constraintEngine.totalPenalty(for: chromosome, context: context)
-            // Map penalty to (0, 0.1] — lower penalty = closer to 0.1
-            return 0.1 / (1.0 + hardPenalty * 0.01)
+            // Only use hard constraint penalties for the gradient (not soft)
+            let hardPenalty = constraintEngine.constraints
+                .filter { $0.isHard }
+                .reduce(0.0) { $0 + $1.penalty(for: chromosome, context: context) }
+            // Map penalty to (0, 0.09] — lower penalty = closer to 0.09
+            // Ceiling at 0.09 ensures infeasible < feasible (which starts at 0.1)
+            return 0.09 / (1.0 + hardPenalty * 0.01)
         }
 
         // Soft constraint penalty (only from soft constraints, already validated hard ones)
@@ -79,10 +83,11 @@ final class FitnessEvaluator {
 
         let normalizedScore = weightedSum / totalWeight  // [0, 1]
 
-        // Soft penalty reduces score but keeps it in [0.1, 1.0]
+        // Soft penalty reduces score multiplicatively
         let penaltyFactor = 1.0 / (1.0 + softPenalty * 0.01)
 
-        return max(0.1, normalizedScore * penaltyFactor)
+        // Feasible solutions: [0.1, 1.0] — always above infeasible ceiling of 0.09
+        return 0.1 + normalizedScore * penaltyFactor * 0.9
     }
 
     /// Evaluate and assign fitness to a chromosome (mutating).
@@ -90,14 +95,14 @@ final class FitnessEvaluator {
         chromosome.fitness = evaluate(chromosome: chromosome, context: context)
     }
 
-    /// Detailed breakdown of all objective scores.
+    /// Detailed breakdown of all objective scores (clamped to [0, 1]).
     func objectiveBreakdown(
         for chromosome: ScheduleChromosome,
         context: OptimizerContext
     ) -> [String: Double] {
         var result: [String: Double] = [:]
         for objective in objectives {
-            result[objective.name] = objective.evaluate(chromosome: chromosome, context: context)
+            result[objective.name] = max(0, min(1, objective.evaluate(chromosome: chromosome, context: context)))
         }
         return result
     }
