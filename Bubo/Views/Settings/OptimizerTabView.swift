@@ -23,7 +23,7 @@ struct OptimizerTabView: View {
                             Text("\(hour):00").tag(hour)
                         }
                     }
-                    .frame(width: 80)
+                    .frame(width: 100)
 
                     Spacer()
 
@@ -33,7 +33,7 @@ struct OptimizerTabView: View {
                             Text("\(hour):00").tag(hour)
                         }
                     }
-                    .frame(width: 80)
+                    .frame(width: 100)
                 }
             }
 
@@ -58,13 +58,14 @@ struct OptimizerTabView: View {
                             Text("\(hour):00").tag(hour)
                         }
                     }
-                    .frame(width: 80)
+                    .frame(width: 100)
                 }
             }
 
             Section("Break Rules") {
                 HStack {
                     Text("Max consecutive meetings:")
+                    Spacer()
                     Picker("", selection: Binding(
                         get: { optimizerService.optimizer.preferences.maxConsecutiveMeetingMinutes },
                         set: { optimizerService.optimizer.preferences.maxConsecutiveMeetingMinutes = $0; optimizerService.savePreferences() }
@@ -74,11 +75,12 @@ struct OptimizerTabView: View {
                         Text("2 hours").tag(120)
                         Text("3 hours").tag(180)
                     }
-                    .frame(width: 100)
+                    .frame(width: 120)
                 }
 
                 HStack {
                     Text("Lunch window:")
+                    Spacer()
                     Picker("", selection: Binding(
                         get: { optimizerService.optimizer.preferences.lunchWindowStart },
                         set: { optimizerService.optimizer.preferences.lunchWindowStart = $0; optimizerService.savePreferences() }
@@ -87,7 +89,7 @@ struct OptimizerTabView: View {
                             Text("\(h):00").tag(h)
                         }
                     }
-                    .frame(width: 70)
+                    .frame(width: 90)
                     Text("–")
                     Picker("", selection: Binding(
                         get: { optimizerService.optimizer.preferences.lunchWindowEnd },
@@ -97,7 +99,7 @@ struct OptimizerTabView: View {
                             Text("\(h):00").tag(h)
                         }
                     }
-                    .frame(width: 70)
+                    .frame(width: 90)
                 }
             }
 
