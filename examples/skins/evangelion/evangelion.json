@@ -1,0 +1,48 @@
+{
+  "id": "evangelion",
+  "displayName": "Evangelion",
+  "author": "Bubo Community",
+  "accentColor": "#8C00D9",
+  "surfaceTint": "#14001F",
+  "surfaceTintOpacity": 0.35,
+  "backgroundGradient": {
+    "colors": [
+      "#66009966",
+      "#00802626",
+      "#00000000"
+    ],
+    "style": "linear",
+    "startPoint": "topLeading",
+    "endPoint": "bottomTrailing"
+  },
+  "previewColors": [
+    "#8C00D9",
+    "#009933"
+  ],
+  "prefersDarkTint": true,
+  "secondaryAccent": "#F27300",
+  "buttonStyle": "gradient",
+  "buttonShape": "roundedRect",
+  "toolbarTint": "#008C2E",
+  "barMaterial": "thick",
+  "barTint": "#4C0073",
+  "barTintOpacity": 0.15,
+  "platterTint": "#380059",
+  "platterTintOpacity": 0.08,
+  "fontDesign": "default",
+  "fontWeight": "semibold",
+  "headlineFontWeight": "bold",
+  "sfSymbolRendering": "hierarchical",
+  "sfSymbolWeight": "medium",
+  "badgeStyle": "tinted",
+  "separatorStyle": "subtle",
+  "separatorOpacity": 0.35,
+  "platterBorderOpacity": 0.2,
+  "shadowOpacity": 0.15,
+  "shadowRadius": 10,
+  "shadowY": 5,
+  "hoverShadowOpacity": 0.2,
+  "hoverShadowRadius": 14,
+  "hoverShadowY": 7,
+  "hoverFillOpacity": 0.08
+}

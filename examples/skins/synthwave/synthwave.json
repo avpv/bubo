@@ -1,0 +1,48 @@
+{
+  "id": "synthwave",
+  "displayName": "Synthwave",
+  "author": "Bubo Community",
+  "accentColor": "#FF4CD9",
+  "surfaceTint": "#14001A",
+  "surfaceTintOpacity": 0.35,
+  "backgroundGradient": {
+    "colors": [
+      "#B21A9959",
+      "#1A006640",
+      "#00000000"
+    ],
+    "style": "linear",
+    "startPoint": "bottom",
+    "endPoint": "top"
+  },
+  "previewColors": [
+    "#FF4CD9",
+    "#260066"
+  ],
+  "prefersDarkTint": true,
+  "secondaryAccent": "#4CB2FF",
+  "buttonStyle": "gradient",
+  "buttonShape": "roundedRect",
+  "toolbarTint": "#4C99FF",
+  "barMaterial": "thin",
+  "barTint": "#800D66",
+  "barTintOpacity": 0.18,
+  "platterTint": "#59004C",
+  "platterTintOpacity": 0.08,
+  "fontDesign": "rounded",
+  "fontWeight": "semibold",
+  "headlineFontWeight": "bold",
+  "sfSymbolRendering": "hierarchical",
+  "sfSymbolWeight": "semibold",
+  "badgeStyle": "filled",
+  "separatorStyle": "accent",
+  "separatorOpacity": 0.25,
+  "platterBorderOpacity": 0.2,
+  "shadowOpacity": 0.15,
+  "shadowRadius": 12,
+  "shadowY": 5,
+  "hoverShadowOpacity": 0.25,
+  "hoverShadowRadius": 16,
+  "hoverShadowY": 8,
+  "hoverFillOpacity": 0.1
+}

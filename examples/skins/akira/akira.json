@@ -1,0 +1,49 @@
+{
+  "id": "akira",
+  "displayName": "Akira",
+  "author": "Bubo Community",
+  "accentColor": "#F23333",
+  "surfaceTint": "#1F0505",
+  "surfaceTintOpacity": 0.35,
+  "backgroundGradient": {
+    "colors": [
+      "#B21A1A66",
+      "#1A004040",
+      "#00000000"
+    ],
+    "style": "radial",
+    "center": "bottomTrailing",
+    "startRadius": 0,
+    "endRadius": 550
+  },
+  "previewColors": [
+    "#F23333",
+    "#1A0040"
+  ],
+  "prefersDarkTint": true,
+  "secondaryAccent": "#F2BF00",
+  "buttonStyle": "solid",
+  "buttonShape": "rectangle",
+  "toolbarTint": "#D9A600",
+  "barMaterial": "thin",
+  "barTint": "#800F0F",
+  "barTintOpacity": 0.18,
+  "platterTint": "#590A0A",
+  "platterTintOpacity": 0.1,
+  "fontDesign": "default",
+  "fontWeight": "bold",
+  "headlineFontWeight": "bold",
+  "sfSymbolRendering": "monochrome",
+  "sfSymbolWeight": "bold",
+  "badgeStyle": "filled",
+  "separatorStyle": "system",
+  "separatorOpacity": 0.4,
+  "platterBorderOpacity": 0.2,
+  "shadowOpacity": 0.15,
+  "shadowRadius": 10,
+  "shadowY": 5,
+  "hoverShadowOpacity": 0.25,
+  "hoverShadowRadius": 14,
+  "hoverShadowY": 7,
+  "hoverFillOpacity": 0.1
+}

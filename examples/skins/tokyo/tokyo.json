@@ -1,0 +1,49 @@
+{
+  "id": "tokyo",
+  "displayName": "Tokyo Night",
+  "author": "Bubo Community",
+  "accentColor": "#F24C8C",
+  "surfaceTint": "#0F051F",
+  "surfaceTintOpacity": 0.35,
+  "backgroundGradient": {
+    "colors": [
+      "#99267359",
+      "#0D1A5940",
+      "#00000000"
+    ],
+    "style": "linear",
+    "startPoint": "topLeading",
+    "endPoint": "bottomTrailing"
+  },
+  "previewColors": [
+    "#F24C8C",
+    "#1A0D4C"
+  ],
+  "prefersDarkTint": true,
+  "secondaryAccent": "#4CCCFF",
+  "buttonStyle": "glass",
+  "buttonTint": "#B2336B",
+  "buttonTintOpacity": 0.25,
+  "toolbarTint": "#4CB2E6",
+  "barMaterial": "thin",
+  "barTint": "#66144C",
+  "barTintOpacity": 0.15,
+  "platterTint": "#400D33",
+  "platterTintOpacity": 0.08,
+  "fontDesign": "rounded",
+  "fontWeight": "medium",
+  "headlineFontWeight": "semibold",
+  "sfSymbolRendering": "hierarchical",
+  "sfSymbolWeight": "medium",
+  "badgeStyle": "filled",
+  "separatorStyle": "accent",
+  "separatorOpacity": 0.2,
+  "platterBorderOpacity": 0.15,
+  "shadowOpacity": 0.1,
+  "shadowRadius": 10,
+  "shadowY": 5,
+  "hoverShadowOpacity": 0.18,
+  "hoverShadowRadius": 14,
+  "hoverShadowY": 6,
+  "hoverFillOpacity": 0.07
+}

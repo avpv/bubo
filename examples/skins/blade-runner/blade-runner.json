@@ -1,0 +1,49 @@
+{
+  "id": "blade_runner",
+  "displayName": "Blade Runner",
+  "author": "Bubo Community",
+  "accentColor": "#CC6600",
+  "surfaceTint": "#140800",
+  "surfaceTintOpacity": 0.4,
+  "backgroundGradient": {
+    "colors": [
+      "#B2400066",
+      "#260D334C",
+      "#00000000"
+    ],
+    "style": "radial",
+    "center": "bottom",
+    "startRadius": 0,
+    "endRadius": 500
+  },
+  "previewColors": [
+    "#CC6600",
+    "#260D33"
+  ],
+  "prefersDarkTint": true,
+  "secondaryAccent": "#E64C1A",
+  "buttonStyle": "solid",
+  "buttonShape": "rectangle",
+  "toolbarTint": "#3399CC",
+  "barMaterial": "ultraThin",
+  "barTint": "#802E00",
+  "barTintOpacity": 0.15,
+  "platterMaterial": "thin",
+  "platterTint": "#661F00",
+  "platterTintOpacity": 0.1,
+  "fontDesign": "default",
+  "fontWeight": "regular",
+  "headlineFontWeight": "semibold",
+  "sfSymbolRendering": "monochrome",
+  "sfSymbolWeight": "light",
+  "badgeStyle": "outlined",
+  "separatorStyle": "none",
+  "platterBorderOpacity": 0.2,
+  "shadowOpacity": 0.18,
+  "shadowRadius": 12,
+  "shadowY": 5,
+  "hoverShadowOpacity": 0.25,
+  "hoverShadowRadius": 16,
+  "hoverShadowY": 8,
+  "hoverFillOpacity": 0.1
+}

@@ -6,6 +6,7 @@ import AppKit
 struct FormattableTextView: NSViewRepresentable {
     @Binding var text: String
     var prompt: String = ""
+    var promptColor: NSColor = .placeholderTextColor
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -35,13 +36,15 @@ struct FormattableTextView: NSViewRepresentable {
 
         // Placeholder
         textView.placeholderString = prompt
+        textView.placeholderColor = promptColor
 
         scrollView.documentView = textView
         return scrollView
     }
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
-        guard let textView = scrollView.documentView as? NSTextView else { return }
+        guard let textView = scrollView.documentView as? FormattableNSTextView else { return }
+        textView.placeholderColor = promptColor
         if textView.string != text {
             let selectedRanges = textView.selectedRanges
             textView.string = text
@@ -65,8 +68,12 @@ struct FormattableTextView: NSViewRepresentable {
 
 // MARK: - Custom NSTextView with extended Transformations menu
 
-private final class FormattableNSTextView: NSTextView {
+final class FormattableNSTextView: NSTextView {
     var placeholderString: String = "" {
+        didSet { needsDisplay = true }
+    }
+
+    var placeholderColor: NSColor = .placeholderTextColor {
         didSet { needsDisplay = true }
     }
 
@@ -75,7 +82,7 @@ private final class FormattableNSTextView: NSTextView {
 
         if string.isEmpty && !placeholderString.isEmpty {
             let attrs: [NSAttributedString.Key: Any] = [
-                .foregroundColor: NSColor.placeholderTextColor,
+                .foregroundColor: placeholderColor,
                 .font: font ?? .systemFont(ofSize: NSFont.systemFontSize),
             ]
             let rect = CGRect(

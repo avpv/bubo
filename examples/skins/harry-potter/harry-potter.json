@@ -1,0 +1,49 @@
+{
+  "id": "harry_potter",
+  "displayName": "Harry Potter",
+  "author": "Bubo Community",
+  "accentColor": "#A67A14",
+  "surfaceTint": "#261400",
+  "surfaceTintOpacity": 0.35,
+  "backgroundGradient": {
+    "colors": [
+      "#59330D66",
+      "#260D3340",
+      "#00000000"
+    ],
+    "style": "radial",
+    "center": "top",
+    "startRadius": 0,
+    "endRadius": 500
+  },
+  "previewColors": [
+    "#A67A14",
+    "#401414"
+  ],
+  "prefersDarkTint": true,
+  "secondaryAccent": "#992626",
+  "buttonStyle": "gradient",
+  "buttonShape": "roundedRect",
+  "toolbarTint": "#801F1F",
+  "barMaterial": "thick",
+  "barTint": "#4C2605",
+  "barTintOpacity": 0.15,
+  "platterTint": "#401F00",
+  "platterTintOpacity": 0.08,
+  "fontDesign": "default",
+  "fontWeight": "medium",
+  "headlineFontWeight": "bold",
+  "sfSymbolRendering": "hierarchical",
+  "sfSymbolWeight": "medium",
+  "badgeStyle": "tinted",
+  "separatorStyle": "accent",
+  "separatorOpacity": 0.2,
+  "platterBorderOpacity": 0.15,
+  "shadowOpacity": 0.1,
+  "shadowRadius": 10,
+  "shadowY": 5,
+  "hoverShadowOpacity": 0.15,
+  "hoverShadowRadius": 14,
+  "hoverShadowY": 6,
+  "hoverFillOpacity": 0.06
+}

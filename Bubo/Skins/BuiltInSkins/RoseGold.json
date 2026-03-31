@@ -1,0 +1,51 @@
+{
+  "id": "rose_gold",
+  "displayName": "Rose Gold",
+  "author": "Bubo",
+  "accentColor": "#D68075",
+  "surfaceTint": "#2E120D",
+  "surfaceTintOpacity": 0.1,
+  "backgroundGradient": {
+    "colors": [
+      "#C7665918",
+      "#7A38330A",
+      "clear"
+    ],
+    "style": "linear",
+    "startPoint": "topLeading",
+    "endPoint": "bottomTrailing"
+  },
+  "previewColors": [
+    "#D68075",
+    "#F0AD94"
+  ],
+  "prefersDarkTint": false,
+  "secondaryAccent": "#EB9E8A",
+  "buttonStyle": "gradient",
+  "buttonShape": "capsule",
+  "toolbarTint": "#C7A666",
+  "barMaterial": "ultraThin",
+  "barTint": "#9E614C",
+  "barTintOpacity": 0.08,
+  "platterMaterial": "thin",
+  "platterTint": "#945247",
+  "platterTintOpacity": 0.06,
+  "fontDesign": "rounded",
+  "fontWeight": "medium",
+  "headlineFontWeight": "bold",
+  "sfSymbolRendering": "hierarchical",
+  "sfSymbolWeight": "regular",
+  "badgeStyle": "outlined",
+  "separatorStyle": "accent",
+  "separatorOpacity": 0.15,
+  "cornerRadius": 12,
+  "shadowOpacity": 0.08,
+  "shadowRadius": 10,
+  "shadowY": 5,
+  "platterBorderOpacity": 0.15,
+  "animationStyle": "bouncy",
+  "hoverShadowOpacity": 0.1,
+  "hoverShadowRadius": 14,
+  "hoverShadowY": 6,
+  "hoverFillOpacity": 0.05
+}

@@ -1,0 +1,48 @@
+{
+  "id": "gta_vice_city",
+  "displayName": "GTA Vice City",
+  "author": "Bubo Community",
+  "accentColor": "#CC4C8C",
+  "surfaceTint": "#1A050F",
+  "surfaceTintOpacity": 0.3,
+  "backgroundGradient": {
+    "colors": [
+      "#F280404C",
+      "#99268040",
+      "#00000000"
+    ],
+    "style": "linear",
+    "startPoint": "topTrailing",
+    "endPoint": "bottomLeading"
+  },
+  "previewColors": [
+    "#CC4C8C",
+    "#F28C33"
+  ],
+  "prefersDarkTint": false,
+  "secondaryAccent": "#4CD9D9",
+  "buttonStyle": "gradient",
+  "buttonShape": "roundedRect",
+  "toolbarTint": "#4CCCCC",
+  "barMaterial": "regular",
+  "barTint": "#992E66",
+  "barTintOpacity": 0.15,
+  "platterTint": "#731A4C",
+  "platterTintOpacity": 0.08,
+  "fontDesign": "rounded",
+  "fontWeight": "semibold",
+  "headlineFontWeight": "bold",
+  "sfSymbolRendering": "hierarchical",
+  "sfSymbolWeight": "medium",
+  "badgeStyle": "filled",
+  "separatorStyle": "subtle",
+  "separatorOpacity": 0.35,
+  "platterBorderOpacity": 0.18,
+  "shadowOpacity": 0.12,
+  "shadowRadius": 10,
+  "shadowY": 5,
+  "hoverShadowOpacity": 0.2,
+  "hoverShadowRadius": 14,
+  "hoverShadowY": 7,
+  "hoverFillOpacity": 0.08
+}

@@ -1,0 +1,52 @@
+{
+  "id": "arctic",
+  "displayName": "Arctic",
+  "author": "Bubo",
+  "accentColor": "#38A6E0",
+  "surfaceTint": "#0F1F29",
+  "surfaceTintOpacity": 0.06,
+  "backgroundGradient": {
+    "colors": [
+      "#3380B810",
+      "#1F4C7308"
+    ],
+    "style": "linear",
+    "startPoint": "top",
+    "endPoint": "bottom"
+  },
+  "previewColors": [
+    "#38A6E0",
+    "#9ED9F5"
+  ],
+  "prefersDarkTint": false,
+  "secondaryAccent": "#7DD4F0",
+  "buttonStyle": "glass",
+  "buttonShape": "capsule",
+  "buttonTint": "#2E8CC7",
+  "buttonTintOpacity": 0.12,
+  "toolbarTint": "#8C80BF",
+  "barMaterial": "ultraThin",
+  "barTint": "#2E6B94",
+  "barTintOpacity": 0.04,
+  "platterMaterial": "ultraThin",
+  "platterTint": "#246185",
+  "platterTintOpacity": 0.04,
+  "fontDesign": "rounded",
+  "fontWeight": "regular",
+  "headlineFontWeight": "medium",
+  "sfSymbolRendering": "hierarchical",
+  "sfSymbolWeight": "regular",
+  "badgeStyle": "tinted",
+  "separatorStyle": "subtle",
+  "separatorOpacity": 0.15,
+  "cornerRadius": 12,
+  "shadowOpacity": 0.04,
+  "shadowRadius": 10,
+  "shadowY": 5,
+  "platterBorderOpacity": 0.2,
+  "animationStyle": "smooth",
+  "hoverShadowOpacity": 0.2,
+  "hoverShadowRadius": 16,
+  "hoverShadowY": 8,
+  "hoverFillOpacity": 0.08
+}

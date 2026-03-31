@@ -1,0 +1,49 @@
+{
+  "id": "spirited_away",
+  "displayName": "Spirited Away",
+  "author": "Bubo Community",
+  "accentColor": "#598CD9",
+  "surfaceTint": "#0D0D26",
+  "surfaceTintOpacity": 0.3,
+  "backgroundGradient": {
+    "colors": [
+      "#33599959",
+      "#66408033",
+      "#00000000"
+    ],
+    "style": "linear",
+    "startPoint": "top",
+    "endPoint": "bottom"
+  },
+  "previewColors": [
+    "#598CD9",
+    "#664080"
+  ],
+  "prefersDarkTint": false,
+  "secondaryAccent": "#804C99",
+  "buttonStyle": "glass",
+  "buttonTint": "#476BB2",
+  "buttonTintOpacity": 0.22,
+  "toolbarTint": "#73478C",
+  "barMaterial": "thin",
+  "barTint": "#2E4780",
+  "barTintOpacity": 0.12,
+  "platterTint": "#243866",
+  "platterTintOpacity": 0.06,
+  "fontDesign": "rounded",
+  "fontWeight": "regular",
+  "headlineFontWeight": "medium",
+  "sfSymbolRendering": "hierarchical",
+  "sfSymbolWeight": "light",
+  "badgeStyle": "tinted",
+  "separatorStyle": "subtle",
+  "separatorOpacity": 0.25,
+  "platterBorderOpacity": 0.15,
+  "shadowOpacity": 0.08,
+  "shadowRadius": 10,
+  "shadowY": 5,
+  "hoverShadowOpacity": 0.15,
+  "hoverShadowRadius": 14,
+  "hoverShadowY": 6,
+  "hoverFillOpacity": 0.06
+}

@@ -1,0 +1,57 @@
+{
+  "id": "my_skin_name",
+  "displayName": "My Skin Name",
+  "author": "@your_github",
+
+  "accentColor": "#0080FF",
+  "surfaceTint": "#000514",
+  "surfaceTintOpacity": 0.3,
+
+  "backgroundGradient": {
+    "colors": ["#004C9933", "#1A006619", "clear"],
+    "style": "linear",
+    "startPoint": "topLeading",
+    "endPoint": "bottomTrailing"
+  },
+
+  "previewColors": ["#0080FF", "#4C0099"],
+  "prefersDarkTint": false,
+
+  "secondaryAccent": "#330080",
+  "buttonStyle": "gradient",
+  "buttonShape": "capsule",
+  "buttonColor": "#FFFFFF",
+  "buttonMaterial": "regular",
+  "buttonTint": "#0066CC",
+  "buttonTintOpacity": 0.3,
+
+  "toolbarTint": "#4C8066",
+  "barMaterial": "thick",
+  "barTint": "#003366",
+  "barTintOpacity": 0.15,
+  "platterMaterial": "regular",
+  "platterTint": "#001A33",
+  "platterTintOpacity": 0.1,
+
+  "destructiveColor": "#FF3B30",
+  "successColor": "#34C759",
+  "warningColor": "#FF9500",
+
+  "fontDesign": "rounded",
+  "fontWeight": "semibold",
+  "headlineFontWeight": "bold",
+  "sfSymbolRendering": "hierarchical",
+  "sfSymbolWeight": "medium",
+  "badgeStyle": "tinted",
+  "separatorStyle": "system",
+  "separatorOpacity": 0.5,
+  "cornerRadius": 12,
+  "platterBorderOpacity": 0.15,
+  "shadowOpacity": 0.1,
+  "shadowRadius": 10,
+  "shadowY": 5,
+  "hoverShadowOpacity": 0.18,
+  "hoverShadowRadius": 14,
+  "hoverShadowY": 6,
+  "hoverFillOpacity": 0.08
+}

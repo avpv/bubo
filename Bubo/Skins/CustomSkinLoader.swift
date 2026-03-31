@@ -5,11 +5,11 @@ import SwiftUI
 
 /// JSON-serializable representation of a Bubo skin.
 ///
-/// Both built-in and custom skins use the same `.buboskin` JSON format.
+/// Both built-in and custom skins use the same `.json` JSON format.
 /// Colors are strings: hex (`"#0070FA"`), named (`"accentColor"`),
 /// named with opacity (`"accentColor:0.5"`), or keyword (`"clear"`).
 ///
-/// Example `.buboskin` file:
+/// Example `.json` file:
 /// ```json
 /// {
 ///   "id": "my_cool_skin",
@@ -438,7 +438,7 @@ struct JSONGradient: Codable {
 
 // MARK: - Custom Skin Loader
 
-/// Manages loading, importing, and removing custom `.buboskin` files.
+/// Manages loading, importing, and removing custom `.json` files.
 ///
 /// Skins are stored in `~/Library/Application Support/Bubo/Skins/`.
 @Observable
@@ -468,7 +468,7 @@ class CustomSkinLoader {
             includingPropertiesForKeys: nil
         ) else { return }
 
-        for file in files where file.pathExtension == "buboskin" {
+        for file in files where file.pathExtension == "json" {
             if let skin = loadSkin(from: file) {
                 loaded.append(skin)
             }
@@ -477,7 +477,7 @@ class CustomSkinLoader {
         customSkins = loaded.sorted { $0.displayName < $1.displayName }
     }
 
-    /// Import a `.buboskin` file by copying it into the skins directory.
+    /// Import a `.json` file by copying it into the skins directory.
     /// Returns the skin definition if successful.
     @discardableResult
     func importSkin(from sourceURL: URL) -> SkinDefinition? {
@@ -514,7 +514,7 @@ class CustomSkinLoader {
             includingPropertiesForKeys: nil
         ) else { return }
 
-        for file in files where file.pathExtension == "buboskin" {
+        for file in files where file.pathExtension == "json" {
             if let data = try? Data(contentsOf: file),
                let json = try? JSONDecoder().decode(CustomSkinJSON.self, from: data),
                "custom_\(json.id)" == id {
@@ -548,7 +548,7 @@ class CustomSkinLoader {
 
 // MARK: - Built-In Skin Loader
 
-/// Loads built-in skins from bundled `.buboskin` JSON files in the app's
+/// Loads built-in skins from bundled `.json` JSON files in the app's
 /// `BuiltInSkins` resource directory. This gives built-in skins the same
 /// JSON-based configuration as custom skins — a unified approach.
 ///
@@ -634,18 +634,18 @@ enum BuiltInSkinLoader {
             let builtInDir = moduleBundle.resourceURL?.appendingPathComponent("BuiltInSkins", isDirectory: true)
             if let dir = builtInDir,
                let urls = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil),
-               !urls.filter({ $0.pathExtension == "buboskin" }).isEmpty {
-                return urls.filter { $0.pathExtension == "buboskin" }
+               !urls.filter({ $0.pathExtension == "json" }).isEmpty {
+                return urls.filter { $0.pathExtension == "json" }
             }
             // Also try subdirectory API on the module bundle
-            if let urls = moduleBundle.urls(forResourcesWithExtension: "buboskin", subdirectory: "BuiltInSkins"),
+            if let urls = moduleBundle.urls(forResourcesWithExtension: "json", subdirectory: "BuiltInSkins"),
                !urls.isEmpty {
                 return urls
             }
         }
 
         // 2. Standard: bundled with subdirectory
-        if let urls = Bundle.main.urls(forResourcesWithExtension: "buboskin", subdirectory: "BuiltInSkins"),
+        if let urls = Bundle.main.urls(forResourcesWithExtension: "json", subdirectory: "BuiltInSkins"),
            !urls.isEmpty {
             return urls
         }
@@ -654,8 +654,8 @@ enum BuiltInSkinLoader {
         if let resourceURL = Bundle.main.resourceURL {
             let builtInDir = resourceURL.appendingPathComponent("BuiltInSkins", isDirectory: true)
             if let urls = try? FileManager.default.contentsOfDirectory(at: builtInDir, includingPropertiesForKeys: nil),
-               !urls.filter({ $0.pathExtension == "buboskin" }).isEmpty {
-                return urls.filter { $0.pathExtension == "buboskin" }
+               !urls.filter({ $0.pathExtension == "json" }).isEmpty {
+                return urls.filter { $0.pathExtension == "json" }
             }
         }
 
@@ -664,8 +664,8 @@ enum BuiltInSkinLoader {
         if let execDir = executableURL {
             let devDir = execDir.appendingPathComponent("BuiltInSkins", isDirectory: true)
             if let urls = try? FileManager.default.contentsOfDirectory(at: devDir, includingPropertiesForKeys: nil),
-               !urls.filter({ $0.pathExtension == "buboskin" }).isEmpty {
-                return urls.filter { $0.pathExtension == "buboskin" }
+               !urls.filter({ $0.pathExtension == "json" }).isEmpty {
+                return urls.filter { $0.pathExtension == "json" }
             }
         }
 
