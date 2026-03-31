@@ -33,6 +33,7 @@ struct NoOverlapConstraint: ScheduleConstraint {
         }
 
         allEvents.sort { $0.start < $1.start }
+        guard allEvents.count > 1 else { return 0 }
 
         var overlapMinutes = 0.0
         for i in 0..<(allEvents.count - 1) {

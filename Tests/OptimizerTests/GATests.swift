@@ -448,3 +448,450 @@ struct EventConversionTests {
         #expect(event.startDate == start)
     }
 }
+
+// MARK: - Edge Case & Regression Tests
+
+@Suite("Edge Case Tests")
+struct EdgeCaseTests {
+
+    @Test("Random chromosome with zero movable events")
+    func randomChromosomeEmpty() {
+        let context = makeContext(movableEvents: [])
+        let chromosome = ScheduleChromosome.random(context: context)
+        #expect(chromosome.genes.isEmpty)
+    }
+
+    @Test("Crossover with single gene returns parents unchanged")
+    func crossoverSingleGene() {
+        let events = [makeMovableEvent(id: "t1")]
+        let context = makeContext(movableEvents: events)
+        let p1 = ScheduleChromosome.random(context: context)
+        let p2 = ScheduleChromosome.random(context: context)
+        let (c1, c2) = p1.crossover(with: p2, context: context)
+        #expect(c1.genes.count == 1)
+        #expect(c2.genes.count == 1)
+        #expect(c1.genes[0].eventId == "t1")
+        #expect(c2.genes[0].eventId == "t1")
+    }
+
+    @Test("Mutation with rate zero changes nothing")
+    func mutationZeroRate() {
+        let events = [makeMovableEvent(id: "t1")]
+        let context = makeContext(movableEvents: events)
+        let original = ScheduleChromosome.random(context: context)
+        var copy = original
+        copy.mutate(rate: 0.0, context: context)
+        #expect(copy.genes[0].startTime == original.genes[0].startTime)
+    }
+
+    @Test("Clamp with duration exceeding work day")
+    func clampDurationExceedsWorkDay() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let noon = cal.date(bySettingHour: 12, minute: 0, second: 0, of: today)!
+        let duration: TimeInterval = 12 * 3600 // 12 hours > 9-hour work day
+        let clamped = clampToWorkingHours(noon, duration: duration, workingHours: 9...18, calendar: cal)
+        // Should clamp to workStart since event can't fit
+        let expected = cal.date(bySettingHour: 9, minute: 0, second: 0, of: today)!
+        #expect(clamped == expected)
+    }
+
+    @Test("Population with eliteCount zero")
+    func populationZeroElites() {
+        let context = makeContext(movableEvents: [makeMovableEvent()])
+        var pop = Population<ScheduleChromosome>(size: 5, eliteCount: 0, context: context)
+        #expect(pop.elites.isEmpty)
+        // replaceGeneration should still work
+        let offspring = (0..<5).map { _ in ScheduleChromosome.random(context: context) }
+        pop.replaceGeneration(with: offspring)
+        #expect(pop.size == 5)
+    }
+
+    @Test("NoOverlapConstraint with empty chromosome and no fixed events")
+    func noOverlapEmptyChromosome() {
+        let chromosome = ScheduleChromosome(genes: [])
+        let context = makeContext()
+        let constraint = NoOverlapConstraint()
+        let penalty = constraint.penalty(for: chromosome, context: context)
+        #expect(penalty == 0)
+    }
+
+    @Test("WorkingHoursConstraint with empty chromosome")
+    func workingHoursEmptyChromosome() {
+        let chromosome = ScheduleChromosome(genes: [])
+        let context = makeContext()
+        let constraint = WorkingHoursConstraint()
+        let penalty = constraint.penalty(for: chromosome, context: context)
+        #expect(penalty == 0)
+    }
+
+    @Test("ScenarioGenerator with empty population")
+    func scenarioGeneratorEmpty() {
+        let context = makeContext()
+        let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
+        let gen = ScenarioGenerator()
+        let scenarios = gen.generateScenarios(from: [], context: context, evaluator: evaluator)
+        #expect(scenarios.isEmpty)
+    }
+
+    @Test("ScenarioGenerator with single chromosome")
+    func scenarioGeneratorSingle() {
+        let events = [makeMovableEvent()]
+        let context = makeContext(movableEvents: events)
+        let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
+        let chromosome = ScheduleChromosome.random(context: context)
+        let gen = ScenarioGenerator()
+        let scenarios = gen.generateScenarios(from: [chromosome], context: context, evaluator: evaluator)
+        #expect(scenarios.count == 1)
+    }
+
+    @Test("ScheduleGene.withStartTime preserves all fields")
+    func geneWithStartTimePreservesFields() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let start = cal.date(bySettingHour: 10, minute: 0, second: 0, of: today)!
+        let newStart = cal.date(bySettingHour: 14, minute: 0, second: 0, of: today)!
+
+        let gene = ScheduleGene(
+            eventId: "test", title: "My Event", startTime: start,
+            duration: 3600, context: "work", energyCost: 0.7,
+            priority: 0.9, isFocusBlock: true
+        )
+        let moved = gene.withStartTime(newStart)
+
+        #expect(moved.eventId == "test")
+        #expect(moved.title == "My Event")
+        #expect(moved.startTime == newStart)
+        #expect(moved.duration == 3600)
+        #expect(moved.context == "work")
+        #expect(moved.energyCost == 0.7)
+        #expect(moved.priority == 0.9)
+        #expect(moved.isFocusBlock == true)
+    }
+}
+
+// MARK: - Invariant Tests
+
+@Suite("Invariant Tests")
+struct InvariantTests {
+
+    @Test("Fitness is always non-negative across random chromosomes")
+    func fitnessAlwaysNonNegative() {
+        let events = [
+            makeMovableEvent(id: "t1", durationMinutes: 60),
+            makeMovableEvent(id: "t2", durationMinutes: 30),
+            makeMovableEvent(id: "t3", durationMinutes: 45),
+        ]
+        let context = makeContext(movableEvents: events)
+        let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
+
+        for _ in 0..<50 {
+            let chromosome = ScheduleChromosome.random(context: context)
+            let fitness = evaluator.evaluate(chromosome: chromosome, context: context)
+            #expect(fitness >= 0, "Fitness was \(fitness)")
+            #expect(fitness <= 1.0, "Fitness was \(fitness)")
+            #expect(fitness.isFinite, "Fitness was \(fitness)")
+        }
+    }
+
+    @Test("Feasible solutions always score above infeasible ceiling")
+    func feasibleAboveInfeasible() {
+        let events = [makeMovableEvent(id: "t1", durationMinutes: 60)]
+        let context = makeContext(movableEvents: events)
+        let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
+        let constraintEngine = ConstraintEngine.standard
+
+        for _ in 0..<50 {
+            let chromosome = ScheduleChromosome.random(context: context)
+            let fitness = evaluator.evaluate(chromosome: chromosome, context: context)
+            let valid = constraintEngine.isValid(chromosome, context: context)
+
+            if valid {
+                #expect(fitness >= 0.1, "Feasible chromosome scored \(fitness) (should be >= 0.1)")
+            } else {
+                #expect(fitness <= 0.09, "Infeasible chromosome scored \(fitness) (should be <= 0.09)")
+            }
+        }
+    }
+
+    @Test("Gene count preserved after crossover")
+    func geneCountPreservedCrossover() {
+        let events = [
+            makeMovableEvent(id: "t1"), makeMovableEvent(id: "t2"),
+            makeMovableEvent(id: "t3"), makeMovableEvent(id: "t4"),
+        ]
+        let context = makeContext(movableEvents: events)
+
+        for _ in 0..<20 {
+            let p1 = ScheduleChromosome.random(context: context)
+            let p2 = ScheduleChromosome.random(context: context)
+            let (c1, c2) = p1.crossover(with: p2, context: context)
+            #expect(c1.genes.count == 4)
+            #expect(c2.genes.count == 4)
+        }
+    }
+
+    @Test("Event IDs preserved after crossover")
+    func eventIdsPreservedCrossover() {
+        let events = [
+            makeMovableEvent(id: "t1"), makeMovableEvent(id: "t2"), makeMovableEvent(id: "t3"),
+        ]
+        let context = makeContext(movableEvents: events)
+        let expectedIds = Set(["t1", "t2", "t3"])
+
+        for _ in 0..<20 {
+            let p1 = ScheduleChromosome.random(context: context)
+            let p2 = ScheduleChromosome.random(context: context)
+            let (c1, c2) = p1.crossover(with: p2, context: context)
+            #expect(Set(c1.genes.map(\.eventId)) == expectedIds)
+            #expect(Set(c2.genes.map(\.eventId)) == expectedIds)
+        }
+    }
+
+    @Test("Gene count preserved after mutation")
+    func geneCountPreservedMutation() {
+        let events = [makeMovableEvent(id: "t1"), makeMovableEvent(id: "t2")]
+        let context = makeContext(movableEvents: events)
+
+        for _ in 0..<20 {
+            var chromosome = ScheduleChromosome.random(context: context)
+            chromosome.mutate(rate: 1.0, context: context)
+            #expect(chromosome.genes.count == 2)
+            #expect(Set(chromosome.genes.map(\.eventId)) == Set(["t1", "t2"]))
+        }
+    }
+
+    @Test("Population size preserved after replaceGeneration")
+    func populationSizePreserved() {
+        let events = [makeMovableEvent(id: "t1")]
+        let context = makeContext(movableEvents: events)
+        var pop = Population<ScheduleChromosome>(size: 20, eliteCount: 2, context: context)
+
+        // Assign fitness
+        for i in pop.individuals.indices {
+            pop.individuals[i].fitness = Double.random(in: 0...1)
+        }
+
+        let offspring = (0..<18).map { _ in ScheduleChromosome.random(context: context) }
+        pop.replaceGeneration(with: offspring)
+        #expect(pop.size == 20)
+    }
+
+    @Test("All objective scores are in [0, 1]")
+    func objectiveScoresBounded() {
+        let events = [
+            makeMovableEvent(id: "t1", context: "work", isFocusBlock: true),
+            makeMovableEvent(id: "t2", context: "personal"),
+        ]
+        let context = makeContext(
+            fixedEvents: [makeFixedEvent(startHour: 10)],
+            movableEvents: events
+        )
+        let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
+
+        for _ in 0..<30 {
+            let chromosome = ScheduleChromosome.random(context: context)
+            let breakdown = evaluator.objectiveBreakdown(for: chromosome, context: context)
+            for (name, score) in breakdown {
+                #expect(score >= 0, "\(name) scored \(score) (< 0)")
+                #expect(score <= 1, "\(name) scored \(score) (> 1)")
+            }
+        }
+    }
+}
+
+// MARK: - Constraint Enforcement Tests
+
+@Suite("Constraint Enforcement Tests")
+struct ConstraintEnforcementTests {
+
+    @Test("GA final result has no overlaps with fixed events")
+    func gaNoOverlapsWithFixed() {
+        let events = [
+            makeMovableEvent(id: "t1", durationMinutes: 60),
+            makeMovableEvent(id: "t2", durationMinutes: 45),
+        ]
+        let fixed = [
+            makeFixedEvent(id: "f1", startHour: 10, durationMinutes: 60),
+            makeFixedEvent(id: "f2", startHour: 14, durationMinutes: 60),
+        ]
+        let context = makeContext(fixedEvents: fixed, movableEvents: events)
+        let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
+
+        let ga = GeneticAlgorithm<ScheduleChromosome>(
+            config: .quick,
+            context: context,
+            evaluate: { chromosome in
+                evaluator.evaluateAndAssign(&chromosome, context: context)
+            }
+        )
+
+        let results = ga.run()
+        guard let best = results.first else {
+            #expect(Bool(false), "GA returned empty results")
+            return
+        }
+
+        let constraint = NoOverlapConstraint()
+        let penalty = constraint.penalty(for: best, context: context)
+        #expect(penalty == 0, "Best solution has overlap penalty \(penalty)")
+    }
+
+    @Test("GA final result is within working hours")
+    func gaWithinWorkingHours() {
+        let events = [
+            makeMovableEvent(id: "t1", durationMinutes: 60),
+            makeMovableEvent(id: "t2", durationMinutes: 30),
+        ]
+        let context = makeContext(movableEvents: events, workingHours: 9...17)
+        let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
+
+        let ga = GeneticAlgorithm<ScheduleChromosome>(
+            config: .quick,
+            context: context,
+            evaluate: { chromosome in
+                evaluator.evaluateAndAssign(&chromosome, context: context)
+            }
+        )
+
+        let results = ga.run()
+        guard let best = results.first else { return }
+
+        let constraint = WorkingHoursConstraint()
+        let penalty = constraint.penalty(for: best, context: context)
+        #expect(penalty == 0, "Best solution violates working hours (penalty \(penalty))")
+    }
+
+    @Test("Deadline constraint boundary: event ending exactly at deadline")
+    func deadlineExactBoundary() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let start = cal.date(bySettingHour: 10, minute: 0, second: 0, of: today)!
+        let deadline = start.addingTimeInterval(3600) // 1 hour later = exactly endTime
+
+        let gene = ScheduleGene(
+            eventId: "t1", title: "Task", startTime: start,
+            duration: 3600, context: nil, energyCost: 0.5, priority: 0.5, isFocusBlock: false
+        )
+        let event = makeMovableEvent(id: "t1", durationMinutes: 60, deadline: deadline)
+        let context = makeContext(movableEvents: [event])
+        let chromosome = ScheduleChromosome(genes: [gene])
+
+        let constraint = DeadlineConstraint()
+        let penalty = constraint.penalty(for: chromosome, context: context)
+        #expect(penalty == 0, "Event ending at deadline should not be penalized")
+    }
+
+    @Test("ConstraintEngine isValid returns false for overlapping events")
+    func constraintEngineIsValid() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let start = cal.date(bySettingHour: 10, minute: 0, second: 0, of: today)!
+
+        let gene1 = ScheduleGene(eventId: "a", title: "A", startTime: start, duration: 3600, context: nil, energyCost: 0.5, priority: 0.5, isFocusBlock: false)
+        let gene2 = ScheduleGene(eventId: "b", title: "B", startTime: start.addingTimeInterval(1800), duration: 3600, context: nil, energyCost: 0.5, priority: 0.5, isFocusBlock: false)
+
+        let chromosome = ScheduleChromosome(genes: [gene1, gene2])
+        let context = makeContext()
+        let engine = ConstraintEngine.standard
+
+        #expect(!engine.isValid(chromosome, context: context))
+    }
+}
+
+// MARK: - Regression Tests (for previously fixed bugs)
+
+@Suite("Regression Tests")
+struct RegressionTests {
+
+    @Test("FitnessEvaluator with all-zero weights returns valid score")
+    func zeroWeightsNoNaN() {
+        var prefs = OptimizerPreferences()
+        prefs.focusBlockWeight = 0
+        prefs.pomodoroFitWeight = 0
+        prefs.conflictWeight = 0
+        prefs.taskPlacementWeight = 0
+        prefs.weekBalanceWeight = 0
+        prefs.energyCurveWeight = 0
+        prefs.multiPersonWeight = 0
+        prefs.breakWeight = 0
+        prefs.deadlineWeight = 0
+        prefs.contextSwitchWeight = 0
+        prefs.bufferWeight = 0
+
+        let evaluator = FitnessEvaluator.standard(preferences: prefs)
+        let context = makeContext(movableEvents: [makeMovableEvent()])
+        let chromosome = ScheduleChromosome.random(context: context)
+        let fitness = evaluator.evaluate(chromosome: chromosome, context: context)
+
+        #expect(fitness.isFinite)
+        #expect(!fitness.isNaN)
+        #expect(fitness >= 0)
+    }
+
+    @Test("StabilityAwareFitnessEvaluator never goes negative")
+    func stabilityNeverNegative() {
+        let events = [makeMovableEvent(id: "t1")]
+        let context = makeContext(movableEvents: events)
+        let base = FitnessEvaluator.standard(preferences: context.preferences)
+
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let refGene = ScheduleGene(
+            eventId: "t1", title: "Task", startTime: cal.date(bySettingHour: 9, minute: 0, second: 0, of: today)!,
+            duration: 3600, context: nil, energyCost: 0.5, priority: 0.5, isFocusBlock: false
+        )
+
+        let evaluator = StabilityAwareFitnessEvaluator(
+            base: base, referenceGenes: [refGene], stabilityWeight: 100.0 // extreme weight
+        )
+
+        for _ in 0..<20 {
+            let chromosome = ScheduleChromosome.random(context: context)
+            let fitness = evaluator.evaluate(chromosome: chromosome, context: context)
+            #expect(fitness >= 0, "Stability evaluator returned \(fitness)")
+        }
+    }
+
+    @Test("PreferenceLearner applyToPreferences is no-op with insufficient feedback")
+    func learnerNoOpBelowMinSamples() {
+        let learner = PreferenceLearner()
+        var prefs = OptimizerPreferences()
+        let originalFocusWeight = prefs.focusBlockWeight
+
+        learner.applyToPreferences(&prefs)
+
+        #expect(prefs.focusBlockWeight == originalFocusWeight)
+    }
+
+    @Test("PreferenceLearner reset clears everything")
+    func learnerResetClears() {
+        let learner = PreferenceLearner()
+        learner.recordAcceptance(scenarioFitness: 0.8)
+        learner.recordAcceptance(scenarioFitness: 0.7)
+        learner.reset()
+
+        #expect(learner.feedbackHistory.isEmpty)
+        #expect(learner.learnedWeights == PreferenceLearner.defaultWeights)
+    }
+
+    @Test("WorkingHoursConstraint minute-precise penalty")
+    func workingHoursMinutePrecise() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        // Event starts at 8:45 — 15 minutes before working hours (9:00)
+        let start = cal.date(bySettingHour: 8, minute: 45, second: 0, of: today)!
+
+        let gene = ScheduleGene(
+            eventId: "a", title: "Early", startTime: start,
+            duration: 3600, context: nil, energyCost: 0.5, priority: 0.5, isFocusBlock: false
+        )
+        let chromosome = ScheduleChromosome(genes: [gene])
+        let context = makeContext(workingHours: 9...18)
+
+        let constraint = WorkingHoursConstraint()
+        let penalty = constraint.penalty(for: chromosome, context: context)
+        // Should be exactly 15 minutes, not 60 minutes (old truncated behavior)
+        #expect(penalty == 15, "Expected 15-minute penalty, got \(penalty)")
+    }
+}

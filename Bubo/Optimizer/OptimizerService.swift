@@ -29,12 +29,18 @@ final class OptimizerService {
     }
 
     private let persistenceKey = "BuboOptimizerServiceSettings"
+    private let preferencesKey = "BuboOptimizerPreferences"
 
     init() {
         let saved = Self.loadSettings()
         self.workingHoursStart = saved.start
         self.workingHoursEnd = saved.end
         self.isEnabled = saved.enabled
+        // Restore optimizer preferences
+        if let data = UserDefaults.standard.data(forKey: "BuboOptimizerPreferences"),
+           let prefs = try? JSONDecoder().decode(OptimizerPreferences.self, from: data) {
+            self.optimizer.preferences = prefs
+        }
     }
 
     var workingHours: ClosedRange<Int> {
@@ -98,6 +104,7 @@ final class OptimizerService {
         durationMinutes: Int = 120,
         reminderService: ReminderService
     ) async {
+        guard isEnabled else { return }
         isOptimizing = true
         defer { isOptimizing = false }
         error = nil
@@ -122,6 +129,7 @@ final class OptimizerService {
         config: PomodoroConfig = .classic,
         reminderService: ReminderService
     ) async {
+        guard isEnabled else { return }
         isOptimizing = true
         defer { isOptimizing = false }
         error = nil
@@ -193,6 +201,13 @@ final class OptimizerService {
         let saved = SavedSettings(start: workingHoursStart, end: workingHoursEnd, enabled: isEnabled)
         if let data = try? JSONEncoder().encode(saved) {
             UserDefaults.standard.set(data, forKey: persistenceKey)
+        }
+    }
+
+    /// Persist optimizer preferences (called from OptimizerTabView on changes).
+    func savePreferences() {
+        if let data = try? JSONEncoder().encode(optimizer.preferences) {
+            UserDefaults.standard.set(data, forKey: preferencesKey)
         }
     }
 

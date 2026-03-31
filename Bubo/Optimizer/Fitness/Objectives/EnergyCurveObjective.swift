@@ -87,6 +87,7 @@ struct EnergyCurveObjective: FitnessObjective {
     private func countConsecutiveHeavyTasks(
         _ events: [(start: Date, end: Date, energyCost: Double)]
     ) -> Int {
+        guard events.count > 1 else { return 0 }
         var count = 0
         for i in 0..<(events.count - 1) {
             // "Heavy" = energy cost > 0.6, and gap between events < 15 min

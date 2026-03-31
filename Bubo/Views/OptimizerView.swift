@@ -13,6 +13,13 @@ struct OptimizerView: View {
     @State private var focusBlockCount = 2
     @State private var focusBlockMinutes = 120
     @State private var selectedScenarioIndex = 0
+    @State private var appliedScenarioIndex: Int? = nil
+
+    private static let timeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        return f
+    }()
 
     enum OptimizerAction: String, CaseIterable {
         case focusBlocks = "Focus Blocks"
@@ -47,6 +54,11 @@ struct OptimizerView: View {
             SkinSeparator()
             footerActions
         }
+        .onChange(of: optimizerService.scenarios.count) { _, _ in
+            // Reset selection when new results arrive
+            selectedScenarioIndex = 0
+            appliedScenarioIndex = nil
+        }
     }
 
     // MARK: - Header
@@ -78,6 +90,8 @@ struct OptimizerView: View {
                     withAnimation(DS.Animation.smoothSpring) {
                         selectedAction = action
                         optimizerService.scenarios = []
+                        selectedScenarioIndex = 0
+                        appliedScenarioIndex = nil
                     }
                 } label: {
                     Label(action.rawValue, systemImage: action.icon)
@@ -92,6 +106,7 @@ struct OptimizerView: View {
                         .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
+                .accessibilityAddTraits(selectedAction == action ? .isSelected : [])
             }
         }
         .padding(.horizontal, DS.Spacing.md)
@@ -224,6 +239,7 @@ struct OptimizerView: View {
         }
         .buttonStyle(.borderedProminent)
         .controlSize(.regular)
+        .disabled(optimizerService.isOptimizing)
     }
 
     // MARK: - Optimizing State
@@ -273,6 +289,7 @@ struct OptimizerView: View {
                                     .clipShape(Capsule())
                             }
                             .buttonStyle(.plain)
+                            .accessibilityAddTraits(selectedScenarioIndex == idx ? .isSelected : [])
                         }
                     }
                 }
@@ -307,7 +324,7 @@ struct OptimizerView: View {
                         .foregroundStyle(skin.accentColor)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(gene.eventId)
+                        Text(gene.title)
                             .font(.caption.weight(.medium))
                             .lineLimit(1)
 
@@ -341,21 +358,43 @@ struct OptimizerView: View {
                 }
             }
 
-            // Accept button
-            Button {
-                Haptics.tap()
-                optimizerService.applyScenario(
-                    at: selectedScenarioIndex,
-                    to: reminderService
-                )
-            } label: {
-                Label("Apply this schedule", systemImage: "checkmark.circle.fill")
+            // Action buttons
+            HStack(spacing: DS.Spacing.sm) {
+                // Apply
+                let isApplied = appliedScenarioIndex == selectedScenarioIndex
+                Button {
+                    Haptics.tap()
+                    optimizerService.applyScenario(
+                        at: selectedScenarioIndex,
+                        to: reminderService
+                    )
+                    appliedScenarioIndex = selectedScenarioIndex
+                } label: {
+                    Label(
+                        isApplied ? "Applied" : "Apply this schedule",
+                        systemImage: isApplied ? "checkmark.circle" : "checkmark.circle.fill"
+                    )
                     .font(.subheadline.weight(.medium))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, DS.Spacing.sm)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.regular)
+                .disabled(isApplied)
+
+                // Reject (sends feedback to preference learner)
+                if appliedScenarioIndex == nil {
+                    Button {
+                        Haptics.tap()
+                        optimizerService.rejectScenario(at: selectedScenarioIndex)
+                    } label: {
+                        Image(systemName: "hand.thumbsdown")
+                            .padding(.vertical, DS.Spacing.sm)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.regular)
+                }
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.regular)
             .padding(.top, DS.Spacing.sm)
         }
     }
@@ -396,9 +435,17 @@ struct OptimizerView: View {
             if !optimizerService.scenarios.isEmpty {
                 Button {
                     Haptics.tap()
+                    // Reject all unapplied scenarios for preference learning
+                    if appliedScenarioIndex == nil {
+                        for i in 0..<optimizerService.scenarios.count {
+                            optimizerService.rejectScenario(at: i)
+                        }
+                    }
                     optimizerService.scenarios = []
+                    selectedScenarioIndex = 0
+                    appliedScenarioIndex = nil
                 } label: {
-                    Label("New", systemImage: "arrow.counterclockwise")
+                    Label("Clear", systemImage: "arrow.counterclockwise")
                 }
                 .buttonStyle(.borderless)
             }
@@ -406,7 +453,7 @@ struct OptimizerView: View {
             Spacer()
 
             if let date = optimizerService.lastOptimizationDate {
-                Text("Last: \(date, style: .relative) ago")
+                Text("Last: \(date, style: .relative)")
                     .font(.caption2)
                     .foregroundStyle(skin.resolvedTextTertiary)
             }
@@ -421,8 +468,6 @@ struct OptimizerView: View {
     // MARK: - Helpers
 
     private func formatTimeRange(_ start: Date, _ end: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
-        return "\(formatter.string(from: start)) – \(formatter.string(from: end))"
+        "\(Self.timeFormatter.string(from: start)) – \(Self.timeFormatter.string(from: end))"
     }
 }
