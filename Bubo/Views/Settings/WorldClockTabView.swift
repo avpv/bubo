@@ -41,7 +41,8 @@ struct WorldClockTabView: View {
                     // Selected cities
                     if !selectedCities.isEmpty {
                         SettingsPlatter("Selected Cities") {
-                            VStack(spacing: DS.Spacing.xs) {
+                            // HIG: User-managed lists should support reordering
+                            List {
                                 ForEach(selectedCities) { city in
                                     HStack {
                                         VStack(alignment: .leading, spacing: 2) {
@@ -70,13 +71,14 @@ struct WorldClockTabView: View {
                                         .accessibilityLabel("Remove \(city.city)")
                                         .help("Remove \(city.city) from world clock")
                                     }
-                                    .padding(.vertical, DS.Spacing.xxs)
-
-                                    if city.id != selectedCities.last?.id {
-                                        Divider()
-                                    }
+                                }
+                                .onMove { from, to in
+                                    settings.worldClockCityIDs.move(fromOffsets: from, toOffset: to)
                                 }
                             }
+                            .listStyle(.plain)
+                            .frame(maxHeight: CGFloat(selectedCities.count) * 50)
+                            .scrollContentBackground(.hidden)
                         }
                     }
 

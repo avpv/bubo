@@ -153,6 +153,7 @@ struct AddEventView: View {
                         Text("Date & Time")
                             .font(.headline)
                             .foregroundStyle(skin.resolvedTextPrimary)
+                            .accessibilityAddTraits(.isHeader)
                         
                         Grid(alignment: .leading, horizontalSpacing: DS.Spacing.sm, verticalSpacing: DS.Spacing.md) {
                             GridRow {
@@ -230,6 +231,7 @@ struct AddEventView: View {
                         Text("Color")
                             .font(.headline)
                             .foregroundStyle(skin.resolvedTextPrimary)
+                            .accessibilityAddTraits(.isHeader)
 
                         HStack(spacing: DS.Spacing.xs) {
                             ForEach(EventColorTag.allCases, id: \.self) { tag in
@@ -282,6 +284,7 @@ struct AddEventView: View {
                         Text("Details")
                             .font(.headline)
                             .foregroundStyle(skin.resolvedTextPrimary)
+                            .accessibilityAddTraits(.isHeader)
                         
                         VStack(spacing: DS.Spacing.md) {
                             TextField("Location", text: $location, prompt: Text("Location").foregroundStyle(skin.resolvedTextTertiary))
@@ -334,6 +337,7 @@ struct AddEventView: View {
                         Text("Reminders")
                             .font(.headline)
                             .foregroundStyle(skin.resolvedTextPrimary)
+                            .accessibilityAddTraits(.isHeader)
                         
                         VStack(alignment: .leading, spacing: DS.Spacing.md) {
                             Toggle("Custom reminders", isOn: $useCustomReminders)
@@ -510,6 +514,7 @@ struct AddEventView: View {
             Text("Pomodoro")
                 .font(.headline)
                 .foregroundStyle(skin.resolvedTextPrimary)
+                .accessibilityAddTraits(.isHeader)
 
             VStack(alignment: .leading, spacing: DS.Spacing.md) {
                 Grid(alignment: .leading, horizontalSpacing: DS.Spacing.md, verticalSpacing: DS.Spacing.sm) {
@@ -807,6 +812,7 @@ struct AddEventView: View {
         if isExternal, let event = editingEvent {
             let minutes = useCustomReminders ? reminderMinutes.sorted() : nil
             reminderService.updateLocalReminder(for: event.id, minutes: minutes)
+            Haptics.impact()
             onSave(true)
             return
         }
@@ -839,6 +845,8 @@ struct AddEventView: View {
         } else {
             reminderService.addLocalEvent(event)
         }
+        // HIG: Confirm successful action with haptic feedback
+        Haptics.impact()
         onSave(isEditing)
     }
 }
