@@ -1,11 +1,8 @@
 {
   "json.schemas": [
     {
-      "fileMatch": ["*.buboskin"],
+      "fileMatch": ["**/Skins/**/*.json", "**/skins/**/*.json"],
       "url": "./Bubo/Skins/buboskin.schema.json"
     }
-  ],
-  "files.associations": {
-    "*.buboskin": "json"
-  }
+  ]
 }

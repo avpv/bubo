@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://bubo.app/buboskin.schema.json",
   "title": "Bubo Skin",
-  "description": "A .buboskin theme file for the Bubo calendar app.",
+  "description": "A skin theme file for the Bubo calendar app.",
   "type": "object",
   "required": [
     "id",

@@ -209,8 +209,8 @@ enum SkinBarMaterial: String, Equatable, CaseIterable {
 
 /// A complete visual theme for Bubo.
 ///
-/// All skins — both built-in and custom — are defined as `.buboskin` JSON files.
-/// See `TEMPLATE.buboskin` for the format and `CONTRIBUTING_SKINS.md` for full
+/// All skins — both built-in and custom — are defined as `.json` JSON files.
+/// See `TEMPLATE.json` for the format and `CONTRIBUTING_SKINS.md` for full
 /// instructions. Built-in skins live in `Bubo/Skins/BuiltInSkins/`.
 struct SkinDefinition: Identifiable, Equatable {
     /// Unique identifier — used for persistence. Must be stable across versions.
@@ -632,16 +632,16 @@ struct SkinGradient: Equatable {
 /// Central registry of all available skins.
 ///
 /// **To add a new built-in skin:**
-/// 1. Create a `.buboskin` JSON file in `Bubo/Skins/BuiltInSkins/`
-///    (copy `TEMPLATE.buboskin` as a starting point)
+/// 1. Create a `.json` JSON file in `Bubo/Skins/BuiltInSkins/`
+///    (copy `TEMPLATE.json` as a starting point)
 /// 2. Add its ID to the `order` array in `BuiltInSkinLoader`
 ///
 /// That's it — your skin will appear in Settings automatically.
 ///
-/// Users can also create custom `.buboskin` files and import them
+/// Users can also create custom `.json` files and import them
 /// via Settings — no code changes needed. See `CustomSkinLoader` for details.
 enum SkinCatalog {
-    /// All built-in skins loaded from bundled `.buboskin` JSON files.
+    /// All built-in skins loaded from bundled `.json` JSON files.
     /// Guaranteed to contain at least one skin (Classic fallback).
     static let builtInSkins: [SkinDefinition] = BuiltInSkinLoader.skins
 

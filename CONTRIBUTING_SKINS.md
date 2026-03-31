@@ -4,7 +4,7 @@ Bubo supports community-contributed skins — visual themes that change the app'
 accent colors, background gradient, and surface tinting. Think of it like
 [Winamp skins](https://skins.webamp.org/) but for a calendar app.
 
-All skins — both built-in and custom — use the same `.buboskin` JSON format.
+All skins — both built-in and custom — use the same `.json` skin format.
 One unified approach for everything.
 
 ## Quick Start
@@ -12,7 +12,7 @@ One unified approach for everything.
 1. **Copy the template**
 
    ```
-   cp Bubo/Skins/TEMPLATE.buboskin MyNewSkin.buboskin
+   cp Bubo/Skins/TEMPLATE.json MyNewSkin.json
    ```
 
 2. **Edit the JSON values** — each field is documented below.
@@ -30,14 +30,14 @@ One unified approach for everything.
    | `previewColors` | 1–2 colors for the thumbnail in the picker |
    | `prefersDarkTint` | `true` for dark/moody skins |
 
-3. **For built-in skins** — place the `.buboskin` file in
+3. **For built-in skins** — place the `.json` file in
    `Bubo/Skins/BuiltInSkins/` and add the skin's `id` to the `order` array
    in `BuiltInSkinLoader` (inside `CustomSkinLoader.swift`).
 
-   **For personal skins** — import via Settings → Skin → Import .buboskin file
+   **For personal skins** — import via Settings → Skin → Import skin .json file
    (no code changes needed).
 
-4. **Open a PR** with your new `.buboskin` file. That's it!
+4. **Open a PR** with your new `.json` skin file. That's it!
 
 ## JSON Format
 
@@ -78,7 +78,7 @@ Every color field accepts any of these formats:
 Use any color picker to get the hex value.
 
 Named colors (`"accentColor"`) are useful for skins that adapt to the user's
-system accent — see `System.buboskin` for an example.
+system accent — see `System.json` for an example.
 
 ## Gradients
 
@@ -283,13 +283,13 @@ The JSON schema enforces these ranges to prevent broken skins:
 
 A JSON Schema is available at `Bubo/Skins/buboskin.schema.json`. It validates
 all keys, types, enums, and required fields. VS Code users get automatic
-validation and autocomplete for `.buboskin` files (see `.vscode/settings.json`).
+validation and autocomplete for skin `.json` files (see `.vscode/settings.json`).
 
 To validate a skin manually:
 
 ```sh
 pip install jsonschema
-python3 -c "import json,jsonschema; jsonschema.validate(json.load(open('MySkin.buboskin')), json.load(open('Bubo/Skins/buboskin.schema.json')))"
+python3 -c "import json,jsonschema; jsonschema.validate(json.load(open('MySkin.json')), json.load(open('Bubo/Skins/buboskin.schema.json')))"
 ```
 
 ## File Structure
@@ -299,21 +299,21 @@ Bubo/Skins/
 ├── SkinDefinition.swift       # Core struct + catalog registry
 ├── CustomSkinLoader.swift     # JSON loading (built-in + custom)
 ├── buboskin.schema.json       # JSON Schema for validation
-├── TEMPLATE.buboskin          # Copy this to start a new skin
+├── TEMPLATE.json              # Copy this to start a new skin
 └── BuiltInSkins/              # Bundled default skins (always present)
-    ├── System.buboskin
-    ├── Classic.buboskin
-    ├── Graphite.buboskin
-    ├── Ocean.buboskin
-    ├── Lavender.buboskin
-    ├── RoseGold.buboskin
-    ├── Midnight.buboskin
-    ├── Sierra.buboskin
-    ├── Arctic.buboskin
-    ├── Sage.buboskin
-    ├── WinXPBlue.buboskin
-    ├── WinXPOlive.buboskin
-    └── WinXPSilver.buboskin
+    ├── System.json
+    ├── Classic.json
+    ├── Graphite.json
+    ├── Ocean.json
+    ├── Lavender.json
+    ├── RoseGold.json
+    ├── Midnight.json
+    ├── Sierra.json
+    ├── Arctic.json
+    ├── Sage.json
+    ├── WinXPBlue.json
+    ├── WinXPOlive.json
+    └── WinXPSilver.json
 ```
 
 ## Rules
@@ -332,11 +332,11 @@ Select a skin, then use the "Choose image..." button to pick a photo.
 Opacity and blur can be adjusted per skin.
 
 Custom skins are stored in `~/Library/Application Support/Bubo/Skins/`.
-You can also drop `.buboskin` files there directly and restart Bubo.
+You can also drop skin `.json` files there directly and restart Bubo.
 
 Right-click a community skin in the picker to remove it.
 
 ## Example
 
 See any built-in skin in `Bubo/Skins/BuiltInSkins/` for a complete working
-example, or `TEMPLATE.buboskin` for the format.
+example, or `TEMPLATE.json` for the format.

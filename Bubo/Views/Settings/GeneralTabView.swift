@@ -155,7 +155,7 @@ struct CustomSkinsSection: View {
             Button {
                 importSkin()
             } label: {
-                Label("Import .buboskin file\u{2026}", systemImage: "plus.circle")
+                Label("Import skin .json file\u{2026}", systemImage: "plus.circle")
                     .font(.caption)
             }
             .buttonStyle(.plain)
@@ -174,7 +174,7 @@ struct CustomSkinsSection: View {
     private func importSkin() {
         let panel = NSOpenPanel()
         panel.title = "Import Bubo Skin"
-        panel.allowedContentTypes = [.json, UTType(filenameExtension: "buboskin") ?? .json]
+        panel.allowedContentTypes = [.json]
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = false
 
@@ -188,7 +188,7 @@ struct CustomSkinsSection: View {
         }
 
         if importedCount == 0 {
-            importError = "Could not read the skin file. Make sure it is a valid .buboskin JSON file."
+            importError = "Could not read the skin file. Make sure it is a valid skin .json file."
         }
     }
 }
