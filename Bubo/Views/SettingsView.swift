@@ -5,7 +5,7 @@ struct SettingsView: View {
     @Environment(ReminderService.self) var reminderService
     @Environment(OptimizerService.self) var optimizerService
     @State private var viewModel = SettingsViewModel()
-    @State private var selectedPane: SettingsPane? = .general
+    @State private var selectedPane: SettingsPane = .general
 
     enum SettingsPane: String, CaseIterable, Hashable {
         case general = "General"
@@ -24,18 +24,38 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        NavigationSplitView {
-            List(selection: $selectedPane) {
+        HStack(spacing: 0) {
+            // Sidebar
+            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                 ForEach(SettingsPane.allCases, id: \.self) { pane in
-                    Label(pane.rawValue, systemImage: pane.icon)
-                        .tag(pane)
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            selectedPane = pane
+                        }
+                    } label: {
+                        Label(pane.rawValue, systemImage: pane.icon)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 6)
+                            .padding(.horizontal, 8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .fill(selectedPane == pane ? Color.accentColor.opacity(0.2) : Color.clear)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(selectedPane == pane ? .primary : .secondary)
                 }
             }
-            .navigationSplitViewColumnWidth(min: 160, ideal: 180, max: 220)
-            .listStyle(.sidebar)
-        } detail: {
+            .padding(12)
+            .frame(width: 170)
+            .frame(maxHeight: .infinity, alignment: .top)
+            .background(.ultraThinMaterial)
+
+            Divider()
+
+            // Detail
             Group {
-                switch selectedPane ?? .general {
+                switch selectedPane {
                 case .general:
                     GeneralTabView()
                 case .calendars:
@@ -46,12 +66,8 @@ struct SettingsView: View {
                     OptimizerTabView()
                 }
             }
-            .toolbar(.hidden, for: .automatic)
-            .navigationTitle("")
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .navigationSplitViewStyle(.balanced)
-        .toolbar(removing: .title)
-        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         .environment(viewModel)
         .environment(settings)
         .environment(reminderService)
