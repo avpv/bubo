@@ -276,8 +276,8 @@ struct MenuBarView: View {
                 }
             }
 
-            // Color filter — show whenever events have color tags
-            if !usedColorTags.isEmpty {
+            // Color filter — show whenever there are events
+            if reminderService.nonDisintegratingEventCount > 0 {
                 colorFilterBar
             }
 
