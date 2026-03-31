@@ -4,7 +4,7 @@
   "author": "Bubo",
   "accentColor": "#38A6E0",
   "surfaceTint": "#0F1F29",
-  "surfaceTintOpacity": 0.03,
+  "surfaceTintOpacity": 0.06,
   "backgroundGradient": {
     "colors": [
       "#3380B810",
@@ -30,7 +30,7 @@
   "barTintOpacity": 0.04,
   "platterMaterial": "ultraThin",
   "platterTint": "#246185",
-  "platterTintOpacity": 0.02,
+  "platterTintOpacity": 0.04,
   "fontDesign": "rounded",
   "fontWeight": "regular",
   "headlineFontWeight": "medium",

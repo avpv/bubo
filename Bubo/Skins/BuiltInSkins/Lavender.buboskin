@@ -32,7 +32,7 @@
   "barTintOpacity": 0.08,
   "platterMaterial": "ultraThin",
   "platterTint": "#522E85",
-  "platterTintOpacity": 0.04,
+  "platterTintOpacity": 0.06,
   "fontDesign": "rounded",
   "fontWeight": "regular",
   "headlineFontWeight": "medium",

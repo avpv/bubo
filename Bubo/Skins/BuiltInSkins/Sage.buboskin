@@ -4,7 +4,7 @@
   "author": "Bubo",
   "accentColor": "#579966",
   "surfaceTint": "#0D1F0F",
-  "surfaceTintOpacity": 0.08,
+  "surfaceTintOpacity": 0.10,
   "backgroundGradient": {
     "colors": [
       "clear",
@@ -30,7 +30,7 @@
   "barTintOpacity": 0.05,
   "platterMaterial": "ultraThin",
   "platterTint": "#244229",
-  "platterTintOpacity": 0.03,
+  "platterTintOpacity": 0.05,
   "fontDesign": "default",
   "fontWeight": "regular",
   "headlineFontWeight": "medium",
@@ -43,7 +43,7 @@
   "shadowOpacity": 0.08,
   "shadowRadius": 10,
   "shadowY": 5,
-  "platterBorderOpacity": 0.1,
+  "platterBorderOpacity": 0.15,
   "animationStyle": "bouncy",
   "hoverShadowOpacity": 0.1,
   "hoverShadowRadius": 14,

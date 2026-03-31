@@ -42,7 +42,7 @@
   "shadowOpacity": 0.15,
   "shadowRadius": 12,
   "shadowY": 5,
-  "platterBorderOpacity": 0.1,
+  "platterBorderOpacity": 0.15,
   "animationStyle": "smooth",
   "hoverShadowOpacity": 0.2,
   "hoverShadowRadius": 16,
