@@ -73,5 +73,6 @@ struct SettingsView: View {
         .environment(reminderService)
         .environment(optimizerService)
         .frame(width: DS.Settings.width, height: DS.Settings.idealHeight)
+        .toolbar(removing: .sidebarToggle)
     }
 }
