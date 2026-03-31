@@ -3,14 +3,14 @@ import Foundation
 // MARK: - Optimizer Service
 
 /// Bridges BuboOptimizer with ReminderService and the rest of the app.
-/// Manages optimizer lifecycle, converts between app models and optimizer models.
+/// All optimization calls are async to avoid blocking the main thread.
 @MainActor
 @Observable
 final class OptimizerService {
 
     let optimizer = BuboOptimizer()
 
-    private(set) var scenarios: [ScheduleScenario] = []
+    var scenarios: [ScheduleScenario] = []
     private(set) var selectedScenarioIndex: Int? = nil
     private(set) var isOptimizing: Bool = false
     private(set) var lastOptimizationDate: Date? = nil
@@ -43,18 +43,17 @@ final class OptimizerService {
 
     // MARK: - Optimize Day
 
-    /// Optimize today's schedule given current events and movable tasks.
     func optimizeDay(
         reminderService: ReminderService,
         movableTasks: [OptimizableEvent]
-    ) {
+    ) async {
         guard isEnabled else { return }
         isOptimizing = true
         error = nil
 
         let fixedEvents = reminderService.allEvents.filter { !$0.isLocalEvent }
 
-        let result = optimizer.optimizeToday(
+        let result = await optimizer.optimizeToday(
             fixedEvents: fixedEvents,
             movableEvents: movableTasks,
             workingHours: workingHours
@@ -68,19 +67,18 @@ final class OptimizerService {
 
     // MARK: - Optimize Week
 
-    /// Optimize the full week schedule.
     func optimizeWeek(
         reminderService: ReminderService,
         movableTasks: [OptimizableEvent],
         participantAvailability: [String: [DateInterval]] = [:]
-    ) {
+    ) async {
         guard isEnabled else { return }
         isOptimizing = true
         error = nil
 
         let fixedEvents = reminderService.allEvents.filter { !$0.isLocalEvent }
 
-        let result = optimizer.optimizeWeek(
+        let result = await optimizer.optimizeWeek(
             fixedEvents: fixedEvents,
             movableEvents: movableTasks,
             workingHours: workingHours,
@@ -95,21 +93,18 @@ final class OptimizerService {
 
     // MARK: - Suggest Focus Blocks
 
-    /// Find optimal time for focus blocks.
     func suggestFocusBlocks(
         count: Int = 2,
         durationMinutes: Int = 120,
         reminderService: ReminderService
-    ) {
+    ) async {
         isOptimizing = true
         error = nil
 
-        let fixedEvents = reminderService.allEvents
-
-        let result = optimizer.suggestFocusBlocks(
+        let result = await optimizer.suggestFocusBlocks(
             count: count,
             durationMinutes: durationMinutes,
-            fixedEvents: fixedEvents,
+            fixedEvents: reminderService.allEvents,
             workingHours: workingHours
         )
 
@@ -121,15 +116,14 @@ final class OptimizerService {
 
     // MARK: - Suggest Pomodoro Slot
 
-    /// Find optimal time for a Pomodoro session.
     func suggestPomodoroSlot(
         config: PomodoroConfig = .classic,
         reminderService: ReminderService
-    ) {
+    ) async {
         isOptimizing = true
         error = nil
 
-        let result = optimizer.suggestPomodoroSlot(
+        let result = await optimizer.suggestPomodoroSlot(
             config: config,
             fixedEvents: reminderService.allEvents,
             workingHours: workingHours
@@ -143,18 +137,16 @@ final class OptimizerService {
 
     // MARK: - Apply Scenario
 
-    /// User accepted a scenario — apply it and record feedback.
     func applyScenario(at index: Int, to reminderService: ReminderService) {
         guard index < scenarios.count else { return }
         let scenario = scenarios[index]
 
         optimizer.acceptScenario(scenario)
 
-        // Convert genes to local events and add them
         for gene in scenario.genes {
             let event = CalendarEvent(
                 id: gene.eventId,
-                title: gene.eventId, // Will be overridden by the actual title
+                title: gene.eventId,
                 startDate: gene.startTime,
                 endDate: gene.endTime,
                 location: nil,
@@ -169,7 +161,6 @@ final class OptimizerService {
         selectedScenarioIndex = index
     }
 
-    /// User rejected a scenario — record feedback.
     func rejectScenario(at index: Int) {
         guard index < scenarios.count else { return }
         optimizer.rejectScenario(scenarios[index])
@@ -209,7 +200,6 @@ final class OptimizerService {
         return (start: saved.start, end: saved.end, enabled: saved.enabled)
     }
 
-    /// Reset optimizer state.
     func reset() {
         optimizer.reset()
         scenarios = []

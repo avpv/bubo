@@ -5,6 +5,10 @@ import Foundation
 /// Main facade for the Bubo schedule optimization engine.
 /// Combines GA core, constraints, objectives, re-optimization,
 /// scenario generation, and preference learning into a single API.
+///
+/// All optimization methods are async and run the GA on a background thread
+/// to keep the main thread responsive.
+@MainActor
 @Observable
 final class BuboOptimizer {
 
@@ -28,13 +32,13 @@ final class BuboOptimizer {
     var gaConfig: GAConfiguration = .default
     var preferences: OptimizerPreferences = OptimizerPreferences()
 
-    // MARK: - Full Optimization
+    // MARK: - Full Optimization (Async)
 
     /// Run a full optimization for the given context.
-    /// Returns multiple diverse scenarios for the user to choose from.
-    func optimize(context: OptimizerContext) -> OptimizerResult {
+    /// The GA runs on a background thread; progress updates are dispatched to main.
+    func optimize(context: OptimizerContext) async -> OptimizerResult {
         isOptimizing = true
-        defer { isOptimizing = false }
+        progress = nil
 
         // Apply learned preferences
         var prefs = context.preferences
@@ -51,57 +55,64 @@ final class BuboOptimizer {
         )
 
         let evaluator = FitnessEvaluator.standard(preferences: prefs)
+        let config = gaConfig
+        let scenGen = scenarioGenerator
 
-        let startTime = Date()
+        // Run GA on background thread
+        let (population, convergenceGen, duration) = await Task.detached(priority: .userInitiated) {
+            let startTime = Date()
 
-        let ga = GeneticAlgorithm<ScheduleChromosome>(
-            config: gaConfig,
-            context: adjustedContext,
-            evaluate: { [evaluator, adjustedContext] chromosome in
-                evaluator.evaluateAndAssign(&chromosome, context: adjustedContext)
-            },
-            onProgress: { [weak self] p in
-                self?.progress = p
-            }
-        )
+            let ga = GeneticAlgorithm<ScheduleChromosome>(
+                config: config,
+                context: adjustedContext,
+                evaluate: { chromosome in
+                    evaluator.evaluateAndAssign(&chromosome, context: adjustedContext)
+                },
+                onProgress: { [weak self] p in
+                    Task { @MainActor in
+                        self?.progress = p
+                    }
+                }
+            )
 
-        let population = ga.run()
-        let duration = Date().timeIntervalSince(startTime)
+            let pop = ga.run()
+            let elapsed = Date().timeIntervalSince(startTime)
+            return (pop, ga.convergenceGeneration, elapsed)
+        }.value
 
-        // Generate diverse scenarios
-        let scenarios = scenarioGenerator.generateScenarios(
+        // Back on main thread — generate scenarios and update state
+        let scenarios = scenGen.generateScenarios(
             from: population,
             context: adjustedContext,
             evaluator: evaluator
         )
 
         let metadata = OptimizationMetadata(
-            generations: ga.convergenceGeneration,
+            generations: convergenceGen,
             totalDuration: duration,
             bestFitness: population.first?.fitness ?? 0,
             averageFitness: population.prefix(10).reduce(0) { $0 + $1.fitness } / Double(min(10, population.count)),
-            convergenceGeneration: ga.convergenceGeneration
+            convergenceGeneration: convergenceGen
         )
 
         let result = OptimizerResult(scenarios: scenarios, metadata: metadata)
         lastResult = result
 
-        // Update current schedule with best result
         if let best = scenarios.first {
             currentSchedule = best.genes
         }
 
+        isOptimizing = false
         return result
     }
 
     // MARK: - Quick Optimize (Day)
 
-    /// Quick optimization for today only. Uses faster GA settings.
     func optimizeToday(
         fixedEvents: [CalendarEvent],
         movableEvents: [OptimizableEvent],
         workingHours: ClosedRange<Int> = 9...18
-    ) -> OptimizerResult {
+    ) async -> OptimizerResult {
         let cal = Calendar.current
         let todayStart = cal.startOfDay(for: Date())
         let todayEnd = cal.date(byAdding: .day, value: 1, to: todayStart)!
@@ -116,20 +127,19 @@ final class BuboOptimizer {
 
         let savedConfig = gaConfig
         gaConfig = .quick
-        defer { gaConfig = savedConfig }
-
-        return optimize(context: context)
+        let result = await optimize(context: context)
+        gaConfig = savedConfig
+        return result
     }
 
     // MARK: - Weekly Optimize
 
-    /// Optimize the full week schedule.
     func optimizeWeek(
         fixedEvents: [CalendarEvent],
         movableEvents: [OptimizableEvent],
         workingHours: ClosedRange<Int> = 9...18,
         participantAvailability: [String: [DateInterval]] = [:]
-    ) -> OptimizerResult {
+    ) async -> OptimizerResult {
         let now = Date()
         let weekEnd = Calendar.current.date(byAdding: .day, value: 7, to: now)!
 
@@ -142,47 +152,49 @@ final class BuboOptimizer {
             participantAvailability: participantAvailability
         )
 
-        return optimize(context: context)
+        return await optimize(context: context)
     }
 
     // MARK: - Incremental Re-optimization (#26)
 
-    /// Re-optimize after a schedule change (new event, cancellation, etc.).
     func reoptimize(
         trigger: ReoptimizationTrigger,
         context: OptimizerContext
-    ) -> OptimizerResult? {
+    ) async -> OptimizerResult? {
         isOptimizing = true
-        defer { isOptimizing = false }
 
         var prefs = context.preferences
         preferenceLearner.applyToPreferences(&prefs)
 
         let evaluator = FitnessEvaluator.standard(preferences: prefs)
+        let schedule = currentSchedule
+        let reopt = reoptimizer
 
-        return reoptimizer.reoptimize(
-            currentSchedule: currentSchedule,
-            trigger: trigger,
-            context: context,
-            evaluator: evaluator,
-            config: .quick
-        )
+        let result = await Task.detached(priority: .userInitiated) {
+            reopt.reoptimize(
+                currentSchedule: schedule,
+                trigger: trigger,
+                context: context,
+                evaluator: evaluator,
+                config: .quick
+            )
+        }.value
+
+        isOptimizing = false
+        return result
     }
 
     // MARK: - User Feedback (#24)
 
-    /// User accepted a scenario — record positive feedback.
     func acceptScenario(_ scenario: ScheduleScenario) {
         currentSchedule = scenario.genes
         preferenceLearner.recordAcceptance(scenarioFitness: scenario.fitness)
     }
 
-    /// User rejected a scenario — record negative feedback.
     func rejectScenario(_ scenario: ScheduleScenario) {
         preferenceLearner.recordRejection(scenarioFitness: scenario.fitness)
     }
 
-    /// User manually edited the schedule — record modification feedback.
     func recordManualEdit(original: [ScheduleGene], edited: [ScheduleGene]) {
         currentSchedule = edited
         preferenceLearner.recordModification(original: original, edited: edited)
@@ -190,7 +202,6 @@ final class BuboOptimizer {
 
     // MARK: - Scenario Comparison (#27)
 
-    /// Compare the scenarios from the last optimization.
     func compareLastScenarios() -> [ScenarioComparison] {
         guard let result = lastResult else { return [] }
         return scenarioGenerator.compareScenarios(result.scenarios)
@@ -198,13 +209,12 @@ final class BuboOptimizer {
 
     // MARK: - Focus Block Suggestions (#1)
 
-    /// Find optimal focus block placements in the current schedule.
     func suggestFocusBlocks(
         count: Int = 2,
         durationMinutes: Int = 120,
         fixedEvents: [CalendarEvent],
         workingHours: ClosedRange<Int> = 9...18
-    ) -> OptimizerResult {
+    ) async -> OptimizerResult {
         let focusEvents = (0..<count).map { i in
             OptimizableEvent(
                 title: "Focus Block \(i + 1)",
@@ -217,7 +227,7 @@ final class BuboOptimizer {
             )
         }
 
-        return optimizeToday(
+        return await optimizeToday(
             fixedEvents: fixedEvents,
             movableEvents: focusEvents,
             workingHours: workingHours
@@ -226,12 +236,11 @@ final class BuboOptimizer {
 
     // MARK: - Pomodoro Optimization (#2)
 
-    /// Find the optimal time for a Pomodoro session.
     func suggestPomodoroSlot(
         config: PomodoroConfig = .classic,
         fixedEvents: [CalendarEvent],
         workingHours: ClosedRange<Int> = 9...18
-    ) -> OptimizerResult {
+    ) async -> OptimizerResult {
         let totalMinutes = config.workMinutes * config.rounds
             + config.breakMinutes * (config.rounds - 1)
             + config.longBreakMinutes
@@ -247,7 +256,7 @@ final class BuboOptimizer {
             pomodoroConfig: config
         )
 
-        return optimizeToday(
+        return await optimizeToday(
             fixedEvents: fixedEvents,
             movableEvents: [pomodoroEvent],
             workingHours: workingHours
@@ -256,7 +265,6 @@ final class BuboOptimizer {
 
     // MARK: - Meeting Scheduling (#5, #16)
 
-    /// Find optimal slot for a meeting with participants.
     func suggestMeetingSlot(
         title: String,
         durationMinutes: Int,
@@ -264,7 +272,7 @@ final class BuboOptimizer {
         fixedEvents: [CalendarEvent],
         participantAvailability: [String: [DateInterval]],
         workingHours: ClosedRange<Int> = 9...18
-    ) -> OptimizerResult {
+    ) async -> OptimizerResult {
         let meetingEvent = OptimizableEvent(
             title: title,
             duration: TimeInterval(durationMinutes * 60),
@@ -274,7 +282,7 @@ final class BuboOptimizer {
             requiredParticipants: participants
         )
 
-        return optimizeWeek(
+        return await optimizeWeek(
             fixedEvents: fixedEvents,
             movableEvents: [meetingEvent],
             workingHours: workingHours,
@@ -284,13 +292,12 @@ final class BuboOptimizer {
 
     // MARK: - Day Planning (#6)
 
-    /// Plan an entire day by placing all movable tasks optimally.
     func planDay(
         tasks: [OptimizableEvent],
         fixedEvents: [CalendarEvent],
         workingHours: ClosedRange<Int> = 9...18
-    ) -> OptimizerResult {
-        optimizeToday(
+    ) async -> OptimizerResult {
+        await optimizeToday(
             fixedEvents: fixedEvents,
             movableEvents: tasks,
             workingHours: workingHours
@@ -299,13 +306,12 @@ final class BuboOptimizer {
 
     // MARK: - Week Balancing (#9)
 
-    /// Rebalance the week by redistributing movable events across days.
     func balanceWeek(
         movableEvents: [OptimizableEvent],
         fixedEvents: [CalendarEvent],
         workingHours: ClosedRange<Int> = 9...18
-    ) -> OptimizerResult {
-        optimizeWeek(
+    ) async -> OptimizerResult {
+        await optimizeWeek(
             fixedEvents: fixedEvents,
             movableEvents: movableEvents,
             workingHours: workingHours
@@ -314,7 +320,6 @@ final class BuboOptimizer {
 
     // MARK: - Reset
 
-    /// Reset all learned preferences and optimization state.
     func reset() {
         preferenceLearner.reset()
         currentSchedule = []

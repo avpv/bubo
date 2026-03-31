@@ -32,13 +32,14 @@ struct ConflictObjective: FitnessObjective {
             for j in (i + 1)..<allEvents.count {
                 guard allEvents[j].start < allEvents[i].end else { break }
 
-                // Direct overlap
+                // Direct overlap = intersection of two intervals
+                let overlapStart = max(allEvents[i].start, allEvents[j].start)
                 let overlapEnd = min(allEvents[i].end, allEvents[j].end)
-                let overlapDuration = overlapEnd.timeIntervalSince(allEvents[j].start) / 60
-                totalOverlapMinutes += max(0, overlapDuration)
+                let overlapDuration = max(0, overlapEnd.timeIntervalSince(overlapStart)) / 60
+                totalOverlapMinutes += overlapDuration
             }
 
-            // Near-miss: events within 5 minutes (creates stress)
+            // Near-miss: consecutive events within 5 minutes (creates stress)
             if i + 1 < allEvents.count {
                 let gap = allEvents[i + 1].start.timeIntervalSince(allEvents[i].end) / 60
                 if gap > 0 && gap < 5 {
@@ -47,10 +48,11 @@ struct ConflictObjective: FitnessObjective {
             }
         }
 
-        // Score: 1.0 = no conflicts, approaches 0.0 with more overlap
-        let overlapPenalty = totalOverlapMinutes * 0.1
-        let nearMissPenalty = nearMissMinutes * 0.02
+        // Score: 1.0 = no conflicts, decays toward 0 with more overlap
+        // Using exponential decay instead of linear to keep score in [0, 1]
+        let overlapScore = exp(-totalOverlapMinutes * 0.05)
+        let nearMissScore = exp(-nearMissMinutes * 0.02)
 
-        return max(0, 1.0 - overlapPenalty - nearMissPenalty)
+        return overlapScore * 0.8 + nearMissScore * 0.2
     }
 }

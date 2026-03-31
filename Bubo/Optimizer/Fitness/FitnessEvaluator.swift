@@ -51,24 +51,38 @@ final class FitnessEvaluator {
     // MARK: - Evaluation
 
     /// Compute the total fitness for a chromosome.
+    /// Returns a value in [0, 1] — 0 = completely infeasible, 1 = perfect.
     func evaluate(chromosome: ScheduleChromosome, context: OptimizerContext) -> Double {
-        // Compute constraint penalty
-        let penalty = constraintEngine.totalPenalty(for: chromosome, context: context)
+        // Hard constraint check — infeasible solutions get near-zero fitness
+        // but we still give a tiny gradient based on violation magnitude
+        // so the GA can evolve toward feasibility.
+        if !constraintEngine.isValid(chromosome, context: context) {
+            let hardPenalty = constraintEngine.totalPenalty(for: chromosome, context: context)
+            // Map penalty to (0, 0.1] — lower penalty = closer to 0.1
+            return 0.1 / (1.0 + hardPenalty * 0.01)
+        }
+
+        // Soft constraint penalty (only from soft constraints, already validated hard ones)
+        let softPenalty = constraintEngine.constraints
+            .filter { !$0.isHard }
+            .reduce(0.0) { $0 + $1.penalty(for: chromosome, context: context) }
 
         // Compute weighted objective sum
         let totalWeight = objectives.reduce(0.0) { $0 + $1.weight }
-        guard totalWeight > 0 else { return -penalty }
+        guard totalWeight > 0 else { return 0.1 }
 
         var weightedSum = 0.0
         for objective in objectives {
-            let score = objective.evaluate(chromosome: chromosome, context: context)
+            let score = max(0, min(1, objective.evaluate(chromosome: chromosome, context: context)))
             weightedSum += score * objective.weight
         }
 
-        let normalizedScore = weightedSum / totalWeight
+        let normalizedScore = weightedSum / totalWeight  // [0, 1]
 
-        // Fitness = objective score - constraint penalty
-        return normalizedScore - penalty
+        // Soft penalty reduces score but keeps it in [0.1, 1.0]
+        let penaltyFactor = 1.0 / (1.0 + softPenalty * 0.01)
+
+        return max(0.1, normalizedScore * penaltyFactor)
     }
 
     /// Evaluate and assign fitness to a chromosome (mutating).

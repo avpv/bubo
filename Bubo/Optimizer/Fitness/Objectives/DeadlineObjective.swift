@@ -25,33 +25,34 @@ struct DeadlineObjective: FitnessObjective {
             let timeUntilDeadline = deadline.timeIntervalSince(gene.endTime)
 
             if timeUntilDeadline < 0 {
-                // Past deadline — heavy penalty proportional to lateness
-                let hoursLate = -timeUntilDeadline / 3600
-                totalScore += max(0, -hoursLate * 0.1)  // negative contribution
+                // Past deadline — zero score (hard fail for this event)
+                totalScore += 0.0
                 continue
             }
 
-            // Time available from now to deadline
-            let totalAvailable = deadline.timeIntervalSince(context.planningHorizon.start)
-            guard totalAvailable > 0 else {
-                totalScore += 0.5
+            // Total window from event start to deadline
+            let totalWindow = deadline.timeIntervalSince(gene.startTime)
+            guard totalWindow > 0 else {
+                totalScore += 0.0
                 continue
             }
 
-            // How early is the task scheduled relative to the deadline?
-            let earlinessRatio = timeUntilDeadline / totalAvailable // 0 = at deadline, 1 = at start
+            // Fraction of buffer remaining: 1.0 = scheduled at the very start, 0.0 = at deadline
+            let bufferFraction = timeUntilDeadline / totalWindow
 
-            // Score: reward earlier scheduling (anti-procrastination)
-            // Use a curve that rewards moderate earliness but doesn't over-reward very early
-            let earlyScore = 1.0 - exp(-earlinessRatio * 3.0)
+            // Smooth reward curve: more buffer = higher score
+            // bufferFraction 0.0 → score ~0.0 (cramming)
+            // bufferFraction 0.5 → score ~0.78
+            // bufferFraction 0.9 → score ~0.93
+            let earlyScore = 1.0 - exp(-bufferFraction * 3.0)
 
-            // Priority multiplier: high priority tasks should be scheduled earlier
+            // Priority multiplier: high priority tasks benefit more from early scheduling
             let priorityBonus = earlyScore * event.priority * 0.2
 
             // Penalty for cramming: if multiple deadline tasks on same day
             let crammingPenalty = crammingFactor(for: gene, chromosome: chromosome, context: context)
 
-            totalScore += min(1.0, earlyScore + priorityBonus - crammingPenalty)
+            totalScore += max(0, min(1.0, earlyScore + priorityBonus - crammingPenalty))
         }
 
         return max(0, totalScore / Double(eventsWithDeadlines.count))

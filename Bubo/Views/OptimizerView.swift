@@ -146,8 +146,8 @@ struct OptimizerView: View {
                 .frame(width: 100)
             }
 
-            optimizeButton {
-                optimizerService.suggestFocusBlocks(
+            asyncOptimizeButton {
+                await optimizerService.suggestFocusBlocks(
                     count: focusBlockCount,
                     durationMinutes: focusBlockMinutes,
                     reminderService: reminderService
@@ -186,9 +186,9 @@ struct OptimizerView: View {
                     }
                 }
 
-                optimizeButton {
+                asyncOptimizeButton {
                     let tasks = localEvents.map { $0.toOptimizableEvent() }
-                    optimizerService.optimizeDay(
+                    await optimizerService.optimizeDay(
                         reminderService: reminderService,
                         movableTasks: tasks
                     )
@@ -203,8 +203,8 @@ struct OptimizerView: View {
                 .font(.caption)
                 .foregroundStyle(skin.resolvedTextSecondary)
 
-            optimizeButton {
-                optimizerService.suggestPomodoroSlot(
+            asyncOptimizeButton {
+                await optimizerService.suggestPomodoroSlot(
                     config: .classic,
                     reminderService: reminderService
                 )
@@ -212,10 +212,10 @@ struct OptimizerView: View {
         }
     }
 
-    private func optimizeButton(action: @escaping () -> Void) -> some View {
+    private func asyncOptimizeButton(action: @escaping () async -> Void) -> some View {
         Button {
             Haptics.tap()
-            action()
+            Task { await action() }
         } label: {
             Label("Optimize", systemImage: "wand.and.stars")
                 .font(.subheadline.weight(.medium))

@@ -163,14 +163,19 @@ struct LunchWindowConstraint: ScheduleConstraint {
         var penalty = 0.0
 
         for gene in chromosome.genes {
-            let startHour = cal.component(.hour, from: gene.startTime)
-            let endHour = cal.component(.hour, from: gene.endTime)
+            let day = cal.startOfDay(for: gene.startTime)
+            guard let lunchStartTime = cal.date(bySettingHour: lunchStart, minute: 0, second: 0, of: day),
+                  let lunchEndTime = cal.date(bySettingHour: lunchEnd, minute: 0, second: 0, of: day) else {
+                continue
+            }
 
-            // Check if event overlaps with lunch window
-            if startHour < lunchEnd && endHour > lunchStart {
-                let overlapStart = max(startHour, lunchStart)
-                let overlapEnd = min(endHour, lunchEnd)
-                penalty += Double(overlapEnd - overlapStart) * 5
+            // Calculate actual overlap in minutes
+            let overlapStart = max(gene.startTime, lunchStartTime)
+            let overlapEnd = min(gene.endTime, lunchEndTime)
+            let overlapMinutes = max(0, overlapEnd.timeIntervalSince(overlapStart)) / 60
+
+            if overlapMinutes > 0 {
+                penalty += overlapMinutes * 0.1
             }
         }
         return penalty
