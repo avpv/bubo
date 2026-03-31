@@ -22,7 +22,6 @@ final class BuboOptimizer {
 
     private(set) var isOptimizing = false
     private(set) var lastResult: OptimizerResult?
-    private(set) var progress: GAProgress?
 
     /// The current schedule genes (movable events placement).
     private(set) var currentSchedule: [ScheduleGene] = []
@@ -39,7 +38,6 @@ final class BuboOptimizer {
     func optimize(context: OptimizerContext, overrideConfig: GAConfiguration? = nil) async -> OptimizerResult {
         isOptimizing = true
         defer { isOptimizing = false }
-        progress = nil
 
         // Apply learned preferences, merging with (not replacing) user preferences
         var prefs = context.preferences
@@ -330,7 +328,6 @@ final class BuboOptimizer {
         preferenceLearner.reset()
         currentSchedule = []
         lastResult = nil
-        progress = nil
         preferences = OptimizerPreferences()
     }
 }

@@ -250,11 +250,6 @@ struct OptimizerView: View {
             Text("Optimizing your schedule...")
                 .font(.subheadline)
                 .foregroundStyle(skin.resolvedTextSecondary)
-            if let progress = optimizerService.optimizer.progress {
-                Text("Generation \(progress.generation) | Best: \(String(format: "%.2f", progress.bestFitness))")
-                    .font(.caption2)
-                    .foregroundStyle(skin.resolvedTextTertiary)
-            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
