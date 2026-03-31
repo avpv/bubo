@@ -44,5 +44,14 @@
   "sfSymbolWeight": "medium",
   "badgeStyle": "tinted",
   "separatorStyle": "system",
-  "separatorOpacity": 0.5
+  "separatorOpacity": 0.5,
+  "cornerRadius": 12,
+  "platterBorderOpacity": 0.15,
+  "shadowOpacity": 0.1,
+  "shadowRadius": 10,
+  "shadowY": 5,
+  "hoverShadowOpacity": 0.18,
+  "hoverShadowRadius": 14,
+  "hoverShadowY": 6,
+  "hoverFillOpacity": 0.08
 }

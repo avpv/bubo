@@ -233,13 +233,13 @@ struct MenuBarView: View {
                 StatusBanner(
                     icon: "wifi.slash",
                     text: "No internet — calendar data may be outdated",
-                    color: DS.Colors.warning
+                    color: skin.resolvedWarningColor
                 )
             } else if reminderService.isUsingCache {
                 StatusBanner(
                     icon: "arrow.triangle.2.circlepath",
                     text: "Showing cached data",
-                    color: DS.Colors.warning
+                    color: skin.resolvedWarningColor
                 )
                 .frame(maxWidth: .infinity, alignment: .center)
             }
@@ -249,7 +249,7 @@ struct MenuBarView: View {
                     CalendarAccessBanner()
                         .frame(maxWidth: .infinity, alignment: .center)
                 } else if let error = reminderService.syncError, networkMonitor.isConnected {
-                    StatusBanner(icon: "exclamationmark.triangle.fill", text: error, color: DS.Colors.warning)
+                    StatusBanner(icon: "exclamationmark.triangle.fill", text: error, color: skin.resolvedWarningColor)
                         .frame(maxWidth: .infinity, alignment: .center)
                 }
             }
@@ -533,7 +533,7 @@ private struct CalendarAccessBanner: View {
         } label: {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "calendar.badge.exclamationmark")
-                    .foregroundStyle(DS.Colors.warning)
+                    .foregroundStyle(skin.resolvedWarningColor)
                     .font(.caption)
                     .symbolRenderingMode(.hierarchical)
                 Text("Calendar access not granted. Click to open Settings.")
@@ -546,7 +546,7 @@ private struct CalendarAccessBanner: View {
             }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.vertical, DS.Spacing.md)
-            .adaptiveBadgeFill(DS.Colors.warning)
+            .adaptiveBadgeFill(skin.resolvedWarningColor)
             .clipShape(Capsule())
             .shadow(color: skin.resolvedShadowColor, radius: skin.shadowRadius, y: skin.shadowY)
         }

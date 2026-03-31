@@ -199,18 +199,17 @@ struct AddEventView: View {
                                     .controlSize(.large)
                                     .frame(height: DS.Size.controlHeight)
                                 }
+
+                                if !addToCalendar {
+                                    Text("Event will be stored locally in Bubo only")
+                                        .font(.caption)
+                                        .foregroundStyle(skin.resolvedTextTertiary)
+                                }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(DS.Spacing.md)
                             .skinPlatter(skin)
                             .skinPlatterDepth(skin)
-
-                            if !addToCalendar {
-                                Text("Event will be stored locally in Bubo only")
-                                    .font(.caption)
-                                    .foregroundStyle(skin.resolvedTextSecondary)
-                                    .padding(.horizontal, DS.Spacing.sm)
-                            }
                         }
                     }
 
