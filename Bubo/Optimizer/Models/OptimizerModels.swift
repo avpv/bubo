@@ -3,7 +3,7 @@ import Foundation
 // MARK: - Optimizable Event
 
 /// An event that the optimizer can move around in the schedule.
-struct OptimizableEvent: Identifiable, Codable, Hashable {
+struct OptimizableEvent: Identifiable, Codable, Hashable, Sendable {
     let id: String
     let title: String
     let duration: TimeInterval
@@ -45,7 +45,7 @@ struct OptimizableEvent: Identifiable, Codable, Hashable {
 
 // MARK: - Pomodoro Config
 
-struct PomodoroConfig: Codable, Hashable {
+struct PomodoroConfig: Codable, Hashable, Sendable {
     let workMinutes: Int
     let breakMinutes: Int
     let rounds: Int
@@ -58,7 +58,7 @@ struct PomodoroConfig: Codable, Hashable {
 // MARK: - Schedule Gene
 
 /// A single gene: placement of one event in the schedule.
-struct ScheduleGene: Codable, Hashable {
+struct ScheduleGene: Codable, Hashable, Sendable {
     let eventId: String
     let title: String
     var startTime: Date
@@ -88,7 +88,7 @@ struct ScheduleGene: Codable, Hashable {
 // MARK: - Optimizer Context
 
 /// All data the optimizer needs to generate and evaluate schedules.
-struct OptimizerContext {
+struct OptimizerContext: Sendable {
     let fixedEvents: [CalendarEvent]
     let movableEvents: [OptimizableEvent]
     let workingHours: ClosedRange<Int>              // e.g. 9...18
@@ -122,7 +122,7 @@ struct OptimizerContext {
 // MARK: - Optimizer Preferences
 
 /// User preferences that influence optimization weights.
-struct OptimizerPreferences: Codable {
+struct OptimizerPreferences: Codable, Sendable {
     var focusBlockWeight: Double
     var pomodoroFitWeight: Double
     var conflictWeight: Double
@@ -203,12 +203,12 @@ struct OptimizerPreferences: Codable {
 // MARK: - Optimizer Result
 
 /// The output of a single optimization run.
-struct OptimizerResult {
+struct OptimizerResult: Sendable {
     let scenarios: [ScheduleScenario]
     let metadata: OptimizationMetadata
 }
 
-struct ScheduleScenario: Identifiable {
+struct ScheduleScenario: Identifiable, Sendable {
     let id = UUID()
     let genes: [ScheduleGene]
     let fitness: Double
@@ -232,7 +232,7 @@ struct ScheduleScenario: Identifiable {
     }
 }
 
-struct OptimizationMetadata {
+struct OptimizationMetadata: Sendable {
     let generations: Int
     let totalDuration: TimeInterval
     let bestFitness: Double
@@ -243,7 +243,7 @@ struct OptimizationMetadata {
 // MARK: - User Feedback
 
 /// Tracks user actions on optimizer suggestions for preference learning.
-enum UserFeedback: Codable {
+enum UserFeedback: Codable, Sendable {
     case accepted(scenarioFitness: Double, weights: [String: Double])
     case rejected(scenarioFitness: Double, weights: [String: Double])
     case modified(originalGenes: [ScheduleGene], editedGenes: [ScheduleGene], weights: [String: Double])

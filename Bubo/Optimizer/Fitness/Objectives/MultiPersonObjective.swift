@@ -42,6 +42,7 @@ struct MultiPersonObjective: FitnessObjective {
                             return total + max(0, overlapEnd.timeIntervalSince(overlapStart)) / 60
                         }
                         let eventMinutes = event.duration / 60
+                        guard eventMinutes > 0 else { participantScore += 0.5; continue }
                         participantScore += min(1.0, overlapMinutes / eventMinutes) * 0.5
                     }
                 } else {

@@ -16,7 +16,9 @@ protocol FitnessObjective {
 
 /// Combines multiple objectives into a single weighted fitness score.
 /// Also applies constraint penalties.
-final class FitnessEvaluator {
+/// Thread safety: a fresh evaluator is created per optimization run.
+/// Weights are set before the GA starts and not mutated during evolution.
+final class FitnessEvaluator: @unchecked Sendable {
     var objectives: [any FitnessObjective]
     let constraintEngine: ConstraintEngine
 

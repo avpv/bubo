@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - GA Configuration
 
-struct GAConfiguration {
+struct GAConfiguration: Sendable {
     var populationSize: Int
     var maxGenerations: Int
     var mutationRate: Double
@@ -56,7 +56,7 @@ struct GAConfiguration {
 
 // MARK: - GA Progress
 
-struct GAProgress {
+struct GAProgress: Sendable {
     let generation: Int
     let bestFitness: Double
     let averageFitness: Double
@@ -66,7 +66,8 @@ struct GAProgress {
 // MARK: - Genetic Algorithm Engine
 
 /// The core genetic algorithm engine, generic over chromosome type.
-final class GeneticAlgorithm<C: Chromosome> {
+/// Thread safety: instances are created and used within a single Task.detached block.
+final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
     let config: GAConfiguration
     let context: OptimizerContext
     private let evaluate: (inout C) -> Void

@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Selection Strategy
 
-enum SelectionStrategy {
+enum SelectionStrategy: Sendable {
     case tournament(size: Int)
     case roulette
     case rank
@@ -50,6 +50,9 @@ enum Selection {
         from population: Population<C>,
         tournamentSize: Int
     ) -> C {
+        guard !population.individuals.isEmpty else {
+            fatalError("Cannot select from empty population")
+        }
         let candidates = (0..<tournamentSize).compactMap { _ -> C? in
             population.individuals.randomElement()
         }
@@ -59,6 +62,9 @@ enum Selection {
     // MARK: - Roulette Wheel Selection
 
     private static func rouletteSelect<C: Chromosome>(from population: Population<C>) -> C {
+        guard !population.individuals.isEmpty else {
+            fatalError("Cannot select from empty population")
+        }
         let minFitness = population.individuals.map(\.fitness).min() ?? 0
         let shifted = population.individuals.map { $0.fitness - minFitness + 1e-6 }
         let totalFitness = shifted.reduce(0, +)
@@ -79,6 +85,9 @@ enum Selection {
     // MARK: - Rank Selection
 
     private static func rankSelect<C: Chromosome>(from population: Population<C>) -> C {
+        guard !population.individuals.isEmpty else {
+            fatalError("Cannot select from empty population")
+        }
         let sorted = population.sortedByFitness
         let totalRank = (1...sorted.count).reduce(0, +)
         var random = Int.random(in: 0..<totalRank)

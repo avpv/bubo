@@ -30,7 +30,9 @@ struct WeekBalanceObjective: FitnessObjective {
         }
 
         // Include all working days in the horizon (even empty ones)
-        let daysInHorizon = Int(context.planningHorizon.duration / 86400)
+        let daysInHorizon = context.calendar.dateComponents(
+            [.day], from: context.planningHorizon.start, to: context.planningHorizon.end
+        ).day ?? 1
         for dayOffset in 0..<daysInHorizon {
             guard let day = cal.date(byAdding: .day, value: dayOffset, to: context.planningHorizon.start) else { continue }
             let weekday = cal.component(.weekday, from: day)

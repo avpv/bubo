@@ -137,7 +137,7 @@ struct ScenarioGenerator {
 
 // MARK: - Scenario Comparison
 
-struct ScenarioComparison {
+struct ScenarioComparison: Sendable {
     let scenarioIndex: Int
     let fitnessVsBest: Double
     let keyDifferences: [String]

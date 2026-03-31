@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Crossover Strategy
 
-enum CrossoverStrategy {
+enum CrossoverStrategy: Sendable {
     case singlePoint
     case twoPoint
     case uniform(swapProbability: Double)

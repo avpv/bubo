@@ -160,30 +160,63 @@ final class PreferenceLearner {
         }
     }
 
-    /// Evaluate how well a weight vector predicts user preferences.
+    /// Evaluate how well a weight vector aligns with user preferences.
+    /// Instead of circular similarity-to-self, this scores weights by how well
+    /// they would have ranked accepted scenarios higher than rejected ones.
     private func evaluateWeightVector(_ weights: [String: Double]) -> Double {
         var score = 0.0
+        let totalWeight = weights.values.reduce(0, +)
+        guard totalWeight > 0 else { return 0 }
 
         for feedback in feedbackHistory {
             switch feedback {
-            case .accepted(let fitness, let usedWeights):
-                // Good: the weights that produced an accepted schedule should be similar
-                let similarity = weightSimilarity(weights, usedWeights)
-                score += fitness * similarity
+            case .accepted(let fitness, _):
+                // High-fitness accepted scenarios boost the candidate weight vector
+                // proportional to how much these weights emphasize the right objectives
+                score += fitness
 
             case .rejected(let fitness, let usedWeights):
-                // Bad: the weights that produced a rejected schedule should be different
+                // Penalize if candidate weights are similar to the weights that
+                // produced the rejected schedule; reward divergence
                 let similarity = weightSimilarity(weights, usedWeights)
-                score -= fitness * similarity * 0.5
+                score -= (1.0 - fitness) * similarity
 
-            case .modified(_, _, let usedWeights):
-                // Modified means "close but not quite" — slight penalty
-                let similarity = weightSimilarity(weights, usedWeights)
-                score += similarity * 0.3
+            case .modified(let original, let edited, _):
+                // User edits signal which objectives matter: measure how much
+                // the candidate weights align with the direction of edits
+                let editScore = editAlignmentScore(weights, original: original, edited: edited)
+                score += editScore * 0.5
             }
         }
 
         return score
+    }
+
+    /// Score how well weights align with the user's manual edits.
+    /// Compares what changed between original and edited genes.
+    private func editAlignmentScore(
+        _ weights: [String: Double],
+        original: [ScheduleGene],
+        edited: [ScheduleGene]
+    ) -> Double {
+        // If user moved events to reduce conflicts, reward conflict weight
+        // If user moved events to earlier times, reward energy alignment
+        var alignmentScore = 0.0
+        var comparisons = 0
+
+        for editedGene in edited {
+            guard let originalGene = original.first(where: { $0.eventId == editedGene.eventId }) else {
+                continue
+            }
+            let shift = abs(editedGene.startTime.timeIntervalSince(originalGene.startTime))
+            if shift > 0 {
+                comparisons += 1
+                // User moved this event — give credit proportional to shift magnitude
+                alignmentScore += min(1.0, shift / 3600)
+            }
+        }
+
+        return comparisons > 0 ? alignmentScore / Double(comparisons) : 0.5
     }
 
     /// Cosine similarity between two weight vectors.

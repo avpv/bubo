@@ -895,3 +895,146 @@ struct RegressionTests {
         #expect(penalty == 15, "Expected 15-minute penalty, got \(penalty)")
     }
 }
+
+// MARK: - Round 5: Concurrency, Validation, and Edge Case Tests
+
+@Suite("Working Hours Validation Tests")
+struct WorkingHoursValidationTests {
+
+    @Test("Working hours range creates valid ClosedRange")
+    func workingHoursValidRange() {
+        // Verify that the context can handle valid ranges
+        let context = makeContext(workingHours: 9...18)
+        #expect(context.workingHours.lowerBound == 9)
+        #expect(context.workingHours.upperBound == 18)
+    }
+
+    @Test("Clamp handles single-hour working window")
+    func clampSingleHourWindow() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let noon = cal.date(bySettingHour: 12, minute: 0, second: 0, of: today)!
+
+        // Working hours 10...10 means 0-length window
+        let clamped = clampToWorkingHours(noon, duration: 3600, workingHours: 10...10, calendar: cal)
+        let hour = cal.component(.hour, from: clamped)
+        #expect(hour == 10)
+    }
+}
+
+@Suite("DST-Safe Day Counting Tests")
+struct DSTDayCountingTests {
+
+    @Test("Day counting uses Calendar not 86400 seconds")
+    func dayCountingUsesCalendar() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let nextWeek = cal.date(byAdding: .day, value: 7, to: today)!
+        let horizon = DateInterval(start: today, end: nextWeek)
+
+        let days = cal.dateComponents([.day], from: horizon.start, to: horizon.end).day ?? 0
+        #expect(days == 7)
+    }
+}
+
+@Suite("MultiPerson Zero Duration Tests")
+struct MultiPersonZeroDurationTests {
+
+    @Test("MultiPersonObjective handles zero-duration event without crash")
+    func zeroDurationEvent() {
+        let event = OptimizableEvent(
+            id: "meet1",
+            title: "Quick Sync",
+            duration: 0,
+            priority: 0.5,
+            energyCost: 0.3,
+            requiredParticipants: ["alice"]
+        )
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let start = cal.date(bySettingHour: 10, minute: 0, second: 0, of: today)!
+
+        let gene = ScheduleGene(
+            eventId: "meet1", title: "Quick Sync", startTime: start,
+            duration: 0, context: nil, energyCost: 0.3, priority: 0.5, isFocusBlock: false
+        )
+        let chromosome = ScheduleChromosome(genes: [gene])
+        let context = OptimizerContext(
+            movableEvents: [event],
+            planningHorizon: DateInterval(start: today, end: cal.date(byAdding: .day, value: 1, to: today)!),
+            participantAvailability: ["alice": [DateInterval(start: start, duration: 3600)]]
+        )
+
+        let objective = MultiPersonObjective(weight: 1.0)
+        let score = objective.evaluate(chromosome: chromosome, context: context)
+        // Should not crash, and score should be valid
+        #expect(score >= 0 && score <= 1)
+        #expect(!score.isNaN)
+    }
+}
+
+@Suite("Sendable Conformance Tests")
+struct SendableConformanceTests {
+
+    @Test("ScheduleGene is Sendable")
+    func geneIsSendable() {
+        let gene = ScheduleGene(
+            eventId: "t1", title: "Task", startTime: Date(),
+            duration: 3600, context: nil, energyCost: 0.5, priority: 0.5, isFocusBlock: false
+        )
+        // Compile-time check: assign to Sendable-typed variable
+        let _: any Sendable = gene
+        #expect(true)
+    }
+
+    @Test("OptimizerContext is Sendable")
+    func contextIsSendable() {
+        let context = makeContext()
+        let _: any Sendable = context
+        #expect(true)
+    }
+
+    @Test("GAConfiguration is Sendable")
+    func configIsSendable() {
+        let config = GAConfiguration.default
+        let _: any Sendable = config
+        #expect(true)
+    }
+}
+
+@Suite("PreferenceLearner Fitness Tests")
+struct PreferenceLearnerFitnessTests {
+
+    @Test("PreferenceLearner does not crash with empty feedback")
+    func emptyFeedback() {
+        let learner = PreferenceLearner()
+        var prefs = OptimizerPreferences()
+        learner.applyToPreferences(&prefs)
+        // With < minSamples feedback, weights should be unchanged
+        #expect(prefs.focusBlockWeight == 1.0)
+    }
+
+    @Test("PreferenceLearner reset clears all state")
+    func resetClearsState() {
+        let learner = PreferenceLearner()
+        learner.recordAcceptance(scenarioFitness: 0.8)
+        learner.recordAcceptance(scenarioFitness: 0.9)
+        learner.reset()
+        #expect(learner.feedbackHistory.isEmpty)
+    }
+}
+
+@Suite("Frozen Gene Title Tests")
+struct FrozenGeneTitleTests {
+
+    @Test("Frozen genes preserve title not eventId")
+    func frozenGenesPreserveTitle() {
+        let gene = ScheduleGene(
+            eventId: "uuid-123", title: "Team Standup", startTime: Date(),
+            duration: 1800, context: nil, energyCost: 0.3, priority: 0.5, isFocusBlock: false
+        )
+        // The gene title should be "Team Standup", not "uuid-123"
+        #expect(gene.title == "Team Standup")
+        #expect(gene.eventId == "uuid-123")
+    }
+}

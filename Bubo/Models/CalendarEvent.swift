@@ -4,7 +4,7 @@ import SwiftUI
 // MARK: - Event Color Tag
 
 /// Predefined color choices for events.
-enum EventColorTag: String, Codable, Hashable, CaseIterable {
+enum EventColorTag: String, Codable, Hashable, CaseIterable, Sendable {
     case red, orange, yellow, green, blue, purple, pink
 
     var color: Color {
@@ -23,12 +23,12 @@ enum EventColorTag: String, Codable, Hashable, CaseIterable {
 // MARK: - Event Type
 
 /// Distinguishes regular calendar events from Pomodoro sessions.
-enum EventType: String, Codable, Hashable {
+enum EventType: String, Codable, Hashable, Sendable {
     case standard
     case pomodoro
 }
 
-struct CalendarEvent: Identifiable, Codable, Hashable {
+struct CalendarEvent: Identifiable, Codable, Hashable, Sendable {
     let id: String
     let title: String
     let startDate: Date

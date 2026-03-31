@@ -20,7 +20,7 @@ protocol Chromosome: Equatable {
 
 /// A chromosome representing a complete schedule assignment.
 /// Each gene maps one movable event to a specific time slot.
-struct ScheduleChromosome: Chromosome {
+struct ScheduleChromosome: Chromosome, Sendable {
     var genes: [ScheduleGene]
     var fitness: Double = 0.0
 
@@ -91,7 +91,9 @@ struct ScheduleChromosome: Chromosome {
                 )
             case 1:
                 // Move to different day within horizon
-                let daysInHorizon = Int(context.planningHorizon.duration / 86400)
+                let daysInHorizon = context.calendar.dateComponents(
+                    [.day], from: context.planningHorizon.start, to: context.planningHorizon.end
+                ).day ?? 1
                 guard daysInHorizon > 0 else { break }
                 let dayOffset = Int.random(in: 0..<daysInHorizon)
                 let newDay = cal.date(byAdding: .day, value: dayOffset, to: context.planningHorizon.start)!
@@ -120,7 +122,7 @@ struct ScheduleChromosome: Chromosome {
         workingHours: ClosedRange<Int>,
         calendar: Calendar
     ) -> Date {
-        let daysInHorizon = max(1, Int(horizon.duration / 86400))
+        let daysInHorizon = max(1, calendar.dateComponents([.day], from: horizon.start, to: horizon.end).day ?? 1)
         let dayOffset = Int.random(in: 0..<daysInHorizon)
         let day = calendar.date(byAdding: .day, value: dayOffset, to: horizon.start)!
 

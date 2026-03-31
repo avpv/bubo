@@ -4,7 +4,8 @@ import Foundation
 
 /// Handles mid-day schedule changes without full re-optimization.
 /// Seeds the GA with the current schedule and freezes events that already happened.
-final class IncrementalReoptimizer {
+/// Thread safety: a fresh instance is created per reoptimize() call in BuboOptimizer.
+final class IncrementalReoptimizer: @unchecked Sendable {
 
     /// Stability penalty weight — how much we penalize deviation from current schedule.
     var stabilityWeight: Double = 2.0
@@ -127,7 +128,8 @@ final class IncrementalReoptimizer {
         var movable: [ScheduleGene] = []
 
         for gene in genes {
-            if gene.startTime < freezeBefore || gene.endTime < freezeBefore {
+            if gene.startTime < freezeBefore {
+                // Freeze events that have already started (in-progress or completed)
                 frozen.append(gene)
             } else {
                 movable.append(gene)
@@ -141,7 +143,7 @@ final class IncrementalReoptimizer {
         genes.map { gene in
             CalendarEvent(
                 id: gene.eventId,
-                title: gene.eventId,
+                title: gene.title,
                 startDate: gene.startTime,
                 endDate: gene.endTime,
                 location: nil,
@@ -193,7 +195,7 @@ final class IncrementalReoptimizer {
 
 // MARK: - Reoptimization Trigger
 
-enum ReoptimizationTrigger {
+enum ReoptimizationTrigger: Sendable {
     case newEvent(OptimizableEvent)
     case cancelledEvent(eventId: String)
     case movedEvent(eventId: String, newStart: Date)
@@ -204,7 +206,7 @@ enum ReoptimizationTrigger {
 // MARK: - Stability-Aware Fitness Evaluator
 
 /// Adds a stability penalty to the base fitness, discouraging unnecessary changes.
-struct StabilityAwareFitnessEvaluator {
+struct StabilityAwareFitnessEvaluator: Sendable {
     let base: FitnessEvaluator
     let referenceGenes: [ScheduleGene]
     let stabilityWeight: Double

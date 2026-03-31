@@ -19,10 +19,22 @@ final class OptimizerService {
     // MARK: - Optimizer Settings (persisted)
 
     var workingHoursStart: Int {
-        didSet { saveSettings() }
+        didSet {
+            // Ensure start <= end to prevent ClosedRange crash
+            if workingHoursStart > workingHoursEnd {
+                workingHoursEnd = workingHoursStart
+            }
+            saveSettings()
+        }
     }
     var workingHoursEnd: Int {
-        didSet { saveSettings() }
+        didSet {
+            // Ensure start <= end to prevent ClosedRange crash
+            if workingHoursEnd < workingHoursStart {
+                workingHoursStart = workingHoursEnd
+            }
+            saveSettings()
+        }
     }
     var isEnabled: Bool {
         didSet { saveSettings() }

@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Recurrence Rule (RFC 5545 compatible)
 
-struct RecurrenceRule: Codable, Hashable {
+struct RecurrenceRule: Codable, Hashable, Sendable {
     let frequency: RecurrenceFrequency
     let interval: Int
     let end: RecurrenceEnd
@@ -238,7 +238,7 @@ struct RecurrenceRule: Codable, Hashable {
 
 // MARK: - Frequency
 
-enum RecurrenceFrequency: String, Codable, Hashable, CaseIterable {
+enum RecurrenceFrequency: String, Codable, Hashable, CaseIterable, Sendable {
     case minutely
     case hourly
     case daily
@@ -285,7 +285,7 @@ enum RecurrenceFrequency: String, Codable, Hashable, CaseIterable {
 
 // MARK: - End Condition
 
-enum RecurrenceEnd: Codable, Hashable {
+enum RecurrenceEnd: Codable, Hashable, Sendable {
     case never
     case afterCount(Int)
     case untilDate(Date)
@@ -293,7 +293,7 @@ enum RecurrenceEnd: Codable, Hashable {
 
 // MARK: - Monthly Mode
 
-enum MonthlyMode: Codable, Hashable {
+enum MonthlyMode: Codable, Hashable, Sendable {
     /// Repeat on a specific day of the month (e.g. the 15th).
     case dayOfMonth(Int)
     /// Repeat on the Nth weekday of the month (e.g. the 2nd Tuesday).
@@ -302,7 +302,7 @@ enum MonthlyMode: Codable, Hashable {
 
 // MARK: - Weekday
 
-enum Weekday: String, Codable, Hashable, CaseIterable {
+enum Weekday: String, Codable, Hashable, CaseIterable, Sendable {
     case monday, tuesday, wednesday, thursday, friday, saturday, sunday
 
     var shortName: String {
