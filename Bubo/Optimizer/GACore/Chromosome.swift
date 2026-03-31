@@ -52,7 +52,7 @@ struct ScheduleChromosome: Chromosome, Sendable {
     // MARK: - Crossover (Order-based)
 
     func crossover(with other: ScheduleChromosome, context: OptimizerContext) -> (ScheduleChromosome, ScheduleChromosome) {
-        guard genes.count > 1 else { return (self, other) }
+        guard genes.count > 1, genes.count == other.genes.count else { return (self, other) }
 
         let point = Int.random(in: 1..<genes.count)
 
