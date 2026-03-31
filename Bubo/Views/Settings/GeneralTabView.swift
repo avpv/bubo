@@ -322,6 +322,9 @@ struct SkinImageSection: View {
                     opacity: existing?.opacity ?? 0.3,
                     blur: existing?.blur ?? 0
                 )
+                // Skin image and wallpaper/photo are mutually exclusive
+                settings.selectedWallpaperID = "none"
+                settings.customBackgroundPhotoPath = ""
             }
         } catch {
             // Silently fail — user can try again
@@ -442,6 +445,9 @@ struct BackgroundPhotoSection: View {
             try fileManager.copyItem(at: url, to: destination)
             withAnimation(DS.Animation.smoothSpring) {
                 settings.customBackgroundPhotoPath = destination.path
+                // Photo and wallpaper/skin image are mutually exclusive
+                settings.selectedWallpaperID = "none"
+                settings.skinImageOverrides.removeValue(forKey: settings.selectedSkinID)
             }
         } catch {
             // Silently fail — user can try again
@@ -481,6 +487,11 @@ struct WallpaperSectionView: View {
                     Button {
                         withAnimation(DS.Animation.smoothSpring) {
                             settings.selectedWallpaperID = wallpaper.id
+                            // Wallpaper and photo/skin image are mutually exclusive
+                            if wallpaper.id != "none" {
+                                settings.customBackgroundPhotoPath = ""
+                                settings.skinImageOverrides.removeValue(forKey: settings.selectedSkinID)
+                            }
                         }
                     } label: {
                         WallpaperPreviewCard(wallpaper: wallpaper, isSelected: isSelected)

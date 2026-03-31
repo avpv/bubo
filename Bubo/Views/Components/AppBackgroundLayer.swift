@@ -8,13 +8,19 @@ struct AppBackgroundLayer: View {
     var customPhotoBlur: Double = 2
     var skinImageOverride: SkinImageOverride? = nil
 
+    /// Whether a non-trivial wallpaper is active (not "none").
+    private var hasActiveWallpaper: Bool {
+        wallpaper.id != "none"
+    }
+
     var body: some View {
         ZStack {
             // Wallpaper layer (rendered first, behind everything)
             WallpaperBackgroundLayer(wallpaper: wallpaper)
 
-            // User's custom background photo
-            if !customPhotoPath.isEmpty,
+            // User's custom background photo — only when no wallpaper is active
+            if !hasActiveWallpaper,
+               !customPhotoPath.isEmpty,
                let nsImage = NSImage(contentsOfFile: customPhotoPath) {
                 GeometryReader { geo in
                     Image(nsImage: nsImage)
@@ -28,8 +34,8 @@ struct AppBackgroundLayer: View {
                 .ignoresSafeArea()
             }
 
-            // Skin background layer
-            SkinBackgroundLayer(skin: skin, skinImageOverride: skinImageOverride)
+            // Skin background layer — pass skin image only when no wallpaper/photo is active
+            SkinBackgroundLayer(skin: skin, skinImageOverride: hasActiveWallpaper || !customPhotoPath.isEmpty ? nil : skinImageOverride)
 
             // Surface tint overlay
             if !skin.isClassic {
