@@ -25,6 +25,7 @@
   "buttonStyle": "solid",
   "buttonShape": "roundedRect",
   "toolbarTint": "#EBE8DF",
+  "toolbarIconSize": 14,
   "barMaterial": "thin",
   "barTint": "#2E4C2E",
   "barTintOpacity": 0.05,
