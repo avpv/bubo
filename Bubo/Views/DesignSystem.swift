@@ -31,9 +31,9 @@ enum DS {
     // MARK: Settings Window
 
     enum Settings {
-        static let width: CGFloat = 480
-        static let minHeight: CGFloat = 400
-        static let idealHeight: CGFloat = 460
+        static let width: CGFloat = 640
+        static let minHeight: CGFloat = 480
+        static let idealHeight: CGFloat = 540
     }
 
     // MARK: Empty State

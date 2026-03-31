@@ -180,7 +180,8 @@ struct MenuBarView: View {
                 return filtered.isEmpty ? nil : (date: dayGroup.date, events: filtered)
             }
         } else {
-            base = reminderService.eventsByDay
+            // Skip empty day groups (e.g. "Today" with 0 events when tomorrow has events)
+            base = reminderService.eventsByDay.filter { !$0.events.isEmpty }
         }
         return base
     }
@@ -275,8 +276,8 @@ struct MenuBarView: View {
                 }
             }
 
-            // Color filter
-            if reminderService.nonDisintegratingEventCount > 0 {
+            // Color filter — only show when there are multiple distinct colors to filter by
+            if usedColorTags.count > 1 {
                 colorFilterBar
             }
 
@@ -372,9 +373,15 @@ struct MenuBarView: View {
         .transition(.opacity.combined(with: .scale(scale: 0.95)))
     }
 
+    private var usedColorTags: [EventColorTag] {
+        let allEvents = reminderService.eventsByDay.flatMap(\.events)
+        let usedTags = Set(allEvents.compactMap(\.colorTag))
+        return EventColorTag.allCases.filter { usedTags.contains($0) }
+    }
+
     private var colorFilterBar: some View {
         HStack(spacing: DS.Spacing.xs) {
-            ForEach(EventColorTag.allCases, id: \.self) { tag in
+            ForEach(usedColorTags, id: \.self) { tag in
                 Button {
                     Haptics.tap()
                     withAnimation(skin.resolvedMicroAnimation) {
@@ -435,14 +442,6 @@ struct MenuBarView: View {
                         .padding(.horizontal, DS.Spacing.sm)
                         .padding(.top, dayGroup.date == reminderService.eventsByDay.first?.date ? 0 : DS.Spacing.sm)
 
-                    if dayGroup.events.isEmpty {
-                        Text("No events")
-                            .font(.subheadline)
-                            .foregroundStyle(skin.resolvedTextSecondary)
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.vertical, DS.Spacing.sm)
-                    }
-
                     ForEach(dayGroup.events) { event in
                         EventRowView(
                             event: event,
@@ -490,14 +489,14 @@ struct MenuBarView: View {
 
             Spacer()
 
-            HStack(spacing: DS.Spacing.sm) {
+            HStack(spacing: DS.Spacing.md) {
                 Button(action: {
                     Haptics.tap()
                     navigation = .optimizer
                 }) {
-                    Label("Optimize", systemImage: "wand.and.stars")
+                    Image(systemName: "wand.and.stars")
                 }
-                .help("AI Schedule Optimizer (\u{2318}O)")
+                .help("Optimize (\u{2318}O)")
                 .keyboardShortcut("o", modifiers: .command)
 
                 Button(action: {
@@ -505,19 +504,19 @@ struct MenuBarView: View {
                     reminderService.syncNow()
                     toastState.showInfo("Refreshing calendars…", icon: "arrow.clockwise")
                 }) {
-                    Label("Refresh", systemImage: "arrow.clockwise")
+                    Image(systemName: "arrow.clockwise")
                 }
-                .help("Refresh calendars (\u{2318}R)")
+                .help("Refresh (\u{2318}R)")
                 .keyboardShortcut("r", modifiers: .command)
 
-                OpenSettingsButton()
+                OpenSettingsButton(iconOnly: true)
                     .keyboardShortcut(",", modifiers: .command)
-                    .help("Open settings (\u{2318},)")
+                    .help("Settings (\u{2318},)")
 
                 Button(action: { NSApplication.shared.terminate(nil) }) {
-                    Label("Quit", systemImage: "power")
+                    Image(systemName: "power")
                 }
-                .help("Quit Bubo (\u{2318}Q)")
+                .help("Quit (\u{2318}Q)")
                 .keyboardShortcut("q", modifiers: .command)
             }
             .buttonStyle(.borderless)
@@ -535,6 +534,7 @@ struct MenuBarView: View {
 // MARK: - Settings Button
 
 private struct OpenSettingsButton: View {
+    var iconOnly: Bool = false
     @Environment(\.openSettings) private var openSettings
 
     var body: some View {
@@ -544,7 +544,11 @@ private struct OpenSettingsButton: View {
             openSettings()
             NSApp.activate()
         } label: {
-            Label("Settings", systemImage: "gear")
+            if iconOnly {
+                Image(systemName: "gear")
+            } else {
+                Label("Settings", systemImage: "gear")
+            }
         }
     }
 }
@@ -566,7 +570,7 @@ private struct CalendarAccessBanner: View {
                     .foregroundStyle(skin.resolvedWarningColor)
                     .font(.caption)
                     .symbolRenderingMode(.hierarchical)
-                Text("Calendar access not granted. Click to open Settings.")
+                Text("Calendar access not granted")
                     .font(.caption)
                     .foregroundStyle(skin.resolvedTextPrimary)
                 Spacer()
@@ -574,8 +578,8 @@ private struct CalendarAccessBanner: View {
                     .font(.caption2)
                     .foregroundStyle(skin.resolvedTextTertiary)
             }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.md)
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.sm)
             .adaptiveBadgeFill(skin.resolvedWarningColor)
             .clipShape(Capsule())
             .shadow(color: skin.resolvedShadowColor, radius: skin.shadowRadius, y: skin.shadowY)
