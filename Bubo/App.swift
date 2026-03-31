@@ -223,6 +223,7 @@ struct BuboApp: App {
                 .environment(settings)
                 .environment(reminderService)
                 .environment(optimizerService)
+                .toolbar(.hidden, for: .windowToolbar)
         }
     }
 }
