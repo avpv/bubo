@@ -28,7 +28,7 @@
   "barTint": "#B24066",
   "barTintOpacity": 0.08,
   "platterTint": "#993359",
-  "platterTintOpacity": 0.04,
+  "platterTintOpacity": 0.06,
   "fontDesign": "rounded",
   "fontWeight": "medium",
   "headlineFontWeight": "semibold",
@@ -36,5 +36,6 @@
   "sfSymbolWeight": "medium",
   "badgeStyle": "tinted",
   "separatorStyle": "subtle",
-  "separatorOpacity": 0.3
+  "separatorOpacity": 0.3,
+  "platterBorderOpacity": 0.12
 }

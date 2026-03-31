@@ -37,5 +37,6 @@
   "sfSymbolRendering": "monochrome",
   "sfSymbolWeight": "light",
   "badgeStyle": "outlined",
-  "separatorStyle": "none"
+  "separatorStyle": "none",
+  "platterBorderOpacity": 0.2
 }

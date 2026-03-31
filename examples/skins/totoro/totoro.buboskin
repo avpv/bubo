@@ -36,5 +36,6 @@
   "sfSymbolWeight": "light",
   "badgeStyle": "tinted",
   "separatorStyle": "subtle",
-  "separatorOpacity": 0.3
+  "separatorOpacity": 0.3,
+  "platterBorderOpacity": 0.12
 }
