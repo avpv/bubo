@@ -69,6 +69,9 @@ struct CustomSkinJSON: Codable {
     /// Apple HIG: secondary actions use a subtler color for visual hierarchy.
     let toolbarTint: JSONColor?
 
+    /// Icon size in points for toolbar buttons. Defaults to 15.
+    let toolbarIconSize: CGFloat?
+
     /// Material for header/footer bars.
     /// Valid values: "ultraThin", "thin", "regular", "thick", "ultraThick", "bar".
     /// Apple HIG: controls translucency level of toolbar areas. Defaults to "thick".
@@ -176,6 +179,7 @@ struct CustomSkinJSON: Codable {
             buttonTint: buttonTint?.toColor(),
             buttonTintOpacity: buttonTintOpacity ?? 0.3,
             toolbarTint: toolbarTint?.toColor(),
+            toolbarIconSize: toolbarIconSize ?? 15,
             barMaterial: resolvedBarMaterial,
             barTint: barTint?.toColor(),
             barTintOpacity: barTintOpacity ?? 0,
