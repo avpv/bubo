@@ -38,5 +38,12 @@
   "badgeStyle": "tinted",
   "separatorStyle": "system",
   "separatorOpacity": 0.5,
-  "platterBorderOpacity": 0.1
+  "platterBorderOpacity": 0.1,
+  "shadowOpacity": 0.12,
+  "shadowRadius": 6,
+  "shadowY": 3,
+  "hoverShadowOpacity": 0.18,
+  "hoverShadowRadius": 8,
+  "hoverShadowY": 4,
+  "hoverFillOpacity": 0.08
 }

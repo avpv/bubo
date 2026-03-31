@@ -37,6 +37,13 @@
   "sfSymbolWeight": "bold",
   "badgeStyle": "filled",
   "separatorStyle": "system",
-  "separatorOpacity": 0.6,
-  "platterBorderOpacity": 0.15
+  "separatorOpacity": 0.4,
+  "platterBorderOpacity": 0.15,
+  "shadowOpacity": 0.1,
+  "shadowRadius": 8,
+  "shadowY": 4,
+  "hoverShadowOpacity": 0.15,
+  "hoverShadowRadius": 10,
+  "hoverShadowY": 5,
+  "hoverFillOpacity": 0.08
 }

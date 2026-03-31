@@ -23,7 +23,7 @@
   "secondaryAccent": "#F26600",
   "buttonStyle": "solid",
   "buttonShape": "rectangle",
-  "toolbarTint": "#D95900",
+  "toolbarTint": "#A6A6B8",
   "barMaterial": "ultraThick",
   "barTint": "#730A00",
   "barTintOpacity": 0.22,
@@ -36,6 +36,13 @@
   "sfSymbolWeight": "heavy",
   "badgeStyle": "filled",
   "separatorStyle": "system",
-  "separatorOpacity": 0.7,
-  "platterBorderOpacity": 0.2
+  "separatorOpacity": 0.45,
+  "platterBorderOpacity": 0.2,
+  "shadowOpacity": 0.18,
+  "shadowRadius": 10,
+  "shadowY": 5,
+  "hoverShadowOpacity": 0.25,
+  "hoverShadowRadius": 14,
+  "hoverShadowY": 7,
+  "hoverFillOpacity": 0.1
 }

@@ -37,5 +37,12 @@
   "badgeStyle": "filled",
   "separatorStyle": "subtle",
   "separatorOpacity": 0.35,
-  "platterBorderOpacity": 0.18
+  "platterBorderOpacity": 0.18,
+  "shadowOpacity": 0.12,
+  "shadowRadius": 10,
+  "shadowY": 5,
+  "hoverShadowOpacity": 0.2,
+  "hoverShadowRadius": 14,
+  "hoverShadowY": 7,
+  "hoverFillOpacity": 0.08
 }
