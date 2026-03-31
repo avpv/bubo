@@ -5,6 +5,7 @@ struct MenuBarView: View {
     var settings: ReminderSettings
     var reminderService: ReminderService
     var networkMonitor: NetworkMonitor
+    var optimizerService: OptimizerService
 
     @State private var navigation: Navigation = .list
     @State private var hasStartedSync = false
@@ -20,9 +21,15 @@ struct MenuBarView: View {
         case detail(CalendarEvent)
         case addEvent(editing: CalendarEvent? = nil)
         case timer(CalendarEvent)
+        case optimizer
 
         var isTimer: Bool {
             if case .timer = self { return true }
+            return false
+        }
+
+        var isOptimizer: Bool {
+            if case .optimizer = self { return true }
             return false
         }
 
@@ -32,6 +39,7 @@ struct MenuBarView: View {
             case (.detail(let a), .detail(let b)): return a.id == b.id
             case (.addEvent(let a), .addEvent(let b)): return a?.id == b?.id
             case (.timer(let a), .timer(let b)): return a.id == b.id
+            case (.optimizer, .optimizer): return true
             default: return false
             }
         }
@@ -121,6 +129,19 @@ struct MenuBarView: View {
                             navigation = .list
                             toastState.showSuccess(isEdit ? "Event updated" : "Event added")
                         }
+                    )
+                    .transition(
+                        reduceMotion ? .opacity : .asymmetric(
+                            insertion: .move(edge: .trailing).combined(with: .opacity),
+                            removal: .move(edge: .trailing).combined(with: .opacity).combined(with: .scale(scale: 0.98))
+                        )
+                    )
+
+                case .optimizer:
+                    OptimizerView(
+                        optimizerService: optimizerService,
+                        reminderService: reminderService,
+                        onBack: { navigation = .list }
                     )
                     .transition(
                         reduceMotion ? .opacity : .asymmetric(
@@ -470,6 +491,15 @@ struct MenuBarView: View {
             Spacer()
 
             HStack(spacing: DS.Spacing.sm) {
+                Button(action: {
+                    Haptics.tap()
+                    navigation = .optimizer
+                }) {
+                    Label("Optimize", systemImage: "wand.and.stars")
+                }
+                .help("AI Schedule Optimizer (\u{2318}O)")
+                .keyboardShortcut("o", modifiers: .command)
+
                 Button(action: {
                     Haptics.tap()
                     reminderService.syncNow()

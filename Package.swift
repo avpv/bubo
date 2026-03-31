@@ -17,6 +17,11 @@ let package = Package(
                 .copy("Resources/MenuBarIcon@2x.png"),
                 .copy("Skins/BuiltInSkins"),
             ]
-        )
+        ),
+        .testTarget(
+            name: "OptimizerTests",
+            dependencies: ["Bubo"],
+            path: "Tests/OptimizerTests"
+        ),
     ]
 )
