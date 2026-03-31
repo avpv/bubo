@@ -7,13 +7,11 @@ struct SettingsView: View {
     @State private var viewModel = SettingsViewModel()
     @State private var selectedPane: SettingsPane = .general
 
-    enum SettingsPane: String, CaseIterable, Identifiable {
+    enum SettingsPane: String, CaseIterable, Hashable {
         case general = "General"
         case calendars = "Calendars"
         case reminders = "Reminders"
         case optimizer = "Optimizer"
-
-        var id: String { rawValue }
 
         var icon: String {
             switch self {
@@ -26,12 +24,36 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        NavigationSplitView {
-            List(SettingsPane.allCases, selection: $selectedPane) { pane in
-                Label(pane.rawValue, systemImage: pane.icon)
+        HStack(spacing: 0) {
+            // Sidebar
+            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                ForEach(SettingsPane.allCases, id: \.self) { pane in
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            selectedPane = pane
+                        }
+                    } label: {
+                        Label(pane.rawValue, systemImage: pane.icon)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 6)
+                            .padding(.horizontal, 8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .fill(selectedPane == pane ? Color.accentColor.opacity(0.2) : Color.clear)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(selectedPane == pane ? .primary : .secondary)
+                }
             }
-            .navigationSplitViewColumnWidth(min: 160, ideal: 180, max: 220)
-        } detail: {
+            .padding(12)
+            .frame(width: 170)
+            .frame(maxHeight: .infinity, alignment: .top)
+            .background(.ultraThinMaterial)
+
+            Divider()
+
+            // Detail
             Group {
                 switch selectedPane {
                 case .general:
@@ -44,7 +66,7 @@ struct SettingsView: View {
                     OptimizerTabView()
                 }
             }
-            .navigationTitle(selectedPane.rawValue)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .environment(viewModel)
         .environment(settings)
