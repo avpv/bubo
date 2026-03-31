@@ -24,6 +24,7 @@
   "buttonStyle": "gradient",
   "buttonShape": "capsule",
   "toolbarTint": "#FFF0E0",
+  "toolbarIconSize": 15,
   "barMaterial": "ultraThin",
   "barTint": "#9E614C",
   "barTintOpacity": 0.08,

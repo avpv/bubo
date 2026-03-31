@@ -27,6 +27,7 @@
   "buttonTint": "#7A4CC7",
   "buttonTintOpacity": 0.2,
   "toolbarTint": "#FFFFFF",
+  "toolbarIconSize": 15,
   "barMaterial": "ultraThin",
   "barTint": "#613394",
   "barTintOpacity": 0.08,

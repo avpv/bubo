@@ -280,6 +280,9 @@ struct SkinDefinition: Identifiable, Equatable {
     /// buttons recede. Falls back to accent color if nil.
     let toolbarTint: Color?
 
+    /// Icon size for toolbar/utility buttons in points. Defaults to 15.
+    let toolbarIconSize: CGFloat
+
     /// Material used for header and footer bars.
     /// Apple HIG: different material levels control translucency/vibrancy.
     /// Defaults to `.thick` for rich vibrancy.
@@ -401,6 +404,7 @@ struct SkinDefinition: Identifiable, Equatable {
         buttonTint: Color? = nil,
         buttonTintOpacity: Double = 0.3,
         toolbarTint: Color? = nil,
+        toolbarIconSize: CGFloat = 15,
         barMaterial: SkinBarMaterial = .thick,
         barTint: Color? = nil,
         barTintOpacity: Double = 0,
@@ -451,6 +455,7 @@ struct SkinDefinition: Identifiable, Equatable {
         self.buttonTint = buttonTint
         self.buttonTintOpacity = buttonTintOpacity
         self.toolbarTint = toolbarTint
+        self.toolbarIconSize = toolbarIconSize
         self.barMaterial = barMaterial
         self.barTint = barTint
         self.barTintOpacity = barTintOpacity

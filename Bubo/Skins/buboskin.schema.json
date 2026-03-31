@@ -112,6 +112,13 @@
       "$ref": "#/$defs/color",
       "description": "Tint color for toolbar buttons (Refresh, Settings, Quit)."
     },
+    "toolbarIconSize": {
+      "type": "number",
+      "minimum": 10,
+      "maximum": 24,
+      "default": 15,
+      "description": "Icon size in points for toolbar buttons (Refresh, Settings, Quit)."
+    },
     "barMaterial": {
       "$ref": "#/$defs/material",
       "default": "thick",
