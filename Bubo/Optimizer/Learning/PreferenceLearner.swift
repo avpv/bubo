@@ -75,9 +75,16 @@ final class PreferenceLearner {
 
     // MARK: - Learning
 
-    /// Run meta-GA to evolve weights if we have enough feedback.
+    /// Track feedback count at last learning run.
+    private var feedbackCountAtLastLearn: Int = 0
+
+    /// Run meta-GA to evolve weights if we have enough new feedback.
+    /// Only runs every 5 new feedback items to avoid blocking the main thread.
     private func learnIfReady() {
         guard feedbackHistory.count >= minSamplesForLearning else { return }
+        let newFeedback = feedbackHistory.count - feedbackCountAtLastLearn
+        guard newFeedback >= 5 else { return }
+        feedbackCountAtLastLearn = feedbackHistory.count
         evolveWeights()
     }
 
@@ -200,19 +207,32 @@ final class PreferenceLearner {
 
     // MARK: - Apply to Preferences
 
-    /// Convert learned weights to OptimizerPreferences updates.
+    /// Blend learned weights with user preferences.
+    /// User-set weights are the base; learned weights nudge them proportionally.
+    /// This ensures user manual adjustments in Settings are never silently overwritten.
     func applyToPreferences(_ preferences: inout OptimizerPreferences) {
-        preferences.focusBlockWeight = learnedWeights["FocusBlock"] ?? preferences.focusBlockWeight
-        preferences.pomodoroFitWeight = learnedWeights["PomodoroFit"] ?? preferences.pomodoroFitWeight
-        preferences.conflictWeight = learnedWeights["Conflict"] ?? preferences.conflictWeight
-        preferences.taskPlacementWeight = learnedWeights["TaskPlacement"] ?? preferences.taskPlacementWeight
-        preferences.weekBalanceWeight = learnedWeights["WeekBalance"] ?? preferences.weekBalanceWeight
-        preferences.energyCurveWeight = learnedWeights["EnergyBalance"] ?? preferences.energyCurveWeight
-        preferences.multiPersonWeight = learnedWeights["MultiPerson"] ?? preferences.multiPersonWeight
-        preferences.breakWeight = learnedWeights["BreakPlacement"] ?? preferences.breakWeight
-        preferences.deadlineWeight = learnedWeights["Deadline"] ?? preferences.deadlineWeight
-        preferences.contextSwitchWeight = learnedWeights["ContextSwitch"] ?? preferences.contextSwitchWeight
-        preferences.bufferWeight = learnedWeights["Buffer"] ?? preferences.bufferWeight
+        guard feedbackHistory.count >= minSamplesForLearning else { return }
+
+        let blend = 0.3  // 30% learned, 70% user-set
+        func blended(_ userWeight: Double, key: String) -> Double {
+            guard let learned = learnedWeights[key] else { return userWeight }
+            let defaultVal = Self.defaultWeights[key] ?? 1.0
+            // Only apply learned delta relative to default, scaled by blend factor
+            let learnedDelta = learned - defaultVal
+            return max(0.01, userWeight + learnedDelta * blend)
+        }
+
+        preferences.focusBlockWeight = blended(preferences.focusBlockWeight, key: "FocusBlock")
+        preferences.pomodoroFitWeight = blended(preferences.pomodoroFitWeight, key: "PomodoroFit")
+        preferences.conflictWeight = blended(preferences.conflictWeight, key: "Conflict")
+        preferences.taskPlacementWeight = blended(preferences.taskPlacementWeight, key: "TaskPlacement")
+        preferences.weekBalanceWeight = blended(preferences.weekBalanceWeight, key: "WeekBalance")
+        preferences.energyCurveWeight = blended(preferences.energyCurveWeight, key: "EnergyBalance")
+        preferences.multiPersonWeight = blended(preferences.multiPersonWeight, key: "MultiPerson")
+        preferences.breakWeight = blended(preferences.breakWeight, key: "BreakPlacement")
+        preferences.deadlineWeight = blended(preferences.deadlineWeight, key: "Deadline")
+        preferences.contextSwitchWeight = blended(preferences.contextSwitchWeight, key: "ContextSwitch")
+        preferences.bufferWeight = blended(preferences.bufferWeight, key: "Buffer")
     }
 
     // MARK: - Persistence

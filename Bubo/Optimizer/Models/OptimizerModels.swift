@@ -60,6 +60,7 @@ struct PomodoroConfig: Codable, Hashable {
 /// A single gene: placement of one event in the schedule.
 struct ScheduleGene: Codable, Hashable {
     let eventId: String
+    let title: String
     var startTime: Date
     let duration: TimeInterval
     let context: String?
@@ -68,6 +69,20 @@ struct ScheduleGene: Codable, Hashable {
     let isFocusBlock: Bool
 
     var endTime: Date { startTime.addingTimeInterval(duration) }
+
+    /// Create a copy with a new start time (preserves all other fields).
+    func withStartTime(_ newStart: Date) -> ScheduleGene {
+        ScheduleGene(
+            eventId: eventId,
+            title: title,
+            startTime: newStart,
+            duration: duration,
+            context: context,
+            energyCost: energyCost,
+            priority: priority,
+            isFocusBlock: isFocusBlock
+        )
+    }
 }
 
 // MARK: - Optimizer Context
@@ -205,7 +220,7 @@ struct ScheduleScenario: Identifiable {
         genes.map { gene in
             CalendarEvent(
                 id: gene.eventId,
-                title: gene.eventId,
+                title: gene.title,
                 startDate: gene.startTime,
                 endDate: gene.endTime,
                 location: nil,

@@ -169,8 +169,8 @@ struct ConstraintTests {
         let today = cal.startOfDay(for: Date())
         let start = cal.date(bySettingHour: 10, minute: 0, second: 0, of: today)!
 
-        let gene1 = ScheduleGene(eventId: "a", startTime: start, duration: 3600, context: nil, energyCost: 0.5, priority: 0.5, isFocusBlock: false)
-        let gene2 = ScheduleGene(eventId: "b", startTime: start.addingTimeInterval(1800), duration: 3600, context: nil, energyCost: 0.5, priority: 0.5, isFocusBlock: false)
+        let gene1 = ScheduleGene(eventId: "a", title: "Event A", startTime: start, duration: 3600, context: nil, energyCost: 0.5, priority: 0.5, isFocusBlock: false)
+        let gene2 = ScheduleGene(eventId: "b", title: "Event B", startTime: start.addingTimeInterval(1800), duration: 3600, context: nil, energyCost: 0.5, priority: 0.5, isFocusBlock: false)
 
         let chromosome = ScheduleChromosome(genes: [gene1, gene2])
         let context = makeContext()
@@ -187,8 +187,8 @@ struct ConstraintTests {
         let start1 = cal.date(bySettingHour: 10, minute: 0, second: 0, of: today)!
         let start2 = cal.date(bySettingHour: 12, minute: 0, second: 0, of: today)!
 
-        let gene1 = ScheduleGene(eventId: "a", startTime: start1, duration: 3600, context: nil, energyCost: 0.5, priority: 0.5, isFocusBlock: false)
-        let gene2 = ScheduleGene(eventId: "b", startTime: start2, duration: 3600, context: nil, energyCost: 0.5, priority: 0.5, isFocusBlock: false)
+        let gene1 = ScheduleGene(eventId: "a", title: "Event A", startTime: start1, duration: 3600, context: nil, energyCost: 0.5, priority: 0.5, isFocusBlock: false)
+        let gene2 = ScheduleGene(eventId: "b", title: "Event B", startTime: start2, duration: 3600, context: nil, energyCost: 0.5, priority: 0.5, isFocusBlock: false)
 
         let chromosome = ScheduleChromosome(genes: [gene1, gene2])
         let context = makeContext()
@@ -204,7 +204,7 @@ struct ConstraintTests {
         let today = cal.startOfDay(for: Date())
         let start = cal.date(bySettingHour: 7, minute: 0, second: 0, of: today)!  // before 9 AM
 
-        let gene = ScheduleGene(eventId: "a", startTime: start, duration: 3600, context: nil, energyCost: 0.5, priority: 0.5, isFocusBlock: false)
+        let gene = ScheduleGene(eventId: "a", title: "Event A", startTime: start, duration: 3600, context: nil, energyCost: 0.5, priority: 0.5, isFocusBlock: false)
         let chromosome = ScheduleChromosome(genes: [gene])
         let context = makeContext(workingHours: 9...18)
 
@@ -225,6 +225,7 @@ struct ObjectiveTests {
         let today = cal.startOfDay(for: Date())
         let gene = ScheduleGene(
             eventId: "a",
+            title: "Event A",
             startTime: cal.date(bySettingHour: 10, minute: 0, second: 0, of: today)!,
             duration: 3600,
             context: nil,
@@ -249,6 +250,7 @@ struct ObjectiveTests {
         let genes = (0..<3).map { i in
             ScheduleGene(
                 eventId: "t\(i)",
+                title: "Task \(i)",
                 startTime: cal.date(bySettingHour: 10 + i, minute: 0, second: 0, of: today)!,
                 duration: 3600,
                 context: "projectA",
@@ -272,8 +274,8 @@ struct ObjectiveTests {
         let today = cal.startOfDay(for: Date())
 
         // Two events with 30-minute gap
-        let gene1 = ScheduleGene(eventId: "a", startTime: cal.date(bySettingHour: 10, minute: 0, second: 0, of: today)!, duration: 3600, context: nil, energyCost: 0.5, priority: 0.5, isFocusBlock: false)
-        let gene2 = ScheduleGene(eventId: "b", startTime: cal.date(bySettingHour: 11, minute: 30, second: 0, of: today)!, duration: 3600, context: nil, energyCost: 0.5, priority: 0.5, isFocusBlock: false)
+        let gene1 = ScheduleGene(eventId: "a", title: "Event A", startTime: cal.date(bySettingHour: 10, minute: 0, second: 0, of: today)!, duration: 3600, context: nil, energyCost: 0.5, priority: 0.5, isFocusBlock: false)
+        let gene2 = ScheduleGene(eventId: "b", title: "Event B", startTime: cal.date(bySettingHour: 11, minute: 30, second: 0, of: today)!, duration: 3600, context: nil, energyCost: 0.5, priority: 0.5, isFocusBlock: false)
 
         let chromosome = ScheduleChromosome(genes: [gene1, gene2])
         let context = makeContext()
@@ -430,6 +432,7 @@ struct EventConversionTests {
         let start = Date()
         let gene = ScheduleGene(
             eventId: "g1",
+            title: "Focus Block",
             startTime: start,
             duration: 3600,
             context: nil,

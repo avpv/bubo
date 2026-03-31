@@ -10,7 +10,7 @@ struct ScenarioGenerator {
     var maxScenarios: Int = 3
 
     /// Minimum diversity threshold (0-1) between scenarios.
-    var diversityThreshold: Double = 0.3
+    var diversityThreshold: Double = 0.15
 
     // MARK: - Generate Scenarios
 
@@ -68,10 +68,11 @@ struct ScenarioGenerator {
                 continue
             }
 
-            // Time difference
+            // Time difference — normalize by working day length (not full horizon)
+            // so that a 2-hour shift is meaningful regardless of planning horizon
             let timeDiff = abs(geneA.startTime.timeIntervalSince(geneB.startTime))
-            let maxTimeDiff = context.planningHorizon.duration
-            let normalizedTimeDiff = min(1.0, timeDiff / maxTimeDiff)
+            let workingDaySeconds = Double(context.workingHours.upperBound - context.workingHours.lowerBound) * 3600
+            let normalizedTimeDiff = min(1.0, timeDiff / max(workingDaySeconds, 1))
 
             // Day difference
             let cal = context.calendar

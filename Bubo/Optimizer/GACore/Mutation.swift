@@ -87,14 +87,8 @@ enum Mutation {
         let second = focusIndices[1]
         let newStart = chromosome.genes[first].endTime
 
-        chromosome.genes[second] = ScheduleGene(
-            eventId: chromosome.genes[second].eventId,
-            startTime: clampToWorkingHours(newStart, duration: chromosome.genes[second].duration, workingHours: context.workingHours, calendar: calendar),
-            duration: chromosome.genes[second].duration,
-            context: chromosome.genes[second].context,
-            energyCost: chromosome.genes[second].energyCost,
-            priority: chromosome.genes[second].priority,
-            isFocusBlock: chromosome.genes[second].isFocusBlock
+        chromosome.genes[second] = chromosome.genes[second].withStartTime(
+            clampToWorkingHours(newStart, duration: chromosome.genes[second].duration, workingHours: context.workingHours, calendar: calendar)
         )
     }
 
@@ -111,14 +105,8 @@ enum Mutation {
                 // Conflict found — move the later event after the earlier one
                 if let idx = chromosome.genes.firstIndex(where: { $0.eventId == allEvents[i + 1].eventId }) {
                     let newStart = allEvents[i].endTime.addingTimeInterval(Double(context.preferences.defaultBufferMinutes) * 60)
-                    chromosome.genes[idx] = ScheduleGene(
-                        eventId: chromosome.genes[idx].eventId,
-                        startTime: clampToWorkingHours(newStart, duration: chromosome.genes[idx].duration, workingHours: context.workingHours, calendar: calendar),
-                        duration: chromosome.genes[idx].duration,
-                        context: chromosome.genes[idx].context,
-                        energyCost: chromosome.genes[idx].energyCost,
-                        priority: chromosome.genes[idx].priority,
-                        isFocusBlock: chromosome.genes[idx].isFocusBlock
+                    chromosome.genes[idx] = chromosome.genes[idx].withStartTime(
+                        clampToWorkingHours(newStart, duration: chromosome.genes[idx].duration, workingHours: context.workingHours, calendar: calendar)
                     )
                 }
             }
@@ -138,15 +126,7 @@ enum Mutation {
         let peakHour = context.preferences.peakEnergyHour
         let currentDay = calendar.startOfDay(for: chromosome.genes[heaviestIdx].startTime)
         if let newStart = calendar.date(bySettingHour: peakHour, minute: 0, second: 0, of: currentDay) {
-            chromosome.genes[heaviestIdx] = ScheduleGene(
-                eventId: chromosome.genes[heaviestIdx].eventId,
-                startTime: newStart,
-                duration: chromosome.genes[heaviestIdx].duration,
-                context: chromosome.genes[heaviestIdx].context,
-                energyCost: chromosome.genes[heaviestIdx].energyCost,
-                priority: chromosome.genes[heaviestIdx].priority,
-                isFocusBlock: chromosome.genes[heaviestIdx].isFocusBlock
-            )
+            chromosome.genes[heaviestIdx] = chromosome.genes[heaviestIdx].withStartTime(newStart)
         }
     }
 }

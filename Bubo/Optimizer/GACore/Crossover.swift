@@ -84,14 +84,6 @@ enum Crossover {
     // MARK: - Helper
 
     private static func makeGene(from base: ScheduleGene, withTimeOf donor: ScheduleGene) -> ScheduleGene {
-        ScheduleGene(
-            eventId: base.eventId,
-            startTime: donor.startTime,
-            duration: base.duration,
-            context: base.context,
-            energyCost: base.energyCost,
-            priority: base.priority,
-            isFocusBlock: base.isFocusBlock
-        )
+        base.withStartTime(donor.startTime)
     }
 }

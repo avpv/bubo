@@ -49,6 +49,7 @@ final class OptimizerService {
     ) async {
         guard isEnabled else { return }
         isOptimizing = true
+        defer { isOptimizing = false }
         error = nil
 
         let fixedEvents = reminderService.allEvents.filter { !$0.isLocalEvent }
@@ -61,7 +62,6 @@ final class OptimizerService {
 
         scenarios = result.scenarios
         selectedScenarioIndex = scenarios.isEmpty ? nil : 0
-        isOptimizing = false
         lastOptimizationDate = Date()
     }
 
@@ -74,6 +74,7 @@ final class OptimizerService {
     ) async {
         guard isEnabled else { return }
         isOptimizing = true
+        defer { isOptimizing = false }
         error = nil
 
         let fixedEvents = reminderService.allEvents.filter { !$0.isLocalEvent }
@@ -87,7 +88,6 @@ final class OptimizerService {
 
         scenarios = result.scenarios
         selectedScenarioIndex = scenarios.isEmpty ? nil : 0
-        isOptimizing = false
         lastOptimizationDate = Date()
     }
 
@@ -99,18 +99,20 @@ final class OptimizerService {
         reminderService: ReminderService
     ) async {
         isOptimizing = true
+        defer { isOptimizing = false }
         error = nil
+
+        let fixedEvents = reminderService.allEvents.filter { !$0.isLocalEvent }
 
         let result = await optimizer.suggestFocusBlocks(
             count: count,
             durationMinutes: durationMinutes,
-            fixedEvents: reminderService.allEvents,
+            fixedEvents: fixedEvents,
             workingHours: workingHours
         )
 
         scenarios = result.scenarios
         selectedScenarioIndex = scenarios.isEmpty ? nil : 0
-        isOptimizing = false
         lastOptimizationDate = Date()
     }
 
@@ -121,17 +123,19 @@ final class OptimizerService {
         reminderService: ReminderService
     ) async {
         isOptimizing = true
+        defer { isOptimizing = false }
         error = nil
+
+        let fixedEvents = reminderService.allEvents.filter { !$0.isLocalEvent }
 
         let result = await optimizer.suggestPomodoroSlot(
             config: config,
-            fixedEvents: reminderService.allEvents,
+            fixedEvents: fixedEvents,
             workingHours: workingHours
         )
 
         scenarios = result.scenarios
         selectedScenarioIndex = scenarios.isEmpty ? nil : 0
-        isOptimizing = false
         lastOptimizationDate = Date()
     }
 
@@ -146,7 +150,7 @@ final class OptimizerService {
         for gene in scenario.genes {
             let event = CalendarEvent(
                 id: gene.eventId,
-                title: gene.eventId,
+                title: gene.title,
                 startDate: gene.startTime,
                 endDate: gene.endTime,
                 location: nil,

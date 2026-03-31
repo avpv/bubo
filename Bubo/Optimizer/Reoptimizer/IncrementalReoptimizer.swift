@@ -109,7 +109,7 @@ final class IncrementalReoptimizer {
                 generations: ga.convergenceGeneration,
                 totalDuration: 0,
                 bestFitness: best.fitness,
-                averageFitness: results.prefix(10).reduce(0) { $0 + $1.fitness } / Double(min(10, results.count)),
+                averageFitness: results.isEmpty ? 0 : results.prefix(10).reduce(0) { $0 + $1.fitness } / Double(min(10, results.count)),
                 convergenceGeneration: ga.convergenceGeneration
             )
         )

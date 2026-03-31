@@ -36,11 +36,12 @@ final class BuboOptimizer {
 
     /// Run a full optimization for the given context.
     /// The GA runs on a background thread; progress updates are dispatched to main.
-    func optimize(context: OptimizerContext) async -> OptimizerResult {
+    func optimize(context: OptimizerContext, overrideConfig: GAConfiguration? = nil) async -> OptimizerResult {
         isOptimizing = true
+        defer { isOptimizing = false }
         progress = nil
 
-        // Apply learned preferences
+        // Apply learned preferences, merging with (not replacing) user preferences
         var prefs = context.preferences
         preferenceLearner.applyToPreferences(&prefs)
 
@@ -55,7 +56,7 @@ final class BuboOptimizer {
         )
 
         let evaluator = FitnessEvaluator.standard(preferences: prefs)
-        let config = gaConfig
+        let config = overrideConfig ?? gaConfig
         let scenGen = scenarioGenerator
 
         // Run GA on background thread
@@ -67,11 +68,6 @@ final class BuboOptimizer {
                 context: adjustedContext,
                 evaluate: { chromosome in
                     evaluator.evaluateAndAssign(&chromosome, context: adjustedContext)
-                },
-                onProgress: { [weak self] p in
-                    Task { @MainActor in
-                        self?.progress = p
-                    }
                 }
             )
 
@@ -87,11 +83,14 @@ final class BuboOptimizer {
             evaluator: evaluator
         )
 
+        let populationCount = population.prefix(10).count
         let metadata = OptimizationMetadata(
             generations: convergenceGen,
             totalDuration: duration,
             bestFitness: population.first?.fitness ?? 0,
-            averageFitness: population.prefix(10).reduce(0) { $0 + $1.fitness } / Double(min(10, population.count)),
+            averageFitness: populationCount > 0
+                ? population.prefix(10).reduce(0) { $0 + $1.fitness } / Double(populationCount)
+                : 0,
             convergenceGeneration: convergenceGen
         )
 
@@ -102,7 +101,6 @@ final class BuboOptimizer {
             currentSchedule = best.genes
         }
 
-        isOptimizing = false
         return result
     }
 
@@ -125,11 +123,7 @@ final class BuboOptimizer {
             preferences: preferences
         )
 
-        let savedConfig = gaConfig
-        gaConfig = .quick
-        let result = await optimize(context: context)
-        gaConfig = savedConfig
-        return result
+        return await optimize(context: context, overrideConfig: .quick)
     }
 
     // MARK: - Weekly Optimize
@@ -162,13 +156,20 @@ final class BuboOptimizer {
         context: OptimizerContext
     ) async -> OptimizerResult? {
         isOptimizing = true
+        defer { isOptimizing = false }
 
         var prefs = context.preferences
         preferenceLearner.applyToPreferences(&prefs)
 
         let evaluator = FitnessEvaluator.standard(preferences: prefs)
         let schedule = currentSchedule
-        let reopt = reoptimizer
+        // Capture reoptimizer config as values for thread safety
+        let stabilityWeight = reoptimizer.stabilityWeight
+        let minimumImprovement = reoptimizer.minimumImprovement
+
+        let reopt = IncrementalReoptimizer()
+        reopt.stabilityWeight = stabilityWeight
+        reopt.minimumImprovement = minimumImprovement
 
         let result = await Task.detached(priority: .userInitiated) {
             reopt.reoptimize(
@@ -180,7 +181,12 @@ final class BuboOptimizer {
             )
         }.value
 
-        isOptimizing = false
+        // Update internal state if re-optimization succeeded
+        if let result = result, let best = result.scenarios.first {
+            currentSchedule = best.genes
+            lastResult = result
+        }
+
         return result
     }
 

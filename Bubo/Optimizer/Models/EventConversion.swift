@@ -60,14 +60,14 @@ extension ScheduleGene {
 
     /// Convert a ScheduleGene back into a CalendarEvent.
     func toCalendarEvent(
-        title: String,
+        title: String? = nil,
         calendarName: String? = "Optimizer",
         eventType: EventType = .standard,
         colorTag: EventColorTag? = nil
     ) -> CalendarEvent {
         CalendarEvent(
             id: eventId,
-            title: title,
+            title: title ?? self.title,
             startDate: startTime,
             endDate: endTime,
             location: nil,

@@ -37,6 +37,7 @@ struct ScheduleChromosome: Chromosome {
             )
             return ScheduleGene(
                 eventId: event.id,
+                title: event.title,
                 startTime: start,
                 duration: event.duration,
                 context: event.context,
@@ -58,26 +59,10 @@ struct ScheduleChromosome: Chromosome {
         var child1Genes = Array(genes[..<point])
         var child2Genes = Array(other.genes[..<point])
 
-        // Fill remaining genes from the other parent, matching by eventId
+        // Fill remaining genes from the other parent — swap time slots
         for i in point..<genes.count {
-            child1Genes.append(ScheduleGene(
-                eventId: genes[i].eventId,
-                startTime: other.genes[i].startTime,
-                duration: genes[i].duration,
-                context: genes[i].context,
-                energyCost: genes[i].energyCost,
-                priority: genes[i].priority,
-                isFocusBlock: genes[i].isFocusBlock
-            ))
-            child2Genes.append(ScheduleGene(
-                eventId: other.genes[i].eventId,
-                startTime: genes[i].startTime,
-                duration: other.genes[i].duration,
-                context: other.genes[i].context,
-                energyCost: other.genes[i].energyCost,
-                priority: other.genes[i].priority,
-                isFocusBlock: other.genes[i].isFocusBlock
-            ))
+            child1Genes.append(genes[i].withStartTime(other.genes[i].startTime))
+            child2Genes.append(other.genes[i].withStartTime(genes[i].startTime))
         }
 
         return (
@@ -101,14 +86,8 @@ struct ScheduleChromosome: Chromosome {
                 // Small time shift: +-30 min
                 let shift = Double.random(in: -1800...1800)
                 let newStart = genes[i].startTime.addingTimeInterval(shift)
-                genes[i] = ScheduleGene(
-                    eventId: genes[i].eventId,
-                    startTime: clampToWorkingHours(newStart, duration: genes[i].duration, workingHours: context.workingHours, calendar: cal),
-                    duration: genes[i].duration,
-                    context: genes[i].context,
-                    energyCost: genes[i].energyCost,
-                    priority: genes[i].priority,
-                    isFocusBlock: genes[i].isFocusBlock
+                genes[i] = genes[i].withStartTime(
+                    clampToWorkingHours(newStart, duration: genes[i].duration, workingHours: context.workingHours, calendar: cal)
                 )
             case 1:
                 // Move to different day within horizon
@@ -118,28 +97,16 @@ struct ScheduleChromosome: Chromosome {
                 let newDay = cal.date(byAdding: .day, value: dayOffset, to: context.planningHorizon.start)!
                 let hour = event?.preferredHourRange?.randomElement() ?? Int.random(in: context.workingHours)
                 let rawStart = cal.date(bySettingHour: hour, minute: Int.random(in: 0...3) * 15, second: 0, of: newDay)!
-                genes[i] = ScheduleGene(
-                    eventId: genes[i].eventId,
-                    startTime: clampToWorkingHours(rawStart, duration: genes[i].duration, workingHours: context.workingHours, calendar: cal),
-                    duration: genes[i].duration,
-                    context: genes[i].context,
-                    energyCost: genes[i].energyCost,
-                    priority: genes[i].priority,
-                    isFocusBlock: genes[i].isFocusBlock
+                genes[i] = genes[i].withStartTime(
+                    clampToWorkingHours(rawStart, duration: genes[i].duration, workingHours: context.workingHours, calendar: cal)
                 )
             default:
                 // Snap to nearest half-hour
                 let timeInterval = genes[i].startTime.timeIntervalSinceReferenceDate
                 let rounded = (timeInterval / 1800).rounded() * 1800
                 let snapped = Date(timeIntervalSinceReferenceDate: rounded)
-                genes[i] = ScheduleGene(
-                    eventId: genes[i].eventId,
-                    startTime: clampToWorkingHours(snapped, duration: genes[i].duration, workingHours: context.workingHours, calendar: cal),
-                    duration: genes[i].duration,
-                    context: genes[i].context,
-                    energyCost: genes[i].energyCost,
-                    priority: genes[i].priority,
-                    isFocusBlock: genes[i].isFocusBlock
+                genes[i] = genes[i].withStartTime(
+                    clampToWorkingHours(snapped, duration: genes[i].duration, workingHours: context.workingHours, calendar: cal)
                 )
             }
         }
