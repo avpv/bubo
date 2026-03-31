@@ -66,17 +66,8 @@ struct OptimizerView: View {
     private var header: some View {
         PopoverHeader(
             title: "Optimizer",
-            leading: AnyView(
-                Button {
-                    Haptics.tap()
-                    onBack()
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: DS.Size.iconSmall, weight: .semibold))
-                        .foregroundStyle(skin.resolvedTextSecondary)
-                }
-                .buttonStyle(.borderless)
-            )
+            showBack: true,
+            onBack: onBack
         )
     }
 
