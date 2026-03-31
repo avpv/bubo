@@ -6,6 +6,8 @@ struct ToastMessage: Equatable, Identifiable {
     let icon: String
     let text: String
     let style: Style
+    /// Optional undo action — when provided, toast shows an "Undo" button (HIG: Undo support).
+    var onUndo: (() -> Void)?
 
     enum Style {
         case success, info, warning
@@ -33,6 +35,8 @@ final class ToastState {
     func show(_ message: ToastMessage, duration: TimeInterval = 2.5) {
         dismissTask?.cancel()
         Haptics.tap()
+        // Show undo toasts longer so users have time to react
+        let effectiveDuration = message.onUndo != nil ? max(duration, 4.0) : duration
         withAnimation(DS.Animation.standard) {
             current = message
         }
@@ -42,11 +46,18 @@ final class ToastState {
             }
         }
         dismissTask = task
-        DispatchQueue.main.asyncAfter(deadline: .now() + duration, execute: task)
+        DispatchQueue.main.asyncAfter(deadline: .now() + effectiveDuration, execute: task)
     }
 
-    func showSuccess(_ text: String, icon: String = "checkmark.circle.fill") {
-        show(ToastMessage(icon: icon, text: text, style: .success))
+    func dismiss() {
+        dismissTask?.cancel()
+        withAnimation(DS.Animation.standard) {
+            current = nil
+        }
+    }
+
+    func showSuccess(_ text: String, icon: String = "checkmark.circle.fill", onUndo: (() -> Void)? = nil) {
+        show(ToastMessage(icon: icon, text: text, style: .success, onUndo: onUndo))
     }
 
     func showInfo(_ text: String, icon: String = "info.circle.fill") {
@@ -73,6 +84,22 @@ struct ToastOverlay: View {
                     Text(toast.text)
                         .font(.caption)
                         .foregroundStyle(.primary)
+
+                    // HIG: Provide undo for destructive actions
+                    if let onUndo = toast.onUndo {
+                        Button {
+                            Haptics.tap()
+                            onUndo()
+                            toastState.dismiss()
+                        } label: {
+                            Text("Undo")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(skin.accentColor)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Undo action")
+                    }
                 }
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.vertical, DS.Spacing.md)
@@ -89,7 +116,7 @@ struct ToastOverlay: View {
                         )
                 )
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel("Status: \(toast.text)")
+                .accessibilityLabel("Status: \(toast.text)\(toast.onUndo != nil ? ". Undo available." : "")")
             }
         }
         .animation(

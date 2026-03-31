@@ -28,19 +28,21 @@ struct DateSuggestionsPopover: View {
                         .padding(.bottom, DS.Spacing.sm)
 
                     if let range = range {
-                        DatePicker("", selection: Binding(get: { date }, set: { newDate in
+                        DatePicker("Select date", selection: Binding(get: { date }, set: { newDate in
                             date = newDate
                             isPresented = false
                         }), in: range, displayedComponents: .date)
                         .datePickerStyle(.graphical)
+                        .labelsHidden()
                         .padding(.horizontal)
                         .padding(.bottom)
                     } else {
-                        DatePicker("", selection: Binding(get: { date }, set: { newDate in
+                        DatePicker("Select date", selection: Binding(get: { date }, set: { newDate in
                             date = newDate
                             isPresented = false
                         }), displayedComponents: .date)
                         .datePickerStyle(.graphical)
+                        .labelsHidden()
                         .padding(.horizontal)
                         .padding(.bottom)
                     }

@@ -763,7 +763,7 @@ struct AddEventView: View {
     private func legendItem(color: Color, icon: String, label: String) -> some View {
         HStack(spacing: DS.Spacing.xxs) {
             Image(systemName: icon)
-                .font(.system(size: 8))
+                .font(.system(size: 8, weight: .medium))
                 .foregroundStyle(color)
             Text(label)
                 .font(.caption2)

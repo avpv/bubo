@@ -20,21 +20,23 @@ struct OptimizerTabView: View {
                 SettingsPlatter("Working Hours") {
                     HStack {
                         Text("Start:")
-                        Picker("", selection: $service.workingHoursStart) {
+                        Picker("Working hours start", selection: $service.workingHoursStart) {
                             ForEach(5...12, id: \.self) { hour in
                                 Text("\(hour):00").tag(hour)
                             }
                         }
+                        .labelsHidden()
                         .frame(width: 100)
 
                         Spacer()
 
                         Text("End:")
-                        Picker("", selection: $service.workingHoursEnd) {
+                        Picker("Working hours end", selection: $service.workingHoursEnd) {
                             ForEach(15...22, id: \.self) { hour in
                                 Text("\(hour):00").tag(hour)
                             }
                         }
+                        .labelsHidden()
                         .frame(width: 100)
                     }
                 }
@@ -52,7 +54,7 @@ struct OptimizerTabView: View {
                 SettingsPlatter("Energy Model") {
                     HStack {
                         Text("Peak energy hour:")
-                        Picker("", selection: Binding(
+                        Picker("Peak energy hour", selection: Binding(
                             get: { optimizerService.optimizer.preferences.peakEnergyHour },
                             set: { optimizerService.optimizer.preferences.peakEnergyHour = $0; optimizerService.savePreferences() }
                         )) {
@@ -60,6 +62,7 @@ struct OptimizerTabView: View {
                                 Text("\(hour):00").tag(hour)
                             }
                         }
+                        .labelsHidden()
                         .frame(width: 100)
                     }
                 }
@@ -68,7 +71,7 @@ struct OptimizerTabView: View {
                     HStack {
                         Text("Max consecutive meetings:")
                         Spacer()
-                        Picker("", selection: Binding(
+                        Picker("Max consecutive meetings", selection: Binding(
                             get: { optimizerService.optimizer.preferences.maxConsecutiveMeetingMinutes },
                             set: { optimizerService.optimizer.preferences.maxConsecutiveMeetingMinutes = $0; optimizerService.savePreferences() }
                         )) {
@@ -77,13 +80,14 @@ struct OptimizerTabView: View {
                             Text("2 hours").tag(120)
                             Text("3 hours").tag(180)
                         }
+                        .labelsHidden()
                         .frame(width: 120)
                     }
 
                     HStack {
                         Text("Lunch window:")
                         Spacer()
-                        Picker("", selection: Binding(
+                        Picker("Lunch window start", selection: Binding(
                             get: { optimizerService.optimizer.preferences.lunchWindowStart },
                             set: { optimizerService.optimizer.preferences.lunchWindowStart = $0; optimizerService.savePreferences() }
                         )) {
@@ -91,9 +95,10 @@ struct OptimizerTabView: View {
                                 Text("\(h):00").tag(h)
                             }
                         }
+                        .labelsHidden()
                         .frame(width: 90)
                         Text("\u{2013}")
-                        Picker("", selection: Binding(
+                        Picker("Lunch window end", selection: Binding(
                             get: { optimizerService.optimizer.preferences.lunchWindowEnd },
                             set: { optimizerService.optimizer.preferences.lunchWindowEnd = $0; optimizerService.savePreferences() }
                         )) {
@@ -101,6 +106,7 @@ struct OptimizerTabView: View {
                                 Text("\(h):00").tag(h)
                             }
                         }
+                        .labelsHidden()
                         .frame(width: 90)
                     }
                 }

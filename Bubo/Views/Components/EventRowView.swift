@@ -80,11 +80,18 @@ struct EventRowView: View {
             }
             if hovering { Haptics.tap() }
         }
+        // HIG: Support keyboard navigation — focusable rows, Enter to open
+        .focusable()
+        .onKeyPress(.return) {
+            Haptics.tap()
+            onTap?(event)
+            return .handled
+        }
         // Scroll-aware transition: fade/scale as items enter/exit viewport
         .eventScrollTransition()
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(event.title)\(event.isRecurring ? ", recurring" : ""), \(event.formattedTimeRange)\(event.location.map { ", \($0)" } ?? "")")
-        .accessibilityHint("Click to view details. Right-click to set reminder.")
+        .accessibilityHint("Press Enter to view details. Right-click to set reminder.")
         .accessibilityAddTraits(.isButton)
         .onChange(of: now) {
             // Detect event end and trigger disintegration
@@ -181,7 +188,7 @@ struct EventRowView: View {
 
                 if let segment = event.pomodoroSegment {
                     Image(systemName: segment.iconName)
-                        .font(.system(size: DS.Size.iconSmall))
+                        .font(.system(size: DS.Size.iconSmall, weight: .medium))
                         .foregroundStyle(pomodoroSegmentColor(segment))
                         .contentTransition(.symbolEffect(.replace))
                         .accessibilityLabel(segment.label)
@@ -220,7 +227,7 @@ struct EventRowView: View {
                     NSWorkspace.shared.open(meetingURL)
                 } label: {
                     Image(systemName: "video.fill")
-                        .font(.system(size: DS.Size.iconMedium))
+                        .font(.system(size: DS.Size.iconMedium, weight: .medium))
                         .foregroundStyle(DS.Colors.accent)
                 }
                 .buttonStyle(.borderless)
@@ -233,7 +240,7 @@ struct EventRowView: View {
                     reminderMenuItems
                 } label: {
                     Image(systemName: "bell.badge")
-                        .font(.system(size: DS.Size.iconMedium))
+                        .font(.system(size: DS.Size.iconMedium, weight: .medium))
                         .foregroundStyle(skin.resolvedTextSecondary)
                 }
                 .buttonStyle(.borderless)
@@ -256,7 +263,7 @@ struct EventRowView: View {
                         }
                     } label: {
                         Image(systemName: "minus.circle.fill")
-                            .font(.system(size: DS.Size.iconLarge))
+                            .font(.system(size: DS.Size.iconLarge, weight: .medium))
                             .symbolRenderingMode(.hierarchical)
                             .foregroundStyle(skin.resolvedDestructiveColor)
                     }
@@ -270,7 +277,7 @@ struct EventRowView: View {
                         triggerDeleteWithDisintegration { onDelete?(event) }
                     } label: {
                         Image(systemName: "minus.circle.fill")
-                            .font(.system(size: DS.Size.iconLarge))
+                            .font(.system(size: DS.Size.iconLarge, weight: .medium))
                             .symbolRenderingMode(.hierarchical)
                             .foregroundStyle(skin.resolvedDestructiveColor)
                     }

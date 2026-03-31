@@ -53,7 +53,7 @@ struct EventDetailView: View {
 
                         if event.isRecurring {
                             Image(systemName: "repeat")
-                                .font(.system(size: DS.Size.iconMedium))
+                                .font(.system(size: DS.Size.iconMedium, weight: .medium))
                                 .foregroundStyle(skin.resolvedTextSecondary)
                                 .contentTransition(.symbolEffect(.replace))
                                 .accessibilityLabel("Recurring event")
