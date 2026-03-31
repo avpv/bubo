@@ -17,11 +17,13 @@ struct TaskPlacementObjective: FitnessObjective {
 
         let cal = context.calendar
         var totalScore = 0.0
+        var evaluatedCount = 0
 
         for gene in chromosome.genes {
             guard let event = context.movableEvents.first(where: { $0.id == gene.eventId }) else {
                 continue
             }
+            evaluatedCount += 1
 
             var score = 0.0
 
@@ -55,7 +57,7 @@ struct TaskPlacementObjective: FitnessObjective {
             totalScore += score
         }
 
-        return totalScore / Double(chromosome.genes.count)
+        return evaluatedCount > 0 ? totalScore / Double(evaluatedCount) : 1.0
     }
 
     private func isInterrupted(

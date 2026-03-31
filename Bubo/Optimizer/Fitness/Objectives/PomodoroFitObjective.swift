@@ -17,10 +17,12 @@ struct PomodoroFitObjective: FitnessObjective {
         guard !pomodoroEvents.isEmpty else { return 1.0 } // No pomodoro = perfect
 
         var totalScore = 0.0
+        var evaluatedCount = 0
 
         for pomEvent in pomodoroEvents {
             guard let gene = chromosome.genes.first(where: { $0.eventId == pomEvent.id }),
                   let config = pomEvent.pomodoroConfig else { continue }
+            evaluatedCount += 1
 
             var score = 0.0
 
@@ -56,7 +58,7 @@ struct PomodoroFitObjective: FitnessObjective {
             totalScore += score
         }
 
-        return totalScore / Double(pomodoroEvents.count)
+        return evaluatedCount > 0 ? totalScore / Double(evaluatedCount) : 1.0
     }
 
     // MARK: - Helpers
