@@ -5,15 +5,13 @@ struct SettingsView: View {
     @Environment(ReminderService.self) var reminderService
     @Environment(OptimizerService.self) var optimizerService
     @State private var viewModel = SettingsViewModel()
-    @State private var selectedPane: SettingsPane = .general
+    @State private var selectedPane: SettingsPane? = .general
 
-    enum SettingsPane: String, CaseIterable, Identifiable {
+    enum SettingsPane: String, CaseIterable, Hashable {
         case general = "General"
         case calendars = "Calendars"
         case reminders = "Reminders"
         case optimizer = "Optimizer"
-
-        var id: String { rawValue }
 
         var icon: String {
             switch self {
@@ -27,13 +25,17 @@ struct SettingsView: View {
 
     var body: some View {
         NavigationSplitView {
-            List(SettingsPane.allCases, selection: $selectedPane) { pane in
-                Label(pane.rawValue, systemImage: pane.icon)
+            List(selection: $selectedPane) {
+                ForEach(SettingsPane.allCases, id: \.self) { pane in
+                    Label(pane.rawValue, systemImage: pane.icon)
+                        .tag(pane)
+                }
             }
             .navigationSplitViewColumnWidth(min: 160, ideal: 180, max: 220)
+            .listStyle(.sidebar)
         } detail: {
             Group {
-                switch selectedPane {
+                switch selectedPane ?? .general {
                 case .general:
                     GeneralTabView()
                 case .calendars:
@@ -44,7 +46,7 @@ struct SettingsView: View {
                     OptimizerTabView()
                 }
             }
-            .navigationTitle(selectedPane.rawValue)
+            .navigationTitle(selectedPane?.rawValue ?? "General")
         }
         .environment(viewModel)
         .environment(settings)
