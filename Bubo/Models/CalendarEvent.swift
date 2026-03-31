@@ -18,6 +18,37 @@ enum EventColorTag: String, Codable, Hashable, CaseIterable, Sendable {
         case .pink: .pink
         }
     }
+
+    /// Map a CGColor (e.g. from EKCalendar) to the nearest EventColorTag
+    /// by comparing hue, saturation, and brightness in HSB space.
+    static func from(cgColor: CGColor) -> EventColorTag? {
+        #if canImport(AppKit)
+        guard let nsColor = NSColor(cgColor: cgColor)?.usingColorSpace(.deviceRGB) else { return nil }
+        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        nsColor.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+        #else
+        return nil
+        #endif
+
+        // Achromatic colors (gray/white/black) — no meaningful hue
+        guard s > 0.15 && b > 0.15 else { return nil }
+
+        let hue = h * 360  // 0–360
+
+        // Map hue ranges to tags
+        switch hue {
+        case 0..<15:     return .red
+        case 15..<45:    return .orange
+        case 45..<70:    return .yellow
+        case 70..<165:   return .green
+        case 165..<195:  return .blue   // cyan-ish → blue
+        case 195..<260:  return .blue
+        case 260..<290:  return .purple
+        case 290..<340:  return .pink
+        case 340...360:  return .red
+        default:         return nil
+        }
+    }
 }
 
 // MARK: - Event Type

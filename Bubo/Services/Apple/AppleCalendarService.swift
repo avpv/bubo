@@ -135,7 +135,8 @@ class AppleCalendarService {
                 description: ek.notes,
                 calendarName: ek.calendar.title,
                 seriesId: ek.hasRecurrenceRules ? baseId : nil,
-                eventType: .standard
+                eventType: .standard,
+                colorTag: EventColorTag.from(cgColor: ek.calendar.cgColor)
             )
         }
     }
