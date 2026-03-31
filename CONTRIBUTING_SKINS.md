@@ -190,6 +190,84 @@ might use a coral-red for destructive and amber for warning.
 - **Test both light & dark mode** — skins use adaptive blend modes that work in
   both, but some color combos look better in one mode.
 
+## Apple Human Interface Guidelines (HIG)
+
+Bubo is a native macOS app, and every skin must respect Apple's platform
+conventions. Keep these HIG principles in mind when designing your skin.
+
+### Color & Contrast
+
+- **3:1 minimum contrast** — interactive elements (buttons, links, toggles) must
+  have at least 3:1 contrast ratio against their background. Accent colors that
+  are too light or too dark to meet this threshold will look broken.
+- **Semantic colors have meaning** — red = destructive, green = success,
+  orange = warning. If you override `destructiveColor` / `successColor` /
+  `warningColor`, keep the same emotional mapping (e.g. don't use green for
+  delete).
+- **Respect system appearance** — skins must work in both Light and Dark Mode.
+  Avoid hard-coded colors that only look right in one mode. Test both.
+
+### Typography
+
+- **Never replace the system font** — Bubo uses SF Pro and SF Rounded
+  exclusively. The `fontDesign` property switches between the two; no custom
+  typefaces are allowed.
+- **Avoid ultraLight / thin weights** — HIG discourages low-weight text in
+  utility-class windows. The lightest allowed `fontWeight` is `"regular"`.
+- **Match symbol weight to text weight** — `sfSymbolWeight` should be close to
+  `fontWeight` so icons and labels feel visually balanced.
+
+### Materials & Vibrancy
+
+- **Use translucency intentionally** — macOS materials (ultraThin → ultraThick)
+  let background content bleed through. Heavier materials are more opaque;
+  lighter materials show more of the desktop. Choose the level that keeps your
+  content readable.
+- **Content surfaces below bars** — `barMaterial` should generally be equal to
+  or heavier than `platterMaterial` so that toolbars visually sit on top of
+  content, not behind it.
+- **Don't fight the system blur** — if you set high `barTintOpacity` or
+  `platterTintOpacity` you'll overpower the system vibrancy effect. Keep tint
+  opacity subtle (≤ 0.3) to let the material do its job.
+
+### SF Symbols
+
+- **Prefer hierarchical rendering** — `"hierarchical"` is the recommended
+  default for utility apps. It provides depth without the visual noise of
+  multicolor icons.
+- **Monochrome for minimal skins** — if your skin is intentionally flat and
+  understated, `"monochrome"` works well.
+- **Palette / multicolor sparingly** — these modes draw more attention; use them
+  only when the skin's visual identity calls for it.
+
+### Layout & Spacing
+
+- **4-point grid** — Bubo's layout uses a 4 pt spacing scale. Skin properties
+  like `cornerRadius` and `shadowRadius` follow this system. Stick to even
+  values for visual consistency.
+- **Corner radius restraint** — HIG prefers continuous (squircle) corners that
+  match system controls. Very large radii (> 16) can feel cartoonish; very
+  small radii (< 4) can feel out of place on macOS.
+
+### Motion & Animation
+
+- **Respect Reduce Motion** — Bubo honors the system accessibility setting
+  automatically, but keep in mind that any visual effect driven by your skin
+  (gradient animation, glow) should remain legible even when animations are
+  disabled.
+
+### Accessibility
+
+- **Don't rely on color alone** — if your skin conveys meaning through color
+  (e.g. tinted badges), ensure shape or label also carries the information for
+  users with color vision deficiency.
+- **Test with Increase Contrast** — macOS Accessibility → Display → Increase
+  Contrast boosts borders and reduces transparency. Make sure your skin still
+  looks intentional in this mode.
+
+For the full guidelines, see
+[Apple Human Interface Guidelines](https://developer.apple.com/design/human-interface-guidelines/).
+
 ## Value Constraints
 
 The JSON schema enforces these ranges to prevent broken skins:
