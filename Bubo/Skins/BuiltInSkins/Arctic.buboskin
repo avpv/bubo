@@ -19,7 +19,7 @@
     "#9ED9F5"
   ],
   "prefersDarkTint": false,
-  "secondaryAccent": "#61B8E6",
+  "secondaryAccent": "#7DD4F0",
   "buttonStyle": "glass",
   "buttonShape": "capsule",
   "buttonTint": "#2E8CC7",
@@ -35,7 +35,7 @@
   "fontWeight": "regular",
   "headlineFontWeight": "medium",
   "sfSymbolRendering": "hierarchical",
-  "sfSymbolWeight": "light",
+  "sfSymbolWeight": "regular",
   "badgeStyle": "tinted",
   "separatorStyle": "subtle",
   "separatorOpacity": 0.15,

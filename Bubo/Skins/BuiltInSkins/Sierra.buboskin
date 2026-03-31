@@ -33,7 +33,7 @@
   "platterTintOpacity": 0.04,
   "fontDesign": "rounded",
   "fontWeight": "medium",
-  "headlineFontWeight": "semibold",
+  "headlineFontWeight": "bold",
   "sfSymbolRendering": "hierarchical",
   "sfSymbolWeight": "regular",
   "badgeStyle": "filled",

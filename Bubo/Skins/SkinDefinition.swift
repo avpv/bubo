@@ -322,6 +322,15 @@ struct SkinDefinition: Identifiable, Equatable {
     /// Semantic text tertiary color override.
     let textTertiary: Color?
 
+    /// Color for destructive actions (delete, remove). Falls back to system red.
+    let destructiveColor: Color?
+
+    /// Color for success states (confirmed, saved). Falls back to system green.
+    let successColor: Color?
+
+    /// Color for warning states (conflicts, alerts). Falls back to system orange.
+    let warningColor: Color?
+
     /// Physics style for micro-interactions and modally-animated elements.
     let animationStyle: SkinAnimationStyle
 
@@ -395,6 +404,9 @@ struct SkinDefinition: Identifiable, Equatable {
         textPrimary: Color? = nil,
         textSecondary: Color? = nil,
         textTertiary: Color? = nil,
+        destructiveColor: Color? = nil,
+        successColor: Color? = nil,
+        warningColor: Color? = nil,
         animationStyle: SkinAnimationStyle = .smooth,
         hoverShadowOpacity: Double = 0.12,
         hoverShadowRadius: CGFloat = 12,
@@ -440,6 +452,9 @@ struct SkinDefinition: Identifiable, Equatable {
         self.textPrimary = textPrimary
         self.textSecondary = textSecondary
         self.textTertiary = textTertiary
+        self.destructiveColor = destructiveColor
+        self.successColor = successColor
+        self.warningColor = warningColor
         self.animationStyle = animationStyle
         self.hoverShadowOpacity = hoverShadowOpacity
         self.hoverShadowRadius = hoverShadowRadius
@@ -524,6 +539,21 @@ struct SkinDefinition: Identifiable, Equatable {
 
     var resolvedTextTertiary: Color {
         textTertiary ?? Color(nsColor: .tertiaryLabelColor)
+    }
+
+    /// Resolved destructive action color, falling back to system red.
+    var resolvedDestructiveColor: Color {
+        destructiveColor ?? .red
+    }
+
+    /// Resolved success state color, falling back to system green.
+    var resolvedSuccessColor: Color {
+        successColor ?? .green
+    }
+
+    /// Resolved warning state color, falling back to system orange.
+    var resolvedWarningColor: Color {
+        warningColor ?? .orange
     }
 
     /// Resolved animation matching the skin's physical properties.

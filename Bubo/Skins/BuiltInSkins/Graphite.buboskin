@@ -2,7 +2,7 @@
   "id": "graphite",
   "displayName": "Graphite",
   "author": "Bubo",
-  "accentColor": "#858594",
+  "accentColor": "#9090A8",
   "surfaceTint": "#1A1A1F",
   "surfaceTintOpacity": 0.08,
   "backgroundGradient": {
@@ -15,7 +15,7 @@
     "endPoint": "bottom"
   },
   "previewColors": [
-    "#858594",
+    "#9090A8",
     "#40404C"
   ],
   "prefersDarkTint": true,
