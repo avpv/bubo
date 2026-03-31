@@ -119,7 +119,7 @@ struct ScenarioGenerator {
                     if abs(timeDiff) > 30 * 60 {  // > 30 min difference
                         let direction = timeDiff > 0 ? "later" : "earlier"
                         let hours = abs(timeDiff) / 3600
-                        differences.append("\(baseGene.eventId): \(String(format: "%.1f", hours))h \(direction)")
+                        differences.append("\(baseGene.title): \(String(format: "%.1f", hours))h \(direction)")
                     }
                 }
             }

@@ -17,11 +17,13 @@ struct MultiPersonObjective: FitnessObjective {
         guard !eventsWithParticipants.isEmpty else { return 1.0 }
 
         var totalScore = 0.0
+        var evaluatedCount = 0
 
         for event in eventsWithParticipants {
             guard let gene = chromosome.genes.first(where: { $0.eventId == event.id }) else {
                 continue
             }
+            evaluatedCount += 1
 
             let eventInterval = DateInterval(start: gene.startTime, duration: gene.duration)
             var participantScore = 0.0
@@ -63,6 +65,6 @@ struct MultiPersonObjective: FitnessObjective {
             totalScore += min(1.0, avgScore + timeBonus)
         }
 
-        return totalScore / Double(eventsWithParticipants.count)
+        return evaluatedCount > 0 ? totalScore / Double(evaluatedCount) : 1.0
     }
 }

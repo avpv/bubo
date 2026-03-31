@@ -59,7 +59,7 @@ struct BufferObjective: FitnessObjective {
                     pairScore = 1.0
                 } else {
                     // Partial buffer
-                    pairScore = gapMinutes / requiredBuffer
+                    pairScore = requiredBuffer > 0 ? gapMinutes / requiredBuffer : 1.0
                 }
 
                 totalScore += pairScore

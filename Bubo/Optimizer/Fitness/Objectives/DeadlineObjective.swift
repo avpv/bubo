@@ -17,10 +17,12 @@ struct DeadlineObjective: FitnessObjective {
         guard !eventsWithDeadlines.isEmpty else { return 1.0 }
 
         var totalScore = 0.0
+        var evaluatedCount = 0
 
         for event in eventsWithDeadlines {
             guard let gene = chromosome.genes.first(where: { $0.eventId == event.id }),
                   let deadline = event.deadline else { continue }
+            evaluatedCount += 1
 
             let timeUntilDeadline = deadline.timeIntervalSince(gene.endTime)
 
@@ -55,7 +57,7 @@ struct DeadlineObjective: FitnessObjective {
             totalScore += max(0, min(1.0, earlyScore + priorityBonus - crammingPenalty))
         }
 
-        return max(0, totalScore / Double(eventsWithDeadlines.count))
+        return evaluatedCount > 0 ? max(0, totalScore / Double(evaluatedCount)) : 1.0
     }
 
     /// Returns a penalty if too many deadline tasks are scheduled on the same day.
