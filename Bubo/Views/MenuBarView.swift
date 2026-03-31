@@ -276,8 +276,8 @@ struct MenuBarView: View {
                 }
             }
 
-            // Color filter — only show when there are multiple distinct colors to filter by
-            if usedColorTags.count > 1 {
+            // Color filter — show whenever events have color tags
+            if !usedColorTags.isEmpty {
                 colorFilterBar
             }
 
