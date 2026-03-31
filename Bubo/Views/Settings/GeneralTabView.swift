@@ -646,6 +646,7 @@ struct GeneralTabView: View {
                         Spacer()
                         Link("GitHub Project", destination: URL(string: "https://github.com/avpv/bubo")!)
                             .font(.caption2)
+                            .accessibilityHint("Opens in your web browser")
                         Spacer()
                     }
                 }

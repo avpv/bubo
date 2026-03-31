@@ -36,7 +36,7 @@ struct RemindersTabView: View {
                             .frame(minWidth: 100, alignment: .leading)
                             .monospacedDigit()
                         
-                        Stepper("", value: $viewModel.newIntervalMinutes, in: 1...120)
+                        Stepper("Reminder interval minutes", value: $viewModel.newIntervalMinutes, in: 1...120)
                             .labelsHidden()
 
                         Button("Add") {

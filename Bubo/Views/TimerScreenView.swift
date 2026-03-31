@@ -183,6 +183,7 @@ struct TimerScreenView: View {
                         Text(event.title)
                             .font(.system(.headline, design: .rounded, weight: .semibold))
                             .lineLimit(2)
+                            .truncationMode(.tail)
 
                         HStack(spacing: DS.Spacing.md) {
                             Label(event.formattedDate, systemImage: "calendar")
@@ -199,6 +200,7 @@ struct TimerScreenView: View {
                                 .font(.caption)
                                 .foregroundStyle(skin.resolvedTextSecondary)
                                 .lineLimit(1)
+                                .truncationMode(.tail)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)

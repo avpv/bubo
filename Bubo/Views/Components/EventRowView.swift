@@ -185,6 +185,7 @@ struct EventRowView: View {
                     .font(.subheadline)
                     .fontWeight(.medium)
                     .lineLimit(2)
+                    .truncationMode(.tail)
 
                 if let segment = event.pomodoroSegment {
                     Image(systemName: segment.iconName)
@@ -201,11 +202,13 @@ struct EventRowView: View {
                         .font(.caption2)
                         .foregroundStyle(skin.isClassic ? DS.Colors.accent : skin.accentColor)
                         .lineLimit(1)
+                        .truncationMode(.tail)
                 } else if let location = event.location, !location.isEmpty {
                     Label(location, systemImage: "mappin")
                         .font(.caption2)
                         .foregroundStyle(skin.resolvedTextSecondary)
                         .lineLimit(1)
+                        .truncationMode(.tail)
                 }
 
                 if let calName = event.calendarName {

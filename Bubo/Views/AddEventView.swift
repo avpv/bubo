@@ -351,7 +351,7 @@ struct AddEventView: View {
                                             .frame(minWidth: 60, alignment: .leading)
                                             .monospacedDigit()
                                         
-                                        Stepper("", value: $newReminderValue, in: 1...120)
+                                        Stepper("Reminder minutes", value: $newReminderValue, in: 1...120)
                                             .labelsHidden()
                                         
                                         Button {
@@ -496,14 +496,14 @@ struct AddEventView: View {
                         Label("Work: \(pomodoroWork) min", systemImage: "brain.head.profile")
                             .foregroundStyle(.primary)
                             .gridColumnAlignment(.leading)
-                        Stepper("", value: $pomodoroWork, in: 1...90)
+                        Stepper("Work duration", value: $pomodoroWork, in: 1...90)
                             .labelsHidden()
                     }
 
                     GridRow {
                         Label("Rounds: \(pomodoroRounds)", systemImage: "arrow.trianglehead.2.counterclockwise")
                             .foregroundStyle(.primary)
-                        Stepper("", value: $pomodoroRounds, in: 1...12)
+                        Stepper("Number of rounds", value: $pomodoroRounds, in: 1...12)
                             .labelsHidden()
                     }
 
@@ -511,7 +511,7 @@ struct AddEventView: View {
                         GridRow {
                             Label("Break: \(pomodoroBreak) min", systemImage: "cup.and.saucer")
                                 .foregroundStyle(.primary)
-                            Stepper("", value: $pomodoroBreak, in: 1...30)
+                            Stepper("Break duration", value: $pomodoroBreak, in: 1...30)
                                 .labelsHidden()
                         }
 
@@ -528,7 +528,7 @@ struct AddEventView: View {
                                 Label("Duration: \(pomodoroLongBreak) min", systemImage: "moon.zzz")
                                     .foregroundStyle(.primary)
                                     .padding(.leading, DS.Spacing.lg)
-                                Stepper("", value: $pomodoroLongBreak, in: 5...60, step: 5)
+                                Stepper("Long break duration", value: $pomodoroLongBreak, in: 5...60, step: 5)
                                     .labelsHidden()
                             }
                         }
@@ -557,6 +557,7 @@ struct AddEventView: View {
                     Link("Learn about Pomodoro combinations", destination: URL(string: "https://github.com/avpv/bubo/blob/HEAD/docs/Pomodoro.md")!)
                         .font(.caption)
                         .foregroundStyle(skin.accentColor)
+                        .accessibilityHint("Opens in your web browser")
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
