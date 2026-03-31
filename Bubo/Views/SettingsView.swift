@@ -46,8 +46,12 @@ struct SettingsView: View {
                     OptimizerTabView()
                 }
             }
-            .toolbar(.hidden)
+            .toolbar(.hidden, for: .automatic)
+            .navigationTitle("")
         }
+        .navigationSplitViewStyle(.balanced)
+        .toolbar(removing: .title)
+        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         .environment(viewModel)
         .environment(settings)
         .environment(reminderService)
