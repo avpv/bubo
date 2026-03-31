@@ -146,22 +146,24 @@
     },
     "cornerRadius": {
       "type": "number",
-      "minimum": 0,
+      "minimum": 2,
+      "maximum": 24,
       "default": 12,
-      "description": "Global corner radius for card/platter surfaces."
+      "description": "Global corner radius for card/platter surfaces (2–24)."
     },
     "shadowOpacity": {
       "type": "number",
       "minimum": 0,
-      "maximum": 1,
+      "maximum": 0.25,
       "default": 0.06,
-      "description": "Ambient shadow opacity for elevated surfaces."
+      "description": "Ambient shadow opacity for elevated surfaces (0–0.25)."
     },
     "shadowRadius": {
       "type": "number",
       "minimum": 0,
+      "maximum": 20,
       "default": 8,
-      "description": "Ambient shadow blur radius."
+      "description": "Ambient shadow blur radius (0–20)."
     },
     "shadowY": {
       "type": "number",
@@ -244,22 +246,34 @@
     },
     "separatorOpacity": {
       "type": "number",
-      "minimum": 0,
-      "maximum": 1,
+      "minimum": 0.05,
+      "maximum": 0.5,
       "default": 0.5,
-      "description": "Separator opacity."
+      "description": "Separator opacity (0.05–0.5). Floor at 0.15 when separatorStyle != none."
     },
     "textPrimary": {
-      "type": "string",
-      "description": "Semantic text primary color"
+      "$ref": "#/$defs/color",
+      "description": "Semantic text primary color override. Falls back to system label color."
     },
     "textSecondary": {
-      "type": "string",
-      "description": "Semantic text secondary color"
+      "$ref": "#/$defs/color",
+      "description": "Semantic text secondary color override. Falls back to system secondary label."
     },
     "textTertiary": {
-      "type": "string",
-      "description": "Semantic text tertiary color"
+      "$ref": "#/$defs/color",
+      "description": "Semantic text tertiary color override. Falls back to system tertiary label."
+    },
+    "destructiveColor": {
+      "$ref": "#/$defs/color",
+      "description": "Color for destructive actions (delete, remove). Falls back to system red."
+    },
+    "successColor": {
+      "$ref": "#/$defs/color",
+      "description": "Color for success states (confirmed, saved). Falls back to system green."
+    },
+    "warningColor": {
+      "$ref": "#/$defs/color",
+      "description": "Color for warning states (conflicts, alerts). Falls back to system orange."
     },
     "animationStyle": {
       "type": "string",

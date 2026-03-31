@@ -33,6 +33,10 @@
   "platterTint": "#001A33",
   "platterTintOpacity": 0.1,
 
+  "destructiveColor": "#FF3B30",
+  "successColor": "#34C759",
+  "warningColor": "#FF9500",
+
   "fontDesign": "rounded",
   "fontWeight": "semibold",
   "headlineFontWeight": "bold",

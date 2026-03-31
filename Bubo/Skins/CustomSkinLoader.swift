@@ -104,7 +104,16 @@ struct CustomSkinJSON: Codable {
     let textPrimary: JSONColor?
     let textSecondary: JSONColor?
     let textTertiary: JSONColor?
-    
+
+    /// Color for destructive actions (delete, remove). Falls back to system red.
+    let destructiveColor: JSONColor?
+
+    /// Color for success states (confirmed, saved). Falls back to system green.
+    let successColor: JSONColor?
+
+    /// Color for warning states (conflicts, alerts). Falls back to system orange.
+    let warningColor: JSONColor?
+
     /// Animation style: "bouncy", "smooth", "snappy". Defaults to "smooth".
     let animationStyle: String?
 
@@ -172,6 +181,9 @@ struct CustomSkinJSON: Codable {
             textPrimary: textPrimary?.toColor(),
             textSecondary: textSecondary?.toColor(),
             textTertiary: textTertiary?.toColor(),
+            destructiveColor: destructiveColor?.toColor(),
+            successColor: successColor?.toColor(),
+            warningColor: warningColor?.toColor(),
             animationStyle: resolvedAnimationStyle,
             hoverShadowOpacity: hoverShadowOpacity ?? 0.12,
             hoverShadowRadius: hoverShadowRadius ?? 12,

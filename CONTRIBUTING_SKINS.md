@@ -143,11 +143,23 @@ Valid point values: `top`, `bottom`, `leading`, `trailing`, `topLeading`,
 | `platterTintOpacity` | 0–1 | `0` |
 | `toolbarTint` | color | Falls back to accentColor at 70% |
 
+### Optional — Semantic Colors
+
+| Property | Type | Default |
+|----------|------|---------|
+| `destructiveColor` | color | System red (`#FF3B30`) |
+| `successColor` | color | System green (`#34C759`) |
+| `warningColor` | color | System orange (`#FF9500`) |
+
+These colors are used for delete/remove actions, success states, and warnings
+respectively. Override them to match your skin's palette — e.g. a warm skin
+might use a coral-red for destructive and amber for warning.
+
 ### Optional — Typography & Symbols
 
 | Property | Values | Default |
 |----------|--------|---------|
-| `fontDesign` | `"default"`, `"rounded"`, `"serif"`, `"monospaced"` | `"rounded"` |
+| `fontDesign` | `"default"`, `"rounded"` | `"rounded"` |
 | `fontWeight` | `"regular"`, `"medium"`, `"semibold"`, `"bold"` | `"semibold"` |
 | `headlineFontWeight` | same as fontWeight | `"semibold"` |
 | `sfSymbolRendering` | `"monochrome"`, `"hierarchical"`, `"palette"`, `"multicolor"` | `"hierarchical"` |
@@ -159,15 +171,35 @@ Valid point values: `top`, `bottom`, `leading`, `trailing`, `topLeading`,
 ## Design Tips
 
 - **Accent color**: Pick one strong, saturated color. This drives the entire
-  visual identity.
+  visual identity. Avoid grey/desaturated accents — interactive elements must
+  be visually distinct from non-interactive text (aim for ≥ 3:1 contrast).
 - **Surface tint**: Use a very dark, desaturated version of your accent. High
   opacity here overwhelms the UI — keep it subtle (0.2–0.35).
 - **Background gradient**: Use 2–3 stops fading to clear. Opacity should be
   0.10–0.25 so the gradient doesn't overpower content.
 - **Preview colors**: The first color should be your accent; the second a
   complementary dark tone.
+- **`buttonStyle: "gradient"`**: Renders a gradient from `accentColor` →
+  `secondaryAccent`. Always set `secondaryAccent` when using gradient buttons,
+  otherwise it falls back to a darkened version of `accentColor` (subtle shift).
+- **`secondaryAccent` fallback**: If omitted, defaults to `accentColor` at 85%
+  opacity. For distinct visual hierarchy, always provide an explicit value.
+- **`toolbarTint`**: Intentionally different from `accentColor` to create
+  hierarchy — primary actions (Add) use the accent, toolbar buttons recede.
+  Choose a complementary, lower-saturation color.
 - **Test both light & dark mode** — skins use adaptive blend modes that work in
   both, but some color combos look better in one mode.
+
+## Value Constraints
+
+The JSON schema enforces these ranges to prevent broken skins:
+
+| Property | Min | Max | Notes |
+|----------|-----|-----|-------|
+| `cornerRadius` | 2 | 24 | Avoids invisible or cartoonish rounding |
+| `shadowOpacity` | 0 | 0.25 | Prevents overpowering drop shadows |
+| `shadowRadius` | 0 | 20 | Keeps shadows plausible |
+| `separatorOpacity` | 0.05 | 0.5 | Runtime floor at 0.15 when style ≠ `"none"` |
 
 ## JSON Schema Validation
 
