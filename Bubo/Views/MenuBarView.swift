@@ -519,6 +519,7 @@ struct MenuBarView: View {
                 .help("Quit (\u{2318}Q)")
                 .keyboardShortcut("q", modifiers: .command)
             }
+            .font(.system(size: 15, weight: .semibold))
             .buttonStyle(.borderless)
             .symbolRenderingMode(.monochrome)
             .tint(activeSkin.resolvedToolbarTint)
