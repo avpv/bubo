@@ -48,6 +48,13 @@ struct CustomSkinJSON: Codable {
     /// Explicit foreground color for primary buttons. Overrides auto-contrast logic.
     let buttonColor: JSONColor?
 
+    /// Optional accent color override for primary button backgrounds only.
+    /// Allows a skin to use a different accent for buttons than the overall theme.
+    let buttonAccentColor: JSONColor?
+
+    /// Optional secondary accent override for the primary button gradient end color.
+    let buttonSecondaryAccent: JSONColor?
+
     /// Material used as the base for glass-style and secondary buttons.
     /// Same values as barMaterial. Defaults to "regular".
     let buttonMaterial: String?
@@ -163,6 +170,8 @@ struct CustomSkinJSON: Codable {
             buttonStyle: resolvedButtonStyle,
             buttonShape: resolvedButtonShape,
             buttonColor: buttonColor?.toColor(),
+            buttonAccentColor: buttonAccentColor?.toColor(),
+            buttonSecondaryAccent: buttonSecondaryAccent?.toColor(),
             buttonMaterial: resolvedButtonMaterial,
             buttonTint: buttonTint?.toColor(),
             buttonTintOpacity: buttonTintOpacity ?? 0.3,

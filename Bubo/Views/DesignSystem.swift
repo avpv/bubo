@@ -479,7 +479,7 @@ struct ActionButtonStyle: ButtonStyle {
     }
 
     private var skinAccent: Color {
-        skin.isClassic ? DS.Colors.accent : skin.accentColor
+        skin.isClassic ? DS.Colors.accent : skin.resolvedButtonAccentColor
     }
 
     // MARK: Shape
@@ -533,8 +533,8 @@ struct ActionButtonStyle: ButtonStyle {
             case .gradient:
                 LinearGradient(
                     colors: isPressed
-                        ? [skinAccent.opacity(0.75), skin.resolvedSecondaryAccent.opacity(0.75)]
-                        : [skinAccent, skin.resolvedSecondaryAccent],
+                        ? [skinAccent.opacity(0.75), skin.resolvedButtonSecondaryAccent.opacity(0.75)]
+                        : [skinAccent, skin.resolvedButtonSecondaryAccent],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )

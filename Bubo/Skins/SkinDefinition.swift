@@ -265,6 +265,15 @@ struct SkinDefinition: Identifiable, Equatable {
     /// Defaults to 0.3 for glass buttons.
     let buttonTintOpacity: Double
 
+    /// Optional accent color override used exclusively for primary button backgrounds.
+    /// When set, the primary button gradient uses this instead of the skin's main accentColor,
+    /// allowing a skin to have one overall accent (e.g. silver) while keeping vivid buttons.
+    let buttonAccentColor: Color?
+
+    /// Optional secondary accent override for the primary button gradient end color.
+    /// Falls back to `buttonAccentColor?.opacity(0.85)` → `secondaryAccent` → `accentColor.opacity(0.85)`.
+    let buttonSecondaryAccent: Color?
+
     /// Tint color for toolbar/utility buttons (Refresh, Settings, Quit).
     /// Apple HIG: secondary actions use a subtler, complementary color to
     /// establish visual hierarchy — primary action (Add) stays bold, toolbar
@@ -386,6 +395,8 @@ struct SkinDefinition: Identifiable, Equatable {
         buttonStyle: SkinButtonStyle = .gradient,
         buttonShape: SkinButtonShape = .capsule,
         buttonColor: Color? = nil,
+        buttonAccentColor: Color? = nil,
+        buttonSecondaryAccent: Color? = nil,
         buttonMaterial: SkinBarMaterial = .regular,
         buttonTint: Color? = nil,
         buttonTintOpacity: Double = 0.3,
@@ -434,6 +445,8 @@ struct SkinDefinition: Identifiable, Equatable {
         self.buttonStyle = buttonStyle
         self.buttonShape = buttonShape
         self.buttonColor = buttonColor
+        self.buttonAccentColor = buttonAccentColor
+        self.buttonSecondaryAccent = buttonSecondaryAccent
         self.buttonMaterial = buttonMaterial
         self.buttonTint = buttonTint
         self.buttonTintOpacity = buttonTintOpacity
@@ -476,6 +489,19 @@ struct SkinDefinition: Identifiable, Equatable {
     /// Resolved secondary accent, falling back to a darkened version of accentColor.
     var resolvedSecondaryAccent: Color {
         secondaryAccent ?? accentColor.opacity(0.85)
+    }
+
+    /// Resolved accent color for primary buttons. Falls back to main accentColor.
+    var resolvedButtonAccentColor: Color {
+        buttonAccentColor ?? accentColor
+    }
+
+    /// Resolved secondary accent for primary button gradient.
+    /// Falls back to buttonAccentColor's secondary → skin secondaryAccent → accentColor dimmed.
+    var resolvedButtonSecondaryAccent: Color {
+        buttonSecondaryAccent
+            ?? buttonAccentColor.map { $0.opacity(0.85) }
+            ?? resolvedSecondaryAccent
     }
 
     /// Resolved toolbar tint, falling back to accent color at reduced opacity.
