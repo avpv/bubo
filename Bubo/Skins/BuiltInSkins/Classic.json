@@ -14,7 +14,7 @@
   "prefersDarkTint": false,
   "buttonStyle": "solid",
   "buttonShape": "roundedRect",
-  "toolbarIconSize": 14,
+  "toolbarIconSize": 15,
   "barMaterial": "regular",
   "platterMaterial": "thin",
   "fontDesign": "default",

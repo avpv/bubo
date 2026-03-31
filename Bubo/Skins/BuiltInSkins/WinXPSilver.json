@@ -27,7 +27,7 @@
   "buttonAccentColor": "#0054D6",
   "buttonSecondaryAccent": "#388A29",
   "toolbarTint": "#FFFFFF",
-  "toolbarIconSize": 14,
+  "toolbarIconSize": 15,
   "barMaterial": "thin",
   "barTint": "#616180",
   "barTintOpacity": 0.08,

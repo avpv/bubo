@@ -25,7 +25,7 @@
   "buttonStyle": "glass",
   "buttonShape": "capsule",
   "toolbarTint": "accentColor:0.85",
-  "toolbarIconSize": 14,
+  "toolbarIconSize": 15,
   "barMaterial": "regular",
   "barTint": "accentColor",
   "barTintOpacity": 0.05,
