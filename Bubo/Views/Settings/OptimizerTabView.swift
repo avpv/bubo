@@ -146,6 +146,8 @@ struct OptimizerTabView: View {
                 in: 0...5,
                 step: 0.1
             )
+            .accessibilityLabel(label)
+            .accessibilityValue(String(format: "%.1f", optimizerService.optimizer.preferences[keyPath: keyPath]))
 
             Text(String(format: "%.1f", optimizerService.optimizer.preferences[keyPath: keyPath]))
                 .font(.caption.monospacedDigit())

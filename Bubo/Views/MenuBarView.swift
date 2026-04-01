@@ -405,18 +405,23 @@ struct MenuBarView: View {
                         colorFilter = isActive ? nil : tag
                     }
                 } label: {
-                    Circle()
-                        .fill(tag.color)
-                        .frame(width: 24, height: 24)
-                        .opacity(selected == nil || isActive ? 1.0 : 0.3)
-                        .scaleEffect(isActive ? 1.1 : 1.0)
-                        .overlay(
+                    ZStack {
+                        Circle()
+                            .fill(tag.color)
+                            .frame(width: DS.Size.colorDotSize, height: DS.Size.colorDotSize)
+                            .opacity(selected == nil || isActive ? 1.0 : 0.3)
+
+                        // HIG: Non-color indicator for active state
+                        if isActive {
                             Circle()
                                 .strokeBorder(
-                                    skin.resolvedTextPrimary.opacity(isActive ? 0.8 : 0),
-                                    lineWidth: isActive ? 1.5 : 0
+                                    skin.resolvedTextPrimary.opacity(DS.Opacity.overlayDark),
+                                    lineWidth: DS.Border.medium
                                 )
-                        )
+                                .frame(width: DS.Size.colorDotSize, height: DS.Size.colorDotSize)
+                        }
+                    }
+                    .scaleEffect(isActive ? 1.1 : 1.0)
                         .shadow(
                             color: isActive ? tag.color.opacity(skin.shadowOpacity * 6) : .clear,
                             radius: isActive ? skin.shadowRadius * 0.4 : 0
@@ -445,6 +450,7 @@ struct MenuBarView: View {
                         .foregroundStyle(skin.resolvedTextTertiary)
                 }
                 .buttonStyle(.borderless)
+                .accessibilityLabel("Clear filter")
                 .transition(.scale.combined(with: .opacity))
             }
         }

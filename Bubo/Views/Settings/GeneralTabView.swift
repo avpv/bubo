@@ -256,6 +256,7 @@ struct SkinImageSection: View {
                             ),
                             in: 0.05...1.0, step: 0.05
                         )
+                        .accessibilityLabel("Image opacity")
                         Text("\(Int((override.opacity) * 100))%")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
@@ -273,6 +274,7 @@ struct SkinImageSection: View {
                             ),
                             in: 0...10, step: 0.5
                         )
+                        .accessibilityLabel("Image blur")
                         Text(String(format: "%.1f", override.blur))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
@@ -383,6 +385,7 @@ struct BackgroundPhotoSection: View {
                             .foregroundStyle(.secondary)
                             .frame(width: 50, alignment: .leading)
                         Slider(value: $settings.customBackgroundPhotoOpacity, in: 0.05...1.0, step: 0.05)
+                            .accessibilityLabel("Photo opacity")
                         Text("\(Int(settings.customBackgroundPhotoOpacity * 100))%")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
@@ -394,6 +397,7 @@ struct BackgroundPhotoSection: View {
                             .foregroundStyle(.secondary)
                             .frame(width: 50, alignment: .leading)
                         Slider(value: $settings.customBackgroundPhotoBlur, in: 0...10, step: 0.5)
+                            .accessibilityLabel("Photo blur")
                         Text(String(format: "%.1f", settings.customBackgroundPhotoBlur))
                             .font(.caption2)
                             .foregroundStyle(.secondary)

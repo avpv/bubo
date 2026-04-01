@@ -108,7 +108,7 @@ struct AddEventView: View {
                     
                     // Title section
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                        TextField("Title", text: $title, prompt: Text("Event title").foregroundStyle(skin.resolvedTextTertiary))
+                        TextField("Title", text: $title, prompt: Text("Event title (required)").foregroundStyle(skin.resolvedTextTertiary))
                             .textFieldStyle(.plain)
                             .font(.headline)
                             .focused($isTitleFocused)
