@@ -121,7 +121,7 @@ struct EmojiPickerView: View {
 
                 // Category title
                 Text(Self.categories[selectedCategory].title.uppercased())
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.caption2.weight(.semibold))
                     .foregroundStyle(skin.resolvedTextTertiary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, DS.Spacing.md)
@@ -136,7 +136,7 @@ struct EmojiPickerView: View {
                             onSelect(emoji)
                         } label: {
                             Text(emoji)
-                                .font(.system(size: 22))
+                                .font(.title2)
                                 .frame(width: 32, height: 32)
                                 .background(Color.clear)
                                 .contentShape(Rectangle())

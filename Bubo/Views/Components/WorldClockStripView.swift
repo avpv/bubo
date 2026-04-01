@@ -174,9 +174,10 @@ private struct WorldClockPill: View {
     var body: some View {
         VStack(spacing: 1) {
             Text(city.city)
-                .font(.system(size: 9, weight: .medium, design: skin.resolvedFontDesign))
+                .font(.system(.caption2, design: skin.resolvedFontDesign, weight: .medium))
                 .foregroundStyle(skin.resolvedTextSecondary)
                 .lineLimit(1)
+                .truncationMode(.tail)
 
             HStack(spacing: 3) {
                 if isNighttime {
@@ -191,7 +192,7 @@ private struct WorldClockPill: View {
 
             if !offsetLabel.isEmpty {
                 Text(offsetLabel)
-                    .font(.system(size: 8, weight: .medium, design: .monospaced))
+                    .font(.system(.caption2, design: .monospaced, weight: .medium))
                     .foregroundStyle(skin.resolvedTextTertiary)
             }
         }

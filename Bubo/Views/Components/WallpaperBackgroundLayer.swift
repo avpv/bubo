@@ -814,6 +814,7 @@ struct WallpaperPreviewCard: View {
                 .fontWeight(isSelected ? .semibold : .regular)
                 .foregroundStyle(isSelected ? Color.primary : .secondary)
                 .lineLimit(1)
+                .truncationMode(.tail)
         }
     }
 

@@ -17,6 +17,7 @@ struct SettingsPlatter<Content: View>: View {
                 Text(title)
                     .font(.headline)
                     .foregroundStyle(skin.resolvedTextPrimary)
+                    .accessibilityAddTraits(.isHeader)
                     .padding(.bottom, DS.Spacing.xs)
             }
             content

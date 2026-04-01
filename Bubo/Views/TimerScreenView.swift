@@ -160,7 +160,7 @@ struct TimerScreenView: View {
                         // Center content
                         VStack(spacing: DS.Spacing.sm) {
                             Text(statusLabel(now))
-                                .font(.system(size: 11, weight: .medium, design: .rounded))
+                                .font(.system(.caption, design: .rounded, weight: .medium))
                                 .foregroundStyle(skin.resolvedTextTertiary)
                                 .textCase(.uppercase)
                                 .tracking(1.5)

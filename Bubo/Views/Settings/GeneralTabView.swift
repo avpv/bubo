@@ -89,11 +89,13 @@ struct SkinPreviewCard: View {
                     .fontWeight(isSelected ? .semibold : .regular)
                     .foregroundStyle(isSelected ? Color.primary : .secondary)
                     .lineLimit(1)
+                    .truncationMode(.tail)
                 if skin.author != "Bubo" {
                     Text("by \(skin.author)")
-                        .font(.system(size: 8))
+                        .font(.caption2)
                         .foregroundStyle(.tertiary)
                         .lineLimit(1)
+                        .truncationMode(.tail)
                 }
             }
         }

@@ -62,6 +62,7 @@ struct RecurrencePickerView: View {
             Text("Repeat")
                 .font(.headline)
                 .foregroundStyle(skin.resolvedTextPrimary)
+                .accessibilityAddTraits(.isHeader)
 
             modePicker
 

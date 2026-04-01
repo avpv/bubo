@@ -183,6 +183,7 @@ struct OptimizerView: View {
                         Text(event.title)
                             .font(.caption)
                             .lineLimit(1)
+                            .truncationMode(.tail)
                         Spacer()
                         Text(event.formattedTimeRange)
                             .font(.caption2)
@@ -311,6 +312,7 @@ struct OptimizerView: View {
                         Text(gene.title)
                             .font(.caption.weight(.medium))
                             .lineLimit(1)
+                            .truncationMode(.tail)
 
                         Text(formatTimeRange(gene.startTime, gene.endTime))
                             .font(.caption2)
