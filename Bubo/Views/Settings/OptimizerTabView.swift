@@ -12,10 +12,7 @@ struct OptimizerTabView: View {
 
         ScrollView {
             VStack(spacing: DS.Spacing.lg) {
-                SettingsPlatter("General") {
-                    Toggle("Enable Schedule Assistant", isOn: $service.isEnabled)
-                        .help("Enable the schedule optimization engine")
-                }
+
 
                 SettingsPlatter("Working Hours") {
                     HStack {

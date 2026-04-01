@@ -36,9 +36,6 @@ final class OptimizerService {
             saveSettings()
         }
     }
-    var isEnabled: Bool {
-        didSet { saveSettings() }
-    }
 
     private let persistenceKey = "BuboOptimizerServiceSettings"
     private let preferencesKey = "BuboOptimizerPreferences"
@@ -47,7 +44,6 @@ final class OptimizerService {
         let saved = Self.loadSettings()
         self.workingHoursStart = saved.start
         self.workingHoursEnd = saved.end
-        self.isEnabled = saved.enabled
         // Restore optimizer preferences
         if let data = UserDefaults.standard.data(forKey: "BuboOptimizerPreferences"),
            let prefs = try? JSONDecoder().decode(OptimizerPreferences.self, from: data) {
@@ -65,7 +61,6 @@ final class OptimizerService {
         reminderService: ReminderService,
         movableTasks: [OptimizableEvent]
     ) async {
-        guard isEnabled else { return }
         isOptimizing = true
         defer { isOptimizing = false }
         error = nil
@@ -90,7 +85,6 @@ final class OptimizerService {
         movableTasks: [OptimizableEvent],
         participantAvailability: [String: [DateInterval]] = [:]
     ) async {
-        guard isEnabled else { return }
         isOptimizing = true
         defer { isOptimizing = false }
         error = nil
@@ -116,7 +110,6 @@ final class OptimizerService {
         durationMinutes: Int = 120,
         reminderService: ReminderService
     ) async {
-        guard isEnabled else { return }
         isOptimizing = true
         defer { isOptimizing = false }
         error = nil
@@ -141,7 +134,6 @@ final class OptimizerService {
         config: PomodoroConfig = .classic,
         reminderService: ReminderService
     ) async {
-        guard isEnabled else { return }
         isOptimizing = true
         defer { isOptimizing = false }
         error = nil
@@ -206,11 +198,10 @@ final class OptimizerService {
     private struct SavedSettings: Codable {
         let start: Int
         let end: Int
-        let enabled: Bool
     }
 
     private func saveSettings() {
-        let saved = SavedSettings(start: workingHoursStart, end: workingHoursEnd, enabled: isEnabled)
+        let saved = SavedSettings(start: workingHoursStart, end: workingHoursEnd)
         if let data = try? JSONEncoder().encode(saved) {
             UserDefaults.standard.set(data, forKey: persistenceKey)
         }
@@ -223,12 +214,12 @@ final class OptimizerService {
         }
     }
 
-    private static func loadSettings() -> (start: Int, end: Int, enabled: Bool) {
+    private static func loadSettings() -> (start: Int, end: Int) {
         guard let data = UserDefaults.standard.data(forKey: "BuboOptimizerServiceSettings"),
               let saved = try? JSONDecoder().decode(SavedSettings.self, from: data) else {
-            return (start: 9, end: 18, enabled: true)
+            return (start: 9, end: 18)
         }
-        return (start: saved.start, end: saved.end, enabled: saved.enabled)
+        return (start: saved.start, end: saved.end)
     }
 
     func reset() {
