@@ -8,11 +8,12 @@ struct QuickAddTasksView: View {
     var optimizerService: OptimizerService
     var reminderService: ReminderService
     var onBack: () -> Void
+    var onShowResults: (() -> Void)? = nil
 
     @State private var tasks: [TaskEntry] = [TaskEntry()]
     @State private var horizon: Horizon = .today
     @State private var isOptimizing = false
-    @State private var result: RecipeResult? = nil
+    @State private var showResults = false
 
     struct TaskEntry: Identifiable {
         let id = UUID()
@@ -203,11 +204,14 @@ struct QuickAddTasksView: View {
         )
 
         Task {
-            _ = await optimizerService.executeRecipe(
+            let result = await optimizerService.executeRecipe(
                 recipe,
                 reminderService: reminderService
             )
             isOptimizing = false
+            if result.optimizerResult != nil {
+                onShowResults?()
+            }
         }
     }
 

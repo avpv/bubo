@@ -78,6 +78,20 @@ struct OptimizerView: View {
                 value: phase
             )
         }
+        .onAppear {
+            // If a recipe was pre-set (from context menu or QuickAddTasks),
+            // jump directly to results or config
+            if let recipe = optimizerService.activeRecipe {
+                selectedRecipe = recipe
+                if !optimizerService.scenarios.isEmpty {
+                    phase = .results
+                } else if recipe.params.isEmpty {
+                    handleExecute(recipe, [:])
+                } else {
+                    phase = .configuring
+                }
+            }
+        }
     }
 
     // MARK: - Header

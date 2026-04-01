@@ -20,7 +20,7 @@ final class OptimizerService {
     private(set) var lastSnapshot: AppliedRecipeSnapshot? = nil
 
     /// The recipe that produced the current scenarios.
-    private(set) var activeRecipe: ScheduleRecipe? = nil
+    var activeRecipe: ScheduleRecipe? = nil
 
     /// Recipe monitor for auto-triggered reactions and contextual suggestions.
     private(set) var recipeMonitor: RecipeMonitor? = nil

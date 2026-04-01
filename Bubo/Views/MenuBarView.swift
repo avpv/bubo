@@ -165,7 +165,8 @@ struct MenuBarView: View {
                     QuickAddTasksView(
                         optimizerService: optimizerService,
                         reminderService: reminderService,
-                        onBack: { navigation = .list }
+                        onBack: { navigation = .list },
+                        onShowResults: { navigation = .optimizer }
                     )
                     .transition(
                         reduceMotion ? .opacity : .asymmetric(
@@ -191,6 +192,7 @@ struct MenuBarView: View {
             hasStartedSync = true
             reminderService.updateSettings(settings)
             reminderService.startSync()
+            optimizerService.setupRecipeMonitor(reminderService: reminderService)
         }
     }
 
@@ -237,6 +239,18 @@ struct MenuBarView: View {
         reminderService.removeLocalEvent(id: event.id)
         toastState.showSuccess("Event deleted", icon: "trash.fill") {
             reminderService.addLocalEvent(deletedEvent)
+        }
+
+        // Notify recipe monitor for auto-reactions
+        Task {
+            await optimizerService.recipeMonitor?.onEventChange(
+                .deleted(eventId: event.id),
+                workingHours: optimizerService.workingHours
+            )
+            // If monitor produced a suggestion, show it
+            if optimizerService.recipeMonitor?.lastReaction != nil {
+                toastState.showInfo("Schedule adjusted", icon: "wand.and.stars")
+            }
         }
     }
 
@@ -513,6 +527,46 @@ struct MenuBarView: View {
                             },
                             onTap: { event in
                                 navigation = .detail(event)
+                            },
+                            onFindBetterTime: { event in
+                                // Navigate to optimizer with a whatIf recipe for this event
+                                optimizerService.activeRecipe = ScheduleRecipe(
+                                    id: "find-better-time",
+                                    name: "Find Better Time",
+                                    icon: "wand.and.stars",
+                                    description: "Find a better slot for \(event.title)",
+                                    events: [EventSpec(
+                                        title: event.title,
+                                        minutes: Int(event.duration / 60),
+                                        priority: 0.8,
+                                        focus: event.eventType == .pomodoro
+                                    )],
+                                    includeExistingEvents: false,
+                                    display: .scenarios
+                                )
+                                navigation = .optimizer
+                            },
+                            onSplitTask: { event in
+                                optimizerService.activeRecipe = ScheduleRecipe.splitLargeTask()
+                                navigation = .optimizer
+                            },
+                            onProtectBlock: { event in
+                                let recipe = ScheduleRecipe(
+                                    id: "protect-block",
+                                    name: "Protect Block",
+                                    icon: "shield",
+                                    eventRules: [EventRule(match: .id(event.id), action: .markFixed)],
+                                    display: .confirmation
+                                )
+                                Task {
+                                    _ = await optimizerService.executeRecipe(recipe, reminderService: reminderService)
+                                    toastState.showSuccess("Focus block protected", icon: "shield.fill")
+                                }
+                            },
+                            onAddPrep: { event in
+                                var recipe = ScheduleRecipe.prepBeforeMeeting()
+                                recipe.applyParamValues(["eventId": event.id])
+                                navigation = .optimizer
                             }
                         )
                     }
