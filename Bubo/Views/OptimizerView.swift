@@ -14,6 +14,7 @@ struct OptimizerView: View {
     @State private var focusBlockMinutes = 120
     @State private var selectedScenarioIndex = 0
     @State private var appliedScenarioIndex: Int? = nil
+    @State private var isAnimatingSpinner = false
 
     private static let timeFormatter = DS.timeFormatter
 
@@ -69,23 +70,24 @@ struct OptimizerView: View {
 
     // MARK: - Action Picker
 
-    /// HIG: Use the system segmented control for mutually exclusive options.
     private var actionPicker: some View {
-        Picker("Optimizer action", selection: $selectedAction) {
+        HStack(spacing: DS.Spacing.sm) {
             ForEach(OptimizerAction.allCases, id: \.self) { action in
-                Label(action.rawValue, systemImage: action.icon)
-                    .tag(action)
+                OptimizerActionCard(
+                    action: action,
+                    isSelected: selectedAction == action,
+                    actionHandler: {
+                        Haptics.tap()
+                        selectedAction = action
+                        optimizerService.scenarios = []
+                        selectedScenarioIndex = 0
+                        appliedScenarioIndex = nil
+                    }
+                )
             }
         }
-        .pickerStyle(.segmented)
         .padding(.horizontal, DS.Spacing.md)
         .padding(.vertical, DS.Spacing.sm)
-        .onChange(of: selectedAction) { _, _ in
-            Haptics.tap()
-            optimizerService.scenarios = []
-            selectedScenarioIndex = 0
-            appliedScenarioIndex = nil
-        }
     }
 
     // MARK: - Configuration
@@ -112,21 +114,31 @@ struct OptimizerView: View {
                 .font(.caption)
                 .foregroundStyle(skin.resolvedTextSecondary)
 
-            Picker("Blocks:", selection: $focusBlockCount) {
-                ForEach(1...4, id: \.self) { n in
-                    Text("\(n)").tag(n)
-                }
+            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                Text("Blocks:").font(.caption2).foregroundStyle(skin.resolvedTextTertiary)
+                SegmentedPillPicker(
+                    options: Array(1...4),
+                    selection: $focusBlockCount,
+                    labelProvider: { "\($0)" }
+                )
             }
-            .frame(width: 200)
+            .padding(.bottom, DS.Spacing.xs)
 
-            Picker("Duration:", selection: $focusBlockMinutes) {
-                Text("30 min").tag(30)
-                Text("60 min").tag(60)
-                Text("90 min").tag(90)
-                Text("2 hours").tag(120)
-                Text("3 hours").tag(180)
+            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                Text("Duration:").font(.caption2).foregroundStyle(skin.resolvedTextTertiary)
+                SegmentedPillPicker(
+                    options: [30, 60, 90, 120, 180],
+                    selection: $focusBlockMinutes,
+                    labelProvider: { minutes in
+                        if minutes < 60 { return "\(minutes)m" }
+                        let hours = minutes / 60
+                        let rem = minutes % 60
+                        if rem == 0 { return "\(hours)h" }
+                        return "\(hours)h \(rem)m"
+                    }
+                )
             }
-            .frame(width: 240)
+            .padding(.bottom, DS.Spacing.sm)
 
             asyncOptimizeButton {
                 await optimizerService.suggestFocusBlocks(
@@ -229,12 +241,37 @@ struct OptimizerView: View {
 
     private var optimizingView: some View {
         VStack(spacing: DS.Spacing.lg) {
-            ProgressView()
-            Text("Optimizing your schedule...")
-                .font(.subheadline)
-                .foregroundStyle(skin.resolvedTextSecondary)
+            ZStack {
+                Circle()
+                    .strokeBorder(skin.accentColor.opacity(0.15), lineWidth: 4)
+                    .frame(width: 48, height: 48)
+                Circle()
+                    .trim(from: 0, to: 0.7)
+                    .stroke(skin.accentColor, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                    .frame(width: 48, height: 48)
+                    .rotationEffect(.degrees(isAnimatingSpinner ? 360 : 0))
+                    .animation(.linear(duration: 1.2).repeatForever(autoreverses: false), value: isAnimatingSpinner)
+                    .onAppear { isAnimatingSpinner = true }
+                    .onDisappear { isAnimatingSpinner = false }
+                Image(systemName: "wand.and.stars")
+                    .font(.system(size: 20))
+                    .foregroundStyle(skin.accentColor)
+                    .symbolEffect(.pulse)
+            }
+            
+            VStack(spacing: DS.Spacing.xs) {
+                Text("Analyzing schedule...")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(skin.resolvedTextPrimary)
+                Text("Finding the perfect time slots based on your habits.")
+                    .font(.caption)
+                    .foregroundStyle(skin.resolvedTextSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, DS.Spacing.lg)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.vertical, DS.Spacing.xxl)
     }
 
     // MARK: - Results
@@ -267,15 +304,19 @@ struct OptimizerView: View {
 
     private func scenarioDetail(_ scenario: ScheduleScenario) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            // Fitness score
+            // Fitness score pill
             HStack {
-                Text("Score:")
-                    .font(.caption)
-                    .foregroundStyle(skin.resolvedTextSecondary)
-                Text(String(format: "%.1f%%", max(0, scenario.fitness) * 100))
+                Label("Match: \(Int(max(0, scenario.fitness) * 100))%", systemImage: "sparkles")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(skin.accentColor)
+                    .padding(.horizontal, DS.Spacing.sm)
+                    .padding(.vertical, 4)
+                    .background(skin.accentColor.opacity(0.15))
+                    .clipShape(Capsule())
+                    .overlay(Capsule().strokeBorder(skin.accentColor.opacity(0.3), lineWidth: 1))
+                Spacer()
             }
+            .padding(.bottom, DS.Spacing.xs)
 
             // Events in this scenario
             ForEach(scenario.genes, id: \.eventId) { gene in
@@ -298,7 +339,8 @@ struct OptimizerView: View {
                     Spacer()
                 }
                 .padding(DS.Spacing.sm)
-                .skinPlatter(skin)
+                .background(skin.resolvedPlatterMaterial)
+                .skinPlatterDepth(skin)
             }
 
             // Objective breakdown
@@ -430,5 +472,95 @@ struct OptimizerView: View {
 
     private func formatTimeRange(_ start: Date, _ end: Date) -> String {
         "\(Self.timeFormatter.string(from: start)) – \(Self.timeFormatter.string(from: end))"
+    }
+}
+
+// MARK: - Components
+
+struct SegmentedPillPicker<T: Equatable & Hashable>: View {
+    @Environment(\.activeSkin) private var skin
+    let options: [T]
+    @Binding var selection: T
+    let labelProvider: (T) -> String
+
+    var body: some View {
+        HStack(spacing: DS.Spacing.xs) {
+            ForEach(options, id: \.self) { option in
+                let isSelected = selection == option
+                Button {
+                    Haptics.tap()
+                    withAnimation(skin.resolvedMicroAnimation) {
+                        selection = option
+                    }
+                } label: {
+                    Text(labelProvider(option))
+                        .font(.caption.weight(isSelected ? .bold : .medium))
+                        .foregroundStyle(isSelected ? skin.resolvedTextPrimary : skin.resolvedTextSecondary)
+                        .padding(.vertical, 6)
+                        .padding(.horizontal, 10)
+                        .background {
+                            if isSelected {
+                                Capsule()
+                                    .fill(skin.accentColor.opacity(0.15))
+                            }
+                        }
+                        .overlay {
+                            if isSelected {
+                                Capsule()
+                                    .strokeBorder(skin.accentColor.opacity(0.4), lineWidth: 1)
+                            }
+                        }
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+}
+
+struct OptimizerActionCard: View {
+    @Environment(\.activeSkin) private var skin
+    let action: OptimizerView.OptimizerAction
+    let isSelected: Bool
+    let actionHandler: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: actionHandler) {
+            VStack(spacing: DS.Spacing.sm) {
+                Image(systemName: action.icon)
+                    .font(.system(size: 20, weight: isSelected ? .semibold : .regular))
+                    .foregroundStyle(isSelected ? skin.accentColor : skin.resolvedTextSecondary)
+                    .symbolEffect(.bounce, value: isSelected)
+
+                Text(action.rawValue)
+                    .font(.caption.weight(isSelected ? .semibold : .medium))
+                    .foregroundStyle(isSelected ? skin.resolvedTextPrimary : skin.resolvedTextSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, DS.Spacing.md)
+            .background {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: DS.Size.cornerRadius)
+                        .fill(skin.accentColor.opacity(0.1))
+                }
+            }
+            .overlay {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: DS.Size.cornerRadius)
+                        .strokeBorder(skin.accentColor.opacity(0.35), lineWidth: 1)
+                }
+            }
+            .background(skin.resolvedPlatterMaterial)
+            .skinPlatterDepth(skin)
+            .scaleEffect(isHovered && !isSelected ? 1.02 : 1.0)
+            .animation(skin.resolvedMicroAnimation, value: isHovered)
+            .animation(skin.resolvedMicroAnimation, value: isSelected)
+        }
+        .buttonStyle(.plain)
+        .onHover { hover in isHovered = hover }
     }
 }
