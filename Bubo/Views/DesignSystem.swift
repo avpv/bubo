@@ -463,9 +463,10 @@ extension View {
 struct PopoverHeader: View {
     var title: String? = nil
     var showBack: Bool = false
+    /// HIG: Back button should display the title of the previous screen.
+    var backLabel: String = "Back"
     var onBack: (() -> Void)? = nil
     var trailing: AnyView? = nil
-    var showOwlIcon: Bool = true
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.activeSkin) private var skin
@@ -488,7 +489,7 @@ struct PopoverHeader: View {
                             Haptics.tap()
                             onBack?()
                         } label: {
-                            Label("Back", systemImage: "chevron.left")
+                            Label(backLabel, systemImage: "chevron.left")
                         }
                         .buttonStyle(.borderless)
                         .keyboardShortcut(.escape, modifiers: [])
@@ -505,11 +506,6 @@ struct PopoverHeader: View {
                     }
 
                     Spacer()
-
-                    if showBack && showOwlIcon {
-                        OwlIcon(size: DS.Size.headerIcon)
-                            .foregroundStyle(skin.accentColor)
-                    }
 
                     if let trailing {
                         trailing

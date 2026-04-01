@@ -63,41 +63,30 @@ struct OptimizerView: View {
         PopoverHeader(
             title: "Optimizer",
             showBack: true,
+            backLabel: "Bubo",
             onBack: onBack
         )
     }
 
     // MARK: - Action Picker
 
+    /// HIG: Use the system segmented control for mutually exclusive options.
     private var actionPicker: some View {
-        HStack(spacing: DS.Spacing.xs) {
+        Picker("Optimizer action", selection: $selectedAction) {
             ForEach(OptimizerAction.allCases, id: \.self) { action in
-                Button {
-                    Haptics.tap()
-                    withAnimation(DS.Animation.smoothSpring) {
-                        selectedAction = action
-                        optimizerService.scenarios = []
-                        selectedScenarioIndex = 0
-                        appliedScenarioIndex = nil
-                    }
-                } label: {
-                    Label(action.rawValue, systemImage: action.icon)
-                        .font(.caption)
-                        .padding(.horizontal, DS.Spacing.sm)
-                        .padding(.vertical, DS.Spacing.xs)
-                        .background(
-                            selectedAction == action
-                                ? skin.accentColor.opacity(0.2)
-                                : Color.clear
-                        )
-                        .clipShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(selectedAction == action ? .isSelected : [])
+                Label(action.rawValue, systemImage: action.icon)
+                    .tag(action)
             }
         }
+        .pickerStyle(.segmented)
         .padding(.horizontal, DS.Spacing.md)
         .padding(.vertical, DS.Spacing.sm)
+        .onChange(of: selectedAction) { _, _ in
+            Haptics.tap()
+            optimizerService.scenarios = []
+            selectedScenarioIndex = 0
+            appliedScenarioIndex = nil
+        }
     }
 
     // MARK: - Configuration
@@ -124,31 +113,21 @@ struct OptimizerView: View {
                 .font(.caption)
                 .foregroundStyle(skin.resolvedTextSecondary)
 
-            HStack {
-                Text("Blocks:")
-                    .font(.subheadline)
-                Picker("Number of focus blocks", selection: $focusBlockCount) {
-                    ForEach(1...4, id: \.self) { n in
-                        Text("\(n)").tag(n)
-                    }
+            Picker("Blocks:", selection: $focusBlockCount) {
+                ForEach(1...4, id: \.self) { n in
+                    Text("\(n)").tag(n)
                 }
-                .labelsHidden()
-                .frame(width: 60)
             }
+            .frame(width: 200)
 
-            HStack {
-                Text("Duration:")
-                    .font(.subheadline)
-                Picker("Focus block duration", selection: $focusBlockMinutes) {
-                    Text("30 min").tag(30)
-                    Text("60 min").tag(60)
-                    Text("90 min").tag(90)
-                    Text("2 hours").tag(120)
-                    Text("3 hours").tag(180)
-                }
-                .labelsHidden()
-                .frame(width: 100)
+            Picker("Duration:", selection: $focusBlockMinutes) {
+                Text("30 min").tag(30)
+                Text("60 min").tag(60)
+                Text("90 min").tag(90)
+                Text("2 hours").tag(120)
+                Text("3 hours").tag(180)
             }
+            .frame(width: 240)
 
             asyncOptimizeButton {
                 await optimizerService.suggestFocusBlocks(
@@ -223,12 +202,9 @@ struct OptimizerView: View {
             Task { await action() }
         } label: {
             Label("Optimize", systemImage: "wand.and.stars")
-                .font(.subheadline.weight(.medium))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, DS.Spacing.sm)
         }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.regular)
+        .buttonStyle(.action(role: .primary, size: .flexible))
+        .frame(maxWidth: .infinity)
         .disabled(optimizerService.isOptimizing)
     }
 
@@ -360,12 +336,9 @@ struct OptimizerView: View {
                         isApplied ? "Applied" : "Apply this schedule",
                         systemImage: isApplied ? "checkmark.circle" : "checkmark.circle.fill"
                     )
-                    .font(.subheadline.weight(.medium))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, DS.Spacing.sm)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.regular)
+                .buttonStyle(.action(role: .primary, size: .flexible))
+                .frame(maxWidth: .infinity)
                 .disabled(isApplied)
 
                 // Reject (sends feedback to preference learner)

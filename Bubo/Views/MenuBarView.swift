@@ -262,13 +262,16 @@ struct MenuBarView: View {
                 )
             )
 
-            // Status messages
+            // Status messages — show at most one banner to avoid stacking (HIG: keep primary content visible)
             if !networkMonitor.isConnected {
                 StatusBanner(
                     icon: "wifi.slash",
                     text: "No internet — calendar data may be outdated",
                     color: skin.resolvedWarningColor
                 )
+            } else if settings.isCalendarSyncEnabled && !AppleCalendarService.hasAccess {
+                CalendarAccessBanner()
+                    .frame(maxWidth: .infinity, alignment: .center)
             } else if reminderService.isUsingCache {
                 StatusBanner(
                     icon: "arrow.triangle.2.circlepath",
@@ -276,16 +279,9 @@ struct MenuBarView: View {
                     color: skin.resolvedWarningColor
                 )
                 .frame(maxWidth: .infinity, alignment: .center)
-            }
-
-            if settings.isCalendarSyncEnabled {
-                if !AppleCalendarService.hasAccess {
-                    CalendarAccessBanner()
-                        .frame(maxWidth: .infinity, alignment: .center)
-                } else if let error = reminderService.syncError, networkMonitor.isConnected {
-                    StatusBanner(icon: "exclamationmark.triangle.fill", text: error, color: skin.resolvedWarningColor)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                }
+            } else if let error = reminderService.syncError, settings.isCalendarSyncEnabled, networkMonitor.isConnected {
+                StatusBanner(icon: "exclamationmark.triangle.fill", text: error, color: skin.resolvedWarningColor)
+                    .frame(maxWidth: .infinity, alignment: .center)
             }
 
             // Color filter — show whenever there are events

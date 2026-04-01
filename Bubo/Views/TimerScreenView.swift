@@ -97,6 +97,7 @@ struct TimerScreenView: View {
             PopoverHeader(
                 title: "Timer",
                 showBack: !isPinned,
+                backLabel: "Event",
                 onBack: {
                     onBack()
                 },
@@ -123,8 +124,7 @@ struct TimerScreenView: View {
                     .buttonStyle(.borderless)
                     .help(isPinned ? "Unpin window" : "Pin on top")
                     .accessibilityLabel(isPinned ? "Unpin timer window" : "Pin timer window on top")
-                ),
-                showOwlIcon: false
+                )
             )
 
             ScrollView {
