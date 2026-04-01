@@ -564,7 +564,7 @@ struct ActionButtonStyle: ButtonStyle {
     private var buttonContentShape: AnyShape {
         switch skin.buttonShape {
         case .capsule:     AnyShape(Capsule())
-        case .roundedRect: AnyShape(RoundedRectangle(cornerRadius: skin.cornerRadius))
+        case .roundedRect: AnyShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius))
         case .rectangle:   AnyShape(Rectangle())
         }
     }
@@ -579,7 +579,7 @@ struct ActionButtonStyle: ButtonStyle {
             Capsule()
                 .strokeBorder(.white.opacity(opacity), lineWidth: 0.5)
         case .roundedRect:
-            RoundedRectangle(cornerRadius: skin.cornerRadius)
+            RoundedRectangle(cornerRadius: DS.Size.cornerRadius)
                 .strokeBorder(.white.opacity(opacity), lineWidth: 0.5)
         case .rectangle:
             Rectangle()

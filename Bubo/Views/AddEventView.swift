@@ -126,7 +126,7 @@ struct AddEventView: View {
                     .skinPlatter(skin)
                     .skinPlatterDepth(skin)
                     .overlay(
-                        RoundedRectangle(cornerRadius: skin.cornerRadius, style: .continuous)
+                        RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
                             .stroke(isTitleFocused ? skinAccent.opacity(0.8) : Color.clear, lineWidth: DS.Size.focusRingWidth)
                     )
                     .shadow(
@@ -306,7 +306,7 @@ struct AddEventView: View {
                         .skinPlatter(skin)
                         .skinPlatterDepth(skin)
                         .overlay(
-                            RoundedRectangle(cornerRadius: skin.cornerRadius, style: .continuous)
+                            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
                                 .stroke((isLocationFocused || isNotesFocused) ? skinAccent.opacity(0.8) : Color.clear, lineWidth: DS.Size.focusRingWidth)
                         )
                         .shadow(
@@ -677,7 +677,7 @@ struct AddEventView: View {
                         let isLast = idx == pomodoroSegments.count - 1
 
                         RoundedRectangle(
-                            cornerRadius: (isFirst || isLast) ? max(skin.cornerRadius - 3, 3) : max(skin.cornerRadius - 5, 2),
+                            cornerRadius: (isFirst || isLast) ? max(DS.Size.cornerRadius - 3, 3) : max(DS.Size.cornerRadius - 5, 2),
                             style: .continuous
                         )
                         .fill(

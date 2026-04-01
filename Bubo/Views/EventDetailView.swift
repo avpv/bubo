@@ -107,7 +107,7 @@ struct EventDetailView: View {
                                             endPoint: .trailing
                                         )
                                     )
-                                    .clipShape(RoundedRectangle(cornerRadius: skin.cornerRadius, style: .continuous))
+                                    .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
                             }
                             .buttonStyle(.plain)
                             .staggeredEntrance(index: 3)

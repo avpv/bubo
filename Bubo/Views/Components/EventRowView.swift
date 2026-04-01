@@ -47,20 +47,20 @@ struct EventRowView: View {
         .background(
             ZStack(alignment: .leading) {
                 SkinPlatterBackground(skin: skin)
-                    .clipShape(RoundedRectangle(cornerRadius: skin.cornerRadius, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
                 
                 if eventProgress(now) > 0 {
                     GeometryReader { geo in
-                        RoundedRectangle(cornerRadius: skin.cornerRadius, style: .continuous)
+                        RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
                             .fill(
                                 (skin.isClassic ? DS.Colors.accent : skin.accentColor)
                                     .opacity(contrast == .increased ? skin.hoverFillOpacity * 3 : skin.hoverFillOpacity * 1.5)
                             )
-                            .frame(width: max(geo.size.width * eventProgress(now), skin.cornerRadius * 2))
+                            .frame(width: max(geo.size.width * eventProgress(now), DS.Size.cornerRadius * 2))
                     }
                 }
                 
-                RoundedRectangle(cornerRadius: skin.cornerRadius, style: .continuous)
+                RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
                     .fill(isHovered ? skin.resolvedHoverFill : Color.clear)
             }
         )

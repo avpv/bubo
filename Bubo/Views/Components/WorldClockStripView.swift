@@ -200,7 +200,7 @@ private struct WorldClockPill: View {
         .padding(.vertical, DS.Spacing.xs)
         .background {
             if isNighttime {
-                RoundedRectangle(cornerRadius: skin.cornerRadius, style: .continuous)
+                RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
                     .fill(chipAccent.opacity(0.08))
             }
         }

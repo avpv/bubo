@@ -39,9 +39,9 @@ struct DateTimePickerPills: View {
                 .padding(.horizontal, DS.Spacing.pillHorizontal)
                 .frame(height: DS.Size.controlHeight)
                 .skinPlatter(skin)
-                .clipShape(RoundedRectangle(cornerRadius: skin.cornerRadius, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: skin.cornerRadius, style: .continuous)
+                    RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
                         .strokeBorder(
                             isDateHovered ? pillAccent.opacity(0.4) : .white.opacity(0.08),
                             lineWidth: DS.Border.thin
@@ -76,9 +76,9 @@ struct DateTimePickerPills: View {
                 .padding(.horizontal, DS.Spacing.pillHorizontal)
                 .frame(height: DS.Size.controlHeight)
                 .skinPlatter(skin)
-                .clipShape(RoundedRectangle(cornerRadius: skin.cornerRadius, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: skin.cornerRadius, style: .continuous)
+                    RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
                         .strokeBorder(
                             isTimeHovered ? pillAccent.opacity(0.4) : .white.opacity(0.08),
                             lineWidth: DS.Border.thin
@@ -126,7 +126,7 @@ struct DateTimePickerPills: View {
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, DS.Spacing.xs)
                                     .background(
-                                        RoundedRectangle(cornerRadius: skin.cornerRadius, style: .continuous)
+                                        RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
                                             .fill(
                                                 isActive
                                                     ? AnyShapeStyle(LinearGradient(
