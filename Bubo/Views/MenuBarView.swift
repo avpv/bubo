@@ -284,14 +284,14 @@ struct MenuBarView: View {
                     .frame(maxWidth: .infinity, alignment: .center)
             }
 
+            // World Clock — pinned at top, never compressed
+            WorldClockStripView(settings: settings)
+                .fixedSize(horizontal: false, vertical: true)
+
             // Color filter — show whenever there are events so users discover the feature
             if reminderService.nonDisintegratingEventCount > 0 {
                 colorFilterBar
             }
-
-            // World Clock — pinned at top, never compressed
-            WorldClockStripView(settings: settings)
-                .fixedSize(horizontal: false, vertical: true)
 
             // Events — fill remaining space so header stays pinned
             Group {
