@@ -19,9 +19,9 @@ struct OptimizerView: View {
     private static let timeFormatter = DS.timeFormatter
 
     enum OptimizerAction: String, CaseIterable {
-        case focusBlocks = "Find Focus Time"
-        case planDay = "Auto-Plan Day"
-        case pomodoro = "Quick Pomodoro"
+        case focusBlocks = "Focus Time"
+        case planDay = "Plan Day"
+        case pomodoro = "Pomodoro"
 
         var icon: String {
             switch self {
@@ -35,16 +35,16 @@ struct OptimizerView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-            welcomeHeader
-            actionPicker
-            SkinSeparator()
 
             if optimizerService.isOptimizing {
                 optimizingView
             } else if !optimizerService.scenarios.isEmpty {
                 scenarioResults
             } else {
-                configurationView
+                VStack(spacing: DS.Spacing.md) {
+                    actionPicker
+                    configurationView
+                }
             }
 
             Spacer(minLength: 0)
@@ -58,57 +58,52 @@ struct OptimizerView: View {
         }
     }
 
-    // MARK: - Header & Welcome
+    // MARK: - Header
 
     private var header: some View {
         PopoverHeader(
-            title: "Optimizer",
+            title: "Schedule Assistant",
             showBack: true,
             onBack: onBack
         )
     }
 
-    private var welcomeHeader: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            Text("Schedule Assistant")
-                .font(.headline)
-                .foregroundStyle(skin.resolvedTextPrimary)
-            Text("Let AI analyze your calendar gaps to find the perfect slots for deep work, planning, or a quick Pomodoro.")
-                .font(.caption)
-                .foregroundStyle(skin.resolvedTextSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.horizontal, DS.Spacing.md)
-        .padding(.top, DS.Spacing.md)
-    }
-
     // MARK: - Action Picker
 
     private var actionPicker: some View {
-        HStack(spacing: DS.Spacing.sm) {
-            ForEach(OptimizerAction.allCases, id: \.self) { action in
-                OptimizerActionCard(
-                    action: action,
-                    isSelected: selectedAction == action,
-                    actionHandler: {
-                        Haptics.tap()
-                        selectedAction = action
-                        optimizerService.scenarios = []
-                        selectedScenarioIndex = 0
-                        appliedScenarioIndex = nil
-                    }
-                )
+        HStack {
+            Text("Action")
+                .font(.headline)
+                .foregroundStyle(skin.resolvedTextPrimary)
+                .accessibilityAddTraits(.isHeader)
+            
+            Spacer()
+            
+            Picker("Action", selection: $selectedAction) {
+                ForEach(OptimizerAction.allCases, id: \.self) { action in
+                    Text(action.rawValue).tag(action)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: 260)
+            .padding(.horizontal, DS.Spacing.md)
+            .onChange(of: selectedAction) { _, _ in
+                Haptics.tap()
+                optimizerService.scenarios = []
+                selectedScenarioIndex = 0
+                appliedScenarioIndex = nil
             }
         }
         .padding(.horizontal, DS.Spacing.md)
-        .padding(.vertical, DS.Spacing.sm)
+        .padding(.top, DS.Spacing.lg)
     }
 
     // MARK: - Configuration
 
     private var configurationView: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            VStack(alignment: .leading, spacing: DS.Spacing.lg) {
                 switch selectedAction {
                 case .focusBlocks:
                     focusBlockConfig
@@ -118,124 +113,119 @@ struct OptimizerView: View {
                     pomodoroConfig
                 }
             }
-            .padding(DS.Spacing.md)
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.vertical, DS.Spacing.xl)
         }
+        .scrollContentBackground(.hidden)
     }
 
     private var focusBlockConfig: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                Text("I want to schedule")
-                    .font(.body)
-                    .foregroundStyle(skin.resolvedTextSecondary)
-                
-                SegmentedPillPicker(
-                    options: Array(1...4),
-                    selection: $focusBlockCount,
-                    labelProvider: { "\($0)" }
-                )
-                
-                Text(focusBlockCount == 1 ? "block of" : "blocks of")
-                    .font(.body)
-                    .foregroundStyle(skin.resolvedTextSecondary)
-                
-                SegmentedPillPicker(
-                    options: [30, 60, 90, 120, 180],
-                    selection: $focusBlockMinutes,
-                    labelProvider: { minutes in
-                        if minutes < 60 { return "\(minutes)m" }
-                        let hours = minutes / 60
-                        let rem = minutes % 60
-                        if rem == 0 { return "\(hours)h" }
-                        return "\(hours)h \(rem)m"
-                    }
-                )
-                
-                Text("today.")
-                    .font(.body)
-                    .foregroundStyle(skin.resolvedTextSecondary)
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            Text("Settings")
+                .font(.headline)
+                .foregroundStyle(skin.resolvedTextPrimary)
+                .accessibilityAddTraits(.isHeader)
+
+            Grid(alignment: .leading, horizontalSpacing: DS.Spacing.sm, verticalSpacing: DS.Spacing.md) {
+                GridRow {
+                    Text("Blocks")
+                        .foregroundStyle(skin.resolvedTextSecondary)
+                        .gridColumnAlignment(.trailing)
+                    
+                    SegmentedPillPicker(
+                        options: Array(1...4),
+                        selection: $focusBlockCount,
+                        labelProvider: { "\($0)" }
+                    )
+                }
+
+                GridRow {
+                    Text("Duration")
+                        .foregroundStyle(skin.resolvedTextSecondary)
+                        .gridColumnAlignment(.trailing)
+                    
+                    SegmentedPillPicker(
+                        options: [30, 60, 90, 120, 180],
+                        selection: $focusBlockMinutes,
+                        labelProvider: { minutes in
+                            if minutes < 60 { return "\(minutes)m" }
+                            let hours = minutes / 60
+                            let rem = minutes % 60
+                            if rem == 0 { return "\(hours)h" }
+                            return "\(hours)h \(rem)m"
+                        }
+                    )
+                }
             }
-            .padding(.vertical, DS.Spacing.sm)
-            
-            asyncOptimizeButton(title: "Find Focus Slots") {
-                await optimizerService.suggestFocusBlocks(
-                    count: focusBlockCount,
-                    durationMinutes: focusBlockMinutes,
-                    reminderService: reminderService
-                )
-            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(DS.Spacing.md)
+            .skinPlatter(skin)
+            .skinPlatterDepth(skin)
         }
     }
 
     private var planDayConfig: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            Text("Let AI automatically arrange your unscheduled local events into the best available slots today.")
-                .font(.body)
-                .foregroundStyle(skin.resolvedTextSecondary)
-                .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            Text("Pending Events")
+                .font(.headline)
+                .foregroundStyle(skin.resolvedTextPrimary)
+                .accessibilityAddTraits(.isHeader)
 
-            let localEvents = reminderService.localEvents.filter { $0.isUpcoming }
-            if localEvents.isEmpty {
-                Text("No local events to optimize.")
-                    .font(.caption)
-                    .foregroundStyle(skin.resolvedTextTertiary)
-            } else {
-                Text("\(localEvents.count) event(s) to place")
-                    .font(.subheadline)
+            VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                let localEvents = reminderService.localEvents.filter { $0.isUpcoming }
+                if localEvents.isEmpty {
+                    Text("No local events to optimize.")
+                        .font(.caption)
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                } else {
+                    Text("\(localEvents.count) event(s) will be automatically scheduled.")
+                        .font(.caption)
+                        .foregroundStyle(skin.resolvedTextSecondary)
 
-                ForEach(localEvents) { event in
-                    HStack(spacing: DS.Spacing.sm) {
-                        Circle()
-                            .fill(event.colorTag?.color ?? Color.accentColor)
-                            .frame(width: 8, height: 8)
-                        Text(event.title)
-                            .font(.caption)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                        Spacer()
-                        Text(event.formattedTimeRange)
-                            .font(.caption2)
-                            .foregroundStyle(skin.resolvedTextTertiary)
+                    VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                        ForEach(localEvents) { event in
+                            HStack(spacing: DS.Spacing.sm) {
+                                Circle()
+                                    .fill(event.colorTag?.color ?? Color.accentColor)
+                                    .frame(width: 8, height: 8)
+                                Text(event.title)
+                                    .font(.caption)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                                Spacer()
+                                Text(event.formattedTimeRange)
+                                    .font(.caption2)
+                                    .foregroundStyle(skin.resolvedTextTertiary)
+                            }
+                        }
                     }
                 }
-
-                asyncOptimizeButton(title: "Arrange My Day") {
-                    let tasks = localEvents.map { $0.toOptimizableEvent() }
-                    await optimizerService.optimizeDay(
-                        reminderService: reminderService,
-                        movableTasks: tasks
-                    )
-                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(DS.Spacing.md)
+            .skinPlatter(skin)
+            .skinPlatterDepth(skin)
         }
     }
 
     private var pomodoroConfig: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            Text("Find a quick 25-minute gap in your schedule to knock out a single task right now.")
-                .font(.body)
-                .foregroundStyle(skin.resolvedTextSecondary)
-                .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            Text("Configuration")
+                .font(.headline)
+                .foregroundStyle(skin.resolvedTextPrimary)
+                .accessibilityAddTraits(.isHeader)
 
-            asyncOptimizeButton(title: "Find 25m Slot") {
-                await optimizerService.suggestPomodoroSlot(
-                    config: .classic,
-                    reminderService: reminderService
-                )
+            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                Text("Bubo will analyze today's schedule and suggest an uninterrupted 25-minute gap for standard deep work.")
+                    .font(.caption)
+                    .foregroundStyle(skin.resolvedTextSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(DS.Spacing.md)
+            .skinPlatter(skin)
+            .skinPlatterDepth(skin)
         }
-    }
-
-    private func asyncOptimizeButton(title: String, action: @escaping () async -> Void) -> some View {
-        Button {
-            Haptics.tap()
-            Task { await action() }
-        } label: {
-            Label(title, systemImage: "wand.and.stars")
-        }
-        .buttonStyle(.action(role: .primary, size: .flexible))
-        .frame(maxWidth: .infinity)
-        .disabled(optimizerService.isOptimizing)
     }
 
     // MARK: - Optimizing State
@@ -436,35 +426,66 @@ struct OptimizerView: View {
 
     private var footerActions: some View {
         HStack {
-            if !optimizerService.scenarios.isEmpty {
-                Button {
-                    Haptics.tap()
-                    // Reject all unapplied scenarios for preference learning
+            Button(action: {
+                Haptics.tap()
+                if !optimizerService.scenarios.isEmpty {
                     if appliedScenarioIndex == nil {
                         for i in 0..<optimizerService.scenarios.count {
                             optimizerService.rejectScenario(at: i)
                         }
                     }
-                    optimizerService.scenarios = []
+                    optimizerService.scenarios = [] // clear scenarios
                     selectedScenarioIndex = 0
                     appliedScenarioIndex = nil
-                } label: {
-                    Label("Clear", systemImage: "arrow.counterclockwise")
+                } else {
+                    onBack() // cancel
                 }
-                .buttonStyle(.borderless)
+            }) {
+                Text(!optimizerService.scenarios.isEmpty ? "Clear" : "Cancel")
             }
+            .keyboardShortcut(.cancelAction)
+            .buttonStyle(.action(role: .secondary))
 
             Spacer()
 
-            if let date = optimizerService.lastOptimizationDate {
-                Text("Last: \(date, style: .relative)")
-                    .font(.caption2)
-                    .foregroundStyle(skin.resolvedTextTertiary)
+            if optimizerService.scenarios.isEmpty {
+                Button(action: {
+                    Haptics.tap()
+                    let action = selectedAction
+                    let events = reminderService.localEvents.filter { $0.isUpcoming }
+                    Task {
+                        switch action {
+                        case .focusBlocks:
+                            await optimizerService.suggestFocusBlocks(count: focusBlockCount, durationMinutes: focusBlockMinutes, reminderService: reminderService)
+                        case .planDay:
+                            let tasks = events.map { $0.toOptimizableEvent() }
+                            await optimizerService.optimizeDay(reminderService: reminderService, movableTasks: tasks)
+                        case .pomodoro:
+                            await optimizerService.suggestPomodoroSlot(config: .classic, reminderService: reminderService)
+                        }
+                    }
+                }) {
+                    Label(
+                        selectedAction == .focusBlocks ? "Find Focus Slots" : (selectedAction == .planDay ? "Arrange My Day" : "Find 25m Slot"),
+                        systemImage: "wand.and.stars"
+                    )
+                }
+                .buttonStyle(.action(role: .primary))
+                .disabled(optimizerService.isOptimizing || (selectedAction == .planDay && reminderService.localEvents.filter { $0.isUpcoming }.isEmpty))
+            } else {
+                let isApplied = appliedScenarioIndex == selectedScenarioIndex
+                Button(action: {
+                    Haptics.tap()
+                    optimizerService.applyScenario(at: selectedScenarioIndex, to: reminderService)
+                    appliedScenarioIndex = selectedScenarioIndex
+                }) {
+                    Label(isApplied ? "Applied" : "Apply Schedule", systemImage: isApplied ? "checkmark.circle" : "checkmark.circle.fill")
+                }
+                .buttonStyle(.action(role: .primary))
+                .disabled(isApplied)
             }
         }
-        .font(.system(size: 13, weight: .medium))
         .padding(.horizontal, DS.Spacing.lg)
-        .frame(maxWidth: .infinity)
         .frame(height: DS.Size.actionFooterHeight)
         .skinBarBackground(skin)
     }
@@ -519,49 +540,4 @@ struct SegmentedPillPicker<T: Equatable & Hashable>: View {
     }
 }
 
-struct OptimizerActionCard: View {
-    @Environment(\.activeSkin) private var skin
-    let action: OptimizerView.OptimizerAction
-    let isSelected: Bool
-    let actionHandler: () -> Void
 
-    @State private var isHovered = false
-
-    var body: some View {
-        Button(action: actionHandler) {
-            VStack(spacing: DS.Spacing.sm) {
-                Image(systemName: action.icon)
-                    .font(.system(size: 20, weight: isSelected ? .semibold : .regular))
-                    .foregroundStyle(isSelected ? skin.accentColor : skin.resolvedTextSecondary)
-                    .symbolEffect(.bounce, value: isSelected)
-
-                Text(action.rawValue)
-                    .font(.caption.weight(isSelected ? .semibold : .medium))
-                    .foregroundStyle(isSelected ? skin.resolvedTextPrimary : skin.resolvedTextSecondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, DS.Spacing.md)
-            .background {
-                if isSelected {
-                    RoundedRectangle(cornerRadius: DS.Size.cornerRadius)
-                        .fill(skin.accentColor.opacity(0.1))
-                }
-            }
-            .overlay {
-                if isSelected {
-                    RoundedRectangle(cornerRadius: DS.Size.cornerRadius)
-                        .strokeBorder(skin.accentColor.opacity(0.35), lineWidth: 1)
-                }
-            }
-            .background(skin.resolvedPlatterMaterial)
-            .skinPlatterDepth(skin)
-            .scaleEffect(isHovered && !isSelected ? 1.02 : 1.0)
-            .animation(skin.resolvedMicroAnimation, value: isHovered)
-            .animation(skin.resolvedMicroAnimation, value: isSelected)
-        }
-        .buttonStyle(.plain)
-        .onHover { hover in isHovered = hover }
-    }
-}
