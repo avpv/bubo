@@ -146,7 +146,7 @@ private struct WorldClockPill: View {
         guard let tz = city.timeZone else { return "--:--" }
         let formatter = DateFormatter()
         formatter.timeZone = tz
-        formatter.dateFormat = "HH:mm"
+        formatter.timeStyle = .short
         return formatter.string(from: now)
     }
 
@@ -165,52 +165,46 @@ private struct WorldClockPill: View {
 
     private var isNighttime: Bool {
         guard let tz = city.timeZone else { return false }
-        let formatter = DateFormatter()
-        formatter.timeZone = tz
-        formatter.dateFormat = "HH"
-        let hour = Int(formatter.string(from: now)) ?? 12
+        var cal = Calendar.current
+        cal.timeZone = tz
+        let hour = cal.component(.hour, from: now)
         return hour < 6 || hour >= 22
     }
 
     var body: some View {
         VStack(spacing: 1) {
             Text(city.city)
-                .font(.system(size: 9, weight: .medium, design: skin.resolvedFontDesign))
+                .font(.system(.caption2, design: skin.resolvedFontDesign, weight: skin.resolvedFontWeight))
                 .foregroundStyle(skin.resolvedTextSecondary)
                 .lineLimit(1)
+                .truncationMode(.tail)
 
             HStack(spacing: 3) {
                 if isNighttime {
                     Image(systemName: "moon.fill")
-                        .font(.system(size: 7))
+                        .font(.system(size: 7, weight: skin.resolvedSymbolWeight))
                         .foregroundStyle(skin.resolvedTextTertiary)
                 }
                 Text(timeString)
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .font(.system(.caption, design: .monospaced, weight: .semibold))
                     .foregroundStyle(skin.resolvedTextPrimary)
             }
 
             if !offsetLabel.isEmpty {
                 Text(offsetLabel)
-                    .font(.system(size: 8, weight: .medium, design: .monospaced))
+                    .font(.system(.caption2, design: .monospaced, weight: skin.resolvedFontWeight))
                     .foregroundStyle(skin.resolvedTextTertiary)
             }
         }
         .padding(.horizontal, DS.Spacing.sm)
-        .padding(.vertical, DS.Spacing.xxs + 2)
+        .padding(.vertical, DS.Spacing.xs)
         .background {
-            Capsule()
-                .fill(isNighttime
-                    ? chipAccent.opacity(0.06)
-                    : Color.primary.opacity(0.04)
-                )
+            if isNighttime {
+                RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                    .fill(chipAccent.opacity(DS.Opacity.lightFill))
+            }
         }
-        .overlay {
-            Capsule()
-                .strokeBorder(
-                    skin.resolvedTextTertiary.opacity(0.15),
-                    lineWidth: 0.5
-                )
-        }
+        .skinPlatter(skin)
+        .skinPlatterDepth(skin)
     }
 }

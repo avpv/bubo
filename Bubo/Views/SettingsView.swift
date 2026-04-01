@@ -25,59 +25,34 @@ struct SettingsView: View {
         }
     }
 
+    /// HIG: macOS Settings windows use standard toolbar tab navigation.
     var body: some View {
-        HStack(spacing: 0) {
-            // Sidebar
-            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                ForEach(SettingsPane.allCases, id: \.self) { pane in
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.15)) {
-                            selectedPane = pane
-                        }
-                    } label: {
-                        Label(pane.rawValue, systemImage: pane.icon)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.vertical, 6)
-                            .padding(.horizontal, 8)
-                            .background(
-                                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                    .fill(selectedPane == pane ? Color.accentColor.opacity(0.2) : Color.clear)
-                            )
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(selectedPane == pane ? .primary : .secondary)
-                }
-            }
-            .padding(12)
-            .frame(width: 170)
-            .frame(maxHeight: .infinity, alignment: .top)
-            .background(.ultraThinMaterial)
+        TabView(selection: $selectedPane) {
+            GeneralTabView()
+                .tabItem { Label(SettingsPane.general.rawValue, systemImage: SettingsPane.general.icon) }
+                .tag(SettingsPane.general)
 
-            Divider()
+            CalendarsTabView()
+                .tabItem { Label(SettingsPane.calendars.rawValue, systemImage: SettingsPane.calendars.icon) }
+                .tag(SettingsPane.calendars)
 
-            // Detail
-            Group {
-                switch selectedPane {
-                case .general:
-                    GeneralTabView()
-                case .calendars:
-                    CalendarsTabView()
-                case .reminders:
-                    RemindersTabView()
-                case .worldClock:
-                    WorldClockTabView()
-                case .optimizer:
-                    OptimizerTabView()
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            RemindersTabView()
+                .tabItem { Label(SettingsPane.reminders.rawValue, systemImage: SettingsPane.reminders.icon) }
+                .tag(SettingsPane.reminders)
+
+            WorldClockTabView()
+                .tabItem { Label(SettingsPane.worldClock.rawValue, systemImage: SettingsPane.worldClock.icon) }
+                .tag(SettingsPane.worldClock)
+
+            OptimizerTabView()
+                .tabItem { Label(SettingsPane.optimizer.rawValue, systemImage: SettingsPane.optimizer.icon) }
+                .tag(SettingsPane.optimizer)
         }
         .environment(viewModel)
         .environment(settings)
         .environment(reminderService)
         .environment(optimizerService)
-        .frame(width: DS.Settings.width, height: DS.Settings.idealHeight)
-        .toolbar(removing: .sidebarToggle)
+        .frame(width: DS.Settings.width, minHeight: DS.Settings.minHeight)
         .onAppear {
             if let pending = SettingsViewModel.pendingPane {
                 selectedPane = pending

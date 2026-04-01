@@ -85,7 +85,7 @@ struct MarkdownText: View {
 
         case .blockquote(let content):
             HStack(spacing: DS.Spacing.sm) {
-                RoundedRectangle(cornerRadius: 1)
+                RoundedRectangle(cornerRadius: DS.Size.previewMicroRadius)
                     .fill(DS.Colors.accent.opacity(0.5))
                     .frame(width: DS.Spacing.xxs)
                 Text(inlineMarkdown(content))

@@ -39,7 +39,6 @@
   "badgeStyle": "tinted",
   "separatorStyle": "subtle",
   "separatorOpacity": 0.15,
-  "cornerRadius": 12,
   "shadowOpacity": 0.05,
   "shadowRadius": 12,
   "shadowY": 5,

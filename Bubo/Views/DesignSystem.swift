@@ -26,6 +26,14 @@ enum DS {
         static let width: CGFloat = 360
         static let height: CGFloat = 600
         static let timerHeight: CGFloat = 440
+        static let dateSuggestionsWidth: CGFloat = 240
+    }
+
+    // MARK: Grid Layout
+
+    enum Grid {
+        static let skinCardMinWidth: CGFloat = 94
+        static let skinCardSpacing: CGFloat = 8
     }
 
     // MARK: Settings Window
@@ -70,21 +78,95 @@ enum DS {
         static let badgeCornerRadius: CGFloat = 20
         static let syncIndicatorSize: CGFloat = 14
         static let todayDotSize: CGFloat = 6
+
+        // Timer
+        static let timerRingDiameter: CGFloat = 180
+        static let timerRingStrokeWidth: CGFloat = 4
+        static let timerCheckmarkSize: CGFloat = 36
+
+        // Alert
+        static let alertIconSize: CGFloat = 60
+
+        // Preview cards (settings UI)
+        static let previewCardRadius: CGFloat = 6
+        static let previewCardHeight: CGFloat = 40
+        static let previewSmallRadius: CGFloat = 2
+        static let previewMicroRadius: CGFloat = 1
+
+        // Emoji picker
+        static let emojiCellSize: CGFloat = 32
+        static let emojiPickerWidth: CGFloat = 280
+        static let emojiPickerHeight: CGFloat = 320
+
+        // Inputs
+        static let numberInputWidth: CGFloat = 80
+
+        // Color tag
+        static let colorDotSize: CGFloat = 24
+
+        // Progress bar
+        static let progressBarHeight: CGFloat = 6
+
+        // World clock
+        static let worldClockMoonSize: CGFloat = 7
     }
-    
+
+    // MARK: Borders
+
+    enum Border {
+        static let thin: CGFloat = 0.5
+        static let standard: CGFloat = 1
+        static let medium: CGFloat = 1.5
+        static let selection: CGFloat = 2
+    }
+
+    // MARK: Opacity
+
+    enum Opacity {
+        // Backgrounds & fills
+        static let subtleFill: Double = 0.04
+        static let lightFill: Double = 0.08
+        static let mediumFill: Double = 0.12
+        static let strongFill: Double = 0.2
+
+        // Text & overlays
+        static let tertiaryText: Double = 0.4
+        static let overlayLight: Double = 0.6
+        static let overlayDark: Double = 0.8
+
+        // Prominent fills
+        static let half: Double = 0.5
+        static let accentMuted: Double = 0.7
+
+        // Borders & strokes
+        static let faintBorder: Double = 0.1
+        static let subtleBorder: Double = 0.15
+        static let glassBorder: Double = 0.2
+    }
+
     // MARK: Shadows
-    
+
     enum Shadows {
         static let ambientColor = Color.black.opacity(0.06)
         static let ambientRadius: CGFloat = 8
         static let ambientY: CGFloat = 4
-        
+
         static let hoverColor = Color.black.opacity(0.12)
         static let hoverRadius: CGFloat = 12
         static let hoverY: CGFloat = 6
-        
+
         static let pillRadius: CGFloat = 1
         static let pillY: CGFloat = 1
+
+        // Alert/fullscreen
+        static let glowRadius: CGFloat = 20
+        static let buttonRadius: CGFloat = 12
+        static let buttonY: CGFloat = 4
+
+        // Toast
+        static let toastColor = Color.black.opacity(0.12)
+        static let toastRadius: CGFloat = 12
+        static let toastY: CGFloat = 6
     }
 
     // MARK: Animation
@@ -142,6 +224,11 @@ enum DS {
         // Separator & borders
         static let separator = Color(nsColor: .separatorColor)
         static let border = Color(nsColor: .separatorColor).opacity(0.5)
+
+        // Overlay / fullscreen alert — contrast-aware
+        static let overlayBackground = Color.black
+        static let onOverlay = Color.white
+        static let defaultCalendar = Color.gray
 
         // Hover & selection states
         static let hoverFill = Color(nsColor: .labelColor).opacity(0.06)
@@ -227,25 +314,31 @@ enum DS {
 
     // MARK: Shared Formatters
 
+    /// HIG: Respect user's locale time format (12h vs 24h).
     static let timeFormatter: DateFormatter = {
         let f = DateFormatter()
-        f.dateFormat = "HH:mm"
+        f.timeStyle = .short
         return f
     }()
 
+    /// HIG: Use locale-aware formatting for day section headers.
     static let daySectionFormatter: DateFormatter = {
         let f = DateFormatter()
-        f.dateFormat = "EEEE, MMM d"
+        f.setLocalizedDateFormatFromTemplate("EEEEMMMd")
         return f
     }()
 }
 
 // MARK: - Haptic Feedback (macOS Force Touch Trackpad)
 
+/// HIG: Use appropriate haptic feedback patterns.
+/// - `tap()`: Light feedback for standard button actions (generic pattern).
+/// - `impact()`: Stronger feedback for significant state changes (levelChange).
+/// - `alignment()`: For drag/alignment guides only (alignment pattern).
 enum Haptics {
     static func tap() {
         NSHapticFeedbackManager.defaultPerformer.perform(
-            .alignment, performanceTime: .default
+            .generic, performanceTime: .default
         )
     }
 
@@ -255,9 +348,9 @@ enum Haptics {
         )
     }
 
-    static func generic() {
+    static func alignment() {
         NSHapticFeedbackManager.defaultPerformer.perform(
-            .generic, performanceTime: .default
+            .alignment, performanceTime: .default
         )
     }
 }
@@ -268,7 +361,7 @@ enum Haptics {
 /// Respects `accessibilityReduceMotion` — skips animation when enabled.
 struct StaggeredEntrance: ViewModifier {
     var index: Int = 0
-    var offsetY: CGFloat = 8
+    var offsetY: CGFloat = DS.Spacing.sm
 
     @State private var appeared = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -301,11 +394,11 @@ extension View {
 extension View {
     /// Applies a scroll-aware transition: items fade/scale as they enter/exit the visible area.
     func eventScrollTransition() -> some View {
-        self.scrollTransition(.animated(.spring(duration: 0.4, bounce: 0.2))) { content, phase in
+        self.scrollTransition(.animated(DS.Animation.smoothSpring)) { content, phase in
             content
-                .opacity(phase.isIdentity ? 1 : 0.4)
+                .opacity(phase.isIdentity ? 1 : DS.Opacity.tertiaryText)
                 .scaleEffect(phase.isIdentity ? 1 : 0.94, anchor: .leading)
-                .offset(x: phase.isIdentity ? 0 : phase.value * -8)
+                .offset(x: phase.isIdentity ? 0 : phase.value * -DS.Spacing.sm)
         }
     }
 }
@@ -377,53 +470,50 @@ struct PopoverHeader: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.activeSkin) private var skin
 
+    /// HIG: Navigation bar pattern — back button leading, title centered, trailing items trailing.
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: DS.Spacing.xs) {
-                if showBack {
-                    Button {
-                        Haptics.tap()
-                        onBack?()
-                    } label: {
-                        Label("Back", systemImage: "chevron.left")
+            ZStack {
+                // Center: title (only when in navigation / back mode)
+                if let title, showBack {
+                    Text(title)
+                        .font(.headline)
+                        .fontWeight(skin.resolvedHeadlineFontWeight)
+                        .fontDesign(skin.resolvedFontDesign)
+                }
+
+                HStack(spacing: DS.Spacing.xs) {
+                    if showBack {
+                        Button {
+                            Haptics.tap()
+                            onBack?()
+                        } label: {
+                            Label("Back", systemImage: "chevron.left")
+                        }
+                        .buttonStyle(.borderless)
+                        .keyboardShortcut(.escape, modifiers: [])
+                    } else {
+                        OwlIcon(size: DS.Size.headerIcon)
+                            .foregroundStyle(skin.accentColor)
+
+                        if let title {
+                            Text(title)
+                                .font(.headline)
+                                .fontWeight(skin.resolvedHeadlineFontWeight)
+                                .fontDesign(skin.resolvedFontDesign)
+                        }
                     }
-                    // HIG: Back buttons should be borderless with chevron
-                    .buttonStyle(.borderless)
-                    .keyboardShortcut(.escape, modifiers: [])
-                }
 
-                if !showBack {
-                    OwlIcon(size: DS.Size.headerIcon)
-                        .foregroundStyle(skin.accentColor)
-                }
-
-                if let title = title, !showBack {
-                    Text(title)
-                        .font(.headline)
-                        .fontWeight(skin.resolvedHeadlineFontWeight)
-                        .fontDesign(skin.resolvedFontDesign)
-                }
-
-                Spacer()
-
-                if let title = title, showBack {
-                    Text(title)
-                        .font(.headline)
-                        .fontWeight(skin.resolvedHeadlineFontWeight)
-                        .fontDesign(skin.resolvedFontDesign)
                     Spacer()
-                }
 
-                if showBack {
-                    if showOwlIcon {
+                    if showBack && showOwlIcon {
                         OwlIcon(size: DS.Size.headerIcon)
                             .foregroundStyle(skin.accentColor)
                     }
-                    if let trailing = trailing {
+
+                    if let trailing {
                         trailing
                     }
-                } else if let trailing = trailing {
-                    trailing
                 }
             }
             .padding(.horizontal, DS.Spacing.lg)
@@ -471,8 +561,8 @@ struct ActionButtonStyle: ButtonStyle {
             .overlay(buttonStrokeOverlay)
             .shadow(
                 color: shadowColor(isPressed: configuration.isPressed),
-                radius: configuration.isPressed ? 2 : (role == .primary ? 8 : 4),
-                y: configuration.isPressed ? 1 : (role == .primary ? 4 : 2)
+                radius: configuration.isPressed ? skin.shadowRadius * 0.25 : (role == .primary ? skin.hoverShadowRadius : skin.shadowRadius),
+                y: configuration.isPressed ? skin.shadowY * 0.25 : (role == .primary ? skin.hoverShadowY * 0.67 : skin.shadowY * 0.5)
             )
             .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
             .animation(skin.resolvedMicroAnimation, value: configuration.isPressed)
@@ -487,7 +577,7 @@ struct ActionButtonStyle: ButtonStyle {
     private var buttonContentShape: AnyShape {
         switch skin.buttonShape {
         case .capsule:     AnyShape(Capsule())
-        case .roundedRect: AnyShape(RoundedRectangle(cornerRadius: skin.cornerRadius))
+        case .roundedRect: AnyShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius))
         case .rectangle:   AnyShape(Rectangle())
         }
     }
@@ -502,7 +592,7 @@ struct ActionButtonStyle: ButtonStyle {
             Capsule()
                 .strokeBorder(.white.opacity(opacity), lineWidth: 0.5)
         case .roundedRect:
-            RoundedRectangle(cornerRadius: skin.cornerRadius)
+            RoundedRectangle(cornerRadius: DS.Size.cornerRadius)
                 .strokeBorder(.white.opacity(opacity), lineWidth: 0.5)
         case .rectangle:
             Rectangle()

@@ -13,6 +13,7 @@ struct EventRowView: View {
     @State private var isDisintegrating = false
     @State private var pendingDeleteAction: (() -> Void)?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.activeSkin) private var skin
 
     private var isLocal: Bool {
@@ -46,19 +47,20 @@ struct EventRowView: View {
         .background(
             ZStack(alignment: .leading) {
                 SkinPlatterBackground(skin: skin)
-                    .clipShape(RoundedRectangle(cornerRadius: skin.cornerRadius, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
                 
                 if eventProgress(now) > 0 {
                     GeometryReader { geo in
-                        RoundedRectangle(cornerRadius: skin.cornerRadius, style: .continuous)
+                        RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
                             .fill(
-                                (skin.isClassic ? DS.Colors.accent : skin.accentColor).opacity(0.12)
+                                (skin.isClassic ? DS.Colors.accent : skin.accentColor)
+                                    .opacity(contrast == .increased ? skin.hoverFillOpacity * 3 : skin.hoverFillOpacity * 1.5)
                             )
-                            .frame(width: max(geo.size.width * eventProgress(now), skin.cornerRadius * 2))
+                            .frame(width: max(geo.size.width * eventProgress(now), DS.Size.cornerRadius * 2))
                     }
                 }
                 
-                RoundedRectangle(cornerRadius: skin.cornerRadius, style: .continuous)
+                RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
                     .fill(isHovered ? skin.resolvedHoverFill : Color.clear)
             }
         )
@@ -78,13 +80,20 @@ struct EventRowView: View {
             withAnimation(skin.resolvedMicroAnimation) {
                 isHovered = hovering
             }
-            if hovering { Haptics.generic() }
+            if hovering { Haptics.tap() }
+        }
+        // HIG: Support keyboard navigation — focusable rows, Enter to open
+        .focusable()
+        .onKeyPress(.return) {
+            Haptics.tap()
+            onTap?(event)
+            return .handled
         }
         // Scroll-aware transition: fade/scale as items enter/exit viewport
         .eventScrollTransition()
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(event.title)\(event.isRecurring ? ", recurring" : ""), \(event.formattedTimeRange)\(event.location.map { ", \($0)" } ?? "")")
-        .accessibilityHint("Click to view details. Right-click to set reminder.")
+        .accessibilityHint("Press Enter to view details. Right-click to set reminder.")
         .accessibilityAddTraits(.isButton)
         .onChange(of: now) {
             // Detect event end and trigger disintegration
@@ -138,8 +147,8 @@ struct EventRowView: View {
             .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
             .padding(.trailing, DS.Spacing.md)
             .shadow(
-                color: accentBarColor.opacity(0.4),
-                radius: 4
+                color: accentBarColor.opacity(skin.shadowOpacity * 4),
+                radius: skin.shadowRadius * 0.5
             )
     }
 
@@ -178,10 +187,11 @@ struct EventRowView: View {
                     .font(.subheadline)
                     .fontWeight(.medium)
                     .lineLimit(2)
+                    .truncationMode(.tail)
 
                 if let segment = event.pomodoroSegment {
                     Image(systemName: segment.iconName)
-                        .font(.system(size: DS.Size.iconSmall))
+                        .font(.system(size: DS.Size.iconSmall, weight: .medium))
                         .foregroundStyle(pomodoroSegmentColor(segment))
                         .contentTransition(.symbolEffect(.replace))
                         .accessibilityLabel(segment.label)
@@ -194,11 +204,13 @@ struct EventRowView: View {
                         .font(.caption2)
                         .foregroundStyle(skin.isClassic ? DS.Colors.accent : skin.accentColor)
                         .lineLimit(1)
+                        .truncationMode(.tail)
                 } else if let location = event.location, !location.isEmpty {
                     Label(location, systemImage: "mappin")
                         .font(.caption2)
                         .foregroundStyle(skin.resolvedTextSecondary)
                         .lineLimit(1)
+                        .truncationMode(.tail)
                 }
 
                 if let calName = event.calendarName {
@@ -220,7 +232,7 @@ struct EventRowView: View {
                     NSWorkspace.shared.open(meetingURL)
                 } label: {
                     Image(systemName: "video.fill")
-                        .font(.system(size: DS.Size.iconMedium))
+                        .font(.system(size: DS.Size.iconMedium, weight: .medium))
                         .foregroundStyle(DS.Colors.accent)
                 }
                 .buttonStyle(.borderless)
@@ -233,7 +245,7 @@ struct EventRowView: View {
                     reminderMenuItems
                 } label: {
                     Image(systemName: "bell.badge")
-                        .font(.system(size: DS.Size.iconMedium))
+                        .font(.system(size: DS.Size.iconMedium, weight: .medium))
                         .foregroundStyle(skin.resolvedTextSecondary)
                 }
                 .buttonStyle(.borderless)
@@ -256,7 +268,7 @@ struct EventRowView: View {
                         }
                     } label: {
                         Image(systemName: "minus.circle.fill")
-                            .font(.system(size: DS.Size.iconLarge))
+                            .font(.system(size: DS.Size.iconLarge, weight: .medium))
                             .symbolRenderingMode(.hierarchical)
                             .foregroundStyle(skin.resolvedDestructiveColor)
                     }
@@ -270,12 +282,13 @@ struct EventRowView: View {
                         triggerDeleteWithDisintegration { onDelete?(event) }
                     } label: {
                         Image(systemName: "minus.circle.fill")
-                            .font(.system(size: DS.Size.iconLarge))
+                            .font(.system(size: DS.Size.iconLarge, weight: .medium))
                             .symbolRenderingMode(.hierarchical)
                             .foregroundStyle(skin.resolvedDestructiveColor)
                     }
                     .buttonStyle(.borderless)
                     .help("Delete event")
+                    .accessibilityLabel("Delete event")
                 }
             }
         }

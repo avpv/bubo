@@ -82,15 +82,23 @@ struct MenuBarView: View {
                         onBack: { navigation = .list },
                         onEdit: { event in resolveEdit(event) },
                         onDelete: { event in
+                            // HIG: Capture event for undo before deleting
+                            let deletedEvent = event
                             reminderService.removeLocalEvent(id: event.id)
                             navigation = .list
-                            toastState.showSuccess("Event deleted", icon: "trash.fill")
+                            toastState.showSuccess("Event deleted", icon: "trash.fill") {
+                                reminderService.addLocalEvent(deletedEvent)
+                            }
                         },
                         onDeleteSeries: { event in
                             let seriesId = event.seriesId ?? event.id
+                            // Capture the series root for undo
+                            let seriesEvent = reminderService.seriesEvent(for: event) ?? event
                             reminderService.removeLocalEvent(id: seriesId)
                             navigation = .list
-                            toastState.showSuccess("All occurrences deleted", icon: "trash.fill")
+                            toastState.showSuccess("All occurrences deleted", icon: "trash.fill") {
+                                reminderService.addLocalEvent(seriesEvent)
+                            }
                         },
                         onDeleteOccurrence: { event in
                             reminderService.excludeOccurrence(occurrenceId: event.id)
@@ -210,8 +218,11 @@ struct MenuBarView: View {
     }
 
     private func handleDelete(_ event: CalendarEvent) {
+        let deletedEvent = event
         reminderService.removeLocalEvent(id: event.id)
-        toastState.showSuccess("Event deleted", icon: "trash.fill")
+        toastState.showSuccess("Event deleted", icon: "trash.fill") {
+            reminderService.addLocalEvent(deletedEvent)
+        }
     }
 
     // MARK: - Main Content
@@ -394,24 +405,34 @@ struct MenuBarView: View {
                         colorFilter = isActive ? nil : tag
                     }
                 } label: {
-                    Circle()
-                        .fill(tag.color)
-                        .frame(width: 24, height: 24)
-                        .opacity(selected == nil || isActive ? 1.0 : 0.3)
-                        .scaleEffect(isActive ? 1.1 : 1.0)
-                        .overlay(
+                    ZStack {
+                        Circle()
+                            .fill(tag.color)
+                            .frame(width: DS.Size.colorDotSize, height: DS.Size.colorDotSize)
+                            .opacity(selected == nil || isActive ? 1.0 : 0.3)
+
+                        // HIG: Non-color indicator for active state
+                        if isActive {
                             Circle()
                                 .strokeBorder(
-                                    skin.resolvedTextPrimary.opacity(isActive ? 0.8 : 0),
-                                    lineWidth: isActive ? 1.5 : 0
+                                    skin.resolvedTextPrimary.opacity(DS.Opacity.overlayDark),
+                                    lineWidth: DS.Border.medium
                                 )
-                        )
+                                .frame(width: DS.Size.colorDotSize, height: DS.Size.colorDotSize)
+                        }
+                    }
+                    .scaleEffect(isActive ? 1.1 : 1.0)
                         .shadow(
                             color: isActive ? tag.color.opacity(skin.shadowOpacity * 6) : .clear,
                             radius: isActive ? skin.shadowRadius * 0.4 : 0
                         )
+                        // HIG: Expand hit area to minimum comfortable target size
+                        .padding(DS.Spacing.xs)
+                        .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
+                // HIG: Don't use color as the only differentiator — show name on hover
+                .help(tag.rawValue)
                 .accessibilityLabel("Filter by \(tag.rawValue)")
                 .accessibilityAddTraits(isActive ? .isSelected : [])
             }
@@ -429,6 +450,7 @@ struct MenuBarView: View {
                         .foregroundStyle(skin.resolvedTextTertiary)
                 }
                 .buttonStyle(.borderless)
+                .accessibilityLabel("Clear filter")
                 .transition(.scale.combined(with: .opacity))
             }
         }

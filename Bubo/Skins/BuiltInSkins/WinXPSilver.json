@@ -42,7 +42,6 @@
   "badgeStyle": "filled",
   "separatorStyle": "system",
   "separatorOpacity": 0.25,
-  "cornerRadius": 4,
   "shadowOpacity": 0.15,
   "shadowRadius": 4,
   "shadowY": 2,

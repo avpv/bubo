@@ -173,10 +173,10 @@ struct SkinPlatterDepthModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .clipShape(RoundedRectangle(cornerRadius: skin.cornerRadius, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: skin.cornerRadius, style: .continuous)
-                    .strokeBorder(.white.opacity(skin.platterBorderOpacity), lineWidth: 1)
+                RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                    .strokeBorder(.white.opacity(skin.platterBorderOpacity), lineWidth: DS.Border.standard)
             )
             .shadow(
                 color: skin.resolvedShadowColor,

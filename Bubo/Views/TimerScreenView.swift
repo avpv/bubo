@@ -14,6 +14,7 @@ struct TimerScreenView: View {
 
     @State private var pulseRing = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var contrast
 
     private var totalDuration: TimeInterval {
         event.endDate.timeIntervalSince(event.startDate)
@@ -130,10 +131,10 @@ struct TimerScreenView: View {
                 VStack(spacing: DS.Spacing.xl) {
                     // Timer ring
                     ZStack {
-                        // Track
+                        // Track — HIG: adapt opacity for Increase Contrast mode
                         Circle()
-                            .stroke(accent.opacity(0.12), lineWidth: 4)
-                            .frame(width: 180, height: 180)
+                            .stroke(accent.opacity(contrast == .increased ? skin.hoverFillOpacity * 4 : skin.hoverFillOpacity * 1.5), lineWidth: DS.Size.timerRingStrokeWidth)
+                            .frame(width: DS.Size.timerRingDiameter, height: DS.Size.timerRingDiameter)
 
                         // Progress arc
                         if !ended {
@@ -141,30 +142,32 @@ struct TimerScreenView: View {
                                 .trim(from: 0, to: progress)
                                 .stroke(
                                     accent,
-                                    style: StrokeStyle(lineWidth: 4, lineCap: .round)
+                                    style: StrokeStyle(lineWidth: DS.Size.timerRingStrokeWidth, lineCap: .round)
                                 )
-                                .frame(width: 180, height: 180)
+                                .frame(width: DS.Size.timerRingDiameter, height: DS.Size.timerRingDiameter)
                                 .rotationEffect(.degrees(-90))
                                 .animation(.linear(duration: 1), value: progress)
                         }
 
-                        // Subtle glow
-                        Circle()
-                            .fill(accent.opacity(pulseRing ? 0.06 : 0.02))
-                            .frame(width: 170, height: 170)
-                            .blur(radius: 20)
+                        // Subtle glow — hidden in Increase Contrast to reduce visual noise
+                        if contrast != .increased {
+                            Circle()
+                                .fill(accent.opacity(pulseRing ? 0.06 : 0.02))
+                                .frame(width: DS.Size.timerRingDiameter - 10, height: DS.Size.timerRingDiameter - 10)
+                                .blur(radius: 20)
+                        }
 
                         // Center content
                         VStack(spacing: DS.Spacing.sm) {
                             Text(statusLabel(now))
-                                .font(.system(size: 11, weight: .medium, design: .rounded))
+                                .font(.system(.caption, design: .rounded, weight: .medium))
                                 .foregroundStyle(skin.resolvedTextTertiary)
                                 .textCase(.uppercase)
                                 .tracking(1.5)
 
                             if ended {
                                 Image(systemName: "checkmark.circle")
-                                    .font(.system(size: 36, weight: .light))
+                                    .font(.system(size: DS.Size.timerCheckmarkSize, weight: .light))
                                     .foregroundStyle(skin.resolvedTextTertiary)
                             } else if days {
                                 VStack(spacing: DS.Spacing.xxs) {
@@ -183,6 +186,7 @@ struct TimerScreenView: View {
                         Text(event.title)
                             .font(.system(.headline, design: .rounded, weight: .semibold))
                             .lineLimit(2)
+                            .truncationMode(.tail)
 
                         HStack(spacing: DS.Spacing.md) {
                             Label(event.formattedDate, systemImage: "calendar")
@@ -199,6 +203,7 @@ struct TimerScreenView: View {
                                 .font(.caption)
                                 .foregroundStyle(skin.resolvedTextSecondary)
                                 .lineLimit(1)
+                                .truncationMode(.tail)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)

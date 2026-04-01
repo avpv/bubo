@@ -26,6 +26,7 @@ struct AddEventView: View {
     @State private var selectedEventType: EventType = .standard
     @State private var addToCalendar = false
     @State private var selectedColorTag: EventColorTag? = nil
+    @State private var showDiscardConfirmation = false
 
     // MARK: - Pomodoro state
 
@@ -48,6 +49,11 @@ struct AddEventView: View {
 
     private var isTitleValid: Bool {
         !title.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    /// HIG: Detect unsaved changes to warn before data loss.
+    private var hasUnsavedChanges: Bool {
+        !title.isEmpty || !location.isEmpty || !description.isEmpty
     }
 
     private var eventEndDate: Date {
@@ -102,7 +108,7 @@ struct AddEventView: View {
                     
                     // Title section
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                        TextField("Title", text: $title, prompt: Text("Event title").foregroundStyle(skin.resolvedTextTertiary))
+                        TextField("Title", text: $title, prompt: Text("Event title (required)").foregroundStyle(skin.resolvedTextTertiary))
                             .textFieldStyle(.plain)
                             .font(.headline)
                             .focused($isTitleFocused)
@@ -120,11 +126,11 @@ struct AddEventView: View {
                     .skinPlatter(skin)
                     .skinPlatterDepth(skin)
                     .overlay(
-                        RoundedRectangle(cornerRadius: skin.cornerRadius, style: .continuous)
-                            .stroke(isTitleFocused ? skinAccent.opacity(0.8) : Color.clear, lineWidth: DS.Size.focusRingWidth)
+                        RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                            .stroke(isTitleFocused ? skinAccent.opacity(DS.Opacity.overlayDark) : Color.clear, lineWidth: DS.Size.focusRingWidth)
                     )
                     .shadow(
-                        color: isTitleFocused ? skinAccent.opacity(0.15) : DS.Shadows.ambientColor,
+                        color: isTitleFocused ? skinAccent.opacity(DS.Opacity.subtleBorder) : DS.Shadows.ambientColor,
                         radius: isTitleFocused ? DS.Shadows.ambientRadius + 1 : DS.Shadows.ambientRadius,
                         y: DS.Shadows.ambientY
                     )
@@ -147,6 +153,7 @@ struct AddEventView: View {
                         Text("Date & Time")
                             .font(.headline)
                             .foregroundStyle(skin.resolvedTextPrimary)
+                            .accessibilityAddTraits(.isHeader)
                         
                         Grid(alignment: .leading, horizontalSpacing: DS.Spacing.sm, verticalSpacing: DS.Spacing.md) {
                             GridRow {
@@ -224,6 +231,7 @@ struct AddEventView: View {
                         Text("Color")
                             .font(.headline)
                             .foregroundStyle(skin.resolvedTextPrimary)
+                            .accessibilityAddTraits(.isHeader)
 
                         HStack(spacing: DS.Spacing.xs) {
                             ForEach(EventColorTag.allCases, id: \.self) { tag in
@@ -240,16 +248,24 @@ struct AddEventView: View {
                                         .frame(width: 24, height: 24)
                                         .overlay(
                                             Circle()
-                                                .stroke(Color.white, lineWidth: selectedColorTag == tag ? 1.5 : 0)
+                                                .strokeBorder(
+                                                    skin.resolvedTextPrimary.opacity(selectedColorTag == tag ? 0.8 : 0),
+                                                    lineWidth: selectedColorTag == tag ? 2 : 0
+                                                )
                                         )
                                         .shadow(
-                                            color: selectedColorTag == tag ? tag.color.opacity(0.5) : .clear,
+                                            color: selectedColorTag == tag ? tag.color.opacity(DS.Opacity.half) : .clear,
                                             radius: selectedColorTag == tag ? 3 : 0
                                         )
                                         .scaleEffect(selectedColorTag == tag ? 1.1 : 1.0)
                                         .animation(skin.resolvedMicroAnimation, value: selectedColorTag)
+                                        // HIG: Expand hit area to minimum comfortable target size
+                                        .padding(DS.Spacing.xs)
+                                        .contentShape(Circle())
                                 }
                                 .buttonStyle(.plain)
+                                // HIG: Don't use color as the only differentiator — show name on hover
+                                .help(tag.rawValue)
                                 .accessibilityLabel(tag.rawValue)
                                 .accessibilityAddTraits(selectedColorTag == tag ? .isSelected : [])
                             }
@@ -268,6 +284,7 @@ struct AddEventView: View {
                         Text("Details")
                             .font(.headline)
                             .foregroundStyle(skin.resolvedTextPrimary)
+                            .accessibilityAddTraits(.isHeader)
                         
                         VStack(spacing: DS.Spacing.md) {
                             TextField("Location", text: $location, prompt: Text("Location").foregroundStyle(skin.resolvedTextTertiary))
@@ -289,11 +306,11 @@ struct AddEventView: View {
                         .skinPlatter(skin)
                         .skinPlatterDepth(skin)
                         .overlay(
-                            RoundedRectangle(cornerRadius: skin.cornerRadius, style: .continuous)
-                                .stroke((isLocationFocused || isNotesFocused) ? skinAccent.opacity(0.8) : Color.clear, lineWidth: DS.Size.focusRingWidth)
+                            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                                .stroke((isLocationFocused || isNotesFocused) ? skinAccent.opacity(DS.Opacity.overlayDark) : Color.clear, lineWidth: DS.Size.focusRingWidth)
                         )
                         .shadow(
-                            color: (isLocationFocused || isNotesFocused) ? skinAccent.opacity(0.15) : DS.Shadows.ambientColor,
+                            color: (isLocationFocused || isNotesFocused) ? skinAccent.opacity(DS.Opacity.subtleBorder) : DS.Shadows.ambientColor,
                             radius: (isLocationFocused || isNotesFocused) ? DS.Shadows.ambientRadius + 1 : DS.Shadows.ambientRadius,
                             y: DS.Shadows.ambientY
                         )
@@ -320,6 +337,7 @@ struct AddEventView: View {
                         Text("Reminders")
                             .font(.headline)
                             .foregroundStyle(skin.resolvedTextPrimary)
+                            .accessibilityAddTraits(.isHeader)
                         
                         VStack(alignment: .leading, spacing: DS.Spacing.md) {
                             Toggle("Custom reminders", isOn: $useCustomReminders)
@@ -345,7 +363,7 @@ struct AddEventView: View {
                                             .frame(minWidth: 60, alignment: .leading)
                                             .monospacedDigit()
                                         
-                                        Stepper("", value: $newReminderValue, in: 1...120)
+                                        Stepper("Reminder minutes", value: $newReminderValue, in: 1...120)
                                             .labelsHidden()
                                         
                                         Button {
@@ -409,7 +427,14 @@ struct AddEventView: View {
 
             HStack {
                 Spacer()
-                Button(action: { onDismiss() }) {
+                Button(action: {
+                    // HIG: Warn before discarding unsaved changes
+                    if hasUnsavedChanges && !isEditing {
+                        showDiscardConfirmation = true
+                    } else {
+                        onDismiss()
+                    }
+                }) {
                     Text("Cancel")
                 }
                 .keyboardShortcut(.cancelAction)
@@ -429,6 +454,12 @@ struct AddEventView: View {
             .padding(.horizontal, DS.Spacing.lg)
             .frame(height: DS.Size.actionFooterHeight)
             .skinBarBackground(skin)
+            .confirmationDialog("Discard Changes?", isPresented: $showDiscardConfirmation, titleVisibility: .visible) {
+                Button("Discard", role: .destructive) { onDismiss() }
+                Button("Keep Editing", role: .cancel) {}
+            } message: {
+                Text("You have unsaved changes that will be lost.")
+            }
         }
         .frame(width: DS.Popover.width, height: DS.Popover.height)
         .onAppear {
@@ -483,6 +514,7 @@ struct AddEventView: View {
             Text("Pomodoro")
                 .font(.headline)
                 .foregroundStyle(skin.resolvedTextPrimary)
+                .accessibilityAddTraits(.isHeader)
 
             VStack(alignment: .leading, spacing: DS.Spacing.md) {
                 Grid(alignment: .leading, horizontalSpacing: DS.Spacing.md, verticalSpacing: DS.Spacing.sm) {
@@ -490,14 +522,14 @@ struct AddEventView: View {
                         Label("Work: \(pomodoroWork) min", systemImage: "brain.head.profile")
                             .foregroundStyle(.primary)
                             .gridColumnAlignment(.leading)
-                        Stepper("", value: $pomodoroWork, in: 1...90)
+                        Stepper("Work duration", value: $pomodoroWork, in: 1...90)
                             .labelsHidden()
                     }
 
                     GridRow {
                         Label("Rounds: \(pomodoroRounds)", systemImage: "arrow.trianglehead.2.counterclockwise")
                             .foregroundStyle(.primary)
-                        Stepper("", value: $pomodoroRounds, in: 1...12)
+                        Stepper("Number of rounds", value: $pomodoroRounds, in: 1...12)
                             .labelsHidden()
                     }
 
@@ -505,7 +537,7 @@ struct AddEventView: View {
                         GridRow {
                             Label("Break: \(pomodoroBreak) min", systemImage: "cup.and.saucer")
                                 .foregroundStyle(.primary)
-                            Stepper("", value: $pomodoroBreak, in: 1...30)
+                            Stepper("Break duration", value: $pomodoroBreak, in: 1...30)
                                 .labelsHidden()
                         }
 
@@ -522,7 +554,7 @@ struct AddEventView: View {
                                 Label("Duration: \(pomodoroLongBreak) min", systemImage: "moon.zzz")
                                     .foregroundStyle(.primary)
                                     .padding(.leading, DS.Spacing.lg)
-                                Stepper("", value: $pomodoroLongBreak, in: 5...60, step: 5)
+                                Stepper("Long break duration", value: $pomodoroLongBreak, in: 5...60, step: 5)
                                     .labelsHidden()
                             }
                         }
@@ -551,6 +583,7 @@ struct AddEventView: View {
                     Link("Learn about Pomodoro combinations", destination: URL(string: "https://github.com/avpv/bubo/blob/HEAD/docs/Pomodoro.md")!)
                         .font(.caption)
                         .foregroundStyle(skin.accentColor)
+                        .accessibilityHint("Opens in your web browser")
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -644,12 +677,12 @@ struct AddEventView: View {
                         let isLast = idx == pomodoroSegments.count - 1
 
                         RoundedRectangle(
-                            cornerRadius: (isFirst || isLast) ? max(skin.cornerRadius - 3, 3) : max(skin.cornerRadius - 5, 2),
+                            cornerRadius: (isFirst || isLast) ? max(DS.Size.cornerRadius - 3, 3) : max(DS.Size.cornerRadius - 5, 2),
                             style: .continuous
                         )
                         .fill(
                             LinearGradient(
-                                colors: [color, color.opacity(0.7)],
+                                colors: [color, color.opacity(DS.Opacity.accentMuted)],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
@@ -658,8 +691,8 @@ struct AddEventView: View {
                         .overlay {
                             if segWidth > 30 {
                                 Text("\(segment.minutes)m")
-                                    .font(.system(size: 10, weight: .semibold, design: .rounded))
-                                    .foregroundStyle(.white)
+                                    .font(.system(.caption2, design: .rounded, weight: .semibold))
+                                    .foregroundStyle(DS.Colors.onOverlay)
                             }
                         }
                     }
@@ -695,7 +728,7 @@ struct AddEventView: View {
                 HStack(spacing: DS.Spacing.sm) {
                     // Connecting line centered in the same 12pt column as dots
                     Rectangle()
-                        .fill(Color.secondary.opacity(0.15))
+                        .fill(Color.secondary.opacity(DS.Opacity.subtleBorder))
                         .frame(width: 1.5, height: 16)
                         .frame(width: 12)
                     Text("\(segments.count - 4) more")
@@ -726,7 +759,7 @@ struct AddEventView: View {
             ZStack(alignment: .top) {
                 if !isLast {
                     Rectangle()
-                        .fill(color.opacity(0.2))
+                        .fill(color.opacity(DS.Opacity.strongFill))
                         .frame(width: 1.5)
                         .frame(maxHeight: .infinity)
                 }
@@ -736,7 +769,7 @@ struct AddEventView: View {
                     .overlay {
                         Image(systemName: icon)
                             .font(.system(size: 6, weight: .bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(DS.Colors.onOverlay)
                     }
             }
             .frame(width: 12)
@@ -757,7 +790,7 @@ struct AddEventView: View {
     private func legendItem(color: Color, icon: String, label: String) -> some View {
         HStack(spacing: DS.Spacing.xxs) {
             Image(systemName: icon)
-                .font(.system(size: 8))
+                .font(.system(size: 8, weight: .medium))
                 .foregroundStyle(color)
             Text(label)
                 .font(.caption2)
@@ -779,6 +812,7 @@ struct AddEventView: View {
         if isExternal, let event = editingEvent {
             let minutes = useCustomReminders ? reminderMinutes.sorted() : nil
             reminderService.updateLocalReminder(for: event.id, minutes: minutes)
+            Haptics.impact()
             onSave(true)
             return
         }
@@ -811,6 +845,8 @@ struct AddEventView: View {
         } else {
             reminderService.addLocalEvent(event)
         }
+        // HIG: Confirm successful action with haptic feedback
+        Haptics.impact()
         onSave(isEditing)
     }
 }

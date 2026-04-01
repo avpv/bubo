@@ -36,51 +36,51 @@ struct SkinPreviewCard: View {
             // Mini preview showing skin's visual identity
             ZStack {
                 // Background
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: DS.Size.previewCardRadius)
                     .fill(skin.prefersDarkTint
-                        ? Color(white: 0.12)
-                        : Color(white: 0.95)
+                        ? DS.Colors.overlayBackground.opacity(0.88)
+                        : DS.Colors.onOverlay.opacity(0.95)
                     )
 
                 // Skin gradient
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: DS.Size.previewCardRadius)
                     .fill(skin.previewGradient)
                     .opacity(0.8)
 
                 // Mini UI mockup
-                VStack(spacing: 2) {
+                VStack(spacing: DS.Spacing.xxs) {
                     // Header bar
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(skin.accentColor.opacity(0.6))
-                        .frame(height: 4)
-                        .padding(.horizontal, 6)
+                    RoundedRectangle(cornerRadius: DS.Size.previewSmallRadius)
+                        .fill(skin.accentColor.opacity(DS.Opacity.overlayLight))
+                        .frame(height: DS.Size.accentBarWidth)
+                        .padding(.horizontal, DS.Spacing.pillVertical)
 
                     // Event rows
                     ForEach(0..<3, id: \.self) { i in
                         HStack(spacing: 3) {
-                            RoundedRectangle(cornerRadius: 1)
+                            RoundedRectangle(cornerRadius: DS.Size.previewMicroRadius)
                                 .fill(skin.accentColor)
-                                .frame(width: 2, height: 5)
-                            RoundedRectangle(cornerRadius: 1)
-                                .fill(Color.primary.opacity(0.2 - Double(i) * 0.05))
+                                .frame(width: DS.Spacing.xxs, height: 5)
+                            RoundedRectangle(cornerRadius: DS.Size.previewMicroRadius)
+                                .fill(DS.Colors.textPrimary.opacity(DS.Opacity.strongFill - Double(i) * 0.05))
                                 .frame(height: 5)
                         }
-                        .padding(.horizontal, 6)
+                        .padding(.horizontal, DS.Spacing.pillVertical)
                     }
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, DS.Spacing.xs)
             }
-            .frame(height: 40)
+            .frame(height: DS.Size.previewCardHeight)
             .overlay(
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: DS.Size.previewCardRadius)
                     .strokeBorder(
-                        isSelected ? skin.accentColor : Color.primary.opacity(0.1),
-                        lineWidth: isSelected ? 2 : 0.5
+                        isSelected ? skin.accentColor : DS.Colors.textPrimary.opacity(0.1),
+                        lineWidth: isSelected ? DS.Border.selection : DS.Border.thin
                     )
             )
             .shadow(
                 color: isSelected ? skin.accentColor.opacity(0.3) : .clear,
-                radius: isSelected ? 4 : 0
+                radius: isSelected ? DS.Shadows.ambientY : 0
             )
 
             VStack(spacing: 0) {
@@ -89,11 +89,13 @@ struct SkinPreviewCard: View {
                     .fontWeight(isSelected ? .semibold : .regular)
                     .foregroundStyle(isSelected ? Color.primary : .secondary)
                     .lineLimit(1)
+                    .truncationMode(.tail)
                 if skin.author != "Bubo" {
                     Text("by \(skin.author)")
-                        .font(.system(size: 8))
+                        .font(.caption2)
                         .foregroundStyle(.tertiary)
                         .lineLimit(1)
+                        .truncationMode(.tail)
                 }
             }
         }
@@ -127,7 +129,7 @@ struct CustomSkinsSection: View {
             }
 
             if !customSkinLoader.customSkins.isEmpty {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 94), spacing: 8)], spacing: 8) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: DS.Grid.skinCardMinWidth), spacing: DS.Grid.skinCardSpacing)], spacing: 8) {
                     ForEach(customSkinLoader.customSkins) { skin in
                         let isSelected = settings.selectedSkinID == skin.id
                         Button {
@@ -221,10 +223,10 @@ struct SkinImageSection: View {
                         .opacity(override.opacity)
                         .blur(radius: override.blur)
                         .clipped()
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Spacing.sm))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5)
+                            RoundedRectangle(cornerRadius: DS.Spacing.sm)
+                                .strokeBorder(DS.Colors.textPrimary.opacity(DS.Opacity.faintBorder), lineWidth: DS.Border.thin)
                         )
 
                     Button {
@@ -237,7 +239,7 @@ struct SkinImageSection: View {
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
-                    .padding(6)
+                    .padding(DS.Spacing.pillVertical)
                 }
 
                 // Controls
@@ -254,6 +256,7 @@ struct SkinImageSection: View {
                             ),
                             in: 0.05...1.0, step: 0.05
                         )
+                        .accessibilityLabel("Image opacity")
                         Text("\(Int((override.opacity) * 100))%")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
@@ -271,6 +274,7 @@ struct SkinImageSection: View {
                             ),
                             in: 0...10, step: 0.5
                         )
+                        .accessibilityLabel("Image blur")
                         Text(String(format: "%.1f", override.blur))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
@@ -354,10 +358,10 @@ struct BackgroundPhotoSection: View {
                         .opacity(settings.customBackgroundPhotoOpacity)
                         .blur(radius: settings.customBackgroundPhotoBlur)
                         .clipped()
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Spacing.sm))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5)
+                            RoundedRectangle(cornerRadius: DS.Spacing.sm)
+                                .strokeBorder(DS.Colors.textPrimary.opacity(DS.Opacity.faintBorder), lineWidth: DS.Border.thin)
                         )
 
                     Button {
@@ -370,7 +374,7 @@ struct BackgroundPhotoSection: View {
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
-                    .padding(6)
+                    .padding(DS.Spacing.pillVertical)
                 }
 
                 // Controls
@@ -381,6 +385,7 @@ struct BackgroundPhotoSection: View {
                             .foregroundStyle(.secondary)
                             .frame(width: 50, alignment: .leading)
                         Slider(value: $settings.customBackgroundPhotoOpacity, in: 0.05...1.0, step: 0.05)
+                            .accessibilityLabel("Photo opacity")
                         Text("\(Int(settings.customBackgroundPhotoOpacity * 100))%")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
@@ -392,6 +397,7 @@ struct BackgroundPhotoSection: View {
                             .foregroundStyle(.secondary)
                             .frame(width: 50, alignment: .leading)
                         Slider(value: $settings.customBackgroundPhotoBlur, in: 0...10, step: 0.5)
+                            .accessibilityLabel("Photo blur")
                         Text(String(format: "%.1f", settings.customBackgroundPhotoBlur))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
@@ -481,7 +487,7 @@ struct WallpaperSectionView: View {
 
             // Wallpaper grid for selected category
             let wallpapers = WallpaperCatalog.wallpapers(in: selectedCategory)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 94), spacing: 8)], spacing: 8) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: DS.Grid.skinCardMinWidth), spacing: DS.Grid.skinCardSpacing)], spacing: 8) {
                 ForEach(wallpapers) { wallpaper in
                     let isSelected = settings.selectedWallpaperID == wallpaper.id
                     Button {
@@ -580,7 +586,7 @@ struct GeneralTabView: View {
                     Text("Choose a visual theme")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 94), spacing: 8)], spacing: 8) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: DS.Grid.skinCardMinWidth), spacing: DS.Grid.skinCardSpacing)], spacing: 8) {
                         ForEach(SkinCatalog.builtInSkins) { skin in
                             let isSelected = settings.selectedSkinID == skin.id
                             Button {
@@ -646,12 +652,13 @@ struct GeneralTabView: View {
                         Spacer()
                         Link("GitHub Project", destination: URL(string: "https://github.com/avpv/bubo")!)
                             .font(.caption2)
+                            .accessibilityHint("Opens in your web browser")
                         Spacer()
                     }
                 }
             }
             }
-            .padding(20)
+            .padding(DS.Spacing.xl)
         }
         .onAppear {
             settings.launchAtLogin = SMAppService.mainApp.status == .enabled

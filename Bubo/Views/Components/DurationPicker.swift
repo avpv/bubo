@@ -136,5 +136,6 @@ struct DurationPicker: View {
         .fixedSize()
         .help(String(localized: "Duration presets",
                      comment: "Tooltip for the duration preset menu"))
+        .accessibilityLabel("Duration presets")
     }
 }

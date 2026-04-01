@@ -87,7 +87,7 @@ struct EmojiPickerView: View {
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, DS.Spacing.xs)
             .skinPlatter(skin)
-            .clipShape(RoundedRectangle(cornerRadius: skin.cornerRadius, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.top, DS.Spacing.sm)
             .padding(.bottom, DS.Spacing.xs)
@@ -109,7 +109,7 @@ struct EmojiPickerView: View {
                                             ? skin.accentColor.opacity(0.15)
                                             : Color.clear
                                     )
-                                    .clipShape(RoundedRectangle(cornerRadius: max(skin.cornerRadius - 3, 3), style: .continuous))
+                                    .clipShape(RoundedRectangle(cornerRadius: max(DS.Size.cornerRadius - 3, 3), style: .continuous))
                             }
                             .buttonStyle(.plain)
                             .help(category.title)
@@ -121,7 +121,7 @@ struct EmojiPickerView: View {
 
                 // Category title
                 Text(Self.categories[selectedCategory].title.uppercased())
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.caption2.weight(.semibold))
                     .foregroundStyle(skin.resolvedTextTertiary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, DS.Spacing.md)
@@ -136,7 +136,7 @@ struct EmojiPickerView: View {
                             onSelect(emoji)
                         } label: {
                             Text(emoji)
-                                .font(.system(size: 22))
+                                .font(.title2)
                                 .frame(width: 32, height: 32)
                                 .background(Color.clear)
                                 .contentShape(Rectangle())

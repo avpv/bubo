@@ -25,6 +25,8 @@ struct RemindersTabView: View {
                             Image(systemName: "trash")
                         }
                         .buttonStyle(.borderless)
+                        .accessibilityLabel("Delete \(interval.displayText) reminder")
+                        .help("Delete reminder")
                     }
                 }
 
@@ -34,7 +36,7 @@ struct RemindersTabView: View {
                             .frame(minWidth: 100, alignment: .leading)
                             .monospacedDigit()
                         
-                        Stepper("", value: $viewModel.newIntervalMinutes, in: 1...120)
+                        Stepper("Reminder interval minutes", value: $viewModel.newIntervalMinutes, in: 1...120)
                             .labelsHidden()
 
                         Button("Add") {
@@ -54,7 +56,7 @@ struct RemindersTabView: View {
             }
 
             }
-            .padding(20)
+            .padding(DS.Spacing.xl)
         }
     }
 }

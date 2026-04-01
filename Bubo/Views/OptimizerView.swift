@@ -15,11 +15,7 @@ struct OptimizerView: View {
     @State private var selectedScenarioIndex = 0
     @State private var appliedScenarioIndex: Int? = nil
 
-    private static let timeFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "HH:mm"
-        return f
-    }()
+    private static let timeFormatter = DS.timeFormatter
 
     enum OptimizerAction: String, CaseIterable {
         case focusBlocks = "Focus Blocks"
@@ -131,24 +127,26 @@ struct OptimizerView: View {
             HStack {
                 Text("Blocks:")
                     .font(.subheadline)
-                Picker("", selection: $focusBlockCount) {
+                Picker("Number of focus blocks", selection: $focusBlockCount) {
                     ForEach(1...4, id: \.self) { n in
                         Text("\(n)").tag(n)
                     }
                 }
+                .labelsHidden()
                 .frame(width: 60)
             }
 
             HStack {
                 Text("Duration:")
                     .font(.subheadline)
-                Picker("", selection: $focusBlockMinutes) {
+                Picker("Focus block duration", selection: $focusBlockMinutes) {
                     Text("30 min").tag(30)
                     Text("60 min").tag(60)
                     Text("90 min").tag(90)
                     Text("2 hours").tag(120)
                     Text("3 hours").tag(180)
                 }
+                .labelsHidden()
                 .frame(width: 100)
             }
 
@@ -185,6 +183,7 @@ struct OptimizerView: View {
                         Text(event.title)
                             .font(.caption)
                             .lineLimit(1)
+                            .truncationMode(.tail)
                         Spacer()
                         Text(event.formattedTimeRange)
                             .font(.caption2)
@@ -313,6 +312,7 @@ struct OptimizerView: View {
                         Text(gene.title)
                             .font(.caption.weight(.medium))
                             .lineLimit(1)
+                            .truncationMode(.tail)
 
                         Text(formatTimeRange(gene.startTime, gene.endTime))
                             .font(.caption2)
@@ -379,6 +379,8 @@ struct OptimizerView: View {
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.regular)
+                    .accessibilityLabel("Reject this schedule")
+                    .help("Reject this schedule")
                 }
             }
             .padding(.top, DS.Spacing.sm)
@@ -399,7 +401,7 @@ struct OptimizerView: View {
                         .frame(width: 80, alignment: .leading)
 
                     GeometryReader { geo in
-                        RoundedRectangle(cornerRadius: 2)
+                        RoundedRectangle(cornerRadius: DS.Size.previewSmallRadius)
                             .fill(skin.accentColor.opacity(0.3))
                             .frame(width: geo.size.width * max(0, min(1, value)))
                     }

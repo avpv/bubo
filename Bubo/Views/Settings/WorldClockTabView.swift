@@ -41,7 +41,8 @@ struct WorldClockTabView: View {
                     // Selected cities
                     if !selectedCities.isEmpty {
                         SettingsPlatter("Selected Cities") {
-                            VStack(spacing: DS.Spacing.xs) {
+                            // HIG: User-managed lists should support reordering
+                            List {
                                 ForEach(selectedCities) { city in
                                     HStack {
                                         VStack(alignment: .leading, spacing: 2) {
@@ -64,17 +65,20 @@ struct WorldClockTabView: View {
                                             }
                                         } label: {
                                             Image(systemName: "minus.circle.fill")
-                                                .foregroundStyle(.red)
+                                                .foregroundStyle(skin.resolvedDestructiveColor)
                                         }
                                         .buttonStyle(.plain)
-                                    }
-                                    .padding(.vertical, DS.Spacing.xxs)
-
-                                    if city.id != selectedCities.last?.id {
-                                        Divider()
+                                        .accessibilityLabel("Remove \(city.city)")
+                                        .help("Remove \(city.city) from world clock")
                                     }
                                 }
+                                .onMove { from, to in
+                                    settings.worldClockCityIDs.move(fromOffsets: from, toOffset: to)
+                                }
                             }
+                            .listStyle(.plain)
+                            .frame(maxHeight: CGFloat(selectedCities.count) * 50)
+                            .scrollContentBackground(.hidden)
                         }
                     }
 
@@ -88,8 +92,8 @@ struct WorldClockTabView: View {
                         }
                         .padding(DS.Spacing.sm)
                         .background(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(Color.primary.opacity(0.04))
+                            RoundedRectangle(cornerRadius: DS.Spacing.sm, style: .continuous)
+                                .fill(DS.Colors.textPrimary.opacity(DS.Opacity.subtleFill))
                         )
 
                         ScrollView {
@@ -137,7 +141,7 @@ struct WorldClockTabView: View {
                     }
                 }
             }
-            .padding(20)
+            .padding(DS.Spacing.xl)
         }
         .animation(DS.Animation.smoothSpring, value: settings.isWorldClockEnabled)
     }

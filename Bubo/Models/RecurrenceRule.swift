@@ -138,7 +138,7 @@ struct RecurrenceRule: Codable, Hashable, Sendable {
 
     private static let endDateFormatter: DateFormatter = {
         let f = DateFormatter()
-        f.dateFormat = "d MMM yyyy"
+        f.dateStyle = .medium
         return f
     }()
 

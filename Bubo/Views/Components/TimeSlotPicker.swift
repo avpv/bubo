@@ -162,7 +162,7 @@ fileprivate struct TimeSlotChip: View {
                         .clipShape(Capsule())
                     if isHovered {
                         Capsule()
-                            .fill(chipAccent.opacity(0.08))
+                            .fill(chipAccent.opacity(DS.Opacity.lightFill))
                     }
                 }
             }
@@ -171,15 +171,15 @@ fileprivate struct TimeSlotChip: View {
             Capsule()
                 .strokeBorder(
                     isSelected
-                        ? .white.opacity(0.2)
-                        : (isHovered ? chipAccent.opacity(0.3) : .clear),
-                    lineWidth: 0.5
+                        ? DS.Colors.onOverlay.opacity(DS.Opacity.glassBorder)
+                        : (isHovered ? chipAccent.opacity(DS.Opacity.strongFill + DS.Opacity.faintBorder) : .clear),
+                    lineWidth: DS.Border.thin
                 )
         )
         .shadow(
-            color: isSelected ? chipAccent.opacity(0.3) : (isHovered ? skin.resolvedHoverShadowColor : .clear),
-            radius: isSelected ? 6 : (isHovered ? DS.Shadows.hoverRadius : 0),
-            y: isSelected ? 3 : (isHovered ? DS.Shadows.hoverY : 0)
+            color: isSelected ? chipAccent.opacity(skin.hoverShadowOpacity * 1.5) : (isHovered ? skin.resolvedHoverShadowColor : .clear),
+            radius: isSelected ? skin.hoverShadowRadius * 0.5 : (isHovered ? skin.hoverShadowRadius : 0),
+            y: isSelected ? skin.hoverShadowY * 0.5 : (isHovered ? skin.hoverShadowY : 0)
         )
         .scaleEffect(isHovered && !isSelected ? 1.03 : 1.0)
         .animation(skin.resolvedMicroAnimation, value: isHovered)
@@ -192,7 +192,7 @@ fileprivate struct TimeSlotChip: View {
             }
             if hovering && !isSelected {
                 NSCursor.pointingHand.push()
-                Haptics.generic()
+                Haptics.tap()
             } else {
                 NSCursor.pop()
             }

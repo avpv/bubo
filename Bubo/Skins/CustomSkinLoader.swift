@@ -94,8 +94,7 @@ struct CustomSkinJSON: Codable {
 
     // MARK: Layout & Depth (HIG 2026)
 
-    /// Corner radius for platters and popovers. Defaults to 12.
-    let cornerRadius: CGFloat?
+
 
     /// Ambient shadow opacity for depth. Defaults to 0.06.
     let shadowOpacity: Double?
@@ -186,7 +185,6 @@ struct CustomSkinJSON: Codable {
             platterMaterial: resolvedPlatterMaterial,
             platterTint: platterTint?.toColor(),
             platterTintOpacity: platterTintOpacity ?? 0,
-            cornerRadius: cornerRadius ?? 12,
             shadowOpacity: shadowOpacity ?? 0.06,
             shadowRadius: shadowRadius ?? 8,
             shadowY: shadowY ?? 4,
@@ -211,6 +209,26 @@ struct CustomSkinJSON: Codable {
             separatorStyle: resolvedSeparatorStyle,
             separatorOpacity: separatorOpacity ?? 0.5
         )
+    }
+
+    /// HIG: Validate accent color contrast ratio against white (3:1 minimum).
+    func validateContrastRatio() {
+        let color = accentColor.toColor()
+        let nsColor = NSColor(color).usingColorSpace(.sRGB) ?? NSColor(color)
+        let r = nsColor.redComponent
+        let g = nsColor.greenComponent
+        let b = nsColor.blueComponent
+
+        func linearize(_ c: CGFloat) -> CGFloat {
+            c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
+        }
+        let lum = 0.2126 * linearize(r) + 0.7152 * linearize(g) + 0.0722 * linearize(b)
+        let whiteLum: CGFloat = 1.0
+        let ratio = (whiteLum + 0.05) / (lum + 0.05)
+
+        if ratio < 3.0 {
+            print("[Bubo] Warning: Skin '\(displayName)' accentColor contrast ratio is \(String(format: "%.2f", ratio)):1 (minimum 3:1 per Apple HIG). Consider darkening the accent color.")
+        }
     }
 
     private var resolvedAnimationStyle: SkinAnimationStyle {
@@ -555,6 +573,8 @@ class CustomSkinLoader {
         guard let data = try? Data(contentsOf: url),
               let json = try? JSONDecoder().decode(CustomSkinJSON.self, from: data)
         else { return nil }
+        // HIG: Validate custom skin contrast ratios on load
+        json.validateContrastRatio()
         return json.toSkinDefinition(skinFileURL: url)
     }
 }

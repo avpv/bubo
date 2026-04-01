@@ -6,8 +6,6 @@ struct FullScreenAlertView: View {
     let onDismiss: () -> Void
     let onSnooze: (Int) -> Void
 
-    @State private var secondsRemaining: Int = 0
-    @State private var countdownTimer: Timer?
     @State private var isVisible = false
     @State private var snoozeHovered = false
     @State private var joinHovered = false
@@ -25,19 +23,23 @@ struct FullScreenAlertView: View {
     }
 
     var body: some View {
+        // HIG: Use TimelineView for time-based UI updates instead of Timer.publish
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+        let secondsRemaining = max(Int(event.startDate.timeIntervalSince(context.date)), 0)
         ZStack {
             // Background: material + skin-tinted overlay
             Rectangle()
                 .fill(DS.Materials.overlay)
                 .ignoresSafeArea()
 
-            Color.black.opacity(contrast == .increased ? 0.8 : 0.6)
+            DS.Colors.overlayBackground
+                .opacity(contrast == .increased ? DS.Opacity.overlayDark : DS.Opacity.overlayLight)
                 .ignoresSafeArea()
 
             // Ambient skin glow behind content
             if !skin.isClassic {
                 RadialGradient(
-                    colors: [skinAccent.opacity(0.15), skinSecondary.opacity(0.05), .clear],
+                    colors: [skinAccent.opacity(DS.Opacity.subtleBorder), skinSecondary.opacity(DS.Opacity.subtleFill), .clear],
                     center: .top,
                     startRadius: 0,
                     endRadius: 600
@@ -50,75 +52,76 @@ struct FullScreenAlertView: View {
 
                 bellIcon
 
-                Text(headerText)
-                    .font(.system(size: 48, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
+                // HIG: Use semantic text styles that scale with Dynamic Type
+                Text(headerText(secondsRemaining))
+                    .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                    .foregroundStyle(DS.Colors.onOverlay)
 
                 // Live countdown timer
-                Text(countdownText)
-                    .font(.system(size: 72, weight: .heavy, design: .monospaced))
-                    .foregroundStyle(countdownDisplayColor)
-                    .shadow(color: countdownDisplayColor.opacity(0.5), radius: 12)
+                Text(countdownText(secondsRemaining))
+                    .font(.system(.largeTitle, design: .monospaced, weight: .heavy))
+                    .scaleEffect(1.5)
+                    .foregroundStyle(countdownDisplayColor(secondsRemaining))
+                    .shadow(color: countdownDisplayColor(secondsRemaining).opacity(0.5), radius: DS.Shadows.buttonRadius)
                     .contentTransition(.numericText())
                     .motionAwareAnimation(.linear(duration: 0.3), value: secondsRemaining, reduceMotion: reduceMotion)
 
                 Text(event.title)
-                    .font(.system(size: 36, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white)
+                    .font(.system(.title, design: .rounded, weight: .semibold))
+                    .foregroundStyle(DS.Colors.onOverlay)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 40)
+                    .padding(.horizontal, DS.Spacing.xxxl + DS.Spacing.sm)
 
-                HStack(spacing: 20) {
+                HStack(spacing: DS.Spacing.xl) {
                     Label(event.formattedTimeRange, systemImage: "clock.fill")
                         .font(.title2)
-                        .foregroundStyle(.white.opacity(0.9))
+                        .foregroundStyle(DS.Colors.onOverlay.opacity(0.9))
 
                     if let location = event.location, !location.isEmpty {
                         Label(location, systemImage: "location.fill")
                             .font(.title2)
-                            .foregroundStyle(.white.opacity(0.9))
+                            .foregroundStyle(DS.Colors.onOverlay.opacity(0.9))
                     }
                 }
 
                 Spacer()
 
                 // Action buttons
-                HStack(spacing: 20) {
+                HStack(spacing: DS.Spacing.xl) {
                     // Snooze button — outlined, skin-tinted
                     Menu {
                         ForEach(DS.snoozeOptions) { option in
                             Button("In \(option.label)") {
                                 Haptics.tap()
-                                cleanup()
                                 onSnooze(option.minutes)
                             }
                         }
                     } label: {
                         Text("Snooze")
                             .font(.system(.title3, design: .rounded, weight: .medium))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 40)
-                            .padding(.vertical, 14)
+                            .foregroundStyle(DS.Colors.onOverlay)
+                            .padding(.horizontal, DS.Spacing.xxxl + DS.Spacing.sm)
+                            .padding(.vertical, DS.Spacing.md + DS.Spacing.xxs)
                             .background(
                                 Capsule()
-                                    .fill(.ultraThinMaterial)
+                                    .fill(DS.Materials.overlay)
                                     .overlay(
                                         Capsule()
-                                            .fill(skinAccent.opacity(snoozeHovered ? 0.2 : 0.0))
+                                            .fill(skinAccent.opacity(snoozeHovered ? skin.hoverFillOpacity * 2.5 : 0))
                                     )
                             )
                             .overlay(
                                 Capsule()
                                     .strokeBorder(
                                         LinearGradient(
-                                            colors: [skinAccent.opacity(0.6), skinSecondary.opacity(0.3)],
+                                            colors: [skinAccent.opacity(DS.Opacity.overlayLight), skinSecondary.opacity(0.3)],
                                             startPoint: .topLeading,
                                             endPoint: .bottomTrailing
                                         ),
-                                        lineWidth: 1.5
+                                        lineWidth: DS.Border.medium
                                     )
                             )
-                            .shadow(color: skinAccent.opacity(snoozeHovered ? 0.3 : 0.0), radius: 12, y: 4)
+                            .shadow(color: skinAccent.opacity(snoozeHovered ? skin.hoverShadowOpacity * 1.5 : 0), radius: skin.hoverShadowRadius, y: skin.hoverShadowY)
                             .scaleEffect(snoozeHovered ? 1.03 : 1.0)
                             .animation(skin.resolvedMicroAnimation, value: snoozeHovered)
                     }
@@ -130,14 +133,13 @@ struct FullScreenAlertView: View {
                         Button {
                             Haptics.impact()
                             NSWorkspace.shared.open(meetingURL)
-                            cleanup()
                             onDismiss()
                         } label: {
                             Label("Join \(serviceName)", systemImage: "video.fill")
                                 .font(.system(.title2, design: .rounded, weight: .semibold))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 40)
-                                .padding(.vertical, 16)
+                                .foregroundStyle(DS.Colors.onOverlay)
+                                .padding(.horizontal, DS.Spacing.xxxl + DS.Spacing.sm)
+                                .padding(.vertical, DS.Spacing.lg)
                                 .background(
                                     Capsule()
                                         .fill(
@@ -150,9 +152,9 @@ struct FullScreenAlertView: View {
                                 )
                                 .overlay(
                                     Capsule()
-                                        .strokeBorder(.white.opacity(0.2), lineWidth: 0.5)
+                                        .strokeBorder(DS.Colors.onOverlay.opacity(DS.Opacity.glassBorder), lineWidth: DS.Border.thin)
                                 )
-                                .shadow(color: skinAccent.opacity(0.5), radius: joinHovered ? 16 : 10, y: joinHovered ? 6 : 4)
+                                .shadow(color: skinAccent.opacity(0.5), radius: joinHovered ? skin.hoverShadowRadius * 1.3 : skin.hoverShadowRadius * 0.8, y: joinHovered ? skin.hoverShadowY : skin.shadowY)
                                 .scaleEffect(joinHovered ? 1.04 : 1.0)
                                 .animation(skin.resolvedMicroAnimation, value: joinHovered)
                         }
@@ -165,23 +167,22 @@ struct FullScreenAlertView: View {
                     // Dismiss button — white pill with skin accent on hover
                     Button(action: {
                         Haptics.impact()
-                        cleanup()
                         onDismiss()
                     }) {
                         Text("Dismiss")
                             .font(.system(.title2, design: .rounded, weight: .semibold))
-                            .foregroundStyle(dismissHovered ? skinAccent : .black)
-                            .padding(.horizontal, 60)
-                            .padding(.vertical, 16)
+                            .foregroundStyle(dismissHovered ? skinAccent : DS.Colors.overlayBackground)
+                            .padding(.horizontal, DS.Spacing.xxxl + DS.Spacing.xxl + DS.Spacing.xs)
+                            .padding(.vertical, DS.Spacing.lg)
                             .background(
                                 Capsule()
-                                    .fill(.white)
+                                    .fill(DS.Colors.onOverlay)
                             )
                             .overlay(
                                 Capsule()
-                                    .strokeBorder(skinAccent.opacity(dismissHovered ? 0.5 : 0.0), lineWidth: 1.5)
+                                    .strokeBorder(skinAccent.opacity(dismissHovered ? 0.5 : 0), lineWidth: DS.Border.medium)
                             )
-                            .shadow(color: .white.opacity(dismissHovered ? 0.3 : 0.15), radius: dismissHovered ? 14 : 8, y: dismissHovered ? 5 : 3)
+                            .shadow(color: DS.Colors.onOverlay.opacity(dismissHovered ? skin.hoverShadowOpacity * 1.5 : skin.shadowOpacity * 2), radius: dismissHovered ? skin.hoverShadowRadius : skin.shadowRadius, y: dismissHovered ? skin.hoverShadowY : skin.shadowY)
                             .scaleEffect(dismissHovered ? 1.03 : 1.0)
                             .animation(skin.resolvedMicroAnimation, value: dismissHovered)
                     }
@@ -189,29 +190,28 @@ struct FullScreenAlertView: View {
                     .onHover { dismissHovered = $0 }
                     .keyboardShortcut(event.meetingLink != nil ? .escape : .return, modifiers: [])
                     .accessibilityLabel("Dismiss alert")
-                    .accessibilityHint("Press Enter or click to dismiss")
+                    .accessibilityHint(event.meetingLink != nil ? "Press Escape to dismiss" : "Press Enter to dismiss")
                 }
 
-                Text("Press Enter or Esc to dismiss")
+                Text(event.meetingLink != nil ? "Enter to join \u{00B7} Esc to dismiss" : "Press Enter or Esc to dismiss")
                     .font(.caption)
-                    .foregroundStyle(.white.opacity(0.4))
+                    .foregroundStyle(DS.Colors.onOverlay.opacity(DS.Opacity.tertiaryText))
                     .accessibilityHidden(true)
 
-                Spacer().frame(height: 60)
+                Spacer().frame(height: DS.Spacing.xxxl + DS.Spacing.xxl + DS.Spacing.xs)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // HIG: Handle Escape key without hidden zero-size button hack
         .onKeyPress(.escape) {
-            cleanup()
             onDismiss()
             return .handled
         }
+        } // TimelineView
         .opacity(isVisible ? 1 : 0)
         .scaleEffect(isVisible ? 1 : (reduceMotion ? 1 : 0.92))
         .onAppear {
             Haptics.impact()
-            startCountdown()
             if reduceMotion {
                 isVisible = true
             } else {
@@ -220,12 +220,11 @@ struct FullScreenAlertView: View {
                 }
             }
         }
-        .onDisappear { cleanup() }
     }
 
     /// Countdown color: uses skin accent when plenty of time remains,
     /// falls back to urgency colors (warning/error) when imminent.
-    private var countdownDisplayColor: Color {
+    private func countdownDisplayColor(_ secondsRemaining: Int) -> Color {
         if secondsRemaining <= 120 { return skin.resolvedDestructiveColor }
         if secondsRemaining <= 300 { return skin.resolvedWarningColor }
         return skinAccent
@@ -235,7 +234,7 @@ struct FullScreenAlertView: View {
 
     private var bellIcon: some View {
         Image(systemName: "bell.fill")
-            .font(.system(size: 60))
+            .font(.system(size: DS.Size.alertIconSize))
             .foregroundStyle(
                 LinearGradient(
                     colors: [skinAccent, skinSecondary],
@@ -243,7 +242,7 @@ struct FullScreenAlertView: View {
                     endPoint: .bottomTrailing
                 )
             )
-            .shadow(color: skinAccent.opacity(0.5), radius: 20)
+            .shadow(color: skinAccent.opacity(0.5), radius: DS.Shadows.glowRadius)
             .symbolEffect(
                 .bounce,
                 options: reduceMotion ? .default : .repeating.speed(0.4),
@@ -253,24 +252,7 @@ struct FullScreenAlertView: View {
 
     // MARK: - Countdown
 
-    private func startCountdown() {
-        updateSecondsRemaining()
-        countdownTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
-            updateSecondsRemaining()
-        }
-    }
-
-    private func updateSecondsRemaining() {
-        let remaining = Int(event.startDate.timeIntervalSinceNow)
-        secondsRemaining = max(remaining, 0)
-    }
-
-    private func cleanup() {
-        countdownTimer?.invalidate()
-        countdownTimer = nil
-    }
-
-    private var countdownText: String {
+    private func countdownText(_ secondsRemaining: Int) -> String {
         if secondsRemaining <= 0 {
             return "00:00"
         }
@@ -284,7 +266,7 @@ struct FullScreenAlertView: View {
         return String(format: "%02d:%02d", minutes, seconds)
     }
 
-    private var headerText: String {
+    private func headerText(_ secondsRemaining: Int) -> String {
         if secondsRemaining <= 0 {
             return "Meeting started!"
         }
