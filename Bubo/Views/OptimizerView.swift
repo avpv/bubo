@@ -426,11 +426,6 @@ struct OptimizerView: View {
                     Label("Clear", systemImage: "arrow.counterclockwise")
                 }
                 .buttonStyle(.borderless)
-            } else {
-                let todayCount = reminderService.eventsByDay.first.map(\.events.count) ?? 0
-                Label("\(todayCount) event\(todayCount == 1 ? "" : "s") today", systemImage: "calendar")
-                    .font(.caption2)
-                    .foregroundStyle(skin.resolvedTextTertiary)
             }
 
             Spacer()
