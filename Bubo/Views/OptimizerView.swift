@@ -63,7 +63,6 @@ struct OptimizerView: View {
         PopoverHeader(
             title: "Optimizer",
             showBack: true,
-            backLabel: "Bubo",
             onBack: onBack
         )
     }

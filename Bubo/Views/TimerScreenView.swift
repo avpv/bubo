@@ -97,7 +97,6 @@ struct TimerScreenView: View {
             PopoverHeader(
                 title: "Timer",
                 showBack: !isPinned,
-                backLabel: "Event",
                 onBack: {
                     onBack()
                 },

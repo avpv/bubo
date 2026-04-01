@@ -40,7 +40,6 @@ struct EventDetailView: View {
             PopoverHeader(
                 title: isLocal ? (event.eventType == .pomodoro ? "Pomodoro" : "Event") : nil,
                 showBack: true,
-                backLabel: "Bubo",
                 onBack: onBack
             )
 

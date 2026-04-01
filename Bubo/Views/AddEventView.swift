@@ -96,7 +96,6 @@ struct AddEventView: View {
                     ? (isPomodoroMode ? "Edit Pomodoro" : "Edit Event")
                     : (isPomodoroMode ? "New Pomodoro" : "New Event"),
                 showBack: true,
-                backLabel: "Bubo",
                 onBack: onDismiss
             )
 
