@@ -148,7 +148,12 @@ class ReminderSettings: Codable {
         badgeCountMode = try container.decodeIfPresent(BadgeCountMode.self, forKey: .badgeCountMode) ?? .wholeDay
         badgeTimeWindowHours = try container.decodeIfPresent(Int.self, forKey: .badgeTimeWindowHours) ?? 8
         isWorldClockEnabled = try container.decodeIfPresent(Bool.self, forKey: .isWorldClockEnabled) ?? false
-        worldClockCityIDs = try container.decodeIfPresent([String].self, forKey: .worldClockCityIDs) ?? []
+        let rawCityIDs = try container.decodeIfPresent([String].self, forKey: .worldClockCityIDs) ?? []
+        // Migrate old timezoneID-only format to new city_timezoneID format
+        worldClockCityIDs = rawCityIDs.map { id in
+            if WorldClockCity.city(forID: id) != nil { return id }
+            return WorldClockCity.allCities.first { $0.timezoneID == id }?.id ?? id
+        }
     }
 
     func encode(to encoder: Encoder) throws {
