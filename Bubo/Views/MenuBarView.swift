@@ -392,13 +392,10 @@ struct MenuBarView: View {
 
     private var colorFilterBar: some View {
         let selected = colorFilter
-        let used = Set(usedColorTags)
         return HStack(spacing: DS.Spacing.xs) {
             ForEach(EventColorTag.allCases, id: \.self) { tag in
                 let isActive = selected == tag
-                let isUsed = used.contains(tag)
                 Button {
-                    guard isUsed else { return }
                     Haptics.tap()
                     withAnimation(skin.resolvedMicroAnimation) {
                         colorFilter = isActive ? nil : tag
@@ -408,7 +405,7 @@ struct MenuBarView: View {
                         Circle()
                             .fill(tag.color)
                             .frame(width: DS.Size.colorDotSize, height: DS.Size.colorDotSize)
-                            .opacity(isUsed ? (selected == nil || isActive ? 1.0 : 0.3) : 0.12)
+                            .opacity(selected == nil || isActive ? 1.0 : 0.3)
 
                         // HIG: Non-color indicator for active state
                         if isActive {
@@ -431,7 +428,7 @@ struct MenuBarView: View {
                 }
                 .buttonStyle(.plain)
                 // HIG: Don't use color as the only differentiator — show name on hover
-                .help(isUsed ? tag.rawValue : "\(tag.rawValue) (no events)")
+                .help(tag.rawValue)
                 .accessibilityLabel("Filter by \(tag.rawValue)")
                 .accessibilityAddTraits(isActive ? .isSelected : [])
             }
