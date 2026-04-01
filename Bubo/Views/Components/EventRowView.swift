@@ -81,7 +81,24 @@ struct EventRowView: View {
                 Rectangle()
                     .fill(isHovered ? skin.resolvedHoverFill : Color.clear)
             }
-            .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
+        )
+        .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [
+                            .white.opacity(skin.platterBorderOpacity * 1.5),
+                            .white.opacity(skin.platterBorderOpacity * 0.1),
+                            .clear,
+                            .white.opacity(skin.platterBorderOpacity * 0.4)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: DS.Border.thin
+                )
+                .blendMode(contrast == .increased ? .normal : .plusLighter)
         )
         .shadow(
             color: isHovered ? skin.resolvedHoverShadowColor : skin.resolvedShadowColor,
