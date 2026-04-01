@@ -16,7 +16,7 @@ final class BuboOptimizer {
 
     let preferenceLearner = PreferenceLearner()
     private let scenarioGenerator = ScenarioGenerator()
-    private let reoptimizer = IncrementalReoptimizer()
+    let reoptimizer = IncrementalReoptimizer()
 
     // MARK: - State
 
@@ -24,7 +24,7 @@ final class BuboOptimizer {
     private(set) var lastResult: OptimizerResult?
 
     /// The current schedule genes (movable events placement).
-    private(set) var currentSchedule: [ScheduleGene] = []
+    var currentSchedule: [ScheduleGene] = []
 
     // MARK: - Configuration
 

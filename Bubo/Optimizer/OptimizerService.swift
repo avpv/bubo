@@ -16,6 +16,15 @@ final class OptimizerService {
     private(set) var lastOptimizationDate: Date? = nil
     private(set) var error: String? = nil
 
+    /// The last applied recipe snapshot for undo support.
+    private(set) var lastSnapshot: AppliedRecipeSnapshot? = nil
+
+    /// The recipe that produced the current scenarios.
+    private(set) var activeRecipe: ScheduleRecipe? = nil
+
+    /// Recipe monitor for auto-triggered reactions and contextual suggestions.
+    private(set) var recipeMonitor: RecipeMonitor? = nil
+
     // MARK: - Optimizer Settings (persisted)
 
     var workingHoursStart: Int {
@@ -233,5 +242,114 @@ final class OptimizerService {
         scenarios = []
         selectedScenarioIndex = nil
         error = nil
+        activeRecipe = nil
+        lastSnapshot = nil
+    }
+
+    // MARK: - Recipe Execution
+
+    /// Execute a ScheduleRecipe — the universal entry point for all optimization flows.
+    func executeRecipe(
+        _ recipe: ScheduleRecipe,
+        paramValues: [String: Any] = [:],
+        reminderService: ReminderService
+    ) async -> RecipeResult {
+        isOptimizing = true
+        defer { isOptimizing = false }
+        error = nil
+        activeRecipe = recipe
+
+        let executor = RecipeExecutor(optimizer: optimizer, reminderService: reminderService)
+        let result = await executor.execute(recipe, paramValues: paramValues, defaultWorkingHours: workingHours)
+
+        switch result {
+        case .success(let optimizerResult):
+            scenarios = optimizerResult.scenarios
+            selectedScenarioIndex = scenarios.isEmpty ? nil : 0
+            lastOptimizationDate = Date()
+
+        case .partialSuccess(let optimizerResult, let warnings):
+            scenarios = optimizerResult.scenarios
+            selectedScenarioIndex = scenarios.isEmpty ? nil : 0
+            lastOptimizationDate = Date()
+            error = warnings.first
+
+        case .noEventsToOptimize:
+            error = "No events to optimize"
+
+        case .infeasible(let reason):
+            error = reason
+        }
+
+        return result
+    }
+
+    /// Apply the selected scenario and record feedback for learning.
+    func applyRecipeScenario(
+        at index: Int,
+        to reminderService: ReminderService,
+        titleOverride: String? = nil,
+        colorOverride: EventColorTag? = nil
+    ) {
+        guard index < scenarios.count else { return }
+        let scenario = scenarios[index]
+
+        // Record snapshot for undo
+        let previousGenes = optimizer.currentSchedule
+        var createdEventIds: [String] = []
+
+        // Apply scenario (same as existing applyScenario)
+        optimizer.acceptScenario(scenario)
+
+        for (i, gene) in scenario.genes.enumerated() {
+            let title: String
+            if let override = titleOverride, !override.isEmpty {
+                title = scenario.genes.count > 1 ? "\(override) \(i + 1)" : override
+            } else {
+                title = gene.title
+            }
+            let event = CalendarEvent(
+                id: gene.eventId,
+                title: title,
+                startDate: gene.startTime,
+                endDate: gene.endTime,
+                location: nil,
+                description: "Created by Schedule Assistant",
+                calendarName: nil,
+                eventType: gene.isFocusBlock ? .pomodoro : .standard,
+                colorTag: colorOverride ?? (gene.isFocusBlock ? .blue : .green)
+            )
+            reminderService.addLocalEvent(event)
+            createdEventIds.append(event.id)
+        }
+
+        // Save undo snapshot
+        lastSnapshot = AppliedRecipeSnapshot(
+            recipeId: activeRecipe?.id ?? "",
+            appliedAt: Date(),
+            previousGenes: previousGenes,
+            appliedGenes: scenario.genes,
+            createdEventIds: createdEventIds
+        )
+
+        selectedScenarioIndex = index
+    }
+
+    /// Undo the last applied recipe by removing created events.
+    func undoLastRecipe(reminderService: ReminderService) {
+        guard let snapshot = lastSnapshot else { return }
+        for eventId in snapshot.createdEventIds {
+            reminderService.removeLocalEvent(id: eventId)
+        }
+        optimizer.currentSchedule = snapshot.previousGenes
+        lastSnapshot = nil
+        scenarios = []
+        selectedScenarioIndex = nil
+    }
+
+    /// Initialize the recipe monitor (called once when reminderService is available).
+    func setupRecipeMonitor(reminderService: ReminderService) {
+        recipeMonitor = RecipeMonitor(optimizer: optimizer, reminderService: reminderService)
+        recipeMonitor?.evaluateSuggestions()
     }
 }
