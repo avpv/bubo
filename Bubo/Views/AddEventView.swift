@@ -433,6 +433,10 @@ struct AddEventView: View {
                 // Clear standard recurrence when switching to Pomodoro
                 if selectedEventType == .pomodoro {
                     recurrenceRule = nil
+                    // Auto-suggest best pomodoro slot
+                    if let optimizerService, !isEditing {
+                        autoSuggestPomodoroSlot(optimizerService)
+                    }
                 }
             }
 
@@ -616,6 +620,48 @@ struct AddEventView: View {
             isFindingBestTime = false
             if let optimizerResult = result.optimizerResult {
                 bestTimeSlots = optimizerResult.scenarios
+            }
+        }
+    }
+
+    private func autoSuggestPomodoroSlot(_ service: OptimizerService) {
+        isFindingBestTime = true
+        let totalMinutes = pomodoroTotalMinutes
+
+        let recipe = ScheduleRecipe(
+            id: "auto-pomodoro-slot",
+            name: "Pomodoro Slot",
+            icon: "timer",
+            events: [
+                EventSpec(
+                    title: title.isEmpty ? "Pomodoro Session" : title,
+                    minutes: totalMinutes,
+                    priority: 0.7,
+                    energy: 0.8,
+                    period: .morning,
+                    focus: true,
+                    pomodoro: .classic
+                ),
+            ],
+            includeExistingEvents: false,
+            speed: .quick,
+            weights: [.pomodoroFit: 1.5, .energyCurve: 1.5],
+            maxScenarios: 3,
+            diversityThreshold: 0.2
+        )
+
+        Task {
+            let result = await service.executeRecipe(
+                recipe,
+                reminderService: reminderService
+            )
+            isFindingBestTime = false
+            if let optimizerResult = result.optimizerResult {
+                bestTimeSlots = optimizerResult.scenarios
+                // Auto-set date to best slot
+                if let bestGene = optimizerResult.scenarios.first?.genes.first {
+                    date = bestGene.startTime
+                }
             }
         }
     }
@@ -961,5 +1007,15 @@ struct AddEventView: View {
         // HIG: Confirm successful action with haptic feedback
         Haptics.impact()
         onSave(isEditing)
+
+        // Notify recipe monitor about new/changed event for auto-adjustment
+        if let optimizerService, !isEditing {
+            Task {
+                await optimizerService.recipeMonitor?.onEventChange(
+                    .created(eventId: event.id),
+                    workingHours: optimizerService.workingHours
+                )
+            }
+        }
     }
 }

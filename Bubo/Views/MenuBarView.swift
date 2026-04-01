@@ -120,7 +120,12 @@ struct MenuBarView: View {
                 case .timer(let event):
                     TimerScreenView(
                         event: event,
-                        onBack: { navigation = .detail(event) }
+                        onBack: { navigation = .detail(event) },
+                        onScheduleNext: { finishedEvent in
+                            // Pre-set a pomodoro recipe and navigate to optimizer
+                            optimizerService.activeRecipe = .pomodoroSession()
+                            navigation = .optimizer
+                        }
                     )
                     .transition(
                         reduceMotion ? .opacity : .asymmetric(
@@ -137,6 +142,10 @@ struct MenuBarView: View {
                         onSave: { isEdit in
                             navigation = .list
                             toastState.showSuccess(isEdit ? "Event updated" : "Event added")
+                            // Notify monitor when editing existing event (time may have changed)
+                            if isEdit, let eventId = editing?.id {
+                                notifyRecipeMonitor(.moved(eventId: eventId))
+                            }
                         },
                         settings: settings,
                         optimizerService: optimizerService

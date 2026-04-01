@@ -5,6 +5,7 @@ struct TimerScreenView: View {
     let event: CalendarEvent
     var onBack: () -> Void
     var isPinned: Bool = false
+    var onScheduleNext: ((CalendarEvent) -> Void)? = nil
 
     var wallpaper: WallpaperDefinition = WallpaperCatalog.none
     var customPhotoPath: String = ""
@@ -202,6 +203,20 @@ struct TimerScreenView: View {
                                 .foregroundStyle(skin.resolvedTextSecondary)
                                 .lineLimit(1)
                                 .truncationMode(.tail)
+                        }
+
+                        // Post-session action for Pomodoro
+                        if ended, event.eventType == .pomodoro, let onScheduleNext {
+                            Button {
+                                Haptics.tap()
+                                onScheduleNext(event)
+                            } label: {
+                                Label("Schedule Next Session", systemImage: "wand.and.stars")
+                                    .font(.caption.weight(.medium))
+                            }
+                            .buttonStyle(.action(role: .primary, size: .compact))
+                            .padding(.top, DS.Spacing.sm)
+                            .transition(.opacity.combined(with: .move(edge: .bottom)))
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
