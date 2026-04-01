@@ -15,7 +15,7 @@ struct DaySectionHeader: View {
             Text(dayTitle)
                 .font(.subheadline)
                 .fontWeight(.semibold)
-                .foregroundStyle(isToday ? skinAccent : skin.resolvedTextPrimary)
+                .foregroundStyle(skin.resolvedTextPrimary)
             if isToday {
                 Circle()
                     .fill(skinAccent)
