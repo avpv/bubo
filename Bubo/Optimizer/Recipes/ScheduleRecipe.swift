@@ -108,6 +108,35 @@ struct EventSpec: Codable, Hashable {
 
     /// How to create events at execution time.
     var creation: CreationMode = .fixed
+
+    /// When set, this event is chained to the previous event in the array.
+    /// The value is the gap in minutes between the end of the previous event
+    /// and the start of this one. nil = independent (optimized separately),
+    /// 0 = immediately after, 5 = 5 min gap after previous.
+    /// Only the FIRST event in a chain is optimized by the GA;
+    /// subsequent chained events are placed sequentially.
+    var chainGap: Int? = nil
+
+    /// Sub-segments within this event (e.g., exercises in a circuit).
+    /// Rendered as a visual timeline in the UI but scheduled as a single
+    /// calendar event. Replaces PomodoroConfig for arbitrary structures.
+    var segments: [EventSegment]? = nil
+}
+
+// MARK: - Event Segment
+
+/// A sub-segment within an event (e.g., one exercise in a circuit).
+struct EventSegment: Codable, Hashable {
+    var title: String
+    var minutes: Int
+    var type: SegmentType = .work
+}
+
+/// The type of segment within an event timeline.
+enum SegmentType: String, Codable, Hashable, CaseIterable {
+    case work
+    case rest
+    case transition
 }
 
 // MARK: - Creation Mode

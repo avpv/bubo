@@ -56,6 +56,9 @@ struct RecipeCatalog {
             .halfDayBlocked, .optimizeMorningOnly,
             .noMeetingsBefore(),
         ]),
+        Category(id: "workouts", name: "Workouts & Activities", icon: "figure.run", recipes: [
+            .circuitTraining(), .yogaSession(), .intervalTraining(),
+        ]),
         Category(id: "advanced", name: "Advanced", icon: "slider.horizontal.3", recipes: [
             .showOptions, .likeYesterday, .makerSchedule, .managerSchedule,
         ]),
@@ -736,6 +739,135 @@ extension ScheduleRecipe {
         ],
         weights: [.contextSwitch: 2.0]
     )
+
+    // ═══════════════════════════════════════════════════════
+    // WORKOUTS & ACTIVITIES
+    // ═══════════════════════════════════════════════════════
+
+    static func circuitTraining(rounds: Int = 3, exerciseMinutes: Int = 3, restMinutes: Int = 1, exercises: Int = 4) -> ScheduleRecipe {
+        let roundMinutes = exerciseMinutes * exercises + restMinutes * (exercises - 1)
+        let roundBreakMinutes = 3
+
+        var events: [EventSpec] = []
+
+        // Build segments for round detail
+        var segments: [EventSegment] = []
+        let exerciseNames = ["Squats", "Push-ups", "Plank", "Lunges", "Burpees", "Mountain Climbers"]
+        for i in 0..<exercises {
+            let name = i < exerciseNames.count ? exerciseNames[i] : "Exercise \(i + 1)"
+            segments.append(EventSegment(title: name, minutes: exerciseMinutes, type: .work))
+            if i < exercises - 1 {
+                segments.append(EventSegment(title: "Rest", minutes: restMinutes, type: .rest))
+            }
+        }
+
+        for round in 0..<rounds {
+            events.append(EventSpec(
+                title: "Round \(round + 1)",
+                minutes: roundMinutes,
+                energy: 0.9,
+                context: "workout",
+                segments: round == 0 ? segments : nil, // segments on first round only
+                chainGap: round == 0 ? nil : 0
+            ))
+            if round < rounds - 1 {
+                events.append(EventSpec(
+                    title: "Round Break",
+                    minutes: roundBreakMinutes,
+                    energy: 0.0,
+                    context: "workout",
+                    chainGap: 0
+                ))
+            }
+        }
+
+        return ScheduleRecipe(
+            id: "circuit-training",
+            name: "Circuit Training",
+            icon: "figure.run",
+            description: "\(rounds) rounds × \(exercises) exercises",
+            category: "workouts",
+            events: events,
+            includeExistingEvents: false,
+            weights: [.energyCurve: 2.0],
+            params: [
+                RecipeParam(id: "rounds", label: "Rounds",
+                           kind: .segmented([2, 3, 4, 5]),
+                           target: .eventCount(index: 0)),
+            ]
+        )
+    }
+
+    static func yogaSession(minutes: Int = 60) -> ScheduleRecipe {
+        ScheduleRecipe(
+            id: "yoga-session",
+            name: "Yoga Session",
+            icon: "figure.yoga",
+            description: "Warm-up, practice, savasana",
+            category: "workouts",
+            events: [
+                EventSpec(
+                    title: "Yoga",
+                    minutes: minutes,
+                    energy: 0.4,
+                    context: "wellness",
+                    period: .morning,
+                    segments: [
+                        EventSegment(title: "Warm-up", minutes: max(5, minutes / 6), type: .transition),
+                        EventSegment(title: "Main Practice", minutes: max(10, minutes * 2 / 3), type: .work),
+                        EventSegment(title: "Savasana", minutes: max(5, minutes / 6), type: .rest),
+                    ]
+                ),
+            ],
+            includeExistingEvents: false,
+            weights: [.energyCurve: 1.5],
+            params: [
+                RecipeParam(id: "minutes", label: "Duration",
+                           kind: .segmented([30, 45, 60, 90]),
+                           target: .eventMinutes(index: 0)),
+            ]
+        )
+    }
+
+    static func intervalTraining(intervals: Int = 6, workMinutes: Int = 4, restMinutes: Int = 2) -> ScheduleRecipe {
+        let totalMinutes = (workMinutes + restMinutes) * intervals + 5 + 5 // warm-up + cool-down
+
+        var segments: [EventSegment] = [
+            EventSegment(title: "Warm-up", minutes: 5, type: .transition),
+        ]
+        for i in 0..<intervals {
+            segments.append(EventSegment(title: "Interval \(i + 1)", minutes: workMinutes, type: .work))
+            if i < intervals - 1 {
+                segments.append(EventSegment(title: "Recovery", minutes: restMinutes, type: .rest))
+            }
+        }
+        segments.append(EventSegment(title: "Cool-down", minutes: 5, type: .transition))
+
+        return ScheduleRecipe(
+            id: "interval-training",
+            name: "Interval Training",
+            icon: "figure.highintensity.intervaltraining",
+            description: "\(intervals) intervals of \(workMinutes)min work / \(restMinutes)min rest",
+            category: "workouts",
+            events: [
+                EventSpec(
+                    title: "Interval Training",
+                    minutes: totalMinutes,
+                    energy: 0.95,
+                    context: "workout",
+                    period: .morning,
+                    segments: segments
+                ),
+            ],
+            includeExistingEvents: false,
+            weights: [.energyCurve: 2.0],
+            params: [
+                RecipeParam(id: "intervals", label: "Intervals",
+                           kind: .segmented([4, 6, 8, 10]),
+                           target: .eventCount(index: 0)),
+            ]
+        )
+    }
 
     // ═══════════════════════════════════════════════════════
     // REACTIONS (auto-triggered)

@@ -507,9 +507,46 @@ extension RecipeExecutor {
         }
 
         let config = recipe.speed.gaConfiguration
-        let result = await optimizer.optimize(context: context, overrideConfig: config)
 
-        let filteredScenarios = Array(result.scenarios.prefix(recipe.maxScenarios))
+        // Separate chained events: only chain heads go to GA
+        let chainInfo = buildChainInfo(recipe.events, allMovable: allMovable)
+        let gaMovable: [OptimizableEvent]
+        if chainInfo.hasChains {
+            gaMovable = chainInfo.headEvents + movableEvents
+        } else {
+            gaMovable = allMovable
+        }
+
+        // Re-build context with only GA-optimizable events
+        let gaContext = chainInfo.hasChains
+            ? OptimizerContext(
+                fixedEvents: allFixed,
+                movableEvents: gaMovable,
+                workingHours: workingHours,
+                planningHorizon: horizon,
+                preferences: prefs
+            )
+            : context
+
+        let result = await optimizer.optimize(context: gaContext, overrideConfig: config)
+
+        // Post-process: insert chained events into scenarios
+        let processedScenarios: [ScheduleScenario]
+        if chainInfo.hasChains {
+            processedScenarios = result.scenarios.map { scenario in
+                let expandedGenes = expandChains(scenario.genes, chainInfo: chainInfo)
+                return ScheduleScenario(
+                    genes: expandedGenes,
+                    fitness: scenario.fitness,
+                    objectiveBreakdown: scenario.objectiveBreakdown,
+                    constraintViolations: scenario.constraintViolations
+                )
+            }
+        } else {
+            processedScenarios = result.scenarios
+        }
+
+        let filteredScenarios = Array(processedScenarios.prefix(recipe.maxScenarios))
         let filteredResult = OptimizerResult(
             scenarios: filteredScenarios,
             metadata: result.metadata
@@ -524,5 +561,92 @@ extension RecipeExecutor {
         }
 
         return .success(filteredResult)
+    }
+
+    // MARK: - Chain Processing
+
+    /// Info about event chains for post-processing after GA.
+    struct ChainInfo {
+        /// Whether any chains exist in the recipe.
+        var hasChains: Bool
+        /// Events that go to the GA (chain heads + independent).
+        var headEvents: [OptimizableEvent]
+        /// Ordered chain followers grouped by head event ID.
+        /// Key = head event ID, Value = [(follower event, gap minutes)]
+        var chains: [String: [(event: OptimizableEvent, gapMinutes: Int)]]
+    }
+
+    /// Analyze event specs and separate chain heads from followers.
+    private func buildChainInfo(_ specs: [EventSpec], allMovable: [OptimizableEvent]) -> ChainInfo {
+        var hasChains = false
+        var headEvents: [OptimizableEvent] = []
+        var chains: [String: [(event: OptimizableEvent, gapMinutes: Int)]] = [:]
+        var currentHeadId: String? = nil
+        var eventIndex = 0
+
+        for spec in specs {
+            let eventsForSpec = resolveSpecToEvents(spec)
+            for event in eventsForSpec {
+                if spec.chainGap != nil, let headId = currentHeadId {
+                    // This is a chain follower
+                    hasChains = true
+                    chains[headId, default: []].append((event: event, gapMinutes: spec.chainGap ?? 0))
+                } else {
+                    // This is a chain head or independent event
+                    currentHeadId = event.id
+                    headEvents.append(event)
+                }
+                eventIndex += 1
+            }
+        }
+
+        return ChainInfo(hasChains: hasChains, headEvents: headEvents, chains: chains)
+    }
+
+    /// Resolve a single EventSpec to OptimizableEvents (without chain logic).
+    private func resolveSpecToEvents(_ spec: EventSpec) -> [OptimizableEvent] {
+        switch spec.creation {
+        case .fixed:
+            return createFixedEvents(from: spec)
+        default:
+            // For non-fixed creation modes, chains don't apply
+            return createFixedEvents(from: spec)
+        }
+    }
+
+    /// After GA optimization, expand chain heads into full chains
+    /// by placing followers sequentially.
+    private func expandChains(_ genes: [ScheduleGene], chainInfo: ChainInfo) -> [ScheduleGene] {
+        var result: [ScheduleGene] = []
+
+        for gene in genes {
+            result.append(gene)
+
+            // If this gene is a chain head, append its followers
+            if let followers = chainInfo.chains[gene.eventId] {
+                var cursor = gene.endTime
+
+                for (followerEvent, gapMinutes) in followers {
+                    let gapInterval = TimeInterval(gapMinutes * 60)
+                    let followerStart = cursor.addingTimeInterval(gapInterval)
+
+                    let followerGene = ScheduleGene(
+                        eventId: followerEvent.id,
+                        title: followerEvent.title,
+                        startTime: followerStart,
+                        duration: followerEvent.duration,
+                        context: followerEvent.context,
+                        energyCost: followerEvent.energyCost,
+                        priority: followerEvent.priority,
+                        isFocusBlock: followerEvent.isFocusBlock
+                    )
+
+                    result.append(followerGene)
+                    cursor = followerGene.endTime
+                }
+            }
+        }
+
+        return result
     }
 }

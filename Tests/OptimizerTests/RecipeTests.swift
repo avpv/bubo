@@ -243,4 +243,116 @@ final class RecipeTests: XCTestCase {
         let recipe = ScheduleRecipe.likeYesterday
         XCTAssertNotNil(recipe.weights[.useLearned])
     }
+
+    // MARK: - Chain Events
+
+    func testChainGapDefault() {
+        let spec = EventSpec()
+        XCTAssertNil(spec.chainGap, "Default chainGap should be nil (independent)")
+    }
+
+    func testChainedEventsInCircuitTraining() {
+        let recipe = ScheduleRecipe.circuitTraining(rounds: 3)
+        // Should have: Round1, Break, Round2, Break, Round3 = 5 events
+        XCTAssertEqual(recipe.events.count, 5)
+
+        // First event: no chain (it's the head)
+        XCTAssertNil(recipe.events[0].chainGap)
+
+        // Rest are chained
+        for i in 1..<recipe.events.count {
+            XCTAssertEqual(recipe.events[i].chainGap, 0, "Event \(i) should be chained")
+        }
+    }
+
+    func testCircuitTrainingSegments() {
+        let recipe = ScheduleRecipe.circuitTraining(rounds: 3, exercises: 4)
+        // First round should have segments (detailed exercise breakdown)
+        XCTAssertNotNil(recipe.events.first?.segments)
+        let segments = recipe.events.first!.segments!
+        // 4 exercises + 3 rests = 7 segments
+        XCTAssertEqual(segments.count, 7)
+        XCTAssertEqual(segments.filter { $0.type == .work }.count, 4)
+        XCTAssertEqual(segments.filter { $0.type == .rest }.count, 3)
+    }
+
+    func testYogaSessionSegments() {
+        let recipe = ScheduleRecipe.yogaSession(minutes: 60)
+        XCTAssertEqual(recipe.events.count, 1)
+        let segments = recipe.events.first?.segments
+        XCTAssertNotNil(segments)
+        XCTAssertEqual(segments?.count, 3) // warm-up, practice, savasana
+        XCTAssertEqual(segments?[0].type, .transition) // warm-up
+        XCTAssertEqual(segments?[1].type, .work)       // practice
+        XCTAssertEqual(segments?[2].type, .rest)        // savasana
+    }
+
+    func testIntervalTrainingSegments() {
+        let recipe = ScheduleRecipe.intervalTraining(intervals: 6)
+        XCTAssertEqual(recipe.events.count, 1)
+        let segments = recipe.events.first?.segments
+        XCTAssertNotNil(segments)
+        // warm-up + 6 intervals + 5 recoveries + cool-down = 13
+        XCTAssertEqual(segments?.count, 13)
+        XCTAssertEqual(segments?.first?.type, .transition) // warm-up
+        XCTAssertEqual(segments?.last?.type, .transition)  // cool-down
+    }
+
+    // MARK: - Event Segments
+
+    func testEventSegmentCodable() throws {
+        let segment = EventSegment(title: "Squats", minutes: 3, type: .work)
+        let data = try JSONEncoder().encode(segment)
+        let decoded = try JSONDecoder().decode(EventSegment.self, from: data)
+        XCTAssertEqual(decoded.title, "Squats")
+        XCTAssertEqual(decoded.minutes, 3)
+        XCTAssertEqual(decoded.type, .work)
+    }
+
+    func testEventSpecWithSegmentsCodable() throws {
+        let spec = EventSpec(
+            title: "Workout",
+            minutes: 30,
+            segments: [
+                EventSegment(title: "Warm-up", minutes: 5, type: .transition),
+                EventSegment(title: "Exercise", minutes: 20, type: .work),
+                EventSegment(title: "Cool-down", minutes: 5, type: .rest),
+            ]
+        )
+        let data = try JSONEncoder().encode(spec)
+        let decoded = try JSONDecoder().decode(EventSpec.self, from: data)
+        XCTAssertEqual(decoded.segments?.count, 3)
+        XCTAssertEqual(decoded.segments?[1].title, "Exercise")
+    }
+
+    // MARK: - LLM Bridge
+
+    func testLLMBridgeSchemaNotEmpty() {
+        XCTAssertFalse(LLMRecipeBridge.schemaDescription.isEmpty)
+        XCTAssertTrue(LLMRecipeBridge.schemaDescription.contains("chainGap"))
+        XCTAssertTrue(LLMRecipeBridge.schemaDescription.contains("segments"))
+    }
+
+    func testLLMBridgeExamplesAreValidJSON() throws {
+        for (prompt, json) in LLMRecipeBridge.examples {
+            guard let data = json.data(using: .utf8) else {
+                XCTFail("Example for '\(prompt)' is not valid UTF-8")
+                continue
+            }
+            do {
+                _ = try JSONDecoder().decode(ScheduleRecipe.self, from: data)
+            } catch {
+                XCTFail("Example for '\(prompt)' doesn't decode: \(error)")
+            }
+        }
+    }
+
+    func testChainedRecipeCodableRoundTrip() throws {
+        let recipe = ScheduleRecipe.circuitTraining(rounds: 2)
+        let data = try JSONEncoder().encode(recipe)
+        let decoded = try JSONDecoder().decode(ScheduleRecipe.self, from: data)
+        XCTAssertEqual(decoded.events.count, recipe.events.count)
+        XCTAssertNil(decoded.events[0].chainGap)
+        XCTAssertEqual(decoded.events[1].chainGap, 0)
+    }
 }
