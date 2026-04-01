@@ -346,27 +346,49 @@ struct MenuBarView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: DS.EmptyState.spacing) {
-            Image(systemName: "calendar.badge.checkmark")
-                .font(.system(size: DS.EmptyState.iconSize))
-                .foregroundStyle(DS.Colors.accent, skin.resolvedTextSecondary)
-                .symbolEffect(.pulse, options: .repeating.speed(0.2))
-            Text("No upcoming meetings")
-                .font(.subheadline)
-                .fontWeight(.medium)
-                .foregroundStyle(skin.resolvedTextSecondary)
-            Text("Your schedule is clear")
-                .font(.caption)
-                .foregroundStyle(skin.resolvedTextTertiary)
+        VStack(spacing: DS.EmptyState.spacing * 1.5) {
+            ZStack {
+                // Ambient glow
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                skin.accentColor.opacity(0.25),
+                                .clear
+                            ],
+                            center: .center,
+                            startRadius: 0,
+                            endRadius: DS.EmptyState.iconSize * 1.5
+                        )
+                    )
+                    .frame(width: DS.EmptyState.iconSize * 3, height: DS.EmptyState.iconSize * 3)
+
+                Image(systemName: "calendar.badge.checkmark")
+                    .font(.system(size: DS.EmptyState.iconSize, weight: .light))
+                    .foregroundStyle(skin.accentColor, skin.resolvedTextSecondary)
+                    .symbolEffect(.pulse, options: .repeating.speed(0.1))
+            }
+
+            VStack(spacing: DS.Spacing.xs) {
+                Text("No upcoming meetings")
+                    .font(.headline)
+                    .fontWeight(skin.resolvedHeadlineFontWeight)
+                    .foregroundStyle(skin.resolvedTextPrimary)
+                Text("Your schedule is clear.")
+                    .font(.subheadline)
+                    .foregroundStyle(skin.resolvedTextSecondary)
+            }
+
             Button {
                 Haptics.tap()
                 navigation = .addEvent()
             } label: {
                 Label("Add Event", systemImage: "plus")
                     .font(.caption)
+                    .fontWeight(.medium)
             }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
+            .buttonStyle(.action(role: .primary, size: .compact))
+            .padding(.top, DS.Spacing.sm)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.vertical, DS.Spacing.xxl)

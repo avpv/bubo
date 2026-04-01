@@ -50,12 +50,31 @@ struct EventRowView: View {
 
                 if eventProgress(now) > 0 {
                     GeometryReader { geo in
+                        let fillWidth = max(geo.size.width * eventProgress(now), DS.Size.cornerRadius * 2)
+                        let baseColor = skin.isClassic ? DS.Colors.accent : skin.accentColor
+                        let fillOpacity = contrast == .increased ? DS.Opacity.strongFill : DS.Opacity.mediumFill
+                        
                         Rectangle()
                             .fill(
-                                (skin.isClassic ? DS.Colors.accent : skin.accentColor)
-                                    .opacity(contrast == .increased ? DS.Opacity.strongFill : DS.Opacity.mediumFill)
+                                LinearGradient(
+                                    colors: [
+                                        baseColor.opacity(fillOpacity * 0.5),
+                                        baseColor.opacity(fillOpacity * 1.5)
+                                    ],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
                             )
-                            .frame(width: max(geo.size.width * eventProgress(now), DS.Size.cornerRadius * 2))
+                            .frame(width: fillWidth)
+                            // Glowing leading edge
+                            .overlay(
+                                Rectangle()
+                                    .fill(baseColor.opacity(0.8))
+                                    .frame(width: 2)
+                                    .shadow(color: baseColor, radius: 4, x: 0, y: 0)
+                                    .blendMode(.plusLighter),
+                                alignment: .trailing
+                            )
                     }
                 }
 
@@ -147,8 +166,8 @@ struct EventRowView: View {
             .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
             .padding(.trailing, DS.Spacing.md)
             .shadow(
-                color: accentBarColor.opacity(skin.shadowOpacity * 4),
-                radius: skin.shadowRadius * 0.5
+                color: accentBarColor.opacity(event.isUpcoming ? 0.6 : skin.shadowOpacity * 4),
+                radius: event.isUpcoming ? 4 : skin.shadowRadius * 0.5
             )
     }
 
@@ -158,20 +177,19 @@ struct EventRowView: View {
         VStack(spacing: DS.Spacing.xxs) {
             HStack(spacing: 2) {
                 Text(event.formattedTime)
-                    .font(.system(.caption, design: .monospaced))
-                    .fontWeight(.bold)
+                    .font(.system(.caption, design: .rounded, weight: .bold)) // Rounded for softer look
                     .foregroundStyle(skin.resolvedTextPrimary)
                 Text("–")
-                    .font(.system(.caption, design: .monospaced))
+                    .font(.system(.caption, design: .rounded, weight: .bold))
                     .foregroundStyle(skin.resolvedTextSecondary)
                 Text(event.formattedEndTime)
-                    .font(.system(.caption, design: .monospaced))
+                    .font(.system(.caption, design: .rounded, weight: .regular))
                     .foregroundStyle(skin.resolvedTextSecondary)
             }
 
             Text(timeUntilText(now))
-                .font(.system(.caption2, design: .monospaced))
-                .foregroundStyle(skin.resolvedTextSecondary)
+                .font(.system(.caption2, design: .rounded, weight: .semibold)) // Bolder countdown
+                .foregroundStyle(skin.isClassic ? skin.resolvedTextSecondary : skin.accentColor) // Highlight countdown
                 .contentTransition(.numericText())
         }
         .frame(width: DS.Size.timeColumnWidth)

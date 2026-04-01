@@ -177,10 +177,10 @@ enum DS {
         static let entrance: SwiftUI.Animation = .easeOut(duration: 0.3)
 
         // Spring-based animations for natural, modern feel (macOS 2026 standard)
-        static let microInteraction: SwiftUI.Animation = .spring(duration: 0.3, bounce: 0.15)
+        static let microInteraction: SwiftUI.Animation = .spring(duration: 0.25, bounce: 0.2)
         static let gentleBounce: SwiftUI.Animation = .spring(duration: 0.35, bounce: 0.25)
         static let smoothSpring: SwiftUI.Animation = .spring(duration: 0.4, bounce: 0.2)
-        static let staggerBase: SwiftUI.Animation = .spring(duration: 0.4, bounce: 0.2)
+        static let staggerBase: SwiftUI.Animation = .spring(duration: 0.45, bounce: 0.25)
 
         /// Staggered entrance animation for list items.
         static func staggered(index: Int) -> SwiftUI.Animation {
@@ -370,6 +370,7 @@ struct StaggeredEntrance: ViewModifier {
         content
             .opacity(appeared || reduceMotion ? 1 : 0)
             .offset(y: appeared || reduceMotion ? 0 : offsetY)
+            .scaleEffect(appeared || reduceMotion ? 1.0 : 0.96)
             .onAppear {
                 guard !reduceMotion else {
                     appeared = true

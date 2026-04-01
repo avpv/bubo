@@ -171,17 +171,38 @@ extension View {
 struct SkinPlatterDepthModifier: ViewModifier {
     let skin: SkinDefinition
 
+    @Environment(\.colorSchemeContrast) private var contrast
+
     func body(content: Content) -> some View {
         content
             .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                    .strokeBorder(.white.opacity(skin.platterBorderOpacity), lineWidth: DS.Border.standard)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [
+                                .white.opacity(skin.platterBorderOpacity * 1.5),
+                                .white.opacity(skin.platterBorderOpacity * 0.1),
+                                .clear,
+                                .white.opacity(skin.platterBorderOpacity * 0.4)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: DS.Border.thin
+                    )
+                    .blendMode(contrast == .increased ? .normal : .plusLighter)
             )
             .shadow(
                 color: skin.resolvedShadowColor,
                 radius: skin.shadowRadius,
                 y: skin.shadowY
+            )
+            // Secondary contact shadow
+            .shadow(
+                color: Color.black.opacity(0.12),
+                radius: 2,
+                y: 1
             )
     }
 }

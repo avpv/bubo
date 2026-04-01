@@ -129,6 +129,7 @@ struct AddEventView: View {
                     .overlay(
                         RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
                             .stroke(isTitleFocused ? skinAccent.opacity(DS.Opacity.overlayDark) : Color.clear, lineWidth: DS.Size.focusRingWidth)
+                            .shadow(color: isTitleFocused ? skinAccent.opacity(0.4) : .clear, radius: 4, x: 0, y: 0)
                     )
                     .shadow(
                         color: isTitleFocused ? skinAccent.opacity(DS.Opacity.subtleBorder) : DS.Shadows.ambientColor,
@@ -309,6 +310,7 @@ struct AddEventView: View {
                         .overlay(
                             RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
                                 .stroke((isLocationFocused || isNotesFocused) ? skinAccent.opacity(DS.Opacity.overlayDark) : Color.clear, lineWidth: DS.Size.focusRingWidth)
+                                .shadow(color: (isLocationFocused || isNotesFocused) ? skinAccent.opacity(0.4) : .clear, radius: 4, x: 0, y: 0)
                         )
                         .shadow(
                             color: (isLocationFocused || isNotesFocused) ? skinAccent.opacity(DS.Opacity.subtleBorder) : DS.Shadows.ambientColor,
