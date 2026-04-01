@@ -284,8 +284,8 @@ struct MenuBarView: View {
                     .frame(maxWidth: .infinity, alignment: .center)
             }
 
-            // Color filter — show whenever there are events
-            if reminderService.nonDisintegratingEventCount > 0 {
+            // Color filter — only show when there are multiple color tags to filter by
+            if usedColorTags.count > 1 || colorFilter != nil {
                 colorFilterBar
             }
 
