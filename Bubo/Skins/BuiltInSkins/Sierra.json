@@ -2,7 +2,7 @@
   "id": "sierra",
   "displayName": "Sierra",
   "author": "Bubo",
-  "accentColor": "#D99947",
+  "accentColor": "#B8823C",
   "surfaceTint": "#291708",
   "surfaceTintOpacity": 0.12,
   "backgroundGradient": {
@@ -17,7 +17,7 @@
     "endRadius": 450
   },
   "previewColors": [
-    "#D99947",
+    "#B8823C",
     "#9E592E"
   ],
   "prefersDarkTint": false,

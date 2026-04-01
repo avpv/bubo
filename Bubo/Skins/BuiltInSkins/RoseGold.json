@@ -2,7 +2,7 @@
   "id": "rose_gold",
   "displayName": "Rose Gold",
   "author": "Bubo",
-  "accentColor": "#D68075",
+  "accentColor": "#C06B60",
   "surfaceTint": "#2E120D",
   "surfaceTintOpacity": 0.1,
   "backgroundGradient": {
@@ -16,7 +16,7 @@
     "endPoint": "bottomTrailing"
   },
   "previewColors": [
-    "#D68075",
+    "#C06B60",
     "#F0AD94"
   ],
   "prefersDarkTint": false,

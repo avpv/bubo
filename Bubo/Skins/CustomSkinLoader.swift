@@ -213,6 +213,26 @@ struct CustomSkinJSON: Codable {
         )
     }
 
+    /// HIG: Validate accent color contrast ratio against white (3:1 minimum).
+    func validateContrastRatio() {
+        let color = accentColor.toColor()
+        let nsColor = NSColor(color).usingColorSpace(.sRGB) ?? NSColor(color)
+        let r = nsColor.redComponent
+        let g = nsColor.greenComponent
+        let b = nsColor.blueComponent
+
+        func linearize(_ c: CGFloat) -> CGFloat {
+            c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
+        }
+        let lum = 0.2126 * linearize(r) + 0.7152 * linearize(g) + 0.0722 * linearize(b)
+        let whiteLum: CGFloat = 1.0
+        let ratio = (whiteLum + 0.05) / (lum + 0.05)
+
+        if ratio < 3.0 {
+            print("[Bubo] Warning: Skin '\(displayName)' accentColor contrast ratio is \(String(format: "%.2f", ratio)):1 (minimum 3:1 per Apple HIG). Consider darkening the accent color.")
+        }
+    }
+
     private var resolvedAnimationStyle: SkinAnimationStyle {
         guard let value = animationStyle?.lowercased() else { return .smooth }
         return SkinAnimationStyle(rawValue: value) ?? .smooth
@@ -555,6 +575,8 @@ class CustomSkinLoader {
         guard let data = try? Data(contentsOf: url),
               let json = try? JSONDecoder().decode(CustomSkinJSON.self, from: data)
         else { return nil }
+        // HIG: Validate custom skin contrast ratios on load
+        json.validateContrastRatio()
         return json.toSkinDefinition(skinFileURL: url)
     }
 }

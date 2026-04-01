@@ -2,7 +2,7 @@
   "id": "arctic",
   "displayName": "Arctic",
   "author": "Bubo",
-  "accentColor": "#38A6E0",
+  "accentColor": "#2E8FC5",
   "surfaceTint": "#0F1F29",
   "surfaceTintOpacity": 0.06,
   "backgroundGradient": {
@@ -15,7 +15,7 @@
     "endPoint": "bottom"
   },
   "previewColors": [
-    "#38A6E0",
+    "#2E8FC5",
     "#9ED9F5"
   ],
   "prefersDarkTint": false,
@@ -33,8 +33,8 @@
   "platterTint": "#246185",
   "platterTintOpacity": 0.04,
   "fontDesign": "rounded",
-  "fontWeight": "regular",
-  "headlineFontWeight": "medium",
+  "fontWeight": "medium",
+  "headlineFontWeight": "semibold",
   "sfSymbolRendering": "hierarchical",
   "sfSymbolWeight": "regular",
   "badgeStyle": "tinted",
