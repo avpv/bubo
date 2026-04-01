@@ -49,6 +49,7 @@ struct WorldClockCity: Identifiable, Codable, Hashable {
         WorldClockCity(timezoneID: "Europe/Warsaw", city: "Warsaw", country: "Poland"),
         WorldClockCity(timezoneID: "Europe/Prague", city: "Prague", country: "Czech Republic"),
         WorldClockCity(timezoneID: "Europe/Vienna", city: "Vienna", country: "Austria"),
+        WorldClockCity(timezoneID: "Europe/Belgrade", city: "Belgrade", country: "Serbia"),
         WorldClockCity(timezoneID: "Europe/Athens", city: "Athens", country: "Greece"),
         WorldClockCity(timezoneID: "Europe/Bucharest", city: "Bucharest", country: "Romania"),
         WorldClockCity(timezoneID: "Europe/Istanbul", city: "Istanbul", country: "Turkey"),
