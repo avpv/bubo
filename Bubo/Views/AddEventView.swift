@@ -101,6 +101,7 @@ struct AddEventView: View {
 
             if let settings {
                 WorldClockStripView(settings: settings)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             ScrollView {
