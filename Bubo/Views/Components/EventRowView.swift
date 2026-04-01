@@ -9,6 +9,12 @@ struct EventRowView: View {
     var onDeleteSeries: ((CalendarEvent) -> Void)? = nil
     var onTap: ((CalendarEvent) -> Void)? = nil
 
+    // Optimizer context menu actions
+    var onFindBetterTime: ((CalendarEvent) -> Void)? = nil
+    var onSplitTask: ((CalendarEvent) -> Void)? = nil
+    var onProtectBlock: ((CalendarEvent) -> Void)? = nil
+    var onAddPrep: ((CalendarEvent) -> Void)? = nil
+
     @State private var isHovered = false
     @State private var isDisintegrating = false
     @State private var pendingDeleteAction: (() -> Void)?
@@ -155,7 +161,44 @@ struct EventRowView: View {
             Section("Set Reminder") {
                 reminderMenuItems
             }
+
             if isLocal {
+                Divider()
+
+                // Optimizer actions
+                if let onFindBetterTime {
+                    Button {
+                        onFindBetterTime(event)
+                    } label: {
+                        Label("Find Better Time", systemImage: "wand.and.stars")
+                    }
+                }
+
+                if event.duration > 2 * 3600, let onSplitTask {
+                    Button {
+                        onSplitTask(event)
+                    } label: {
+                        Label("Split into Sessions", systemImage: "scissors")
+                    }
+                }
+
+                if (event.eventType == .pomodoro || event.title.localizedCaseInsensitiveContains("focus")),
+                   let onProtectBlock {
+                    Button {
+                        onProtectBlock(event)
+                    } label: {
+                        Label("Protect This Block", systemImage: "shield")
+                    }
+                }
+
+                if event.meetingLink != nil || event.calendarName != nil, let onAddPrep {
+                    Button {
+                        onAddPrep(event)
+                    } label: {
+                        Label("Add Prep Time", systemImage: "note.text")
+                    }
+                }
+
                 Divider()
                 Button("Edit") { onEdit?(event) }
                 if event.isRecurring {

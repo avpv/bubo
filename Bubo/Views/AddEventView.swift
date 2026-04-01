@@ -88,6 +88,11 @@ struct AddEventView: View {
     }
 
     var settings: ReminderSettings? = nil
+    var optimizerService: OptimizerService? = nil
+
+    // MARK: - Find Best Time state
+    @State private var bestTimeSlots: [ScheduleScenario] = []
+    @State private var isFindingBestTime = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -189,6 +194,11 @@ struct AddEventView: View {
                     }
                     .disabled(isExternal)
                     .opacity(isExternal ? 0.6 : 1.0)
+
+                    // Find Best Time (optimizer suggestion)
+                    if !isEditing, !isExternal, isTitleValid, let optimizerService {
+                        findBestTimeSection(optimizerService)
+                    }
 
                     // Pomodoro controls (only when Pomodoro type selected)
                     if isPomodoroMode {
@@ -506,6 +516,106 @@ struct AddEventView: View {
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(100))
                 isTitleFocused = true
+            }
+        }
+    }
+
+    // MARK: - Find Best Time
+
+    private func findBestTimeSection(_ service: OptimizerService) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            Button {
+                Haptics.tap()
+                findBestTime(service)
+            } label: {
+                HStack(spacing: DS.Spacing.xs) {
+                    if isFindingBestTime {
+                        ProgressView()
+                            .scaleEffect(0.6)
+                            .frame(width: 16, height: 16)
+                    } else {
+                        Image(systemName: "wand.and.stars")
+                            .font(.caption)
+                    }
+                    Text("Find Best Time")
+                        .font(.caption.weight(.medium))
+                }
+                .foregroundStyle(skin.accentColor)
+            }
+            .buttonStyle(.plain)
+            .disabled(isFindingBestTime)
+
+            if !bestTimeSlots.isEmpty {
+                VStack(spacing: DS.Spacing.xs) {
+                    ForEach(Array(bestTimeSlots.prefix(3).enumerated()), id: \.offset) { index, scenario in
+                        if let gene = scenario.genes.first {
+                            Button {
+                                Haptics.tap()
+                                date = gene.startTime
+                                bestTimeSlots = []
+                            } label: {
+                                HStack(spacing: DS.Spacing.sm) {
+                                    if index == 0 {
+                                        Image(systemName: "star.fill")
+                                            .font(.caption2)
+                                            .foregroundStyle(skin.accentColor)
+                                    }
+                                    Text(DS.timeFormatter.string(from: gene.startTime))
+                                        .font(.caption.weight(.medium).monospacedDigit())
+                                        .foregroundStyle(skin.resolvedTextPrimary)
+                                    Text("(\(Int(scenario.fitness * 100))%)")
+                                        .font(.caption2)
+                                        .foregroundStyle(skin.resolvedTextSecondary)
+                                    Spacer()
+                                }
+                                .padding(.vertical, DS.Spacing.xs)
+                                .padding(.horizontal, DS.Spacing.sm)
+                                .background(
+                                    index == 0
+                                        ? skin.accentColor.opacity(0.08)
+                                        : skin.resolvedPlatterMaterial.opacity(0.3)
+                                )
+                                .clipShape(RoundedRectangle(cornerRadius: DS.Size.previewSmallRadius))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func findBestTime(_ service: OptimizerService) {
+        isFindingBestTime = true
+        let eventDuration = isPomodoroMode ? TimeInterval(pomodoroTotalMinutes * 60) : duration * 60
+
+        let recipe = ScheduleRecipe(
+            id: "find-best-time-inline",
+            name: "Find Best Time",
+            icon: "wand.and.stars",
+            events: [
+                EventSpec(
+                    title: title,
+                    minutes: Int(eventDuration / 60),
+                    priority: 0.8,
+                    energy: 0.5,
+                    focus: isPomodoroMode
+                ),
+            ],
+            includeExistingEvents: false,
+            speed: .quick,
+            maxScenarios: 3,
+            diversityThreshold: 0.2
+        )
+
+        Task {
+            let result = await service.executeRecipe(
+                recipe,
+                reminderService: reminderService
+            )
+            isFindingBestTime = false
+            if let optimizerResult = result.optimizerResult {
+                bestTimeSlots = optimizerResult.scenarios
             }
         }
     }

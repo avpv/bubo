@@ -22,6 +22,7 @@ struct MenuBarView: View {
         case addEvent(editing: CalendarEvent? = nil)
         case timer(CalendarEvent)
         case optimizer
+        case quickAddTasks
 
         var isTimer: Bool {
             if case .timer = self { return true }
@@ -40,6 +41,7 @@ struct MenuBarView: View {
             case (.addEvent(let a), .addEvent(let b)): return a?.id == b?.id
             case (.timer(let a), .timer(let b)): return a.id == b.id
             case (.optimizer, .optimizer): return true
+            case (.quickAddTasks, .quickAddTasks): return true
             default: return false
             }
         }
@@ -136,7 +138,8 @@ struct MenuBarView: View {
                             navigation = .list
                             toastState.showSuccess(isEdit ? "Event updated" : "Event added")
                         },
-                        settings: settings
+                        settings: settings,
+                        optimizerService: optimizerService
                     )
                     .transition(
                         reduceMotion ? .opacity : .asymmetric(
@@ -147,6 +150,19 @@ struct MenuBarView: View {
 
                 case .optimizer:
                     OptimizerView(
+                        optimizerService: optimizerService,
+                        reminderService: reminderService,
+                        onBack: { navigation = .list }
+                    )
+                    .transition(
+                        reduceMotion ? .opacity : .asymmetric(
+                            insertion: .move(edge: .trailing).combined(with: .opacity),
+                            removal: .move(edge: .trailing).combined(with: .opacity).combined(with: .scale(scale: 0.98))
+                        )
+                    )
+
+                case .quickAddTasks:
+                    QuickAddTasksView(
                         optimizerService: optimizerService,
                         reminderService: reminderService,
                         onBack: { navigation = .list }
