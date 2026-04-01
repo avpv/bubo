@@ -172,23 +172,22 @@ private struct WorldClockPill: View {
     }
 
     var body: some View {
-        VStack(spacing: 1) {
+        HStack(spacing: DS.Spacing.xs) {
             Text(city.city)
                 .font(.system(.caption2, design: skin.resolvedFontDesign, weight: skin.resolvedFontWeight))
                 .foregroundStyle(skin.resolvedTextSecondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
 
-            HStack(spacing: 3) {
-                if isNighttime {
-                    Image(systemName: "moon.fill")
-                        .font(.system(size: 7, weight: skin.resolvedSymbolWeight))
-                        .foregroundStyle(skin.resolvedTextTertiary)
-                }
-                Text(timeString)
-                    .font(.system(.caption, design: .monospaced, weight: .semibold))
-                    .foregroundStyle(skin.resolvedTextPrimary)
+            if isNighttime {
+                Image(systemName: "moon.fill")
+                    .font(.system(size: DS.Size.worldClockMoonSize, weight: skin.resolvedSymbolWeight))
+                    .foregroundStyle(skin.resolvedTextTertiary)
             }
+
+            Text(timeString)
+                .font(.system(.caption, design: .monospaced, weight: .semibold))
+                .foregroundStyle(skin.resolvedTextPrimary)
 
             if !offsetLabel.isEmpty {
                 Text(offsetLabel)
