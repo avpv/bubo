@@ -19,9 +19,9 @@ struct OptimizerView: View {
     private static let timeFormatter = DS.timeFormatter
 
     enum OptimizerAction: String, CaseIterable {
-        case focusBlocks = "Focus Blocks"
-        case planDay = "Plan Day"
-        case pomodoro = "Pomodoro Slot"
+        case focusBlocks = "Find Focus Time"
+        case planDay = "Auto-Plan Day"
+        case pomodoro = "Quick Pomodoro"
 
         var icon: String {
             switch self {
@@ -35,7 +35,7 @@ struct OptimizerView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-            SkinSeparator()
+            welcomeHeader
             actionPicker
             SkinSeparator()
 
@@ -58,7 +58,7 @@ struct OptimizerView: View {
         }
     }
 
-    // MARK: - Header
+    // MARK: - Header & Welcome
 
     private var header: some View {
         PopoverHeader(
@@ -66,6 +66,20 @@ struct OptimizerView: View {
             showBack: true,
             onBack: onBack
         )
+    }
+
+    private var welcomeHeader: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            Text("Schedule Assistant")
+                .font(.headline)
+                .foregroundStyle(skin.resolvedTextPrimary)
+            Text("Let AI analyze your calendar gaps to find the perfect slots for deep work, planning, or a quick Pomodoro.")
+                .font(.caption)
+                .foregroundStyle(skin.resolvedTextSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.top, DS.Spacing.md)
     }
 
     // MARK: - Action Picker
@@ -110,22 +124,21 @@ struct OptimizerView: View {
 
     private var focusBlockConfig: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            Text("Find optimal time for focus blocks in today's schedule.")
-                .font(.caption)
-                .foregroundStyle(skin.resolvedTextSecondary)
-
-            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                Text("Blocks:").font(.caption2).foregroundStyle(skin.resolvedTextTertiary)
+            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                Text("I want to schedule")
+                    .font(.body)
+                    .foregroundStyle(skin.resolvedTextSecondary)
+                
                 SegmentedPillPicker(
                     options: Array(1...4),
                     selection: $focusBlockCount,
                     labelProvider: { "\($0)" }
                 )
-            }
-            .padding(.bottom, DS.Spacing.xs)
-
-            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                Text("Duration:").font(.caption2).foregroundStyle(skin.resolvedTextTertiary)
+                
+                Text(focusBlockCount == 1 ? "block of" : "blocks of")
+                    .font(.body)
+                    .foregroundStyle(skin.resolvedTextSecondary)
+                
                 SegmentedPillPicker(
                     options: [30, 60, 90, 120, 180],
                     selection: $focusBlockMinutes,
@@ -137,26 +150,29 @@ struct OptimizerView: View {
                         return "\(hours)h \(rem)m"
                     }
                 )
+                
+                Text("today.")
+                    .font(.body)
+                    .foregroundStyle(skin.resolvedTextSecondary)
             }
-            .padding(.bottom, DS.Spacing.sm)
-
-            asyncOptimizeButton {
+            .padding(.vertical, DS.Spacing.sm)
+            
+            asyncOptimizeButton(title: "Find Focus Slots") {
                 await optimizerService.suggestFocusBlocks(
                     count: focusBlockCount,
                     durationMinutes: focusBlockMinutes,
                     reminderService: reminderService
                 )
             }
-
-            optimizerHint
         }
     }
 
     private var planDayConfig: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            Text("Optimize placement of your local events for today.")
-                .font(.caption)
+            Text("Let AI automatically arrange your unscheduled local events into the best available slots today.")
+                .font(.body)
                 .foregroundStyle(skin.resolvedTextSecondary)
+                .fixedSize(horizontal: false, vertical: true)
 
             let localEvents = reminderService.localEvents.filter { $0.isUpcoming }
             if localEvents.isEmpty {
@@ -183,54 +199,39 @@ struct OptimizerView: View {
                     }
                 }
 
-                asyncOptimizeButton {
+                asyncOptimizeButton(title: "Arrange My Day") {
                     let tasks = localEvents.map { $0.toOptimizableEvent() }
                     await optimizerService.optimizeDay(
                         reminderService: reminderService,
                         movableTasks: tasks
                     )
                 }
-
-                optimizerHint
             }
         }
     }
 
     private var pomodoroConfig: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            Text("Find the best time for a Pomodoro session.")
-                .font(.caption)
+            Text("Find a quick 25-minute gap in your schedule to knock out a single task right now.")
+                .font(.body)
                 .foregroundStyle(skin.resolvedTextSecondary)
+                .fixedSize(horizontal: false, vertical: true)
 
-            asyncOptimizeButton {
+            asyncOptimizeButton(title: "Find 25m Slot") {
                 await optimizerService.suggestPomodoroSlot(
                     config: .classic,
                     reminderService: reminderService
                 )
             }
-
-            optimizerHint
         }
     }
 
-    private var optimizerHint: some View {
-        HStack(spacing: DS.Spacing.sm) {
-            Image(systemName: "info.circle")
-                .font(.caption)
-                .foregroundStyle(skin.resolvedTextTertiary)
-            Text("Analyzes your calendar gaps and suggests the best time slots.")
-                .font(.caption2)
-                .foregroundStyle(skin.resolvedTextTertiary)
-        }
-        .padding(.top, DS.Spacing.lg)
-    }
-
-    private func asyncOptimizeButton(action: @escaping () async -> Void) -> some View {
+    private func asyncOptimizeButton(title: String, action: @escaping () async -> Void) -> some View {
         Button {
             Haptics.tap()
             Task { await action() }
         } label: {
-            Label("Optimize", systemImage: "wand.and.stars")
+            Label(title, systemImage: "wand.and.stars")
         }
         .buttonStyle(.action(role: .primary, size: .flexible))
         .frame(maxWidth: .infinity)
