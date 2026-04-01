@@ -287,14 +287,14 @@ struct AddEventView: View {
                             .accessibilityAddTraits(.isHeader)
                         
                         VStack(spacing: DS.Spacing.md) {
-                            TextField("Location", text: $location, prompt: Text("Add a location or video call link").foregroundStyle(skin.resolvedTextTertiary))
+                            TextField("Location", text: $location, prompt: Text("Add a location or video call link").foregroundStyle(skin.resolvedTextSecondary))
                                 .textFieldStyle(.plain)
                                 .focused($isLocationFocused)
 
                             SkinSeparator()
 
                             HStack(alignment: .top, spacing: DS.Spacing.sm) {
-                                FormattableTextView(text: $description, prompt: "Add notes, agenda, or attachments", promptColor: NSColor(skin.resolvedTextTertiary))
+                                FormattableTextView(text: $description, prompt: "Add notes, agenda, or attachments", promptColor: NSColor(skin.resolvedTextSecondary))
                                     .frame(minHeight: 60, maxHeight: 160)
 
                                 EmojiPickerButton(text: $description)
