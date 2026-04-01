@@ -39,9 +39,11 @@ struct WorldClockTabView: View {
                     // Selected cities
                     if !selectedCities.isEmpty {
                         SettingsPlatter("Selected Cities") {
-                            // HIG: User-managed lists should support reordering
-                            List {
-                                ForEach(selectedCities) { city in
+                            VStack(spacing: 0) {
+                                ForEach(Array(selectedCities.enumerated()), id: \.element.id) { index, city in
+                                    if index > 0 {
+                                        Divider().padding(.leading, DS.Spacing.sm)
+                                    }
                                     HStack {
                                         VStack(alignment: .leading, spacing: 2) {
                                             Text(city.city)
@@ -57,6 +59,33 @@ struct WorldClockTabView: View {
                                             .font(.caption2)
                                             .foregroundStyle(.tertiary)
 
+                                        // Reorder buttons
+                                        Button {
+                                            withAnimation(DS.Animation.smoothSpring) {
+                                                settings.worldClockCityIDs.swapAt(index, index - 1)
+                                            }
+                                        } label: {
+                                            Image(systemName: "chevron.up")
+                                                .font(.caption2)
+                                                .foregroundStyle(skin.resolvedTextSecondary)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .disabled(index == 0)
+                                        .opacity(index == 0 ? 0.3 : 1)
+
+                                        Button {
+                                            withAnimation(DS.Animation.smoothSpring) {
+                                                settings.worldClockCityIDs.swapAt(index, index + 1)
+                                            }
+                                        } label: {
+                                            Image(systemName: "chevron.down")
+                                                .font(.caption2)
+                                                .foregroundStyle(skin.resolvedTextSecondary)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .disabled(index == selectedCities.count - 1)
+                                        .opacity(index == selectedCities.count - 1 ? 0.3 : 1)
+
                                         Button {
                                             withAnimation(DS.Animation.smoothSpring) {
                                                 settings.worldClockCityIDs.removeAll { $0 == city.id }
@@ -69,14 +98,10 @@ struct WorldClockTabView: View {
                                         .accessibilityLabel("Remove \(city.city)")
                                         .help("Remove \(city.city) from world clock")
                                     }
-                                }
-                                .onMove { from, to in
-                                    settings.worldClockCityIDs.move(fromOffsets: from, toOffset: to)
+                                    .padding(.vertical, DS.Spacing.sm)
+                                    .padding(.horizontal, DS.Spacing.sm)
                                 }
                             }
-                            .listStyle(.plain)
-                            .frame(maxHeight: CGFloat(selectedCities.count) * 50)
-                            .scrollContentBackground(.hidden)
                         }
                     }
 
