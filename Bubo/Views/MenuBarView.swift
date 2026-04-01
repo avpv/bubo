@@ -262,13 +262,16 @@ struct MenuBarView: View {
                 )
             )
 
-            // Status messages
+            // Status messages — show at most one banner to avoid stacking (HIG: keep primary content visible)
             if !networkMonitor.isConnected {
                 StatusBanner(
                     icon: "wifi.slash",
                     text: "No internet — calendar data may be outdated",
                     color: skin.resolvedWarningColor
                 )
+            } else if settings.isCalendarSyncEnabled && !AppleCalendarService.hasAccess {
+                CalendarAccessBanner()
+                    .frame(maxWidth: .infinity, alignment: .center)
             } else if reminderService.isUsingCache {
                 StatusBanner(
                     icon: "arrow.triangle.2.circlepath",
@@ -276,19 +279,12 @@ struct MenuBarView: View {
                     color: skin.resolvedWarningColor
                 )
                 .frame(maxWidth: .infinity, alignment: .center)
+            } else if let error = reminderService.syncError, settings.isCalendarSyncEnabled, networkMonitor.isConnected {
+                StatusBanner(icon: "exclamationmark.triangle.fill", text: error, color: skin.resolvedWarningColor)
+                    .frame(maxWidth: .infinity, alignment: .center)
             }
 
-            if settings.isCalendarSyncEnabled {
-                if !AppleCalendarService.hasAccess {
-                    CalendarAccessBanner()
-                        .frame(maxWidth: .infinity, alignment: .center)
-                } else if let error = reminderService.syncError, networkMonitor.isConnected {
-                    StatusBanner(icon: "exclamationmark.triangle.fill", text: error, color: skin.resolvedWarningColor)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                }
-            }
-
-            // Color filter — show whenever there are events
+            // Color filter — show whenever there are events so users discover the feature
             if reminderService.nonDisintegratingEventCount > 0 {
                 colorFilterBar
             }
@@ -317,19 +313,6 @@ struct MenuBarView: View {
             .animation(DS.Animation.smoothSpring, value: reminderService.nonDisintegratingEventCount == 0)
 
             SkinSeparator()
-
-            if let lastSync = reminderService.lastSyncDate {
-                HStack(spacing: DS.Spacing.xs) {
-                    Text("Updated")
-                    Text(lastSync, style: .relative)
-                    Text("ago")
-                }
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-                .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.vertical, DS.Spacing.xs)
-            }
-
             footerActions
         }
         } // ScrollViewReader
@@ -397,7 +380,7 @@ struct MenuBarView: View {
     private var colorFilterBar: some View {
         let selected = colorFilter
         return HStack(spacing: DS.Spacing.xs) {
-            ForEach(usedColorTags, id: \.self) { tag in
+            ForEach(EventColorTag.allCases, id: \.self) { tag in
                 let isActive = selected == tag
                 Button {
                     Haptics.tap()
@@ -541,15 +524,20 @@ struct MenuBarView: View {
                 .help("Refresh (\u{2318}R)")
                 .keyboardShortcut("r", modifiers: .command)
 
-                OpenSettingsButton(iconOnly: true)
-                    .keyboardShortcut(",", modifiers: .command)
-                    .help("Settings (\u{2318},)")
-
-                Button(action: { NSApplication.shared.terminate(nil) }) {
-                    Image(systemName: "power")
+                Menu {
+                    OpenSettingsButton()
+                        .keyboardShortcut(",", modifiers: .command)
+                    Divider()
+                    Button("Quit Bubo", role: .destructive) {
+                        NSApplication.shared.terminate(nil)
+                    }
+                    .keyboardShortcut("q", modifiers: .command)
+                } label: {
+                    Image(systemName: "ellipsis.circle")
                 }
-                .help("Quit (\u{2318}Q)")
-                .keyboardShortcut("q", modifiers: .command)
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .help("More")
             }
             .font(.system(size: activeSkin.toolbarIconSize, weight: .semibold))
             .buttonStyle(.borderless)
