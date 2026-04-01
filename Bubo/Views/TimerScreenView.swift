@@ -10,7 +10,7 @@ struct TimerScreenView: View {
     var customPhotoPath: String = ""
     var customPhotoOpacity: Double = 0.25
     var customPhotoBlur: Double = 2
-    var skinImageOverride: SkinImageOverride? = nil
+
 
     @State private var pulseRing = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -69,8 +69,7 @@ struct TimerScreenView: View {
                         wallpaper: wallpaper,
                         customPhotoPath: customPhotoPath,
                         customPhotoOpacity: customPhotoOpacity,
-                        customPhotoBlur: customPhotoBlur,
-                        skinImageOverride: skinImageOverride
+                        customPhotoBlur: customPhotoBlur
                     )
                 }
 

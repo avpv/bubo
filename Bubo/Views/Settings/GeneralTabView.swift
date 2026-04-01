@@ -115,7 +115,7 @@ struct CustomSkinsSection: View {
 
             HStack {
                 Text("Community skins")
-                    .font(.caption)
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
                 Spacer()
                 Button {
@@ -158,7 +158,7 @@ struct CustomSkinsSection: View {
                 importSkin()
             } label: {
                 Label("Import skin .json file\u{2026}", systemImage: "plus.circle")
-                    .font(.caption)
+                    .font(.subheadline)
             }
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
@@ -195,151 +195,7 @@ struct CustomSkinsSection: View {
     }
 }
 
-// MARK: - Skin Image Section
 
-struct SkinImageSection: View {
-    @Bindable var settings: ReminderSettings
-
-    private var skinID: String { settings.selectedSkinID }
-    private var override: SkinImageOverride? { settings.skinImageOverrides[skinID] }
-    private var hasImage: Bool { override != nil && !(override!.imagePath.isEmpty) }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            SkinSeparator()
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Theme-specific background image")
-                    .font(.caption)
-                    .foregroundStyle(.primary)
-                Text("Attaches a specific image to the currently selected skin")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-
-            if hasImage, let override = override,
-               let nsImage = NSImage(contentsOfFile: override.imagePath) {
-                // Preview
-                ZStack(alignment: .topTrailing) {
-                    Image(nsImage: nsImage)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(height: 80)
-                        .opacity(override.opacity)
-                        .blur(radius: override.blur)
-                        .clipped()
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Spacing.sm))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: DS.Spacing.sm)
-                                .strokeBorder(DS.Colors.textPrimary.opacity(DS.Opacity.faintBorder), lineWidth: DS.Border.thin)
-                        )
-
-                    Button {
-                        withAnimation(DS.Animation.smoothSpring) {
-                            _ = settings.skinImageOverrides.removeValue(forKey: skinID)
-                        }
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.body)
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(DS.Spacing.pillVertical)
-                }
-
-                // Controls
-                VStack(spacing: 4) {
-                    HStack {
-                        Text("Opacity")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .frame(width: 50, alignment: .leading)
-                        Slider(
-                            value: Binding(
-                                get: { settings.skinImageOverrides[skinID]?.opacity ?? 0.3 },
-                                set: { settings.skinImageOverrides[skinID]?.opacity = $0 }
-                            ),
-                            in: 0.05...1.0, step: 0.05
-                        )
-                        .accessibilityLabel("Image opacity")
-                        Text("\(Int((override.opacity) * 100))%")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .frame(width: 30, alignment: .trailing)
-                    }
-                    HStack {
-                        Text("Blur")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .frame(width: 50, alignment: .leading)
-                        Slider(
-                            value: Binding(
-                                get: { settings.skinImageOverrides[skinID]?.blur ?? 0 },
-                                set: { settings.skinImageOverrides[skinID]?.blur = $0 }
-                            ),
-                            in: 0...10, step: 0.5
-                        )
-                        .accessibilityLabel("Image blur")
-                        Text(String(format: "%.1f", override.blur))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .frame(width: 30, alignment: .trailing)
-                    }
-                }
-            }
-
-            Button {
-                chooseSkinImage()
-            } label: {
-                Label(
-                    hasImage ? "Change image\u{2026}" : "Choose image\u{2026}",
-                    systemImage: "photo"
-                )
-                .font(.caption)
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-        }
-    }
-
-    private func chooseSkinImage() {
-        let panel = NSOpenPanel()
-        panel.title = "Choose Skin Background Image"
-        panel.allowedContentTypes = [.image]
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-
-        let fileManager = FileManager.default
-        let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let imagesDir = appSupport.appendingPathComponent("Bubo/SkinImages", isDirectory: true)
-        try? fileManager.createDirectory(at: imagesDir, withIntermediateDirectories: true)
-
-        let destination = imagesDir.appendingPathComponent("\(skinID).\(url.pathExtension)")
-        try? fileManager.removeItem(at: destination)
-
-        let accessing = url.startAccessingSecurityScopedResource()
-        defer { if accessing { url.stopAccessingSecurityScopedResource() } }
-
-        do {
-            try fileManager.copyItem(at: url, to: destination)
-            let existing = settings.skinImageOverrides[skinID]
-            withAnimation(DS.Animation.smoothSpring) {
-                settings.skinImageOverrides[skinID] = SkinImageOverride(
-                    imagePath: destination.path,
-                    opacity: existing?.opacity ?? 0.3,
-                    blur: existing?.blur ?? 0
-                )
-                // Skin image and wallpaper/photo are mutually exclusive
-                settings.selectedWallpaperID = "none"
-                settings.customBackgroundPhotoPath = ""
-            }
-        } catch {
-            // Silently fail — user can try again
-        }
-    }
-}
 
 // MARK: - Background Photo Section
 
@@ -350,10 +206,10 @@ struct BackgroundPhotoSection: View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Global Background Photo")
-                    .font(.caption)
+                    .font(.subheadline)
                     .foregroundStyle(.primary)
                 Text("Overrides all themes and built-in wallpapers across the app")
-                    .font(.caption2)
+                    .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
@@ -391,25 +247,25 @@ struct BackgroundPhotoSection: View {
                 VStack(spacing: 4) {
                     HStack {
                         Text("Opacity")
-                            .font(.caption2)
+                            .font(.caption)
                             .foregroundStyle(.secondary)
                             .frame(width: 50, alignment: .leading)
                         Slider(value: $settings.customBackgroundPhotoOpacity, in: 0.05...1.0, step: 0.05)
                             .accessibilityLabel("Photo opacity")
                         Text("\(Int(settings.customBackgroundPhotoOpacity * 100))%")
-                            .font(.caption2)
+                            .font(.caption)
                             .foregroundStyle(.secondary)
                             .frame(width: 30, alignment: .trailing)
                     }
                     HStack {
                         Text("Blur")
-                            .font(.caption2)
+                            .font(.caption)
                             .foregroundStyle(.secondary)
                             .frame(width: 50, alignment: .leading)
                         Slider(value: $settings.customBackgroundPhotoBlur, in: 0...10, step: 0.5)
                             .accessibilityLabel("Photo blur")
                         Text(String(format: "%.1f", settings.customBackgroundPhotoBlur))
-                            .font(.caption2)
+                            .font(.caption)
                             .foregroundStyle(.secondary)
                             .frame(width: 30, alignment: .trailing)
                     }
@@ -461,9 +317,8 @@ struct BackgroundPhotoSection: View {
             try fileManager.copyItem(at: url, to: destination)
             withAnimation(DS.Animation.smoothSpring) {
                 settings.customBackgroundPhotoPath = destination.path
-                // Photo and wallpaper/skin image are mutually exclusive
+                // Photo and wallpaper are mutually exclusive
                 settings.selectedWallpaperID = "none"
-                settings.skinImageOverrides.removeValue(forKey: settings.selectedSkinID)
             }
         } catch {
             // Silently fail — user can try again
@@ -482,7 +337,7 @@ struct WallpaperSectionView: View {
 
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             Text("Choose a background wallpaper")
-                .font(.caption)
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
 
             // Category picker
@@ -503,10 +358,9 @@ struct WallpaperSectionView: View {
                     Button {
                         withAnimation(DS.Animation.smoothSpring) {
                             settings.selectedWallpaperID = wallpaper.id
-                            // Wallpaper and photo/skin image are mutually exclusive
+                            // Wallpaper and photo are mutually exclusive
                             if wallpaper.id != "none" {
                                 settings.customBackgroundPhotoPath = ""
-                                settings.skinImageOverrides.removeValue(forKey: settings.selectedSkinID)
                             }
                         }
                     } label: {
@@ -594,7 +448,7 @@ struct GeneralTabView: View {
             SettingsPlatter("Skin") {
                 VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                     Text("Choose a visual theme")
-                        .font(.caption)
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: DS.Grid.skinCardMinWidth), spacing: DS.Grid.skinCardSpacing)], spacing: 8) {
                         ForEach(SkinCatalog.builtInSkins) { skin in
@@ -612,9 +466,7 @@ struct GeneralTabView: View {
 
                     CustomSkinsSection(settings: settings)
 
-                    if !settings.selectedSkin.isClassic {
-                        SkinImageSection(settings: settings)
-                    }
+
                 }
             }
 

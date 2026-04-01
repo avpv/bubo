@@ -4,24 +4,14 @@ import SwiftUI
 
 struct SkinBackgroundLayer: View {
     let skin: SkinDefinition
-    var skinImageOverride: SkinImageOverride? = nil
+
 
     var body: some View {
         if skin.isClassic {
             Color.clear
         } else {
             ZStack {
-                // User-chosen background image for this skin
-                if let override = skinImageOverride,
-                   !override.imagePath.isEmpty,
-                   let nsImage = NSImage(contentsOfFile: override.imagePath) {
-                    Image(nsImage: nsImage)
-                        .resizable()
-                        .aspectRatio(contentMode: override.fillMode == "fit" ? .fit : .fill)
-                        .opacity(override.opacity)
-                        .blur(radius: override.blur)
-                        .clipped()
-                }
+
 
                 // Gradient overlay
                 skinGradient

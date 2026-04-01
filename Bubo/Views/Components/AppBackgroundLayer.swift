@@ -6,7 +6,7 @@ struct AppBackgroundLayer: View {
     var customPhotoPath: String = ""
     var customPhotoOpacity: Double = 0.25
     var customPhotoBlur: Double = 2
-    var skinImageOverride: SkinImageOverride? = nil
+
 
     /// Whether a non-trivial wallpaper is active (not "none").
     private var hasActiveWallpaper: Bool {
@@ -34,8 +34,8 @@ struct AppBackgroundLayer: View {
                 .ignoresSafeArea()
             }
 
-            // Skin background layer — pass skin image only when no wallpaper/photo is active
-            SkinBackgroundLayer(skin: skin, skinImageOverride: hasActiveWallpaper || !customPhotoPath.isEmpty ? nil : skinImageOverride)
+            // Skin background layer
+            SkinBackgroundLayer(skin: skin)
 
             // Surface tint overlay
             if !skin.isClassic {
