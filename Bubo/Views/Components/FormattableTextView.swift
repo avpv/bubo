@@ -3,10 +3,33 @@ import AppKit
 
 /// A multi-line text view that adds Markdown formatting items to the
 /// Transformations submenu of the standard context menu.
-struct FormattableTextView: NSViewRepresentable {
+///
+/// The placeholder is rendered as a SwiftUI `Text` overlay so it matches
+/// the native `TextField` prompt styling exactly.
+struct FormattableTextView: View {
     @Binding var text: String
     var prompt: String = ""
-    var promptColor: NSColor = .placeholderTextColor
+    var promptStyle: Color = Color(nsColor: .placeholderTextColor)
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            FormattableTextViewRepresentable(text: $text)
+
+            if text.isEmpty && !prompt.isEmpty {
+                Text(prompt)
+                    .foregroundStyle(promptStyle)
+                    .padding(.leading, 5)
+                    .padding(.top, 1)
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+}
+
+// MARK: - NSViewRepresentable bridge
+
+private struct FormattableTextViewRepresentable: NSViewRepresentable {
+    @Binding var text: String
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -34,17 +57,12 @@ struct FormattableTextView: NSViewRepresentable {
         textView.textContainer?.lineBreakMode = .byWordWrapping
         textView.delegate = context.coordinator
 
-        // Placeholder
-        textView.placeholderString = prompt
-        textView.placeholderColor = promptColor
-
         scrollView.documentView = textView
         return scrollView
     }
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = scrollView.documentView as? FormattableNSTextView else { return }
-        textView.placeholderColor = promptColor
         if textView.string != text {
             let selectedRanges = textView.selectedRanges
             textView.string = text
@@ -53,9 +71,9 @@ struct FormattableTextView: NSViewRepresentable {
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
-        var parent: FormattableTextView
+        var parent: FormattableTextViewRepresentable
 
-        init(_ parent: FormattableTextView) {
+        init(_ parent: FormattableTextViewRepresentable) {
             self.parent = parent
         }
 
@@ -69,32 +87,6 @@ struct FormattableTextView: NSViewRepresentable {
 // MARK: - Custom NSTextView with extended Transformations menu
 
 final class FormattableNSTextView: NSTextView {
-    var placeholderString: String = "" {
-        didSet { needsDisplay = true }
-    }
-
-    var placeholderColor: NSColor = .placeholderTextColor {
-        didSet { needsDisplay = true }
-    }
-
-    override func draw(_ dirtyRect: NSRect) {
-        super.draw(dirtyRect)
-
-        if string.isEmpty && !placeholderString.isEmpty {
-            let attrs: [NSAttributedString.Key: Any] = [
-                .foregroundColor: placeholderColor,
-                .font: font ?? .systemFont(ofSize: NSFont.systemFontSize),
-            ]
-            let rect = CGRect(
-                x: textContainerInset.width + textContainer!.lineFragmentPadding,
-                y: textContainerInset.height,
-                width: bounds.width,
-                height: bounds.height
-            )
-            placeholderString.draw(in: rect, withAttributes: attrs)
-        }
-    }
-
     override func menu(for event: NSEvent) -> NSMenu? {
         guard let menu = super.menu(for: event) else { return nil }
 

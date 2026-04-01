@@ -108,7 +108,7 @@ struct AddEventView: View {
                     
                     // Title section
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                        TextField("Title", text: $title, prompt: Text("Event title (required)").foregroundStyle(skin.resolvedTextTertiary))
+                        TextField("Title", text: $title, prompt: Text("Event title (required)").foregroundStyle(skin.resolvedTextSecondary))
                             .textFieldStyle(.plain)
                             .font(.headline)
                             .focused($isTitleFocused)
@@ -294,7 +294,7 @@ struct AddEventView: View {
                             SkinSeparator()
 
                             HStack(alignment: .top, spacing: DS.Spacing.sm) {
-                                FormattableTextView(text: $description, prompt: "Add notes, agenda, or attachments", promptColor: NSColor(skin.resolvedTextSecondary))
+                                FormattableTextView(text: $description, prompt: "Add notes, agenda, or attachments", promptStyle: skin.resolvedTextSecondary)
                                     .frame(minHeight: 60, maxHeight: 160)
 
                                 EmojiPickerButton(text: $description)
