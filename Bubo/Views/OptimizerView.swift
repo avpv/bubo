@@ -15,6 +15,11 @@ struct OptimizerView: View {
     @State private var wantsPomodoroSlot = false
     @State private var wantsRearrange = false
 
+    // MARK: - Event identity
+    @State private var eventTitle = ""
+    @State private var selectedColorTag: EventColorTag? = .blue
+    @FocusState private var isTitleFocused: Bool
+
     // MARK: - Focus block params
     @State private var focusBlockCount = 2
     @State private var focusBlockMinutes = 120
@@ -72,6 +77,7 @@ struct OptimizerView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: DS.Spacing.lg) {
                 workingHoursSection
+                eventIdentitySection
                 goalsSection
                 settingsLink
             }
@@ -116,6 +122,70 @@ struct OptimizerView: View {
             .padding(DS.Spacing.md)
             .skinPlatter(skin)
             .skinPlatterDepth(skin)
+        }
+    }
+
+    // MARK: Event identity (title + color)
+
+    private var skinAccent: Color {
+        skin.isClassic ? DS.Colors.accent : skin.accentColor
+    }
+
+    private var eventIdentitySection: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            Text("Event")
+                .font(.headline)
+                .foregroundStyle(skin.resolvedTextPrimary)
+                .accessibilityAddTraits(.isHeader)
+
+            VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                TextField("Title", text: $eventTitle, prompt: Text("Event title (e.g. Deep Work)").foregroundStyle(skin.resolvedTextSecondary))
+                    .textFieldStyle(.plain)
+                    .font(.headline)
+                    .focused($isTitleFocused)
+
+                SkinSeparator()
+
+                HStack(spacing: DS.Spacing.xs) {
+                    ForEach(EventColorTag.allCases, id: \.self) { tag in
+                        Button {
+                            Haptics.tap()
+                            selectedColorTag = selectedColorTag == tag ? nil : tag
+                        } label: {
+                            Circle()
+                                .fill(tag.color)
+                                .frame(width: 24, height: 24)
+                                .overlay(
+                                    Circle()
+                                        .strokeBorder(
+                                            skin.resolvedTextPrimary.opacity(selectedColorTag == tag ? 0.8 : 0),
+                                            lineWidth: selectedColorTag == tag ? 2 : 0
+                                        )
+                                )
+                                .shadow(
+                                    color: selectedColorTag == tag ? tag.color.opacity(DS.Opacity.half) : .clear,
+                                    radius: selectedColorTag == tag ? 3 : 0
+                                )
+                                .scaleEffect(selectedColorTag == tag ? 1.1 : 1.0)
+                                .animation(skin.resolvedMicroAnimation, value: selectedColorTag)
+                                .padding(DS.Spacing.xs)
+                                .contentShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .help(tag.rawValue)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(DS.Spacing.md)
+            .skinPlatter(skin)
+            .skinPlatterDepth(skin)
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                    .stroke(isTitleFocused ? skinAccent.opacity(DS.Opacity.overlayDark) : Color.clear, lineWidth: DS.Size.focusRingWidth)
+                    .shadow(color: isTitleFocused ? skinAccent.opacity(0.4) : .clear, radius: 4)
+            )
+            .animation(skin.resolvedMicroAnimation, value: isTitleFocused)
         }
     }
 
@@ -418,7 +488,12 @@ struct OptimizerView: View {
                 let isApplied = appliedScenarioIndex == selectedScenarioIndex
                 Button(action: {
                     Haptics.tap()
-                    optimizerService.applyScenario(at: selectedScenarioIndex, to: reminderService)
+                    optimizerService.applyScenario(
+                        at: selectedScenarioIndex,
+                        to: reminderService,
+                        titleOverride: eventTitle.isEmpty ? nil : eventTitle,
+                        colorOverride: selectedColorTag
+                    )
                     appliedScenarioIndex = selectedScenarioIndex
                 }) {
                     Label(isApplied ? "Applied" : "Apply Schedule", systemImage: isApplied ? "checkmark.circle" : "checkmark.circle.fill")

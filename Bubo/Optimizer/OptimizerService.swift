@@ -153,23 +153,29 @@ final class OptimizerService {
 
     // MARK: - Apply Scenario
 
-    func applyScenario(at index: Int, to reminderService: ReminderService) {
+    func applyScenario(at index: Int, to reminderService: ReminderService, titleOverride: String? = nil, colorOverride: EventColorTag? = nil) {
         guard index < scenarios.count else { return }
         let scenario = scenarios[index]
 
         optimizer.acceptScenario(scenario)
 
-        for gene in scenario.genes {
+        for (i, gene) in scenario.genes.enumerated() {
+            let title: String
+            if let override = titleOverride, !override.isEmpty {
+                title = scenario.genes.count > 1 ? "\(override) \(i + 1)" : override
+            } else {
+                title = gene.title
+            }
             let event = CalendarEvent(
                 id: gene.eventId,
-                title: gene.title,
+                title: title,
                 startDate: gene.startTime,
                 endDate: gene.endTime,
                 location: nil,
-                description: "Created by Bubo Optimizer",
+                description: "Created by Schedule Assistant",
                 calendarName: nil,
                 eventType: gene.isFocusBlock ? .pomodoro : .standard,
-                colorTag: gene.isFocusBlock ? .blue : .green
+                colorTag: colorOverride ?? (gene.isFocusBlock ? .blue : .green)
             )
             reminderService.addLocalEvent(event)
         }
