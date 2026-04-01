@@ -289,10 +289,11 @@ struct MenuBarView: View {
                 colorFilterBar
             }
 
-            // World Clock
+            // World Clock — pinned at top, never compressed
             WorldClockStripView(settings: settings)
+                .fixedSize(horizontal: false, vertical: true)
 
-            // Events
+            // Events — fill remaining space so header stays pinned
             Group {
                 if reminderService.nonDisintegratingEventCount == 0 {
                     emptyState
@@ -310,6 +311,7 @@ struct MenuBarView: View {
                     eventList
                 }
             }
+            .frame(maxHeight: .infinity)
             .animation(DS.Animation.smoothSpring, value: reminderService.nonDisintegratingEventCount == 0)
 
             SkinSeparator()
