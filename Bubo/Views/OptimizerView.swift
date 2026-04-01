@@ -247,29 +247,12 @@ struct OptimizerView: View {
 
                 // Scenario tabs
                 if optimizerService.scenarios.count > 1 {
-                    HStack(spacing: DS.Spacing.xs) {
+                    Picker("Scenario", selection: $selectedScenarioIndex) {
                         ForEach(0..<optimizerService.scenarios.count, id: \.self) { idx in
-                            Button {
-                                Haptics.tap()
-                                withAnimation(DS.Animation.smoothSpring) {
-                                    selectedScenarioIndex = idx
-                                }
-                            } label: {
-                                Text("Option \(idx + 1)")
-                                    .font(.caption.weight(.medium))
-                                    .padding(.horizontal, DS.Spacing.sm)
-                                    .padding(.vertical, DS.Spacing.xs)
-                                    .background(
-                                        selectedScenarioIndex == idx
-                                            ? skin.accentColor.opacity(0.2)
-                                            : Color.clear
-                                    )
-                                    .clipShape(Capsule())
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityAddTraits(selectedScenarioIndex == idx ? .isSelected : [])
+                            Text("Option \(idx + 1)").tag(idx)
                         }
                     }
+                    .pickerStyle(.segmented)
                 }
 
                 // Selected scenario details

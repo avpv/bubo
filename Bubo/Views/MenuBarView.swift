@@ -313,19 +313,6 @@ struct MenuBarView: View {
             .animation(DS.Animation.smoothSpring, value: reminderService.nonDisintegratingEventCount == 0)
 
             SkinSeparator()
-
-            if let lastSync = reminderService.lastSyncDate {
-                HStack(spacing: DS.Spacing.xs) {
-                    Text("Updated")
-                    Text(lastSync, style: .relative)
-                    Text("ago")
-                }
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-                .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.vertical, DS.Spacing.xs)
-            }
-
             footerActions
         }
         } // ScrollViewReader
@@ -537,15 +524,20 @@ struct MenuBarView: View {
                 .help("Refresh (\u{2318}R)")
                 .keyboardShortcut("r", modifiers: .command)
 
-                OpenSettingsButton(iconOnly: true)
-                    .keyboardShortcut(",", modifiers: .command)
-                    .help("Settings (\u{2318},)")
-
-                Button(action: { NSApplication.shared.terminate(nil) }) {
-                    Image(systemName: "power")
+                Menu {
+                    OpenSettingsButton()
+                        .keyboardShortcut(",", modifiers: .command)
+                    Divider()
+                    Button("Quit Bubo", role: .destructive) {
+                        NSApplication.shared.terminate(nil)
+                    }
+                    .keyboardShortcut("q", modifiers: .command)
+                } label: {
+                    Image(systemName: "ellipsis.circle")
                 }
-                .help("Quit (\u{2318}Q)")
-                .keyboardShortcut("q", modifiers: .command)
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .help("More")
             }
             .font(.system(size: activeSkin.toolbarIconSize, weight: .semibold))
             .buttonStyle(.borderless)
