@@ -208,9 +208,14 @@ struct SkinImageSection: View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             SkinSeparator()
 
-            Text("Skin background image")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Theme-specific background image")
+                    .font(.caption)
+                    .foregroundStyle(.primary)
+                Text("Attaches a specific image to the currently selected skin")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
 
             if hasImage, let override = override,
                let nsImage = NSImage(contentsOfFile: override.imagePath) {
@@ -343,9 +348,14 @@ struct BackgroundPhotoSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            Text("Set your own photo as background")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Global Background Photo")
+                    .font(.caption)
+                    .foregroundStyle(.primary)
+                Text("Overrides all themes and built-in wallpapers across the app")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
 
             if !settings.customBackgroundPhotoPath.isEmpty,
                let nsImage = NSImage(contentsOfFile: settings.customBackgroundPhotoPath) {
