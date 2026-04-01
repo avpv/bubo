@@ -44,13 +44,13 @@ struct DateTimePickerPills: View {
                     RoundedRectangle(cornerRadius: skin.cornerRadius, style: .continuous)
                         .strokeBorder(
                             isDateHovered ? pillAccent.opacity(0.4) : .white.opacity(0.08),
-                            lineWidth: 0.5
+                            lineWidth: DS.Border.thin
                         )
                 )
                 .shadow(
-                    color: isDateHovered ? pillAccent.opacity(0.2) : skin.resolvedShadowColor,
-                    radius: isDateHovered ? 6 : skin.shadowRadius,
-                    y: isDateHovered ? 3 : skin.shadowY
+                    color: isDateHovered ? pillAccent.opacity(skin.hoverFillOpacity * 2.5) : skin.resolvedShadowColor,
+                    radius: isDateHovered ? skin.hoverShadowRadius * 0.5 : skin.shadowRadius,
+                    y: isDateHovered ? skin.hoverShadowY * 0.5 : skin.shadowY
                 )
                 .scaleEffect(isDateHovered ? 1.02 : 1.0)
                 .animation(skin.resolvedMicroAnimation, value: isDateHovered)
@@ -81,13 +81,13 @@ struct DateTimePickerPills: View {
                     RoundedRectangle(cornerRadius: skin.cornerRadius, style: .continuous)
                         .strokeBorder(
                             isTimeHovered ? pillAccent.opacity(0.4) : .white.opacity(0.08),
-                            lineWidth: 0.5
+                            lineWidth: DS.Border.thin
                         )
                 )
                 .shadow(
-                    color: isTimeHovered ? pillAccent.opacity(0.2) : skin.resolvedShadowColor,
-                    radius: isTimeHovered ? 6 : skin.shadowRadius,
-                    y: isTimeHovered ? 3 : skin.shadowY
+                    color: isTimeHovered ? pillAccent.opacity(skin.hoverFillOpacity * 2.5) : skin.resolvedShadowColor,
+                    radius: isTimeHovered ? skin.hoverShadowRadius * 0.5 : skin.shadowRadius,
+                    y: isTimeHovered ? skin.hoverShadowY * 0.5 : skin.shadowY
                 )
                 .scaleEffect(isTimeHovered ? 1.02 : 1.0)
                 .animation(skin.resolvedMicroAnimation, value: isTimeHovered)

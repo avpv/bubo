@@ -223,9 +223,9 @@ struct SkinImageSection: View {
                         .opacity(override.opacity)
                         .blur(radius: override.blur)
                         .clipped()
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Spacing.sm))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 8)
+                            RoundedRectangle(cornerRadius: DS.Spacing.sm)
                                 .strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5)
                         )
 
@@ -356,9 +356,9 @@ struct BackgroundPhotoSection: View {
                         .opacity(settings.customBackgroundPhotoOpacity)
                         .blur(radius: settings.customBackgroundPhotoBlur)
                         .clipped()
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Spacing.sm))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 8)
+                            RoundedRectangle(cornerRadius: DS.Spacing.sm)
                                 .strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5)
                         )
 

@@ -173,13 +173,13 @@ fileprivate struct TimeSlotChip: View {
                     isSelected
                         ? .white.opacity(0.2)
                         : (isHovered ? chipAccent.opacity(0.3) : .clear),
-                    lineWidth: 0.5
+                    lineWidth: DS.Border.thin
                 )
         )
         .shadow(
-            color: isSelected ? chipAccent.opacity(0.3) : (isHovered ? skin.resolvedHoverShadowColor : .clear),
-            radius: isSelected ? 6 : (isHovered ? DS.Shadows.hoverRadius : 0),
-            y: isSelected ? 3 : (isHovered ? DS.Shadows.hoverY : 0)
+            color: isSelected ? chipAccent.opacity(skin.hoverShadowOpacity * 1.5) : (isHovered ? skin.resolvedHoverShadowColor : .clear),
+            radius: isSelected ? skin.hoverShadowRadius * 0.5 : (isHovered ? skin.hoverShadowRadius : 0),
+            y: isSelected ? skin.hoverShadowY * 0.5 : (isHovered ? skin.hoverShadowY : 0)
         )
         .scaleEffect(isHovered && !isSelected ? 1.03 : 1.0)
         .animation(skin.resolvedMicroAnimation, value: isHovered)

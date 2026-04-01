@@ -92,7 +92,7 @@ struct WorldClockTabView: View {
                         }
                         .padding(DS.Spacing.sm)
                         .background(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            RoundedRectangle(cornerRadius: DS.Spacing.sm, style: .continuous)
                                 .fill(Color.primary.opacity(0.04))
                         )
 

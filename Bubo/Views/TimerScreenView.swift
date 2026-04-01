@@ -133,7 +133,7 @@ struct TimerScreenView: View {
                     ZStack {
                         // Track — HIG: adapt opacity for Increase Contrast mode
                         Circle()
-                            .stroke(accent.opacity(contrast == .increased ? 0.35 : DS.Opacity.mediumFill), lineWidth: DS.Size.timerRingStrokeWidth)
+                            .stroke(accent.opacity(contrast == .increased ? skin.hoverFillOpacity * 4 : skin.hoverFillOpacity * 1.5), lineWidth: DS.Size.timerRingStrokeWidth)
                             .frame(width: DS.Size.timerRingDiameter, height: DS.Size.timerRingDiameter)
 
                         // Progress arc

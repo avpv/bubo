@@ -54,7 +54,7 @@ struct EventRowView: View {
                         RoundedRectangle(cornerRadius: skin.cornerRadius, style: .continuous)
                             .fill(
                                 (skin.isClassic ? DS.Colors.accent : skin.accentColor)
-                                    .opacity(contrast == .increased ? DS.Opacity.strongFill + 0.05 : DS.Opacity.mediumFill)
+                                    .opacity(contrast == .increased ? skin.hoverFillOpacity * 3 : skin.hoverFillOpacity * 1.5)
                             )
                             .frame(width: max(geo.size.width * eventProgress(now), skin.cornerRadius * 2))
                     }
@@ -147,8 +147,8 @@ struct EventRowView: View {
             .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
             .padding(.trailing, DS.Spacing.md)
             .shadow(
-                color: accentBarColor.opacity(DS.Opacity.tertiaryText),
-                radius: DS.Shadows.ambientY
+                color: accentBarColor.opacity(skin.shadowOpacity * 4),
+                radius: skin.shadowRadius * 0.5
             )
     }
 

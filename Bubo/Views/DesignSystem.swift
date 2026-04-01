@@ -548,8 +548,8 @@ struct ActionButtonStyle: ButtonStyle {
             .overlay(buttonStrokeOverlay)
             .shadow(
                 color: shadowColor(isPressed: configuration.isPressed),
-                radius: configuration.isPressed ? 2 : (role == .primary ? 8 : 4),
-                y: configuration.isPressed ? 1 : (role == .primary ? 4 : 2)
+                radius: configuration.isPressed ? skin.shadowRadius * 0.25 : (role == .primary ? skin.hoverShadowRadius : skin.shadowRadius),
+                y: configuration.isPressed ? skin.shadowY * 0.25 : (role == .primary ? skin.hoverShadowY * 0.67 : skin.shadowY * 0.5)
             )
             .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
             .animation(skin.resolvedMicroAnimation, value: configuration.isPressed)

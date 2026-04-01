@@ -107,7 +107,7 @@ struct FullScreenAlertView: View {
                                     .fill(DS.Materials.overlay)
                                     .overlay(
                                         Capsule()
-                                            .fill(skinAccent.opacity(snoozeHovered ? DS.Opacity.strongFill : 0))
+                                            .fill(skinAccent.opacity(snoozeHovered ? skin.hoverFillOpacity * 2.5 : 0))
                                     )
                             )
                             .overlay(
@@ -121,7 +121,7 @@ struct FullScreenAlertView: View {
                                         lineWidth: DS.Border.medium
                                     )
                             )
-                            .shadow(color: skinAccent.opacity(snoozeHovered ? 0.3 : 0), radius: DS.Shadows.buttonRadius, y: DS.Shadows.buttonY)
+                            .shadow(color: skinAccent.opacity(snoozeHovered ? skin.hoverShadowOpacity * 1.5 : 0), radius: skin.hoverShadowRadius, y: skin.hoverShadowY)
                             .scaleEffect(snoozeHovered ? 1.03 : 1.0)
                             .animation(skin.resolvedMicroAnimation, value: snoozeHovered)
                     }
@@ -154,7 +154,7 @@ struct FullScreenAlertView: View {
                                     Capsule()
                                         .strokeBorder(DS.Colors.onOverlay.opacity(DS.Opacity.glassBorder), lineWidth: DS.Border.thin)
                                 )
-                                .shadow(color: skinAccent.opacity(0.5), radius: joinHovered ? DS.Shadows.hoverRadius + 4 : DS.Shadows.hoverRadius - 2, y: joinHovered ? DS.Shadows.hoverY : DS.Shadows.buttonY)
+                                .shadow(color: skinAccent.opacity(0.5), radius: joinHovered ? skin.hoverShadowRadius * 1.3 : skin.hoverShadowRadius * 0.8, y: joinHovered ? skin.hoverShadowY : skin.shadowY)
                                 .scaleEffect(joinHovered ? 1.04 : 1.0)
                                 .animation(skin.resolvedMicroAnimation, value: joinHovered)
                         }
@@ -182,7 +182,7 @@ struct FullScreenAlertView: View {
                                 Capsule()
                                     .strokeBorder(skinAccent.opacity(dismissHovered ? 0.5 : 0), lineWidth: DS.Border.medium)
                             )
-                            .shadow(color: DS.Colors.onOverlay.opacity(dismissHovered ? 0.3 : DS.Opacity.subtleBorder), radius: dismissHovered ? DS.Shadows.hoverRadius + 2 : DS.Shadows.ambientRadius, y: dismissHovered ? DS.Shadows.hoverY - 1 : DS.Shadows.ambientY - 1)
+                            .shadow(color: DS.Colors.onOverlay.opacity(dismissHovered ? skin.hoverShadowOpacity * 1.5 : skin.shadowOpacity * 2), radius: dismissHovered ? skin.hoverShadowRadius : skin.shadowRadius, y: dismissHovered ? skin.hoverShadowY : skin.shadowY)
                             .scaleEffect(dismissHovered ? 1.03 : 1.0)
                             .animation(skin.resolvedMicroAnimation, value: dismissHovered)
                     }
