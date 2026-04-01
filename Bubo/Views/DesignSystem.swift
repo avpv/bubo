@@ -26,6 +26,14 @@ enum DS {
         static let width: CGFloat = 360
         static let height: CGFloat = 600
         static let timerHeight: CGFloat = 440
+        static let dateSuggestionsWidth: CGFloat = 240
+    }
+
+    // MARK: Grid Layout
+
+    enum Grid {
+        static let skinCardMinWidth: CGFloat = 94
+        static let skinCardSpacing: CGFloat = 8
     }
 
     // MARK: Settings Window
@@ -126,7 +134,12 @@ enum DS {
         static let overlayLight: Double = 0.6
         static let overlayDark: Double = 0.8
 
+        // Prominent fills
+        static let half: Double = 0.5
+        static let accentMuted: Double = 0.7
+
         // Borders & strokes
+        static let faintBorder: Double = 0.1
         static let subtleBorder: Double = 0.15
         static let glassBorder: Double = 0.2
     }
@@ -348,7 +361,7 @@ enum Haptics {
 /// Respects `accessibilityReduceMotion` — skips animation when enabled.
 struct StaggeredEntrance: ViewModifier {
     var index: Int = 0
-    var offsetY: CGFloat = 8
+    var offsetY: CGFloat = DS.Spacing.sm
 
     @State private var appeared = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -381,11 +394,11 @@ extension View {
 extension View {
     /// Applies a scroll-aware transition: items fade/scale as they enter/exit the visible area.
     func eventScrollTransition() -> some View {
-        self.scrollTransition(.animated(.spring(duration: 0.4, bounce: 0.2))) { content, phase in
+        self.scrollTransition(.animated(DS.Animation.smoothSpring)) { content, phase in
             content
-                .opacity(phase.isIdentity ? 1 : 0.4)
+                .opacity(phase.isIdentity ? 1 : DS.Opacity.tertiaryText)
                 .scaleEffect(phase.isIdentity ? 1 : 0.94, anchor: .leading)
-                .offset(x: phase.isIdentity ? 0 : phase.value * -8)
+                .offset(x: phase.isIdentity ? 0 : phase.value * -DS.Spacing.sm)
         }
     }
 }

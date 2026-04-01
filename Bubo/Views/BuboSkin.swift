@@ -176,7 +176,7 @@ struct SkinPlatterDepthModifier: ViewModifier {
             .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                    .strokeBorder(.white.opacity(skin.platterBorderOpacity), lineWidth: 1)
+                    .strokeBorder(.white.opacity(skin.platterBorderOpacity), lineWidth: DS.Border.standard)
             )
             .shadow(
                 color: skin.resolvedShadowColor,

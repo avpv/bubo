@@ -127,10 +127,10 @@ struct AddEventView: View {
                     .skinPlatterDepth(skin)
                     .overlay(
                         RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                            .stroke(isTitleFocused ? skinAccent.opacity(0.8) : Color.clear, lineWidth: DS.Size.focusRingWidth)
+                            .stroke(isTitleFocused ? skinAccent.opacity(DS.Opacity.overlayDark) : Color.clear, lineWidth: DS.Size.focusRingWidth)
                     )
                     .shadow(
-                        color: isTitleFocused ? skinAccent.opacity(0.15) : DS.Shadows.ambientColor,
+                        color: isTitleFocused ? skinAccent.opacity(DS.Opacity.subtleBorder) : DS.Shadows.ambientColor,
                         radius: isTitleFocused ? DS.Shadows.ambientRadius + 1 : DS.Shadows.ambientRadius,
                         y: DS.Shadows.ambientY
                     )
@@ -254,7 +254,7 @@ struct AddEventView: View {
                                                 )
                                         )
                                         .shadow(
-                                            color: selectedColorTag == tag ? tag.color.opacity(0.5) : .clear,
+                                            color: selectedColorTag == tag ? tag.color.opacity(DS.Opacity.half) : .clear,
                                             radius: selectedColorTag == tag ? 3 : 0
                                         )
                                         .scaleEffect(selectedColorTag == tag ? 1.1 : 1.0)
@@ -307,10 +307,10 @@ struct AddEventView: View {
                         .skinPlatterDepth(skin)
                         .overlay(
                             RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                                .stroke((isLocationFocused || isNotesFocused) ? skinAccent.opacity(0.8) : Color.clear, lineWidth: DS.Size.focusRingWidth)
+                                .stroke((isLocationFocused || isNotesFocused) ? skinAccent.opacity(DS.Opacity.overlayDark) : Color.clear, lineWidth: DS.Size.focusRingWidth)
                         )
                         .shadow(
-                            color: (isLocationFocused || isNotesFocused) ? skinAccent.opacity(0.15) : DS.Shadows.ambientColor,
+                            color: (isLocationFocused || isNotesFocused) ? skinAccent.opacity(DS.Opacity.subtleBorder) : DS.Shadows.ambientColor,
                             radius: (isLocationFocused || isNotesFocused) ? DS.Shadows.ambientRadius + 1 : DS.Shadows.ambientRadius,
                             y: DS.Shadows.ambientY
                         )
@@ -682,7 +682,7 @@ struct AddEventView: View {
                         )
                         .fill(
                             LinearGradient(
-                                colors: [color, color.opacity(0.7)],
+                                colors: [color, color.opacity(DS.Opacity.accentMuted)],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
@@ -728,7 +728,7 @@ struct AddEventView: View {
                 HStack(spacing: DS.Spacing.sm) {
                     // Connecting line centered in the same 12pt column as dots
                     Rectangle()
-                        .fill(Color.secondary.opacity(0.15))
+                        .fill(Color.secondary.opacity(DS.Opacity.subtleBorder))
                         .frame(width: 1.5, height: 16)
                         .frame(width: 12)
                     Text("\(segments.count - 4) more")
@@ -759,7 +759,7 @@ struct AddEventView: View {
             ZStack(alignment: .top) {
                 if !isLast {
                     Rectangle()
-                        .fill(color.opacity(0.2))
+                        .fill(color.opacity(DS.Opacity.strongFill))
                         .frame(width: 1.5)
                         .frame(maxHeight: .infinity)
                 }

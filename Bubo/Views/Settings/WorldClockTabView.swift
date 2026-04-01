@@ -93,7 +93,7 @@ struct WorldClockTabView: View {
                         .padding(DS.Spacing.sm)
                         .background(
                             RoundedRectangle(cornerRadius: DS.Spacing.sm, style: .continuous)
-                                .fill(Color.primary.opacity(0.04))
+                                .fill(DS.Colors.textPrimary.opacity(DS.Opacity.subtleFill))
                         )
 
                         ScrollView {

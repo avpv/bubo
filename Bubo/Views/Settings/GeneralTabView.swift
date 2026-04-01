@@ -129,7 +129,7 @@ struct CustomSkinsSection: View {
             }
 
             if !customSkinLoader.customSkins.isEmpty {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 94), spacing: 8)], spacing: 8) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: DS.Grid.skinCardMinWidth), spacing: DS.Grid.skinCardSpacing)], spacing: 8) {
                     ForEach(customSkinLoader.customSkins) { skin in
                         let isSelected = settings.selectedSkinID == skin.id
                         Button {
@@ -226,7 +226,7 @@ struct SkinImageSection: View {
                         .clipShape(RoundedRectangle(cornerRadius: DS.Spacing.sm))
                         .overlay(
                             RoundedRectangle(cornerRadius: DS.Spacing.sm)
-                                .strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5)
+                                .strokeBorder(DS.Colors.textPrimary.opacity(DS.Opacity.faintBorder), lineWidth: DS.Border.thin)
                         )
 
                     Button {
@@ -239,7 +239,7 @@ struct SkinImageSection: View {
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
-                    .padding(6)
+                    .padding(DS.Spacing.pillVertical)
                 }
 
                 // Controls
@@ -359,7 +359,7 @@ struct BackgroundPhotoSection: View {
                         .clipShape(RoundedRectangle(cornerRadius: DS.Spacing.sm))
                         .overlay(
                             RoundedRectangle(cornerRadius: DS.Spacing.sm)
-                                .strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5)
+                                .strokeBorder(DS.Colors.textPrimary.opacity(DS.Opacity.faintBorder), lineWidth: DS.Border.thin)
                         )
 
                     Button {
@@ -372,7 +372,7 @@ struct BackgroundPhotoSection: View {
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
-                    .padding(6)
+                    .padding(DS.Spacing.pillVertical)
                 }
 
                 // Controls
@@ -483,7 +483,7 @@ struct WallpaperSectionView: View {
 
             // Wallpaper grid for selected category
             let wallpapers = WallpaperCatalog.wallpapers(in: selectedCategory)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 94), spacing: 8)], spacing: 8) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: DS.Grid.skinCardMinWidth), spacing: DS.Grid.skinCardSpacing)], spacing: 8) {
                 ForEach(wallpapers) { wallpaper in
                     let isSelected = settings.selectedWallpaperID == wallpaper.id
                     Button {
@@ -582,7 +582,7 @@ struct GeneralTabView: View {
                     Text("Choose a visual theme")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 94), spacing: 8)], spacing: 8) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: DS.Grid.skinCardMinWidth), spacing: DS.Grid.skinCardSpacing)], spacing: 8) {
                         ForEach(SkinCatalog.builtInSkins) { skin in
                             let isSelected = settings.selectedSkinID == skin.id
                             Button {

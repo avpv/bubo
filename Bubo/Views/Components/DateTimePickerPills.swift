@@ -18,7 +18,7 @@ struct DateTimePickerPills: View {
         HStack(spacing: DS.Spacing.sm) {
             // Date Pill
             Button(action: { showDatePopover.toggle() }) {
-                HStack(spacing: 6) {
+                HStack(spacing: DS.Spacing.pillVertical) {
                     Image(systemName: "calendar")
                         .foregroundStyle(pillAccent)
                     Text(formattedDate)
@@ -43,7 +43,7 @@ struct DateTimePickerPills: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
                         .strokeBorder(
-                            isDateHovered ? pillAccent.opacity(0.4) : .white.opacity(0.08),
+                            isDateHovered ? pillAccent.opacity(DS.Opacity.tertiaryText) : DS.Colors.onOverlay.opacity(DS.Opacity.lightFill),
                             lineWidth: DS.Border.thin
                         )
                 )
@@ -64,9 +64,9 @@ struct DateTimePickerPills: View {
 
             // Time Pill
             Button(action: { showTimePopover.toggle() }) {
-                HStack(spacing: 6) {
+                HStack(spacing: DS.Spacing.pillVertical) {
                     Image(systemName: "clock")
-                        .foregroundStyle(pillAccent.opacity(0.7))
+                        .foregroundStyle(pillAccent.opacity(DS.Opacity.accentMuted))
                     Text(formattedTime)
                         .font(.system(.body, design: .monospaced, weight: .medium))
                         .foregroundStyle(skin.resolvedTextPrimary)
@@ -80,7 +80,7 @@ struct DateTimePickerPills: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
                         .strokeBorder(
-                            isTimeHovered ? pillAccent.opacity(0.4) : .white.opacity(0.08),
+                            isTimeHovered ? pillAccent.opacity(DS.Opacity.tertiaryText) : DS.Colors.onOverlay.opacity(DS.Opacity.lightFill),
                             lineWidth: DS.Border.thin
                         )
                 )

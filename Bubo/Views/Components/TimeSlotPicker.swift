@@ -162,7 +162,7 @@ fileprivate struct TimeSlotChip: View {
                         .clipShape(Capsule())
                     if isHovered {
                         Capsule()
-                            .fill(chipAccent.opacity(0.08))
+                            .fill(chipAccent.opacity(DS.Opacity.lightFill))
                     }
                 }
             }
@@ -171,8 +171,8 @@ fileprivate struct TimeSlotChip: View {
             Capsule()
                 .strokeBorder(
                     isSelected
-                        ? .white.opacity(0.2)
-                        : (isHovered ? chipAccent.opacity(0.3) : .clear),
+                        ? DS.Colors.onOverlay.opacity(DS.Opacity.glassBorder)
+                        : (isHovered ? chipAccent.opacity(DS.Opacity.strongFill + DS.Opacity.faintBorder) : .clear),
                     lineWidth: DS.Border.thin
                 )
         )

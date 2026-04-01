@@ -5,9 +5,9 @@ struct DateSuggestionsPopover: View {
     @Binding var date: Date
     @Binding var isPresented: Bool
     var range: PartialRangeFrom<Date>?
-    
+
     @State private var showCustomCalendar = false
-    
+
     var body: some View {
         VStack(spacing: 0) {
             if showCustomCalendar {
@@ -53,10 +53,10 @@ struct DateSuggestionsPopover: View {
                     Text("Suggestions")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .padding(.horizontal, 16)
-                        .padding(.top, 12)
-                        .padding(.bottom, 8)
-                    
+                        .padding(.horizontal, DS.Spacing.lg)
+                        .padding(.top, DS.Spacing.md)
+                        .padding(.bottom, DS.Spacing.sm)
+
                     ForEach(0..<7) { offset in
                         if let d = Calendar.current.date(byAdding: .day, value: offset, to: Date()) {
                             suggestionRow(
@@ -66,16 +66,16 @@ struct DateSuggestionsPopover: View {
                             )
                         }
                     }
-                    
-                    SkinSeparator().padding(.vertical, 4)
-                    
+
+                    SkinSeparator().padding(.vertical, DS.Spacing.xs)
+
                     Button(action: { showCustomCalendar = true }) {
-                        HStack(spacing: 12) {
+                        HStack(spacing: DS.Spacing.md) {
                             Image(systemName: "calendar")
                                 .foregroundStyle(.secondary)
                                 .font(.title3)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Custom...")
+                            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                                Text("Custom\u{2026}")
                                     .foregroundStyle(skin.resolvedTextPrimary)
                                 Text("Use the calendar to pick a date")
                                     .font(.caption)
@@ -83,25 +83,25 @@ struct DateSuggestionsPopover: View {
                             }
                             Spacer()
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
+                        .padding(.horizontal, DS.Spacing.lg)
+                        .padding(.vertical, DS.Spacing.sm)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .padding(.bottom, 8)
+                    .padding(.bottom, DS.Spacing.sm)
                 }
-                .frame(width: 240)
+                .frame(width: DS.Popover.dateSuggestionsWidth)
             }
         }
     }
-    
+
     private func suggestionRow(title: String, subtitle: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 12) {
+            HStack(spacing: DS.Spacing.md) {
                 Image(systemName: "calendar")
                     .foregroundStyle(.secondary)
                     .font(.title3)
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(title)
                         .foregroundStyle(skin.resolvedTextPrimary)
                     Text(subtitle)
@@ -110,13 +110,13 @@ struct DateSuggestionsPopover: View {
                 }
                 Spacer()
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.vertical, DS.Spacing.sm)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
-    
+
     private func formatted(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateStyle = .short
@@ -130,12 +130,12 @@ struct DateSuggestionsPopover: View {
         formatter.setLocalizedDateFormatFromTemplate("EEEE")
         return formatter.string(from: date)
     }
-    
+
     private func selectDate(_ newDate: Date) {
         let cal = Calendar.current
         let timeComps = cal.dateComponents([.hour, .minute, .second], from: date)
         let dateComps = cal.dateComponents([.year, .month, .day], from: newDate)
-        
+
         var finalComps = DateComponents()
         finalComps.year = dateComps.year
         finalComps.month = dateComps.month
@@ -143,7 +143,7 @@ struct DateSuggestionsPopover: View {
         finalComps.hour = timeComps.hour
         finalComps.minute = timeComps.minute
         finalComps.second = timeComps.second
-        
+
         if let finalDate = cal.date(from: finalComps) {
             date = finalDate
         }

@@ -350,7 +350,7 @@ struct EventDetailView: View {
                             .font(.caption2)
                             .padding(.horizontal, DS.Spacing.md)
                             .padding(.vertical, DS.Spacing.xs)
-                            .background(skinAccent.opacity(0.12))
+                            .background(skinAccent.opacity(DS.Opacity.mediumFill))
                             .clipShape(Capsule())
                             .accessibilityLabel(day.fullName)
                     }
