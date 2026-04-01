@@ -133,8 +133,8 @@ struct TimerScreenView: View {
                     ZStack {
                         // Track — HIG: adapt opacity for Increase Contrast mode
                         Circle()
-                            .stroke(accent.opacity(contrast == .increased ? 0.35 : 0.12), lineWidth: 4)
-                            .frame(width: 180, height: 180)
+                            .stroke(accent.opacity(contrast == .increased ? 0.35 : DS.Opacity.mediumFill), lineWidth: DS.Size.timerRingStrokeWidth)
+                            .frame(width: DS.Size.timerRingDiameter, height: DS.Size.timerRingDiameter)
 
                         // Progress arc
                         if !ended {
@@ -142,9 +142,9 @@ struct TimerScreenView: View {
                                 .trim(from: 0, to: progress)
                                 .stroke(
                                     accent,
-                                    style: StrokeStyle(lineWidth: 4, lineCap: .round)
+                                    style: StrokeStyle(lineWidth: DS.Size.timerRingStrokeWidth, lineCap: .round)
                                 )
-                                .frame(width: 180, height: 180)
+                                .frame(width: DS.Size.timerRingDiameter, height: DS.Size.timerRingDiameter)
                                 .rotationEffect(.degrees(-90))
                                 .animation(.linear(duration: 1), value: progress)
                         }
@@ -153,7 +153,7 @@ struct TimerScreenView: View {
                         if contrast != .increased {
                             Circle()
                                 .fill(accent.opacity(pulseRing ? 0.06 : 0.02))
-                                .frame(width: 170, height: 170)
+                                .frame(width: DS.Size.timerRingDiameter - 10, height: DS.Size.timerRingDiameter - 10)
                                 .blur(radius: 20)
                         }
 
@@ -167,7 +167,7 @@ struct TimerScreenView: View {
 
                             if ended {
                                 Image(systemName: "checkmark.circle")
-                                    .font(.system(size: 36, weight: .light))
+                                    .font(.system(size: DS.Size.timerCheckmarkSize, weight: .light))
                                     .foregroundStyle(skin.resolvedTextTertiary)
                             } else if days {
                                 VStack(spacing: DS.Spacing.xxs) {

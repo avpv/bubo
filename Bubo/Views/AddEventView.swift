@@ -692,7 +692,7 @@ struct AddEventView: View {
                             if segWidth > 30 {
                                 Text("\(segment.minutes)m")
                                     .font(.system(.caption2, design: .rounded, weight: .semibold))
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(DS.Colors.onOverlay)
                             }
                         }
                     }
@@ -769,7 +769,7 @@ struct AddEventView: View {
                     .overlay {
                         Image(systemName: icon)
                             .font(.system(size: 6, weight: .bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(DS.Colors.onOverlay)
                     }
             }
             .frame(width: 12)

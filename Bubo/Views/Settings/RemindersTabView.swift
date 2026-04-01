@@ -56,7 +56,7 @@ struct RemindersTabView: View {
             }
 
             }
-            .padding(20)
+            .padding(DS.Spacing.xl)
         }
     }
 }

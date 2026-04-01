@@ -32,13 +32,14 @@ struct FullScreenAlertView: View {
                 .fill(DS.Materials.overlay)
                 .ignoresSafeArea()
 
-            Color.black.opacity(contrast == .increased ? 0.8 : 0.6)
+            DS.Colors.overlayBackground
+                .opacity(contrast == .increased ? DS.Opacity.overlayDark : DS.Opacity.overlayLight)
                 .ignoresSafeArea()
 
             // Ambient skin glow behind content
             if !skin.isClassic {
                 RadialGradient(
-                    colors: [skinAccent.opacity(0.15), skinSecondary.opacity(0.05), .clear],
+                    colors: [skinAccent.opacity(DS.Opacity.subtleBorder), skinSecondary.opacity(DS.Opacity.subtleFill), .clear],
                     center: .top,
                     startRadius: 0,
                     endRadius: 600
@@ -54,39 +55,39 @@ struct FullScreenAlertView: View {
                 // HIG: Use semantic text styles that scale with Dynamic Type
                 Text(headerText(secondsRemaining))
                     .font(.system(.largeTitle, design: .rounded, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(DS.Colors.onOverlay)
 
                 // Live countdown timer
                 Text(countdownText(secondsRemaining))
                     .font(.system(.largeTitle, design: .monospaced, weight: .heavy))
                     .scaleEffect(1.5)
                     .foregroundStyle(countdownDisplayColor(secondsRemaining))
-                    .shadow(color: countdownDisplayColor(secondsRemaining).opacity(0.5), radius: 12)
+                    .shadow(color: countdownDisplayColor(secondsRemaining).opacity(0.5), radius: DS.Shadows.buttonRadius)
                     .contentTransition(.numericText())
                     .motionAwareAnimation(.linear(duration: 0.3), value: secondsRemaining, reduceMotion: reduceMotion)
 
                 Text(event.title)
                     .font(.system(.title, design: .rounded, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(DS.Colors.onOverlay)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 40)
+                    .padding(.horizontal, DS.Spacing.xxxl + DS.Spacing.sm)
 
-                HStack(spacing: 20) {
+                HStack(spacing: DS.Spacing.xl) {
                     Label(event.formattedTimeRange, systemImage: "clock.fill")
                         .font(.title2)
-                        .foregroundStyle(.white.opacity(0.9))
+                        .foregroundStyle(DS.Colors.onOverlay.opacity(0.9))
 
                     if let location = event.location, !location.isEmpty {
                         Label(location, systemImage: "location.fill")
                             .font(.title2)
-                            .foregroundStyle(.white.opacity(0.9))
+                            .foregroundStyle(DS.Colors.onOverlay.opacity(0.9))
                     }
                 }
 
                 Spacer()
 
                 // Action buttons
-                HStack(spacing: 20) {
+                HStack(spacing: DS.Spacing.xl) {
                     // Snooze button — outlined, skin-tinted
                     Menu {
                         ForEach(DS.snoozeOptions) { option in
@@ -98,29 +99,29 @@ struct FullScreenAlertView: View {
                     } label: {
                         Text("Snooze")
                             .font(.system(.title3, design: .rounded, weight: .medium))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 40)
-                            .padding(.vertical, 14)
+                            .foregroundStyle(DS.Colors.onOverlay)
+                            .padding(.horizontal, DS.Spacing.xxxl + DS.Spacing.sm)
+                            .padding(.vertical, DS.Spacing.md + DS.Spacing.xxs)
                             .background(
                                 Capsule()
-                                    .fill(.ultraThinMaterial)
+                                    .fill(DS.Materials.overlay)
                                     .overlay(
                                         Capsule()
-                                            .fill(skinAccent.opacity(snoozeHovered ? 0.2 : 0.0))
+                                            .fill(skinAccent.opacity(snoozeHovered ? DS.Opacity.strongFill : 0))
                                     )
                             )
                             .overlay(
                                 Capsule()
                                     .strokeBorder(
                                         LinearGradient(
-                                            colors: [skinAccent.opacity(0.6), skinSecondary.opacity(0.3)],
+                                            colors: [skinAccent.opacity(DS.Opacity.overlayLight), skinSecondary.opacity(0.3)],
                                             startPoint: .topLeading,
                                             endPoint: .bottomTrailing
                                         ),
-                                        lineWidth: 1.5
+                                        lineWidth: DS.Border.medium
                                     )
                             )
-                            .shadow(color: skinAccent.opacity(snoozeHovered ? 0.3 : 0.0), radius: 12, y: 4)
+                            .shadow(color: skinAccent.opacity(snoozeHovered ? 0.3 : 0), radius: DS.Shadows.buttonRadius, y: DS.Shadows.buttonY)
                             .scaleEffect(snoozeHovered ? 1.03 : 1.0)
                             .animation(skin.resolvedMicroAnimation, value: snoozeHovered)
                     }
@@ -136,9 +137,9 @@ struct FullScreenAlertView: View {
                         } label: {
                             Label("Join \(serviceName)", systemImage: "video.fill")
                                 .font(.system(.title2, design: .rounded, weight: .semibold))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 40)
-                                .padding(.vertical, 16)
+                                .foregroundStyle(DS.Colors.onOverlay)
+                                .padding(.horizontal, DS.Spacing.xxxl + DS.Spacing.sm)
+                                .padding(.vertical, DS.Spacing.lg)
                                 .background(
                                     Capsule()
                                         .fill(
@@ -151,9 +152,9 @@ struct FullScreenAlertView: View {
                                 )
                                 .overlay(
                                     Capsule()
-                                        .strokeBorder(.white.opacity(0.2), lineWidth: 0.5)
+                                        .strokeBorder(DS.Colors.onOverlay.opacity(DS.Opacity.glassBorder), lineWidth: DS.Border.thin)
                                 )
-                                .shadow(color: skinAccent.opacity(0.5), radius: joinHovered ? 16 : 10, y: joinHovered ? 6 : 4)
+                                .shadow(color: skinAccent.opacity(0.5), radius: joinHovered ? DS.Shadows.hoverRadius + 4 : DS.Shadows.hoverRadius - 2, y: joinHovered ? DS.Shadows.hoverY : DS.Shadows.buttonY)
                                 .scaleEffect(joinHovered ? 1.04 : 1.0)
                                 .animation(skin.resolvedMicroAnimation, value: joinHovered)
                         }
@@ -170,18 +171,18 @@ struct FullScreenAlertView: View {
                     }) {
                         Text("Dismiss")
                             .font(.system(.title2, design: .rounded, weight: .semibold))
-                            .foregroundStyle(dismissHovered ? skinAccent : .black)
-                            .padding(.horizontal, 60)
-                            .padding(.vertical, 16)
+                            .foregroundStyle(dismissHovered ? skinAccent : DS.Colors.overlayBackground)
+                            .padding(.horizontal, DS.Spacing.xxxl + DS.Spacing.xxl + DS.Spacing.xs)
+                            .padding(.vertical, DS.Spacing.lg)
                             .background(
                                 Capsule()
-                                    .fill(.white)
+                                    .fill(DS.Colors.onOverlay)
                             )
                             .overlay(
                                 Capsule()
-                                    .strokeBorder(skinAccent.opacity(dismissHovered ? 0.5 : 0.0), lineWidth: 1.5)
+                                    .strokeBorder(skinAccent.opacity(dismissHovered ? 0.5 : 0), lineWidth: DS.Border.medium)
                             )
-                            .shadow(color: .white.opacity(dismissHovered ? 0.3 : 0.15), radius: dismissHovered ? 14 : 8, y: dismissHovered ? 5 : 3)
+                            .shadow(color: DS.Colors.onOverlay.opacity(dismissHovered ? 0.3 : DS.Opacity.subtleBorder), radius: dismissHovered ? DS.Shadows.hoverRadius + 2 : DS.Shadows.ambientRadius, y: dismissHovered ? DS.Shadows.hoverY - 1 : DS.Shadows.ambientY - 1)
                             .scaleEffect(dismissHovered ? 1.03 : 1.0)
                             .animation(skin.resolvedMicroAnimation, value: dismissHovered)
                     }
@@ -194,10 +195,10 @@ struct FullScreenAlertView: View {
 
                 Text(event.meetingLink != nil ? "Enter to join \u{00B7} Esc to dismiss" : "Press Enter or Esc to dismiss")
                     .font(.caption)
-                    .foregroundStyle(.white.opacity(0.4))
+                    .foregroundStyle(DS.Colors.onOverlay.opacity(DS.Opacity.tertiaryText))
                     .accessibilityHidden(true)
 
-                Spacer().frame(height: 60)
+                Spacer().frame(height: DS.Spacing.xxxl + DS.Spacing.xxl + DS.Spacing.xs)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -233,7 +234,7 @@ struct FullScreenAlertView: View {
 
     private var bellIcon: some View {
         Image(systemName: "bell.fill")
-            .font(.system(size: 60))
+            .font(.system(size: DS.Size.alertIconSize))
             .foregroundStyle(
                 LinearGradient(
                     colors: [skinAccent, skinSecondary],
@@ -241,7 +242,7 @@ struct FullScreenAlertView: View {
                     endPoint: .bottomTrailing
                 )
             )
-            .shadow(color: skinAccent.opacity(0.5), radius: 20)
+            .shadow(color: skinAccent.opacity(0.5), radius: DS.Shadows.glowRadius)
             .symbolEffect(
                 .bounce,
                 options: reduceMotion ? .default : .repeating.speed(0.4),

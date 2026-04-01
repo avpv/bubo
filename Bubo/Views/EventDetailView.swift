@@ -97,7 +97,7 @@ struct EventDetailView: View {
                                 Label("Join \(serviceName)", systemImage: "video.fill")
                                     .font(.subheadline)
                                     .fontWeight(.semibold)
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(DS.Colors.onOverlay)
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, DS.Spacing.sm)
                                     .background(

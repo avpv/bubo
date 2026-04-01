@@ -16,7 +16,7 @@ struct CalendarsTabView: View {
                     calendarSelectionSection
                 }
             }
-            .padding(20)
+            .padding(DS.Spacing.xl)
         }
         .onAppear {
             if viewModel.appleCalendarAccessGranted && viewModel.availableAppleCalendars.isEmpty {
@@ -142,7 +142,7 @@ struct CalendarsTabView: View {
                             )) {
                                 HStack(spacing: DS.Spacing.sm) {
                                     Circle()
-                                        .fill(Color(cgColor: cal.color ?? CGColor(red: 0.5, green: 0.5, blue: 0.5, alpha: 1)))
+                                        .fill(cal.color.map { Color(cgColor: $0) } ?? DS.Colors.defaultCalendar)
                                         .frame(width: DS.Size.iconSmall, height: DS.Size.iconSmall)
                                     Text(cal.title)
                                 }

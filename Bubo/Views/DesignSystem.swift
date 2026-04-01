@@ -70,21 +70,90 @@ enum DS {
         static let badgeCornerRadius: CGFloat = 20
         static let syncIndicatorSize: CGFloat = 14
         static let todayDotSize: CGFloat = 6
+
+        // Timer
+        static let timerRingDiameter: CGFloat = 180
+        static let timerRingStrokeWidth: CGFloat = 4
+        static let timerCheckmarkSize: CGFloat = 36
+
+        // Alert
+        static let alertIconSize: CGFloat = 60
+
+        // Preview cards (settings UI)
+        static let previewCardRadius: CGFloat = 6
+        static let previewCardHeight: CGFloat = 40
+        static let previewSmallRadius: CGFloat = 2
+        static let previewMicroRadius: CGFloat = 1
+
+        // Emoji picker
+        static let emojiCellSize: CGFloat = 32
+        static let emojiPickerWidth: CGFloat = 280
+        static let emojiPickerHeight: CGFloat = 320
+
+        // Inputs
+        static let numberInputWidth: CGFloat = 80
+
+        // Color tag
+        static let colorDotSize: CGFloat = 24
+
+        // Progress bar
+        static let progressBarHeight: CGFloat = 6
+
+        // World clock
+        static let worldClockMoonSize: CGFloat = 7
     }
-    
+
+    // MARK: Borders
+
+    enum Border {
+        static let thin: CGFloat = 0.5
+        static let standard: CGFloat = 1
+        static let medium: CGFloat = 1.5
+        static let selection: CGFloat = 2
+    }
+
+    // MARK: Opacity
+
+    enum Opacity {
+        // Backgrounds & fills
+        static let subtleFill: Double = 0.04
+        static let lightFill: Double = 0.08
+        static let mediumFill: Double = 0.12
+        static let strongFill: Double = 0.2
+
+        // Text & overlays
+        static let tertiaryText: Double = 0.4
+        static let overlayLight: Double = 0.6
+        static let overlayDark: Double = 0.8
+
+        // Borders & strokes
+        static let subtleBorder: Double = 0.15
+        static let glassBorder: Double = 0.2
+    }
+
     // MARK: Shadows
-    
+
     enum Shadows {
         static let ambientColor = Color.black.opacity(0.06)
         static let ambientRadius: CGFloat = 8
         static let ambientY: CGFloat = 4
-        
+
         static let hoverColor = Color.black.opacity(0.12)
         static let hoverRadius: CGFloat = 12
         static let hoverY: CGFloat = 6
-        
+
         static let pillRadius: CGFloat = 1
         static let pillY: CGFloat = 1
+
+        // Alert/fullscreen
+        static let glowRadius: CGFloat = 20
+        static let buttonRadius: CGFloat = 12
+        static let buttonY: CGFloat = 4
+
+        // Toast
+        static let toastColor = Color.black.opacity(0.12)
+        static let toastRadius: CGFloat = 12
+        static let toastY: CGFloat = 6
     }
 
     // MARK: Animation
@@ -142,6 +211,11 @@ enum DS {
         // Separator & borders
         static let separator = Color(nsColor: .separatorColor)
         static let border = Color(nsColor: .separatorColor).opacity(0.5)
+
+        // Overlay / fullscreen alert — contrast-aware
+        static let overlayBackground = Color.black
+        static let onOverlay = Color.white
+        static let defaultCalendar = Color.gray
 
         // Hover & selection states
         static let hoverFill = Color(nsColor: .labelColor).opacity(0.06)

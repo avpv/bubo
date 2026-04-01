@@ -36,51 +36,51 @@ struct SkinPreviewCard: View {
             // Mini preview showing skin's visual identity
             ZStack {
                 // Background
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: DS.Size.previewCardRadius)
                     .fill(skin.prefersDarkTint
-                        ? Color(white: 0.12)
-                        : Color(white: 0.95)
+                        ? DS.Colors.overlayBackground.opacity(0.88)
+                        : DS.Colors.onOverlay.opacity(0.95)
                     )
 
                 // Skin gradient
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: DS.Size.previewCardRadius)
                     .fill(skin.previewGradient)
                     .opacity(0.8)
 
                 // Mini UI mockup
-                VStack(spacing: 2) {
+                VStack(spacing: DS.Spacing.xxs) {
                     // Header bar
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(skin.accentColor.opacity(0.6))
-                        .frame(height: 4)
-                        .padding(.horizontal, 6)
+                    RoundedRectangle(cornerRadius: DS.Size.previewSmallRadius)
+                        .fill(skin.accentColor.opacity(DS.Opacity.overlayLight))
+                        .frame(height: DS.Size.accentBarWidth)
+                        .padding(.horizontal, DS.Spacing.pillVertical)
 
                     // Event rows
                     ForEach(0..<3, id: \.self) { i in
                         HStack(spacing: 3) {
-                            RoundedRectangle(cornerRadius: 1)
+                            RoundedRectangle(cornerRadius: DS.Size.previewMicroRadius)
                                 .fill(skin.accentColor)
-                                .frame(width: 2, height: 5)
-                            RoundedRectangle(cornerRadius: 1)
-                                .fill(Color.primary.opacity(0.2 - Double(i) * 0.05))
+                                .frame(width: DS.Spacing.xxs, height: 5)
+                            RoundedRectangle(cornerRadius: DS.Size.previewMicroRadius)
+                                .fill(DS.Colors.textPrimary.opacity(DS.Opacity.strongFill - Double(i) * 0.05))
                                 .frame(height: 5)
                         }
-                        .padding(.horizontal, 6)
+                        .padding(.horizontal, DS.Spacing.pillVertical)
                     }
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, DS.Spacing.xs)
             }
-            .frame(height: 40)
+            .frame(height: DS.Size.previewCardHeight)
             .overlay(
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: DS.Size.previewCardRadius)
                     .strokeBorder(
-                        isSelected ? skin.accentColor : Color.primary.opacity(0.1),
-                        lineWidth: isSelected ? 2 : 0.5
+                        isSelected ? skin.accentColor : DS.Colors.textPrimary.opacity(0.1),
+                        lineWidth: isSelected ? DS.Border.selection : DS.Border.thin
                     )
             )
             .shadow(
                 color: isSelected ? skin.accentColor.opacity(0.3) : .clear,
-                radius: isSelected ? 4 : 0
+                radius: isSelected ? DS.Shadows.ambientY : 0
             )
 
             VStack(spacing: 0) {
@@ -654,7 +654,7 @@ struct GeneralTabView: View {
                 }
             }
             }
-            .padding(20)
+            .padding(DS.Spacing.xl)
         }
         .onAppear {
             settings.launchAtLogin = SMAppService.mainApp.status == .enabled

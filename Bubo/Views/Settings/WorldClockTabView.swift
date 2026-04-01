@@ -65,7 +65,7 @@ struct WorldClockTabView: View {
                                             }
                                         } label: {
                                             Image(systemName: "minus.circle.fill")
-                                                .foregroundStyle(.red)
+                                                .foregroundStyle(skin.resolvedDestructiveColor)
                                         }
                                         .buttonStyle(.plain)
                                         .accessibilityLabel("Remove \(city.city)")
@@ -141,7 +141,7 @@ struct WorldClockTabView: View {
                     }
                 }
             }
-            .padding(20)
+            .padding(DS.Spacing.xl)
         }
         .animation(DS.Animation.smoothSpring, value: settings.isWorldClockEnabled)
     }
