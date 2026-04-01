@@ -22,6 +22,7 @@ struct MenuBarView: View {
         case addEvent(editing: CalendarEvent? = nil)
         case timer(CalendarEvent)
         case optimizer
+        case quickAddTasks
 
         var isTimer: Bool {
             if case .timer = self { return true }
@@ -40,6 +41,7 @@ struct MenuBarView: View {
             case (.addEvent(let a), .addEvent(let b)): return a?.id == b?.id
             case (.timer(let a), .timer(let b)): return a.id == b.id
             case (.optimizer, .optimizer): return true
+            case (.quickAddTasks, .quickAddTasks): return true
             default: return false
             }
         }
@@ -81,23 +83,23 @@ struct MenuBarView: View {
                         onBack: { navigation = .list },
                         onEdit: { event in resolveEdit(event) },
                         onDelete: { event in
-                            // HIG: Capture event for undo before deleting
                             let deletedEvent = event
                             reminderService.removeLocalEvent(id: event.id)
                             navigation = .list
                             toastState.showSuccess("Event deleted", icon: "trash.fill") {
                                 reminderService.addLocalEvent(deletedEvent)
                             }
+                            notifyRecipeMonitor(.deleted(eventId: event.id))
                         },
                         onDeleteSeries: { event in
                             let seriesId = event.seriesId ?? event.id
-                            // Capture the series root for undo
                             let seriesEvent = reminderService.seriesEvent(for: event) ?? event
                             reminderService.removeLocalEvent(id: seriesId)
                             navigation = .list
                             toastState.showSuccess("All occurrences deleted", icon: "trash.fill") {
                                 reminderService.addLocalEvent(seriesEvent)
                             }
+                            notifyRecipeMonitor(.deleted(eventId: seriesId))
                         },
                         onDeleteOccurrence: { event in
                             reminderService.excludeOccurrence(occurrenceId: event.id)
@@ -118,7 +120,12 @@ struct MenuBarView: View {
                 case .timer(let event):
                     TimerScreenView(
                         event: event,
-                        onBack: { navigation = .detail(event) }
+                        onBack: { navigation = .detail(event) },
+                        onScheduleNext: { finishedEvent in
+                            // Pre-set a pomodoro recipe and navigate to optimizer
+                            optimizerService.activeRecipe = .pomodoroSession()
+                            navigation = .optimizer
+                        }
                     )
                     .transition(
                         reduceMotion ? .opacity : .asymmetric(
@@ -135,8 +142,13 @@ struct MenuBarView: View {
                         onSave: { isEdit in
                             navigation = .list
                             toastState.showSuccess(isEdit ? "Event updated" : "Event added")
+                            // Notify monitor when editing existing event (time may have changed)
+                            if isEdit, let eventId = editing?.id {
+                                notifyRecipeMonitor(.moved(eventId: eventId))
+                            }
                         },
-                        settings: settings
+                        settings: settings,
+                        optimizerService: optimizerService
                     )
                     .transition(
                         reduceMotion ? .opacity : .asymmetric(
@@ -150,6 +162,20 @@ struct MenuBarView: View {
                         optimizerService: optimizerService,
                         reminderService: reminderService,
                         onBack: { navigation = .list }
+                    )
+                    .transition(
+                        reduceMotion ? .opacity : .asymmetric(
+                            insertion: .move(edge: .trailing).combined(with: .opacity),
+                            removal: .move(edge: .trailing).combined(with: .opacity).combined(with: .scale(scale: 0.98))
+                        )
+                    )
+
+                case .quickAddTasks:
+                    QuickAddTasksView(
+                        optimizerService: optimizerService,
+                        reminderService: reminderService,
+                        onBack: { navigation = .list },
+                        onShowResults: { navigation = .optimizer }
                     )
                     .transition(
                         reduceMotion ? .opacity : .asymmetric(
@@ -175,6 +201,7 @@ struct MenuBarView: View {
             hasStartedSync = true
             reminderService.updateSettings(settings)
             reminderService.startSync()
+            optimizerService.setupRecipeMonitor(reminderService: reminderService)
         }
     }
 
@@ -221,6 +248,19 @@ struct MenuBarView: View {
         reminderService.removeLocalEvent(id: event.id)
         toastState.showSuccess("Event deleted", icon: "trash.fill") {
             reminderService.addLocalEvent(deletedEvent)
+        }
+        notifyRecipeMonitor(.deleted(eventId: event.id))
+    }
+
+    private func notifyRecipeMonitor(_ change: RecipeMonitor.EventChange) {
+        Task {
+            await optimizerService.recipeMonitor?.onEventChange(
+                change,
+                workingHours: optimizerService.workingHours
+            )
+            if optimizerService.recipeMonitor?.lastReaction != nil {
+                toastState.showInfo("Schedule adjusted", icon: "wand.and.stars")
+            }
         }
     }
 
@@ -497,6 +537,46 @@ struct MenuBarView: View {
                             },
                             onTap: { event in
                                 navigation = .detail(event)
+                            },
+                            onFindBetterTime: { event in
+                                // Navigate to optimizer with a whatIf recipe for this event
+                                optimizerService.activeRecipe = ScheduleRecipe(
+                                    id: "find-better-time",
+                                    name: "Find Better Time",
+                                    icon: "wand.and.stars",
+                                    description: "Find a better slot for \(event.title)",
+                                    events: [EventSpec(
+                                        title: event.title,
+                                        minutes: Int(event.duration / 60),
+                                        priority: 0.8,
+                                        focus: event.eventType == .pomodoro
+                                    )],
+                                    includeExistingEvents: false,
+                                    display: .scenarios
+                                )
+                                navigation = .optimizer
+                            },
+                            onSplitTask: { event in
+                                optimizerService.activeRecipe = ScheduleRecipe.splitLargeTask()
+                                navigation = .optimizer
+                            },
+                            onProtectBlock: { event in
+                                let recipe = ScheduleRecipe(
+                                    id: "protect-block",
+                                    name: "Protect Block",
+                                    icon: "shield",
+                                    eventRules: [EventRule(match: .id(event.id), action: .markFixed)],
+                                    display: .confirmation
+                                )
+                                Task {
+                                    _ = await optimizerService.executeRecipe(recipe, reminderService: reminderService)
+                                    toastState.showSuccess("Focus block protected", icon: "shield.fill")
+                                }
+                            },
+                            onAddPrep: { event in
+                                var recipe = ScheduleRecipe.prepBeforeMeeting()
+                                recipe.applyParamValues(["eventId": event.id])
+                                navigation = .optimizer
                             }
                         )
                     }
