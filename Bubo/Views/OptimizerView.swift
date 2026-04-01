@@ -135,6 +135,8 @@ struct OptimizerView: View {
                     reminderService: reminderService
                 )
             }
+
+            optimizerHint
         }
     }
 
@@ -176,6 +178,8 @@ struct OptimizerView: View {
                         movableTasks: tasks
                     )
                 }
+
+                optimizerHint
             }
         }
     }
@@ -192,7 +196,21 @@ struct OptimizerView: View {
                     reminderService: reminderService
                 )
             }
+
+            optimizerHint
         }
+    }
+
+    private var optimizerHint: some View {
+        HStack(spacing: DS.Spacing.sm) {
+            Image(systemName: "info.circle")
+                .font(.caption)
+                .foregroundStyle(skin.resolvedTextTertiary)
+            Text("Analyzes your calendar gaps and suggests the best time slots.")
+                .font(.caption2)
+                .foregroundStyle(skin.resolvedTextTertiary)
+        }
+        .padding(.top, DS.Spacing.lg)
     }
 
     private func asyncOptimizeButton(action: @escaping () async -> Void) -> some View {
@@ -408,6 +426,11 @@ struct OptimizerView: View {
                     Label("Clear", systemImage: "arrow.counterclockwise")
                 }
                 .buttonStyle(.borderless)
+            } else {
+                let todayCount = reminderService.eventsByDay.first.map(\.events.count) ?? 0
+                Label("\(todayCount) event\(todayCount == 1 ? "" : "s") today", systemImage: "calendar")
+                    .font(.caption2)
+                    .foregroundStyle(skin.resolvedTextTertiary)
             }
 
             Spacer()
