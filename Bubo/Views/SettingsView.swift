@@ -52,7 +52,7 @@ struct SettingsView: View {
         .environment(settings)
         .environment(reminderService)
         .environment(optimizerService)
-        .frame(width: DS.Settings.width, minHeight: DS.Settings.minHeight)
+        .frame(minWidth: DS.Settings.width, maxWidth: DS.Settings.width, minHeight: DS.Settings.minHeight)
         .onAppear {
             if let pending = SettingsViewModel.pendingPane {
                 selectedPane = pending
