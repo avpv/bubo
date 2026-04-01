@@ -146,10 +146,8 @@ struct WorldClockCity: Identifiable, Codable, Hashable {
         WorldClockCity(timezoneID: "Pacific/Fiji", city: "Suva", country: "Fiji"),
     ]
 
-    /// Look up a city by its unique `id` (preferred) or legacy `timezoneID`.
     static func city(forID id: String) -> WorldClockCity? {
         allCities.first { $0.id == id }
-            ?? allCities.first { $0.timezoneID == id }
     }
 }
 
