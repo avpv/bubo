@@ -284,8 +284,8 @@ struct MenuBarView: View {
                     .frame(maxWidth: .infinity, alignment: .center)
             }
 
-            // Color filter — only show when there are multiple color tags to filter by
-            if usedColorTags.count > 1 || colorFilter != nil {
+            // Color filter — show whenever there are events so users discover the feature
+            if reminderService.nonDisintegratingEventCount > 0 {
                 colorFilterBar
             }
 
@@ -392,10 +392,13 @@ struct MenuBarView: View {
 
     private var colorFilterBar: some View {
         let selected = colorFilter
+        let used = Set(usedColorTags)
         return HStack(spacing: DS.Spacing.xs) {
-            ForEach(usedColorTags, id: \.self) { tag in
+            ForEach(EventColorTag.allCases, id: \.self) { tag in
                 let isActive = selected == tag
+                let isUsed = used.contains(tag)
                 Button {
+                    guard isUsed else { return }
                     Haptics.tap()
                     withAnimation(skin.resolvedMicroAnimation) {
                         colorFilter = isActive ? nil : tag
@@ -405,7 +408,7 @@ struct MenuBarView: View {
                         Circle()
                             .fill(tag.color)
                             .frame(width: DS.Size.colorDotSize, height: DS.Size.colorDotSize)
-                            .opacity(selected == nil || isActive ? 1.0 : 0.3)
+                            .opacity(isUsed ? (selected == nil || isActive ? 1.0 : 0.3) : 0.12)
 
                         // HIG: Non-color indicator for active state
                         if isActive {
@@ -428,7 +431,7 @@ struct MenuBarView: View {
                 }
                 .buttonStyle(.plain)
                 // HIG: Don't use color as the only differentiator — show name on hover
-                .help(tag.rawValue)
+                .help(isUsed ? tag.rawValue : "\(tag.rawValue) (no events)")
                 .accessibilityLabel("Filter by \(tag.rawValue)")
                 .accessibilityAddTraits(isActive ? .isSelected : [])
             }
