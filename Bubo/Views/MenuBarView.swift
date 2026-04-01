@@ -83,23 +83,23 @@ struct MenuBarView: View {
                         onBack: { navigation = .list },
                         onEdit: { event in resolveEdit(event) },
                         onDelete: { event in
-                            // HIG: Capture event for undo before deleting
                             let deletedEvent = event
                             reminderService.removeLocalEvent(id: event.id)
                             navigation = .list
                             toastState.showSuccess("Event deleted", icon: "trash.fill") {
                                 reminderService.addLocalEvent(deletedEvent)
                             }
+                            notifyRecipeMonitor(.deleted(eventId: event.id))
                         },
                         onDeleteSeries: { event in
                             let seriesId = event.seriesId ?? event.id
-                            // Capture the series root for undo
                             let seriesEvent = reminderService.seriesEvent(for: event) ?? event
                             reminderService.removeLocalEvent(id: seriesId)
                             navigation = .list
                             toastState.showSuccess("All occurrences deleted", icon: "trash.fill") {
                                 reminderService.addLocalEvent(seriesEvent)
                             }
+                            notifyRecipeMonitor(.deleted(eventId: seriesId))
                         },
                         onDeleteOccurrence: { event in
                             reminderService.excludeOccurrence(occurrenceId: event.id)
@@ -240,14 +240,15 @@ struct MenuBarView: View {
         toastState.showSuccess("Event deleted", icon: "trash.fill") {
             reminderService.addLocalEvent(deletedEvent)
         }
+        notifyRecipeMonitor(.deleted(eventId: event.id))
+    }
 
-        // Notify recipe monitor for auto-reactions
+    private func notifyRecipeMonitor(_ change: RecipeMonitor.EventChange) {
         Task {
             await optimizerService.recipeMonitor?.onEventChange(
-                .deleted(eventId: event.id),
+                change,
                 workingHours: optimizerService.workingHours
             )
-            // If monitor produced a suggestion, show it
             if optimizerService.recipeMonitor?.lastReaction != nil {
                 toastState.showInfo("Schedule adjusted", icon: "wand.and.stars")
             }
