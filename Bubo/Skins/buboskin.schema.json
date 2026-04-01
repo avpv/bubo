@@ -151,13 +151,6 @@
       "default": 0,
       "description": "Opacity of the platter tint overlay."
     },
-    "cornerRadius": {
-      "type": "number",
-      "minimum": 2,
-      "maximum": 24,
-      "default": 12,
-      "description": "Global corner radius for card/platter surfaces (2–24)."
-    },
     "shadowOpacity": {
       "type": "number",
       "minimum": 0,

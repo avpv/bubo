@@ -401,7 +401,7 @@ struct OptimizerView: View {
                         .frame(width: 80, alignment: .leading)
 
                     GeometryReader { geo in
-                        RoundedRectangle(cornerRadius: 2)
+                        RoundedRectangle(cornerRadius: DS.Size.previewSmallRadius)
                             .fill(skin.accentColor.opacity(0.3))
                             .frame(width: geo.size.width * max(0, min(1, value)))
                     }

@@ -24,7 +24,6 @@
   "sfSymbolWeight": "regular",
   "badgeStyle": "tinted",
   "separatorStyle": "subtle",
-  "cornerRadius": 8,
   "shadowOpacity": 0.15,
   "shadowRadius": 4,
   "shadowY": 2,

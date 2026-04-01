@@ -763,7 +763,7 @@ struct WallpaperPreviewCard: View {
     var body: some View {
         VStack(spacing: 4) {
             ZStack {
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: DS.Size.previewCardRadius)
                     .fill(Color(white: 0.12))
 
                 // Preview content
@@ -771,14 +771,14 @@ struct WallpaperPreviewCard: View {
                     switch wallpaper.category {
                     case .solidColor:
                         if let color = wallpaper.solidColor {
-                            RoundedRectangle(cornerRadius: 6).fill(color)
+                            RoundedRectangle(cornerRadius: DS.Size.previewCardRadius).fill(color)
                         }
                     case .gradient:
-                        RoundedRectangle(cornerRadius: 6).fill(previewGradient)
+                        RoundedRectangle(cornerRadius: DS.Size.previewCardRadius).fill(previewGradient)
                     case .pattern:
                         if let colors = wallpaper.patternColors {
                             ZStack {
-                                RoundedRectangle(cornerRadius: 6).fill(colors.background)
+                                RoundedRectangle(cornerRadius: DS.Size.previewCardRadius).fill(colors.background)
                                 Image(systemName: patternIcon)
                                     .font(.system(size: 16))
                                     .foregroundStyle(colors.foreground.opacity(3))
@@ -786,7 +786,7 @@ struct WallpaperPreviewCard: View {
                         }
                     case .live:
                         ZStack {
-                            RoundedRectangle(cornerRadius: 6)
+                            RoundedRectangle(cornerRadius: DS.Size.previewCardRadius)
                                 .fill(livePreviewGradient)
                             Image(systemName: "waveform")
                                 .font(.system(size: 10))
@@ -794,11 +794,11 @@ struct WallpaperPreviewCard: View {
                         }
                     }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .clipShape(RoundedRectangle(cornerRadius: DS.Size.previewCardRadius))
             }
             .frame(height: 40)
             .overlay(
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: DS.Size.previewCardRadius)
                     .strokeBorder(
                         isSelected ? Color.accentColor : Color.primary.opacity(0.1),
                         lineWidth: isSelected ? 2 : 0.5

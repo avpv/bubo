@@ -94,8 +94,7 @@ struct CustomSkinJSON: Codable {
 
     // MARK: Layout & Depth (HIG 2026)
 
-    /// Corner radius for platters and popovers. Defaults to 12.
-    let cornerRadius: CGFloat?
+
 
     /// Ambient shadow opacity for depth. Defaults to 0.06.
     let shadowOpacity: Double?
@@ -186,7 +185,6 @@ struct CustomSkinJSON: Codable {
             platterMaterial: resolvedPlatterMaterial,
             platterTint: platterTint?.toColor(),
             platterTintOpacity: platterTintOpacity ?? 0,
-            cornerRadius: cornerRadius ?? 12,
             shadowOpacity: shadowOpacity ?? 0.06,
             shadowRadius: shadowRadius ?? 8,
             shadowY: shadowY ?? 4,

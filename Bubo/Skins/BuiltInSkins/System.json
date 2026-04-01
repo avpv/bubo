@@ -40,7 +40,6 @@
   "badgeStyle": "outlined",
   "separatorStyle": "subtle",
   "separatorOpacity": 0.15,
-  "cornerRadius": 8,
   "shadowOpacity": 0.12,
   "shadowRadius": 10,
   "shadowY": 5,

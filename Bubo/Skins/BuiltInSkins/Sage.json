@@ -4,7 +4,7 @@
   "author": "Bubo",
   "accentColor": "#579966",
   "surfaceTint": "#0D1F0F",
-  "surfaceTintOpacity": 0.10,
+  "surfaceTintOpacity": 0.1,
   "backgroundGradient": {
     "colors": [
       "clear",
@@ -40,7 +40,6 @@
   "badgeStyle": "tinted",
   "separatorStyle": "subtle",
   "separatorOpacity": 0.2,
-  "cornerRadius": 12,
   "shadowOpacity": 0.08,
   "shadowRadius": 10,
   "shadowY": 5,

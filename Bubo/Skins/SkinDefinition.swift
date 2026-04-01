@@ -308,9 +308,6 @@ struct SkinDefinition: Identifiable, Equatable {
 
     // MARK: Layout & Depth (HIG 2026)
 
-    /// Global corner radius for card/platter surfaces (default 12).
-    let cornerRadius: CGFloat
-
     /// Ambient shadow opacity for elevated surfaces like popovers and tooltips.
     let shadowOpacity: Double
 
@@ -411,7 +408,6 @@ struct SkinDefinition: Identifiable, Equatable {
         platterMaterial: SkinBarMaterial = .regular,
         platterTint: Color? = nil,
         platterTintOpacity: Double = 0,
-        cornerRadius: CGFloat = 12,
         shadowOpacity: Double = 0.06,
         shadowRadius: CGFloat = 8,
         shadowY: CGFloat = 4,
@@ -462,7 +458,6 @@ struct SkinDefinition: Identifiable, Equatable {
         self.platterMaterial = platterMaterial
         self.platterTint = platterTint
         self.platterTintOpacity = platterTintOpacity
-        self.cornerRadius = cornerRadius
         self.shadowOpacity = shadowOpacity
         self.shadowRadius = shadowRadius
         self.shadowY = shadowY
