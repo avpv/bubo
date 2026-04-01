@@ -220,7 +220,7 @@ struct BackgroundPhotoSection: View {
                     Image(nsImage: nsImage)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
-                        .frame(height: 80)
+                        .frame(height: 240)
                         .opacity(settings.customBackgroundPhotoOpacity)
                         .blur(radius: settings.customBackgroundPhotoBlur)
                         .clipped()
