@@ -17,9 +17,7 @@ struct WorldClockTabView: View {
     }
 
     private var selectedCities: [WorldClockCity] {
-        settings.worldClockCityIDs.compactMap { id in
-            WorldClockCity.allCities.first { $0.timezoneID == id }
-        }
+        settings.worldClockCityIDs.compactMap { WorldClockCity.city(forID: $0) }
     }
 
     var body: some View {
@@ -61,7 +59,7 @@ struct WorldClockTabView: View {
 
                                         Button {
                                             withAnimation(DS.Animation.smoothSpring) {
-                                                settings.worldClockCityIDs.removeAll { $0 == city.timezoneID }
+                                                settings.worldClockCityIDs.removeAll { $0 == city.id }
                                             }
                                         } label: {
                                             Image(systemName: "minus.circle.fill")
@@ -99,13 +97,13 @@ struct WorldClockTabView: View {
                         ScrollView {
                             LazyVStack(spacing: 0) {
                                 ForEach(filteredCities) { city in
-                                    let isAdded = settings.worldClockCityIDs.contains(city.timezoneID)
+                                    let isAdded = settings.worldClockCityIDs.contains(city.id)
                                     Button {
                                         withAnimation(DS.Animation.smoothSpring) {
                                             if isAdded {
-                                                settings.worldClockCityIDs.removeAll { $0 == city.timezoneID }
+                                                settings.worldClockCityIDs.removeAll { $0 == city.id }
                                             } else {
-                                                settings.worldClockCityIDs.append(city.timezoneID)
+                                                settings.worldClockCityIDs.append(city.id)
                                             }
                                         }
                                     } label: {

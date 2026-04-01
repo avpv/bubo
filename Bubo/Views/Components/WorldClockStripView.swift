@@ -3,7 +3,7 @@ import SwiftUI
 // MARK: - World Clock City
 
 struct WorldClockCity: Identifiable, Codable, Hashable {
-    var id: String { timezoneID }
+    var id: String { "\(city)_\(timezoneID)" }
     let timezoneID: String
     let city: String
     let country: String
@@ -146,8 +146,10 @@ struct WorldClockCity: Identifiable, Codable, Hashable {
         WorldClockCity(timezoneID: "Pacific/Fiji", city: "Suva", country: "Fiji"),
     ]
 
+    /// Look up a city by its unique `id` (preferred) or legacy `timezoneID`.
     static func city(forID id: String) -> WorldClockCity? {
-        allCities.first { $0.timezoneID == id }
+        allCities.first { $0.id == id }
+            ?? allCities.first { $0.timezoneID == id }
     }
 }
 
@@ -158,9 +160,7 @@ struct WorldClockStripView: View {
     @Environment(\.activeSkin) private var skin
 
     private var selectedCities: [WorldClockCity] {
-        settings.worldClockCityIDs.compactMap { id in
-            WorldClockCity.allCities.first { $0.timezoneID == id }
-        }
+        settings.worldClockCityIDs.compactMap { WorldClockCity.city(forID: $0) }
     }
 
     var body: some View {
