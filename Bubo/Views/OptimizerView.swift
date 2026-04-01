@@ -1,35 +1,37 @@
 import SwiftUI
 
-// MARK: - Optimizer View
+// MARK: - Schedule Assistant View
 
-/// Main optimizer panel shown in the MenuBarView popover.
+/// Single-form schedule optimization panel shown in the MenuBarView popover.
 struct OptimizerView: View {
     @Environment(\.activeSkin) private var skin
+    @Environment(\.openSettings) private var openSettings
     var optimizerService: OptimizerService
     var reminderService: ReminderService
     var onBack: () -> Void
 
-    @State private var selectedAction: OptimizerAction = .focusBlocks
+    // MARK: - Goals (checkboxes)
+    @State private var wantsFocusBlocks = true
+    @State private var wantsPomodoroSlot = false
+    @State private var wantsRearrange = false
+
+    // MARK: - Focus block params
     @State private var focusBlockCount = 2
     @State private var focusBlockMinutes = 120
+
+    // MARK: - Results
     @State private var selectedScenarioIndex = 0
     @State private var appliedScenarioIndex: Int? = nil
     @State private var isAnimatingSpinner = false
 
     private static let timeFormatter = DS.timeFormatter
 
-    enum OptimizerAction: String, CaseIterable {
-        case focusBlocks = "Focus Time"
-        case planDay = "Plan Day"
-        case pomodoro = "Pomodoro"
+    private var hasAnyGoal: Bool {
+        wantsFocusBlocks || wantsPomodoroSlot || wantsRearrange
+    }
 
-        var icon: String {
-            switch self {
-            case .focusBlocks: "brain.head.profile"
-            case .planDay: "calendar.day.timeline.left"
-            case .pomodoro: "timer"
-            }
-        }
+    private var localEvents: [CalendarEvent] {
+        reminderService.localEvents.filter { $0.isUpcoming }
     }
 
     var body: some View {
@@ -41,10 +43,7 @@ struct OptimizerView: View {
             } else if !optimizerService.scenarios.isEmpty {
                 scenarioResults
             } else {
-                VStack(spacing: DS.Spacing.md) {
-                    actionPicker
-                    configurationView
-                }
+                configurationView
             }
 
             Spacer(minLength: 0)
@@ -52,7 +51,6 @@ struct OptimizerView: View {
             footerActions
         }
         .onChange(of: optimizerService.scenarios.count) { _, _ in
-            // Reset selection when new results arrive
             selectedScenarioIndex = 0
             appliedScenarioIndex = nil
         }
@@ -68,50 +66,14 @@ struct OptimizerView: View {
         )
     }
 
-    // MARK: - Action Picker
-
-    private var actionPicker: some View {
-        HStack {
-            Text("Action")
-                .font(.headline)
-                .foregroundStyle(skin.resolvedTextPrimary)
-                .accessibilityAddTraits(.isHeader)
-            
-            Spacer()
-            
-            Picker("Action", selection: $selectedAction) {
-                ForEach(OptimizerAction.allCases, id: \.self) { action in
-                    Text(action.rawValue).tag(action)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(width: 260)
-            .padding(.horizontal, DS.Spacing.md)
-            .onChange(of: selectedAction) { _, _ in
-                Haptics.tap()
-                optimizerService.scenarios = []
-                selectedScenarioIndex = 0
-                appliedScenarioIndex = nil
-            }
-        }
-        .padding(.horizontal, DS.Spacing.md)
-        .padding(.top, DS.Spacing.lg)
-    }
-
-    // MARK: - Configuration
+    // MARK: - Configuration (single form)
 
     private var configurationView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: DS.Spacing.lg) {
-                switch selectedAction {
-                case .focusBlocks:
-                    focusBlockConfig
-                case .planDay:
-                    planDayConfig
-                case .pomodoro:
-                    pomodoroConfig
-                }
+                workingHoursSection
+                goalsSection
+                settingsLink
             }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.vertical, DS.Spacing.xl)
@@ -119,43 +81,36 @@ struct OptimizerView: View {
         .scrollContentBackground(.hidden)
     }
 
-    private var focusBlockConfig: some View {
+    // MARK: Working Hours (inline from settings)
+
+    private var workingHoursSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            Text("Settings")
+            Text("Working Hours")
                 .font(.headline)
                 .foregroundStyle(skin.resolvedTextPrimary)
                 .accessibilityAddTraits(.isHeader)
 
-            Grid(alignment: .leading, horizontalSpacing: DS.Spacing.sm, verticalSpacing: DS.Spacing.md) {
-                GridRow {
-                    Text("Blocks")
-                        .foregroundStyle(skin.resolvedTextSecondary)
-                        .gridColumnAlignment(.trailing)
-                    
-                    SegmentedPillPicker(
-                        options: Array(1...4),
-                        selection: $focusBlockCount,
-                        labelProvider: { "\($0)" }
-                    )
-                }
+            HStack {
+                Text("\(optimizerService.workingHoursStart):00")
+                    .font(.system(.body, design: .monospaced, weight: .medium))
+                    .foregroundStyle(skin.resolvedTextPrimary)
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.sm)
+                    .background(skin.accentColor.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Size.previewSmallRadius))
 
-                GridRow {
-                    Text("Duration")
-                        .foregroundStyle(skin.resolvedTextSecondary)
-                        .gridColumnAlignment(.trailing)
-                    
-                    SegmentedPillPicker(
-                        options: [30, 60, 90, 120, 180],
-                        selection: $focusBlockMinutes,
-                        labelProvider: { minutes in
-                            if minutes < 60 { return "\(minutes)m" }
-                            let hours = minutes / 60
-                            let rem = minutes % 60
-                            if rem == 0 { return "\(hours)h" }
-                            return "\(hours)h \(rem)m"
-                        }
-                    )
-                }
+                Text("–")
+                    .foregroundStyle(skin.resolvedTextTertiary)
+
+                Text("\(optimizerService.workingHoursEnd):00")
+                    .font(.system(.body, design: .monospaced, weight: .medium))
+                    .foregroundStyle(skin.resolvedTextPrimary)
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.sm)
+                    .background(skin.accentColor.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Size.previewSmallRadius))
+
+                Spacer()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(DS.Spacing.md)
@@ -164,40 +119,85 @@ struct OptimizerView: View {
         }
     }
 
-    private var planDayConfig: some View {
+    // MARK: Goals (checkboxes)
+
+    private var goalsSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            Text("Pending Events")
+            Text("What to schedule")
                 .font(.headline)
                 .foregroundStyle(skin.resolvedTextPrimary)
                 .accessibilityAddTraits(.isHeader)
 
             VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                let localEvents = reminderService.localEvents.filter { $0.isUpcoming }
-                if localEvents.isEmpty {
-                    Text("No local events to optimize.")
-                        .font(.caption)
-                        .foregroundStyle(skin.resolvedTextTertiary)
-                } else {
-                    Text("\(localEvents.count) event(s) will be automatically scheduled.")
-                        .font(.caption)
-                        .foregroundStyle(skin.resolvedTextSecondary)
+                // Focus Blocks
+                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                    Toggle(isOn: $wantsFocusBlocks) {
+                        Label("Focus blocks", systemImage: "brain.head.profile")
+                    }
 
-                    VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                        ForEach(localEvents) { event in
-                            HStack(spacing: DS.Spacing.sm) {
-                                Circle()
-                                    .fill(event.colorTag?.color ?? Color.accentColor)
-                                    .frame(width: 8, height: 8)
-                                Text(event.title)
+                    if wantsFocusBlocks {
+                        Grid(alignment: .leading, horizontalSpacing: DS.Spacing.sm, verticalSpacing: DS.Spacing.sm) {
+                            GridRow {
+                                Text("Count")
                                     .font(.caption)
-                                    .lineLimit(1)
-                                    .truncationMode(.tail)
-                                Spacer()
-                                Text(event.formattedTimeRange)
-                                    .font(.caption2)
-                                    .foregroundStyle(skin.resolvedTextTertiary)
+                                    .foregroundStyle(skin.resolvedTextSecondary)
+                                    .gridColumnAlignment(.trailing)
+
+                                SegmentedPillPicker(
+                                    options: Array(1...4),
+                                    selection: $focusBlockCount,
+                                    labelProvider: { "\($0)" }
+                                )
+                            }
+
+                            GridRow {
+                                Text("Duration")
+                                    .font(.caption)
+                                    .foregroundStyle(skin.resolvedTextSecondary)
+                                    .gridColumnAlignment(.trailing)
+
+                                SegmentedPillPicker(
+                                    options: [30, 60, 90, 120, 180],
+                                    selection: $focusBlockMinutes,
+                                    labelProvider: { minutes in
+                                        if minutes < 60 { return "\(minutes)m" }
+                                        let hours = minutes / 60
+                                        let rem = minutes % 60
+                                        if rem == 0 { return "\(hours)h" }
+                                        return "\(hours)h \(rem)m"
+                                    }
+                                )
                             }
                         }
+                        .padding(.leading, DS.Spacing.xl)
+                    }
+                }
+
+                SkinSeparator()
+
+                // Pomodoro
+                Toggle(isOn: $wantsPomodoroSlot) {
+                    Label("Pomodoro slot (25 min)", systemImage: "timer")
+                }
+
+                SkinSeparator()
+
+                // Rearrange local events
+                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                    Toggle(isOn: $wantsRearrange) {
+                        Label("Rearrange local events", systemImage: "calendar.day.timeline.left")
+                    }
+
+                    if wantsRearrange && localEvents.isEmpty {
+                        Text("No local events to optimize.")
+                            .font(.caption)
+                            .foregroundStyle(skin.resolvedTextTertiary)
+                            .padding(.leading, DS.Spacing.xl)
+                    } else if wantsRearrange {
+                        Text("\(localEvents.count) event(s) will be rearranged")
+                            .font(.caption)
+                            .foregroundStyle(skin.resolvedTextSecondary)
+                            .padding(.leading, DS.Spacing.xl)
                     }
                 }
             }
@@ -208,24 +208,24 @@ struct OptimizerView: View {
         }
     }
 
-    private var pomodoroConfig: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            Text("Configuration")
-                .font(.headline)
-                .foregroundStyle(skin.resolvedTextPrimary)
-                .accessibilityAddTraits(.isHeader)
+    // MARK: Settings link
 
-            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                Text("Bubo will analyze today's schedule and suggest an uninterrupted 25-minute gap for standard deep work.")
+    private var settingsLink: some View {
+        Button {
+            Haptics.tap()
+            SettingsViewModel.pendingPane = .optimizer
+            openSettings()
+        } label: {
+            HStack(spacing: DS.Spacing.xs) {
+                Image(systemName: "gearshape")
                     .font(.caption)
-                    .foregroundStyle(skin.resolvedTextSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                Text("Advanced settings")
+                    .font(.caption)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(DS.Spacing.md)
-            .skinPlatter(skin)
-            .skinPlatterDepth(skin)
+            .foregroundStyle(skin.resolvedTextSecondary)
         }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, alignment: .trailing)
     }
 
     // MARK: - Optimizing State
@@ -249,12 +249,12 @@ struct OptimizerView: View {
                     .foregroundStyle(skin.accentColor)
                     .symbolEffect(.pulse)
             }
-            
+
             VStack(spacing: DS.Spacing.xs) {
-                Text("Analyzing schedule...")
+                Text("Optimizing schedule…")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(skin.resolvedTextPrimary)
-                Text("Finding the perfect time slots based on your habits.")
+                Text("Searching for optimal time slots…")
                     .font(.caption)
                     .foregroundStyle(skin.resolvedTextSecondary)
                     .multilineTextAlignment(.center)
@@ -273,7 +273,6 @@ struct OptimizerView: View {
                 Text("Found \(optimizerService.scenarios.count) scenario(s)")
                     .font(.subheadline.weight(.medium))
 
-                // Scenario tabs
                 if optimizerService.scenarios.count > 1 {
                     Picker("Scenario", selection: $selectedScenarioIndex) {
                         ForEach(0..<optimizerService.scenarios.count, id: \.self) { idx in
@@ -283,7 +282,6 @@ struct OptimizerView: View {
                     .pickerStyle(.segmented)
                 }
 
-                // Selected scenario details
                 if selectedScenarioIndex < optimizerService.scenarios.count {
                     let scenario = optimizerService.scenarios[selectedScenarioIndex]
                     scenarioDetail(scenario)
@@ -309,7 +307,6 @@ struct OptimizerView: View {
             }
             .padding(.bottom, DS.Spacing.xs)
 
-            // Events in this scenario
             ForEach(scenario.genes, id: \.eventId) { gene in
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: gene.isFocusBlock ? "brain.head.profile" : "calendar")
@@ -334,12 +331,10 @@ struct OptimizerView: View {
                 .skinPlatterDepth(skin)
             }
 
-            // Objective breakdown
             if !scenario.objectiveBreakdown.isEmpty {
                 objectiveBreakdownView(scenario.objectiveBreakdown)
             }
 
-            // Violations
             if !scenario.constraintViolations.isEmpty {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Warnings:")
@@ -352,44 +347,6 @@ struct OptimizerView: View {
                     }
                 }
             }
-
-            // Action buttons
-            HStack(spacing: DS.Spacing.sm) {
-                // Apply
-                let isApplied = appliedScenarioIndex == selectedScenarioIndex
-                Button {
-                    Haptics.tap()
-                    optimizerService.applyScenario(
-                        at: selectedScenarioIndex,
-                        to: reminderService
-                    )
-                    appliedScenarioIndex = selectedScenarioIndex
-                } label: {
-                    Label(
-                        isApplied ? "Applied" : "Apply this schedule",
-                        systemImage: isApplied ? "checkmark.circle" : "checkmark.circle.fill"
-                    )
-                }
-                .buttonStyle(.action(role: .primary, size: .flexible))
-                .frame(maxWidth: .infinity)
-                .disabled(isApplied)
-
-                // Reject (sends feedback to preference learner)
-                if appliedScenarioIndex == nil {
-                    Button {
-                        Haptics.tap()
-                        optimizerService.rejectScenario(at: selectedScenarioIndex)
-                    } label: {
-                        Image(systemName: "hand.thumbsdown")
-                            .padding(.vertical, DS.Spacing.sm)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.regular)
-                    .accessibilityLabel("Reject this schedule")
-                    .help("Reject this schedule")
-                }
-            }
-            .padding(.top, DS.Spacing.sm)
         }
     }
 
@@ -434,11 +391,11 @@ struct OptimizerView: View {
                             optimizerService.rejectScenario(at: i)
                         }
                     }
-                    optimizerService.scenarios = [] // clear scenarios
+                    optimizerService.scenarios = []
                     selectedScenarioIndex = 0
                     appliedScenarioIndex = nil
                 } else {
-                    onBack() // cancel
+                    onBack()
                 }
             }) {
                 Text(!optimizerService.scenarios.isEmpty ? "Clear" : "Cancel")
@@ -451,27 +408,12 @@ struct OptimizerView: View {
             if optimizerService.scenarios.isEmpty {
                 Button(action: {
                     Haptics.tap()
-                    let action = selectedAction
-                    let events = reminderService.localEvents.filter { $0.isUpcoming }
-                    Task {
-                        switch action {
-                        case .focusBlocks:
-                            await optimizerService.suggestFocusBlocks(count: focusBlockCount, durationMinutes: focusBlockMinutes, reminderService: reminderService)
-                        case .planDay:
-                            let tasks = events.map { $0.toOptimizableEvent() }
-                            await optimizerService.optimizeDay(reminderService: reminderService, movableTasks: tasks)
-                        case .pomodoro:
-                            await optimizerService.suggestPomodoroSlot(config: .classic, reminderService: reminderService)
-                        }
-                    }
+                    runOptimization()
                 }) {
-                    Label(
-                        selectedAction == .focusBlocks ? "Find Focus Slots" : (selectedAction == .planDay ? "Arrange My Day" : "Find 25m Slot"),
-                        systemImage: "wand.and.stars"
-                    )
+                    Label("Optimize", systemImage: "wand.and.stars")
                 }
                 .buttonStyle(.action(role: .primary))
-                .disabled(optimizerService.isOptimizing || (selectedAction == .planDay && reminderService.localEvents.filter { $0.isUpcoming }.isEmpty))
+                .disabled(optimizerService.isOptimizing || !hasAnyGoal || (wantsRearrange && localEvents.isEmpty && !wantsFocusBlocks && !wantsPomodoroSlot))
             } else {
                 let isApplied = appliedScenarioIndex == selectedScenarioIndex
                 Button(action: {
@@ -488,6 +430,36 @@ struct OptimizerView: View {
         .padding(.horizontal, DS.Spacing.lg)
         .frame(height: DS.Size.actionFooterHeight)
         .skinBarBackground(skin)
+    }
+
+    // MARK: - Actions
+
+    private func runOptimization() {
+        Task {
+            // Run focus blocks if requested
+            if wantsFocusBlocks {
+                await optimizerService.suggestFocusBlocks(
+                    count: focusBlockCount,
+                    durationMinutes: focusBlockMinutes,
+                    reminderService: reminderService
+                )
+            }
+            // Run pomodoro if requested (and focus blocks wasn't the only goal)
+            if wantsPomodoroSlot && !wantsFocusBlocks {
+                await optimizerService.suggestPomodoroSlot(
+                    config: .classic,
+                    reminderService: reminderService
+                )
+            }
+            // Run day planning if requested (and nothing else was the only goal)
+            if wantsRearrange && !localEvents.isEmpty {
+                let tasks = localEvents.map { $0.toOptimizableEvent() }
+                await optimizerService.optimizeDay(
+                    reminderService: reminderService,
+                    movableTasks: tasks
+                )
+            }
+        }
     }
 
     // MARK: - Helpers
@@ -539,5 +511,3 @@ struct SegmentedPillPicker<T: Equatable & Hashable>: View {
         }
     }
 }
-
-

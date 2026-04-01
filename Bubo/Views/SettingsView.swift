@@ -12,7 +12,7 @@ struct SettingsView: View {
         case calendars = "Calendars"
         case reminders = "Reminders"
         case worldClock = "World Clock"
-        case optimizer = "Optimizer"
+        case optimizer = "Schedule Assistant"
 
         var icon: String {
             switch self {
@@ -20,7 +20,7 @@ struct SettingsView: View {
             case .calendars: "calendar"
             case .reminders: "bell"
             case .worldClock: "globe"
-            case .optimizer: "wand.and.stars"
+            case .optimizer: "wand.and.stars.inverse"
             }
         }
     }

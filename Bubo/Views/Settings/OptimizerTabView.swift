@@ -13,8 +13,8 @@ struct OptimizerTabView: View {
         ScrollView {
             VStack(spacing: DS.Spacing.lg) {
                 SettingsPlatter("General") {
-                    Toggle("Enable AI Optimizer", isOn: $service.isEnabled)
-                        .help("Enable the genetic algorithm schedule optimizer")
+                    Toggle("Enable Schedule Assistant", isOn: $service.isEnabled)
+                        .help("Enable the schedule optimization engine")
                 }
 
                 SettingsPlatter("Working Hours") {
