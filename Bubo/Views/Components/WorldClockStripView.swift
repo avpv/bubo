@@ -174,7 +174,7 @@ private struct WorldClockPill: View {
     var body: some View {
         VStack(spacing: 1) {
             Text(city.city)
-                .font(.system(.caption2, design: skin.resolvedFontDesign, weight: .medium))
+                .font(.system(.caption2, design: skin.resolvedFontDesign, weight: skin.resolvedFontWeight))
                 .foregroundStyle(skin.resolvedTextSecondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -182,35 +182,29 @@ private struct WorldClockPill: View {
             HStack(spacing: 3) {
                 if isNighttime {
                     Image(systemName: "moon.fill")
-                        .font(.system(size: 7))
+                        .font(.system(size: 7, weight: skin.resolvedSymbolWeight))
                         .foregroundStyle(skin.resolvedTextTertiary)
                 }
                 Text(timeString)
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .font(.system(.caption, design: .monospaced, weight: .semibold))
                     .foregroundStyle(skin.resolvedTextPrimary)
             }
 
             if !offsetLabel.isEmpty {
                 Text(offsetLabel)
-                    .font(.system(.caption2, design: .monospaced, weight: .medium))
+                    .font(.system(.caption2, design: .monospaced, weight: skin.resolvedFontWeight))
                     .foregroundStyle(skin.resolvedTextTertiary)
             }
         }
         .padding(.horizontal, DS.Spacing.sm)
-        .padding(.vertical, DS.Spacing.xxs + 2)
+        .padding(.vertical, DS.Spacing.xs)
         .background {
-            Capsule()
-                .fill(isNighttime
-                    ? chipAccent.opacity(0.06)
-                    : Color.primary.opacity(0.04)
-                )
+            if isNighttime {
+                RoundedRectangle(cornerRadius: skin.cornerRadius, style: .continuous)
+                    .fill(chipAccent.opacity(0.08))
+            }
         }
-        .overlay {
-            Capsule()
-                .strokeBorder(
-                    skin.resolvedTextTertiary.opacity(0.15),
-                    lineWidth: 0.5
-                )
-        }
+        .skinPlatter(skin)
+        .skinPlatterDepth(skin)
     }
 }
