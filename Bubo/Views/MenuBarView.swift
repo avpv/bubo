@@ -161,7 +161,8 @@ struct MenuBarView: View {
                     OptimizerView(
                         optimizerService: optimizerService,
                         reminderService: reminderService,
-                        onBack: { navigation = .list }
+                        onBack: { navigation = .list },
+                        onAddTasks: { navigation = .quickAddTasks }
                     )
                     .transition(
                         reduceMotion ? .opacity : .asymmetric(
