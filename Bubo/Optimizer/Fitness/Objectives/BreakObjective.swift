@@ -62,7 +62,14 @@ struct BreakObjective: FitnessObjective {
                     hasOverlong = true
                 }
             }
-            score += hasOverlong ? 0.0 : 0.4
+            // Gradient: schedules barely over the limit score better than those far over.
+            // consecutiveTime at maxConsecutive → 0.4, at 2x maxConsecutive → ~0.13, at 3x → ~0.05
+            if hasOverlong {
+                let overage = max(0, consecutiveTime - maxConsecutive)
+                score += 0.4 * exp(-overage / maxConsecutive)
+            } else {
+                score += 0.4
+            }
 
             // 2. Adequate breaks between meetings (0.3 weight)
             var adequateBreaks = 0

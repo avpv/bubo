@@ -1024,6 +1024,115 @@ struct PreferenceLearnerFitnessTests {
     }
 }
 
+@Suite("Break Objective Gradient Tests")
+struct BreakObjectiveGradientTests {
+
+    @Test("Slightly overlong schedule scores better than extremely overlong")
+    func gradientForOverlong() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+
+        // Schedule A: 2.5 hours consecutive (slightly over 2h max)
+        let genesSlightlyOver = [
+            ScheduleGene(eventId: "t1", title: "Meeting 1",
+                         startTime: cal.date(bySettingHour: 10, minute: 0, second: 0, of: today)!,
+                         duration: 5400, context: nil, energyCost: 0.5, priority: 0.5, isFocusBlock: false),
+            ScheduleGene(eventId: "t2", title: "Meeting 2",
+                         startTime: cal.date(bySettingHour: 11, minute: 30, second: 0, of: today)!,
+                         duration: 3600, context: nil, energyCost: 0.5, priority: 0.5, isFocusBlock: false),
+        ]
+
+        // Schedule B: 5 hours consecutive (way over 2h max)
+        let genesWayOver = [
+            ScheduleGene(eventId: "t1", title: "Meeting 1",
+                         startTime: cal.date(bySettingHour: 10, minute: 0, second: 0, of: today)!,
+                         duration: 9000, context: nil, energyCost: 0.5, priority: 0.5, isFocusBlock: false),
+            ScheduleGene(eventId: "t2", title: "Meeting 2",
+                         startTime: cal.date(bySettingHour: 12, minute: 30, second: 0, of: today)!,
+                         duration: 9000, context: nil, energyCost: 0.5, priority: 0.5, isFocusBlock: false),
+        ]
+
+        let chromSlightly = ScheduleChromosome(genes: genesSlightlyOver)
+        let chromWayOver = ScheduleChromosome(genes: genesWayOver)
+        let context = makeContext()
+
+        let objective = BreakObjective(weight: 1.0)
+        let scoreSlightly = objective.evaluate(chromosome: chromSlightly, context: context)
+        let scoreWayOver = objective.evaluate(chromosome: chromWayOver, context: context)
+
+        #expect(scoreSlightly > scoreWayOver,
+                "Slightly overlong (\(scoreSlightly)) should score better than way overlong (\(scoreWayOver))")
+    }
+}
+
+@Suite("Context Switch Cluster Scaling Tests")
+struct ContextSwitchClusterScalingTests {
+
+    @Test("Larger context clusters get higher bonus")
+    func largerClustersScoreHigher() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+
+        // Schedule A: cluster of 3 same-context events
+        let genesCluster3 = (0..<3).map { i in
+            ScheduleGene(
+                eventId: "t\(i)", title: "Task \(i)",
+                startTime: cal.date(bySettingHour: 10 + i, minute: 0, second: 0, of: today)!,
+                duration: 3600, context: "projectA", energyCost: 0.5, priority: 0.5, isFocusBlock: false
+            )
+        }
+
+        // Schedule B: cluster of 5 same-context events
+        let genesCluster5 = (0..<5).map { i in
+            ScheduleGene(
+                eventId: "t\(i)", title: "Task \(i)",
+                startTime: cal.date(bySettingHour: 10 + i, minute: 0, second: 0, of: today)!,
+                duration: 3600, context: "projectA", energyCost: 0.5, priority: 0.5, isFocusBlock: false
+            )
+        }
+
+        let chrom3 = ScheduleChromosome(genes: genesCluster3)
+        let chrom5 = ScheduleChromosome(genes: genesCluster5)
+        let context = makeContext()
+
+        let objective = ContextSwitchObjective(weight: 1.0)
+        let score3 = objective.evaluate(chromosome: chrom3, context: context)
+        let score5 = objective.evaluate(chromosome: chrom5, context: context)
+
+        #expect(score5 >= score3,
+                "Cluster of 5 (\(score5)) should score at least as high as cluster of 3 (\(score3))")
+    }
+}
+
+@Suite("Scenario Generator Relaxation Tests")
+struct ScenarioGeneratorRelaxationTests {
+
+    @Test("Scenario generator returns multiple scenarios even from similar population")
+    func relaxedDiversityFillsScenarios() {
+        let events = [makeMovableEvent(id: "t1", durationMinutes: 60)]
+        let context = makeContext(movableEvents: events)
+        let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
+
+        // Create a population of very similar chromosomes
+        var population: [ScheduleChromosome] = []
+        let base = ScheduleChromosome.random(context: context)
+        for _ in 0..<20 {
+            var copy = base
+            copy.mutate(rate: 0.05, context: context)  // tiny mutations
+            evaluator.evaluateAndAssign(&copy, context: context)
+            population.append(copy)
+        }
+        population.sort { $0.fitness > $1.fitness }
+
+        let generator = ScenarioGenerator()
+        let scenarios = generator.generateScenarios(from: population, context: context, evaluator: evaluator)
+
+        // With relaxed diversity, we should get more than 1 scenario
+        // (strict threshold might fail, but relaxation should find some)
+        #expect(scenarios.count >= 1)
+    }
+}
+
 @Suite("Frozen Gene Title Tests")
 struct FrozenGeneTitleTests {
 

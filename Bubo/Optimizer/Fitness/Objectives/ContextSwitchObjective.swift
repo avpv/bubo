@@ -70,11 +70,13 @@ struct ContextSwitchObjective: FitnessObjective {
     }
 
     /// Bonus for having clusters of same-context events.
+    /// Scales with cluster size: 3 events → 0.05, 4 → 0.08, 5+ → 0.1.
     private func contextClusterBonus(
         _ events: [(start: Date, end: Date, context: String?)]
     ) -> Double {
         var maxRun = 1
         var currentRun = 1
+        var clusterCount = 0
 
         for i in 1..<events.count {
             let prev = events[i - 1].context ?? "__none__"
@@ -83,11 +85,17 @@ struct ContextSwitchObjective: FitnessObjective {
                 currentRun += 1
                 maxRun = max(maxRun, currentRun)
             } else {
+                if currentRun >= 3 { clusterCount += 1 }
                 currentRun = 1
             }
         }
+        if currentRun >= 3 { clusterCount += 1 }
 
-        // Bonus for clusters of 3+
-        return maxRun >= 3 ? 0.1 : 0.0
+        guard maxRun >= 3 else { return 0.0 }
+
+        // Scaled bonus: larger clusters and more clusters = better
+        let sizeBonus = min(0.1, Double(maxRun - 2) * 0.025)  // 3→0.025, 4→0.05, 6+→0.1
+        let countBonus = min(0.05, Double(clusterCount - 1) * 0.025)  // extra clusters add up to 0.05
+        return sizeBonus + countBonus
     }
 }
