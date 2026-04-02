@@ -50,7 +50,7 @@ struct SettingsView: View {
                 OptimizerTabView()
             }
         }
-        .toolbar(removing: .title)
+        .modifier(RemoveToolbarTitleIfAvailable())
         .environment(viewModel)
         .environment(settings)
         .environment(reminderService)
@@ -67,6 +67,16 @@ struct SettingsView: View {
                 selectedPane = pane
                 SettingsViewModel.pendingPane = nil
             }
+        }
+    }
+}
+
+private struct RemoveToolbarTitleIfAvailable: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 15.0, *) {
+            content.toolbar(removing: .title)
+        } else {
+            content
         }
     }
 }
