@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 @main
 struct BuboApp: App {
@@ -9,10 +10,25 @@ struct BuboApp: App {
     @State private var optimizerService = OptimizerService()
     @State private var agentService = AgentService()
 
+    private let modelContainer: ModelContainer
+
     init() {
+        let container: ModelContainer
+        do {
+            container = try ModelContainer(for:
+                PersistedLocalEvent.self,
+                PersistedCachedEvent.self,
+                PersistedExcludedOccurrence.self,
+                PersistedReminderOverride.self
+            )
+        } catch {
+            fatalError("Failed to create ModelContainer: \(error)")
+        }
+        self.modelContainer = container
+
         let s = ReminderSettings.load()
         _settings = State(wrappedValue: s)
-        _reminderService = State(wrappedValue: ReminderService(settings: s))
+        _reminderService = State(wrappedValue: ReminderService(settings: s, modelContainer: container))
     }
 
     private func drawOwl(in ctx: CGContext, size s: CGFloat, color: CGColor) {

@@ -1,42 +1,70 @@
 import Foundation
+import SwiftData
 
-/// Offline cache for calendar events
+/// Offline cache for calendar events, backed by SwiftData.
 actor EventCache {
-    private let cacheKey = "CachedCalendarEvents"
-    private let cacheTimestampKey = "CachedEventsTimestamp"
+    private let modelContainer: ModelContainer
 
-    struct CachedData: Codable {
-        let events: [CalendarEvent]
-        let timestamp: Date
+    init(modelContainer: ModelContainer) {
+        self.modelContainer = modelContainer
     }
 
-    func save(events: [CalendarEvent]) {
-        let cached = CachedData(events: events, timestamp: Date())
-        if let data = try? JSONEncoder().encode(cached) {
-            UserDefaults.standard.set(data, forKey: cacheKey)
+    @discardableResult
+    func save(events: [CalendarEvent]) -> Bool {
+        let context = ModelContext(modelContainer)
+        // Delete all existing cached events
+        do {
+            try context.delete(model: PersistedCachedEvent.self)
+        } catch {
+            print("EventCache: failed to clear old cache: \(error)")
+            return false
         }
-    }
 
-    func load() -> CachedData? {
-        guard let data = UserDefaults.standard.data(forKey: cacheKey),
-              let cached = try? JSONDecoder().decode(CachedData.self, from: data) else {
-            return nil
+        let now = Date()
+        for event in events {
+            context.insert(PersistedCachedEvent(from: event, cachedAt: now))
         }
-        return cached
+
+        do {
+            try context.save()
+            return true
+        } catch {
+            print("EventCache: failed to save cache: \(error)")
+            return false
+        }
     }
 
     func loadEvents() -> [CalendarEvent] {
-        guard let cached = load() else { return [] }
-        // Return only future events
-        return cached.events.filter { $0.startDate > Date() }
+        let context = ModelContext(modelContainer)
+        let now = Date()
+        let descriptor = FetchDescriptor<PersistedCachedEvent>(
+            predicate: #Predicate { $0.startDate > now }
+        )
+        do {
+            return try context.fetch(descriptor).map { $0.toCalendarEvent() }
+        } catch {
+            print("EventCache: failed to load: \(error)")
+            return []
+        }
     }
 
     func cacheAge() -> TimeInterval? {
-        guard let cached = load() else { return nil }
-        return Date().timeIntervalSince(cached.timestamp)
+        let context = ModelContext(modelContainer)
+        var descriptor = FetchDescriptor<PersistedCachedEvent>(
+            sortBy: [SortDescriptor(\.cachedAt, order: .reverse)]
+        )
+        descriptor.fetchLimit = 1
+        guard let newest = try? context.fetch(descriptor).first else { return nil }
+        return Date().timeIntervalSince(newest.cachedAt)
     }
 
     func clear() {
-        UserDefaults.standard.removeObject(forKey: cacheKey)
+        let context = ModelContext(modelContainer)
+        do {
+            try context.delete(model: PersistedCachedEvent.self)
+            try context.save()
+        } catch {
+            print("EventCache: failed to clear: \(error)")
+        }
     }
 }
