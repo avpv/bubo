@@ -1153,6 +1153,80 @@ struct BreakObjectiveGradientTests {
     }
 }
 
+@Suite("Fuzzy Context Switch Tests")
+struct FuzzyContextSwitchTests {
+
+    @Test("Identical contexts have zero severity")
+    func identicalContexts() {
+        let severity = ContextSwitchObjective.switchSeverity(from: "Work/backend/API", to: "Work/backend/API")
+        #expect(severity == 0.0)
+    }
+
+    @Test("Completely different contexts have full severity")
+    func completelyDifferent() {
+        let severity = ContextSwitchObjective.switchSeverity(from: "Work", to: "Personal")
+        #expect(severity == 1.0)
+    }
+
+    @Test("Partial overlap gives fractional severity")
+    func partialOverlap() {
+        // 2 of 3 segments shared → severity = 1/3
+        let severity = ContextSwitchObjective.switchSeverity(from: "Work/backend/API", to: "Work/backend/DB")
+        #expect(abs(severity - 1.0/3.0) < 0.01)
+    }
+
+    @Test("One shared prefix out of two gives half severity")
+    func halfOverlap() {
+        // 1 of 2 segments shared → severity = 0.5
+        let severity = ContextSwitchObjective.switchSeverity(from: "Work/backend", to: "Work/frontend")
+        #expect(abs(severity - 0.5) < 0.01)
+    }
+
+    @Test("Partial switch penalized less than full switch in objective")
+    func partialSwitchLessPenalty() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+
+        // Schedule A: full context switch (Work → Personal)
+        let genesFull = [
+            ScheduleGene(eventId: "t1", title: "Task 1",
+                         startTime: cal.date(bySettingHour: 10, minute: 0, second: 0, of: today)!,
+                         duration: 3600, context: "Work/backend", energyCost: 0.5, priority: 0.5, isFocusBlock: false),
+            ScheduleGene(eventId: "t2", title: "Task 2",
+                         startTime: cal.date(bySettingHour: 11, minute: 0, second: 0, of: today)!,
+                         duration: 3600, context: "Personal/sport", energyCost: 0.5, priority: 0.5, isFocusBlock: false),
+        ]
+
+        // Schedule B: partial context switch (Work/backend → Work/frontend)
+        let genesPartial = [
+            ScheduleGene(eventId: "t1", title: "Task 1",
+                         startTime: cal.date(bySettingHour: 10, minute: 0, second: 0, of: today)!,
+                         duration: 3600, context: "Work/backend", energyCost: 0.5, priority: 0.5, isFocusBlock: false),
+            ScheduleGene(eventId: "t2", title: "Task 2",
+                         startTime: cal.date(bySettingHour: 11, minute: 0, second: 0, of: today)!,
+                         duration: 3600, context: "Work/frontend", energyCost: 0.5, priority: 0.5, isFocusBlock: false),
+        ]
+
+        let chromFull = ScheduleChromosome(genes: genesFull)
+        let chromPartial = ScheduleChromosome(genes: genesPartial)
+        let context = makeContext()
+
+        let objective = ContextSwitchObjective(weight: 1.0)
+        let scoreFull = objective.evaluate(chromosome: chromFull, context: context)
+        let scorePartial = objective.evaluate(chromosome: chromPartial, context: context)
+
+        #expect(scorePartial > scoreFull,
+                "Partial switch (\(scorePartial)) should score higher than full switch (\(scoreFull))")
+    }
+
+    @Test("Different length contexts compared correctly")
+    func differentLengths() {
+        // "Work" vs "Work/backend" → 1 shared, max=2, severity=0.5
+        let severity = ContextSwitchObjective.switchSeverity(from: "Work", to: "Work/backend")
+        #expect(abs(severity - 0.5) < 0.01)
+    }
+}
+
 @Suite("Context Switch Cluster Scaling Tests")
 struct ContextSwitchClusterScalingTests {
 

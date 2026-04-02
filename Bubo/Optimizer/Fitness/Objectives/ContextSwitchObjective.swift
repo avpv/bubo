@@ -41,21 +41,22 @@ struct ContextSwitchObjective: FitnessObjective {
 
             let sorted = events.sorted { $0.start < $1.start }
 
-            // Count context switches
-            var switches = 0
+            // Measure context switch severity using composite key prefix overlap.
+            // "Work/backend/API" → "Work/backend/DB" is a partial switch (0.33),
+            // "Work/backend" → "Personal/sport" is a full switch (1.0),
+            // "Work/backend" → "Work/backend" is no switch (0.0).
+            var totalSwitchSeverity = 0.0
             for i in 0..<(sorted.count - 1) {
                 let ctx1 = sorted[i].context ?? "__none__"
                 let ctx2 = sorted[i + 1].context ?? "__none__"
-                if ctx1 != ctx2 {
-                    switches += 1
-                }
+                totalSwitchSeverity += Self.switchSeverity(from: ctx1, to: ctx2)
             }
 
-            // Maximum possible switches = events - 1
+            // Normalize: severity per transition, 0 = no switches, 1 = all full switches
             let maxSwitches = sorted.count - 1
-            let switchRatio = maxSwitches > 0 ? Double(switches) / Double(maxSwitches) : 0
+            let switchRatio = maxSwitches > 0 ? totalSwitchSeverity / Double(maxSwitches) : 0
 
-            // Score: fewer switches = better
+            // Score: fewer/lighter switches = better
             // switchRatio 0 = 1.0, switchRatio 1 = ~0.37
             let dayScore = exp(-switchRatio * 1.5)
 
@@ -70,6 +71,8 @@ struct ContextSwitchObjective: FitnessObjective {
     }
 
     /// Bonus for having clusters of same-context events.
+    /// Uses fuzzy matching: events sharing a common prefix (e.g. "Work/backend/API"
+    /// and "Work/backend/DB") count as a cluster with partial credit.
     /// Scales with cluster size: 3 events → 0.05, 4 → 0.08, 5+ → 0.1.
     private func contextClusterBonus(
         _ events: [(start: Date, end: Date, context: String?)]
@@ -81,7 +84,8 @@ struct ContextSwitchObjective: FitnessObjective {
         for i in 1..<events.count {
             let prev = events[i - 1].context ?? "__none__"
             let curr = events[i].context ?? "__none__"
-            if prev == curr {
+            // Near-match (severity < 0.5) counts as same cluster
+            if Self.switchSeverity(from: prev, to: curr) < 0.5 {
                 currentRun += 1
                 maxRun = max(maxRun, currentRun)
             } else {
@@ -97,5 +101,28 @@ struct ContextSwitchObjective: FitnessObjective {
         let sizeBonus = min(0.1, Double(maxRun - 2) * 0.025)  // 3→0.025, 4→0.05, 6+→0.1
         let countBonus = min(0.05, Double(clusterCount - 1) * 0.025)  // extra clusters add up to 0.05
         return sizeBonus + countBonus
+    }
+
+    // MARK: - Fuzzy Context Comparison
+
+    /// Measure how severe a context switch is based on shared prefix segments.
+    ///   - Identical contexts → 0.0 (no switch)
+    ///   - Partial overlap ("Work/backend/API" → "Work/backend/DB") → 0.33
+    ///   - No overlap ("Work" → "Personal") → 1.0 (full switch)
+    static func switchSeverity(from ctx1: String, to ctx2: String) -> Double {
+        if ctx1 == ctx2 { return 0.0 }
+
+        let parts1 = ctx1.split(separator: "/")
+        let parts2 = ctx2.split(separator: "/")
+        let maxParts = max(parts1.count, parts2.count)
+        guard maxParts > 0 else { return 1.0 }
+
+        var shared = 0
+        for (a, b) in zip(parts1, parts2) {
+            if a == b { shared += 1 } else { break }
+        }
+
+        // Fraction of segments that differ
+        return 1.0 - Double(shared) / Double(maxParts)
     }
 }
