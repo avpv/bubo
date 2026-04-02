@@ -34,6 +34,15 @@ struct ScheduleChromosome: Chromosome, Sendable {
     var genes: [ScheduleGene]
     var fitness: Double = 0.0
 
+    /// Tracks whether this chromosome needs fitness re-evaluation.
+    /// Set to true on creation, crossover, and mutation; cleared after evaluation.
+    var needsEvaluation: Bool = true
+
+    /// Equality ignores needsEvaluation — two chromosomes with the same genes and fitness are equal.
+    static func == (lhs: ScheduleChromosome, rhs: ScheduleChromosome) -> Bool {
+        lhs.genes == rhs.genes && lhs.fitness == rhs.fitness
+    }
+
     // MARK: - Random Initialization
 
     static func random(context: OptimizerContext) -> ScheduleChromosome {
@@ -56,7 +65,7 @@ struct ScheduleChromosome: Chromosome, Sendable {
                 isFocusBlock: event.isFocusBlock
             )
         }
-        return ScheduleChromosome(genes: genes)
+        return ScheduleChromosome(genes: genes, needsEvaluation: true)
     }
 
     // MARK: - Crossover (Order-based)
@@ -76,8 +85,8 @@ struct ScheduleChromosome: Chromosome, Sendable {
         }
 
         return (
-            ScheduleChromosome(genes: child1Genes),
-            ScheduleChromosome(genes: child2Genes)
+            ScheduleChromosome(genes: child1Genes, needsEvaluation: true),
+            ScheduleChromosome(genes: child2Genes, needsEvaluation: true)
         )
     }
 
@@ -89,6 +98,7 @@ struct ScheduleChromosome: Chromosome, Sendable {
     // MARK: - Mutation
 
     mutating func mutate(rate: Double, context: OptimizerContext) {
+        needsEvaluation = true
         let cal = context.calendar
         for i in genes.indices {
             guard Double.random(in: 0...1) < rate else { continue }

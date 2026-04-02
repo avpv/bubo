@@ -50,9 +50,16 @@ struct Population<C: Chromosome> {
     }
 
     /// Evaluate all individuals using the given fitness function.
+    /// Uses parallel evaluation when the population is large enough to benefit.
     mutating func evaluateAll(using evaluate: (inout C) -> Void) {
-        for i in individuals.indices {
-            evaluate(&individuals[i])
+        if individuals.count > 1 {
+            DispatchQueue.concurrentPerform(iterations: individuals.count) { i in
+                evaluate(&individuals[i])
+            }
+        } else {
+            for i in individuals.indices {
+                evaluate(&individuals[i])
+            }
         }
     }
 

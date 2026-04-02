@@ -184,8 +184,16 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
                 offspring.removeLast(offspring.count - targetCount)
             }
 
-            for i in offspring.indices {
-                evaluate(&offspring[i])
+            // Parallel fitness evaluation: offspring are independent, so evaluate concurrently.
+            // Uses GCD concurrentPerform which automatically scales to available cores.
+            if offspring.count > 1 {
+                DispatchQueue.concurrentPerform(iterations: offspring.count) { i in
+                    self.evaluate(&offspring[i])
+                }
+            } else {
+                for i in offspring.indices {
+                    evaluate(&offspring[i])
+                }
             }
 
             population.replaceGeneration(with: offspring)

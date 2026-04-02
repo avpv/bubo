@@ -56,11 +56,12 @@ struct EnergyCurveObjective: FitnessObjective {
                     }
                 }
 
-                let hour = cal.component(.hour, from: event.start)
+                let hour = Double(cal.component(.hour, from: event.start))
+                    + Double(cal.component(.minute, from: event.start)) / 60.0
                 let durationHours = event.end.timeIntervalSince(event.start) / 3600
 
-                // Energy at this time of day (bell curve around peak)
-                let hourDistance = Double(abs(hour - peakHour))
+                // Energy at this time of day (smooth bell curve around peak)
+                let hourDistance = abs(hour - Double(peakHour))
                 let timeEnergy = exp(-hourDistance * hourDistance * 0.02)
 
                 // High-cost tasks at high-energy times = good alignment

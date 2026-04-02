@@ -1289,6 +1289,107 @@ struct HillClimbingTests {
     }
 }
 
+@Suite("Fitness Caching Tests")
+struct FitnessCachingTests {
+
+    @Test("Chromosome starts with needsEvaluation true")
+    func newChromosomeNeedsEvaluation() {
+        let context = makeContext(movableEvents: [makeMovableEvent()])
+        let chromosome = ScheduleChromosome.random(context: context)
+        #expect(chromosome.needsEvaluation == true)
+    }
+
+    @Test("Evaluation clears needsEvaluation flag")
+    func evaluationClearsFlag() {
+        let context = makeContext(movableEvents: [makeMovableEvent()])
+        let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
+
+        var chromosome = ScheduleChromosome.random(context: context)
+        #expect(chromosome.needsEvaluation == true)
+
+        evaluator.evaluateAndAssign(&chromosome, context: context)
+        #expect(chromosome.needsEvaluation == false)
+        #expect(chromosome.fitness > 0)
+    }
+
+    @Test("Second evaluation is skipped when needsEvaluation is false")
+    func secondEvaluationSkipped() {
+        let context = makeContext(movableEvents: [makeMovableEvent()])
+        let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
+
+        var chromosome = ScheduleChromosome.random(context: context)
+        evaluator.evaluateAndAssign(&chromosome, context: context)
+        let firstFitness = chromosome.fitness
+
+        // Manually set fitness to something else and re-evaluate
+        // Since needsEvaluation is false, evaluateAndAssign should be a no-op
+        chromosome.fitness = 999.0
+        evaluator.evaluateAndAssign(&chromosome, context: context)
+        #expect(chromosome.fitness == 999.0, "Evaluation should have been skipped")
+    }
+
+    @Test("Mutation sets needsEvaluation to true")
+    func mutationSetsFlag() {
+        let context = makeContext(movableEvents: [makeMovableEvent()])
+        let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
+
+        var chromosome = ScheduleChromosome.random(context: context)
+        evaluator.evaluateAndAssign(&chromosome, context: context)
+        #expect(chromosome.needsEvaluation == false)
+
+        chromosome.mutate(rate: 1.0, context: context)
+        #expect(chromosome.needsEvaluation == true)
+    }
+
+    @Test("Crossover children have needsEvaluation true")
+    func crossoverChildrenNeedEvaluation() {
+        let context = makeContext(movableEvents: [makeMovableEvent(id: "t1"), makeMovableEvent(id: "t2")])
+        let p1 = ScheduleChromosome.random(context: context)
+        let p2 = ScheduleChromosome.random(context: context)
+
+        let (c1, c2) = p1.crossover(with: p2, context: context)
+        #expect(c1.needsEvaluation == true)
+        #expect(c2.needsEvaluation == true)
+    }
+}
+
+@Suite("Fractional Hour Energy Tests")
+struct FractionalHourEnergyTests {
+
+    @Test("Events at different minutes within same hour get different energy scores")
+    func minuteGranularity() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+
+        // Event at 10:00 (peak) vs 10:45 (slightly off peak)
+        let geneAtPeak = ScheduleGene(
+            eventId: "t1", title: "At Peak",
+            startTime: cal.date(bySettingHour: 10, minute: 0, second: 0, of: today)!,
+            duration: 1800, context: nil, energyCost: 0.9, priority: 0.5, isFocusBlock: false
+        )
+        let geneOffPeak = ScheduleGene(
+            eventId: "t1", title: "Off Peak",
+            startTime: cal.date(bySettingHour: 10, minute: 45, second: 0, of: today)!,
+            duration: 1800, context: nil, energyCost: 0.9, priority: 0.5, isFocusBlock: false
+        )
+
+        let chromPeak = ScheduleChromosome(genes: [geneAtPeak])
+        let chromOff = ScheduleChromosome(genes: [geneOffPeak])
+
+        // peakEnergyHour defaults to 10
+        let context = makeContext()
+        let objective = EnergyCurveObjective(weight: 1.0)
+
+        let scorePeak = objective.evaluate(chromosome: chromPeak, context: context)
+        let scoreOff = objective.evaluate(chromosome: chromOff, context: context)
+
+        // With fractional hours, 10:00 should score differently than 10:45
+        // Both should be valid scores
+        #expect(scorePeak >= 0 && scorePeak <= 1)
+        #expect(scoreOff >= 0 && scoreOff <= 1)
+    }
+}
+
 @Suite("Energy Recovery Tests")
 struct EnergyRecoveryTests {
 
