@@ -586,6 +586,8 @@ struct MenuBarView: View {
             HStack(spacing: DS.Spacing.md) {
                 Button(action: {
                     Haptics.tap()
+                    optimizerService.activeRecipe = nil
+                    optimizerService.scenarios = []
                     navigation = .optimizer
                 }) {
                     Image(systemName: "wand.and.stars")
