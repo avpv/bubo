@@ -8,10 +8,12 @@ import SwiftUI
 struct RecipeConfigSheet: View {
     @Environment(\.activeSkin) private var skin
     let recipe: ScheduleRecipe
+    var reminderService: ReminderService? = nil
     let onExecute: (ScheduleRecipe, [String: Any]) -> Void
     let onCancel: () -> Void
 
     @State private var paramValues: [String: Any] = [:]
+    @State private var selectedEventIds: Set<String> = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.lg) {
@@ -92,6 +94,9 @@ struct RecipeConfigSheet: View {
 
             case .eventPicker:
                 eventPickerParam(id: param.id)
+
+            case .eventMultiPicker:
+                eventMultiPickerParam(id: param.id)
             }
         }
     }
@@ -173,6 +178,94 @@ struct RecipeConfigSheet: View {
             .clipShape(RoundedRectangle(cornerRadius: DS.Size.previewSmallRadius))
     }
 
+    private func eventMultiPickerParam(id: String) -> some View {
+        let events = localEventsForPicker
+
+        return VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            if events.isEmpty {
+                Text("No tasks to select")
+                    .font(.caption)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                    .padding(.vertical, DS.Spacing.sm)
+            } else {
+                // Select all / none toggle
+                HStack {
+                    let allSelected = selectedEventIds.count == events.count
+                    Button {
+                        if allSelected {
+                            selectedEventIds.removeAll()
+                        } else {
+                            selectedEventIds = Set(events.map(\.id))
+                        }
+                        paramValues[id] = Array(selectedEventIds)
+                    } label: {
+                        Text(allSelected ? "Deselect all" : "Select all")
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(skin.accentColor)
+                    }
+                    .buttonStyle(.plain)
+
+                    Spacer()
+
+                    Text("\(selectedEventIds.count) of \(events.count)")
+                        .font(.caption2)
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                }
+
+                ForEach(events, id: \.id) { event in
+                    eventRow(event: event, paramId: id)
+                }
+            }
+        }
+    }
+
+    private func eventRow(event: CalendarEvent, paramId: String) -> some View {
+        let isSelected = selectedEventIds.contains(event.id)
+
+        return Button {
+            if isSelected {
+                selectedEventIds.remove(event.id)
+            } else {
+                selectedEventIds.insert(event.id)
+            }
+            paramValues[paramId] = Array(selectedEventIds)
+        } label: {
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 16))
+                    .foregroundStyle(isSelected ? skin.accentColor : skin.resolvedTextTertiary)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(event.title)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(skin.resolvedTextPrimary)
+
+                    Text(event.formattedTimeRange)
+                        .font(.caption2)
+                        .foregroundStyle(skin.resolvedTextSecondary)
+                }
+
+                Spacer()
+
+                Text("\(Int(event.duration / 60))m")
+                    .font(.caption2)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+            }
+            .padding(.vertical, DS.Spacing.xs)
+            .padding(.horizontal, DS.Spacing.sm)
+            .background(isSelected ? skin.accentColor.opacity(0.06) : .clear)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Size.previewSmallRadius))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var localEventsForPicker: [CalendarEvent] {
+        guard let service = reminderService else { return [] }
+        return service.localEvents
+            .filter { $0.isUpcoming }
+            .sorted { $0.startDate < $1.startDate }
+    }
+
     // MARK: - Default Values
 
     private func initializeDefaults() {
@@ -193,6 +286,13 @@ struct RecipeConfigSheet: View {
                 }
             case .text, .eventPicker:
                 break
+            case .eventMultiPicker:
+                // Default: select all local events
+                if selectedEventIds.isEmpty {
+                    let allIds = localEventsForPicker.map(\.id)
+                    selectedEventIds = Set(allIds)
+                    paramValues[param.id] = allIds
+                }
             }
         }
     }

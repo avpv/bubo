@@ -184,7 +184,11 @@ extension ScheduleRecipe {
         icon: "calendar.day.timeline.left",
         description: "Rearrange today's tasks for best flow",
         category: "planning",
-        weights: [.energyCurve: 1.5, .contextSwitch: 1.2]
+        weights: [.energyCurve: 1.5, .contextSwitch: 1.2],
+        params: [
+            RecipeParam(id: "events", label: "Which tasks to organize?",
+                       kind: .eventMultiPicker, target: .selectedEventIds),
+        ]
     )
 
     static let planWeek = ScheduleRecipe(
