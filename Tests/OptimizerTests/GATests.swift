@@ -491,6 +491,39 @@ struct ContextResolutionTests {
         #expect(event.resolvedContext() == "Personal")
     }
 
+    @Test("ColorTag raw value used when no contextLabel configured")
+    func colorTagRawValue() {
+        var event = CalendarEvent(
+            id: "e1", title: "Task", startDate: Date(),
+            endDate: Date().addingTimeInterval(3600),
+            location: nil, description: nil, calendarName: "Work", eventType: .standard
+        )
+        event.colorTag = .blue
+
+        // No contextLabel configured for blue → uses raw value "blue"
+        let resolved = event.resolvedContext()!
+        #expect(resolved == "Work/blue")
+    }
+
+    @Test("Two events with same color group together")
+    func sameColorGroups() {
+        var event1 = CalendarEvent(
+            id: "e1", title: "Task A", startDate: Date(),
+            endDate: Date().addingTimeInterval(3600),
+            location: nil, description: nil, calendarName: "Work", eventType: .standard
+        )
+        event1.colorTag = .blue
+
+        var event2 = CalendarEvent(
+            id: "e2", title: "Task B", startDate: Date(),
+            endDate: Date().addingTimeInterval(3600),
+            location: nil, description: nil, calendarName: "Work", eventType: .standard
+        )
+        event2.colorTag = .blue
+
+        #expect(event1.resolvedContext() == event2.resolvedContext())
+    }
+
     @Test("Events in same calendar share context prefix")
     func sameCalendarPrefix() {
         let event1 = CalendarEvent(

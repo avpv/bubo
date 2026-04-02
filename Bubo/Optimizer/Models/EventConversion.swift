@@ -10,7 +10,7 @@ extension CalendarEvent {
     ///
     /// Examples:
     ///   calendar="Work", colorTag=blue("backend"), context="API"  → "Work/backend/API"
-    ///   calendar="Work", colorTag=blue("backend"), context=nil    → "Work/backend"
+    ///   calendar="Work", colorTag=blue(no label),  context=nil    → "Work/blue"
     ///   calendar="Work", colorTag=nil,             context=nil    → "Work"
     ///   calendar=nil,    colorTag=nil,             context="design" → "design"
     func resolvedContext(override: String? = nil) -> String? {
@@ -18,8 +18,9 @@ extension CalendarEvent {
         if let name = calendarName, !name.isEmpty {
             parts.append(name)
         }
-        if let label = colorTag?.contextLabel, !label.isEmpty {
-            parts.append(label)
+        if let tag = colorTag {
+            // User-configured label takes priority, raw color name as fallback
+            parts.append(tag.contextLabel ?? tag.rawValue)
         }
         if let ctx = override ?? context, !ctx.isEmpty {
             parts.append(ctx)
