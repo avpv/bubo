@@ -36,6 +36,7 @@ struct SettingsView: View {
             }
             .listStyle(.sidebar)
             .frame(width: DS.Settings.sidebarWidth)
+            .scrollContentBackground(.visible)
 
             Divider()
 
@@ -55,6 +56,7 @@ struct SettingsView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .toolbar(.hidden)
         .environment(viewModel)
         .environment(settings)
         .environment(reminderService)
