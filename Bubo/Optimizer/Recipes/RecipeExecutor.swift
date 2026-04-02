@@ -97,23 +97,28 @@ struct RecipeExecutor {
             optimizer.reoptimizer.stabilityWeight = 5.0
         }
 
-        // 14. Configure scenario generation
+        // 14. Pre-flight: check if there's enough working time for events
+        if let preflight = preflightCheck(context: context) {
+            return .infeasible(reason: preflight)
+        }
+
+        // 15. Configure scenario generation
         let scenarioGen = ScenarioGenerator()
         // scenarioGen uses default values; maxScenarios/diversityThreshold
         // are passed through GAConfiguration or handled post-optimization
 
-        // 15. Run optimizer
+        // 16. Run optimizer
         let config = recipe.speed.gaConfiguration
         let result = await optimizer.optimize(context: context, overrideConfig: config)
 
-        // 16. Filter scenarios to recipe's diversity/count preferences
+        // 17. Filter scenarios to recipe's diversity/count preferences
         let filteredScenarios = Array(result.scenarios.prefix(recipe.maxScenarios))
         let filteredResult = OptimizerResult(
             scenarios: filteredScenarios,
             metadata: result.metadata
         )
 
-        // 17. Check result quality
+        // 18. Check result quality
         if filteredResult.scenarios.isEmpty {
             return .infeasible(reason: "No feasible schedule found for the given constraints")
         }
@@ -333,6 +338,67 @@ struct RecipeExecutor {
         }
     }
 
+    // MARK: - Pre-flight Validation
+
+    /// Returns a user-facing error message if the schedule is clearly infeasible,
+    /// or nil if the optimizer should proceed.
+    private func preflightCheck(context: OptimizerContext) -> String? {
+        let cal = context.calendar
+        let now = Date()
+
+        // Calculate total available working minutes within the planning horizon
+        var availableMinutes: Double = 0
+        var day = cal.startOfDay(for: context.planningHorizon.start)
+        let horizonEnd = context.planningHorizon.end
+
+        while day < horizonEnd {
+            guard let workStart = cal.date(
+                bySettingHour: context.workingHours.lowerBound, minute: 0, second: 0, of: day
+            ), let workEnd = cal.date(
+                bySettingHour: context.workingHours.upperBound, minute: 0, second: 0, of: day
+            ) else {
+                day = cal.date(byAdding: .day, value: 1, to: day)!
+                continue
+            }
+
+            // Clamp to planning horizon and current time
+            let effectiveStart = max(workStart, max(now, context.planningHorizon.start))
+            let effectiveEnd = min(workEnd, horizonEnd)
+
+            if effectiveEnd > effectiveStart {
+                var freeMinutes = effectiveEnd.timeIntervalSince(effectiveStart) / 60
+
+                // Subtract fixed events that overlap this working window
+                for fixed in context.fixedEvents {
+                    let overlapStart = max(fixed.startDate, effectiveStart)
+                    let overlapEnd = min(fixed.endDate, effectiveEnd)
+                    if overlapEnd > overlapStart {
+                        freeMinutes -= overlapEnd.timeIntervalSince(overlapStart) / 60
+                    }
+                }
+
+                availableMinutes += max(0, freeMinutes)
+            }
+
+            day = cal.date(byAdding: .day, value: 1, to: day)!
+        }
+
+        // Calculate total required minutes
+        let requiredMinutes = context.movableEvents.reduce(0.0) { $0 + $1.duration / 60 }
+
+        if availableMinutes < 1 {
+            return "No working time left today — try scheduling for tomorrow"
+        }
+
+        if requiredMinutes > availableMinutes {
+            let needed = Int(requiredMinutes)
+            let available = Int(availableMinutes)
+            return "Need \(needed) min but only \(available) min of working time available"
+        }
+
+        return nil
+    }
+
     // MARK: - Horizon Resolution
 
     private func resolveHorizon(_ horizon: Horizon, workingHours: ClosedRange<Int>) -> DateInterval {
@@ -341,8 +407,22 @@ struct RecipeExecutor {
 
         switch horizon {
         case .today:
-            let end = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now))!
-            return DateInterval(start: now, end: end)
+            let todayEnd = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now))!
+
+            // Check remaining working hours today
+            let workEndToday = cal.date(
+                bySettingHour: workingHours.upperBound, minute: 0, second: 0, of: now
+            ) ?? todayEnd
+            let remainingMinutes = workEndToday.timeIntervalSince(now) / 60
+
+            // If less than 30 minutes of working time remain, extend to end of tomorrow
+            // so the optimizer can place events on the next day
+            if remainingMinutes < 30 {
+                let tomorrowEnd = cal.date(byAdding: .day, value: 1, to: todayEnd)!
+                return DateInterval(start: now, end: tomorrowEnd)
+            }
+
+            return DateInterval(start: now, end: todayEnd)
 
         case .tomorrow:
             let tomorrowStart = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now))!
@@ -510,6 +590,11 @@ extension RecipeExecutor {
             optimizer.reoptimizer.stabilityWeight = 2.0
         case .conservative:
             optimizer.reoptimizer.stabilityWeight = 5.0
+        }
+
+        // Pre-flight: check if there's enough working time for events
+        if let preflight = preflightCheck(context: context) {
+            return .infeasible(reason: preflight)
         }
 
         let config = recipe.speed.gaConfiguration
