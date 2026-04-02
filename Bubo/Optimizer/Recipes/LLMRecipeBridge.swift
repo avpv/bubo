@@ -33,16 +33,21 @@ struct LLMRecipeBridge {
     }
 
     /// Parse and validate without executing (for preview).
-    func parseRecipe(from json: String) -> Result<ScheduleRecipe, String> {
+    struct ParseError: Error, LocalizedError {
+        let message: String
+        var errorDescription: String? { message }
+    }
+
+    func parseRecipe(from json: String) -> Result<ScheduleRecipe, ParseError> {
         guard let data = json.data(using: .utf8) else {
-            return .failure("Invalid JSON string")
+            return .failure(ParseError(message: "Invalid JSON string"))
         }
 
         do {
             let recipe = try JSONDecoder().decode(ScheduleRecipe.self, from: data)
             return .success(recipe)
         } catch {
-            return .failure("Parse error: \(error.localizedDescription)")
+            return .failure(ParseError(message: "Parse error: \(error.localizedDescription)"))
         }
     }
 

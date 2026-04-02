@@ -145,6 +145,10 @@ struct CalendarEvent: Identifiable, Codable, Hashable, Sendable {
         endDate > Date()
     }
 
+    var duration: TimeInterval {
+        endDate.timeIntervalSince(startDate)
+    }
+
     var timeUntilStart: TimeInterval {
         startDate.timeIntervalSinceNow
     }

@@ -12,7 +12,7 @@ struct RecipeExecutor {
 
     // MARK: - Execute
 
-    func execute(_ recipe: ScheduleRecipe, paramValues: [String: Any] = []) async -> RecipeResult {
+    func execute(_ recipe: ScheduleRecipe, paramValues: [String: Any] = [:]) async -> RecipeResult {
         // 0. Apply user parameters
         var recipe = recipe
         recipe.applyParamValues(paramValues)

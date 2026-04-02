@@ -713,15 +713,15 @@ extension ScheduleRecipe {
         icon: "hammer",
         description: "Focus mornings, meetings afternoon",
         category: "advanced",
-        dayStructure: [
-            TimeBlock(period: .morning, allowedTypes: [.focus]),
-            TimeBlock(period: .afternoon, allowedTypes: [.meetings, .tasks]),
-        ],
+        weights: [.focusBlock: 2.0, .contextSwitch: 2.0],
         eventRules: [
             EventRule(match: .meetings, action: .setPreferredPeriod(.afternoon)),
             EventRule(match: .focusBlocks, action: .setPreferredPeriod(.morning)),
         ],
-        weights: [.focusBlock: 2.0, .contextSwitch: 2.0]
+        dayStructure: [
+            TimeBlock(period: .morning, allowedTypes: [.focus]),
+            TimeBlock(period: .afternoon, allowedTypes: [.meetings, .tasks]),
+        ]
     )
 
     static let managerSchedule = ScheduleRecipe(
@@ -730,14 +730,14 @@ extension ScheduleRecipe {
         icon: "briefcase",
         description: "Meetings morning, admin afternoon",
         category: "advanced",
-        dayStructure: [
-            TimeBlock(period: .morning, allowedTypes: [.meetings]),
-            TimeBlock(period: .afternoon, allowedTypes: [.tasks, .focus]),
-        ],
+        weights: [.contextSwitch: 2.0],
         eventRules: [
             EventRule(match: .meetings, action: .setPreferredPeriod(.morning)),
         ],
-        weights: [.contextSwitch: 2.0]
+        dayStructure: [
+            TimeBlock(period: .morning, allowedTypes: [.meetings]),
+            TimeBlock(period: .afternoon, allowedTypes: [.tasks, .focus]),
+        ]
     )
 
     // ═══════════════════════════════════════════════════════
@@ -767,8 +767,8 @@ extension ScheduleRecipe {
                 minutes: roundMinutes,
                 energy: 0.9,
                 context: "workout",
-                segments: round == 0 ? segments : nil, // segments on first round only
-                chainGap: round == 0 ? nil : 0
+                chainGap: round == 0 ? nil : 0,
+                segments: round == 0 ? segments : nil // segments on first round only
             ))
             if round < rounds - 1 {
                 events.append(EventSpec(
@@ -878,8 +878,8 @@ extension ScheduleRecipe {
         name: "Smart Reschedule",
         icon: "arrow.uturn.forward",
         description: "Adjust schedule after event removal",
-        trigger: .eventDeleted,
         stability: .conservative,
+        trigger: .eventDeleted,
         display: .inline,
         postActions: [.suggestInGap],
         learnable: false
@@ -890,8 +890,8 @@ extension ScheduleRecipe {
         name: "Readjust Schedule",
         icon: "arrow.right.arrow.left",
         description: "Shift remaining events",
-        trigger: .eventMoved,
         stability: .conservative,
+        trigger: .eventMoved,
         display: .confirmation,
         postActions: [.undoable],
         learnable: false
@@ -902,8 +902,8 @@ extension ScheduleRecipe {
         name: "Fit New Event",
         icon: "plus.circle",
         description: "Adjust schedule for new event",
-        trigger: .eventCreated,
         stability: .conservative,
+        trigger: .eventCreated,
         display: .toast,
         learnable: false
     )
