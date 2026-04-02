@@ -1,0 +1,11 @@
+name = "bubo-agent-proxy"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+
+# KV namespace for rate limiting (create with: wrangler kv namespace create RATE_LIMITS)
+[[kv_namespaces]]
+binding = "RATE_LIMITS"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+# Secrets (set with: wrangler secret put ANTHROPIC_API_KEY)
+# ANTHROPIC_API_KEY — your Anthropic API key (never committed to git)
