@@ -1,6 +1,6 @@
 # Bubo Agent Proxy
 
-Cloudflare Worker that proxies AI requests from the Bubo app to the Anthropic API with per-device rate limiting.
+Cloudflare Worker that proxies AI requests from the Bubo app to the DeepSeek API with per-device rate limiting.
 
 ## Why a proxy?
 
@@ -19,8 +19,8 @@ npx wrangler kv namespace create RATE_LIMITS
 
 # Copy the namespace ID into wrangler.toml (replace REPLACE_WITH_KV_NAMESPACE_ID)
 
-# Set your Anthropic API key as a secret (never committed to git)
-npx wrangler secret put ANTHROPIC_API_KEY
+# Set your DeepSeek API key as a secret (never committed to git)
+npx wrangler secret put DEEPSEEK_API_KEY
 
 # Deploy
 npm run deploy
@@ -37,19 +37,19 @@ Edit `src/index.ts` to change:
 ## How it works
 
 ```
-Bubo app                          Proxy (Cloudflare Worker)              Anthropic API
+Bubo app                          Proxy (Cloudflare Worker)              DeepSeek API
    │                                     │                                    │
    │── POST /v1/agent/recipe ──────────>│                                    │
    │   X-Device-Id: <uuid>              │                                    │
-   │   Body: Claude API request          │                                    │
+   │   Body: chat completion request     │                                    │
    │                                     │── Check rate limit (KV) ──>       │
    │                                     │<─ 17/20 used today                │
    │                                     │                                    │
-   │                                     │── POST /v1/messages ────────────>│
-   │                                     │   x-api-key: sk-ant-...           │
+   │                                     │── POST /chat/completions ───────>│
+   │                                     │   Authorization: Bearer sk-...     │
    │                                     │   Body: (forwarded)               │
    │                                     │                                    │
-   │                                     │<─ 200 + Claude response ─────────│
+   │                                     │<─ 200 + response ────────────────│
    │                                     │── Increment counter (KV) ──>      │
    │                                     │                                    │
    │<── 200 + Claude response ──────────│                                    │
@@ -75,8 +75,8 @@ npm run dev
 
 ## Cost estimate
 
-At ~20 requests/device/day with Claude Sonnet (~1K output tokens per recipe):
-- 100 daily users × 20 req × $0.003/req ≈ **$6/day**
-- 1000 daily users × 20 req × $0.003/req ≈ **$60/day**
+DeepSeek Chat is significantly cheaper than other LLM APIs (~$0.0003/req for ~1K output tokens):
+- 100 daily users × 20 req × $0.0003/req ≈ **$0.60/day**
+- 1000 daily users × 20 req × $0.0003/req ≈ **$6/day**
 
 Cloudflare Worker free tier: 100K requests/day.

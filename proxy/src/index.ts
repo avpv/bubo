@@ -8,15 +8,14 @@
  */
 
 interface Env {
-  ANTHROPIC_API_KEY: string;
+  DEEPSEEK_API_KEY: string;
   RATE_LIMITS: KVNamespace;
 }
 
 // ── Config ──────────────────────────────────────────────
 
 const DAILY_LIMIT = 20; // requests per device per day
-const ANTHROPIC_API = "https://api.anthropic.com/v1/messages";
-const ANTHROPIC_VERSION = "2023-06-01";
+const DEEPSEEK_API = "https://api.deepseek.com/chat/completions";
 
 // ── Entry Point ─────────────────────────────────────────
 
@@ -103,12 +102,11 @@ export default {
     }
 
     // Forward with the server-side API key
-    const anthropicResponse = await fetch(ANTHROPIC_API, {
+    const anthropicResponse = await fetch(DEEPSEEK_API, {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "anthropic-version": ANTHROPIC_VERSION,
-        "x-api-key": env.ANTHROPIC_API_KEY,
+        "authorization": `Bearer ${env.DEEPSEEK_API_KEY}`,
       },
       body,
     });

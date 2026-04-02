@@ -98,7 +98,7 @@ final class AgentService {
     /// Deploy your own proxy — see proxy/ directory for reference implementation.
     static let proxyEndpoint = URL(string: "https://bubo-proxy.YOUR_DOMAIN.workers.dev/v1/agent/recipe")!
 
-    private static let directEndpoint = URL(string: "https://api.anthropic.com/v1/messages")!
+    private static let directEndpoint = URL(string: "https://api.deepseek.com/chat/completions")!
 
     // MARK: - Init
 
@@ -129,16 +129,19 @@ final class AgentService {
         lastError = nil
         defer { isGenerating = false }
 
-        // Build the Claude API request body
-        let body = ClaudeToolRequest(
-            model: "claude-sonnet-4-20250514",
-            max_tokens: 4096,
-            system: Self.systemPrompt,
-            tools: [RecipeToolSchema.tool],
-            tool_choice: .init(type: "tool", name: RecipeToolSchema.toolName),
+        // Build OpenAI-compatible request body (DeepSeek API)
+        let body = ChatCompletionRequest(
+            model: "deepseek-chat",
             messages: [
-                .init(role: "user", content: userPrompt)
-            ]
+                .init(role: "system", content: Self.systemPrompt),
+                .init(role: "user", content: userPrompt),
+            ],
+            tools: [RecipeToolSchema.openAITool],
+            tool_choice: .init(
+                type: "function",
+                function: .init(name: RecipeToolSchema.toolName)
+            ),
+            max_tokens: 4096
         )
 
         guard let jsonBody = try? JSONEncoder().encode(body) else {
@@ -185,7 +188,7 @@ final class AgentService {
             return fail(.api(message))
         }
 
-        // Parse Claude response — extract tool_use block
+        // Parse OpenAI-compatible response — extract tool call arguments
         return parseToolResponse(data: data)
     }
 
@@ -205,8 +208,7 @@ final class AgentService {
         var request = URLRequest(url: Self.directEndpoint)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "content-type")
-        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-        request.setValue(ownAPIKey, forHTTPHeaderField: "x-api-key")
+        request.setValue("Bearer \(ownAPIKey)", forHTTPHeaderField: "authorization")
         request.httpBody = body
         request.timeoutInterval = 30
         return request
@@ -233,27 +235,24 @@ final class AgentService {
     // MARK: - Response Parsing
 
     private func parseToolResponse(data: Data) -> Result<ScheduleRecipe, AgentError> {
-        let claudeResponse: ClaudeToolResponse
+        let response: ChatCompletionResponse
         do {
-            claudeResponse = try JSONDecoder().decode(ClaudeToolResponse.self, from: data)
+            response = try JSONDecoder().decode(ChatCompletionResponse.self, from: data)
         } catch {
             return fail(.parsing("Could not parse API response: \(error.localizedDescription)"))
         }
 
-        guard let toolUse = claudeResponse.content.first(where: { $0.type == "tool_use" }),
-              let input = toolUse.input else {
-            return fail(.parsing("No tool_use block in response"))
+        guard let choice = response.choices.first,
+              let toolCall = choice.message.tool_calls?.first else {
+            return fail(.parsing("No tool call in response"))
         }
 
-        let inputData: Data
-        do {
-            inputData = try JSONSerialization.data(withJSONObject: input)
-        } catch {
-            return fail(.parsing("Could not serialize tool input: \(error.localizedDescription)"))
+        guard let argumentsData = toolCall.function.arguments.data(using: .utf8) else {
+            return fail(.parsing("Invalid tool call arguments"))
         }
 
         do {
-            var recipe = try JSONDecoder().decode(ScheduleRecipe.self, from: inputData)
+            var recipe = try JSONDecoder().decode(ScheduleRecipe.self, from: argumentsData)
             recipe = RecipeValidator.sanitize(recipe)
 
             if let error = RecipeValidator.validate(recipe) {
@@ -317,10 +316,13 @@ enum RecipeToolSchema {
 
     static let toolName = "create_recipe"
 
-    static let tool: ClaudeTool = .init(
-        name: toolName,
-        description: "Create a schedule optimization recipe from the user's request. The recipe defines what events to create and how to optimize them.",
-        input_schema: recipeSchema
+    /// Tool definition in OpenAI-compatible format (used by DeepSeek API).
+    static let openAITool = OpenAITool(
+        function: .init(
+            name: toolName,
+            description: "Create a schedule optimization recipe from the user's request. The recipe defines what events to create and how to optimize them.",
+            parameters: recipeSchema
+        )
     )
 
     // MARK: - Root Schema
@@ -630,7 +632,7 @@ enum AgentError: Error, LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .noAPIKey: "No API key configured. Add your Anthropic API key in Settings → AI Assistant."
+        case .noAPIKey: "No API key configured. Add your DeepSeek API key in Settings → AI Assistant."
         case .encoding: "Failed to encode request."
         case .network(let msg): "Network error: \(msg)"
         case .api(let msg): "API error: \(msg)"
@@ -641,34 +643,39 @@ enum AgentError: Error, LocalizedError {
     }
 }
 
-// MARK: - Claude Tool Use API Types
+// MARK: - OpenAI-Compatible API Types (DeepSeek)
 
-struct ClaudeTool: Encodable {
-    let name: String
-    let description: String
-    let input_schema: [String: Any]
+/// Tool definition in OpenAI format (wraps function in a type envelope).
+struct OpenAITool: Encodable {
+    let type = "function"
+    let function: FunctionDef
 
-    enum CodingKeys: String, CodingKey {
-        case name, description, input_schema
-    }
+    struct FunctionDef: Encodable {
+        let name: String
+        let description: String
+        let parameters: [String: Any]
 
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(name, forKey: .name)
-        try container.encode(description, forKey: .description)
-        let data = try JSONSerialization.data(withJSONObject: input_schema)
-        let rawJSON = try JSONDecoder().decode(AnyCodable.self, from: data)
-        try container.encode(rawJSON, forKey: .input_schema)
+        enum CodingKeys: String, CodingKey {
+            case name, description, parameters
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(name, forKey: .name)
+            try container.encode(description, forKey: .description)
+            let data = try JSONSerialization.data(withJSONObject: parameters)
+            let rawJSON = try JSONDecoder().decode(AnyCodable.self, from: data)
+            try container.encode(rawJSON, forKey: .parameters)
+        }
     }
 }
 
-struct ClaudeToolRequest: Encodable {
+struct ChatCompletionRequest: Encodable {
     let model: String
-    let max_tokens: Int
-    let system: String
-    let tools: [ClaudeTool]
-    let tool_choice: ToolChoice
     let messages: [Message]
+    let tools: [OpenAITool]
+    let tool_choice: ToolChoice
+    let max_tokens: Int
 
     struct Message: Encodable {
         let role: String
@@ -677,33 +684,32 @@ struct ClaudeToolRequest: Encodable {
 
     struct ToolChoice: Encodable {
         let type: String
-        let name: String
+        let function: FunctionName
+
+        struct FunctionName: Encodable {
+            let name: String
+        }
     }
 }
 
-struct ClaudeToolResponse: Decodable {
-    let content: [ContentBlock]
+struct ChatCompletionResponse: Decodable {
+    let choices: [Choice]
 
-    struct ContentBlock: Decodable {
-        let type: String
-        let name: String?
-        let input: [String: Any]?
+    struct Choice: Decodable {
+        let message: ResponseMessage
+    }
 
-        enum CodingKeys: String, CodingKey {
-            case type, name, input
-        }
+    struct ResponseMessage: Decodable {
+        let tool_calls: [ToolCall]?
+    }
 
-        init(from decoder: Decoder) throws {
-            let container = try decoder.container(keyedBy: CodingKeys.self)
-            type = try container.decode(String.self, forKey: .type)
-            name = try container.decodeIfPresent(String.self, forKey: .name)
-            if container.contains(.input) {
-                let rawInput = try container.decode(AnyCodable.self, forKey: .input)
-                input = rawInput.value as? [String: Any]
-            } else {
-                input = nil
-            }
-        }
+    struct ToolCall: Decodable {
+        let function: FunctionCall
+    }
+
+    struct FunctionCall: Decodable {
+        let name: String
+        let arguments: String // JSON string
     }
 }
 

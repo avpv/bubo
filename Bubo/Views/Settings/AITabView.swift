@@ -75,7 +75,7 @@ struct AITabView: View {
 
     private var ownKeyDescription: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            Text("Requests go directly to the Anthropic API using your key. No rate limits from Bubo, you pay per usage on your Anthropic account.")
+            Text("Requests go directly to the DeepSeek API using your key. No rate limits from Bubo, you pay per usage on your DeepSeek account.")
                 .font(.caption)
                 .foregroundStyle(skin.resolvedTextSecondary)
         }
@@ -85,16 +85,16 @@ struct AITabView: View {
 
     private var apiKeySection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            Text("Enter your Anthropic API key. Stored securely in your macOS Keychain.")
+            Text("Enter your DeepSeek API key. Stored securely in your macOS Keychain.")
                 .font(.caption)
                 .foregroundStyle(skin.resolvedTextSecondary)
 
             HStack(spacing: DS.Spacing.sm) {
                 Group {
                     if isKeyVisible {
-                        TextField("sk-ant-...", text: $apiKeyInput)
+                        TextField("sk-...", text: $apiKeyInput)
                     } else {
-                        SecureField("sk-ant-...", text: $apiKeyInput)
+                        SecureField("sk-...", text: $apiKeyInput)
                     }
                 }
                 .textFieldStyle(.plain)

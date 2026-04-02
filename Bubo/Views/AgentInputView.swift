@@ -77,7 +77,7 @@ struct AgentInputView: View {
                     .foregroundStyle(skin.resolvedTextPrimary)
             }
 
-            Text("Add your Anthropic API key in Settings → AI Assistant → Own API key to enable this feature.")
+            Text("Add your DeepSeek API key in Settings → AI Assistant → Own API key to enable this feature.")
                 .font(.caption)
                 .foregroundStyle(skin.resolvedTextSecondary)
 
