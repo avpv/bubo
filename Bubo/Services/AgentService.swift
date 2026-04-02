@@ -14,17 +14,40 @@ final class AgentService {
     private(set) var isGenerating: Bool = false
     private(set) var lastError: String? = nil
 
-    // MARK: - API Key (persisted in UserDefaults; move to Keychain for production)
+    // MARK: - API Key (stored in macOS Keychain)
+
+    private static let keychainKey = "anthropic-api-key"
+    private static let legacyDefaultsKey = "BuboAgentAPIKey"
 
     var apiKey: String {
-        get { UserDefaults.standard.string(forKey: apiKeyKey) ?? "" }
-        set { UserDefaults.standard.set(newValue, forKey: apiKeyKey) }
+        get { Keychain.load(key: Self.keychainKey) ?? "" }
+        set {
+            let trimmed = newValue.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty {
+                Keychain.delete(key: Self.keychainKey)
+            } else {
+                Keychain.save(key: Self.keychainKey, value: trimmed)
+            }
+        }
     }
 
-    var hasAPIKey: Bool { !apiKey.trimmingCharacters(in: .whitespaces).isEmpty }
+    var hasAPIKey: Bool { Keychain.exists(key: Self.keychainKey) }
 
-    private let apiKeyKey = "BuboAgentAPIKey"
     private let endpoint = URL(string: "https://api.anthropic.com/v1/messages")!
+
+    init() {
+        migrateFromUserDefaults()
+    }
+
+    /// One-time migration: move API key from UserDefaults to Keychain, then delete the plaintext copy.
+    private func migrateFromUserDefaults() {
+        let defaults = UserDefaults.standard
+        if let legacyKey = defaults.string(forKey: Self.legacyDefaultsKey),
+           !legacyKey.trimmingCharacters(in: .whitespaces).isEmpty {
+            Keychain.save(key: Self.keychainKey, value: legacyKey)
+            defaults.removeObject(forKey: Self.legacyDefaultsKey)
+        }
+    }
 
     // MARK: - Generate Recipe
 
