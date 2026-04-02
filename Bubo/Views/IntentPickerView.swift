@@ -9,6 +9,7 @@ struct IntentPickerView: View {
     var optimizerService: OptimizerService
     var hasLocalEvents: Bool = true
     let onSelectRecipe: (ScheduleRecipe) -> Void
+    var onAskAI: (() -> Void)? = nil
 
     private var suggestions: [ScheduleRecipe] {
         optimizerService.recipeMonitor?.suggestedRecipes ?? []
@@ -20,6 +21,11 @@ struct IntentPickerView: View {
                 // Getting started hint when no tasks exist
                 if !hasLocalEvents {
                     gettingStartedHint
+                }
+
+                // AI assistant entry point
+                if onAskAI != nil {
+                    askAISection
                 }
 
                 // Contextual suggestions (condition-based)
@@ -56,6 +62,51 @@ struct IntentPickerView: View {
             RoundedRectangle(cornerRadius: DS.Size.previewSmallRadius)
                 .fill(skin.accentColor.opacity(0.06))
         )
+    }
+
+    // MARK: - Ask AI
+
+    private var askAISection: some View {
+        Button { onAskAI?() } label: {
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 20))
+                    .foregroundStyle(skin.accentColor)
+                    .frame(width: 28)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Ask AI")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(skin.resolvedTextPrimary)
+                    Text("Describe what you want in your own words")
+                        .font(.caption2)
+                        .foregroundStyle(skin.resolvedTextSecondary)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "chevron.right")
+                    .font(.caption2)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+            }
+            .padding(DS.Spacing.sm)
+            .background(
+                RoundedRectangle(cornerRadius: DS.Size.previewSmallRadius)
+                    .fill(
+                        LinearGradient(
+                            colors: [skin.accentColor.opacity(0.12), skin.accentColor.opacity(0.04)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Size.previewSmallRadius)
+                    .strokeBorder(skin.accentColor.opacity(0.25), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Suggestions

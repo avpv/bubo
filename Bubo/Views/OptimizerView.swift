@@ -9,6 +9,7 @@ struct OptimizerView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var optimizerService: OptimizerService
     var reminderService: ReminderService
+    var agentService: AgentService
     var onBack: () -> Void
     var onAddTasks: (() -> Void)? = nil
 
@@ -18,6 +19,7 @@ struct OptimizerView: View {
 
     enum Phase: Equatable {
         case picking
+        case agentInput
         case configuring
         case optimizing
         case results
@@ -26,6 +28,7 @@ struct OptimizerView: View {
         static func == (lhs: Phase, rhs: Phase) -> Bool {
             switch (lhs, rhs) {
             case (.picking, .picking): return true
+            case (.agentInput, .agentInput): return true
             case (.configuring, .configuring): return true
             case (.optimizing, .optimizing): return true
             case (.results, .results): return true
@@ -45,7 +48,15 @@ struct OptimizerView: View {
                     IntentPickerView(
                         optimizerService: optimizerService,
                         hasLocalEvents: !reminderService.localEvents.filter(\.isUpcoming).isEmpty,
-                        onSelectRecipe: handleRecipeSelected
+                        onSelectRecipe: handleRecipeSelected,
+                        onAskAI: handleAskAI
+                    )
+
+                case .agentInput:
+                    AgentInputView(
+                        agentService: agentService,
+                        onRecipeGenerated: handleAgentRecipe,
+                        onCancel: { resetToPicking() }
                     )
 
                 case .configuring:
@@ -107,7 +118,7 @@ struct OptimizerView: View {
                 switch phase {
                 case .picking:
                     onBack()
-                case .configuring, .error:
+                case .agentInput, .configuring, .error:
                     resetToPicking()
                 case .optimizing:
                     break // can't go back while optimizing
@@ -268,6 +279,18 @@ struct OptimizerView: View {
             // Show configuration sheet
             phase = .configuring
         }
+    }
+
+    private func handleAskAI() {
+        Haptics.tap()
+        phase = .agentInput
+    }
+
+    private func handleAgentRecipe(_ recipe: ScheduleRecipe) {
+        Haptics.tap()
+        selectedRecipe = recipe
+        // Agent-generated recipes have no params — execute immediately
+        handleExecute(recipe, [:])
     }
 
     private func handleExecute(_ recipe: ScheduleRecipe, _ paramValues: [String: Any]) {

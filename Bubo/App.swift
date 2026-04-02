@@ -7,6 +7,7 @@ struct BuboApp: App {
     @State private var reminderService: ReminderService
     @State private var networkMonitor = NetworkMonitor()
     @State private var optimizerService = OptimizerService()
+    @State private var agentService = AgentService()
 
     init() {
         let s = ReminderSettings.load()
@@ -211,7 +212,8 @@ struct BuboApp: App {
                 settings: settings,
                 reminderService: reminderService,
                 networkMonitor: networkMonitor,
-                optimizerService: optimizerService
+                optimizerService: optimizerService,
+                agentService: agentService
             )
         } label: {
             Image(nsImage: menuBarIconWithBadge(count: badgeCount))
@@ -223,6 +225,7 @@ struct BuboApp: App {
                 .environment(settings)
                 .environment(reminderService)
                 .environment(optimizerService)
+                .environment(agentService)
         }
         .windowToolbarStyle(.unified(showsTitle: true))
     }

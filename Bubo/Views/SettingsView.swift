@@ -5,6 +5,7 @@ struct SettingsView: View {
     @Environment(ReminderSettings.self) var settings
     @Environment(ReminderService.self) var reminderService
     @Environment(OptimizerService.self) var optimizerService
+    @Environment(AgentService.self) var agentService
     @State private var viewModel = SettingsViewModel()
     @State private var selectedPane: SettingsPane = .general
 
@@ -14,6 +15,7 @@ struct SettingsView: View {
         case reminders = "Reminders"
         case worldClock = "World Clock"
         case optimizer = "Schedule Assistant"
+        case ai = "AI Assistant"
 
         var id: String { rawValue }
 
@@ -24,6 +26,7 @@ struct SettingsView: View {
             case .reminders: "bell"
             case .worldClock: "globe"
             case .optimizer: "wand.and.stars.inverse"
+            case .ai: "sparkles"
             }
         }
     }
@@ -52,6 +55,8 @@ struct SettingsView: View {
                     WorldClockTabView()
                 case .optimizer:
                     OptimizerTabView()
+                case .ai:
+                    AITabView(agentService: agentService)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
