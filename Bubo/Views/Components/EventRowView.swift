@@ -18,6 +18,7 @@ struct EventRowView: View {
     @State private var isHovered = false
     @State private var isDisintegrating = false
     @State private var pendingDeleteAction: (() -> Void)?
+    @FocusState private var isFocused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.activeSkin) private var skin
@@ -126,6 +127,14 @@ struct EventRowView: View {
         }
         // HIG: Support keyboard navigation — focusable rows, Enter to open
         .focusable()
+        .focused($isFocused)
+        .focusEffectDisabled()
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                .stroke(isFocused ? skin.accentColor.opacity(DS.Opacity.overlayDark) : Color.clear, lineWidth: DS.Size.focusRingWidth)
+                .shadow(color: isFocused ? skin.accentColor.opacity(0.4) : .clear, radius: 4, x: 0, y: 0)
+        )
+        .animation(skin.resolvedMicroAnimation, value: isFocused)
         .onKeyPress(.return) {
             Haptics.tap()
             onTap?(event)
