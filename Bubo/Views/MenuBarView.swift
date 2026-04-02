@@ -6,6 +6,7 @@ struct MenuBarView: View {
     var reminderService: ReminderService
     var networkMonitor: NetworkMonitor
     var optimizerService: OptimizerService
+    var agentService: AgentService
 
     @State private var navigation: Navigation = .list
     @State private var hasStartedSync = false
@@ -161,6 +162,7 @@ struct MenuBarView: View {
                     OptimizerView(
                         optimizerService: optimizerService,
                         reminderService: reminderService,
+                        agentService: agentService,
                         onBack: { navigation = .list },
                         onAddTasks: { navigation = .quickAddTasks }
                     )

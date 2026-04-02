@@ -55,6 +55,10 @@ struct LLMRecipeBridge {
 
     /// A concise schema description to include in the LLM system prompt.
     /// The LLM uses this to generate valid ScheduleRecipe JSON.
+    ///
+    /// Note: For structured output, prefer `RecipeToolSchema` (used by AgentService)
+    /// which provides a full JSON Schema with enum constraints via Claude tool_use.
+    /// This text description is kept for contexts where tool_use is not available.
     static let schemaDescription = """
     You can create schedule optimization recipes as JSON objects.
 
@@ -69,35 +73,35 @@ struct LLMRecipeBridge {
       "weights": { WeightKey: double } (optional overrides),
       "speed": "quick" | "balanced" | "thorough" (default: "quick"),
       "stability": "full" | "normal" | "conservative" (default: "normal"),
-      "maxScenarios": int (default: 3),
-      "workingHours": {"start": int, "end": int} (optional),
-      "maxMeetingsPerDay": int (optional),
-      "peakEnergyHour": int (optional)
+      "maxScenarios": int 1-5 (default: 3),
+      "workingHours": {"start": 0-23, "end": 0-23} (optional),
+      "maxMeetingsPerDay": int 0-20 (optional),
+      "peakEnergyHour": int 0-23 (optional)
     }
 
     ## EventSpec
     {
       "title": "string (required)",
-      "minutes": int (required),
-      "count": int (default: 1, creates N copies),
+      "minutes": int 5-480 (required),
+      "count": int 1-10 (default: 1, creates N copies),
       "priority": 0.0-1.0 (default: 0.5),
       "energy": 0.0-1.0 (default: 0.5, cognitive load),
       "context": "string (optional, project/category tag)",
       "period": "morning" | "afternoon" | "evening" (optional preferred time),
       "focus": bool (default: false, marks as uninterruptible),
       "pomodoro": "classic" | "deepWork" (optional),
-      "chainGap": int (optional, minutes after previous event; creates sequential chain),
+      "chainGap": int 0-60 (optional, minutes after previous event; creates sequential chain),
       "segments": [EventSegment array] (optional, sub-structure within event)
     }
 
     ## EventSegment
     {
       "title": "string",
-      "minutes": int,
+      "minutes": int 1-120,
       "type": "work" | "rest" | "transition"
     }
 
-    ## WeightKey values
+    ## WeightKey values (all optional, number type)
     "focusBlock", "pomodoroFit", "conflict", "taskPlacement",
     "weekBalance", "energyCurve", "multiPerson", "break",
     "deadline", "contextSwitch", "buffer"
