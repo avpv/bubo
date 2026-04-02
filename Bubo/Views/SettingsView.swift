@@ -56,6 +56,7 @@ struct SettingsView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .navigationTitle("\(selectedPane.rawValue) | Bubo")
         .toolbar(.hidden)
         .environment(viewModel)
         .environment(settings)

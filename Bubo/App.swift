@@ -224,6 +224,6 @@ struct BuboApp: App {
                 .environment(reminderService)
                 .environment(optimizerService)
         }
-        .windowToolbarStyle(.unified(showsTitle: false))
+        .windowToolbarStyle(.unified(showsTitle: true))
     }
 }
