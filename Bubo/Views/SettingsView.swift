@@ -29,28 +29,32 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        NavigationSplitView {
+        HStack(spacing: 0) {
             List(SettingsPane.allCases, selection: $selectedPane) { pane in
                 Label(pane.rawValue, systemImage: pane.icon)
                     .tag(pane)
             }
             .listStyle(.sidebar)
-            .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 220)
-        } detail: {
-            switch selectedPane {
-            case .general:
-                GeneralTabView()
-            case .calendars:
-                CalendarsTabView()
-            case .reminders:
-                RemindersTabView()
-            case .worldClock:
-                WorldClockTabView()
-            case .optimizer:
-                OptimizerTabView()
+            .frame(width: DS.Settings.sidebarWidth)
+
+            Divider()
+
+            Group {
+                switch selectedPane {
+                case .general:
+                    GeneralTabView()
+                case .calendars:
+                    CalendarsTabView()
+                case .reminders:
+                    RemindersTabView()
+                case .worldClock:
+                    WorldClockTabView()
+                case .optimizer:
+                    OptimizerTabView()
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .modifier(RemoveToolbarTitleIfAvailable())
         .environment(viewModel)
         .environment(settings)
         .environment(reminderService)
@@ -67,16 +71,6 @@ struct SettingsView: View {
                 selectedPane = pane
                 SettingsViewModel.pendingPane = nil
             }
-        }
-    }
-}
-
-private struct RemoveToolbarTitleIfAvailable: ViewModifier {
-    func body(content: Content) -> some View {
-        if #available(macOS 15.0, *) {
-            content.toolbar(removing: .title)
-        } else {
-            content
         }
     }
 }
