@@ -39,7 +39,9 @@ enum DS {
     // MARK: Settings Window
 
     enum Settings {
-        static let width: CGFloat = 640
+        static let sidebarWidth: CGFloat = 200
+        static let detailWidth: CGFloat = 500
+        static let width: CGFloat = sidebarWidth + detailWidth
         static let minHeight: CGFloat = 480
         static let idealHeight: CGFloat = 540
     }
