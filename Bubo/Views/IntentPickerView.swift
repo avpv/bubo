@@ -7,6 +7,7 @@ import SwiftUI
 struct IntentPickerView: View {
     @Environment(\.activeSkin) private var skin
     var optimizerService: OptimizerService
+    var hasLocalEvents: Bool = true
     let onSelectRecipe: (ScheduleRecipe) -> Void
 
     private var suggestions: [ScheduleRecipe] {
@@ -16,6 +17,11 @@ struct IntentPickerView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: DS.Spacing.lg) {
+                // Getting started hint when no tasks exist
+                if !hasLocalEvents {
+                    gettingStartedHint
+                }
+
                 // Contextual suggestions (condition-based)
                 if !suggestions.isEmpty {
                     suggestionsSection
@@ -31,6 +37,25 @@ struct IntentPickerView: View {
             .padding(.vertical, DS.Spacing.xl)
         }
         .scrollContentBackground(.hidden)
+    }
+
+    // MARK: - Getting Started Hint
+
+    private var gettingStartedHint: some View {
+        HStack(spacing: DS.Spacing.sm) {
+            Image(systemName: "lightbulb")
+                .font(.caption)
+                .foregroundStyle(skin.accentColor)
+
+            Text("No tasks yet — pick a recipe that creates blocks (e.g. **Need Focus**, **Pomodoro Session**). Planning recipes like Organize Day need existing tasks.")
+                .font(.caption2)
+                .foregroundStyle(skin.resolvedTextSecondary)
+        }
+        .padding(DS.Spacing.sm)
+        .background(
+            RoundedRectangle(cornerRadius: DS.Size.previewSmallRadius)
+                .fill(skin.accentColor.opacity(0.06))
+        )
     }
 
     // MARK: - Suggestions

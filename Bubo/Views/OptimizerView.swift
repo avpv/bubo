@@ -10,6 +10,7 @@ struct OptimizerView: View {
     var optimizerService: OptimizerService
     var reminderService: ReminderService
     var onBack: () -> Void
+    var onAddTasks: (() -> Void)? = nil
 
     @State private var phase: Phase = .picking
     @State private var selectedRecipe: ScheduleRecipe? = nil
@@ -43,6 +44,7 @@ struct OptimizerView: View {
                 case .picking:
                     IntentPickerView(
                         optimizerService: optimizerService,
+                        hasLocalEvents: !reminderService.localEvents.filter(\.isUpcoming).isEmpty,
                         onSelectRecipe: handleRecipeSelected
                     )
 
@@ -159,30 +161,93 @@ struct OptimizerView: View {
 
     // MARK: - Error View
 
+    private var isNoEventsError: Bool {
+        if case .error(let msg) = phase {
+            return msg.contains("No events")
+        }
+        return false
+    }
+
+    /// Recipes that create new events (don't require existing tasks).
+    private var creativeRecipes: [ScheduleRecipe] {
+        RecipeCatalog.quickActions.filter { !$0.events.isEmpty }
+    }
+
     private func errorView(_ message: String) -> some View {
         VStack(spacing: DS.Spacing.lg) {
             Spacer()
 
-            Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 36))
-                .foregroundStyle(skin.resolvedWarningColor)
+            if isNoEventsError {
+                // Specific empty-state for "no events" — guide the user
+                Image(systemName: "tray")
+                    .font(.system(size: 36))
+                    .foregroundStyle(skin.resolvedTextTertiary)
 
-            VStack(spacing: DS.Spacing.xs) {
-                Text("Couldn't optimize")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(skin.resolvedTextPrimary)
-                Text(message)
-                    .font(.caption)
-                    .foregroundStyle(skin.resolvedTextSecondary)
-                    .multilineTextAlignment(.center)
+                VStack(spacing: DS.Spacing.xs) {
+                    Text("Nothing to organize yet")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(skin.resolvedTextPrimary)
+                    Text("This recipe rearranges existing tasks.\nAdd some first, or try a recipe that creates new blocks.")
+                        .font(.caption)
+                        .foregroundStyle(skin.resolvedTextSecondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, DS.Spacing.lg)
+                }
+
+                VStack(spacing: DS.Spacing.sm) {
+                    if onAddTasks != nil {
+                        Button {
+                            Haptics.tap()
+                            onAddTasks?()
+                        } label: {
+                            Label("Add tasks", systemImage: "plus")
+                        }
+                        .buttonStyle(.action(role: .primary, size: .compact))
+                    }
+
+                    Button("Browse recipes") {
+                        Haptics.tap()
+                        resetToPicking()
+                    }
+                    .buttonStyle(.action(role: .secondary, size: .compact))
+                }
+
+                // Suggest recipes that create events
+                if !creativeRecipes.isEmpty {
+                    VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                        Text("Or try one of these")
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(skin.resolvedTextTertiary)
+
+                        ForEach(creativeRecipes) { recipe in
+                            RecipeCardView(recipe: recipe, style: .list, onTap: handleRecipeSelected)
+                        }
+                    }
                     .padding(.horizontal, DS.Spacing.lg)
-            }
+                }
+            } else {
+                // Generic error
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 36))
+                    .foregroundStyle(skin.resolvedWarningColor)
 
-            Button("Try a different recipe") {
-                Haptics.tap()
-                resetToPicking()
+                VStack(spacing: DS.Spacing.xs) {
+                    Text("Couldn't optimize")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(skin.resolvedTextPrimary)
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(skin.resolvedTextSecondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, DS.Spacing.lg)
+                }
+
+                Button("Try a different recipe") {
+                    Haptics.tap()
+                    resetToPicking()
+                }
+                .buttonStyle(.action(role: .primary, size: .compact))
             }
-            .buttonStyle(.action(role: .primary, size: .compact))
 
             Spacer()
         }
