@@ -26,66 +26,9 @@ struct BuboApp: App {
         }
         self.modelContainer = container
 
-        // One-time migration from UserDefaults
-        Self.migrateFromUserDefaults(into: container)
-
         let s = ReminderSettings.load()
         _settings = State(wrappedValue: s)
         _reminderService = State(wrappedValue: ReminderService(settings: s, modelContainer: container))
-    }
-
-    /// Migrates legacy UserDefaults data into SwiftData on first launch.
-    private static func migrateFromUserDefaults(into container: ModelContainer) {
-        let defaults = UserDefaults.standard
-        let migrationKey = "SwiftDataMigrationCompleted"
-        guard !defaults.bool(forKey: migrationKey) else { return }
-
-        let context = ModelContext(container)
-
-        // Migrate local events
-        if let data = defaults.data(forKey: "LocalEvents"),
-           let events = try? JSONDecoder().decode([CalendarEvent].self, from: data) {
-            for event in events {
-                context.insert(PersistedLocalEvent(from: event))
-            }
-        }
-
-        // Migrate cached events
-        if let data = defaults.data(forKey: "CachedCalendarEvents"),
-           let cached = try? JSONDecoder().decode(EventCacheLegacy.self, from: data) {
-            for event in cached.events {
-                context.insert(PersistedCachedEvent(from: event, cachedAt: cached.timestamp))
-            }
-        }
-
-        // Migrate excluded occurrences
-        if let data = defaults.data(forKey: "ExcludedOccurrences"),
-           let ids = try? JSONDecoder().decode([String].self, from: data) {
-            for id in ids {
-                context.insert(PersistedExcludedOccurrence(occurrenceId: id))
-            }
-        }
-
-        // Migrate reminder overrides
-        if let data = defaults.data(forKey: "LocalRemindersOverrides"),
-           let overrides = try? JSONDecoder().decode([String: [Int]].self, from: data) {
-            for (eventId, minutes) in overrides {
-                context.insert(PersistedReminderOverride(eventId: eventId, minutes: minutes))
-            }
-        }
-
-        do {
-            try context.save()
-            defaults.set(true, forKey: migrationKey)
-            // Clean up old keys
-            defaults.removeObject(forKey: "LocalEvents")
-            defaults.removeObject(forKey: "CachedCalendarEvents")
-            defaults.removeObject(forKey: "CachedEventsTimestamp")
-            defaults.removeObject(forKey: "ExcludedOccurrences")
-            defaults.removeObject(forKey: "LocalRemindersOverrides")
-        } catch {
-            print("SwiftData migration failed: \(error)")
-        }
     }
 
     private func drawOwl(in ctx: CGContext, size s: CGFloat, color: CGColor) {
@@ -277,12 +220,6 @@ struct BuboApp: App {
         }
         image.isTemplate = false
         return image
-    }
-
-    /// Legacy format for decoding cached events from UserDefaults during migration.
-    private struct EventCacheLegacy: Codable {
-        let events: [CalendarEvent]
-        let timestamp: Date
     }
 
     var body: some Scene {
