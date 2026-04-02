@@ -1,6 +1,7 @@
 import Foundation
 import UserNotifications
 import AppKit
+import SwiftData
 
 @MainActor
 @Observable
@@ -19,7 +20,8 @@ class ReminderService {
     private nonisolated(unsafe) var reminderTimers: [String: [Timer]] = [:]
     private var settings: ReminderSettings
     private var firedReminders: Set<String> = []
-    private let eventCache = EventCache()
+    private let eventCache: EventCache
+    private let modelContainer: ModelContainer
     private nonisolated(unsafe) var settingsObserver: Any?
     private var excludedOccurrences: Set<String> = []
     private var localRemindersOverrides: [String: [Int]] = [:]
@@ -92,8 +94,10 @@ class ReminderService {
         return results
     }
 
-    init(settings: ReminderSettings) {
+    init(settings: ReminderSettings, modelContainer: ModelContainer) {
         self.settings = settings
+        self.modelContainer = modelContainer
+        self.eventCache = EventCache(modelContainer: modelContainer)
         requestNotificationPermission()
         loadLocalEvents()
         loadLocalRemindersOverrides()
@@ -346,28 +350,67 @@ class ReminderService {
     }
 
     private func saveLocalEvents() {
-        if let data = try? JSONEncoder().encode(localEvents) {
-            UserDefaults.standard.set(data, forKey: "LocalEvents")
+        let context = ModelContext(modelContainer)
+        do {
+            // Fetch existing persisted events to diff against
+            let existing = try context.fetch(FetchDescriptor<PersistedLocalEvent>())
+            let existingById = Dictionary(uniqueKeysWithValues: existing.map { ($0.eventId, $0) })
+            let currentIds = Set(localEvents.map { $0.id })
+
+            // Delete removed events
+            for persisted in existing where !currentIds.contains(persisted.eventId) {
+                context.delete(persisted)
+            }
+
+            // Insert or update
+            for event in localEvents {
+                if let persisted = existingById[event.id] {
+                    persisted.update(from: event)
+                } else {
+                    context.insert(PersistedLocalEvent(from: event))
+                }
+            }
+
+            try context.save()
+        } catch {
+            print("ReminderService: failed to save local events: \(error)")
         }
     }
 
     private func loadLocalEvents() {
-        guard let data = UserDefaults.standard.data(forKey: "LocalEvents"),
-              let events = try? JSONDecoder().decode([CalendarEvent].self, from: data) else { return }
-        localEvents = events.filter { $0.isUpcoming || $0.recurrenceRule != nil }
-        loadExcludedOccurrences()
+        let context = ModelContext(modelContainer)
+        do {
+            let persisted = try context.fetch(FetchDescriptor<PersistedLocalEvent>())
+            localEvents = persisted
+                .map { $0.toCalendarEvent() }
+                .filter { $0.isUpcoming || $0.recurrenceRule != nil }
+            loadExcludedOccurrences()
+        } catch {
+            print("ReminderService: failed to load local events: \(error)")
+        }
     }
 
     private func saveExcludedOccurrences() {
-        if let data = try? JSONEncoder().encode(Array(excludedOccurrences)) {
-            UserDefaults.standard.set(data, forKey: "ExcludedOccurrences")
+        let context = ModelContext(modelContainer)
+        do {
+            try context.delete(model: PersistedExcludedOccurrence.self)
+            for id in excludedOccurrences {
+                context.insert(PersistedExcludedOccurrence(occurrenceId: id))
+            }
+            try context.save()
+        } catch {
+            print("ReminderService: failed to save excluded occurrences: \(error)")
         }
     }
 
     private func loadExcludedOccurrences() {
-        guard let data = UserDefaults.standard.data(forKey: "ExcludedOccurrences"),
-              let ids = try? JSONDecoder().decode([String].self, from: data) else { return }
-        excludedOccurrences = Set(ids)
+        let context = ModelContext(modelContainer)
+        do {
+            let persisted = try context.fetch(FetchDescriptor<PersistedExcludedOccurrence>())
+            excludedOccurrences = Set(persisted.map { $0.occurrenceId })
+        } catch {
+            print("ReminderService: failed to load excluded occurrences: \(error)")
+        }
     }
 
     // MARK: - Local Reminder Overrides
@@ -387,15 +430,28 @@ class ReminderService {
     }
 
     private func saveLocalRemindersOverrides() {
-        if let data = try? JSONEncoder().encode(localRemindersOverrides) {
-            UserDefaults.standard.set(data, forKey: "LocalRemindersOverrides")
+        let context = ModelContext(modelContainer)
+        do {
+            try context.delete(model: PersistedReminderOverride.self)
+            for (eventId, minutes) in localRemindersOverrides {
+                context.insert(PersistedReminderOverride(eventId: eventId, minutes: minutes))
+            }
+            try context.save()
+        } catch {
+            print("ReminderService: failed to save reminder overrides: \(error)")
         }
     }
 
     private func loadLocalRemindersOverrides() {
-        guard let data = UserDefaults.standard.data(forKey: "LocalRemindersOverrides"),
-              let overrides = try? JSONDecoder().decode([String: [Int]].self, from: data) else { return }
-        localRemindersOverrides = overrides
+        let context = ModelContext(modelContainer)
+        do {
+            let persisted = try context.fetch(FetchDescriptor<PersistedReminderOverride>())
+            localRemindersOverrides = Dictionary(
+                uniqueKeysWithValues: persisted.map { ($0.eventId, $0.minutes) }
+            )
+        } catch {
+            print("ReminderService: failed to load reminder overrides: \(error)")
+        }
     }
 
     // MARK: - Snooze
