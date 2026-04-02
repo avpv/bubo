@@ -131,7 +131,7 @@ struct EventRowView: View {
         .focusEffectDisabled()
         .overlay(
             RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                .stroke(isFocused ? skin.accentColor.opacity(DS.Opacity.overlayDark) : Color.clear, lineWidth: DS.Size.focusRingWidth)
+                .strokeBorder(isFocused ? skin.accentColor.opacity(DS.Opacity.overlayDark) : Color.clear, lineWidth: DS.Size.focusRingWidth)
                 .shadow(color: isFocused ? skin.accentColor.opacity(0.4) : .clear, radius: 4, x: 0, y: 0)
         )
         .animation(skin.resolvedMicroAnimation, value: isFocused)
