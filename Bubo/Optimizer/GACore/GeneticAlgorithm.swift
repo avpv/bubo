@@ -13,6 +13,8 @@ struct GAConfiguration: Sendable {
     var convergenceThreshold: Double   // stop if fitness improvement < this for N generations
     var convergencePatience: Int       // number of stale generations before stopping
     var adaptiveMutation: Bool
+    var diversityThreshold: Double     // below this diversity, boost mutation & inject immigrants
+    var immigrationRate: Double        // fraction of population replaced by random immigrants on stagnation
 
     static let `default` = GAConfiguration(
         populationSize: 100,
@@ -24,7 +26,9 @@ struct GAConfiguration: Sendable {
         crossoverStrategy: .singlePoint,
         convergenceThreshold: 0.001,
         convergencePatience: 30,
-        adaptiveMutation: true
+        adaptiveMutation: true,
+        diversityThreshold: 0.01,
+        immigrationRate: 0.1
     )
 
     static let quick = GAConfiguration(
@@ -37,7 +41,9 @@ struct GAConfiguration: Sendable {
         crossoverStrategy: .singlePoint,
         convergenceThreshold: 0.005,
         convergencePatience: 15,
-        adaptiveMutation: false
+        adaptiveMutation: false,
+        diversityThreshold: 0.01,
+        immigrationRate: 0.1
     )
 
     static let thorough = GAConfiguration(
@@ -50,7 +56,9 @@ struct GAConfiguration: Sendable {
         crossoverStrategy: .twoPoint,
         convergenceThreshold: 0.0005,
         convergencePatience: 50,
-        adaptiveMutation: true
+        adaptiveMutation: true,
+        diversityThreshold: 0.005,
+        immigrationRate: 0.15
     )
 }
 
@@ -125,6 +133,15 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         var lastBestFitness = bestEver?.fitness ?? 0
 
         for generation in 0..<config.maxGenerations {
+            let diversity = population.fitnessDiversity
+            let diversityIsLow = diversity < config.diversityThreshold
+
+            // Immigration: inject random individuals when diversity collapses
+            if diversityIsLow && config.immigrationRate > 0 {
+                let immigrantCount = max(1, Int(Double(config.populationSize) * config.immigrationRate))
+                population.injectImmigrants(count: immigrantCount, context: context, evaluate: evaluate)
+            }
+
             var offspring: [C] = []
             let targetCount = config.populationSize - config.eliteCount
 
@@ -144,9 +161,16 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
                     child2 = parent2
                 }
 
-                let rate = config.adaptiveMutation
-                    ? config.mutationRate * max(0.1, 1.0 - Double(generation) / Double(config.maxGenerations))
-                    : config.mutationRate
+                // Diversity-driven adaptive mutation: boost when population converges,
+                // decay with generation progress, but never below 10% of base rate
+                let rate: Double
+                if config.adaptiveMutation {
+                    let generationDecay = max(0.1, 1.0 - Double(generation) / Double(config.maxGenerations))
+                    let diversityBoost = diversityIsLow ? 2.5 : 1.0
+                    rate = min(1.0, config.mutationRate * generationDecay * diversityBoost)
+                } else {
+                    rate = config.mutationRate
+                }
 
                 child1.mutate(rate: rate, context: context)
                 child2.mutate(rate: rate, context: context)
@@ -176,17 +200,22 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
                 generation: generation,
                 bestFitness: bestEver?.fitness ?? 0,
                 averageFitness: population.averageFitness,
-                diversity: population.fitnessDiversity
+                diversity: diversity
             ))
 
-            let improvement = abs((bestEver?.fitness ?? 0) - lastBestFitness)
-            if improvement < config.convergenceThreshold {
+            // Relative convergence detection: handles both small and large fitness values
+            let currentFitness = bestEver?.fitness ?? 0
+            let relativeImprovement = lastBestFitness > 1e-9
+                ? abs(currentFitness - lastBestFitness) / lastBestFitness
+                : abs(currentFitness - lastBestFitness)
+
+            if relativeImprovement < config.convergenceThreshold {
                 staleGenerations += 1
             } else {
                 staleGenerations = 0
                 convergenceGeneration = generation
             }
-            lastBestFitness = bestEver?.fitness ?? 0
+            lastBestFitness = currentFitness
 
             if staleGenerations >= config.convergencePatience {
                 convergenceGeneration = generation - config.convergencePatience

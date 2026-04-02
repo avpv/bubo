@@ -65,4 +65,22 @@ struct Population<C: Chromosome> {
         let variance = individuals.reduce(0.0) { $0 + pow($1.fitness - avg, 2) } / Double(individuals.count - 1)
         return sqrt(variance)
     }
+
+    // MARK: - Immigration
+
+    /// Replace the worst individuals with random immigrants to restore diversity.
+    /// Preserves elites — only replaces the bottom of the population.
+    mutating func injectImmigrants(count: Int, context: OptimizerContext, evaluate: (inout C) -> Void) {
+        let sorted = individuals.sorted { $0.fitness > $1.fitness }
+        // Keep top individuals, replace worst with immigrants
+        let keepCount = max(eliteCount, individuals.count - count)
+        var next = Array(sorted.prefix(keepCount))
+        let immigrantCount = individuals.count - keepCount
+        for _ in 0..<immigrantCount {
+            var immigrant = C.random(context: context)
+            evaluate(&immigrant)
+            next.append(immigrant)
+        }
+        individuals = next
+    }
 }
