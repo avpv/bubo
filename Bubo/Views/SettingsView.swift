@@ -50,6 +50,7 @@ struct SettingsView: View {
                 OptimizerTabView()
             }
         }
+        .toolbar(removing: .title)
         .environment(viewModel)
         .environment(settings)
         .environment(reminderService)
