@@ -13,7 +13,6 @@ struct OptimizerTabView: View {
         ScrollView {
             VStack(spacing: DS.Spacing.lg) {
 
-
                 SettingsPlatter("Working Hours") {
                     HStack {
                         Text("Start:")
@@ -38,19 +37,15 @@ struct OptimizerTabView: View {
                     }
                 }
 
-                SettingsPlatter("Optimization Priorities") {
-                    prioritySlider("Focus Blocks", keyPath: \.focusBlockWeight)
-                    prioritySlider("Week Balance", keyPath: \.weekBalanceWeight)
-                    prioritySlider("Energy Management", keyPath: \.energyCurveWeight)
-                    prioritySlider("Break Placement", keyPath: \.breakWeight)
-                    prioritySlider("Context Switching", keyPath: \.contextSwitchWeight)
-                    prioritySlider("Buffer Time", keyPath: \.bufferWeight)
-                    prioritySlider("Deadlines", keyPath: \.deadlineWeight)
-                }
-
-                SettingsPlatter("Energy Model") {
+                SettingsPlatter("Your Day") {
                     HStack {
-                        Text("Peak energy hour:")
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Peak energy hour")
+                            Text("When you're most productive")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
                         Picker("Peak energy hour", selection: Binding(
                             get: { optimizerService.optimizer.preferences.peakEnergyHour },
                             set: { optimizerService.optimizer.preferences.peakEnergyHour = $0; optimizerService.savePreferences() }
@@ -62,27 +57,14 @@ struct OptimizerTabView: View {
                         .labelsHidden()
                         .frame(width: 100)
                     }
-                }
 
-                SettingsPlatter("Break Rules") {
                     HStack {
-                        Text("Max consecutive meetings:")
-                        Spacer()
-                        Picker("Max consecutive meetings", selection: Binding(
-                            get: { optimizerService.optimizer.preferences.maxConsecutiveMeetingMinutes },
-                            set: { optimizerService.optimizer.preferences.maxConsecutiveMeetingMinutes = $0; optimizerService.savePreferences() }
-                        )) {
-                            Text("1 hour").tag(60)
-                            Text("1.5 hours").tag(90)
-                            Text("2 hours").tag(120)
-                            Text("3 hours").tag(180)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Lunch window")
+                            Text("Keep this time free for lunch")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
-                        .labelsHidden()
-                        .frame(width: 120)
-                    }
-
-                    HStack {
-                        Text("Lunch window:")
                         Spacer()
                         Picker("Lunch window start", selection: Binding(
                             get: { optimizerService.optimizer.preferences.lunchWindowStart },
@@ -134,35 +116,6 @@ struct OptimizerTabView: View {
                 }
             }
             .padding(DS.Spacing.xl)
-        }
-    }
-
-    private func prioritySlider(
-        _ label: String,
-        keyPath: WritableKeyPath<OptimizerPreferences, Double>
-    ) -> some View {
-        HStack {
-            Text(label)
-                .font(.subheadline)
-                .frame(width: 140, alignment: .leading)
-
-            Slider(
-                value: Binding(
-                    get: { optimizerService.optimizer.preferences[keyPath: keyPath] },
-                    set: {
-                        optimizerService.optimizer.preferences[keyPath: keyPath] = $0
-                        optimizerService.savePreferences()
-                    }
-                ),
-                in: 0...5,
-                step: 0.1
-            )
-            .accessibilityLabel(label)
-            .accessibilityValue(String(format: "%.1f", optimizerService.optimizer.preferences[keyPath: keyPath]))
-
-            Text(String(format: "%.1f", optimizerService.optimizer.preferences[keyPath: keyPath]))
-                .font(.caption.monospacedDigit())
-                .frame(width: 30, alignment: .trailing)
         }
     }
 }
