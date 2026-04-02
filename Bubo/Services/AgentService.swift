@@ -77,15 +77,7 @@ final class AgentService {
     /// Stable anonymous device identifier for rate limiting.
     /// Generated once, persisted in Keychain so it survives reinstalls
     /// but stays on-device and is never tied to personal info.
-    private(set) lazy var deviceId: String = {
-        let key = "bubo-device-id"
-        if let existing = Keychain.load(key: key) {
-            return existing
-        }
-        let newId = UUID().uuidString
-        Keychain.save(key: key, value: newId)
-        return newId
-    }()
+    let deviceId: String
 
     // MARK: - Endpoints
 
@@ -103,6 +95,14 @@ final class AgentService {
     // MARK: - Init
 
     init() {
+        let key = "bubo-device-id"
+        if let existing = Keychain.load(key: key) {
+            deviceId = existing
+        } else {
+            let newId = UUID().uuidString
+            Keychain.save(key: key, value: newId)
+            deviceId = newId
+        }
         migrateFromUserDefaults()
     }
 
