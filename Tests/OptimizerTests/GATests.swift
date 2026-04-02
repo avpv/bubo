@@ -491,7 +491,7 @@ struct ContextResolutionTests {
         #expect(event.resolvedContext() == "Personal")
     }
 
-    @Test("ColorTag raw value used when no contextLabel configured")
+    @Test("ColorTag always included as raw color name")
     func colorTagRawValue() {
         var event = CalendarEvent(
             id: "e1", title: "Task", startDate: Date(),
@@ -500,7 +500,6 @@ struct ContextResolutionTests {
         )
         event.colorTag = .blue
 
-        // No contextLabel configured for blue → uses raw value "blue"
         let resolved = event.resolvedContext()!
         #expect(resolved == "Work/blue")
     }
