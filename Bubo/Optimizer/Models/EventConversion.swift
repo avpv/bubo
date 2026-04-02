@@ -9,11 +9,10 @@ extension CalendarEvent {
     /// so events sharing any subset of signals will have overlapping prefixes.
     ///
     /// Examples:
-    ///   calendar="Work", color=blue, label=nil,        context="API"    → "Work/blue/API"
-    ///   calendar="Work", color=blue, label="backend",  context="API"    → "Work/blue/backend/API"
-    ///   calendar="Work", color=blue, label=nil,        context=nil      → "Work/blue"
-    ///   calendar="Work", color=nil,                    context=nil      → "Work"
-    ///   calendar=nil,    color=nil,                    context="design"  → "design"
+    ///   calendar="Work", color=blue, context="API"    → "Work/blue/API"
+    ///   calendar="Work", color=blue, context=nil      → "Work/blue"
+    ///   calendar="Work", color=nil,  context=nil      → "Work"
+    ///   calendar=nil,    color=nil,  context="design"  → "design"
     func resolvedContext(override: String? = nil) -> String? {
         var parts: [String] = []
         if let name = calendarName, !name.isEmpty {
@@ -21,9 +20,6 @@ extension CalendarEvent {
         }
         if let tag = colorTag {
             parts.append(tag.rawValue)
-            if let label = tag.contextLabel, !label.isEmpty {
-                parts.append(label)
-            }
         }
         if let ctx = override ?? context, !ctx.isEmpty {
             parts.append(ctx)
