@@ -447,43 +447,16 @@ struct MenuBarView: View {
         let selected = colorFilter
         return HStack(spacing: DS.Spacing.xs) {
             ForEach(EventColorTag.allCases, id: \.self) { tag in
-                let isActive = selected == tag
-                Button {
+                ColorDotButton(
+                    tag: tag,
+                    isActive: selected == tag,
+                    isDimmed: selected != nil && selected != tag
+                ) {
                     Haptics.tap()
                     withAnimation(skin.resolvedMicroAnimation) {
-                        colorFilter = isActive ? nil : tag
+                        colorFilter = (colorFilter == tag) ? nil : tag
                     }
-                } label: {
-                    ZStack {
-                        Circle()
-                            .fill(tag.color)
-                            .frame(width: DS.Size.colorDotSize, height: DS.Size.colorDotSize)
-                            .opacity(selected == nil || isActive ? 1.0 : 0.3)
-
-                        // HIG: Non-color indicator for active state
-                        if isActive {
-                            Circle()
-                                .strokeBorder(
-                                    skin.resolvedTextPrimary.opacity(DS.Opacity.overlayDark),
-                                    lineWidth: DS.Border.medium
-                                )
-                                .frame(width: DS.Size.colorDotSize, height: DS.Size.colorDotSize)
-                        }
-                    }
-                    .scaleEffect(isActive ? 1.1 : 1.0)
-                        .shadow(
-                            color: isActive ? tag.color.opacity(skin.shadowOpacity * 6) : .clear,
-                            radius: isActive ? skin.shadowRadius * 0.4 : 0
-                        )
-                        // HIG: Expand hit area to minimum comfortable target size
-                        .padding(DS.Spacing.xs)
-                        .contentShape(Circle())
                 }
-                .buttonStyle(.plain)
-                // HIG: Don't use color as the only differentiator — show name on hover
-                .help(tag.rawValue)
-                .accessibilityLabel("Filter by \(tag.rawValue)")
-                .accessibilityAddTraits(isActive ? .isSelected : [])
             }
 
             if selected != nil {
@@ -722,5 +695,74 @@ private struct CalendarAccessBanner: View {
                 ? .opacity
                 : .move(edge: .top).combined(with: .opacity)
         )
+    }
+}
+
+// MARK: - ColorDotButton
+
+/// Individual color dot with hover, focus, and animation support matching EventRowView patterns.
+private struct ColorDotButton: View {
+    @Environment(\.activeSkin) private var skin
+    let tag: EventColorTag
+    let isActive: Bool
+    let isDimmed: Bool
+    let action: () -> Void
+
+    @State private var isHovered = false
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Circle()
+                    .fill(tag.color)
+                    .frame(width: DS.Size.colorDotSize, height: DS.Size.colorDotSize)
+                    .opacity(isDimmed ? 0.3 : 1.0)
+
+                // HIG: Non-color indicator for active state
+                if isActive {
+                    Circle()
+                        .strokeBorder(
+                            skin.resolvedTextPrimary.opacity(DS.Opacity.overlayDark),
+                            lineWidth: DS.Border.medium
+                        )
+                        .frame(width: DS.Size.colorDotSize, height: DS.Size.colorDotSize)
+                }
+            }
+            .scaleEffect(isActive ? 1.18 : (isHovered ? 1.12 : 1.0))
+            .shadow(
+                color: (isActive || isHovered) ? tag.color.opacity(skin.shadowOpacity * 6) : .clear,
+                radius: (isActive || isHovered) ? skin.shadowRadius * 0.5 : 0
+            )
+            // HIG: Expand hit area to minimum comfortable target size
+            .padding(DS.Spacing.xs)
+            .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(skin.resolvedMicroAnimation) {
+                isHovered = hovering
+            }
+        }
+        // HIG: Support keyboard navigation
+        .focusable()
+        .focused($isFocused)
+        .focusEffectDisabled()
+        .overlay(
+            Circle()
+                .stroke(
+                    isFocused ? skin.accentColor.opacity(DS.Opacity.overlayDark) : Color.clear,
+                    lineWidth: DS.Size.focusRingWidth
+                )
+                .shadow(color: isFocused ? skin.accentColor.opacity(0.4) : .clear, radius: 4, x: 0, y: 0)
+                .padding(DS.Spacing.xs / 2)
+        )
+        .animation(skin.resolvedMicroAnimation, value: isHovered)
+        .animation(skin.resolvedMicroAnimation, value: isFocused)
+        .animation(skin.resolvedMicroAnimation, value: isActive)
+        // HIG: Don't use color as the only differentiator — show name on hover
+        .help(tag.rawValue)
+        .accessibilityLabel("Filter by \(tag.rawValue)")
+        .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 }
