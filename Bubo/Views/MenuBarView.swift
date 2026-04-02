@@ -689,6 +689,7 @@ private struct CalendarAccessBanner: View {
             SettingsViewModel.pendingPane = .calendars
             openSettings()
             NSApp.activate()
+            NotificationCenter.default.post(name: SettingsViewModel.navigateToPaneNotification, object: SettingsView.SettingsPane.calendars)
         } label: {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "calendar.badge.exclamationmark")
