@@ -4,6 +4,18 @@ import Foundation
 
 extension CalendarEvent {
 
+    /// Resolve the context for this event using a priority chain:
+    /// 1. Explicit override (passed as parameter)
+    /// 2. Event's own context field (set by user in AddEventView or LLM)
+    /// 3. Color tag context label (user-configured color→project mapping)
+    /// 4. Calendar name (fallback)
+    func resolvedContext(override: String? = nil) -> String? {
+        override
+            ?? context
+            ?? colorTag?.contextLabel
+            ?? calendarName
+    }
+
     /// Convert a CalendarEvent into an OptimizableEvent for the optimizer.
     /// Only makes sense for events the user can move (local events).
     func toOptimizableEvent(
@@ -46,7 +58,7 @@ extension CalendarEvent {
             duration: duration,
             deadline: deadline,
             priority: priority,
-            context: context ?? calendarName,
+            context: resolvedContext(override: context),
             energyCost: inferredEnergy,
             requiredParticipants: requiredParticipants,
             preferredHourRange: preferredHourRange,

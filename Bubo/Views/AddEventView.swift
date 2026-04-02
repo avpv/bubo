@@ -26,6 +26,7 @@ struct AddEventView: View {
     @State private var selectedEventType: EventType = .standard
     @State private var addToCalendar = false
     @State private var selectedColorTag: EventColorTag? = nil
+    @State private var contextTag = ""
     @State private var showDiscardConfirmation = false
 
     // MARK: - Pomodoro state
@@ -291,6 +292,23 @@ struct AddEventView: View {
                     .disabled(isExternal)
                     .opacity(isExternal ? 0.6 : 1.0)
 
+                    // Context (Project / Category)
+                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                        Text("Context")
+                            .font(.headline)
+                            .foregroundStyle(skin.resolvedTextPrimary)
+                            .accessibilityAddTraits(.isHeader)
+
+                        TextField("Project or category", text: $contextTag, prompt: Text("e.g. backend, design, personal").foregroundStyle(skin.resolvedTextSecondary))
+                            .textFieldStyle(.plain)
+                            .padding(.horizontal, DS.Spacing.md)
+                            .padding(.vertical, DS.Spacing.sm)
+                            .skinPlatter(skin)
+                            .skinPlatterDepth(skin)
+                    }
+                    .disabled(isExternal)
+                    .opacity(isExternal ? 0.6 : 1.0)
+
                     // Details
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                         Text("Details")
@@ -496,6 +514,7 @@ struct AddEventView: View {
                 recurrenceRule = event.recurrenceRule
                 selectedEventType = event.eventType
                 selectedColorTag = event.colorTag
+                contextTag = event.context ?? ""
                 // Load Pomodoro parameters when editing a Pomodoro event
                 if event.eventType == .pomodoro, let rule = event.recurrenceRule, rule.pomodoroMode {
                     if case .afterCount(let rounds) = rule.end {
@@ -997,6 +1016,7 @@ struct AddEventView: View {
             eventType: selectedEventType
         )
         event.colorTag = selectedColorTag
+        event.context = contextTag.isEmpty ? nil : contextTag
         if isEditing {
             reminderService.updateLocalEvent(event)
         } else if addToCalendar {

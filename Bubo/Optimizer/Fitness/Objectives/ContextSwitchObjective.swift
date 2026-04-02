@@ -20,7 +20,7 @@ struct ContextSwitchObjective: FitnessObjective {
 
         for event in context.fixedEvents {
             let day = cal.startOfDay(for: event.startDate)
-            eventsByDay[day, default: []].append((event.startDate, event.endDate, event.calendarName))
+            eventsByDay[day, default: []].append((event.startDate, event.endDate, event.resolvedContext()))
         }
         for gene in chromosome.genes {
             let day = cal.startOfDay(for: gene.startTime)

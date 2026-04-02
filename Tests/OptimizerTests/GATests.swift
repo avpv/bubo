@@ -449,6 +449,68 @@ struct EventConversionTests {
     }
 }
 
+@Suite("Context Resolution Tests")
+struct ContextResolutionTests {
+
+    @Test("Explicit context override takes priority")
+    func explicitContextOverride() {
+        var event = CalendarEvent(
+            id: "e1", title: "Meeting", startDate: Date(),
+            endDate: Date().addingTimeInterval(3600),
+            location: nil, description: nil, calendarName: "Work", eventType: .standard
+        )
+        event.context = "backend"
+        event.colorTag = .blue
+
+        let optimizable = event.toOptimizableEvent(context: "override-project")
+        #expect(optimizable.context == "override-project")
+    }
+
+    @Test("Event context field used when no override")
+    func eventContextField() {
+        var event = CalendarEvent(
+            id: "e1", title: "Meeting", startDate: Date(),
+            endDate: Date().addingTimeInterval(3600),
+            location: nil, description: nil, calendarName: "Work", eventType: .standard
+        )
+        event.context = "frontend"
+
+        let optimizable = event.toOptimizableEvent()
+        #expect(optimizable.context == "frontend")
+    }
+
+    @Test("CalendarName used as fallback when no context or colorTag label")
+    func calendarNameFallback() {
+        let event = CalendarEvent(
+            id: "e1", title: "Meeting", startDate: Date(),
+            endDate: Date().addingTimeInterval(3600),
+            location: nil, description: nil, calendarName: "Personal", eventType: .standard
+        )
+
+        let resolved = event.resolvedContext()
+        #expect(resolved == "Personal")
+    }
+
+    @Test("resolvedContext priority chain works correctly")
+    func resolvedContextPriorityChain() {
+        var event = CalendarEvent(
+            id: "e1", title: "Task", startDate: Date(),
+            endDate: Date().addingTimeInterval(3600),
+            location: nil, description: nil, calendarName: "Work", eventType: .standard
+        )
+
+        // No context, no colorTag → calendarName
+        #expect(event.resolvedContext() == "Work")
+
+        // Add context → uses it
+        event.context = "design"
+        #expect(event.resolvedContext() == "design")
+
+        // Override takes priority over event.context
+        #expect(event.resolvedContext(override: "urgent") == "urgent")
+    }
+}
+
 // MARK: - Edge Case & Regression Tests
 
 @Suite("Edge Case Tests")

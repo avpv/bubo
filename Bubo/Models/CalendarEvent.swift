@@ -19,6 +19,43 @@ enum EventColorTag: String, Codable, Hashable, CaseIterable, Sendable {
         }
     }
 
+    /// User-configurable label for using color tags as context groups.
+    /// Stored in UserDefaults so users can assign meaning to colors
+    /// (e.g. red = "urgent", blue = "backend", green = "personal").
+    var contextLabel: String? {
+        get { Self.contextLabels[self] }
+    }
+
+    /// Load all color-to-context mappings from UserDefaults.
+    static var contextLabels: [EventColorTag: String] {
+        get {
+            guard let data = UserDefaults.standard.data(forKey: "BuboColorContextLabels"),
+                  let map = try? JSONDecoder().decode([String: String].self, from: data) else {
+                return [:]
+            }
+            var result: [EventColorTag: String] = [:]
+            for (key, value) in map {
+                if let tag = EventColorTag(rawValue: key) {
+                    result[tag] = value
+                }
+            }
+            return result
+        }
+        set {
+            let map = Dictionary(uniqueKeysWithValues: newValue.map { ($0.key.rawValue, $0.value) })
+            if let data = try? JSONEncoder().encode(map) {
+                UserDefaults.standard.set(data, forKey: "BuboColorContextLabels")
+            }
+        }
+    }
+
+    /// Set a context label for a specific color tag.
+    static func setContextLabel(_ label: String?, for tag: EventColorTag) {
+        var labels = contextLabels
+        labels[tag] = label
+        contextLabels = labels
+    }
+
     /// Map a CGColor (e.g. from EKCalendar) to the nearest EventColorTag
     /// by comparing hue, saturation, and brightness in HSB space.
     static func from(cgColor: CGColor) -> EventColorTag? {
@@ -75,6 +112,9 @@ struct CalendarEvent: Identifiable, Codable, Hashable, Sendable {
     var eventType: EventType
     /// Optional user-chosen color for the event.
     var colorTag: EventColorTag?
+    /// Optional project/category tag for optimizer context grouping.
+    /// When set, takes priority over colorTag and calendarName for context resolution.
+    var context: String?
 
     // MARK: - Static formatters (avoid re-creation per call)
 
