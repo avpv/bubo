@@ -122,7 +122,7 @@ struct RecipeCardView: View {
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 72, alignment: .leading)
         .padding(DS.Spacing.sm)
         .background(cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: DS.Size.previewSmallRadius))
