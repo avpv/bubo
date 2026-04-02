@@ -155,7 +155,7 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
                 var child2: C
 
                 if Double.random(in: 0...1) < config.crossoverRate {
-                    (child1, child2) = parent1.crossover(with: parent2, context: context)
+                    (child1, child2) = parent1.crossover(with: parent2, strategy: config.crossoverStrategy, context: context)
                 } else {
                     child1 = parent1
                     child2 = parent2
@@ -223,6 +223,36 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             }
         }
 
-        return population.sortedByFitness
+        // Local search: refine top individuals with hill climbing
+        var sorted = population.sortedByFitness
+        let refineCount = min(config.eliteCount, sorted.count)
+        for i in 0..<refineCount {
+            sorted[i] = hillClimb(sorted[i], steps: 20)
+        }
+
+        // Update bestEver if hill climbing found something better
+        if let refined = sorted.first, (bestEver == nil || refined.fitness > bestEver!.fitness) {
+            bestEver = refined
+        }
+
+        return sorted.sorted { $0.fitness > $1.fitness }
+    }
+
+    // MARK: - Local Search (Hill Climbing)
+
+    /// Apply small perturbations to a chromosome and keep improvements.
+    /// This refines a good GA solution by exploring its immediate neighborhood.
+    private func hillClimb(_ chromosome: C, steps: Int) -> C {
+        var current = chromosome
+        for _ in 0..<steps {
+            var neighbor = current
+            // Small mutation rate for fine-tuning
+            neighbor.mutate(rate: 0.3, context: context)
+            evaluate(&neighbor)
+            if neighbor.fitness > current.fitness {
+                current = neighbor
+            }
+        }
+        return current
     }
 }

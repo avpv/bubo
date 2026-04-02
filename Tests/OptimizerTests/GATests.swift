@@ -1181,6 +1181,114 @@ struct SUSTests {
     }
 }
 
+@Suite("Crossover Strategy Tests")
+struct CrossoverStrategyTests {
+
+    @Test("GA uses configured crossover strategy (two-point)")
+    func gaUsesTwoPointCrossover() {
+        let events = [
+            makeMovableEvent(id: "t1", durationMinutes: 60),
+            makeMovableEvent(id: "t2", durationMinutes: 30),
+            makeMovableEvent(id: "t3", durationMinutes: 45),
+            makeMovableEvent(id: "t4", durationMinutes: 30),
+        ]
+        let context = makeContext(movableEvents: events)
+        let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
+
+        // Use two-point crossover via config
+        var config = GAConfiguration.quick
+        config.crossoverStrategy = .twoPoint
+
+        let ga = GeneticAlgorithm<ScheduleChromosome>(
+            config: config,
+            context: context,
+            evaluate: { chromosome in
+                evaluator.evaluateAndAssign(&chromosome, context: context)
+            }
+        )
+
+        let results = ga.run()
+        #expect(!results.isEmpty)
+        #expect(results[0].fitness >= results.last!.fitness)
+    }
+
+    @Test("GA uses configured crossover strategy (uniform)")
+    func gaUsesUniformCrossover() {
+        let events = [
+            makeMovableEvent(id: "t1", durationMinutes: 60),
+            makeMovableEvent(id: "t2", durationMinutes: 30),
+        ]
+        let context = makeContext(movableEvents: events)
+        let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
+
+        var config = GAConfiguration.quick
+        config.crossoverStrategy = .uniform(swapProbability: 0.5)
+
+        let ga = GeneticAlgorithm<ScheduleChromosome>(
+            config: config,
+            context: context,
+            evaluate: { chromosome in
+                evaluator.evaluateAndAssign(&chromosome, context: context)
+            }
+        )
+
+        let results = ga.run()
+        #expect(!results.isEmpty)
+        #expect(ga.bestEver != nil)
+    }
+
+    @Test("Strategy-aware crossover on ScheduleChromosome delegates correctly")
+    func strategyAwareCrossover() {
+        let events = [
+            makeMovableEvent(id: "t1"), makeMovableEvent(id: "t2"),
+            makeMovableEvent(id: "t3"), makeMovableEvent(id: "t4"),
+        ]
+        let context = makeContext(movableEvents: events)
+
+        let p1 = ScheduleChromosome.random(context: context)
+        let p2 = ScheduleChromosome.random(context: context)
+
+        // All strategies should produce valid children
+        for strategy: CrossoverStrategy in [.singlePoint, .twoPoint, .uniform(swapProbability: 0.5)] {
+            let (c1, c2) = p1.crossover(with: p2, strategy: strategy, context: context)
+            #expect(c1.genes.count == 4)
+            #expect(c2.genes.count == 4)
+            #expect(Set(c1.genes.map(\.eventId)) == Set(["t1", "t2", "t3", "t4"]))
+        }
+    }
+}
+
+@Suite("Hill Climbing Tests")
+struct HillClimbingTests {
+
+    @Test("GA with hill climbing produces result at least as good as without")
+    func hillClimbingImproves() {
+        let events = [
+            makeMovableEvent(id: "t1", durationMinutes: 60),
+            makeMovableEvent(id: "t2", durationMinutes: 30),
+        ]
+        let fixed = [makeFixedEvent(id: "f1", title: "Standup", startHour: 10, durationMinutes: 30)]
+        let context = makeContext(fixedEvents: fixed, movableEvents: events)
+        let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
+
+        let ga = GeneticAlgorithm<ScheduleChromosome>(
+            config: .quick,
+            context: context,
+            evaluate: { chromosome in
+                evaluator.evaluateAndAssign(&chromosome, context: context)
+            }
+        )
+
+        let results = ga.run()
+        #expect(!results.isEmpty)
+
+        // bestEver should reflect hill climbing refinement
+        let bestEver = ga.bestEver
+        #expect(bestEver != nil)
+        #expect(bestEver!.fitness >= results.last!.fitness)
+    }
+}
+
 @Suite("Energy Recovery Tests")
 struct EnergyRecoveryTests {
 

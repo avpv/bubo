@@ -12,8 +12,18 @@ protocol Chromosome: Equatable {
     /// Produce two offspring via crossover with another chromosome.
     func crossover(with other: Self, context: OptimizerContext) -> (Self, Self)
 
+    /// Produce two offspring via crossover using a specific strategy.
+    func crossover(with other: Self, strategy: CrossoverStrategy, context: OptimizerContext) -> (Self, Self)
+
     /// Apply random mutations at the given rate.
     mutating func mutate(rate: Double, context: OptimizerContext)
+}
+
+extension Chromosome {
+    /// Default: ignore strategy, fall back to the basic crossover.
+    func crossover(with other: Self, strategy: CrossoverStrategy, context: OptimizerContext) -> (Self, Self) {
+        crossover(with: other, context: context)
+    }
 }
 
 // MARK: - Schedule Chromosome
@@ -69,6 +79,11 @@ struct ScheduleChromosome: Chromosome, Sendable {
             ScheduleChromosome(genes: child1Genes),
             ScheduleChromosome(genes: child2Genes)
         )
+    }
+
+    /// Strategy-aware crossover that delegates to the Crossover enum.
+    func crossover(with other: ScheduleChromosome, strategy: CrossoverStrategy, context: OptimizerContext) -> (ScheduleChromosome, ScheduleChromosome) {
+        Crossover.perform(self, other, strategy: strategy, context: context)
     }
 
     // MARK: - Mutation
