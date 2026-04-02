@@ -719,11 +719,11 @@ extension ScheduleRecipe {
         description: "See diverse schedule alternatives",
         category: "advanced",
         speed: .balanced,
-        diversityThreshold: 0.25,
         params: [
             RecipeParam(id: "events", label: "Which tasks to optimize?",
                        kind: .eventMultiPicker, target: .selectedEventIds),
-        ]
+        ],
+        diversityThreshold: 0.25
     )
 
     static let likeYesterday = ScheduleRecipe(
