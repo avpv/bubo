@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 
 struct SettingsView: View {
@@ -57,6 +58,12 @@ struct SettingsView: View {
         .onAppear {
             if let pending = SettingsViewModel.pendingPane {
                 selectedPane = pending
+                SettingsViewModel.pendingPane = nil
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: SettingsViewModel.navigateToPaneNotification)) { notification in
+            if let pane = notification.object as? SettingsPane {
+                selectedPane = pane
                 SettingsViewModel.pendingPane = nil
             }
         }

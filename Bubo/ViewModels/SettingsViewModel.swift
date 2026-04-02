@@ -8,6 +8,9 @@ class SettingsViewModel {
     /// Set before opening Settings to navigate to a specific pane.
     static var pendingPane: SettingsView.SettingsPane?
 
+    /// Posted when a deep-link navigation to a specific pane is requested.
+    static let navigateToPaneNotification = Notification.Name("SettingsViewModel.navigateToPane")
+
     // MARK: - Reminders Tab
     var newIntervalMinutes = 10
 
