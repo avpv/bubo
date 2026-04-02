@@ -179,7 +179,7 @@ struct RecipeCardView: View {
 
     private var cardBackground: some View {
         RoundedRectangle(cornerRadius: DS.Size.previewSmallRadius)
-            .fill(isHovered ? skin.accentColor.opacity(0.1) : skin.resolvedPlatterMaterial.opacity(0.5))
+            .fill(isHovered ? AnyShapeStyle(skin.accentColor.opacity(0.1)) : AnyShapeStyle(skin.resolvedPlatterMaterial.opacity(0.5)))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Size.previewSmallRadius)
                     .strokeBorder(isHovered ? skin.accentColor.opacity(0.3) : .clear, lineWidth: 1)
