@@ -6,6 +6,7 @@ enum SelectionStrategy: Sendable {
     case tournament(size: Int)
     case roulette
     case rank
+    case stochasticUniversalSampling
 }
 
 // MARK: - Selection
@@ -25,6 +26,8 @@ enum Selection {
             return rouletteSelect(from: population)
         case .rank:
             return rankSelect(from: population)
+        case .stochasticUniversalSampling:
+            return susSelect(from: population)
         }
     }
 
@@ -100,5 +103,39 @@ enum Selection {
             }
         }
         return sorted.first ?? population.individuals[0]
+    }
+
+    // MARK: - Stochastic Universal Sampling
+
+    /// SUS provides more uniform sampling pressure than roulette wheel.
+    /// Uses evenly spaced pointers on the fitness-proportional wheel,
+    /// reducing selection bias and variance.
+    private static func susSelect<C: Chromosome>(from population: Population<C>) -> C {
+        guard !population.individuals.isEmpty else {
+            fatalError("Cannot select from empty population")
+        }
+        let minFitness = population.individuals.map(\.fitness).min() ?? 0
+        let shifted = population.individuals.map { $0.fitness - minFitness + 1e-6 }
+        let totalFitness = shifted.reduce(0, +)
+        guard totalFitness > 0 else {
+            return population.individuals.randomElement() ?? population.individuals[0]
+        }
+
+        let n = population.individuals.count
+        let spacing = totalFitness / Double(n)
+        let start = Double.random(in: 0..<spacing)
+
+        // Pick a random pointer index to return a single individual
+        let pointerIndex = Int.random(in: 0..<n)
+        let pointer = start + spacing * Double(pointerIndex)
+
+        var cumulative = 0.0
+        for (i, fitness) in shifted.enumerated() {
+            cumulative += fitness
+            if cumulative >= pointer {
+                return population.individuals[i]
+            }
+        }
+        return population.individuals.last ?? population.individuals[0]
     }
 }

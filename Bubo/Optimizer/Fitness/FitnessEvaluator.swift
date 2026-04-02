@@ -93,8 +93,11 @@ final class FitnessEvaluator: @unchecked Sendable {
     }
 
     /// Evaluate and assign fitness to a chromosome (mutating).
+    /// Skips evaluation if the chromosome hasn't changed since last evaluation.
     func evaluateAndAssign(_ chromosome: inout ScheduleChromosome, context: OptimizerContext) {
+        guard chromosome.needsEvaluation else { return }
         chromosome.fitness = evaluate(chromosome: chromosome, context: context)
+        chromosome.needsEvaluation = false
     }
 
     /// Detailed breakdown of all objective scores (clamped to [0, 1]).

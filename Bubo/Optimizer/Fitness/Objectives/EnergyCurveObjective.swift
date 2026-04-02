@@ -43,12 +43,25 @@ struct EnergyCurveObjective: FitnessObjective {
             var minEnergy = 1.0
             var alignmentScore = 0.0
 
-            for event in sorted {
-                let hour = cal.component(.hour, from: event.start)
+            for (idx, event) in sorted.enumerated() {
+                // Recover energy during gap before this event
+                if idx > 0 {
+                    let gap = event.start.timeIntervalSince(sorted[idx - 1].end)
+                    if gap > 0 {
+                        let gapHours = gap / 3600
+                        // Logarithmic recovery: longer breaks give diminishing returns.
+                        // A 15-min break recovers ~0.05, a 1-hour break ~0.15.
+                        let recovery = 0.15 * log2(1.0 + gapHours * 4.0)
+                        energy = min(1.0, energy + recovery)
+                    }
+                }
+
+                let hour = Double(cal.component(.hour, from: event.start))
+                    + Double(cal.component(.minute, from: event.start)) / 60.0
                 let durationHours = event.end.timeIntervalSince(event.start) / 3600
 
-                // Energy at this time of day (bell curve around peak)
-                let hourDistance = Double(abs(hour - peakHour))
+                // Energy at this time of day (smooth bell curve around peak)
+                let hourDistance = abs(hour - Double(peakHour))
                 let timeEnergy = exp(-hourDistance * hourDistance * 0.02)
 
                 // High-cost tasks at high-energy times = good alignment
@@ -58,9 +71,6 @@ struct EnergyCurveObjective: FitnessObjective {
                 // Deplete energy
                 energy -= event.energyCost * durationHours * decayRate
                 minEnergy = min(minEnergy, energy)
-
-                // Recover during gaps (check gap to next event)
-                // Recovery happens implicitly by not depleting
             }
 
             // Score components:

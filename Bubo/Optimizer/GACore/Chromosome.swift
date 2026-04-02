@@ -12,8 +12,18 @@ protocol Chromosome: Equatable {
     /// Produce two offspring via crossover with another chromosome.
     func crossover(with other: Self, context: OptimizerContext) -> (Self, Self)
 
+    /// Produce two offspring via crossover using a specific strategy.
+    func crossover(with other: Self, strategy: CrossoverStrategy, context: OptimizerContext) -> (Self, Self)
+
     /// Apply random mutations at the given rate.
     mutating func mutate(rate: Double, context: OptimizerContext)
+}
+
+extension Chromosome {
+    /// Default: ignore strategy, fall back to the basic crossover.
+    func crossover(with other: Self, strategy: CrossoverStrategy, context: OptimizerContext) -> (Self, Self) {
+        crossover(with: other, context: context)
+    }
 }
 
 // MARK: - Schedule Chromosome
@@ -23,6 +33,15 @@ protocol Chromosome: Equatable {
 struct ScheduleChromosome: Chromosome, Sendable {
     var genes: [ScheduleGene]
     var fitness: Double = 0.0
+
+    /// Tracks whether this chromosome needs fitness re-evaluation.
+    /// Set to true on creation, crossover, and mutation; cleared after evaluation.
+    var needsEvaluation: Bool = true
+
+    /// Equality ignores needsEvaluation — two chromosomes with the same genes and fitness are equal.
+    static func == (lhs: ScheduleChromosome, rhs: ScheduleChromosome) -> Bool {
+        lhs.genes == rhs.genes && lhs.fitness == rhs.fitness
+    }
 
     // MARK: - Random Initialization
 
@@ -46,7 +65,7 @@ struct ScheduleChromosome: Chromosome, Sendable {
                 isFocusBlock: event.isFocusBlock
             )
         }
-        return ScheduleChromosome(genes: genes)
+        return ScheduleChromosome(genes: genes, needsEvaluation: true)
     }
 
     // MARK: - Crossover (Order-based)
@@ -66,14 +85,20 @@ struct ScheduleChromosome: Chromosome, Sendable {
         }
 
         return (
-            ScheduleChromosome(genes: child1Genes),
-            ScheduleChromosome(genes: child2Genes)
+            ScheduleChromosome(genes: child1Genes, needsEvaluation: true),
+            ScheduleChromosome(genes: child2Genes, needsEvaluation: true)
         )
+    }
+
+    /// Strategy-aware crossover that delegates to the Crossover enum.
+    func crossover(with other: ScheduleChromosome, strategy: CrossoverStrategy, context: OptimizerContext) -> (ScheduleChromosome, ScheduleChromosome) {
+        Crossover.perform(self, other, strategy: strategy, context: context)
     }
 
     // MARK: - Mutation
 
     mutating func mutate(rate: Double, context: OptimizerContext) {
+        needsEvaluation = true
         let cal = context.calendar
         for i in genes.indices {
             guard Double.random(in: 0...1) < rate else { continue }

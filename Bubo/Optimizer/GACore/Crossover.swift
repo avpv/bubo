@@ -52,8 +52,8 @@ enum Crossover {
         }
 
         return (
-            ScheduleChromosome(genes: child1Genes),
-            ScheduleChromosome(genes: child2Genes)
+            ScheduleChromosome(genes: child1Genes, needsEvaluation: true),
+            ScheduleChromosome(genes: child2Genes, needsEvaluation: true)
         )
     }
 
@@ -76,8 +76,8 @@ enum Crossover {
         }
 
         return (
-            ScheduleChromosome(genes: child1Genes),
-            ScheduleChromosome(genes: child2Genes)
+            ScheduleChromosome(genes: child1Genes, needsEvaluation: true),
+            ScheduleChromosome(genes: child2Genes, needsEvaluation: true)
         )
     }
 

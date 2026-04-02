@@ -156,7 +156,9 @@ final class IncrementalReoptimizer: @unchecked Sendable {
 
     // MARK: - Seeding
 
-    /// Create seed chromosomes from variants of the current schedule.
+    /// Create seed chromosomes from graduated perturbations of the current schedule.
+    /// Seeds range from near-copies (small tweaks) to more exploratory variants,
+    /// giving the GA both exploitation and exploration starting points.
     private func createSeeds(
         from current: [ScheduleGene],
         count: Int,
@@ -164,13 +166,16 @@ final class IncrementalReoptimizer: @unchecked Sendable {
     ) -> [ScheduleChromosome] {
         var seeds: [ScheduleChromosome] = []
 
-        // The current schedule is always a seed
+        // The current schedule is always a seed (exact copy)
         seeds.append(ScheduleChromosome(genes: current))
 
-        // Create mutations of the current schedule
-        for _ in 1..<count {
+        // Create graduated variants: low mutation → high mutation
+        for i in 1..<count {
             var variant = ScheduleChromosome(genes: current)
-            variant.mutate(rate: 0.3, context: context)
+            // Graduated rate: early seeds are conservative (0.1), later ones are exploratory (0.6)
+            let progress = Double(i) / Double(max(1, count - 1))
+            let rate = 0.1 + progress * 0.5
+            variant.mutate(rate: rate, context: context)
             seeds.append(variant)
         }
 

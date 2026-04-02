@@ -4,6 +4,29 @@ import Foundation
 
 extension CalendarEvent {
 
+    /// Resolve a unified context by combining all available signals.
+    /// All non-nil parts are joined with "/" to form a composite key,
+    /// so events sharing any subset of signals will have overlapping prefixes.
+    ///
+    /// Examples:
+    ///   calendar="Work", color=blue, context="API"    → "Work/blue/API"
+    ///   calendar="Work", color=blue, context=nil      → "Work/blue"
+    ///   calendar="Work", color=nil,  context=nil      → "Work"
+    ///   calendar=nil,    color=nil,  context="design"  → "design"
+    func resolvedContext(override: String? = nil) -> String? {
+        var parts: [String] = []
+        if let name = calendarName, !name.isEmpty {
+            parts.append(name)
+        }
+        if let tag = colorTag {
+            parts.append(tag.rawValue)
+        }
+        if let ctx = override ?? context, !ctx.isEmpty {
+            parts.append(ctx)
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: "/")
+    }
+
     /// Convert a CalendarEvent into an OptimizableEvent for the optimizer.
     /// Only makes sense for events the user can move (local events).
     func toOptimizableEvent(
@@ -46,7 +69,7 @@ extension CalendarEvent {
             duration: duration,
             deadline: deadline,
             priority: priority,
-            context: context ?? calendarName,
+            context: resolvedContext(override: context),
             energyCost: inferredEnergy,
             requiredParticipants: requiredParticipants,
             preferredHourRange: preferredHourRange,

@@ -15,6 +15,9 @@ struct ScenarioGenerator {
     // MARK: - Generate Scenarios
 
     /// Extract diverse scenarios from a sorted population.
+    /// Uses progressive diversity relaxation: first tries the full threshold,
+    /// then halves it on each pass to fill remaining slots. This ensures
+    /// users get multiple scenarios even when the population is fairly converged.
     func generateScenarios(
         from population: [ScheduleChromosome],
         context: OptimizerContext,
@@ -25,17 +28,25 @@ struct ScenarioGenerator {
         var selected: [ScheduleChromosome] = []
         selected.append(population[0])  // Always include the best
 
-        for candidate in population.dropFirst() {
-            guard selected.count < maxScenarios else { break }
+        // Progressive relaxation: try full threshold first, halve on each pass
+        var threshold = diversityThreshold
+        let minThreshold = diversityThreshold * 0.1
 
-            // Check if candidate is diverse enough from all selected
-            let isDiverse = selected.allSatisfy { existing in
-                diversity(between: candidate, and: existing, context: context) >= diversityThreshold
-            }
+        while selected.count < maxScenarios && threshold >= minThreshold {
+            for candidate in population.dropFirst() {
+                guard selected.count < maxScenarios else { break }
+                // Skip if already selected (by identity check on genes)
+                if selected.contains(where: { $0.genes == candidate.genes }) { continue }
 
-            if isDiverse {
-                selected.append(candidate)
+                let isDiverse = selected.allSatisfy { existing in
+                    diversity(between: candidate, and: existing, context: context) >= threshold
+                }
+
+                if isDiverse {
+                    selected.append(candidate)
+                }
             }
+            threshold *= 0.5
         }
 
         return selected.map { chromosome in
