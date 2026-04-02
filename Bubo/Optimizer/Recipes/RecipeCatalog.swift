@@ -184,7 +184,11 @@ extension ScheduleRecipe {
         icon: "calendar.day.timeline.left",
         description: "Rearrange today's tasks for best flow",
         category: "planning",
-        weights: [.energyCurve: 1.5, .contextSwitch: 1.2]
+        weights: [.energyCurve: 1.5, .contextSwitch: 1.2],
+        params: [
+            RecipeParam(id: "events", label: "Which tasks to organize?",
+                       kind: .eventMultiPicker, target: .selectedEventIds),
+        ]
     )
 
     static let planWeek = ScheduleRecipe(
@@ -195,7 +199,11 @@ extension ScheduleRecipe {
         category: "planning",
         horizon: .week,
         weights: [.weekBalance: 1.5, .energyCurve: 1.5],
-        speed: .balanced
+        speed: .balanced,
+        params: [
+            RecipeParam(id: "events", label: "Which tasks to plan?",
+                       kind: .eventMultiPicker, target: .selectedEventIds),
+        ]
     )
 
     static let fullRebuild = ScheduleRecipe(
@@ -206,7 +214,11 @@ extension ScheduleRecipe {
         category: "planning",
         horizon: .week,
         stability: .full,
-        speed: .thorough
+        speed: .thorough,
+        params: [
+            RecipeParam(id: "events", label: "Which tasks to rebuild?",
+                       kind: .eventMultiPicker, target: .selectedEventIds),
+        ]
     )
 
     // ═══════════════════════════════════════════════════════
@@ -401,7 +413,11 @@ extension ScheduleRecipe {
         category: "energy",
         horizon: .week,
         weights: [.weekBalance: 2.0],
-        speed: .balanced
+        speed: .balanced,
+        params: [
+            RecipeParam(id: "events", label: "Which tasks to balance?",
+                       kind: .eventMultiPicker, target: .selectedEventIds),
+        ]
     )
 
     static let focusMeetingSplit = ScheduleRecipe(
@@ -526,7 +542,11 @@ extension ScheduleRecipe {
         description: "Batch similar tasks together",
         category: "projects",
         weights: [.contextSwitch: 4.0],
-        speed: .balanced
+        speed: .balanced,
+        params: [
+            RecipeParam(id: "events", label: "Which tasks to group?",
+                       kind: .eventMultiPicker, target: .selectedEventIds),
+        ]
     )
 
     static func prioritizeProject(name: String = "") -> ScheduleRecipe {
@@ -582,7 +602,11 @@ extension ScheduleRecipe {
         icon: "arrow.left.arrow.right",
         description: "Mix different types of work for variety",
         category: "projects",
-        weights: [.contextSwitch: 0.1]
+        weights: [.contextSwitch: 0.1],
+        params: [
+            RecipeParam(id: "events", label: "Which tasks to mix?",
+                       kind: .eventMultiPicker, target: .selectedEventIds),
+        ]
     )
 
     static let carryOverUnfinished = ScheduleRecipe(
@@ -695,7 +719,11 @@ extension ScheduleRecipe {
         description: "See diverse schedule alternatives",
         category: "advanced",
         speed: .balanced,
-        diversityThreshold: 0.25
+        diversityThreshold: 0.25,
+        params: [
+            RecipeParam(id: "events", label: "Which tasks to optimize?",
+                       kind: .eventMultiPicker, target: .selectedEventIds),
+        ]
     )
 
     static let likeYesterday = ScheduleRecipe(

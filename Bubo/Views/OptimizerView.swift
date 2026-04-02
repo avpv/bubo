@@ -52,6 +52,7 @@ struct OptimizerView: View {
                     if let recipe = selectedRecipe {
                         RecipeConfigSheet(
                             recipe: recipe,
+                            reminderService: reminderService,
                             onExecute: handleExecute,
                             onCancel: { resetToPicking() }
                         )

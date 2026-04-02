@@ -83,6 +83,12 @@ struct ScheduleRecipe: Codable, Identifiable, Hashable {
     /// When true, accept/reject feedback is recorded for preference learning.
     var learnable: Bool = true
 
+    // MARK: - Event Selection
+
+    /// When set, only these local event IDs are included in optimization.
+    /// nil = include all local events (default behavior).
+    var selectedEventIds: [String]? = nil
+
     // MARK: - Simple Overrides
 
     var workingHours: HourRange? = nil
@@ -229,6 +235,7 @@ enum ParamKind: Codable, Hashable {
     case stepper(min: Int, max: Int)
     case text
     case eventPicker
+    case eventMultiPicker
     case hourPicker(ClosedRange<Int>)
 }
 
@@ -242,6 +249,7 @@ enum ParamTarget: Codable, Hashable {
     case workingHoursEnd
     case maxMeetings
     case peakEnergy
+    case selectedEventIds
     case placeholder(String)
 }
 
@@ -445,6 +453,10 @@ extension ScheduleRecipe {
             case .peakEnergy:
                 guard let v = value as? Int else { continue }
                 peakEnergyHour = v
+            case .selectedEventIds:
+                if let ids = value as? [String] {
+                    selectedEventIds = ids
+                }
             case .placeholder(let name):
                 replacePlaceholder(name, with: "\(value)")
             }

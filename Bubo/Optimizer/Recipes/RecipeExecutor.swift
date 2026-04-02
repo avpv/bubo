@@ -456,6 +456,12 @@ extension RecipeExecutor {
         var localEvents: [OptimizableEvent] = []
         if recipe.includeExistingEvents {
             localEvents = collectLocalEvents(for: recipe.horizon)
+
+            // Filter to user-selected events when specified
+            if let selected = recipe.selectedEventIds {
+                let selectedSet = Set(selected)
+                localEvents = localEvents.filter { selectedSet.contains($0.id) }
+            }
         }
 
         var movableEvents = applyEventRules(recipe.eventRules, to: localEvents)
