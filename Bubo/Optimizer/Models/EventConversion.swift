@@ -4,16 +4,27 @@ import Foundation
 
 extension CalendarEvent {
 
-    /// Resolve the context for this event using a priority chain:
-    /// 1. Explicit override (passed as parameter)
-    /// 2. Event's own context field (set by user in AddEventView or LLM)
-    /// 3. Color tag context label (user-configured color→project mapping)
-    /// 4. Calendar name (fallback)
+    /// Resolve a unified context by combining all available signals.
+    /// All non-nil parts are joined with "/" to form a composite key,
+    /// so events sharing any subset of signals will have overlapping prefixes.
+    ///
+    /// Examples:
+    ///   calendar="Work", colorTag=blue("backend"), context="API"  → "Work/backend/API"
+    ///   calendar="Work", colorTag=blue("backend"), context=nil    → "Work/backend"
+    ///   calendar="Work", colorTag=nil,             context=nil    → "Work"
+    ///   calendar=nil,    colorTag=nil,             context="design" → "design"
     func resolvedContext(override: String? = nil) -> String? {
-        override
-            ?? context
-            ?? colorTag?.contextLabel
-            ?? calendarName
+        var parts: [String] = []
+        if let name = calendarName, !name.isEmpty {
+            parts.append(name)
+        }
+        if let label = colorTag?.contextLabel, !label.isEmpty {
+            parts.append(label)
+        }
+        if let ctx = override ?? context, !ctx.isEmpty {
+            parts.append(ctx)
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: "/")
     }
 
     /// Convert a CalendarEvent into an OptimizableEvent for the optimizer.

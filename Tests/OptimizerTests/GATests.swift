@@ -452,22 +452,79 @@ struct EventConversionTests {
 @Suite("Context Resolution Tests")
 struct ContextResolutionTests {
 
-    @Test("Explicit context override takes priority")
-    func explicitContextOverride() {
+    @Test("All context signals combined into composite key")
+    func compositeContext() {
+        var event = CalendarEvent(
+            id: "e1", title: "Meeting", startDate: Date(),
+            endDate: Date().addingTimeInterval(3600),
+            location: nil, description: nil, calendarName: "Work", eventType: .standard
+        )
+        event.context = "API"
+
+        // calendar + explicit context → "Work/API"
+        let resolved = event.resolvedContext()
+        #expect(resolved == "Work/API")
+    }
+
+    @Test("Override appended after calendar")
+    func overrideAppended() {
         var event = CalendarEvent(
             id: "e1", title: "Meeting", startDate: Date(),
             endDate: Date().addingTimeInterval(3600),
             location: nil, description: nil, calendarName: "Work", eventType: .standard
         )
         event.context = "backend"
-        event.colorTag = .blue
 
-        let optimizable = event.toOptimizableEvent(context: "override-project")
-        #expect(optimizable.context == "override-project")
+        // Override replaces event.context in the chain
+        let resolved = event.resolvedContext(override: "urgent-fix")
+        #expect(resolved == "Work/urgent-fix")
     }
 
-    @Test("Event context field used when no override")
-    func eventContextField() {
+    @Test("CalendarName alone when no other signals")
+    func calendarNameOnly() {
+        let event = CalendarEvent(
+            id: "e1", title: "Meeting", startDate: Date(),
+            endDate: Date().addingTimeInterval(3600),
+            location: nil, description: nil, calendarName: "Personal", eventType: .standard
+        )
+
+        #expect(event.resolvedContext() == "Personal")
+    }
+
+    @Test("Events in same calendar share context prefix")
+    func sameCalendarPrefix() {
+        let event1 = CalendarEvent(
+            id: "e1", title: "Task A", startDate: Date(),
+            endDate: Date().addingTimeInterval(3600),
+            location: nil, description: nil, calendarName: "Work", eventType: .standard
+        )
+        var event2 = CalendarEvent(
+            id: "e2", title: "Task B", startDate: Date(),
+            endDate: Date().addingTimeInterval(3600),
+            location: nil, description: nil, calendarName: "Work", eventType: .standard
+        )
+        event2.context = "backend"
+
+        let ctx1 = event1.resolvedContext()!  // "Work"
+        let ctx2 = event2.resolvedContext()!  // "Work/backend"
+
+        // Both start with "Work" — same calendar context
+        #expect(ctx2.hasPrefix(ctx1))
+    }
+
+    @Test("Nil when no signals at all")
+    func nilWhenEmpty() {
+        let event = CalendarEvent(
+            id: "e1", title: "Task", startDate: Date(),
+            endDate: Date().addingTimeInterval(3600),
+            location: nil, description: nil, calendarName: nil, eventType: .standard
+        )
+
+        #expect(event.resolvedContext() == nil)
+    }
+
+    @Test("toOptimizableEvent uses resolvedContext")
+    func optimizableEventUsesResolved() {
         var event = CalendarEvent(
             id: "e1", title: "Meeting", startDate: Date(),
             endDate: Date().addingTimeInterval(3600),
@@ -476,38 +533,7 @@ struct ContextResolutionTests {
         event.context = "frontend"
 
         let optimizable = event.toOptimizableEvent()
-        #expect(optimizable.context == "frontend")
-    }
-
-    @Test("CalendarName used as fallback when no context or colorTag label")
-    func calendarNameFallback() {
-        let event = CalendarEvent(
-            id: "e1", title: "Meeting", startDate: Date(),
-            endDate: Date().addingTimeInterval(3600),
-            location: nil, description: nil, calendarName: "Personal", eventType: .standard
-        )
-
-        let resolved = event.resolvedContext()
-        #expect(resolved == "Personal")
-    }
-
-    @Test("resolvedContext priority chain works correctly")
-    func resolvedContextPriorityChain() {
-        var event = CalendarEvent(
-            id: "e1", title: "Task", startDate: Date(),
-            endDate: Date().addingTimeInterval(3600),
-            location: nil, description: nil, calendarName: "Work", eventType: .standard
-        )
-
-        // No context, no colorTag → calendarName
-        #expect(event.resolvedContext() == "Work")
-
-        // Add context → uses it
-        event.context = "design"
-        #expect(event.resolvedContext() == "design")
-
-        // Override takes priority over event.context
-        #expect(event.resolvedContext(override: "urgent") == "urgent")
+        #expect(optimizable.context == "Work/frontend")
     }
 }
 
