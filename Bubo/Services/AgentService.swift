@@ -5,6 +5,12 @@ import Foundation
 /// Bridges user natural-language requests with the recipe system via an LLM.
 /// Uses Claude tool_use to guarantee structured output that matches
 /// the ScheduleRecipe schema exactly — no free-form JSON parsing.
+///
+/// Supports two modes:
+/// - **Built-in** (default): requests go through the Bubo proxy which holds
+///   the API key server-side and enforces per-device rate limits.
+/// - **Own key**: user provides their own Anthropic API key stored in Keychain;
+///   requests go directly to the Anthropic API with no rate limits.
 @MainActor
 @Observable
 final class AgentService {
@@ -14,12 +20,45 @@ final class AgentService {
     private(set) var isGenerating: Bool = false
     private(set) var lastError: String? = nil
 
-    // MARK: - API Key (stored in macOS Keychain)
+    /// Remaining requests in the current rate-limit window (built-in mode only).
+    /// nil when using own key or before the first request.
+    private(set) var remainingRequests: Int? = nil
+
+    /// Total requests allowed per window (built-in mode only).
+    private(set) var requestLimit: Int? = nil
+
+    /// When the rate-limit window resets (built-in mode only).
+    private(set) var limitResetsAt: Date? = nil
+
+    // MARK: - Mode
+
+    enum Mode: String, Codable, CaseIterable {
+        case builtIn = "built-in"
+        case ownKey = "own-key"
+    }
+
+    var mode: Mode {
+        get {
+            let raw = UserDefaults.standard.string(forKey: "BuboAgentMode") ?? Mode.builtIn.rawValue
+            return Mode(rawValue: raw) ?? .builtIn
+        }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: "BuboAgentMode") }
+    }
+
+    /// Whether the service is ready to make requests in the current mode.
+    var isConfigured: Bool {
+        switch mode {
+        case .builtIn: return true
+        case .ownKey: return hasOwnAPIKey
+        }
+    }
+
+    // MARK: - Own API Key (stored in macOS Keychain)
 
     private static let keychainKey = "anthropic-api-key"
     private static let legacyDefaultsKey = "BuboAgentAPIKey"
 
-    var apiKey: String {
+    var ownAPIKey: String {
         get { Keychain.load(key: Self.keychainKey) ?? "" }
         set {
             let trimmed = newValue.trimmingCharacters(in: .whitespaces)
@@ -31,30 +70,58 @@ final class AgentService {
         }
     }
 
-    var hasAPIKey: Bool { Keychain.exists(key: Self.keychainKey) }
+    var hasOwnAPIKey: Bool { Keychain.exists(key: Self.keychainKey) }
 
-    private let endpoint = URL(string: "https://api.anthropic.com/v1/messages")!
+    // MARK: - Device ID
+
+    /// Stable anonymous device identifier for rate limiting.
+    /// Generated once, persisted in Keychain so it survives reinstalls
+    /// but stays on-device and is never tied to personal info.
+    private(set) lazy var deviceId: String = {
+        let key = "bubo-device-id"
+        if let existing = Keychain.load(key: key) {
+            return existing
+        }
+        let newId = UUID().uuidString
+        Keychain.save(key: key, value: newId)
+        return newId
+    }()
+
+    // MARK: - Endpoints
+
+    /// The Bubo proxy endpoint. The proxy:
+    /// 1. Holds the Anthropic API key server-side (never sent to client)
+    /// 2. Forwards requests to Claude API
+    /// 3. Enforces per-device rate limits via X-Device-Id header
+    /// 4. Returns rate-limit info in response headers
+    ///
+    /// Deploy your own proxy — see proxy/ directory for reference implementation.
+    static let proxyEndpoint = URL(string: "https://bubo-proxy.YOUR_DOMAIN.workers.dev/v1/agent/recipe")!
+
+    private static let directEndpoint = URL(string: "https://api.anthropic.com/v1/messages")!
+
+    // MARK: - Init
 
     init() {
         migrateFromUserDefaults()
     }
 
-    /// One-time migration: move API key from UserDefaults to Keychain, then delete the plaintext copy.
     private func migrateFromUserDefaults() {
         let defaults = UserDefaults.standard
         if let legacyKey = defaults.string(forKey: Self.legacyDefaultsKey),
            !legacyKey.trimmingCharacters(in: .whitespaces).isEmpty {
             Keychain.save(key: Self.keychainKey, value: legacyKey)
             defaults.removeObject(forKey: Self.legacyDefaultsKey)
+            // User had their own key → keep them in own-key mode
+            mode = .ownKey
         }
     }
 
     // MARK: - Generate Recipe
 
     /// Takes a natural-language request and returns a parsed ScheduleRecipe.
-    /// Uses tool_use to force structured output matching the recipe schema.
     func generateRecipe(from userPrompt: String) async -> Result<ScheduleRecipe, AgentError> {
-        guard hasAPIKey else {
+        guard isConfigured else {
             return .failure(.noAPIKey)
         }
 
@@ -62,6 +129,7 @@ final class AgentService {
         lastError = nil
         defer { isGenerating = false }
 
+        // Build the Claude API request body
         let body = ClaudeToolRequest(
             model: "claude-sonnet-4-20250514",
             max_tokens: 4096,
@@ -74,67 +142,114 @@ final class AgentService {
         )
 
         guard let jsonBody = try? JSONEncoder().encode(body) else {
-            let err = AgentError.encoding
-            lastError = err.localizedDescription
-            return .failure(err)
+            return fail(.encoding)
         }
 
-        var request = URLRequest(url: endpoint)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "content-type")
-        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
-        request.httpBody = jsonBody
-        request.timeoutInterval = 30
+        // Build HTTP request based on mode
+        let request: URLRequest
+        switch mode {
+        case .builtIn:
+            request = buildProxyRequest(body: jsonBody)
+        case .ownKey:
+            request = buildDirectRequest(body: jsonBody)
+        }
 
+        // Execute
         let data: Data
         let response: URLResponse
         do {
             (data, response) = try await URLSession.shared.data(for: request)
         } catch {
-            let err = AgentError.network(error.localizedDescription)
-            lastError = err.localizedDescription
-            return .failure(err)
+            return fail(.network(error.localizedDescription))
         }
 
         guard let httpResponse = response as? HTTPURLResponse else {
-            let err = AgentError.network("Invalid response")
-            lastError = err.localizedDescription
-            return .failure(err)
+            return fail(.network("Invalid response"))
+        }
+
+        // Update rate-limit info from proxy headers
+        if mode == .builtIn {
+            updateRateLimits(from: httpResponse)
+        }
+
+        // Handle rate limit exceeded
+        if httpResponse.statusCode == 429 {
+            let retryAfter = httpResponse.value(forHTTPHeaderField: "Retry-After")
+            let message = retryAfter.map { "Rate limit exceeded. Try again in \($0)s." }
+                ?? "Rate limit exceeded. Try again later."
+            return fail(.rateLimited(message))
         }
 
         guard httpResponse.statusCode == 200 else {
             let message = String(data: data, encoding: .utf8) ?? "HTTP \(httpResponse.statusCode)"
-            let err = AgentError.api(message)
-            lastError = err.localizedDescription
-            return .failure(err)
+            return fail(.api(message))
         }
 
         // Parse Claude response — extract tool_use block
+        return parseToolResponse(data: data)
+    }
+
+    // MARK: - Request Builders
+
+    private func buildProxyRequest(body: Data) -> URLRequest {
+        var request = URLRequest(url: Self.proxyEndpoint)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "content-type")
+        request.setValue(deviceId, forHTTPHeaderField: "x-device-id")
+        request.httpBody = body
+        request.timeoutInterval = 30
+        return request
+    }
+
+    private func buildDirectRequest(body: Data) -> URLRequest {
+        var request = URLRequest(url: Self.directEndpoint)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "content-type")
+        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        request.setValue(ownAPIKey, forHTTPHeaderField: "x-api-key")
+        request.httpBody = body
+        request.timeoutInterval = 30
+        return request
+    }
+
+    // MARK: - Rate Limit Headers
+
+    /// Parse rate-limit headers returned by the proxy:
+    ///   X-RateLimit-Limit: 20
+    ///   X-RateLimit-Remaining: 17
+    ///   X-RateLimit-Reset: 1714600000
+    private func updateRateLimits(from response: HTTPURLResponse) {
+        if let limit = response.value(forHTTPHeaderField: "X-RateLimit-Limit").flatMap(Int.init) {
+            requestLimit = limit
+        }
+        if let remaining = response.value(forHTTPHeaderField: "X-RateLimit-Remaining").flatMap(Int.init) {
+            remainingRequests = remaining
+        }
+        if let reset = response.value(forHTTPHeaderField: "X-RateLimit-Reset").flatMap(Double.init) {
+            limitResetsAt = Date(timeIntervalSince1970: reset)
+        }
+    }
+
+    // MARK: - Response Parsing
+
+    private func parseToolResponse(data: Data) -> Result<ScheduleRecipe, AgentError> {
         let claudeResponse: ClaudeToolResponse
         do {
             claudeResponse = try JSONDecoder().decode(ClaudeToolResponse.self, from: data)
         } catch {
-            let err = AgentError.parsing("Could not parse API response: \(error.localizedDescription)")
-            lastError = err.localizedDescription
-            return .failure(err)
+            return fail(.parsing("Could not parse API response: \(error.localizedDescription)"))
         }
 
         guard let toolUse = claudeResponse.content.first(where: { $0.type == "tool_use" }),
               let input = toolUse.input else {
-            let err = AgentError.parsing("No tool_use block in response")
-            lastError = err.localizedDescription
-            return .failure(err)
+            return fail(.parsing("No tool_use block in response"))
         }
 
-        // The tool input IS the recipe — already structured by the schema
         let inputData: Data
         do {
             inputData = try JSONSerialization.data(withJSONObject: input)
         } catch {
-            let err = AgentError.parsing("Could not serialize tool input: \(error.localizedDescription)")
-            lastError = err.localizedDescription
-            return .failure(err)
+            return fail(.parsing("Could not serialize tool input: \(error.localizedDescription)"))
         }
 
         do {
@@ -142,17 +257,29 @@ final class AgentService {
             recipe = RecipeValidator.sanitize(recipe)
 
             if let error = RecipeValidator.validate(recipe) {
-                let err = AgentError.validation(error)
-                lastError = err.localizedDescription
-                return .failure(err)
+                return fail(.validation(error))
             }
 
             return .success(recipe)
         } catch {
-            let err = AgentError.parsing("Could not decode recipe: \(error.localizedDescription)")
-            lastError = err.localizedDescription
-            return .failure(err)
+            return fail(.parsing("Could not decode recipe: \(error.localizedDescription)"))
         }
+    }
+
+    // MARK: - Helpers
+
+    private func fail(_ error: AgentError) -> Result<ScheduleRecipe, AgentError> {
+        lastError = error.localizedDescription
+        return .failure(error)
+    }
+
+    // MARK: - Rate Limit Display
+
+    /// Human-readable rate limit status for UI display.
+    var rateLimitStatus: String? {
+        guard mode == .builtIn else { return nil }
+        guard let remaining = remainingRequests, let limit = requestLimit else { return nil }
+        return "\(remaining)/\(limit) requests remaining"
     }
 
     // MARK: - System Prompt
@@ -426,10 +553,8 @@ enum RecipeValidator {
     static func sanitize(_ recipe: ScheduleRecipe) -> ScheduleRecipe {
         var r = recipe
 
-        // Ensure ID
         if r.id.isEmpty { r.id = UUID().uuidString }
 
-        // Clamp event values
         for i in r.events.indices {
             r.events[i].minutes = max(5, min(480, r.events[i].minutes))
             r.events[i].count = max(1, min(10, r.events[i].count))
@@ -438,7 +563,6 @@ enum RecipeValidator {
             if let gap = r.events[i].chainGap {
                 r.events[i].chainGap = max(0, min(60, gap))
             }
-            // Clamp segment minutes
             if let segments = r.events[i].segments {
                 r.events[i].segments = segments.map { seg in
                     var s = seg
@@ -448,10 +572,8 @@ enum RecipeValidator {
             }
         }
 
-        // Clamp scenario count
         r.maxScenarios = max(1, min(5, r.maxScenarios))
 
-        // Clamp working hours
         if var wh = r.workingHours {
             wh.start = max(0, min(23, wh.start))
             wh.end = max(0, min(23, wh.end))
@@ -459,14 +581,12 @@ enum RecipeValidator {
             r.workingHours = wh
         }
 
-        // Clamp weight values to reasonable range
         var sanitizedWeights: [WeightKey: Double] = [:]
         for (key, value) in r.weights {
             sanitizedWeights[key] = max(0, min(10, value))
         }
         r.weights = sanitizedWeights
 
-        // Agent recipes are always manual trigger, scenarios display
         r.trigger = .manual
         r.display = .scenarios
         r.learnable = true
@@ -500,6 +620,7 @@ enum AgentError: Error, LocalizedError {
     case api(String)
     case parsing(String)
     case validation(String)
+    case rateLimited(String)
 
     var errorDescription: String? {
         switch self {
@@ -509,6 +630,7 @@ enum AgentError: Error, LocalizedError {
         case .api(let msg): "API error: \(msg)"
         case .parsing(let msg): "Parse error: \(msg)"
         case .validation(let msg): "Validation error: \(msg)"
+        case .rateLimited(let msg): msg
         }
     }
 }
@@ -528,7 +650,6 @@ struct ClaudeTool: Encodable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(name, forKey: .name)
         try container.encode(description, forKey: .description)
-        // Encode the schema dict as raw JSON
         let data = try JSONSerialization.data(withJSONObject: input_schema)
         let rawJSON = try JSONDecoder().decode(AnyCodable.self, from: data)
         try container.encode(rawJSON, forKey: .input_schema)
@@ -582,7 +703,6 @@ struct ClaudeToolResponse: Decodable {
 
 // MARK: - AnyCodable (for encoding/decoding arbitrary JSON)
 
-/// Wraps any JSON-compatible value for Codable round-tripping.
 struct AnyCodable: Codable {
     let value: Any
 

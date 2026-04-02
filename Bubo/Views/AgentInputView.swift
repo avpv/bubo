@@ -19,12 +19,15 @@ struct AgentInputView: View {
             // Input area
             VStack(alignment: .leading, spacing: DS.Spacing.md) {
                 inputHeader
-                if !agentService.hasAPIKey {
+                if !agentService.isConfigured {
                     noAPIKeyBanner
                 } else {
                     textInput
                     if let error = agentService.lastError {
                         errorBanner(error)
+                    }
+                    if let status = agentService.rateLimitStatus {
+                        rateLimitBadge(status)
                     }
                     examplePrompts
                 }
@@ -74,7 +77,7 @@ struct AgentInputView: View {
                     .foregroundStyle(skin.resolvedTextPrimary)
             }
 
-            Text("Add your Anthropic API key in Settings → AI Assistant to enable this feature.")
+            Text("Add your Anthropic API key in Settings → AI Assistant → Own API key to enable this feature.")
                 .font(.caption)
                 .foregroundStyle(skin.resolvedTextSecondary)
 
@@ -94,6 +97,19 @@ struct AgentInputView: View {
             RoundedRectangle(cornerRadius: DS.Size.previewSmallRadius)
                 .strokeBorder(skin.resolvedWarningColor.opacity(0.2), lineWidth: 1)
         )
+    }
+
+    // MARK: - Rate Limit Badge
+
+    private func rateLimitBadge(_ status: String) -> some View {
+        HStack(spacing: DS.Spacing.xs) {
+            Image(systemName: "chart.bar")
+                .font(.caption2)
+                .foregroundStyle(skin.resolvedTextTertiary)
+            Text(status)
+                .font(.caption2)
+                .foregroundStyle(skin.resolvedTextTertiary)
+        }
     }
 
     // MARK: - Text Input
