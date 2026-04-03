@@ -106,9 +106,9 @@ struct RecipeConfigSheet: View {
                 // Header
                 recipeHeader
 
-                // Parameters — each in its own platter section
-                ForEach(recipe.params) { param in
-                    paramSection(for: param)
+                // Parameters — grouped in one section
+                if !recipe.params.isEmpty {
+                    settingsSection
                 }
 
                 // Preview for creative recipes
@@ -524,23 +524,27 @@ struct RecipeConfigSheet: View {
         }
     }
 
-    // MARK: - Parameter Sections
+    // MARK: - Settings Section (all params in one platter)
 
-    private func paramSection(for param: RecipeParam) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            Text(param.label)
-                .font(.headline)
-                .foregroundStyle(skin.resolvedTextPrimary)
-                .accessibilityAddTraits(.isHeader)
+    private var settingsSection: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            ForEach(Array(recipe.params.enumerated()), id: \.element.id) { index, param in
+                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                    Text(param.label)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(skin.resolvedTextPrimary)
+                    paramControl(for: param)
+                }
 
-            VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                paramControl(for: param)
+                if index < recipe.params.count - 1 {
+                    SkinSeparator()
+                }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(DS.Spacing.md)
-            .skinPlatter(skin)
-            .skinPlatterDepth(skin)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(DS.Spacing.md)
+        .skinPlatter(skin)
+        .skinPlatterDepth(skin)
     }
 
     @ViewBuilder
