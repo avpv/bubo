@@ -103,8 +103,8 @@ struct RecipeConfigSheet: View {
                     settingsSection
                 }
 
-                // Preview for creative recipes
-                if recipe.isCreative && !recipe.events.isEmpty {
+                // Preview for creative recipes with multiple events
+                if recipe.isCreative && recipe.events.count > 1 {
                     creativePreviewSection
                 }
 
