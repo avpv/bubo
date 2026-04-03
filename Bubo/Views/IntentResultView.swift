@@ -49,6 +49,7 @@ struct IntentResultView: View {
                 Text("Found \(optimizerService.scenarios.count) option(s)")
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(skin.resolvedTextPrimary)
+                    .accessibilityAddTraits(.isHeader)
 
                 // Scenario picker
                 if optimizerService.scenarios.count > 1 {
@@ -78,6 +79,7 @@ struct IntentResultView: View {
             Image(systemName: "checkmark.circle")
                 .font(.system(size: 40))
                 .foregroundStyle(skin.accentColor)
+                .accessibilityHidden(true)
 
             Text("Schedule adjusted")
                 .font(.headline)

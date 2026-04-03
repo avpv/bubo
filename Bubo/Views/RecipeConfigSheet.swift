@@ -139,6 +139,8 @@ struct RecipeConfigSheet: View {
         .padding(DS.Spacing.md)
         .skinPlatter(skin)
         .skinPlatterDepth(skin)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(recipe.name): \(recipe.description)")
     }
 
     // MARK: - Settings Section
@@ -484,6 +486,7 @@ struct RecipeConfigSheet: View {
                 Image(systemName: "tray")
                     .font(.system(size: 32))
                     .foregroundStyle(skin.resolvedTextTertiary)
+                    .accessibilityHidden(true)
 
                 VStack(spacing: DS.Spacing.xs) {
                     Text("\(recipe.name) needs tasks")
@@ -512,6 +515,7 @@ struct RecipeConfigSheet: View {
                             .font(.caption2.weight(.medium))
                             .foregroundStyle(skin.resolvedTextTertiary)
                             .padding(.bottom, DS.Spacing.xs)
+                            .accessibilityAddTraits(.isHeader)
 
                         ForEach(suggestedAlternatives) { alt in
                             Button {
@@ -522,7 +526,7 @@ struct RecipeConfigSheet: View {
                                     Image(systemName: alt.icon)
                                         .font(.caption)
                                         .foregroundStyle(skin.accentColor)
-                                        .frame(width: 20)
+                                        .frame(width: DS.Size.headerIcon)
                                     VStack(alignment: .leading, spacing: 1) {
                                         Text(alt.name)
                                             .font(.caption.weight(.medium))
@@ -724,6 +728,8 @@ struct RecipeConfigSheet: View {
             .clipShape(RoundedRectangle(cornerRadius: DS.Size.previewSmallRadius))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("\(event.title), \(event.formattedTimeRange)")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     // MARK: - Helpers
