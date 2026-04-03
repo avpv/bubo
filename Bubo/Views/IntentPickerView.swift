@@ -224,10 +224,19 @@ struct RecipeCardView: View {
         .skinPlatterDepth(skin)
         .overlay(
             RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                .fill(isHovered ? skin.resolvedHoverFill : Color.clear)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
                 .strokeBorder(
                     isHovered ? skin.accentColor.opacity(DS.Opacity.glassBorder) : .clear,
                     lineWidth: DS.Border.standard
                 )
+        )
+        .shadow(
+            color: isHovered ? skin.resolvedHoverShadowColor : skin.resolvedShadowColor,
+            radius: isHovered ? DS.Shadows.hoverRadius : skin.shadowRadius,
+            y: isHovered ? DS.Shadows.hoverY : skin.shadowY
         )
         .scaleEffect(isHovered ? 1.02 : 1.0)
     }
