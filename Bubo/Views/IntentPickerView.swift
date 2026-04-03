@@ -283,8 +283,9 @@ struct RecipeCardView: View {
         .padding(.horizontal, DS.Spacing.md)
         .background(
             RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                .fill(isHovered ? skin.accentColor.opacity(DS.Opacity.subtleFill) : .clear)
+                .fill(isHovered ? skin.resolvedHoverFill : .clear)
         )
+        .scaleEffect(isHovered ? 1.02 : 1.0)
     }
 
     private var snippetLayout: some View {
