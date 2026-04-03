@@ -716,6 +716,11 @@ private struct ColorDotButton: View {
     var body: some View {
         Button(action: action) {
             ZStack {
+                // Hover background — matches snippet (EventRowView) hover pattern
+                Circle()
+                    .fill(isHovered ? skin.resolvedHoverFill : Color.clear)
+                    .frame(width: DS.Size.colorDotSize + DS.Spacing.sm, height: DS.Size.colorDotSize + DS.Spacing.sm)
+
                 Circle()
                     .fill(tag.color)
                     .frame(width: DS.Size.colorDotSize, height: DS.Size.colorDotSize)
