@@ -54,7 +54,7 @@ struct ColorDotButton: View {
                     )
                     .frame(width: DS.Size.colorDotSize + DS.Spacing.sm, height: DS.Size.colorDotSize + DS.Spacing.sm)
             )
-            .scaleEffect(isActive ? 1.18 : (isHovered ? 1.12 : 1.0))
+            .scaleEffect(isActive ? 1.15 : (isHovered ? 1.1 : 1.0))
             // Color glow
             .shadow(
                 color: (isActive || isHovered) ? tag.color.opacity(skin.shadowOpacity * 6) : .clear,
