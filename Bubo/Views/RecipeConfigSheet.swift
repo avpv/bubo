@@ -391,6 +391,11 @@ struct RecipeConfigSheet: View {
     }
 
     private func friendlyErrorTitle(_ raw: String) -> String {
+        if raw.contains("largest free gap") {
+            return recipe.isCreative
+                ? "No free slot long enough for this block. Try shorter duration or tomorrow."
+                : "No free slot long enough. Try shorter duration or tomorrow."
+        }
         if raw.contains("hard constraints") || raw.contains("Cannot satisfy") {
             return recipe.isCreative
                 ? "Schedule too packed for this block. Try shorter duration."

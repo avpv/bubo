@@ -176,7 +176,10 @@ struct RecipeExecutor {
     }
 
     private func createFixedEvents(from spec: EventSpec) -> [OptimizableEvent] {
-        (0..<spec.count).map { i in
+        let earliest: Date? = spec.startOffsetMinutes.map {
+            Date().addingTimeInterval(TimeInterval($0 * 60))
+        }
+        return (0..<spec.count).map { i in
             OptimizableEvent(
                 title: spec.count > 1 ? "\(spec.title) \(i + 1)" : spec.title,
                 duration: TimeInterval(spec.minutes * 60),
@@ -186,7 +189,8 @@ struct RecipeExecutor {
                 requiredParticipants: spec.participants,
                 preferredHourRange: spec.period?.hourRange,
                 isFocusBlock: spec.focus,
-                pomodoroConfig: spec.pomodoro?.config
+                pomodoroConfig: spec.pomodoro?.config,
+                earliestStart: earliest
             )
         }
     }
@@ -346,8 +350,9 @@ struct RecipeExecutor {
         let cal = context.calendar
         let now = Date()
 
-        // Calculate total available working minutes within the planning horizon
+        // Calculate total available working minutes and largest contiguous gap
         var availableMinutes: Double = 0
+        var largestGapMinutes: Double = 0
         var day = cal.startOfDay(for: context.planningHorizon.start)
         let horizonEnd = context.planningHorizon.end
 
@@ -368,13 +373,29 @@ struct RecipeExecutor {
             if effectiveEnd > effectiveStart {
                 var freeMinutes = effectiveEnd.timeIntervalSince(effectiveStart) / 60
 
-                // Subtract fixed events that overlap this working window
-                for fixed in context.fixedEvents {
-                    let overlapStart = max(fixed.startDate, effectiveStart)
-                    let overlapEnd = min(fixed.endDate, effectiveEnd)
-                    if overlapEnd > overlapStart {
-                        freeMinutes -= overlapEnd.timeIntervalSince(overlapStart) / 60
+                // Collect fixed events that overlap this working window, sorted by start
+                let overlapping = context.fixedEvents
+                    .compactMap { fixed -> (start: Date, end: Date)? in
+                        let oStart = max(fixed.startDate, effectiveStart)
+                        let oEnd = min(fixed.endDate, effectiveEnd)
+                        return oEnd > oStart ? (oStart, oEnd) : nil
                     }
+                    .sorted { $0.start < $1.start }
+
+                // Subtract fixed events and find contiguous gaps
+                var cursor = effectiveStart
+                for fixed in overlapping {
+                    let gapMinutes = fixed.start.timeIntervalSince(cursor) / 60
+                    if gapMinutes > 0 {
+                        largestGapMinutes = max(largestGapMinutes, gapMinutes)
+                    }
+                    freeMinutes -= fixed.end.timeIntervalSince(fixed.start) / 60
+                    cursor = max(cursor, fixed.end)
+                }
+                // Trailing gap after last fixed event
+                let trailingGap = effectiveEnd.timeIntervalSince(cursor) / 60
+                if trailingGap > 0 {
+                    largestGapMinutes = max(largestGapMinutes, trailingGap)
                 }
 
                 availableMinutes += max(0, freeMinutes)
@@ -383,8 +404,9 @@ struct RecipeExecutor {
             day = cal.date(byAdding: .day, value: 1, to: day)!
         }
 
-        // Calculate total required minutes
+        // Calculate total required minutes and longest single event
         let requiredMinutes = context.movableEvents.reduce(0.0) { $0 + $1.duration / 60 }
+        let longestEventMinutes = context.movableEvents.map { $0.duration / 60 }.max() ?? 0
 
         if availableMinutes < 1 {
             return "No working time left today — try scheduling for tomorrow"
@@ -394,6 +416,13 @@ struct RecipeExecutor {
             let needed = Int(requiredMinutes)
             let available = Int(availableMinutes)
             return "Need \(needed) min but only \(available) min of working time available"
+        }
+
+        // Check that the longest event can fit in at least one contiguous gap
+        if longestEventMinutes > largestGapMinutes {
+            let needed = Int(longestEventMinutes)
+            let largest = Int(largestGapMinutes)
+            return "Longest event needs \(needed) min but the largest free gap is \(largest) min"
         }
 
         return nil
