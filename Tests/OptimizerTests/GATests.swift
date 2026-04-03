@@ -1739,3 +1739,96 @@ struct EnergyRecoveryTests {
                 "Schedule with breaks (\(scoreWithBreaks)) should score higher than back-to-back (\(scoreBackToBack))")
     }
 }
+
+// MARK: - EarliestStart Constraint Tests
+
+@Suite("EarliestStart Constraint Tests")
+struct EarliestStartConstraintTests {
+
+    @Test("No penalty when event starts after earliestStart")
+    func noPenaltyWhenAfterEarliestStart() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let earliest = cal.date(bySettingHour: 10, minute: 0, second: 0, of: today)!
+
+        let event = OptimizableEvent(
+            id: "t1", title: "Task", duration: 3600,
+            earliestStart: earliest
+        )
+        let context = makeContext(movableEvents: [event])
+
+        let gene = ScheduleGene(
+            eventId: "t1", title: "Task",
+            startTime: cal.date(bySettingHour: 11, minute: 0, second: 0, of: today)!,
+            duration: 3600, context: nil, energyCost: 0.5, priority: 0.5, isFocusBlock: false
+        )
+        let chromosome = ScheduleChromosome(genes: [gene])
+
+        let constraint = EarliestStartConstraint()
+        #expect(constraint.penalty(for: chromosome, context: context) == 0)
+    }
+
+    @Test("Penalty when event starts before earliestStart")
+    func penaltyWhenBeforeEarliestStart() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let earliest = cal.date(bySettingHour: 10, minute: 0, second: 0, of: today)!
+
+        let event = OptimizableEvent(
+            id: "t1", title: "Task", duration: 3600,
+            earliestStart: earliest
+        )
+        let context = makeContext(movableEvents: [event])
+
+        let gene = ScheduleGene(
+            eventId: "t1", title: "Task",
+            startTime: cal.date(bySettingHour: 9, minute: 0, second: 0, of: today)!,
+            duration: 3600, context: nil, energyCost: 0.5, priority: 0.5, isFocusBlock: false
+        )
+        let chromosome = ScheduleChromosome(genes: [gene])
+
+        let constraint = EarliestStartConstraint()
+        let penalty = constraint.penalty(for: chromosome, context: context)
+        #expect(penalty == 60, "Should penalize by 60 minutes (started 1 hour early)")
+    }
+
+    @Test("No penalty when event has no earliestStart")
+    func noPenaltyWhenNoEarliestStart() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+
+        let event = makeMovableEvent(id: "t1")
+        let context = makeContext(movableEvents: [event])
+
+        let gene = ScheduleGene(
+            eventId: "t1", title: "Test Task",
+            startTime: cal.date(bySettingHour: 9, minute: 0, second: 0, of: today)!,
+            duration: 3600, context: nil, energyCost: 0.5, priority: 0.5, isFocusBlock: false
+        )
+        let chromosome = ScheduleChromosome(genes: [gene])
+
+        let constraint = EarliestStartConstraint()
+        #expect(constraint.penalty(for: chromosome, context: context) == 0)
+    }
+
+    @Test("Random chromosome respects earliestStart")
+    func randomChromosomeRespectsEarliestStart() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let earliest = cal.date(bySettingHour: 14, minute: 0, second: 0, of: today)!
+
+        let event = OptimizableEvent(
+            id: "t1", title: "Afternoon Task", duration: 3600,
+            earliestStart: earliest
+        )
+        let context = makeContext(movableEvents: [event])
+
+        // Generate many random chromosomes — all should respect earliestStart
+        for _ in 0..<20 {
+            let chromosome = ScheduleChromosome.random(context: context)
+            let gene = chromosome.genes.first!
+            #expect(gene.startTime >= earliest,
+                    "Random start \(gene.startTime) should be >= earliest \(earliest)")
+        }
+    }
+}
