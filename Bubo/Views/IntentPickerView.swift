@@ -355,7 +355,7 @@ struct RecipeCardView: View {
 // MARK: - Recipe Card Button Style
 
 private struct RecipeCardButtonStyle: ButtonStyle {
-    let skin: any SkinProtocol
+    let skin: SkinDefinition
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
