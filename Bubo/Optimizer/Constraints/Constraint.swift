@@ -120,6 +120,26 @@ struct DeadlineConstraint: ScheduleConstraint {
     }
 }
 
+// MARK: - Earliest Start Constraint (Hard)
+
+/// Events with an earliestStart must not be scheduled before that time.
+struct EarliestStartConstraint: ScheduleConstraint {
+    let name = "EarliestStart"
+    let isHard = true
+
+    func penalty(for chromosome: ScheduleChromosome, context: OptimizerContext) -> Double {
+        var totalViolation = 0.0
+        for gene in chromosome.genes {
+            guard let event = context.movableEvents.first(where: { $0.id == gene.eventId }),
+                  let earliest = event.earliestStart else { continue }
+            if gene.startTime < earliest {
+                totalViolation += earliest.timeIntervalSince(gene.startTime) / 60
+            }
+        }
+        return totalViolation
+    }
+}
+
 // MARK: - Max Meetings Per Day Constraint (Soft)
 
 /// Soft limit on the number of meetings per day.

@@ -215,6 +215,11 @@ struct EventSpec: Codable, Hashable {
     /// calendar event. Replaces PomodoroConfig for arbitrary structures.
     var segments: [EventSegment]? = nil
 
+    /// Offset in minutes from now for the earliest start time.
+    /// When set, the optimizer will not place this event earlier than now + startOffsetMinutes.
+    /// Example: "in 5 minutes" → startOffsetMinutes = 5
+    var startOffsetMinutes: Int? = nil
+
     /// Custom decoder that tolerates missing keys by falling back to defaults.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -231,6 +236,7 @@ struct EventSpec: Codable, Hashable {
         creation = (try? c.decode(CreationMode.self, forKey: .creation)) ?? .fixed
         chainGap = try? c.decode(Int.self, forKey: .chainGap)
         segments = try? c.decode([EventSegment].self, forKey: .segments)
+        startOffsetMinutes = try? c.decode(Int.self, forKey: .startOffsetMinutes)
     }
 
     init(
@@ -246,7 +252,8 @@ struct EventSpec: Codable, Hashable {
         participants: [String] = [],
         creation: CreationMode = .fixed,
         chainGap: Int? = nil,
-        segments: [EventSegment]? = nil
+        segments: [EventSegment]? = nil,
+        startOffsetMinutes: Int? = nil
     ) {
         self.title = title
         self.minutes = minutes
@@ -261,6 +268,7 @@ struct EventSpec: Codable, Hashable {
         self.creation = creation
         self.chainGap = chainGap
         self.segments = segments
+        self.startOffsetMinutes = startOffsetMinutes
     }
 }
 

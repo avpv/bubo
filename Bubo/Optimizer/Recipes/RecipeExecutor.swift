@@ -66,7 +66,8 @@ struct RecipeExecutor {
             ?? optimizerService.workingHours
 
         // 9. Build planning horizon
-        let horizon = resolveHorizon(recipe.horizon, workingHours: workingHours)
+        let maxEventMinutes = recipe.events.map { Double($0.minutes) }.max() ?? 30
+        let horizon = resolveHorizon(recipe.horizon, workingHours: workingHours, minRequiredMinutes: maxEventMinutes)
 
         // 10. Collect fixed calendar events + frozen events from rules
         let calendarFixed = reminderService.allEvents.filter { !$0.isLocalEvent }
@@ -160,10 +161,12 @@ struct RecipeExecutor {
 
             case .splitEvent(let eventId):
                 guard let original = findLocalEvent(eventId) else { return [] }
-                let partMinutes = max(15, Int(original.duration / 60) / max(1, spec.count))
-                return (0..<spec.count).map { i in
+                let originalMinutes = Int(original.duration / 60)
+                let partMinutes = max(5, min(originalMinutes, originalMinutes / max(1, spec.count)))
+                let actualCount = max(1, originalMinutes / max(1, partMinutes))
+                return (0..<actualCount).map { i in
                     OptimizableEvent(
-                        title: "\(original.title) (\(i + 1)/\(spec.count))",
+                        title: "\(original.title) (\(i + 1)/\(actualCount))",
                         duration: TimeInterval(partMinutes * 60),
                         priority: spec.priority,
                         context: original.title,
@@ -176,7 +179,10 @@ struct RecipeExecutor {
     }
 
     private func createFixedEvents(from spec: EventSpec) -> [OptimizableEvent] {
-        (0..<spec.count).map { i in
+        let earliest: Date? = spec.startOffsetMinutes.map {
+            Date().addingTimeInterval(TimeInterval($0 * 60))
+        }
+        return (0..<spec.count).map { i in
             OptimizableEvent(
                 title: spec.count > 1 ? "\(spec.title) \(i + 1)" : spec.title,
                 duration: TimeInterval(spec.minutes * 60),
@@ -186,7 +192,8 @@ struct RecipeExecutor {
                 requiredParticipants: spec.participants,
                 preferredHourRange: spec.period?.hourRange,
                 isFocusBlock: spec.focus,
-                pomodoroConfig: spec.pomodoro?.config
+                pomodoroConfig: spec.pomodoro?.config,
+                earliestStart: earliest
             )
         }
     }
@@ -346,8 +353,9 @@ struct RecipeExecutor {
         let cal = context.calendar
         let now = Date()
 
-        // Calculate total available working minutes within the planning horizon
+        // Calculate total available working minutes and largest contiguous gap
         var availableMinutes: Double = 0
+        var largestGapMinutes: Double = 0
         var day = cal.startOfDay(for: context.planningHorizon.start)
         let horizonEnd = context.planningHorizon.end
 
@@ -368,13 +376,29 @@ struct RecipeExecutor {
             if effectiveEnd > effectiveStart {
                 var freeMinutes = effectiveEnd.timeIntervalSince(effectiveStart) / 60
 
-                // Subtract fixed events that overlap this working window
-                for fixed in context.fixedEvents {
-                    let overlapStart = max(fixed.startDate, effectiveStart)
-                    let overlapEnd = min(fixed.endDate, effectiveEnd)
-                    if overlapEnd > overlapStart {
-                        freeMinutes -= overlapEnd.timeIntervalSince(overlapStart) / 60
+                // Collect fixed events that overlap this working window, sorted by start
+                let overlapping = context.fixedEvents
+                    .compactMap { fixed -> (start: Date, end: Date)? in
+                        let oStart = max(fixed.startDate, effectiveStart)
+                        let oEnd = min(fixed.endDate, effectiveEnd)
+                        return oEnd > oStart ? (oStart, oEnd) : nil
                     }
+                    .sorted { $0.start < $1.start }
+
+                // Subtract fixed events and find contiguous gaps
+                var cursor = effectiveStart
+                for fixed in overlapping {
+                    let gapMinutes = fixed.start.timeIntervalSince(cursor) / 60
+                    if gapMinutes > 0 {
+                        largestGapMinutes = max(largestGapMinutes, gapMinutes)
+                    }
+                    freeMinutes -= fixed.end.timeIntervalSince(fixed.start) / 60
+                    cursor = max(cursor, fixed.end)
+                }
+                // Trailing gap after last fixed event
+                let trailingGap = effectiveEnd.timeIntervalSince(cursor) / 60
+                if trailingGap > 0 {
+                    largestGapMinutes = max(largestGapMinutes, trailingGap)
                 }
 
                 availableMinutes += max(0, freeMinutes)
@@ -383,8 +407,9 @@ struct RecipeExecutor {
             day = cal.date(byAdding: .day, value: 1, to: day)!
         }
 
-        // Calculate total required minutes
+        // Calculate total required minutes and longest single event
         let requiredMinutes = context.movableEvents.reduce(0.0) { $0 + $1.duration / 60 }
+        let longestEventMinutes = context.movableEvents.map { $0.duration / 60 }.max() ?? 0
 
         if availableMinutes < 1 {
             return "No working time left today — try scheduling for tomorrow"
@@ -396,12 +421,19 @@ struct RecipeExecutor {
             return "Need \(needed) min but only \(available) min of working time available"
         }
 
+        // Check that the longest event can fit in at least one contiguous gap
+        if longestEventMinutes > largestGapMinutes {
+            let needed = Int(longestEventMinutes)
+            let largest = Int(largestGapMinutes)
+            return "Longest event needs \(needed) min but the largest free gap is \(largest) min"
+        }
+
         return nil
     }
 
     // MARK: - Horizon Resolution
 
-    private func resolveHorizon(_ horizon: Horizon, workingHours: ClosedRange<Int>) -> DateInterval {
+    private func resolveHorizon(_ horizon: Horizon, workingHours: ClosedRange<Int>, minRequiredMinutes: Double = 30) -> DateInterval {
         let cal = Calendar.current
         let now = Date()
 
@@ -415,9 +447,8 @@ struct RecipeExecutor {
             ) ?? todayEnd
             let remainingMinutes = workEndToday.timeIntervalSince(now) / 60
 
-            // If less than 30 minutes of working time remain, extend to end of tomorrow
-            // so the optimizer can place events on the next day
-            if remainingMinutes < 30 {
+            // If not enough working time remains for the longest event, extend to tomorrow
+            if remainingMinutes < minRequiredMinutes {
                 let tomorrowEnd = cal.date(byAdding: .day, value: 1, to: todayEnd)!
                 return DateInterval(start: now, end: tomorrowEnd)
             }
@@ -570,7 +601,8 @@ extension RecipeExecutor {
         if let v = recipe.peakEnergyHour { prefs.peakEnergyHour = v }
 
         let workingHours = recipe.workingHours?.closedRange ?? defaultWorkingHours
-        let horizon = resolveHorizon(recipe.horizon, workingHours: workingHours)
+        let maxEventMinutes = recipe.events.map { Double($0.minutes) }.max() ?? 30
+        let horizon = resolveHorizon(recipe.horizon, workingHours: workingHours, minRequiredMinutes: maxEventMinutes)
 
         let calendarFixed = reminderService.allEvents.filter { !$0.isLocalEvent }
         let allFixed = calendarFixed + fixedFromRules

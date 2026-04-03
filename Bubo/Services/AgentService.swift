@@ -303,6 +303,7 @@ final class AgentService {
     - Set "energy" (0.0-1.0): cognitive load required. 0.9 = intense deep work, 0.5 = moderate, 0.1 = passive/rest.
     - Use "focus": true for deep work that shouldn't be interrupted.
     - Use "period" to hint preferred time of day when the user mentions morning/afternoon/evening.
+    - Use "startOffsetMinutes" when the user says "in X minutes" or "in an hour" (e.g. "in 5 minutes" → startOffsetMinutes: 5).
     - Use "weights" to emphasize what matters most (values > 1.0 increase importance, < 1.0 decrease).
     - For sequential activities (warm-up → main → cooldown), use "chainGap" on follow-up events.
     - For internal structure within a single event (e.g. exercises in a circuit), use "segments".
@@ -482,6 +483,12 @@ enum RecipeToolSchema {
                 "description": "Internal sub-structure (e.g. exercises in a circuit). Rendered as timeline within one calendar event.",
                 "items": segmentSchema
             ],
+            "startOffsetMinutes": [
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 480,
+                "description": "Earliest start time as offset in minutes from now. Use when the user says 'in 5 minutes', 'in an hour', etc. 5 = not before 5 min from now, 60 = not before 1 hour from now."
+            ],
         ] as [String: Any]
     ]
 
@@ -568,6 +575,9 @@ enum RecipeValidator {
             if let gap = r.events[i].chainGap {
                 r.events[i].chainGap = max(0, min(60, gap))
             }
+            if let offset = r.events[i].startOffsetMinutes {
+                r.events[i].startOffsetMinutes = max(0, min(480, offset))
+            }
             if let segments = r.events[i].segments {
                 r.events[i].segments = segments.map { seg in
                     var s = seg
@@ -580,9 +590,12 @@ enum RecipeValidator {
         r.maxScenarios = max(1, min(5, r.maxScenarios))
 
         if var wh = r.workingHours {
-            wh.start = max(0, min(23, wh.start))
-            wh.end = max(0, min(23, wh.end))
-            if wh.start > wh.end { swap(&wh.start, &wh.end) }
+            wh.start = max(0, min(22, wh.start))
+            wh.end = max(1, min(23, wh.end))
+            if wh.start >= wh.end {
+                swap(&wh.start, &wh.end)
+                if wh.start == wh.end { wh.end = wh.start + 1 }
+            }
             r.workingHours = wh
         }
 

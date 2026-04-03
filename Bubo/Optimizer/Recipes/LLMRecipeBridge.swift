@@ -90,7 +90,8 @@ struct LLMRecipeBridge {
       "focus": bool (default: false, marks as uninterruptible),
       "pomodoro": "classic" | "deepWork" (optional),
       "chainGap": int 0-60 (optional, minutes after previous event; creates sequential chain),
-      "segments": [EventSegment array] (optional, sub-structure within event)
+      "segments": [EventSegment array] (optional, sub-structure within event),
+      "startOffsetMinutes": int 0-480 (optional, earliest start = now + this; use for "in 5 min" → 5)
     }
 
     ## EventSegment

@@ -15,6 +15,7 @@ struct OptimizableEvent: Identifiable, Codable, Hashable, Sendable {
     let preferredHourRange: ClosedRange<Int>?  // e.g. 9...12
     let isFocusBlock: Bool
     let pomodoroConfig: PomodoroConfig?
+    let earliestStart: Date?        // don't schedule before this time
 
     init(
         id: String = UUID().uuidString,
@@ -27,7 +28,8 @@ struct OptimizableEvent: Identifiable, Codable, Hashable, Sendable {
         requiredParticipants: [String] = [],
         preferredHourRange: ClosedRange<Int>? = nil,
         isFocusBlock: Bool = false,
-        pomodoroConfig: PomodoroConfig? = nil
+        pomodoroConfig: PomodoroConfig? = nil,
+        earliestStart: Date? = nil
     ) {
         self.id = id
         self.title = title
@@ -40,6 +42,7 @@ struct OptimizableEvent: Identifiable, Codable, Hashable, Sendable {
         self.preferredHourRange = preferredHourRange
         self.isFocusBlock = isFocusBlock
         self.pomodoroConfig = pomodoroConfig
+        self.earliestStart = earliestStart
     }
 }
 

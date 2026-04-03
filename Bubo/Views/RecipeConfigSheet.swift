@@ -5,14 +5,14 @@ import SwiftUI
 private enum OptimizationState: Equatable {
     case idle
     case optimizing
-    case success([ScheduleScenario])
+    case success([ScheduleScenario], warnings: [String] = [])
     case error(String)
 
     static func == (lhs: OptimizationState, rhs: OptimizationState) -> Bool {
         switch (lhs, rhs) {
         case (.idle, .idle): return true
         case (.optimizing, .optimizing): return true
-        case (.success(let a), .success(let b)):
+        case (.success(let a, _), .success(let b, _)):
             return a.map(\.fitness) == b.map(\.fitness)
         case (.error(let a), .error(let b)): return a == b
         default: return false
@@ -56,12 +56,12 @@ struct RecipeConfigSheet: View {
     }
 
     private var hasResults: Bool {
-        if case .success(let s) = optimizationState { return !s.isEmpty }
+        if case .success(let s, _) = optimizationState { return !s.isEmpty }
         return false
     }
 
     private var scenarios: [ScheduleScenario] {
-        if case .success(let s) = optimizationState { return s }
+        if case .success(let s, _) = optimizationState { return s }
         return []
     }
 
@@ -192,9 +192,16 @@ struct RecipeConfigSheet: View {
                             .fill(skin.accentColor.opacity(index % 2 == 0 ? 0.8 : 0.5))
                             .frame(width: DS.Size.accentBarWidth, height: DS.Size.iconLarge)
 
-                        Text(spec.title)
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(skin.resolvedTextPrimary)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(spec.title)
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(skin.resolvedTextPrimary)
+                            if let offset = spec.startOffsetMinutes, offset > 0 {
+                                Text("in \(formatDuration(offset))")
+                                    .font(.caption2)
+                                    .foregroundStyle(skin.resolvedTextSecondary)
+                            }
+                        }
 
                         if spec.count > 1 {
                             Text("×\(spec.count)")
@@ -295,8 +302,20 @@ struct RecipeConfigSheet: View {
             .frame(maxWidth: .infinity)
             .padding(DS.Spacing.lg)
 
-        case .success(let results):
+        case .success(let results, let warnings):
             VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                // Warnings banner
+                if !warnings.isEmpty {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.caption2)
+                            .foregroundStyle(skin.resolvedWarningColor)
+                        Text(warnings.joined(separator: ". "))
+                            .font(.caption2)
+                            .foregroundStyle(skin.resolvedWarningColor)
+                    }
+                }
+
                 // Scenario picker (segmented) when multiple options
                 if results.count > 1 {
                     Picker("Option", selection: $selectedScenarioIndex) {
@@ -391,6 +410,11 @@ struct RecipeConfigSheet: View {
     }
 
     private func friendlyErrorTitle(_ raw: String) -> String {
+        if raw.contains("largest free gap") {
+            return recipe.isCreative
+                ? "No free slot long enough for this block. Try shorter duration or tomorrow."
+                : "No free slot long enough. Try shorter duration or tomorrow."
+        }
         if raw.contains("hard constraints") || raw.contains("Cannot satisfy") {
             return recipe.isCreative
                 ? "Schedule too packed for this block. Try shorter duration."
@@ -398,6 +422,12 @@ struct RecipeConfigSheet: View {
         }
         if raw.contains("No events") {
             return "No events to work with."
+        }
+        if raw.contains("No working time left") {
+            return "Working hours are over for today. Try scheduling for tomorrow."
+        }
+        if raw.contains("but only") && raw.contains("min") {
+            return "Not enough free time in schedule. Try shorter duration or fewer events."
         }
         return raw
     }
@@ -493,7 +523,7 @@ struct RecipeConfigSheet: View {
                 if r.scenarios.isEmpty {
                     optimizationState = .error(warnings.first ?? "No scenarios found")
                 } else {
-                    optimizationState = .success(r.scenarios)
+                    optimizationState = .success(r.scenarios, warnings: warnings)
                     Haptics.impact()
                 }
             case .noEventsToOptimize:

@@ -398,6 +398,38 @@ final class RecipeTests: XCTestCase {
         XCTAssertEqual(spec.energy, 0.5)
         XCTAssertNil(spec.period)
         XCTAssertNil(spec.chainGap)
+        XCTAssertNil(spec.startOffsetMinutes)
         XCTAssertEqual(spec.creation, .fixed)
+    }
+
+    // MARK: - startOffsetMinutes
+
+    func testStartOffsetMinutesDecodes() throws {
+        let json = """
+        {"title": "Think", "minutes": 30, "startOffsetMinutes": 5}
+        """
+        let data = json.data(using: .utf8)!
+        let spec = try JSONDecoder().decode(EventSpec.self, from: data)
+        XCTAssertEqual(spec.startOffsetMinutes, 5)
+    }
+
+    func testStartOffsetMinutesDefaultsToNil() throws {
+        let json = """
+        {"title": "Think", "minutes": 30}
+        """
+        let data = json.data(using: .utf8)!
+        let spec = try JSONDecoder().decode(EventSpec.self, from: data)
+        XCTAssertNil(spec.startOffsetMinutes)
+    }
+
+    func testStartOffsetMinutesCodableRoundTrip() throws {
+        let spec = EventSpec(title: "Later", minutes: 45, startOffsetMinutes: 10)
+        let data = try JSONEncoder().encode(spec)
+        let decoded = try JSONDecoder().decode(EventSpec.self, from: data)
+        XCTAssertEqual(decoded.startOffsetMinutes, 10)
+    }
+
+    func testLLMBridgeSchemaContainsStartOffset() {
+        XCTAssertTrue(LLMRecipeBridge.schemaDescription.contains("startOffsetMinutes"))
     }
 }
