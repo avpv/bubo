@@ -30,18 +30,18 @@ final class OptimizerService {
 
     var workingHoursStart: Int {
         didSet {
-            // Ensure start <= end to prevent ClosedRange crash
-            if workingHoursStart > workingHoursEnd {
-                workingHoursEnd = workingHoursStart
+            // Ensure start < end to prevent zero-duration range
+            if workingHoursStart >= workingHoursEnd {
+                workingHoursEnd = workingHoursStart + 1
             }
             saveSettings()
         }
     }
     var workingHoursEnd: Int {
         didSet {
-            // Ensure start <= end to prevent ClosedRange crash
-            if workingHoursEnd < workingHoursStart {
-                workingHoursStart = workingHoursEnd
+            // Ensure start < end to prevent zero-duration range
+            if workingHoursEnd <= workingHoursStart {
+                workingHoursStart = workingHoursEnd - 1
             }
             saveSettings()
         }

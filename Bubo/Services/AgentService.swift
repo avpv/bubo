@@ -590,9 +590,12 @@ enum RecipeValidator {
         r.maxScenarios = max(1, min(5, r.maxScenarios))
 
         if var wh = r.workingHours {
-            wh.start = max(0, min(23, wh.start))
-            wh.end = max(0, min(23, wh.end))
-            if wh.start > wh.end { swap(&wh.start, &wh.end) }
+            wh.start = max(0, min(22, wh.start))
+            wh.end = max(1, min(23, wh.end))
+            if wh.start >= wh.end {
+                swap(&wh.start, &wh.end)
+                if wh.start == wh.end { wh.end = wh.start + 1 }
+            }
             r.workingHours = wh
         }
 

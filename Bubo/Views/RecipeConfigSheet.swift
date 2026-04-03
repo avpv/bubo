@@ -5,14 +5,14 @@ import SwiftUI
 private enum OptimizationState: Equatable {
     case idle
     case optimizing
-    case success([ScheduleScenario])
+    case success([ScheduleScenario], warnings: [String] = [])
     case error(String)
 
     static func == (lhs: OptimizationState, rhs: OptimizationState) -> Bool {
         switch (lhs, rhs) {
         case (.idle, .idle): return true
         case (.optimizing, .optimizing): return true
-        case (.success(let a), .success(let b)):
+        case (.success(let a, _), .success(let b, _)):
             return a.map(\.fitness) == b.map(\.fitness)
         case (.error(let a), .error(let b)): return a == b
         default: return false
@@ -56,12 +56,12 @@ struct RecipeConfigSheet: View {
     }
 
     private var hasResults: Bool {
-        if case .success(let s) = optimizationState { return !s.isEmpty }
+        if case .success(let s, _) = optimizationState { return !s.isEmpty }
         return false
     }
 
     private var scenarios: [ScheduleScenario] {
-        if case .success(let s) = optimizationState { return s }
+        if case .success(let s, _) = optimizationState { return s }
         return []
     }
 
@@ -302,8 +302,20 @@ struct RecipeConfigSheet: View {
             .frame(maxWidth: .infinity)
             .padding(DS.Spacing.lg)
 
-        case .success(let results):
+        case .success(let results, let warnings):
             VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                // Warnings banner
+                if !warnings.isEmpty {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.caption2)
+                            .foregroundStyle(skin.resolvedWarningColor)
+                        Text(warnings.joined(separator: ". "))
+                            .font(.caption2)
+                            .foregroundStyle(skin.resolvedWarningColor)
+                    }
+                }
+
                 // Scenario picker (segmented) when multiple options
                 if results.count > 1 {
                     Picker("Option", selection: $selectedScenarioIndex) {
@@ -411,6 +423,12 @@ struct RecipeConfigSheet: View {
         if raw.contains("No events") {
             return "No events to work with."
         }
+        if raw.contains("No working time left") {
+            return "Working hours are over for today. Try scheduling for tomorrow."
+        }
+        if raw.contains("but only") && raw.contains("min") {
+            return "Not enough free time in schedule. Try shorter duration or fewer events."
+        }
         return raw
     }
 
@@ -505,7 +523,7 @@ struct RecipeConfigSheet: View {
                 if r.scenarios.isEmpty {
                     optimizationState = .error(warnings.first ?? "No scenarios found")
                 } else {
-                    optimizationState = .success(r.scenarios)
+                    optimizationState = .success(r.scenarios, warnings: warnings)
                     Haptics.impact()
                 }
             case .noEventsToOptimize:

@@ -161,10 +161,12 @@ struct RecipeExecutor {
 
             case .splitEvent(let eventId):
                 guard let original = findLocalEvent(eventId) else { return [] }
-                let partMinutes = max(15, Int(original.duration / 60) / max(1, spec.count))
-                return (0..<spec.count).map { i in
+                let originalMinutes = Int(original.duration / 60)
+                let partMinutes = max(5, min(originalMinutes, originalMinutes / max(1, spec.count)))
+                let actualCount = max(1, originalMinutes / max(1, partMinutes))
+                return (0..<actualCount).map { i in
                     OptimizableEvent(
-                        title: "\(original.title) (\(i + 1)/\(spec.count))",
+                        title: "\(original.title) (\(i + 1)/\(actualCount))",
                         duration: TimeInterval(partMinutes * 60),
                         priority: spec.priority,
                         context: original.title,
