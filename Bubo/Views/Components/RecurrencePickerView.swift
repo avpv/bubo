@@ -102,55 +102,48 @@ struct RecurrencePickerView: View {
 
     @ViewBuilder
     private func standardControls(_ freq: RecurrenceFrequency) -> some View {
-        Color.clear.frame(height: DS.Spacing.xs) // Adds top spacing matching Pomodoro
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            // Interval
+            Stepper(
+                "Every \(interval) \(interval == 1 ? freq.singularUnit : freq.pluralUnit)",
+                value: $interval, in: 1...99
+            )
 
-        // Interval
-        Stepper(
-            "Every \(interval) \(interval == 1 ? freq.singularUnit : freq.pluralUnit)",
-            value: $interval, in: 1...99
-        )
-
-        // Weekly: weekday chips
-        if freq == .weekly {
-            Color.clear.frame(height: 2)
-            weekdayChips
-        }
-
-        // Monthly: mode picker
-        if freq == .monthly {
-            Color.clear.frame(height: 2)
-            monthlyModePicker
-        }
-
-        Color.clear.frame(height: 4)
-
-        // End condition
-        Picker("Ends", selection: $endChoice) {
-            ForEach(EndChoice.allCases, id: \.self) { c in
-                Text(c.rawValue).tag(c)
+            // Weekly: weekday chips
+            if freq == .weekly {
+                weekdayChips
             }
-        }
-        .pickerStyle(.menu)
-        .controlSize(.large)
-        .frame(height: DS.Size.controlHeight)
 
-        switch endChoice {
-        case .never:
-            EmptyView()
-        case .afterCount:
-            Color.clear.frame(height: 2)
-            Stepper("After \(endCount) occurrences", value: $endCount, in: 2...100)
-        case .onDate:
-            Color.clear.frame(height: 2)
-            DatePicker("Until", selection: $endDate, in: eventStartDate..., displayedComponents: .date)
-        }
+            // Monthly: mode picker
+            if freq == .monthly {
+                monthlyModePicker
+            }
 
-        // Summary
-        if let built = buildStandardRule(freq) {
-            Color.clear.frame(height: 4)
-            Label(built.displayText, systemImage: "repeat")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            // End condition
+            Picker("Ends", selection: $endChoice) {
+                ForEach(EndChoice.allCases, id: \.self) { c in
+                    Text(c.rawValue).tag(c)
+                }
+            }
+            .pickerStyle(.menu)
+            .controlSize(.large)
+            .frame(height: DS.Size.controlHeight)
+
+            switch endChoice {
+            case .never:
+                EmptyView()
+            case .afterCount:
+                Stepper("After \(endCount) occurrences", value: $endCount, in: 2...100)
+            case .onDate:
+                DatePicker("Until", selection: $endDate, in: eventStartDate..., displayedComponents: .date)
+            }
+
+            // Summary
+            if let built = buildStandardRule(freq) {
+                Label(built.displayText, systemImage: "repeat")
+                    .font(.caption)
+                    .foregroundStyle(skin.resolvedTextSecondary)
+            }
         }
     }
 
@@ -159,29 +152,17 @@ struct RecurrencePickerView: View {
     private var weekdayChips: some View {
         FlowLayout(spacing: DS.Spacing.xs) {
             ForEach(Weekday.allCases, id: \.self) { day in
-                Button {
-                    if selectedWeekdays.contains(day) {
-                        selectedWeekdays.remove(day)
-                    } else {
-                        selectedWeekdays.insert(day)
+                WeekdayChip(
+                    day: day,
+                    isSelected: selectedWeekdays.contains(day),
+                    action: {
+                        if selectedWeekdays.contains(day) {
+                            selectedWeekdays.remove(day)
+                        } else {
+                            selectedWeekdays.insert(day)
+                        }
                     }
-                } label: {
-                    Text(day.shortName)
-                        .font(.caption2)
-                        .fontWeight(.medium)
-                        .padding(.horizontal, DS.Spacing.sm)
-                        .padding(.vertical, DS.Spacing.xs)
-                        .background(
-                            selectedWeekdays.contains(day)
-                                ? Color.accentColor
-                                : DS.Colors.badgeFill(.secondary)
-                        )
-                        .foregroundStyle(selectedWeekdays.contains(day) ? .white : .primary)
-                        .clipShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(day.fullName)
-                .accessibilityAddTraits(selectedWeekdays.contains(day) ? .isSelected : [])
+                )
             }
         }
     }
@@ -276,6 +257,45 @@ struct RecurrencePickerView: View {
                 monthlyMode = ordinal < 0 ? .lastWeekday : .weekdayPosition
             }
         }
+    }
+}
+
+// MARK: - Weekday Chip (with hover)
+
+private struct WeekdayChip: View {
+    let day: Weekday
+    let isSelected: Bool
+    let action: () -> Void
+
+    @State private var isHovered = false
+    @Environment(\.activeSkin) private var skin
+
+    var body: some View {
+        Button {
+            Haptics.tap()
+            action()
+        } label: {
+            Text(day.shortName)
+                .font(.caption2)
+                .fontWeight(.medium)
+                .padding(.horizontal, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xs)
+                .background(
+                    isSelected
+                        ? skin.accentColor
+                        : (isHovered ? skin.accentColor.opacity(DS.Opacity.lightFill) : DS.Colors.badgeFill(skin.resolvedTextSecondary))
+                )
+                .foregroundStyle(isSelected ? .white : skin.resolvedTextPrimary)
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .scaleEffect(isHovered && !isSelected ? 1.05 : 1.0)
+        .animation(skin.resolvedMicroAnimation, value: isHovered)
+        .onHover { hovering in
+            isHovered = hovering
+        }
+        .accessibilityLabel(day.fullName)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 

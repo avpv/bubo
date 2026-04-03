@@ -3,6 +3,7 @@ import SwiftUI
 struct RemindersTabView: View {
     @Environment(ReminderSettings.self) var settings
     @Environment(SettingsViewModel.self) var viewModel
+    @Environment(\.activeSkin) private var skin
 
     var body: some View {
         @Bindable var settings = settings
@@ -51,7 +52,7 @@ struct RemindersTabView: View {
                 Toggle("System notification", isOn: $settings.showSystemNotification)
                 Text("At least one notification type should be enabled to receive meeting alerts.")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(skin.resolvedTextSecondary)
                     .padding(.top, DS.Spacing.xs)
             }
 

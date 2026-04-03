@@ -40,7 +40,7 @@ struct DurationPicker: View {
                     TextField("Duration", text: $text)
                         .textFieldStyle(.plain)
                         .labelsHidden()
-                        .frame(width: 80)
+                        .frame(width: DS.Size.numberInputWidth)
                         .multilineTextAlignment(.center)
                         .monospacedDigit()
                         .focused($isFocused)
@@ -51,7 +51,7 @@ struct DurationPicker: View {
                 } else {
                     Text(DS.formatMinutes(Int(minutes)))
                         .monospacedDigit()
-                        .frame(width: 80)
+                        .frame(width: DS.Size.numberInputWidth)
                         .multilineTextAlignment(.center)
                         .onTapGesture { startEditing() }
                 }
@@ -130,7 +130,7 @@ struct DurationPicker: View {
             }
         } label: {
             Image(systemName: "hourglass")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(skin.resolvedTextSecondary)
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
