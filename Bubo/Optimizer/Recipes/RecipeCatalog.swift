@@ -104,7 +104,7 @@ extension ScheduleRecipe {
             weights: [.focusBlock: 2.0],
             params: [
                 RecipeParam(id: "minutes", label: "How long?",
-                           kind: .segmented([30, 60, 90, 120, 180]),
+                           kind: .segmented(Array(stride(from: 30, through: 480, by: 30))),
                            target: .eventMinutes(index: 0)),
             ]
         )
