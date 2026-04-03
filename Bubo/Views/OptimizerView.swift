@@ -16,6 +16,7 @@ struct OptimizerView: View {
     @State private var phase: Phase = .picking
     @State private var selectedRecipe: ScheduleRecipe? = nil
     @State private var isAnimatingSpinner = false
+    @State private var lastParamValues: [String: Any] = [:]
 
     enum Phase: Equatable {
         case picking
@@ -65,7 +66,11 @@ struct OptimizerView: View {
                             recipe: recipe,
                             reminderService: reminderService,
                             onExecute: handleExecute,
-                            onCancel: { resetToPicking() }
+                            onCancel: { resetToPicking() },
+                            onAddTasks: onAddTasks,
+                            onSwitchRecipe: { newRecipe in
+                                handleRecipeSelected(newRecipe)
+                            }
                         )
                     }
 
@@ -154,7 +159,7 @@ struct OptimizerView: View {
             }
 
             VStack(spacing: DS.Spacing.xs) {
-                Text("Optimizing schedule…")
+                Text(selectedRecipe?.isCreative == true ? "Finding best time…" : "Optimizing schedule…")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(skin.resolvedTextPrimary)
                 if let recipe = selectedRecipe {
@@ -182,7 +187,7 @@ struct OptimizerView: View {
 
     /// Recipes that create new events (don't require existing tasks).
     private var creativeRecipes: [ScheduleRecipe] {
-        RecipeCatalog.quickActions.filter { !$0.events.isEmpty }
+        RecipeCatalog.quickActions.filter { $0.isCreative }
     }
 
     private func errorView(_ message: String) -> some View {
@@ -238,32 +243,56 @@ struct OptimizerView: View {
                     .padding(.horizontal, DS.Spacing.lg)
                 }
             } else {
-                // Generic error
-                Image(systemName: "exclamationmark.triangle")
+                // Actionable error with context
+                Image(systemName: "clock.badge.exclamationmark")
                     .font(.system(size: 36))
                     .foregroundStyle(skin.resolvedWarningColor)
 
                 VStack(spacing: DS.Spacing.xs) {
-                    Text("Couldn't optimize")
+                    Text("Couldn't fit it in")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(skin.resolvedTextPrimary)
-                    Text(message)
+                    Text(friendlyErrorMessage(message))
                         .font(.caption)
                         .foregroundStyle(skin.resolvedTextSecondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, DS.Spacing.lg)
                 }
 
-                Button("Try a different recipe") {
-                    Haptics.tap()
-                    resetToPicking()
+                VStack(spacing: DS.Spacing.sm) {
+                    // If the recipe has params, offer to go back and adjust
+                    if let recipe = selectedRecipe, !recipe.params.isEmpty {
+                        Button {
+                            Haptics.tap()
+                            phase = .configuring
+                        } label: {
+                            Label("Adjust settings", systemImage: "slider.horizontal.3")
+                        }
+                        .buttonStyle(.action(role: .primary, size: .compact))
+                    }
+
+                    Button("Try a different recipe") {
+                        Haptics.tap()
+                        resetToPicking()
+                    }
+                    .buttonStyle(.action(role: .secondary, size: .compact))
                 }
-                .buttonStyle(.action(role: .primary, size: .compact))
             }
 
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// Convert technical error messages into user-friendly guidance.
+    private func friendlyErrorMessage(_ raw: String) -> String {
+        if raw.contains("hard constraints") || raw.contains("Cannot satisfy") {
+            if let recipe = selectedRecipe, recipe.isCreative {
+                return "Your schedule is too packed to fit this block. Try a shorter duration or a different day."
+            }
+            return "Not enough room to rearrange with current constraints. Try fewer tasks or a wider time range."
+        }
+        return raw
     }
 
     // MARK: - Actions
@@ -295,6 +324,7 @@ struct OptimizerView: View {
 
     private func handleExecute(_ recipe: ScheduleRecipe, _ paramValues: [String: Any]) {
         selectedRecipe = recipe
+        lastParamValues = paramValues
         phase = .optimizing
 
         Task {

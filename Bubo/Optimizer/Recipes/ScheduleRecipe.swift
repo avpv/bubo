@@ -408,6 +408,28 @@ enum RecipeResult: Sendable {
     }
 }
 
+// MARK: - Recipe Classification
+
+extension ScheduleRecipe {
+    /// Whether this recipe creates new event blocks (focus, pomodoro, workout, etc.)
+    /// vs rearranging existing ones.
+    var isCreative: Bool {
+        !events.isEmpty
+    }
+
+    /// Whether this recipe requires existing local events to work.
+    /// Planning/organizing recipes need tasks to rearrange.
+    var needsExistingEvents: Bool {
+        events.isEmpty && includeExistingEvents
+    }
+
+    /// Human-readable verb for the primary action button.
+    var actionLabel: String {
+        if isCreative { return "Find Best Time" }
+        return "Optimize"
+    }
+}
+
 // MARK: - Applied Recipe Snapshot (for Undo)
 
 struct AppliedRecipeSnapshot: Codable {

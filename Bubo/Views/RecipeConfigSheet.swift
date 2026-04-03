@@ -11,63 +11,250 @@ struct RecipeConfigSheet: View {
     var reminderService: ReminderService? = nil
     let onExecute: (ScheduleRecipe, [String: Any]) -> Void
     let onCancel: () -> Void
+    var onAddTasks: (() -> Void)? = nil
+    var onSwitchRecipe: ((ScheduleRecipe) -> Void)? = nil
 
     @State private var paramValues: [String: Any] = [:]
     @State private var selectedEventIds: Set<String> = []
 
+    /// Whether the recipe requires events but none are available.
+    private var isBlockedByNoEvents: Bool {
+        recipe.needsExistingEvents && localEventsForPicker.isEmpty
+    }
+
+    /// Whether the Optimize button should be enabled.
+    private var canExecute: Bool {
+        if isBlockedByNoEvents { return false }
+        // If there's an eventMultiPicker param, at least one event must be selected
+        if recipe.params.contains(where: { $0.kind == .eventMultiPicker }) {
+            return !selectedEventIds.isEmpty
+        }
+        return true
+    }
+
+    /// Recipes that create new events (don't require existing tasks).
+    private var suggestedAlternatives: [ScheduleRecipe] {
+        RecipeCatalog.quickActions.filter { $0.isCreative }
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.lg) {
-            // Header
-            HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: recipe.icon)
-                    .font(.title3)
-                    .foregroundStyle(skin.accentColor)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(recipe.name)
-                        .font(.headline)
-                        .foregroundStyle(skin.resolvedTextPrimary)
-                    Text(recipe.description)
-                        .font(.caption)
-                        .foregroundStyle(skin.resolvedTextSecondary)
-                }
+        VStack(alignment: .leading, spacing: 0) {
+            if isBlockedByNoEvents {
+                blockedEmptyState
+            } else {
+                normalConfigFlow
             }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.top, DS.Spacing.lg)
-
-            // Parameters
-            VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                ForEach(recipe.params) { param in
-                    paramView(for: param)
-                }
-            }
-            .padding(.horizontal, DS.Spacing.lg)
-
-            Spacer(minLength: 0)
 
             // Actions
             SkinSeparator()
-            HStack {
-                Button(action: onCancel) {
-                    Text("Cancel")
-                }
-                .buttonStyle(.action(role: .secondary))
-                .keyboardShortcut(.cancelAction)
-
-                Spacer()
-
-                Button(action: {
-                    Haptics.tap()
-                    onExecute(recipe, paramValues)
-                }) {
-                    Label("Optimize", systemImage: "wand.and.stars")
-                }
-                .buttonStyle(.action(role: .primary))
-            }
-            .padding(.horizontal, DS.Spacing.lg)
-            .frame(height: DS.Size.actionFooterHeight)
-            .skinBarBackground(skin)
+            footer
         }
         .onAppear { initializeDefaults() }
+    }
+
+    // MARK: - Normal Config Flow
+
+    private var normalConfigFlow: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: DS.Spacing.lg) {
+                // Header
+                recipeHeader
+
+                // Parameters
+                VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                    ForEach(recipe.params) { param in
+                        paramView(for: param)
+                    }
+                }
+
+                // Preview of what will happen
+                recipePreview
+            }
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.top, DS.Spacing.lg)
+            .padding(.bottom, DS.Spacing.md)
+        }
+    }
+
+    // MARK: - Recipe Header
+
+    private var recipeHeader: some View {
+        HStack(spacing: DS.Spacing.sm) {
+            Image(systemName: recipe.icon)
+                .font(.title3)
+                .foregroundStyle(skin.accentColor)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(recipe.name)
+                    .font(.headline)
+                    .foregroundStyle(skin.resolvedTextPrimary)
+                Text(recipe.description)
+                    .font(.caption)
+                    .foregroundStyle(skin.resolvedTextSecondary)
+            }
+        }
+    }
+
+    // MARK: - Recipe Preview
+
+    @ViewBuilder
+    private var recipePreview: some View {
+        if recipe.isCreative && !recipe.events.isEmpty {
+            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                Text("Will create")
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(skin.resolvedTextTertiary)
+
+                ForEach(Array(recipe.events.enumerated()), id: \.offset) { _, spec in
+                    let minutes = resolvedMinutes(for: spec)
+                    HStack(spacing: DS.Spacing.sm) {
+                        Circle()
+                            .fill(skin.accentColor)
+                            .frame(width: 6, height: 6)
+                        Text(spec.title)
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(skin.resolvedTextPrimary)
+                        Spacer()
+                        Text(formatDuration(minutes * spec.count))
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(skin.resolvedTextSecondary)
+                    }
+                }
+            }
+            .padding(DS.Spacing.sm)
+            .background(
+                RoundedRectangle(cornerRadius: DS.Size.previewSmallRadius)
+                    .fill(skin.accentColor.opacity(0.06))
+            )
+        } else if !recipe.events.isEmpty {
+            // Events with segments get a mini timeline
+            EmptyView()
+        }
+    }
+
+    private func resolvedMinutes(for spec: EventSpec) -> Int {
+        // Check if a param overrides this spec's minutes
+        if let idx = recipe.events.firstIndex(where: { $0.title == spec.title }),
+           let param = recipe.params.first(where: {
+               if case .eventMinutes(let i) = $0.target { return i == idx }
+               return false
+           }),
+           let value = paramValues[param.id] as? Int {
+            return value
+        }
+        return spec.minutes
+    }
+
+    private func formatDuration(_ minutes: Int) -> String {
+        if minutes < 60 { return "\(minutes)m" }
+        let h = minutes / 60
+        let m = minutes % 60
+        if m == 0 { return "\(h)h" }
+        return "\(h)h \(m)m"
+    }
+
+    // MARK: - Blocked Empty State
+
+    private var blockedEmptyState: some View {
+        VStack(spacing: DS.Spacing.lg) {
+            Spacer()
+
+            Image(systemName: "tray")
+                .font(.system(size: 32))
+                .foregroundStyle(skin.resolvedTextTertiary)
+
+            VStack(spacing: DS.Spacing.xs) {
+                Text("\(recipe.name) needs tasks")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(skin.resolvedTextPrimary)
+                Text("This recipe rearranges your existing tasks.\nAdd some first, or try one that creates new blocks.")
+                    .font(.caption)
+                    .foregroundStyle(skin.resolvedTextSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, DS.Spacing.lg)
+            }
+
+            VStack(spacing: DS.Spacing.sm) {
+                if onAddTasks != nil {
+                    Button {
+                        Haptics.tap()
+                        onAddTasks?()
+                    } label: {
+                        Label("Add tasks", systemImage: "plus")
+                    }
+                    .buttonStyle(.action(role: .primary, size: .compact))
+                }
+            }
+
+            // Suggest creative alternatives
+            if let onSwitchRecipe, !suggestedAlternatives.isEmpty {
+                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                    Text("Try instead")
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(skin.resolvedTextTertiary)
+
+                    ForEach(suggestedAlternatives) { alt in
+                        Button {
+                            Haptics.tap()
+                            onSwitchRecipe(alt)
+                        } label: {
+                            HStack(spacing: DS.Spacing.sm) {
+                                Image(systemName: alt.icon)
+                                    .font(.caption)
+                                    .foregroundStyle(skin.accentColor)
+                                    .frame(width: 20)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(alt.name)
+                                        .font(.caption.weight(.medium))
+                                        .foregroundStyle(skin.resolvedTextPrimary)
+                                    Text(alt.description)
+                                        .font(.caption2)
+                                        .foregroundStyle(skin.resolvedTextSecondary)
+                                        .lineLimit(1)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption2)
+                                    .foregroundStyle(skin.resolvedTextTertiary)
+                            }
+                            .padding(.vertical, DS.Spacing.xs)
+                            .padding(.horizontal, DS.Spacing.sm)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, DS.Spacing.lg)
+            }
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: - Footer
+
+    private var footer: some View {
+        HStack {
+            Button(action: onCancel) {
+                Text("Cancel")
+            }
+            .buttonStyle(.action(role: .secondary))
+            .keyboardShortcut(.cancelAction)
+
+            Spacer()
+
+            Button(action: {
+                Haptics.tap()
+                onExecute(recipe, paramValues)
+            }) {
+                Label(recipe.actionLabel, systemImage: recipe.isCreative ? "calendar.badge.plus" : "wand.and.stars")
+            }
+            .buttonStyle(.action(role: .primary))
+            .disabled(!canExecute)
+            .opacity(canExecute ? 1.0 : 0.5)
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+        .frame(height: DS.Size.actionFooterHeight)
+        .skinBarBackground(skin)
     }
 
     // MARK: - Parameter Views
@@ -163,8 +350,6 @@ struct RecipeConfigSheet: View {
     }
 
     private func eventPickerParam(id: String) -> some View {
-        // Shows a simple text field for event ID selection
-        // In a full implementation, this would show a list of local events to pick from
         let binding = Binding<String>(
             get: { paramValues[id] as? String ?? "" },
             set: { paramValues[id] = $0 }
@@ -183,10 +368,16 @@ struct RecipeConfigSheet: View {
 
         return VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             if events.isEmpty {
-                Text("No tasks to select")
-                    .font(.caption)
-                    .foregroundStyle(skin.resolvedTextTertiary)
-                    .padding(.vertical, DS.Spacing.sm)
+                // Inline empty hint (main blocked state handles the full empty view)
+                HStack(spacing: DS.Spacing.xs) {
+                    Image(systemName: "info.circle")
+                        .font(.caption2)
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                    Text("No upcoming tasks found")
+                        .font(.caption)
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                }
+                .padding(.vertical, DS.Spacing.sm)
             } else {
                 // Select all / none toggle
                 HStack {
@@ -273,7 +464,6 @@ struct RecipeConfigSheet: View {
             switch param.kind {
             case .segmented(let options):
                 if paramValues[param.id] == nil {
-                    // Find default from recipe's current value
                     paramValues[param.id] = defaultForParam(param) ?? options.first
                 }
             case .stepper(let min, _):
@@ -287,7 +477,6 @@ struct RecipeConfigSheet: View {
             case .text, .eventPicker:
                 break
             case .eventMultiPicker:
-                // Default: select all local events
                 if selectedEventIds.isEmpty {
                     let allIds = localEventsForPicker.map(\.id)
                     selectedEventIds = Set(allIds)
@@ -318,3 +507,4 @@ struct RecipeConfigSheet: View {
         }
     }
 }
+
