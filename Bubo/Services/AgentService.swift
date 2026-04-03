@@ -75,8 +75,7 @@ final class AgentService {
     // MARK: - Device ID
 
     /// Stable anonymous device identifier for rate limiting.
-    /// Generated once, persisted in Keychain so it survives reinstalls
-    /// but stays on-device and is never tied to personal info.
+    /// Generated once, persisted in UserDefaults (not sensitive data).
     let deviceId: String
 
     // MARK: - Endpoints
@@ -94,19 +93,23 @@ final class AgentService {
 
     // MARK: - Init
 
+    private static let deviceIdKey = "bubo-device-id"
+
     init() {
-        let key = "bubo-device-id"
-        if let existing = Keychain.load(key: key) {
+        let defaults = UserDefaults.standard
+
+        if let existing = defaults.string(forKey: Self.deviceIdKey) {
             deviceId = existing
         } else {
             let newId = UUID().uuidString
-            Keychain.save(key: key, value: newId)
+            defaults.set(newId, forKey: Self.deviceIdKey)
             deviceId = newId
         }
-        migrateFromUserDefaults()
+
+        migrateAPIKeyFromUserDefaults()
     }
 
-    private func migrateFromUserDefaults() {
+    private func migrateAPIKeyFromUserDefaults() {
         let defaults = UserDefaults.standard
         if let legacyKey = defaults.string(forKey: Self.legacyDefaultsKey),
            !legacyKey.trimmingCharacters(in: .whitespaces).isEmpty {

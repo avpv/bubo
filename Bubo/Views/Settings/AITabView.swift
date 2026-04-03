@@ -55,7 +55,9 @@ struct AITabView: View {
         }
         .scrollContentBackground(.hidden)
         .onAppear {
-            apiKeyInput = agentService.ownAPIKey
+            if agentService.mode == .ownKey {
+                apiKeyInput = agentService.ownAPIKey
+            }
         }
     }
 
