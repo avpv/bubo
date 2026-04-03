@@ -105,9 +105,9 @@ struct IntentPickerView: View {
 
             let recipes = recentRecipes.isEmpty ? RecipeCatalog.quickActions : recentRecipes
 
-            VStack(spacing: DS.Spacing.sm) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 3), spacing: DS.Spacing.sm) {
                 ForEach(recipes) { recipe in
-                    RecipeCardView(recipe: recipe, style: .snippet, onTap: onSelectRecipe)
+                    RecipeCardView(recipe: recipe, style: .quick, onTap: onSelectRecipe)
                 }
             }
         }
