@@ -48,7 +48,7 @@ struct EventDetailView: View {
                     // Title
                     HStack(spacing: DS.Spacing.sm) {
                         Text(event.title)
-                            .font(.system(.title2, design: .rounded, weight: .bold))
+                            .font(.system(.title2, design: skin.resolvedFontDesign, weight: .bold))
                             .accessibilityAddTraits(.isHeader)
 
                         if event.isRecurring {

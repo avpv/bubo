@@ -160,7 +160,7 @@ struct TimerScreenView: View {
                         // Center content
                         VStack(spacing: DS.Spacing.sm) {
                             Text(statusLabel(now))
-                                .font(.system(.caption, design: .rounded, weight: .medium))
+                                .font(.system(.caption, design: skin.resolvedFontDesign, weight: .medium))
                                 .foregroundStyle(skin.resolvedTextTertiary)
                                 .textCase(.uppercase)
                                 .tracking(1.5)
@@ -184,7 +184,7 @@ struct TimerScreenView: View {
                     // Event info card
                     VStack(alignment: .leading, spacing: DS.Spacing.md) {
                         Text(event.title)
-                            .font(.system(.headline, design: .rounded, weight: .semibold))
+                            .font(.system(.headline, design: skin.resolvedFontDesign, weight: .semibold))
                             .lineLimit(2)
                             .truncationMode(.tail)
 
@@ -244,7 +244,7 @@ struct TimerScreenView: View {
                         .foregroundStyle(skin.resolvedTextPrimary)
                         .contentTransition(.numericText())
                     Text(comp.unit)
-                        .font(.system(size: size * 0.45, weight: .medium, design: .rounded))
+                        .font(.system(size: size * 0.45, weight: .medium, design: skin.resolvedFontDesign))
                         .foregroundStyle(skin.resolvedTextTertiary)
                 }
             }

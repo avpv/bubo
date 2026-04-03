@@ -879,7 +879,7 @@ struct AddEventView: View {
                         .frame(width: 1.5, height: 16)
                         .frame(width: 12)
                     Text("\(segments.count - 4) more")
-                        .font(.system(.caption2, design: .rounded))
+                        .font(.system(.caption2, design: skin.resolvedFontDesign))
                         .foregroundStyle(skin.resolvedTextTertiary)
                 }
                 ForEach(Array(segments.suffix(2).enumerated()), id: \.offset) { idx, segment in
