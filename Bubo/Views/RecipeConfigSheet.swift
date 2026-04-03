@@ -6,7 +6,7 @@ private enum OptimizationState: Equatable {
     case idle
     case optimizing
     case success([ScheduleScenario], warnings: [String] = [])
-    case error(String)
+    case error(String, snapshot: ScheduleSnapshot? = nil)
 
     static func == (lhs: OptimizationState, rhs: OptimizationState) -> Bool {
         switch (lhs, rhs) {
@@ -14,7 +14,7 @@ private enum OptimizationState: Equatable {
         case (.optimizing, .optimizing): return true
         case (.success(let a, _), .success(let b, _)):
             return a.map(\.fitness) == b.map(\.fitness)
-        case (.error(let a), .error(let b)): return a == b
+        case (.error(let a, _), .error(let b, _)): return a == b
         default: return false
         }
     }
@@ -343,7 +343,7 @@ struct RecipeConfigSheet: View {
             .skinPlatter(skin)
             .skinPlatterDepth(skin)
 
-        case .error(let message):
+        case .error(let message, let snapshot):
             VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: "exclamationmark.triangle.fill")
@@ -360,6 +360,11 @@ struct RecipeConfigSheet: View {
                                 .foregroundStyle(skin.resolvedTextSecondary)
                         }
                     }
+                }
+
+                // Show free gaps so user understands what the optimizer saw
+                if let snapshot, !snapshot.freeGaps.isEmpty {
+                    freeGapsSummary(snapshot.freeGaps)
                 }
 
                 if recipe.isCreative && recipe.horizon == .today {
@@ -478,6 +483,43 @@ struct RecipeConfigSheet: View {
         return raw
     }
 
+    /// Compact summary of free gaps the optimizer found.
+    private func freeGapsSummary(_ gaps: [DateInterval]) -> some View {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "H:mm"
+
+        // Show up to 4 gaps, sorted by duration descending
+        let sorted = gaps.sorted { $0.duration > $1.duration }
+        let top = sorted.prefix(4)
+
+        return VStack(alignment: .leading, spacing: 2) {
+            Text("Free windows found:")
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(skin.resolvedTextSecondary)
+
+            ForEach(Array(top.enumerated()), id: \.offset) { _, gap in
+                let mins = Int(gap.duration / 60)
+                HStack(spacing: DS.Spacing.xs) {
+                    Circle()
+                        .fill(skin.resolvedTextTertiary)
+                        .frame(width: 4, height: 4)
+                    Text("\(formatter.string(from: gap.start))–\(formatter.string(from: gap.end))")
+                        .font(.caption2.monospaced())
+                    Text("(\(mins)m)")
+                        .font(.caption2)
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                }
+                .foregroundStyle(skin.resolvedTextSecondary)
+            }
+
+            if sorted.count > 4 {
+                Text("+\(sorted.count - 4) more")
+                    .font(.caption2)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+            }
+        }
+    }
+
     /// Extracts first integer after a keyword in a string like "largest free gap is 15 min".
     private func extractMinutes(from text: String, after keyword: String) -> Int? {
         guard let range = text.range(of: keyword) else { return nil }
@@ -583,8 +625,8 @@ struct RecipeConfigSheet: View {
                 }
             case .noEventsToOptimize:
                 optimizationState = .error("No events to optimize")
-            case .infeasible(let reason):
-                optimizationState = .error(reason)
+            case .infeasible(let reason, let snapshot):
+                optimizationState = .error(reason, snapshot: snapshot)
             }
         }
     }
@@ -617,8 +659,8 @@ struct RecipeConfigSheet: View {
                 }
             case .noEventsToOptimize:
                 optimizationState = .error("No events to optimize")
-            case .infeasible(let reason):
-                optimizationState = .error(reason)
+            case .infeasible(let reason, let snapshot):
+                optimizationState = .error(reason, snapshot: snapshot)
             }
         }
     }
