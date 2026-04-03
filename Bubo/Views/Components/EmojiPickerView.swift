@@ -7,6 +7,7 @@ struct EmojiPickerView: View {
     @State private var searchText = ""
     @State private var selectedCategory = 0
     @Environment(\.activeSkin) private var skin
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let categories: [(icon: String, title: String, emojis: [String])] = [
         ("clock", "Recent", ["👍", "❤️", "😂", "🔥", "✅", "👀", "🎉", "💯"]),
@@ -70,9 +71,11 @@ struct EmojiPickerView: View {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(skin.resolvedTextTertiary)
                     .font(.caption)
+                    .accessibilityHidden(true)
                 TextField("Search emoji", text: $searchText)
                     .textFieldStyle(.plain)
                     .font(.caption)
+                    .accessibilityLabel("Search emojis")
                 if !searchText.isEmpty {
                     Button {
                         searchText = ""
@@ -82,6 +85,7 @@ struct EmojiPickerView: View {
                             .font(.caption)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Clear search")
                 }
             }
             .padding(.horizontal, DS.Spacing.sm)
@@ -97,22 +101,28 @@ struct EmojiPickerView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: DS.Spacing.xxs) {
                         ForEach(Array(Self.categories.enumerated()), id: \.offset) { index, category in
+                            let isSelected = selectedCategory == index
                             Button {
+                                Haptics.tap()
                                 selectedCategory = index
                             } label: {
                                 Image(systemName: category.icon)
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(selectedCategory == index ? skin.accentColor : skin.resolvedTextTertiary)
-                                    .frame(width: 28, height: 24)
+                                    .font(.system(size: DS.Size.iconMedium))
+                                    .foregroundStyle(isSelected ? skin.accentColor : skin.resolvedTextTertiary)
+                                    .fontWeight(isSelected ? .bold : .regular)
+                                    .frame(width: DS.Size.controlHeight, height: DS.Size.controlHeight)
                                     .background(
-                                        selectedCategory == index
+                                        isSelected
                                             ? skin.accentColor.opacity(0.15)
                                             : Color.clear
                                     )
                                     .clipShape(RoundedRectangle(cornerRadius: max(DS.Size.cornerRadius - 3, 3), style: .continuous))
+                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                             .help(category.title)
+                            .accessibilityLabel(category.title)
+                            .accessibilityAddTraits(isSelected ? .isSelected : [])
                         }
                     }
                     .padding(.horizontal, DS.Spacing.sm)
@@ -133,15 +143,16 @@ struct EmojiPickerView: View {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 8), spacing: 2) {
                     ForEach(filteredEmojis, id: \.self) { emoji in
                         Button {
+                            Haptics.tap()
                             onSelect(emoji)
                         } label: {
                             Text(emoji)
                                 .font(.title2)
                                 .frame(width: DS.Size.emojiCellSize, height: DS.Size.emojiCellSize)
-                                .background(Color.clear)
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel(emoji)
                         .onHover { hovering in
                             if hovering {
                                 NSCursor.pointingHand.push()

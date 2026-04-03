@@ -83,6 +83,8 @@ struct IntentPickerView: View {
             )
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("Ask AI to plan your schedule")
+        .accessibilityHint("Describe what you want in your own words")
     }
 
     // MARK: - Suggestions
@@ -92,6 +94,7 @@ struct IntentPickerView: View {
             Label("Suggested for you", systemImage: "sparkles")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(skin.accentColor)
+                .accessibilityAddTraits(.isHeader)
 
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: DS.Spacing.sm) {
                 ForEach(suggestions) { recipe in
@@ -118,6 +121,7 @@ struct IntentPickerView: View {
                 Text("Create Blocks")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(skin.resolvedTextSecondary)
+                    .accessibilityAddTraits(.isHeader)
 
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: DS.Spacing.sm) {
                     ForEach(creativeActions) { recipe in
@@ -132,6 +136,7 @@ struct IntentPickerView: View {
                     Text("Organize Tasks")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(skin.resolvedTextSecondary)
+                        .accessibilityAddTraits(.isHeader)
 
                     if !hasLocalEvents {
                         Text("needs tasks")
@@ -166,6 +171,7 @@ struct IntentPickerView: View {
             Text("All Recipes")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(skin.resolvedTextSecondary)
+                .accessibilityAddTraits(.isHeader)
 
             ForEach(RecipeCatalog.allCategories) { category in
                 CategorySection(
@@ -209,6 +215,10 @@ struct RecipeCardView: View {
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
         .opacity(dimmed ? 0.45 : 1.0)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(recipe.name)
+        .accessibilityHint(recipe.description)
+        .accessibilityAddTraits(.isButton)
     }
 
     private var quickLayout: some View {
@@ -257,7 +267,7 @@ struct RecipeCardView: View {
             Image(systemName: recipe.icon)
                 .font(.caption)
                 .foregroundStyle(skin.accentColor)
-                .frame(width: 20)
+                .frame(width: DS.Size.headerIcon)
 
             Text(recipe.name)
                 .font(.caption)
@@ -300,6 +310,7 @@ struct RecipeCardView: View {
 
 private struct CategorySection: View {
     @Environment(\.activeSkin) private var skin
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let category: RecipeCatalog.Category
     var hasLocalEvents: Bool = true
     let onSelectRecipe: (ScheduleRecipe) -> Void
@@ -309,7 +320,8 @@ private struct CategorySection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             Button {
-                withAnimation(DS.Animation.smoothSpring) {
+                Haptics.tap()
+                withAnimation(reduceMotion ? nil : DS.Animation.smoothSpring) {
                     isExpanded.toggle()
                 }
             } label: {
@@ -317,7 +329,7 @@ private struct CategorySection: View {
                     Image(systemName: category.icon)
                         .font(.caption)
                         .foregroundStyle(skin.accentColor)
-                        .frame(width: 16)
+                        .frame(width: DS.Size.iconLarge)
 
                     Text(category.name)
                         .font(.caption.weight(.medium))
@@ -338,6 +350,9 @@ private struct CategorySection: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("\(category.name), \(category.recipes.count) recipes")
+            .accessibilityHint(isExpanded ? "Double-tap to collapse" : "Double-tap to expand")
+            .accessibilityAddTraits(.isButton)
 
             if isExpanded {
                 VStack(spacing: 0) {

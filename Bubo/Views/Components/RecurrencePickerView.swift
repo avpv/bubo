@@ -3,6 +3,7 @@ import SwiftUI
 /// Reusable recurrence configuration picker for standard calendar recurrence.
 struct RecurrencePickerView: View {
     @Environment(\.activeSkin) private var skin
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var rule: RecurrenceRule?
     @Binding var eventDuration: Double
     let eventStartDate: Date

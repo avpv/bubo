@@ -43,6 +43,8 @@ struct TimeSlotPicker: View {
                                 action: { selection = apply(slot) }
                             )
                             .id(slot.id)
+                            .accessibilityLabel("Time slot \(slot.label)")
+                            .accessibilityAddTraits(slot.id == nearest ? .isSelected : [])
                         }
                     }
                     .padding(.vertical, 2)

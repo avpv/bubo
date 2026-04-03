@@ -458,6 +458,7 @@ struct GeneralTabView: View {
                         ForEach(SkinCatalog.builtInSkins) { skin in
                             let isSelected = settings.selectedSkinID == skin.id
                             Button {
+                                Haptics.tap()
                                 withAnimation(DS.Animation.smoothSpring) {
                                     settings.selectedSkinID = skin.id
                                 }
@@ -465,6 +466,8 @@ struct GeneralTabView: View {
                                 SkinPreviewCard(skin: skin, isSelected: isSelected)
                             }
                             .buttonStyle(.plain)
+                            .accessibilityLabel("Theme: \(skin.displayName)\(skin.author != "Bubo" ? " by \(skin.author)" : "")")
+                            .accessibilityAddTraits(isSelected ? .isSelected : [])
                         }
                     }
 
