@@ -19,7 +19,7 @@ struct OptimizerTabView: View {
                             Text("Start:")
                                 .gridColumnAlignment(.leading)
                             Picker("Working hours start", selection: $service.workingHoursStart) {
-                                ForEach(5...12, id: \.self) { hour in
+                                ForEach(0...23, id: \.self) { hour in
                                     Text("\(hour):00").tag(hour)
                                 }
                             }
@@ -30,7 +30,7 @@ struct OptimizerTabView: View {
                         GridRow {
                             Text("End:")
                             Picker("Working hours end", selection: $service.workingHoursEnd) {
-                                ForEach(15...22, id: \.self) { hour in
+                                ForEach(0...23, id: \.self) { hour in
                                     Text("\(hour):00").tag(hour)
                                 }
                             }
@@ -54,7 +54,7 @@ struct OptimizerTabView: View {
                                 get: { optimizerService.optimizer.preferences.peakEnergyHour },
                                 set: { optimizerService.optimizer.preferences.peakEnergyHour = $0; optimizerService.savePreferences() }
                             )) {
-                                ForEach(6...14, id: \.self) { hour in
+                                ForEach(0...23, id: \.self) { hour in
                                     Text("\(hour):00").tag(hour)
                                 }
                             }
@@ -78,7 +78,7 @@ struct OptimizerTabView: View {
                                     get: { optimizerService.optimizer.preferences.lunchWindowStart },
                                     set: { optimizerService.optimizer.preferences.lunchWindowStart = $0; optimizerService.savePreferences() }
                                 )) {
-                                    ForEach(11...13, id: \.self) { h in
+                                    ForEach(0...23, id: \.self) { h in
                                         Text("\(h):00").tag(h)
                                     }
                                 }
@@ -90,7 +90,7 @@ struct OptimizerTabView: View {
                                     get: { optimizerService.optimizer.preferences.lunchWindowEnd },
                                     set: { optimizerService.optimizer.preferences.lunchWindowEnd = $0; optimizerService.savePreferences() }
                                 )) {
-                                    ForEach(13...15, id: \.self) { h in
+                                    ForEach(0...23, id: \.self) { h in
                                         Text("\(h):00").tag(h)
                                     }
                                 }
