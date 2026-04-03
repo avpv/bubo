@@ -362,9 +362,9 @@ struct RecipeConfigSheet: View {
                     }
                 }
 
-                // Show free gaps so user understands what the optimizer saw
+                // Visual timeline showing occupied vs free time
                 if let snapshot, !snapshot.freeGaps.isEmpty {
-                    freeGapsSummary(snapshot.freeGaps)
+                    scheduleTimeline(snapshot)
                 }
 
                 if recipe.isCreative && recipe.horizon == .today {
@@ -483,41 +483,103 @@ struct RecipeConfigSheet: View {
         return raw
     }
 
-    /// Compact summary of free gaps the optimizer found.
-    private func freeGapsSummary(_ gaps: [DateInterval]) -> some View {
+    /// Visual timeline showing occupied vs free time, similar to previewTimeline.
+    private func scheduleTimeline(_ snapshot: ScheduleSnapshot) -> some View {
         let formatter = DateFormatter()
         formatter.dateFormat = "H:mm"
 
-        // Show up to 4 gaps, sorted by duration descending
-        let sorted = gaps.sorted { $0.duration > $1.duration }
-        let top = sorted.prefix(4)
+        // Build segments: alternating occupied/free across working hours
+        let segments = buildTimelineSegments(snapshot)
+        let totalDuration = max(segments.reduce(0.0) { $0 + $1.duration }, 1)
 
-        return VStack(alignment: .leading, spacing: 2) {
-            Text("Free windows found:")
-                .font(.caption2.weight(.medium))
-                .foregroundStyle(skin.resolvedTextSecondary)
+        return VStack(alignment: .leading, spacing: 4) {
+            GeometryReader { geo in
+                HStack(spacing: 1) {
+                    ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
+                        let fraction = CGFloat(segment.duration / totalDuration)
+                        let width = max(fraction * geo.size.width - 1, 4)
 
-            ForEach(Array(top.enumerated()), id: \.offset) { _, gap in
-                let mins = Int(gap.duration / 60)
-                HStack(spacing: DS.Spacing.xs) {
-                    Circle()
-                        .fill(skin.resolvedTextTertiary)
-                        .frame(width: 4, height: 4)
-                    Text("\(formatter.string(from: gap.start))–\(formatter.string(from: gap.end))")
-                        .font(.caption2.monospaced())
-                    Text("(\(mins)m)")
-                        .font(.caption2)
-                        .foregroundStyle(skin.resolvedTextTertiary)
+                        RoundedRectangle(cornerRadius: DS.Size.previewCardRadius)
+                            .fill(
+                                segment.isFree
+                                    ? LinearGradient(
+                                        colors: [
+                                            skin.accentColor.opacity(0.7),
+                                            skin.accentColor.opacity(0.5),
+                                        ],
+                                        startPoint: .top, endPoint: .bottom
+                                    )
+                                    : LinearGradient(
+                                        colors: [
+                                            skin.resolvedTextTertiary.opacity(0.25),
+                                            skin.resolvedTextTertiary.opacity(0.15),
+                                        ],
+                                        startPoint: .top, endPoint: .bottom
+                                    )
+                            )
+                            .frame(width: width)
+                            .overlay(
+                                Group {
+                                    if segment.isFree && width > 30 {
+                                        Text("\(Int(segment.duration / 60))m")
+                                            .font(.system(size: 9, weight: .semibold, design: skin.resolvedFontDesign))
+                                            .foregroundStyle(skin.resolvedTextPrimary.opacity(0.9))
+                                    }
+                                }
+                            )
+                    }
                 }
-                .foregroundStyle(skin.resolvedTextSecondary)
             }
+            .frame(height: 24)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Size.previewCardRadius))
 
-            if sorted.count > 4 {
-                Text("+\(sorted.count - 4) more")
-                    .font(.caption2)
+            // Time labels below the bar
+            HStack {
+                Text(formatter.string(from: snapshot.planningHorizon.start))
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                Spacer()
+                let freeTotal = Int(snapshot.freeGaps.reduce(0.0) { $0 + $1.duration } / 60)
+                Text("\(freeTotal)m free")
+                    .font(.system(size: 8, weight: .medium))
+                    .foregroundStyle(skin.resolvedTextSecondary)
+                Spacer()
+                Text(formatter.string(from: snapshot.planningHorizon.end))
+                    .font(.system(size: 8, design: .monospaced))
                     .foregroundStyle(skin.resolvedTextTertiary)
             }
         }
+    }
+
+    private struct TimelineSegment {
+        let duration: TimeInterval
+        let isFree: Bool
+    }
+
+    /// Turns free gaps + working hours into alternating occupied/free segments.
+    private func buildTimelineSegments(_ snapshot: ScheduleSnapshot) -> [TimelineSegment] {
+        let sortedGaps = snapshot.freeGaps.sorted { $0.start < $1.start }
+        var segments: [TimelineSegment] = []
+        var cursor = snapshot.planningHorizon.start
+
+        for gap in sortedGaps {
+            // Occupied block before this gap
+            let occupied = gap.start.timeIntervalSince(cursor)
+            if occupied > 0 {
+                segments.append(TimelineSegment(duration: occupied, isFree: false))
+            }
+            // Free gap
+            segments.append(TimelineSegment(duration: gap.duration, isFree: true))
+            cursor = gap.end
+        }
+
+        // Trailing occupied block
+        let trailing = snapshot.planningHorizon.end.timeIntervalSince(cursor)
+        if trailing > 0 {
+            segments.append(TimelineSegment(duration: trailing, isFree: false))
+        }
+
+        return segments
     }
 
     /// Extracts first integer after a keyword in a string like "largest free gap is 15 min".
