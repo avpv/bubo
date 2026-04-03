@@ -104,7 +104,7 @@ enum DS {
         static let numberInputWidth: CGFloat = 80
 
         // Color tag
-        static let colorDotSize: CGFloat = 18
+        static let colorDotSize: CGFloat = 14
 
         // Progress bar
         static let progressBarHeight: CGFloat = 6
