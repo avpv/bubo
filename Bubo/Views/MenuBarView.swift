@@ -736,10 +736,34 @@ private struct ColorDotButton: View {
                         .frame(width: DS.Size.colorDotSize, height: DS.Size.colorDotSize)
                 }
             }
+            .overlay(
+                Circle()
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [
+                                .white.opacity(isHovered ? skin.platterBorderOpacity * 1.5 : 0),
+                                .white.opacity(isHovered ? skin.platterBorderOpacity * 0.1 : 0),
+                                .clear,
+                                .white.opacity(isHovered ? skin.platterBorderOpacity * 0.4 : 0)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: DS.Border.thin
+                    )
+                    .frame(width: DS.Size.colorDotSize + DS.Spacing.sm, height: DS.Size.colorDotSize + DS.Spacing.sm)
+            )
             .scaleEffect(isActive ? 1.18 : (isHovered ? 1.12 : 1.0))
+            // Color glow
             .shadow(
                 color: (isActive || isHovered) ? tag.color.opacity(skin.shadowOpacity * 6) : .clear,
                 radius: (isActive || isHovered) ? skin.shadowRadius * 0.5 : 0
+            )
+            // Elevation shadow — matches EventRowView hover depth
+            .shadow(
+                color: isHovered ? skin.resolvedHoverShadowColor : .clear,
+                radius: isHovered ? DS.Shadows.hoverRadius : 0,
+                y: isHovered ? DS.Shadows.hoverY : 0
             )
             // HIG: Expand hit area to minimum comfortable target size
             .padding(DS.Spacing.xs)
