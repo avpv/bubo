@@ -64,6 +64,18 @@ struct RecipeCatalog {
         ]),
     ]
 
+    // MARK: - All Recipes (flat lookup)
+
+    /// All user-facing recipes indexed by ID for fast lookup.
+    static let allRecipesById: [String: ScheduleRecipe] = {
+        var map: [String: ScheduleRecipe] = [:]
+        for recipe in quickActions { map[recipe.id] = recipe }
+        for category in allCategories {
+            for recipe in category.recipes { map[recipe.id] = recipe }
+        }
+        return map
+    }()
+
     // MARK: - Reaction Recipes (auto-triggered)
 
     static let reactions: [ScheduleRecipe] = [

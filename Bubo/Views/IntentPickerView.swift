@@ -15,12 +15,23 @@ struct IntentPickerView: View {
         optimizerService.recipeMonitor?.suggestedRecipes ?? []
     }
 
+    private var recentRecipes: [ScheduleRecipe] {
+        optimizerService.usageTracker
+            .topRecipeIds(limit: 6)
+            .compactMap { RecipeCatalog.allRecipesById[$0] }
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: DS.Spacing.lg) {
                 // AI assistant entry point
                 if onAskAI != nil {
                     askAISection
+                }
+
+                // Recently used (HN-ranked)
+                if !recentRecipes.isEmpty {
+                    recentlyUsedSection
                 }
 
                 // Contextual suggestions (condition-based)
@@ -85,6 +96,23 @@ struct IntentPickerView: View {
         .buttonStyle(.plain)
         .accessibilityLabel("Ask AI to plan your schedule")
         .accessibilityHint("Describe what you want in your own words")
+    }
+
+    // MARK: - Recently Used
+
+    private var recentlyUsedSection: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            Label("Recently Used", systemImage: "clock.arrow.circlepath")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(skin.resolvedTextSecondary)
+                .accessibilityAddTraits(.isHeader)
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: DS.Spacing.sm) {
+                ForEach(recentRecipes) { recipe in
+                    RecipeCardView(recipe: recipe, style: .quick, onTap: onSelectRecipe)
+                }
+            }
+        }
     }
 
     // MARK: - Suggestions
