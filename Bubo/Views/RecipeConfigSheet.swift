@@ -122,11 +122,12 @@ struct RecipeConfigSheet: View {
     // MARK: - Recipe Header
 
     private var recipeHeader: some View {
-        HStack(spacing: DS.Spacing.sm) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(recipe.name)
-                    .font(.headline)
-                    .foregroundStyle(skin.resolvedTextPrimary)
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            Text(recipe.name)
+                .font(.headline)
+                .fontWeight(skin.resolvedHeadlineFontWeight)
+                .foregroundStyle(skin.resolvedTextPrimary)
+            if !recipe.description.isEmpty {
                 Text(recipe.description)
                     .font(.caption)
                     .foregroundStyle(skin.resolvedTextSecondary)
@@ -143,66 +144,93 @@ struct RecipeConfigSheet: View {
     // MARK: - Settings Section
 
     private var settingsSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            ForEach(Array(recipe.params.enumerated()), id: \.element.id) { index, param in
-                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                    Text(param.label)
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(skin.resolvedTextPrimary)
-                    paramControl(for: param)
-                }
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            Text("Settings")
+                .font(.headline)
+                .foregroundStyle(skin.resolvedTextPrimary)
+                .accessibilityAddTraits(.isHeader)
 
-                if index < recipe.params.count - 1 {
-                    SkinSeparator()
+            VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                ForEach(Array(recipe.params.enumerated()), id: \.element.id) { index, param in
+                    VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                        Text(param.label)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(skin.resolvedTextPrimary)
+                        paramControl(for: param)
+                    }
+
+                    if index < recipe.params.count - 1 {
+                        SkinSeparator()
+                    }
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(DS.Spacing.md)
+            .skinPlatter(skin)
+            .skinPlatterDepth(skin)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(DS.Spacing.md)
-        .skinPlatter(skin)
-        .skinPlatterDepth(skin)
     }
 
     // MARK: - Creative Preview
 
     private var creativePreviewSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            // Bar visualization
-            previewTimeline
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            Text("Preview")
+                .font(.headline)
+                .foregroundStyle(skin.resolvedTextPrimary)
+                .accessibilityAddTraits(.isHeader)
 
-            // Event breakdown
-            ForEach(Array(recipe.events.enumerated()), id: \.offset) { _, spec in
-                let minutes = resolvedMinutes(for: spec)
-                HStack(spacing: DS.Spacing.sm) {
-                    Circle()
-                        .fill(skin.accentColor)
-                        .frame(width: 6, height: 6)
-                    Text(spec.title)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(skin.resolvedTextPrimary)
-                    if spec.count > 1 {
-                        Text("×\(spec.count)")
-                            .font(.caption2)
-                            .foregroundStyle(skin.accentColor)
+            VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                // Bar visualization
+                previewTimeline
+
+                // Event breakdown
+                ForEach(Array(recipe.events.enumerated()), id: \.offset) { index, spec in
+                    let minutes = resolvedMinutes(for: spec)
+                    HStack(spacing: DS.Spacing.sm) {
+                        RoundedRectangle(cornerRadius: DS.Size.previewSmallRadius)
+                            .fill(skin.accentColor.opacity(index % 2 == 0 ? 0.8 : 0.5))
+                            .frame(width: DS.Size.accentBarWidth, height: DS.Size.iconLarge)
+
+                        Text(spec.title)
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(skin.resolvedTextPrimary)
+
+                        if spec.count > 1 {
+                            Text("×\(spec.count)")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(skin.accentColor)
+                                .padding(.horizontal, DS.Spacing.xs)
+                                .padding(.vertical, 1)
+                                .background(skin.accentColor.opacity(DS.Opacity.lightFill))
+                                .clipShape(Capsule())
+                        }
+
+                        Spacer()
+
+                        Text(formatDuration(minutes * spec.count))
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(skin.resolvedTextSecondary)
                     }
-                    Spacer()
-                    Text(formatDuration(minutes * spec.count))
-                        .font(.caption2.monospacedDigit())
+                }
+
+                SkinSeparator()
+
+                HStack {
+                    Text("Total")
+                        .font(.caption.weight(.medium))
                         .foregroundStyle(skin.resolvedTextSecondary)
+                    Spacer()
+                    Text(formatDuration(totalCreativeMinutes))
+                        .font(.caption.weight(.semibold).monospacedDigit())
+                        .foregroundStyle(skin.resolvedTextPrimary)
                 }
             }
-
-            HStack {
-                Label("Total: \(formatDuration(totalCreativeMinutes))", systemImage: "clock")
-                    .font(.caption)
-                    .foregroundStyle(skin.resolvedTextSecondary)
-                Spacer()
-            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(DS.Spacing.md)
+            .skinPlatter(skin)
+            .skinPlatterDepth(skin)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(DS.Spacing.md)
-        .skinPlatter(skin)
-        .skinPlatterDepth(skin)
     }
 
     private var previewTimeline: some View {
@@ -213,26 +241,35 @@ struct RecipeConfigSheet: View {
         let total = max(segments.reduce(0) { $0 + $1.minutes }, 1)
 
         return GeometryReader { geo in
-            HStack(spacing: 1) {
+            HStack(spacing: 1.5) {
                 ForEach(Array(segments.enumerated()), id: \.offset) { index, segment in
                     let fraction = CGFloat(segment.minutes) / CGFloat(total)
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(skin.accentColor.opacity(index % 2 == 0 ? 0.7 : 0.4))
-                        .frame(width: max(fraction * geo.size.width - 1, 4))
+                    RoundedRectangle(cornerRadius: DS.Size.previewCardRadius)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    skin.accentColor.opacity(index % 2 == 0 ? 0.8 : 0.5),
+                                    skin.accentColor.opacity(index % 2 == 0 ? 0.6 : 0.35),
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .frame(width: max(fraction * geo.size.width - 1.5, 6))
                         .overlay(
                             Group {
-                                if fraction * geo.size.width > 30 {
+                                if fraction * geo.size.width > 36 {
                                     Text("\(segment.minutes)m")
-                                        .font(.system(size: 8, weight: .medium, design: .monospaced))
-                                        .foregroundStyle(.white)
+                                        .font(.system(size: 9, weight: .semibold, design: .rounded))
+                                        .foregroundStyle(.white.opacity(0.9))
                                 }
                             }
                         )
                 }
             }
         }
-        .frame(height: 20)
-        .clipShape(RoundedRectangle(cornerRadius: 4))
+        .frame(height: 24)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Size.previewCardRadius))
     }
 
     private var totalCreativeMinutes: Int {
@@ -609,7 +646,7 @@ struct RecipeConfigSheet: View {
             .font(.body)
             .padding(DS.Spacing.sm)
             .background(skin.resolvedPlatterMaterial.opacity(0.5))
-            .clipShape(RoundedRectangle(cornerRadius: DS.Size.previewSmallRadius))
+            .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
     }
 
     private func hourPickerParam(id: String, range: ClosedRange<Int>) -> some View {
@@ -636,7 +673,7 @@ struct RecipeConfigSheet: View {
             .font(.body)
             .padding(DS.Spacing.sm)
             .background(skin.resolvedPlatterMaterial.opacity(0.5))
-            .clipShape(RoundedRectangle(cornerRadius: DS.Size.previewSmallRadius))
+            .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
     }
 
     private func eventMultiPickerParam(id: String) -> some View {
@@ -718,7 +755,7 @@ struct RecipeConfigSheet: View {
             .padding(.vertical, DS.Spacing.xs)
             .padding(.horizontal, DS.Spacing.sm)
             .background(isSelected ? skin.accentColor.opacity(0.06) : .clear)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Size.previewSmallRadius))
+            .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(event.title), \(event.formattedTimeRange)")
