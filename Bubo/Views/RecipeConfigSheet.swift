@@ -395,6 +395,7 @@ struct RecipeConfigSheet: View {
                     Label("Apply Schedule", systemImage: "checkmark.circle.fill")
                 }
                 .buttonStyle(.action(role: .primary))
+                .keyboardShortcut(.defaultAction)
             } else {
                 // Run optimization
                 Button(action: {
@@ -412,6 +413,7 @@ struct RecipeConfigSheet: View {
                     }
                 }
                 .buttonStyle(.action(role: .primary))
+                .keyboardShortcut(.defaultAction)
                 .disabled(!canExecute)
                 .opacity(canExecute ? 1.0 : 0.5)
             }

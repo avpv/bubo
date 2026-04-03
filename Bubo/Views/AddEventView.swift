@@ -456,6 +456,7 @@ struct AddEventView: View {
                     Label(isEditing ? "Save" : "Add Event", systemImage: isEditing ? "checkmark.circle" : "calendar.badge.plus")
                 }
                 .buttonStyle(.action(role: .primary))
+                .keyboardShortcut(.defaultAction)
             }
             .padding(.horizontal, DS.Spacing.lg)
             .frame(height: DS.Size.actionFooterHeight)

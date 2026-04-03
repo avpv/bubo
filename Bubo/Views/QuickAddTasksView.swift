@@ -116,6 +116,7 @@ struct QuickAddTasksView: View {
                     Label("Plan Tasks", systemImage: "wand.and.stars")
                 }
                 .buttonStyle(.action(role: .primary))
+                .keyboardShortcut(.defaultAction)
                 .disabled(validTasks.isEmpty || isOptimizing)
             }
             .padding(.horizontal, DS.Spacing.lg)

@@ -203,6 +203,7 @@ struct EventDetailView: View {
                     Label("Edit", systemImage: "pencil")
                 }
                 .buttonStyle(.action(role: .primary))
+                .keyboardShortcut(.defaultAction)
             }
             .padding(.horizontal, DS.Spacing.lg)
             .frame(height: DS.Size.actionFooterHeight)
