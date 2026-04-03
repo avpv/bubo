@@ -355,4 +355,52 @@ final class RecipeTests: XCTestCase {
         XCTAssertNil(decoded.events[0].chainGap)
         XCTAssertEqual(decoded.events[1].chainGap, 0)
     }
+
+    // MARK: - Partial JSON Decoding (LLM responses)
+
+    func testPartialJSONDecodesWithDefaults() throws {
+        // LLM typically returns only name + events — all other fields should get defaults
+        let json = """
+        {
+            "name": "Событие",
+            "icon": "calendar",
+            "events": [
+                {"title": "Встреча", "minutes": 30}
+            ]
+        }
+        """
+        let data = json.data(using: .utf8)!
+        let recipe = try JSONDecoder().decode(ScheduleRecipe.self, from: data)
+
+        XCTAssertEqual(recipe.name, "Событие")
+        XCTAssertEqual(recipe.icon, "calendar")
+        XCTAssertEqual(recipe.events.count, 1)
+        XCTAssertEqual(recipe.events[0].title, "Встреча")
+        XCTAssertEqual(recipe.events[0].minutes, 30)
+        // Defaults
+        XCTAssertEqual(recipe.events[0].count, 1)
+        XCTAssertEqual(recipe.events[0].priority, 0.5)
+        XCTAssertFalse(recipe.events[0].focus)
+        XCTAssertEqual(recipe.horizon, .today)
+        XCTAssertEqual(recipe.stability, .normal)
+        XCTAssertEqual(recipe.speed, .quick)
+        XCTAssertTrue(recipe.includeExistingEvents)
+        XCTAssertEqual(recipe.maxScenarios, 3)
+        XCTAssertTrue(recipe.learnable)
+    }
+
+    func testMinimalEventSpecDecodes() throws {
+        let json = """
+        {"title": "Test", "minutes": 15}
+        """
+        let data = json.data(using: .utf8)!
+        let spec = try JSONDecoder().decode(EventSpec.self, from: data)
+        XCTAssertEqual(spec.title, "Test")
+        XCTAssertEqual(spec.minutes, 15)
+        XCTAssertEqual(spec.count, 1)
+        XCTAssertEqual(spec.energy, 0.5)
+        XCTAssertNil(spec.period)
+        XCTAssertNil(spec.chainGap)
+        XCTAssertEqual(spec.creation, .fixed)
+    }
 }
