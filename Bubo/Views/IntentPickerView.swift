@@ -265,12 +265,6 @@ struct RecipeCardView: View {
 
             Spacer()
 
-            if !recipe.params.isEmpty {
-                Image(systemName: "slider.horizontal.3")
-                    .font(.system(size: DS.Size.iconSmall))
-                    .foregroundStyle(skin.resolvedTextTertiary)
-            }
-
             Image(systemName: "chevron.right")
                 .font(.system(size: DS.Size.iconSmall))
                 .foregroundStyle(skin.resolvedTextTertiary)
