@@ -65,7 +65,6 @@ struct LLMRecipeBridge {
     ## ScheduleRecipe
     {
       "name": "string (required)",
-      "icon": "SF Symbol name (optional, default: wand.and.stars)",
       "description": "string (optional)",
       "events": [EventSpec array (required, at least 1)],
       "includeExistingEvents": bool (default: true),

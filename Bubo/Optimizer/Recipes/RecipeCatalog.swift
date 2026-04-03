@@ -104,7 +104,7 @@ extension ScheduleRecipe {
         ScheduleRecipe(
             id: "pomodoro",
             name: "Pomodoro Session",
-            icon: "timer",
+            icon: "brain.head.profile",
             description: "Find best slot for pomodoro",
             category: "focus",
             events: [
@@ -141,7 +141,7 @@ extension ScheduleRecipe {
         ScheduleRecipe(
             id: "deep-work-day",
             name: "Deep Work Day",
-            icon: "brain",
+            icon: "brain.head.profile",
             description: "Focus blocks as anchors, tasks arranged around them",
             category: "focus",
             events: [
@@ -163,7 +163,7 @@ extension ScheduleRecipe {
     static let maxProductivity = ScheduleRecipe(
         id: "max-productivity",
         name: "Max Productivity",
-        icon: "bolt",
+        icon: "brain.head.profile",
         description: "Maximum deep work, minimum interruptions",
         category: "focus",
         events: [
@@ -181,7 +181,7 @@ extension ScheduleRecipe {
     static let organizeDay = ScheduleRecipe(
         id: "organize-day",
         name: "Organize Day",
-        icon: "calendar.day.timeline.left",
+        icon: "calendar",
         description: "Rearrange today's tasks for best flow",
         category: "planning",
         weights: [.energyCurve: 1.5, .contextSwitch: 1.2],
@@ -209,7 +209,7 @@ extension ScheduleRecipe {
     static let fullRebuild = ScheduleRecipe(
         id: "full-rebuild",
         name: "Full Rebuild",
-        icon: "arrow.triangle.2.circlepath",
+        icon: "calendar",
         description: "Optimize everything from scratch",
         category: "planning",
         horizon: .week,
@@ -243,7 +243,7 @@ extension ScheduleRecipe {
     static let deadlineCrunch = ScheduleRecipe(
         id: "deadline-crunch",
         name: "Deadline Crunch",
-        icon: "flame.fill",
+        icon: "flame",
         description: "Aggressive mode — minimize everything else",
         category: "deadlines",
         weights: [.deadline: 10.0, .breakPlacement: 0.3, .buffer: 0.1],
@@ -259,7 +259,7 @@ extension ScheduleRecipe {
     static let multipleDeadlines = ScheduleRecipe(
         id: "multiple-deadlines",
         name: "Multiple Deadlines",
-        icon: "flame.circle",
+        icon: "flame",
         description: "Spread deadline tasks across the week",
         category: "deadlines",
         horizon: .week,
@@ -291,7 +291,7 @@ extension ScheduleRecipe {
         ScheduleRecipe(
             id: "buffer-meetings",
             name: "Buffer Between Meetings",
-            icon: "space",
+            icon: "person.2",
             description: "\(minutes) min gap after each meeting",
             category: "meetings",
             horizon: .week,
@@ -309,7 +309,7 @@ extension ScheduleRecipe {
     static let tooManyMeetings = ScheduleRecipe(
         id: "too-many-meetings",
         name: "Too Many Meetings",
-        icon: "person.3",
+        icon: "person.2",
         description: "Redistribute meetings across the week",
         category: "meetings",
         horizon: .week,
@@ -323,7 +323,7 @@ extension ScheduleRecipe {
         ScheduleRecipe(
             id: "prep-meeting",
             name: "Prep Before Meeting",
-            icon: "note.text",
+            icon: "person.2",
             description: "Add preparation time before a meeting",
             category: "meetings",
             events: [
@@ -349,7 +349,7 @@ extension ScheduleRecipe {
     static let lowEnergyDay = ScheduleRecipe(
         id: "low-energy",
         name: "Low Energy Day",
-        icon: "battery.25percent",
+        icon: "bolt.heart",
         description: "More breaks, lighter load",
         category: "energy",
         weights: [.breakPlacement: 2.5, .buffer: 1.5, .focusBlock: 0.5],
@@ -359,7 +359,7 @@ extension ScheduleRecipe {
     static let morningPerson = ScheduleRecipe(
         id: "morning-person",
         name: "Morning Person",
-        icon: "sunrise",
+        icon: "bolt.heart",
         description: "Hard tasks AM, light tasks PM",
         category: "energy",
         weights: [.energyCurve: 2.0],
@@ -372,7 +372,7 @@ extension ScheduleRecipe {
     static let postLunchDip = ScheduleRecipe(
         id: "post-lunch-dip",
         name: "Post-Lunch Dip",
-        icon: "moon.zzz",
+        icon: "bolt.heart",
         description: "Nothing hard after lunch",
         category: "energy",
         weights: [.energyCurve: 2.0],
@@ -385,7 +385,7 @@ extension ScheduleRecipe {
     static let windDownLastHour = ScheduleRecipe(
         id: "wind-down",
         name: "Wind Down",
-        icon: "sunset",
+        icon: "bolt.heart",
         description: "Only light tasks in the last hour",
         category: "energy",
         weights: [.energyCurve: 2.0],
@@ -397,7 +397,7 @@ extension ScheduleRecipe {
     static let lightenTomorrow = ScheduleRecipe(
         id: "lighten-tomorrow",
         name: "Lighten Tomorrow",
-        icon: "cloud",
+        icon: "bolt.heart",
         description: "Make tomorrow easier",
         category: "energy",
         horizon: .tomorrow,
@@ -408,7 +408,7 @@ extension ScheduleRecipe {
     static let balanceWeek = ScheduleRecipe(
         id: "balance-week",
         name: "Balance Week",
-        icon: "scale.3d",
+        icon: "bolt.heart",
         description: "Even out daily workload",
         category: "energy",
         horizon: .week,
@@ -423,7 +423,7 @@ extension ScheduleRecipe {
     static let focusMeetingSplit = ScheduleRecipe(
         id: "focus-meeting-split",
         name: "Focus / Meeting Days",
-        icon: "rectangle.split.2x1",
+        icon: "bolt.heart",
         description: "Separate focus days and meeting days",
         category: "energy",
         horizon: .week,
@@ -438,7 +438,7 @@ extension ScheduleRecipe {
     static let freeFriday = ScheduleRecipe(
         id: "free-friday",
         name: "Free Friday",
-        icon: "party.popper",
+        icon: "bolt.heart",
         description: "Compress work into Mon-Thu",
         category: "energy",
         horizon: .week,
@@ -457,7 +457,7 @@ extension ScheduleRecipe {
         ScheduleRecipe(
             id: "morning-routine",
             name: "Morning Routine",
-            icon: "sunrise.circle",
+            icon: "repeat",
             description: "Protected morning ritual",
             category: "habits",
             events: [
@@ -480,7 +480,7 @@ extension ScheduleRecipe {
         ScheduleRecipe(
             id: "evening-wrap-up",
             name: "Evening Wrap-up",
-            icon: "moon",
+            icon: "repeat",
             description: "Daily review and planning",
             category: "habits",
             events: [
@@ -498,7 +498,7 @@ extension ScheduleRecipe {
         return ScheduleRecipe(
             id: "regular-learning",
             name: "Regular Learning",
-            icon: "book",
+            icon: "repeat",
             description: "Dedicated time for learning",
             category: "habits",
             events: [
@@ -521,7 +521,7 @@ extension ScheduleRecipe {
     static let movementReminders = ScheduleRecipe(
         id: "movement-reminders",
         name: "Movement Breaks",
-        icon: "figure.walk",
+        icon: "repeat",
         description: "Regular breaks to move",
         category: "habits",
         events: [
@@ -553,7 +553,7 @@ extension ScheduleRecipe {
         ScheduleRecipe(
             id: "prioritize-project",
             name: "Prioritize Project",
-            icon: "star",
+            icon: "folder",
             description: "Give a project the best time slots",
             category: "projects",
             horizon: .week,
@@ -574,7 +574,7 @@ extension ScheduleRecipe {
         ScheduleRecipe(
             id: "split-task",
             name: "Split Large Task",
-            icon: "scissors",
+            icon: "folder",
             description: "Break a big task into sessions",
             category: "projects",
             events: [
@@ -599,7 +599,7 @@ extension ScheduleRecipe {
     static let alternateTaskTypes = ScheduleRecipe(
         id: "alternate-types",
         name: "Alternate Task Types",
-        icon: "arrow.left.arrow.right",
+        icon: "folder",
         description: "Mix different types of work for variety",
         category: "projects",
         weights: [.contextSwitch: 0.1],
@@ -612,7 +612,7 @@ extension ScheduleRecipe {
     static let carryOverUnfinished = ScheduleRecipe(
         id: "carry-over",
         name: "Carry Over Unfinished",
-        icon: "arrow.uturn.forward",
+        icon: "folder",
         description: "Move last week's unfinished tasks",
         category: "projects",
         events: [
@@ -631,7 +631,7 @@ extension ScheduleRecipe {
         ScheduleRecipe(
             id: "short-day",
             name: "Short Day",
-            icon: "clock",
+            icon: "clock.arrow.2.circlepath",
             description: "Leaving early today",
             category: "adapt",
             display: .confirmation,
@@ -648,7 +648,7 @@ extension ScheduleRecipe {
         ScheduleRecipe(
             id: "late-start",
             name: "Late Start",
-            icon: "alarm",
+            icon: "clock.arrow.2.circlepath",
             description: "Starting late today",
             category: "adapt",
             display: .confirmation,
@@ -664,7 +664,7 @@ extension ScheduleRecipe {
     static let workFromHome = ScheduleRecipe(
         id: "wfh",
         name: "Work from Home",
-        icon: "house",
+        icon: "clock.arrow.2.circlepath",
         description: "Wider hours, longer focus blocks",
         category: "adapt",
         weights: [.focusBlock: 1.5],
@@ -674,7 +674,7 @@ extension ScheduleRecipe {
     static let halfDayBlocked = ScheduleRecipe(
         id: "half-day-blocked",
         name: "Half Day Blocked",
-        icon: "rectangle.lefthalf.inset.filled",
+        icon: "clock.arrow.2.circlepath",
         description: "Morning or afternoon is unavailable",
         category: "adapt"
     )
@@ -682,7 +682,7 @@ extension ScheduleRecipe {
     static let optimizeMorningOnly = ScheduleRecipe(
         id: "morning-only",
         name: "Morning Only",
-        icon: "sunrise",
+        icon: "clock.arrow.2.circlepath",
         description: "Optimize only the morning",
         category: "adapt",
         workingHours: HourRange(start: 9, end: 13)
@@ -692,7 +692,7 @@ extension ScheduleRecipe {
         ScheduleRecipe(
             id: "no-meetings-before",
             name: "No Meetings Before \(hour)",
-            icon: "hand.raised",
+            icon: "clock.arrow.2.circlepath",
             description: "Keep mornings meeting-free",
             category: "adapt",
             horizon: .week,
@@ -715,7 +715,7 @@ extension ScheduleRecipe {
     static let showOptions = ScheduleRecipe(
         id: "show-options",
         name: "Show 3 Options",
-        icon: "square.stack.3d.up",
+        icon: "slider.horizontal.3",
         description: "See diverse schedule alternatives",
         category: "advanced",
         speed: .balanced,
@@ -729,7 +729,7 @@ extension ScheduleRecipe {
     static let likeYesterday = ScheduleRecipe(
         id: "like-yesterday",
         name: "Like Yesterday",
-        icon: "clock.arrow.circlepath",
+        icon: "slider.horizontal.3",
         description: "Optimize using your learned preferences",
         category: "advanced",
         weights: [.useLearned: 1.0]
@@ -738,7 +738,7 @@ extension ScheduleRecipe {
     static let makerSchedule = ScheduleRecipe(
         id: "maker-schedule",
         name: "Maker Schedule",
-        icon: "hammer",
+        icon: "slider.horizontal.3",
         description: "Focus mornings, meetings afternoon",
         category: "advanced",
         weights: [.focusBlock: 2.0, .contextSwitch: 2.0],
@@ -755,7 +755,7 @@ extension ScheduleRecipe {
     static let managerSchedule = ScheduleRecipe(
         id: "manager-schedule",
         name: "Manager Schedule",
-        icon: "briefcase",
+        icon: "slider.horizontal.3",
         description: "Meetings morning, admin afternoon",
         category: "advanced",
         weights: [.contextSwitch: 2.0],
@@ -830,7 +830,7 @@ extension ScheduleRecipe {
         ScheduleRecipe(
             id: "yoga-session",
             name: "Yoga Session",
-            icon: "figure.yoga",
+            icon: "figure.run",
             description: "Warm-up, practice, savasana",
             category: "workouts",
             events: [
@@ -874,7 +874,7 @@ extension ScheduleRecipe {
         return ScheduleRecipe(
             id: "interval-training",
             name: "Interval Training",
-            icon: "figure.highintensity.intervaltraining",
+            icon: "figure.run",
             description: "\(intervals) intervals of \(workMinutes)min work / \(restMinutes)min rest",
             category: "workouts",
             events: [

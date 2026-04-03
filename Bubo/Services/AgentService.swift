@@ -336,11 +336,6 @@ enum RecipeToolSchema {
                 "type": "string",
                 "description": "Short display name for the recipe (e.g. 'Focus Block', 'Weekly Tasks')"
             ],
-            "icon": [
-                "type": "string",
-                "description": "SF Symbol name (e.g. brain.head.profile, figure.run, flame, book)",
-                "default": "wand.and.stars"
-            ],
             "description": [
                 "type": "string",
                 "description": "One-line description of what this recipe does"

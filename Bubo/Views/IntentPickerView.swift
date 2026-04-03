@@ -223,7 +223,7 @@ struct RecipeCardView: View {
 
     private var quickLayout: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            Image(systemName: recipe.icon)
+            Image(systemName: recipe.categoryIcon)
                 .font(.system(size: DS.Size.iconLarge + 2))
                 .foregroundStyle(skin.accentColor)
             Text(recipe.name)
@@ -240,7 +240,7 @@ struct RecipeCardView: View {
 
     private var suggestedLayout: some View {
         HStack(spacing: DS.Spacing.sm) {
-            Image(systemName: recipe.icon)
+            Image(systemName: recipe.categoryIcon)
                 .font(.system(size: DS.Size.headerIcon))
                 .foregroundStyle(skin.accentColor)
                 .frame(width: DS.Size.controlHeight)
@@ -264,7 +264,7 @@ struct RecipeCardView: View {
 
     private var listLayout: some View {
         HStack(spacing: DS.Spacing.sm) {
-            Image(systemName: recipe.icon)
+            Image(systemName: recipe.categoryIcon)
                 .font(.caption)
                 .foregroundStyle(skin.accentColor)
                 .frame(width: DS.Size.headerIcon)
