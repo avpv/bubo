@@ -6,7 +6,7 @@ private enum OptimizationState: Equatable {
     case idle
     case optimizing
     case success([ScheduleScenario], warnings: [String] = [])
-    case error(String)
+    case error(String, snapshot: ScheduleSnapshot? = nil)
 
     static func == (lhs: OptimizationState, rhs: OptimizationState) -> Bool {
         switch (lhs, rhs) {
@@ -14,7 +14,7 @@ private enum OptimizationState: Equatable {
         case (.optimizing, .optimizing): return true
         case (.success(let a, _), .success(let b, _)):
             return a.map(\.fitness) == b.map(\.fitness)
-        case (.error(let a), .error(let b)): return a == b
+        case (.error(let a, _), .error(let b, _)): return a == b
         default: return false
         }
     }
@@ -39,6 +39,7 @@ struct RecipeConfigSheet: View {
     @State private var selectedEventIds: Set<String> = []
     @State private var optimizationState: OptimizationState = .idle
     @State private var selectedScenarioIndex = 0
+    @State private var currentSnapshot: ScheduleSnapshot?
 
     // MARK: - Computed
 
@@ -84,6 +85,7 @@ struct RecipeConfigSheet: View {
         }
         .onAppear {
             initializeDefaults()
+            loadScheduleSnapshot()
             if recipe.params.isEmpty && optimizerService != nil {
                 executeOptimization()
             }
@@ -106,6 +108,11 @@ struct RecipeConfigSheet: View {
                 // Preview for creative recipes with multiple events
                 if recipe.isCreative && recipe.events.count > 1 {
                     creativePreviewSection
+                }
+
+                // Schedule context — show what the optimizer will work with
+                if let snapshot = currentSnapshot, !hasResults {
+                    scheduleContextSection(snapshot)
                 }
 
                 // Inline optimization state
@@ -247,6 +254,37 @@ struct RecipeConfigSheet: View {
         }
     }
 
+    // MARK: - Schedule Context
+
+    private func scheduleContextSection(_ snapshot: ScheduleSnapshot) -> some View {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "H:mm"
+        let freeTotal = Int(snapshot.freeGaps.reduce(0.0) { $0 + $1.duration } / 60)
+        let longestGap = Int((snapshot.freeGaps.map(\.duration).max() ?? 0) / 60)
+
+        return VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            Text("Your Schedule")
+                .font(.headline)
+                .foregroundStyle(skin.resolvedTextPrimary)
+                .accessibilityAddTraits(.isHeader)
+
+            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                scheduleTimeline(snapshot)
+
+                HStack(spacing: DS.Spacing.md) {
+                    Label("\(freeTotal)m free", systemImage: "clock")
+                    Label("longest gap \(longestGap)m", systemImage: "arrow.left.and.right")
+                }
+                .font(.caption2)
+                .foregroundStyle(skin.resolvedTextSecondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(DS.Spacing.md)
+            .skinPlatter(skin)
+            .skinPlatterDepth(skin)
+        }
+    }
+
     private var previewTimeline: some View {
         let segments = recipe.events.flatMap { spec -> [(title: String, minutes: Int)] in
             let mins = resolvedMinutes(for: spec)
@@ -343,21 +381,40 @@ struct RecipeConfigSheet: View {
             .skinPlatter(skin)
             .skinPlatterDepth(skin)
 
-        case .error(let message):
-            HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.caption)
-                    .foregroundStyle(skin.resolvedWarningColor)
+        case .error(let message, let snapshot):
+            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                HStack(spacing: DS.Spacing.sm) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(skin.resolvedWarningColor)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(friendlyErrorTitle(message))
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(skin.resolvedTextPrimary)
-                    if !recipe.params.isEmpty && !isAtMinimumDuration {
-                        Text("Try adjusting the settings above.")
-                            .font(.caption2)
-                            .foregroundStyle(skin.resolvedTextSecondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(friendlyErrorTitle(message))
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(skin.resolvedTextPrimary)
+                        if !recipe.params.isEmpty && !isAtMinimumDuration {
+                            Text("Try a shorter duration above.")
+                                .font(.caption2)
+                                .foregroundStyle(skin.resolvedTextSecondary)
+                        }
                     }
+                }
+
+                // Update the context snapshot with optimizer's actual view
+                if let snapshot, currentSnapshot == nil {
+                    scheduleTimeline(snapshot)
+                }
+
+                if recipe.horizon == .today {
+                    Button(action: {
+                        retryWithTomorrow()
+                    }) {
+                        Label("Try Tomorrow", systemImage: "arrow.forward.circle")
+                            .font(.caption.weight(.medium))
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .tint(skin.accentColor)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -438,9 +495,12 @@ struct RecipeConfigSheet: View {
 
     private func friendlyErrorTitle(_ raw: String) -> String {
         if raw.contains("largest free gap") {
+            // Extract gap size from "largest free gap is X min"
+            let gapInfo = extractMinutes(from: raw, after: "largest free gap is")
+            let detail = gapInfo.map { " (largest gap: \($0)m)" } ?? ""
             return recipe.isCreative
-                ? "No free slot long enough for this block. \(durationHint)"
-                : "No free slot long enough. \(durationHint)"
+                ? "No free slot long enough for this block\(detail). \(durationHint)"
+                : "No free slot long enough\(detail). \(durationHint)"
         }
         if raw.contains("hard constraints") || raw.contains("Cannot satisfy") {
             return recipe.isCreative
@@ -454,9 +514,119 @@ struct RecipeConfigSheet: View {
             return "Working hours are over for today. Try scheduling for tomorrow."
         }
         if raw.contains("but only") && raw.contains("min") {
-            return "Not enough free time in schedule. \(durationHint)"
+            let available = extractMinutes(from: raw, after: "only")
+            let detail = available.map { " (\($0)m free)" } ?? ""
+            return "Not enough free time in schedule\(detail). \(durationHint)"
         }
         return raw
+    }
+
+    /// Visual timeline showing occupied vs free time, similar to previewTimeline.
+    private func scheduleTimeline(_ snapshot: ScheduleSnapshot) -> some View {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "H:mm"
+
+        // Build segments: alternating occupied/free across working hours
+        let segments = buildTimelineSegments(snapshot)
+        let totalDuration = max(segments.reduce(0.0) { $0 + $1.duration }, 1)
+
+        return VStack(alignment: .leading, spacing: 4) {
+            GeometryReader { geo in
+                HStack(spacing: 1) {
+                    ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
+                        let fraction = CGFloat(segment.duration / totalDuration)
+                        let width = max(fraction * geo.size.width - 1, 4)
+
+                        RoundedRectangle(cornerRadius: DS.Size.previewCardRadius)
+                            .fill(
+                                segment.isFree
+                                    ? LinearGradient(
+                                        colors: [
+                                            skin.accentColor.opacity(0.7),
+                                            skin.accentColor.opacity(0.5),
+                                        ],
+                                        startPoint: .top, endPoint: .bottom
+                                    )
+                                    : LinearGradient(
+                                        colors: [
+                                            skin.resolvedTextTertiary.opacity(0.25),
+                                            skin.resolvedTextTertiary.opacity(0.15),
+                                        ],
+                                        startPoint: .top, endPoint: .bottom
+                                    )
+                            )
+                            .frame(width: width)
+                            .overlay(
+                                Group {
+                                    if segment.isFree && width > 30 {
+                                        Text("\(Int(segment.duration / 60))m")
+                                            .font(.system(size: 9, weight: .semibold, design: skin.resolvedFontDesign))
+                                            .foregroundStyle(skin.resolvedTextPrimary.opacity(0.9))
+                                    }
+                                }
+                            )
+                    }
+                }
+            }
+            .frame(height: 24)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Size.previewCardRadius))
+
+            // Time labels below the bar
+            HStack {
+                Text(formatter.string(from: snapshot.planningHorizon.start))
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                Spacer()
+                let freeTotal = Int(snapshot.freeGaps.reduce(0.0) { $0 + $1.duration } / 60)
+                Text("\(freeTotal)m free")
+                    .font(.system(size: 8, weight: .medium))
+                    .foregroundStyle(skin.resolvedTextSecondary)
+                Spacer()
+                Text(formatter.string(from: snapshot.planningHorizon.end))
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundStyle(skin.resolvedTextTertiary)
+            }
+        }
+    }
+
+    private struct TimelineSegment {
+        let duration: TimeInterval
+        let isFree: Bool
+    }
+
+    /// Turns free gaps + working hours into alternating occupied/free segments.
+    private func buildTimelineSegments(_ snapshot: ScheduleSnapshot) -> [TimelineSegment] {
+        let sortedGaps = snapshot.freeGaps.sorted { $0.start < $1.start }
+        var segments: [TimelineSegment] = []
+        var cursor = snapshot.planningHorizon.start
+
+        for gap in sortedGaps {
+            // Occupied block before this gap
+            let occupied = gap.start.timeIntervalSince(cursor)
+            if occupied > 0 {
+                segments.append(TimelineSegment(duration: occupied, isFree: false))
+            }
+            // Free gap
+            segments.append(TimelineSegment(duration: gap.duration, isFree: true))
+            cursor = gap.end
+        }
+
+        // Trailing occupied block
+        let trailing = snapshot.planningHorizon.end.timeIntervalSince(cursor)
+        if trailing > 0 {
+            segments.append(TimelineSegment(duration: trailing, isFree: false))
+        }
+
+        return segments
+    }
+
+    /// Extracts first integer after a keyword in a string like "largest free gap is 15 min".
+    private func extractMinutes(from text: String, after keyword: String) -> Int? {
+        guard let range = text.range(of: keyword) else { return nil }
+        let after = text[range.upperBound...]
+        let digits = after.drop(while: { !$0.isNumber })
+        let number = digits.prefix(while: { $0.isNumber })
+        return Int(number)
     }
 
     // MARK: - Footer (adapts to state)
@@ -526,6 +696,69 @@ struct RecipeConfigSheet: View {
 
     // MARK: - Actions
 
+    private func loadScheduleSnapshot() {
+        guard let rs = reminderService, let service = optimizerService else { return }
+
+        let cal = Calendar.current
+        let now = Date()
+        let workingHours = recipe.workingHours?.closedRange ?? service.workingHours
+
+        // Determine horizon for the snapshot
+        let horizon: DateInterval
+        switch recipe.horizon {
+        case .today:
+            let todayEnd = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now))!
+            horizon = DateInterval(start: now, end: todayEnd)
+        case .tomorrow:
+            let tomorrowStart = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now))!
+            let tomorrowEnd = cal.date(byAdding: .day, value: 1, to: tomorrowStart)!
+            horizon = DateInterval(start: tomorrowStart, end: tomorrowEnd)
+        case .week:
+            let weekEnd = cal.date(byAdding: .day, value: 7, to: now)!
+            horizon = DateInterval(start: now, end: weekEnd)
+        }
+
+        let fixedEvents = rs.allEvents.filter { !$0.isLocalEvent }
+        var gaps: [DateInterval] = []
+        var day = cal.startOfDay(for: horizon.start)
+
+        while day < horizon.end {
+            guard let workStart = cal.date(bySettingHour: workingHours.lowerBound, minute: 0, second: 0, of: day),
+                  let workEnd = cal.date(bySettingHour: workingHours.upperBound, minute: 0, second: 0, of: day) else {
+                day = cal.date(byAdding: .day, value: 1, to: day)!
+                continue
+            }
+
+            let effectiveStart = max(workStart, max(now, horizon.start))
+            let effectiveEnd = min(workEnd, horizon.end)
+
+            if effectiveEnd > effectiveStart {
+                let overlapping = fixedEvents
+                    .compactMap { fixed -> (start: Date, end: Date)? in
+                        let oStart = max(fixed.startDate, effectiveStart)
+                        let oEnd = min(fixed.endDate, effectiveEnd)
+                        return oEnd > oStart ? (oStart, oEnd) : nil
+                    }
+                    .sorted { $0.start < $1.start }
+
+                var cursor = effectiveStart
+                for fixed in overlapping {
+                    if fixed.start > cursor {
+                        gaps.append(DateInterval(start: cursor, end: fixed.start))
+                    }
+                    cursor = max(cursor, fixed.end)
+                }
+                if effectiveEnd > cursor {
+                    gaps.append(DateInterval(start: cursor, end: effectiveEnd))
+                }
+            }
+
+            day = cal.date(byAdding: .day, value: 1, to: day)!
+        }
+
+        currentSnapshot = ScheduleSnapshot(freeGaps: gaps, workingHours: workingHours, planningHorizon: horizon)
+    }
+
     private func executeOptimization() {
         guard let service = optimizerService, let rs = reminderService else {
             onExecute(recipe, paramValues)
@@ -555,8 +788,44 @@ struct RecipeConfigSheet: View {
                 }
             case .noEventsToOptimize:
                 optimizationState = .error("No events to optimize")
-            case .infeasible(let reason):
-                optimizationState = .error(reason)
+            case .infeasible(let reason, let snapshot):
+                if let snapshot { currentSnapshot = snapshot }
+                optimizationState = .error(reason, snapshot: snapshot)
+            }
+        }
+    }
+
+    private func retryWithTomorrow() {
+        var tomorrowRecipe = recipe
+        tomorrowRecipe.horizon = .tomorrow
+        guard let service = optimizerService, let rs = reminderService else { return }
+
+        optimizationState = .optimizing
+        selectedScenarioIndex = 0
+
+        Task {
+            let result = await service.executeRecipe(
+                tomorrowRecipe,
+                paramValues: paramValues,
+                reminderService: rs
+            )
+
+            switch result {
+            case .success(let r):
+                optimizationState = .success(r.scenarios)
+                Haptics.impact()
+            case .partialSuccess(let r, let warnings):
+                if r.scenarios.isEmpty {
+                    optimizationState = .error(warnings.first ?? "No scenarios found")
+                } else {
+                    optimizationState = .success(r.scenarios, warnings: warnings)
+                    Haptics.impact()
+                }
+            case .noEventsToOptimize:
+                optimizationState = .error("No events to optimize")
+            case .infeasible(let reason, let snapshot):
+                if let snapshot { currentSnapshot = snapshot }
+                optimizationState = .error(reason, snapshot: snapshot)
             }
         }
     }

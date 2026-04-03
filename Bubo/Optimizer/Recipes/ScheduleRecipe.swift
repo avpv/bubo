@@ -538,18 +538,29 @@ struct HourRange: Codable, Hashable {
     var closedRange: ClosedRange<Int> { start...end }
 }
 
+// MARK: - Schedule Snapshot (error context)
+
+/// Lightweight snapshot of what the optimizer saw when it failed,
+/// so the UI can show the user why it couldn't find a slot.
+struct ScheduleSnapshot: Sendable {
+    /// Free gaps the optimizer found (may be too short for the requested block).
+    let freeGaps: [DateInterval]
+    let workingHours: ClosedRange<Int>
+    let planningHorizon: DateInterval
+}
+
 // MARK: - Recipe Result
 
 enum RecipeResult: Sendable {
     case success(OptimizerResult)
     case noEventsToOptimize
-    case infeasible(reason: String)
+    case infeasible(reason: String, snapshot: ScheduleSnapshot? = nil)
     case partialSuccess(OptimizerResult, warnings: [String])
 
     var errorMessage: String? {
         switch self {
         case .noEventsToOptimize: return "No events to optimize"
-        case .infeasible(let reason): return reason
+        case .infeasible(let reason, _): return reason
         case .partialSuccess(_, let warnings): return warnings.first
         case .success: return nil
         }

@@ -98,9 +98,11 @@ struct RecipeExecutor {
             optimizer.reoptimizer.stabilityWeight = 5.0
         }
 
+        let snapshot = buildSnapshot(fixedEvents: allFixed, workingHours: workingHours, horizon: horizon)
+
         // 14. Pre-flight: check if there's enough working time for events
         if let preflight = preflightCheck(context: context) {
-            return .infeasible(reason: preflight)
+            return .infeasible(reason: preflight, snapshot: snapshot)
         }
 
         // 15. Configure scenario generation
@@ -121,11 +123,11 @@ struct RecipeExecutor {
 
         // 18. Check result quality
         if filteredResult.scenarios.isEmpty {
-            return .infeasible(reason: "No feasible schedule found for the given constraints")
+            return .infeasible(reason: "No feasible schedule found for the given constraints", snapshot: snapshot)
         }
 
         if let best = filteredResult.scenarios.first, best.fitness < 0.1 {
-            return .infeasible(reason: "Cannot satisfy hard constraints with current events and time")
+            return .infeasible(reason: "Cannot satisfy hard constraints with current events and time", snapshot: snapshot)
         }
 
         return .success(filteredResult)
@@ -431,6 +433,51 @@ struct RecipeExecutor {
         return nil
     }
 
+    // MARK: - Snapshot
+
+    private func buildSnapshot(fixedEvents: [CalendarEvent], workingHours: ClosedRange<Int>, horizon: DateInterval) -> ScheduleSnapshot {
+        let cal = Calendar.current
+        let now = Date()
+        var gaps: [DateInterval] = []
+
+        var day = cal.startOfDay(for: horizon.start)
+        while day < horizon.end {
+            guard let workStart = cal.date(bySettingHour: workingHours.lowerBound, minute: 0, second: 0, of: day),
+                  let workEnd = cal.date(bySettingHour: workingHours.upperBound, minute: 0, second: 0, of: day) else {
+                day = cal.date(byAdding: .day, value: 1, to: day)!
+                continue
+            }
+
+            let effectiveStart = max(workStart, max(now, horizon.start))
+            let effectiveEnd = min(workEnd, horizon.end)
+
+            if effectiveEnd > effectiveStart {
+                let overlapping = fixedEvents
+                    .compactMap { fixed -> (start: Date, end: Date)? in
+                        let oStart = max(fixed.startDate, effectiveStart)
+                        let oEnd = min(fixed.endDate, effectiveEnd)
+                        return oEnd > oStart ? (oStart, oEnd) : nil
+                    }
+                    .sorted { $0.start < $1.start }
+
+                var cursor = effectiveStart
+                for fixed in overlapping {
+                    if fixed.start > cursor {
+                        gaps.append(DateInterval(start: cursor, end: fixed.start))
+                    }
+                    cursor = max(cursor, fixed.end)
+                }
+                if effectiveEnd > cursor {
+                    gaps.append(DateInterval(start: cursor, end: effectiveEnd))
+                }
+            }
+
+            day = cal.date(byAdding: .day, value: 1, to: day)!
+        }
+
+        return ScheduleSnapshot(freeGaps: gaps, workingHours: workingHours, planningHorizon: horizon)
+    }
+
     // MARK: - Horizon Resolution
 
     private func resolveHorizon(_ horizon: Horizon, workingHours: ClosedRange<Int>, minRequiredMinutes: Double = 30) -> DateInterval {
@@ -624,9 +671,11 @@ extension RecipeExecutor {
             optimizer.reoptimizer.stabilityWeight = 5.0
         }
 
+        let snapshot = buildSnapshot(fixedEvents: allFixed, workingHours: workingHours, horizon: horizon)
+
         // Pre-flight: check if there's enough working time for events
         if let preflight = preflightCheck(context: context) {
-            return .infeasible(reason: preflight)
+            return .infeasible(reason: preflight, snapshot: snapshot)
         }
 
         let config = recipe.speed.gaConfiguration
@@ -676,11 +725,11 @@ extension RecipeExecutor {
         )
 
         if filteredResult.scenarios.isEmpty {
-            return .infeasible(reason: "No feasible schedule found for the given constraints")
+            return .infeasible(reason: "No feasible schedule found for the given constraints", snapshot: snapshot)
         }
 
         if let best = filteredResult.scenarios.first, best.fitness < 0.1 {
-            return .infeasible(reason: "Cannot satisfy hard constraints with current events and time")
+            return .infeasible(reason: "Cannot satisfy hard constraints with current events and time", snapshot: snapshot)
         }
 
         return .success(filteredResult)
