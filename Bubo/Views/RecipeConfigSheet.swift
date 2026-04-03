@@ -344,20 +344,34 @@ struct RecipeConfigSheet: View {
             .skinPlatterDepth(skin)
 
         case .error(let message):
-            HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.caption)
-                    .foregroundStyle(skin.resolvedWarningColor)
+            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                HStack(spacing: DS.Spacing.sm) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(skin.resolvedWarningColor)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(friendlyErrorTitle(message))
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(skin.resolvedTextPrimary)
-                    if !recipe.params.isEmpty && !isAtMinimumDuration {
-                        Text("Try adjusting the settings above.")
-                            .font(.caption2)
-                            .foregroundStyle(skin.resolvedTextSecondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(friendlyErrorTitle(message))
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(skin.resolvedTextPrimary)
+                        if !recipe.params.isEmpty && !isAtMinimumDuration {
+                            Text("Try a shorter duration above.")
+                                .font(.caption2)
+                                .foregroundStyle(skin.resolvedTextSecondary)
+                        }
                     }
+                }
+
+                if recipe.isCreative && recipe.horizon == .today {
+                    Button(action: {
+                        retryWithTomorrow()
+                    }) {
+                        Label("Try Tomorrow", systemImage: "arrow.forward.circle")
+                            .font(.caption.weight(.medium))
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .tint(skin.accentColor)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -438,9 +452,12 @@ struct RecipeConfigSheet: View {
 
     private func friendlyErrorTitle(_ raw: String) -> String {
         if raw.contains("largest free gap") {
+            // Extract gap size from "largest free gap is X min"
+            let gapInfo = extractMinutes(from: raw, after: "largest free gap is")
+            let detail = gapInfo.map { " (largest gap: \($0)m)" } ?? ""
             return recipe.isCreative
-                ? "No free slot long enough for this block. \(durationHint)"
-                : "No free slot long enough. \(durationHint)"
+                ? "No free slot long enough for this block\(detail). \(durationHint)"
+                : "No free slot long enough\(detail). \(durationHint)"
         }
         if raw.contains("hard constraints") || raw.contains("Cannot satisfy") {
             return recipe.isCreative
@@ -454,9 +471,20 @@ struct RecipeConfigSheet: View {
             return "Working hours are over for today. Try scheduling for tomorrow."
         }
         if raw.contains("but only") && raw.contains("min") {
-            return "Not enough free time in schedule. \(durationHint)"
+            let available = extractMinutes(from: raw, after: "only")
+            let detail = available.map { " (\($0)m free)" } ?? ""
+            return "Not enough free time in schedule\(detail). \(durationHint)"
         }
         return raw
+    }
+
+    /// Extracts first integer after a keyword in a string like "largest free gap is 15 min".
+    private func extractMinutes(from text: String, after keyword: String) -> Int? {
+        guard let range = text.range(of: keyword) else { return nil }
+        let after = text[range.upperBound...]
+        let digits = after.drop(while: { !$0.isNumber })
+        let number = digits.prefix(while: { $0.isNumber })
+        return Int(number)
     }
 
     // MARK: - Footer (adapts to state)
@@ -538,6 +566,40 @@ struct RecipeConfigSheet: View {
         Task {
             let result = await service.executeRecipe(
                 recipe,
+                paramValues: paramValues,
+                reminderService: rs
+            )
+
+            switch result {
+            case .success(let r):
+                optimizationState = .success(r.scenarios)
+                Haptics.impact()
+            case .partialSuccess(let r, let warnings):
+                if r.scenarios.isEmpty {
+                    optimizationState = .error(warnings.first ?? "No scenarios found")
+                } else {
+                    optimizationState = .success(r.scenarios, warnings: warnings)
+                    Haptics.impact()
+                }
+            case .noEventsToOptimize:
+                optimizationState = .error("No events to optimize")
+            case .infeasible(let reason):
+                optimizationState = .error(reason)
+            }
+        }
+    }
+
+    private func retryWithTomorrow() {
+        var tomorrowRecipe = recipe
+        tomorrowRecipe.horizon = .tomorrow
+        guard let service = optimizerService, let rs = reminderService else { return }
+
+        optimizationState = .optimizing
+        selectedScenarioIndex = 0
+
+        Task {
+            let result = await service.executeRecipe(
+                tomorrowRecipe,
                 paramValues: paramValues,
                 reminderService: rs
             )
