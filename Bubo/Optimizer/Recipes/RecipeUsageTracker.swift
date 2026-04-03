@@ -9,7 +9,7 @@ import Foundation
 ///
 /// Where:
 ///   - points = number of successful executions (accepted scenarios count double)
-///   - T = hours since last execution
+///   - T = minutes since last execution
 ///   - gravity = 1.8 (how fast score decays over time)
 ///
 /// Persists to UserDefaults. Top-N recipes are exposed for the "Recently Used" section.
@@ -67,11 +67,12 @@ final class RecipeUsageTracker {
 
     /// HN score for a single entry.
     ///   score = points / (T + 2)^gravity
+    ///   T = minutes since last execution
     private func score(for entry: RecipeUsageEntry, now: Date) -> Double {
         guard let lastUsed = entry.lastExecutedAt else { return 0 }
-        let hoursAgo = now.timeIntervalSince(lastUsed) / 3600
+        let minutesAgo = now.timeIntervalSince(lastUsed) / 60
         let points = Double(entry.executionCount + entry.acceptanceCount)
-        let denominator = pow(hoursAgo + 2, gravity)
+        let denominator = pow(minutesAgo + 2, gravity)
         return points / denominator
     }
 
