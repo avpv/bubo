@@ -26,8 +26,11 @@ struct RecipeExecutor {
         }
 
         // 2. Collect existing local events (if included)
+        // For creative recipes (creating new blocks like focus time), local events
+        // are treated as fixed obstacles rather than movable — we only optimize the
+        // placement of the new synthetic blocks, not rearrange existing tasks.
         var localEvents: [OptimizableEvent] = []
-        if recipe.includeExistingEvents {
+        if recipe.includeExistingEvents && !recipe.isCreative {
             localEvents = collectLocalEvents(for: recipe.horizon)
         }
 
@@ -70,8 +73,13 @@ struct RecipeExecutor {
         let horizon = resolveHorizon(recipe.horizon, workingHours: workingHours, minRequiredMinutes: maxEventMinutes)
 
         // 10. Collect fixed calendar events + frozen events from rules
+        // For creative recipes, also include local events as fixed so the new
+        // block avoids overlapping with existing tasks.
         let calendarFixed = reminderService.allEvents.filter { !$0.isLocalEvent }
-        let allFixed = calendarFixed + fixedFromRules
+        let localAsFixed: [CalendarEvent] = recipe.isCreative
+            ? reminderService.allEvents.filter { $0.isLocalEvent }
+            : []
+        let allFixed = calendarFixed + fixedFromRules + localAsFixed
 
         // 11. Collect participant availability
         let allParticipants = allMovable.flatMap(\.requiredParticipants)
@@ -611,8 +619,9 @@ extension RecipeExecutor {
             return .noEventsToOptimize
         }
 
+        // For creative recipes, local events are fixed obstacles (not rearranged).
         var localEvents: [OptimizableEvent] = []
-        if recipe.includeExistingEvents {
+        if recipe.includeExistingEvents && !recipe.isCreative {
             localEvents = collectLocalEvents(for: recipe.horizon)
 
             // Filter to user-selected events when specified
@@ -652,7 +661,10 @@ extension RecipeExecutor {
         let horizon = resolveHorizon(recipe.horizon, workingHours: workingHours, minRequiredMinutes: maxEventMinutes)
 
         let calendarFixed = reminderService.allEvents.filter { !$0.isLocalEvent }
-        let allFixed = calendarFixed + fixedFromRules
+        let localAsFixed: [CalendarEvent] = recipe.isCreative
+            ? reminderService.allEvents.filter { $0.isLocalEvent }
+            : []
+        let allFixed = calendarFixed + fixedFromRules + localAsFixed
 
         let context = OptimizerContext(
             fixedEvents: allFixed,

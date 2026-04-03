@@ -718,7 +718,11 @@ struct RecipeConfigSheet: View {
             horizon = DateInterval(start: now, end: weekEnd)
         }
 
-        let fixedEvents = rs.allEvents.filter { !$0.isLocalEvent }
+        // For creative recipes, include local events as occupied time too — the optimizer
+        // treats them as fixed obstacles, so the snapshot should reflect that.
+        let fixedEvents = recipe.isCreative
+            ? rs.allEvents
+            : rs.allEvents.filter { !$0.isLocalEvent }
         var gaps: [DateInterval] = []
         var day = cal.startOfDay(for: horizon.start)
 
