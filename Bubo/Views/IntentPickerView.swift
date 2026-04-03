@@ -31,11 +31,9 @@ struct IntentPickerView: View {
                         .staggeredEntrance(index: 0)
                 }
 
-                // Recently used (HN-ranked)
-                if !recentRecipes.isEmpty {
-                    recentlyUsedSection
-                        .staggeredEntrance(index: 1)
-                }
+                // Recently used — always shown, falls back to quick actions
+                recentlySection
+                    .staggeredEntrance(index: 1)
 
                 // Contextual suggestions (condition-based)
                 if !suggestions.isEmpty {
@@ -43,13 +41,9 @@ struct IntentPickerView: View {
                         .staggeredEntrance(index: 2)
                 }
 
-                // Quick actions grid — split into creative + planning
-                quickActionsSection
-                    .staggeredEntrance(index: 3)
-
                 // All categories (expandable)
                 allCategoriesSection
-                    .staggeredEntrance(index: 4)
+                    .staggeredEntrance(index: 3)
             }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.vertical, DS.Spacing.xl)
@@ -103,14 +97,16 @@ struct IntentPickerView: View {
         .accessibilityHint("Describe what you want in your own words")
     }
 
-    // MARK: - Recently Used
+    // MARK: - Recently
 
-    private var recentlyUsedSection: some View {
+    private var recentlySection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            sectionHeader("Recently Used")
+            sectionHeader("Recently")
+
+            let recipes = recentRecipes.isEmpty ? RecipeCatalog.quickActions : recentRecipes
 
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 3), spacing: DS.Spacing.sm) {
-                ForEach(recentRecipes) { recipe in
+                ForEach(recipes) { recipe in
                     RecipeCardView(recipe: recipe, style: .quick, onTap: onSelectRecipe)
                 }
             }
@@ -136,58 +132,6 @@ struct IntentPickerView: View {
         }
     }
 
-    // MARK: - Quick Actions
-
-    private var creativeActions: [ScheduleRecipe] {
-        RecipeCatalog.quickActions.filter { $0.isCreative }
-    }
-
-    private var planningActions: [ScheduleRecipe] {
-        RecipeCatalog.quickActions.filter { $0.needsExistingEvents }
-    }
-
-    private var quickActionsSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.lg) {
-            // Creative recipes — always work
-            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                sectionHeader("Create Blocks")
-
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 3), spacing: DS.Spacing.sm) {
-                    ForEach(creativeActions) { recipe in
-                        RecipeCardView(recipe: recipe, style: .quick, onTap: onSelectRecipe)
-                    }
-                }
-            }
-
-            // Planning recipes — need existing tasks
-            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                HStack(spacing: DS.Spacing.sm) {
-                    sectionHeader("Organize Tasks")
-
-                    if !hasLocalEvents {
-                        Text("needs tasks")
-                            .font(.caption2)
-                            .foregroundStyle(skin.resolvedTextTertiary)
-                            .padding(.horizontal, DS.Spacing.pillHorizontal)
-                            .padding(.vertical, DS.Spacing.xxs)
-                            .adaptiveBadgeFill(skin.resolvedTextTertiary)
-                            .clipShape(Capsule())
-                    }
-                }
-
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 3), spacing: DS.Spacing.sm) {
-                    ForEach(planningActions) { recipe in
-                        RecipeCardView(
-                            recipe: recipe,
-                            style: .quick,
-                            dimmed: !hasLocalEvents,
-                            onTap: onSelectRecipe
-                        )
-                    }
-                }
-            }
-        }
-    }
 
     // MARK: - All Categories
 
