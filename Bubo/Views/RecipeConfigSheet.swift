@@ -192,9 +192,16 @@ struct RecipeConfigSheet: View {
                             .fill(skin.accentColor.opacity(index % 2 == 0 ? 0.8 : 0.5))
                             .frame(width: DS.Size.accentBarWidth, height: DS.Size.iconLarge)
 
-                        Text(spec.title)
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(skin.resolvedTextPrimary)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(spec.title)
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(skin.resolvedTextPrimary)
+                            if let offset = spec.startOffsetMinutes, offset > 0 {
+                                Text("in \(formatDuration(offset))")
+                                    .font(.caption2)
+                                    .foregroundStyle(skin.resolvedTextSecondary)
+                            }
+                        }
 
                         if spec.count > 1 {
                             Text("×\(spec.count)")

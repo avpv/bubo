@@ -66,7 +66,8 @@ struct RecipeExecutor {
             ?? optimizerService.workingHours
 
         // 9. Build planning horizon
-        let horizon = resolveHorizon(recipe.horizon, workingHours: workingHours)
+        let maxEventMinutes = recipe.events.map { Double($0.minutes) }.max() ?? 30
+        let horizon = resolveHorizon(recipe.horizon, workingHours: workingHours, minRequiredMinutes: maxEventMinutes)
 
         // 10. Collect fixed calendar events + frozen events from rules
         let calendarFixed = reminderService.allEvents.filter { !$0.isLocalEvent }
@@ -430,7 +431,7 @@ struct RecipeExecutor {
 
     // MARK: - Horizon Resolution
 
-    private func resolveHorizon(_ horizon: Horizon, workingHours: ClosedRange<Int>) -> DateInterval {
+    private func resolveHorizon(_ horizon: Horizon, workingHours: ClosedRange<Int>, minRequiredMinutes: Double = 30) -> DateInterval {
         let cal = Calendar.current
         let now = Date()
 
@@ -444,9 +445,8 @@ struct RecipeExecutor {
             ) ?? todayEnd
             let remainingMinutes = workEndToday.timeIntervalSince(now) / 60
 
-            // If less than 30 minutes of working time remain, extend to end of tomorrow
-            // so the optimizer can place events on the next day
-            if remainingMinutes < 30 {
+            // If not enough working time remains for the longest event, extend to tomorrow
+            if remainingMinutes < minRequiredMinutes {
                 let tomorrowEnd = cal.date(byAdding: .day, value: 1, to: todayEnd)!
                 return DateInterval(start: now, end: tomorrowEnd)
             }
@@ -599,7 +599,8 @@ extension RecipeExecutor {
         if let v = recipe.peakEnergyHour { prefs.peakEnergyHour = v }
 
         let workingHours = recipe.workingHours?.closedRange ?? defaultWorkingHours
-        let horizon = resolveHorizon(recipe.horizon, workingHours: workingHours)
+        let maxEventMinutes = recipe.events.map { Double($0.minutes) }.max() ?? 30
+        let horizon = resolveHorizon(recipe.horizon, workingHours: workingHours, minRequiredMinutes: maxEventMinutes)
 
         let calendarFixed = reminderService.allEvents.filter { !$0.isLocalEvent }
         let allFixed = calendarFixed + fixedFromRules

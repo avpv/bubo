@@ -575,6 +575,9 @@ enum RecipeValidator {
             if let gap = r.events[i].chainGap {
                 r.events[i].chainGap = max(0, min(60, gap))
             }
+            if let offset = r.events[i].startOffsetMinutes {
+                r.events[i].startOffsetMinutes = max(0, min(480, offset))
+            }
             if let segments = r.events[i].segments {
                 r.events[i].segments = segments.map { seg in
                     var s = seg
