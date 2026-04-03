@@ -586,7 +586,6 @@ struct AddEventView: View {
         let recipe = ScheduleRecipe(
             id: "find-best-time-inline",
             name: "Find Best Time",
-            icon: "wand.and.stars",
             events: [
                 EventSpec(
                     title: title,
@@ -621,7 +620,6 @@ struct AddEventView: View {
         let recipe = ScheduleRecipe(
             id: "auto-pomodoro-slot",
             name: "Pomodoro Slot",
-            icon: "timer",
             events: [
                 EventSpec(
                     title: title.isEmpty ? "Pomodoro Session" : title,

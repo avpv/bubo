@@ -519,7 +519,6 @@ struct MenuBarView: View {
                                 optimizerService.activeRecipe = ScheduleRecipe(
                                     id: "find-better-time",
                                     name: "Find Better Time",
-                                    icon: "wand.and.stars",
                                     description: "Find a better slot for \(event.title)",
                                     events: [EventSpec(
                                         title: event.title,
@@ -540,7 +539,6 @@ struct MenuBarView: View {
                                 let recipe = ScheduleRecipe(
                                     id: "protect-block",
                                     name: "Protect Block",
-                                    icon: "shield",
                                     eventRules: [EventRule(match: .id(event.id), action: .markFixed)],
                                     display: .confirmation
                                 )

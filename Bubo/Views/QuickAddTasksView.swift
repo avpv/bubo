@@ -204,7 +204,6 @@ struct QuickAddTasksView: View {
         let recipe = ScheduleRecipe(
             id: "quick-add-tasks",
             name: "Quick Add Tasks",
-            icon: "list.bullet",
             events: eventSpecs,
             horizon: horizon,
             speed: horizon == .week ? .balanced : .quick
