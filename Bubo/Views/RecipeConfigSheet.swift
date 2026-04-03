@@ -22,9 +22,8 @@ private enum OptimizationState: Equatable {
 
 // MARK: - Recipe Config Sheet
 
-/// Generic configuration sheet that auto-renders UI controls
-/// based on the recipe's `params` array.
-/// One View for all recipes — zero per-recipe UI code.
+/// Unified recipe detail view: configure → optimize → review → apply.
+/// All states live on one scrollable screen. Footer adapts to current state.
 struct RecipeConfigSheet: View {
     @Environment(\.activeSkin) private var skin
     let recipe: ScheduleRecipe
@@ -39,43 +38,38 @@ struct RecipeConfigSheet: View {
     @State private var paramValues: [String: Any] = [:]
     @State private var selectedEventIds: Set<String> = []
     @State private var optimizationState: OptimizationState = .idle
+    @State private var selectedScenarioIndex = 0
 
-    /// Whether the recipe requires events but none are available.
+    // MARK: - Computed
+
     private var isBlockedByNoEvents: Bool {
         recipe.needsExistingEvents && localEventsForPicker.isEmpty
     }
 
-    /// Whether the action button should be enabled.
     private var canExecute: Bool {
         if isBlockedByNoEvents { return false }
         if case .optimizing = optimizationState { return false }
-        // If there's an eventMultiPicker param, at least one event must be selected
         if recipe.params.contains(where: { $0.kind == .eventMultiPicker }) {
             return !selectedEventIds.isEmpty
         }
         return true
     }
 
-    /// Recipes that create new events (don't require existing tasks).
+    private var hasResults: Bool {
+        if case .success(let s) = optimizationState { return !s.isEmpty }
+        return false
+    }
+
+    private var scenarios: [ScheduleScenario] {
+        if case .success(let s) = optimizationState { return s }
+        return []
+    }
+
     private var suggestedAlternatives: [ScheduleRecipe] {
         RecipeCatalog.quickActions.filter { $0.isCreative }
     }
 
-    private var actionButtonLabel: String {
-        switch optimizationState {
-        case .idle: return recipe.actionLabel
-        case .optimizing: return "Optimizing..."
-        case .success: return "Re-optimize"
-        case .error: return "Retry"
-        }
-    }
-
-    private var actionButtonIcon: String {
-        switch optimizationState {
-        case .success, .error: return "arrow.clockwise"
-        default: return recipe.isCreative ? "calendar.badge.plus" : "wand.and.stars"
-        }
-    }
+    // MARK: - Body
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -85,13 +79,11 @@ struct RecipeConfigSheet: View {
                 normalConfigFlow
             }
 
-            // Footer
             SkinSeparator()
             footer
         }
         .onAppear {
             initializeDefaults()
-            // Auto-run for paramless recipes (1-click actions)
             if recipe.params.isEmpty && optimizerService != nil {
                 executeOptimization()
             }
@@ -106,7 +98,7 @@ struct RecipeConfigSheet: View {
                 // Header
                 recipeHeader
 
-                // Parameters — grouped in one section
+                // All parameters in one platter
                 if !recipe.params.isEmpty {
                     settingsSection
                 }
@@ -116,7 +108,7 @@ struct RecipeConfigSheet: View {
                     creativePreviewSection
                 }
 
-                // Inline optimization results
+                // Inline optimization state
                 optimizationResultsSection
             }
             .padding(.horizontal, DS.Spacing.lg)
@@ -149,52 +141,69 @@ struct RecipeConfigSheet: View {
         .skinPlatterDepth(skin)
     }
 
-    // MARK: - Creative Preview Section
+    // MARK: - Settings Section
 
-    private var creativePreviewSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            Text("Preview")
-                .font(.headline)
-                .foregroundStyle(skin.resolvedTextPrimary)
-                .accessibilityAddTraits(.isHeader)
-
-            VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                // Bar visualization
-                previewTimeline
-
-                // Event breakdown
-                ForEach(Array(recipe.events.enumerated()), id: \.offset) { _, spec in
-                    let minutes = resolvedMinutes(for: spec)
-                    HStack(spacing: DS.Spacing.sm) {
-                        Circle()
-                            .fill(skin.accentColor)
-                            .frame(width: 6, height: 6)
-                        Text(spec.title)
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(skin.resolvedTextPrimary)
-                        Spacer()
-                        Text(formatDuration(minutes * spec.count))
-                            .font(.caption2.monospacedDigit())
-                            .foregroundStyle(skin.resolvedTextSecondary)
-                    }
+    private var settingsSection: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            ForEach(Array(recipe.params.enumerated()), id: \.element.id) { index, param in
+                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                    Text(param.label)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(skin.resolvedTextPrimary)
+                    paramControl(for: param)
                 }
 
-                // Total time
-                HStack {
-                    Label(
-                        "Total: \(formatDuration(totalCreativeMinutes))",
-                        systemImage: "clock"
-                    )
-                    .font(.caption)
-                    .foregroundStyle(skin.resolvedTextSecondary)
-                    Spacer()
+                if index < recipe.params.count - 1 {
+                    SkinSeparator()
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(DS.Spacing.md)
-            .skinPlatter(skin)
-            .skinPlatterDepth(skin)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(DS.Spacing.md)
+        .skinPlatter(skin)
+        .skinPlatterDepth(skin)
+    }
+
+    // MARK: - Creative Preview
+
+    private var creativePreviewSection: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            // Bar visualization
+            previewTimeline
+
+            // Event breakdown
+            ForEach(Array(recipe.events.enumerated()), id: \.offset) { _, spec in
+                let minutes = resolvedMinutes(for: spec)
+                HStack(spacing: DS.Spacing.sm) {
+                    Circle()
+                        .fill(skin.accentColor)
+                        .frame(width: 6, height: 6)
+                    Text(spec.title)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(skin.resolvedTextPrimary)
+                    if spec.count > 1 {
+                        Text("×\(spec.count)")
+                            .font(.caption2)
+                            .foregroundStyle(skin.accentColor)
+                    }
+                    Spacer()
+                    Text(formatDuration(minutes * spec.count))
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(skin.resolvedTextSecondary)
+                }
+            }
+
+            HStack {
+                Label("Total: \(formatDuration(totalCreativeMinutes))", systemImage: "clock")
+                    .font(.caption)
+                    .foregroundStyle(skin.resolvedTextSecondary)
+                Spacer()
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(DS.Spacing.md)
+        .skinPlatter(skin)
+        .skinPlatterDepth(skin)
     }
 
     private var previewTimeline: some View {
@@ -228,12 +237,10 @@ struct RecipeConfigSheet: View {
     }
 
     private var totalCreativeMinutes: Int {
-        recipe.events.reduce(0) { total, spec in
-            total + resolvedMinutes(for: spec) * spec.count
-        }
+        recipe.events.reduce(0) { $0 + resolvedMinutes(for: $1) * $1.count }
     }
 
-    // MARK: - Optimization Results
+    // MARK: - Optimization Results (inline)
 
     @ViewBuilder
     private var optimizationResultsSection: some View {
@@ -242,125 +249,228 @@ struct RecipeConfigSheet: View {
             EmptyView()
 
         case .optimizing:
-            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                Text("Optimizing")
-                    .font(.headline)
-                    .foregroundStyle(skin.resolvedTextPrimary)
-                    .accessibilityAddTraits(.isHeader)
-
-                VStack(spacing: DS.Spacing.md) {
-                    ProgressView()
-                        .scaleEffect(0.8)
-                    Text("Finding the best arrangement...")
-                        .font(.caption)
-                        .foregroundStyle(skin.resolvedTextSecondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(DS.Spacing.md)
-                .skinPlatter(skin)
-                .skinPlatterDepth(skin)
+            VStack(spacing: DS.Spacing.md) {
+                ProgressView()
+                    .scaleEffect(0.8)
+                Text(recipe.isCreative ? "Finding the best time…" : "Optimizing schedule…")
+                    .font(.caption)
+                    .foregroundStyle(skin.resolvedTextSecondary)
             }
+            .frame(maxWidth: .infinity)
+            .padding(DS.Spacing.lg)
 
-        case .success(let scenarios):
-            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                Text("Results")
-                    .font(.headline)
-                    .foregroundStyle(skin.resolvedTextPrimary)
-                    .accessibilityAddTraits(.isHeader)
-
-                VStack(spacing: DS.Spacing.xs) {
-                    ForEach(Array(scenarios.prefix(3).enumerated()), id: \.offset) { index, scenario in
-                        scenarioCard(scenario, index: index)
+        case .success(let results):
+            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                // Scenario picker (segmented) when multiple options
+                if results.count > 1 {
+                    Picker("Option", selection: $selectedScenarioIndex) {
+                        ForEach(0..<results.count, id: \.self) { idx in
+                            Text("Option \(idx + 1)").tag(idx)
+                        }
                     }
+                    .pickerStyle(.segmented)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(DS.Spacing.md)
-                .skinPlatter(skin)
-                .skinPlatterDepth(skin)
+
+                // Selected scenario detail
+                if selectedScenarioIndex < results.count {
+                    scenarioDetail(results[selectedScenarioIndex])
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(DS.Spacing.md)
+            .skinPlatter(skin)
+            .skinPlatterDepth(skin)
 
         case .error(let message):
-            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                Text("Could not optimize")
-                    .font(.headline)
-                    .foregroundStyle(skin.resolvedTextPrimary)
-                    .accessibilityAddTraits(.isHeader)
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(skin.resolvedWarningColor)
 
-                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                    HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.caption)
-                            .foregroundStyle(skin.resolvedDestructiveColor)
-                        Text(message)
-                            .font(.caption)
-                            .foregroundStyle(skin.resolvedTextPrimary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(friendlyErrorTitle(message))
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(skin.resolvedTextPrimary)
+                    if !recipe.params.isEmpty {
+                        Text("Try adjusting the settings above.")
+                            .font(.caption2)
+                            .foregroundStyle(skin.resolvedTextSecondary)
                     }
-
-                    Text("Try adjusting your settings above and re-optimizing.")
-                        .font(.caption2)
-                        .foregroundStyle(skin.resolvedTextSecondary)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(DS.Spacing.md)
-                .skinPlatter(skin)
-                .skinPlatterDepth(skin)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(DS.Spacing.md)
+            .background(
+                RoundedRectangle(cornerRadius: DS.Size.cornerRadius)
+                    .fill(skin.resolvedWarningColor.opacity(0.08))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Size.cornerRadius)
+                    .strokeBorder(skin.resolvedWarningColor.opacity(0.2), lineWidth: 1)
+            )
         }
     }
 
-    private func scenarioCard(_ scenario: ScheduleScenario, index: Int) -> some View {
+    private func scenarioDetail(_ scenario: ScheduleScenario) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            HStack(spacing: DS.Spacing.sm) {
-                if index == 0 {
-                    Image(systemName: "star.fill")
-                        .font(.caption2)
-                        .foregroundStyle(skin.accentColor)
-                }
-                Text("Option \(index + 1)")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(skin.resolvedTextPrimary)
-                Text("(\(Int(scenario.fitness * 100))% fit)")
-                    .font(.caption2)
-                    .foregroundStyle(skin.resolvedTextSecondary)
-                Spacer()
+            // Fitness badge
+            Label("\(Int(max(0, scenario.fitness) * 100))% match", systemImage: "sparkles")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(skin.accentColor)
+                .padding(.horizontal, DS.Spacing.sm)
+                .padding(.vertical, 3)
+                .background(skin.accentColor.opacity(0.12))
+                .clipShape(Capsule())
 
-                if let service = optimizerService, let rs = reminderService {
-                    Button {
-                        Haptics.impact()
-                        service.applyRecipeScenario(at: index, to: rs)
-                        onDone?()
-                    } label: {
-                        Text("Apply")
-                    }
-                    .buttonStyle(.action(role: .primary, size: .compact))
-                }
-            }
-
-            // Show gene details
-            ForEach(Array(scenario.genes.prefix(5).enumerated()), id: \.offset) { _, gene in
+            // Events list
+            ForEach(scenario.genes, id: \.eventId) { gene in
                 HStack(spacing: DS.Spacing.sm) {
-                    Circle()
-                        .fill(gene.isFocusBlock ? skin.accentColor : skin.resolvedTextTertiary)
-                        .frame(width: 6, height: 6)
+                    Image(systemName: gene.isFocusBlock ? "brain.head.profile" : "calendar")
+                        .font(.system(size: 10))
+                        .foregroundStyle(gene.isFocusBlock ? skin.accentColor : skin.resolvedTextTertiary)
+                        .frame(width: 14)
+
                     Text(gene.title)
                         .font(.caption.weight(.medium))
                         .foregroundStyle(skin.resolvedTextPrimary)
                         .lineLimit(1)
+
                     Spacer()
-                    Text(DS.timeFormatter.string(from: gene.startTime))
+
+                    Text("\(DS.timeFormatter.string(from: gene.startTime)) – \(DS.timeFormatter.string(from: gene.endTime))")
                         .font(.caption2.monospacedDigit())
                         .foregroundStyle(skin.resolvedTextSecondary)
                 }
             }
+
+            // Warnings
+            if !scenario.constraintViolations.isEmpty {
+                ForEach(scenario.constraintViolations, id: \.self) { v in
+                    Label(v, systemImage: "exclamationmark.triangle")
+                        .font(.caption2)
+                        .foregroundStyle(skin.resolvedWarningColor)
+                }
+            }
         }
-        .padding(.vertical, DS.Spacing.sm)
-        .padding(.horizontal, DS.Spacing.sm)
-        .background(
-            index == 0
-                ? AnyShapeStyle(skin.accentColor.opacity(0.08))
-                : AnyShapeStyle(skin.resolvedPlatterMaterial.opacity(0.3))
-        )
-        .clipShape(RoundedRectangle(cornerRadius: DS.Size.previewSmallRadius))
+    }
+
+    private func friendlyErrorTitle(_ raw: String) -> String {
+        if raw.contains("hard constraints") || raw.contains("Cannot satisfy") {
+            return recipe.isCreative
+                ? "Schedule too packed for this block. Try shorter duration."
+                : "Can't rearrange with these constraints. Try fewer tasks."
+        }
+        if raw.contains("No events") {
+            return "No events to work with."
+        }
+        return raw
+    }
+
+    // MARK: - Footer (adapts to state)
+
+    private var footer: some View {
+        HStack {
+            Button(action: {
+                if hasResults {
+                    // After results, "Back" goes back to re-configure
+                    optimizationState = .idle
+                    selectedScenarioIndex = 0
+                } else {
+                    onCancel()
+                }
+            }) {
+                Text(hasResults ? "Back" : "Cancel")
+            }
+            .buttonStyle(.action(role: .secondary))
+            .keyboardShortcut(.cancelAction)
+
+            Spacer()
+
+            if hasResults {
+                // Apply the selected scenario
+                Button(action: {
+                    Haptics.impact()
+                    applySelectedScenario()
+                }) {
+                    Label("Apply Schedule", systemImage: "checkmark.circle.fill")
+                }
+                .buttonStyle(.action(role: .primary))
+            } else {
+                // Run optimization
+                Button(action: {
+                    Haptics.tap()
+                    executeOptimization()
+                }) {
+                    HStack(spacing: DS.Spacing.xs) {
+                        if case .optimizing = optimizationState {
+                            ProgressView()
+                                .scaleEffect(0.6)
+                                .frame(width: 16, height: 16)
+                        } else {
+                            Image(systemName: recipe.isCreative ? "calendar.badge.plus" : "wand.and.stars")
+                        }
+                        Text(footerActionLabel)
+                    }
+                }
+                .buttonStyle(.action(role: .primary))
+                .disabled(!canExecute)
+                .opacity(canExecute ? 1.0 : 0.5)
+            }
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+        .frame(height: DS.Size.actionFooterHeight)
+        .skinBarBackground(skin)
+    }
+
+    private var footerActionLabel: String {
+        switch optimizationState {
+        case .optimizing: return recipe.isCreative ? "Finding…" : "Optimizing…"
+        case .error: return "Retry"
+        default: return recipe.actionLabel
+        }
+    }
+
+    // MARK: - Actions
+
+    private func executeOptimization() {
+        guard let service = optimizerService, let rs = reminderService else {
+            onExecute(recipe, paramValues)
+            return
+        }
+
+        optimizationState = .optimizing
+        selectedScenarioIndex = 0
+
+        Task {
+            let result = await service.executeRecipe(
+                recipe,
+                paramValues: paramValues,
+                reminderService: rs
+            )
+
+            switch result {
+            case .success(let r):
+                optimizationState = .success(r.scenarios)
+                Haptics.impact()
+            case .partialSuccess(let r, let warnings):
+                if r.scenarios.isEmpty {
+                    optimizationState = .error(warnings.first ?? "No scenarios found")
+                } else {
+                    optimizationState = .success(r.scenarios)
+                    Haptics.impact()
+                }
+            case .noEventsToOptimize:
+                optimizationState = .error("No events to optimize")
+            case .infeasible(let reason):
+                optimizationState = .error(reason)
+            }
+        }
+    }
+
+    private func applySelectedScenario() {
+        guard let service = optimizerService, let rs = reminderService else { return }
+        service.applyRecipeScenario(at: selectedScenarioIndex, to: rs)
+        onDone?()
     }
 
     // MARK: - Blocked Empty State
@@ -395,49 +505,42 @@ struct RecipeConfigSheet: View {
                     .buttonStyle(.action(role: .primary, size: .compact))
                 }
 
-                // Suggest creative alternatives
                 if let onSwitchRecipe, !suggestedAlternatives.isEmpty {
-                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                    VStack(alignment: .leading, spacing: 0) {
                         Text("Try instead")
-                            .font(.headline)
-                            .foregroundStyle(skin.resolvedTextPrimary)
-                            .accessibilityAddTraits(.isHeader)
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(skin.resolvedTextTertiary)
+                            .padding(.bottom, DS.Spacing.xs)
 
-                        VStack(alignment: .leading, spacing: 0) {
-                            ForEach(suggestedAlternatives) { alt in
-                                Button {
-                                    Haptics.tap()
-                                    onSwitchRecipe(alt)
-                                } label: {
-                                    HStack(spacing: DS.Spacing.sm) {
-                                        Image(systemName: alt.icon)
-                                            .font(.caption)
-                                            .foregroundStyle(skin.accentColor)
-                                            .frame(width: 20)
-                                        VStack(alignment: .leading, spacing: 1) {
-                                            Text(alt.name)
-                                                .font(.caption.weight(.medium))
-                                                .foregroundStyle(skin.resolvedTextPrimary)
-                                            Text(alt.description)
-                                                .font(.caption2)
-                                                .foregroundStyle(skin.resolvedTextSecondary)
-                                                .lineLimit(1)
-                                        }
-                                        Spacer()
-                                        Image(systemName: "chevron.right")
+                        ForEach(suggestedAlternatives) { alt in
+                            Button {
+                                Haptics.tap()
+                                onSwitchRecipe(alt)
+                            } label: {
+                                HStack(spacing: DS.Spacing.sm) {
+                                    Image(systemName: alt.icon)
+                                        .font(.caption)
+                                        .foregroundStyle(skin.accentColor)
+                                        .frame(width: 20)
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(alt.name)
+                                            .font(.caption.weight(.medium))
+                                            .foregroundStyle(skin.resolvedTextPrimary)
+                                        Text(alt.description)
                                             .font(.caption2)
-                                            .foregroundStyle(skin.resolvedTextTertiary)
+                                            .foregroundStyle(skin.resolvedTextSecondary)
+                                            .lineLimit(1)
                                     }
-                                    .padding(.vertical, DS.Spacing.sm)
-                                    .padding(.horizontal, DS.Spacing.sm)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption2)
+                                        .foregroundStyle(skin.resolvedTextTertiary)
                                 }
-                                .buttonStyle(.plain)
+                                .padding(.vertical, DS.Spacing.sm)
+                                .padding(.horizontal, DS.Spacing.sm)
                             }
+                            .buttonStyle(.plain)
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(DS.Spacing.md)
-                        .skinPlatter(skin)
-                        .skinPlatterDepth(skin)
                     }
                     .padding(.horizontal, DS.Spacing.lg)
                 }
@@ -448,136 +551,31 @@ struct RecipeConfigSheet: View {
         }
     }
 
-    // MARK: - Footer
-
-    private var footer: some View {
-        HStack {
-            Button(action: onCancel) {
-                Text("Cancel")
-            }
-            .buttonStyle(.action(role: .secondary))
-            .keyboardShortcut(.cancelAction)
-
-            Spacer()
-
-            Button(action: {
-                Haptics.tap()
-                executeOptimization()
-            }) {
-                HStack(spacing: DS.Spacing.xs) {
-                    if case .optimizing = optimizationState {
-                        ProgressView()
-                            .scaleEffect(0.6)
-                            .frame(width: 16, height: 16)
-                    } else {
-                        Image(systemName: actionButtonIcon)
-                    }
-                    Text(actionButtonLabel)
-                }
-            }
-            .buttonStyle(.action(role: .primary))
-            .disabled(!canExecute)
-            .opacity(canExecute ? 1.0 : 0.5)
-        }
-        .padding(.horizontal, DS.Spacing.lg)
-        .frame(height: DS.Size.actionFooterHeight)
-        .skinBarBackground(skin)
-    }
-
-    // MARK: - Execute Optimization
-
-    private func executeOptimization() {
-        guard let service = optimizerService, let rs = reminderService else {
-            // Fall back to the legacy callback path
-            onExecute(recipe, paramValues)
-            return
-        }
-
-        optimizationState = .optimizing
-
-        Task {
-            let result = await service.executeRecipe(
-                recipe,
-                paramValues: paramValues,
-                reminderService: rs
-            )
-
-            switch result {
-            case .success(let optimizerResult):
-                optimizationState = .success(optimizerResult.scenarios)
-                Haptics.impact()
-
-            case .partialSuccess(let optimizerResult, let warnings):
-                if optimizerResult.scenarios.isEmpty {
-                    optimizationState = .error(warnings.first ?? "Partial result with no scenarios")
-                } else {
-                    optimizationState = .success(optimizerResult.scenarios)
-                    Haptics.impact()
-                }
-
-            case .noEventsToOptimize:
-                optimizationState = .error("No events to optimize")
-
-            case .infeasible(let reason):
-                optimizationState = .error(reason)
-            }
-        }
-    }
-
-    // MARK: - Settings Section (all params in one platter)
-
-    private var settingsSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            ForEach(Array(recipe.params.enumerated()), id: \.element.id) { index, param in
-                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                    Text(param.label)
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(skin.resolvedTextPrimary)
-                    paramControl(for: param)
-                }
-
-                if index < recipe.params.count - 1 {
-                    SkinSeparator()
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(DS.Spacing.md)
-        .skinPlatter(skin)
-        .skinPlatterDepth(skin)
-    }
+    // MARK: - Parameter Controls
 
     @ViewBuilder
     private func paramControl(for param: RecipeParam) -> some View {
         switch param.kind {
         case .segmented(let options):
             segmentedParam(id: param.id, options: options)
-
         case .stepper(let min, let max):
             stepperParam(id: param.id, range: min...max)
-
         case .text:
             textParam(id: param.id)
-
         case .hourPicker(let range):
             hourPickerParam(id: param.id, range: range)
-
         case .eventPicker:
             eventPickerParam(id: param.id)
-
         case .eventMultiPicker:
             eventMultiPickerParam(id: param.id)
         }
     }
-
-    // MARK: - Parameter Controls
 
     private func segmentedParam(id: String, options: [Int]) -> some View {
         let binding = Binding<Int>(
             get: { paramValues[id] as? Int ?? options.first ?? 0 },
             set: { paramValues[id] = $0 }
         )
-
         return SegmentedPillPicker(
             options: options,
             selection: binding,
@@ -596,7 +594,6 @@ struct RecipeConfigSheet: View {
             get: { paramValues[id] as? Int ?? range.lowerBound },
             set: { paramValues[id] = $0 }
         )
-
         return Stepper(value: binding, in: range) {
             Text("\(binding.wrappedValue)")
                 .font(.system(.body, design: .monospaced, weight: .medium))
@@ -609,7 +606,6 @@ struct RecipeConfigSheet: View {
             get: { paramValues[id] as? String ?? "" },
             set: { paramValues[id] = $0 }
         )
-
         return TextField("Enter value", text: binding)
             .textFieldStyle(.plain)
             .font(.body)
@@ -623,7 +619,6 @@ struct RecipeConfigSheet: View {
             get: { paramValues[id] as? Int ?? range.lowerBound },
             set: { paramValues[id] = $0 }
         )
-
         return Picker("", selection: binding) {
             ForEach(Array(range), id: \.self) { hour in
                 Text("\(hour):00").tag(hour)
@@ -638,7 +633,6 @@ struct RecipeConfigSheet: View {
             get: { paramValues[id] as? String ?? "" },
             set: { paramValues[id] = $0 }
         )
-
         return TextField("Select event", text: binding)
             .textFieldStyle(.plain)
             .font(.body)
@@ -652,7 +646,6 @@ struct RecipeConfigSheet: View {
 
         return VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             if events.isEmpty {
-                // Inline empty hint (main blocked state handles the full empty view)
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "info.circle")
                         .font(.caption2)
@@ -663,7 +656,6 @@ struct RecipeConfigSheet: View {
                 }
                 .padding(.vertical, DS.Spacing.sm)
             } else {
-                // Select all / none toggle
                 HStack {
                     let allSelected = selectedEventIds.count == events.count
                     Button {
@@ -714,7 +706,6 @@ struct RecipeConfigSheet: View {
                     Text(event.title)
                         .font(.caption.weight(.medium))
                         .foregroundStyle(skin.resolvedTextPrimary)
-
                     Text(event.formattedTimeRange)
                         .font(.caption2)
                         .foregroundStyle(skin.resolvedTextSecondary)
@@ -744,7 +735,6 @@ struct RecipeConfigSheet: View {
     }
 
     private func resolvedMinutes(for spec: EventSpec) -> Int {
-        // Check if a param overrides this spec's minutes
         if let idx = recipe.events.firstIndex(where: { $0.title == spec.title }),
            let param = recipe.params.first(where: {
                if case .eventMinutes(let i) = $0.target { return i == idx }
