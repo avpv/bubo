@@ -134,7 +134,7 @@ struct AddEventView: View {
                     .skinPlatterDepth(skin)
                     .overlay(
                         RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                            .stroke(isTitleFocused ? skinAccent.opacity(DS.Opacity.overlayDark) : Color.clear, lineWidth: DS.Size.focusRingWidth)
+                            .strokeBorder(isTitleFocused ? skinAccent.opacity(DS.Opacity.overlayDark) : Color.clear, lineWidth: DS.Size.focusRingWidth)
                             .shadow(color: isTitleFocused ? skinAccent.opacity(0.4) : .clear, radius: 4, x: 0, y: 0)
                     )
                     .shadow(
@@ -229,7 +229,7 @@ struct AddEventView: View {
                                 if !addToCalendar {
                                     Text("Event will be stored locally in Bubo only")
                                         .font(.caption)
-                                        .foregroundStyle(skin.resolvedTextTertiary)
+                                        .foregroundStyle(skin.resolvedTextSecondary)
                                 }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -248,39 +248,14 @@ struct AddEventView: View {
 
                         HStack(spacing: DS.Spacing.xs) {
                             ForEach(EventColorTag.allCases, id: \.self) { tag in
-                                Button {
-                                    Haptics.tap()
-                                    if selectedColorTag == tag {
-                                        selectedColorTag = nil
-                                    } else {
-                                        selectedColorTag = tag
+                                ColorDotButton(
+                                    tag: tag,
+                                    isActive: selectedColorTag == tag,
+                                    action: {
+                                        Haptics.tap()
+                                        selectedColorTag = selectedColorTag == tag ? nil : tag
                                     }
-                                } label: {
-                                    Circle()
-                                        .fill(tag.color)
-                                        .frame(width: 24, height: 24)
-                                        .overlay(
-                                            Circle()
-                                                .strokeBorder(
-                                                    skin.resolvedTextPrimary.opacity(selectedColorTag == tag ? 0.8 : 0),
-                                                    lineWidth: selectedColorTag == tag ? 2 : 0
-                                                )
-                                        )
-                                        .shadow(
-                                            color: selectedColorTag == tag ? tag.color.opacity(DS.Opacity.half) : .clear,
-                                            radius: selectedColorTag == tag ? 3 : 0
-                                        )
-                                        .scaleEffect(selectedColorTag == tag ? 1.1 : 1.0)
-                                        .animation(skin.resolvedMicroAnimation, value: selectedColorTag)
-                                        // HIG: Expand hit area to minimum comfortable target size
-                                        .padding(DS.Spacing.xs)
-                                        .contentShape(Circle())
-                                }
-                                .buttonStyle(.plain)
-                                // HIG: Don't use color as the only differentiator — show name on hover
-                                .help(tag.rawValue)
-                                .accessibilityLabel(tag.rawValue)
-                                .accessibilityAddTraits(selectedColorTag == tag ? .isSelected : [])
+                                )
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -337,7 +312,7 @@ struct AddEventView: View {
                         .skinPlatterDepth(skin)
                         .overlay(
                             RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                                .stroke((isLocationFocused || isNotesFocused) ? skinAccent.opacity(DS.Opacity.overlayDark) : Color.clear, lineWidth: DS.Size.focusRingWidth)
+                                .strokeBorder((isLocationFocused || isNotesFocused) ? skinAccent.opacity(DS.Opacity.overlayDark) : Color.clear, lineWidth: DS.Size.focusRingWidth)
                                 .shadow(color: (isLocationFocused || isNotesFocused) ? skinAccent.opacity(0.4) : .clear, radius: 4, x: 0, y: 0)
                         )
                         .shadow(
@@ -385,7 +360,7 @@ struct AddEventView: View {
                                         }
                                         .buttonStyle(.borderless)
                                     }
-                                    Divider()
+                                    SkinSeparator()
                                 }
 
                                 Grid(alignment: .leading, horizontalSpacing: DS.Spacing.sm) {
@@ -419,11 +394,7 @@ struct AddEventView: View {
                                                 Text(DS.formatMinutes(preset))
                                                     .font(.caption)
                                             }
-                                            .buttonStyle(.plain)
-                                            .padding(.horizontal, DS.Spacing.sm)
-                                            .frame(height: DS.Size.controlHeight)
-                                            .background(Capsule().fill(DS.Colors.badgeFill(skin.resolvedTextPrimary)))
-                                            .foregroundStyle(skin.resolvedTextPrimary)
+                                            .buttonStyle(.action(role: .secondary, size: .compact))
                                         }
                                     }
                                 }
@@ -433,7 +404,7 @@ struct AddEventView: View {
                                         systemImage: "bell.fill"
                                     )
                                     .font(.subheadline)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(skin.resolvedTextSecondary)
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -485,6 +456,7 @@ struct AddEventView: View {
                     Label(isEditing ? "Save" : "Add Event", systemImage: isEditing ? "checkmark.circle" : "calendar.badge.plus")
                 }
                 .buttonStyle(.action(role: .primary))
+                .keyboardShortcut(.defaultAction)
             }
             .padding(.horizontal, DS.Spacing.lg)
             .frame(height: DS.Size.actionFooterHeight)
@@ -554,8 +526,7 @@ struct AddEventView: View {
                 HStack(spacing: DS.Spacing.xs) {
                     if isFindingBestTime {
                         ProgressView()
-                            .scaleEffect(0.6)
-                            .frame(width: 16, height: 16)
+                            .controlSize(.small)
                     } else {
                         Image(systemName: "wand.and.stars")
                             .font(.caption)
@@ -698,7 +669,7 @@ struct AddEventView: View {
                 Grid(alignment: .leading, horizontalSpacing: DS.Spacing.md, verticalSpacing: DS.Spacing.sm) {
                     GridRow {
                         Label("Work: \(pomodoroWork) min", systemImage: "brain.head.profile")
-                            .foregroundStyle(.primary)
+                            .foregroundStyle(skin.resolvedTextPrimary)
                             .gridColumnAlignment(.leading)
                         Stepper("Work duration", value: $pomodoroWork, in: 1...90)
                             .labelsHidden()
@@ -706,7 +677,7 @@ struct AddEventView: View {
 
                     GridRow {
                         Label("Rounds: \(pomodoroRounds)", systemImage: "arrow.trianglehead.2.counterclockwise")
-                            .foregroundStyle(.primary)
+                            .foregroundStyle(skin.resolvedTextPrimary)
                         Stepper("Number of rounds", value: $pomodoroRounds, in: 1...12)
                             .labelsHidden()
                     }
@@ -714,7 +685,7 @@ struct AddEventView: View {
                     if pomodoroRounds > 1 {
                         GridRow {
                             Label("Break: \(pomodoroBreak) min", systemImage: "cup.and.saucer")
-                                .foregroundStyle(.primary)
+                                .foregroundStyle(skin.resolvedTextPrimary)
                             Stepper("Break duration", value: $pomodoroBreak, in: 1...30)
                                 .labelsHidden()
                         }
@@ -722,7 +693,7 @@ struct AddEventView: View {
                         GridRow {
                             Toggle(isOn: $pomodoroLongBreakEnabled) {
                                 Label("Long break", systemImage: "moon.zzz")
-                                    .foregroundStyle(.primary)
+                                    .foregroundStyle(skin.resolvedTextPrimary)
                             }
                             Color.clear
                         }
@@ -730,7 +701,7 @@ struct AddEventView: View {
                         if pomodoroLongBreakEnabled {
                             GridRow {
                                 Label("Duration: \(pomodoroLongBreak) min", systemImage: "moon.zzz")
-                                    .foregroundStyle(.primary)
+                                    .foregroundStyle(skin.resolvedTextPrimary)
                                     .padding(.leading, DS.Spacing.lg)
                                 Stepper("Long break duration", value: $pomodoroLongBreak, in: 5...60, step: 5)
                                     .labelsHidden()
@@ -742,11 +713,11 @@ struct AddEventView: View {
                 // Visual timeline
                 pomodoroTimeline
                     .padding(.vertical, DS.Spacing.md)
-                    .animation(DS.Animation.smoothSpring, value: pomodoroWork)
-                    .animation(DS.Animation.smoothSpring, value: pomodoroBreak)
-                    .animation(DS.Animation.smoothSpring, value: pomodoroRounds)
-                    .animation(DS.Animation.gentleBounce, value: pomodoroLongBreakEnabled)
-                    .animation(DS.Animation.smoothSpring, value: pomodoroLongBreak)
+                    .animation(skin.resolvedMicroAnimation, value: pomodoroWork)
+                    .animation(skin.resolvedMicroAnimation, value: pomodoroBreak)
+                    .animation(skin.resolvedMicroAnimation, value: pomodoroRounds)
+                    .animation(skin.resolvedMicroAnimation, value: pomodoroLongBreakEnabled)
+                    .animation(skin.resolvedMicroAnimation, value: pomodoroLongBreak)
 
                 HStack {
                     Label(
@@ -754,7 +725,7 @@ struct AddEventView: View {
                         systemImage: "clock"
                     )
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(skin.resolvedTextSecondary)
 
                     Spacer()
 
@@ -835,10 +806,10 @@ struct AddEventView: View {
                 if totalBreak > 0 {
                     Text("\(totalWork):\(totalBreak)")
                         .font(.system(.caption2, design: .monospaced, weight: .medium))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(skin.resolvedTextTertiary)
                     + Text(" work:rest")
                         .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(skin.resolvedTextTertiary)
                 }
             }
 
@@ -876,7 +847,7 @@ struct AddEventView: View {
                     }
                 }
             }
-            .frame(height: 28)
+            .frame(height: DS.Size.controlHeight)
             .accessibilityElement()
             .accessibilityLabel(
                 "Pomodoro timeline: \(pomodoroRounds) rounds of \(pomodoroWork) min work and \(pomodoroBreak) min break"
@@ -906,12 +877,12 @@ struct AddEventView: View {
                 HStack(spacing: DS.Spacing.sm) {
                     // Connecting line centered in the same 12pt column as dots
                     Rectangle()
-                        .fill(Color.secondary.opacity(DS.Opacity.subtleBorder))
+                        .fill(skin.resolvedTextSecondary.opacity(DS.Opacity.subtleBorder))
                         .frame(width: 1.5, height: 16)
                         .frame(width: 12)
                     Text("\(segments.count - 4) more")
                         .font(.system(.caption2, design: .rounded))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(skin.resolvedTextTertiary)
                 }
                 ForEach(Array(segments.suffix(2).enumerated()), id: \.offset) { idx, segment in
                     scheduleRow(segment, index: segments.count - 2 + idx, total: segments.count)
@@ -956,10 +927,10 @@ struct AddEventView: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text("\(DS.timeFormatter.string(from: start)) – \(DS.timeFormatter.string(from: end))")
                     .font(.system(.caption, design: .monospaced, weight: .medium))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(skin.resolvedTextPrimary)
                 Text("\(label) · \(segment.minutes) min")
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(skin.resolvedTextSecondary)
             }
             .padding(.bottom, isLast ? 0 : DS.Spacing.xs)
         }
@@ -972,7 +943,7 @@ struct AddEventView: View {
                 .foregroundStyle(color)
             Text(label)
                 .font(.caption2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(skin.resolvedTextSecondary)
         }
     }
 
@@ -1039,3 +1010,5 @@ struct AddEventView: View {
         }
     }
 }
+
+// ColorDotButton is now a shared component in Components/ColorDotButton.swift

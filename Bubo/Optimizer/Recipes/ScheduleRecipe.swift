@@ -27,6 +27,25 @@ struct ScheduleRecipe: Codable, Identifiable, Hashable {
     var description: String = ""
     var category: String = ""
 
+    /// Returns the category-based icon, ensuring visual consistency across the UI.
+    /// Falls back to the recipe's own icon if no category match.
+    var categoryIcon: String {
+        Self.categoryIcons[category] ?? icon
+    }
+
+    private static let categoryIcons: [String: String] = [
+        "focus": "brain.head.profile",
+        "planning": "calendar",
+        "deadlines": "flame",
+        "meetings": "person.2",
+        "energy": "bolt.heart",
+        "habits": "repeat",
+        "projects": "folder",
+        "adapt": "clock.arrow.2.circlepath",
+        "workouts": "figure.run",
+        "advanced": "slider.horizontal.3",
+    ]
+
     // MARK: - 1. Events to Create
 
     var events: [EventSpec] = []

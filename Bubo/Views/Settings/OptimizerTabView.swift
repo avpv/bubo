@@ -43,7 +43,7 @@ struct OptimizerTabView: View {
                             Text("Peak energy hour")
                             Text("When you're most productive")
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(skin.resolvedTextSecondary)
                         }
                         Spacer()
                         Picker("Peak energy hour", selection: Binding(
@@ -63,7 +63,7 @@ struct OptimizerTabView: View {
                             Text("Lunch window")
                             Text("Keep this time free for lunch")
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(skin.resolvedTextSecondary)
                         }
                         Spacer()
                         Picker("Lunch window start", selection: Binding(
@@ -94,7 +94,7 @@ struct OptimizerTabView: View {
                     let feedbackCount = optimizerService.optimizer.preferenceLearner.feedbackHistory.count
                     Text("Feedback collected: \(feedbackCount) action(s)")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(skin.resolvedTextSecondary)
 
                     Button("Reset Learned Preferences", role: .destructive) {
                         optimizerService.optimizer.preferenceLearner.reset()
@@ -110,7 +110,7 @@ struct OptimizerTabView: View {
                             Text("Auto-adjust schedule")
                             Text("Automatically reoptimize when events change")
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(skin.resolvedTextSecondary)
                         }
                     }
                 }

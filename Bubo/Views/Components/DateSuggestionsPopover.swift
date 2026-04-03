@@ -52,7 +52,7 @@ struct DateSuggestionsPopover: View {
                 VStack(alignment: .leading, spacing: 0) {
                     Text("Suggestions")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(skin.resolvedTextSecondary)
                         .padding(.horizontal, DS.Spacing.lg)
                         .padding(.top, DS.Spacing.md)
                         .padding(.bottom, DS.Spacing.sm)
@@ -72,14 +72,14 @@ struct DateSuggestionsPopover: View {
                     Button(action: { showCustomCalendar = true }) {
                         HStack(spacing: DS.Spacing.md) {
                             Image(systemName: "calendar")
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(skin.resolvedTextSecondary)
                                 .font(.title3)
                             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                                 Text("Custom\u{2026}")
                                     .foregroundStyle(skin.resolvedTextPrimary)
                                 Text("Use the calendar to pick a date")
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(skin.resolvedTextSecondary)
                             }
                             Spacer()
                         }
@@ -99,14 +99,14 @@ struct DateSuggestionsPopover: View {
         Button(action: action) {
             HStack(spacing: DS.Spacing.md) {
                 Image(systemName: "calendar")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(skin.resolvedTextSecondary)
                     .font(.title3)
                 VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(title)
                         .foregroundStyle(skin.resolvedTextPrimary)
                     Text(subtitle)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(skin.resolvedTextSecondary)
                 }
                 Spacer()
             }

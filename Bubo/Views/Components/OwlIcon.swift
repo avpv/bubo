@@ -3,6 +3,7 @@ import SwiftUI
 struct OwlIcon: View {
     var size: CGFloat = 20
     @State private var isBouncing = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Canvas { context, canvasSize in
@@ -64,6 +65,7 @@ struct OwlIcon: View {
         .rotationEffect(.degrees(isBouncing ? 12 : 0))
         .onTapGesture {
             Haptics.tap()
+            guard !reduceMotion else { return }
             withAnimation(.spring(response: 0.2, dampingFraction: 0.4)) {
                 isBouncing = true
             }

@@ -24,7 +24,7 @@ struct TimeSlotPicker: View {
         if slots.isEmpty {
             Text("No slots left today")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(skin.resolvedTextSecondary)
                 .padding(.horizontal, DS.Spacing.xs)
                 .task {
                     while !Task.isCancelled {
@@ -43,6 +43,8 @@ struct TimeSlotPicker: View {
                                 action: { selection = apply(slot) }
                             )
                             .id(slot.id)
+                            .accessibilityLabel("Time slot \(slot.label)")
+                            .accessibilityAddTraits(slot.id == nearest ? .isSelected : [])
                         }
                     }
                     .padding(.vertical, 2)

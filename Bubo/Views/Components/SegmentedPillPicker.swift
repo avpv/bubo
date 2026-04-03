@@ -7,25 +7,31 @@ struct SegmentedPillPicker<T: Hashable>: View {
     let labelProvider: (T) -> String
 
     @Environment(\.activeSkin) private var skin
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: DS.Spacing.xs) {
             ForEach(options, id: \.self) { option in
+                let isSelected = selection == option
                 Button {
+                    Haptics.tap()
                     selection = option
                 } label: {
                     Text(labelProvider(option))
-                        .font(.caption.weight(selection == option ? .semibold : .regular))
+                        .font(.caption.weight(isSelected ? .semibold : .regular))
                         .padding(.horizontal, DS.Spacing.sm)
                         .padding(.vertical, DS.Spacing.xs)
-                        .foregroundStyle(selection == option ? .white : skin.resolvedTextPrimary)
+                        .foregroundStyle(isSelected ? .white : skin.resolvedTextPrimary)
                         .background(
                             Capsule()
-                                .fill(selection == option ? skin.accentColor : skin.accentColor.opacity(0.1))
+                                .fill(isSelected ? skin.accentColor : skin.accentColor.opacity(0.1))
                         )
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(labelProvider(option))
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
             }
         }
+        .animation(reduceMotion ? nil : skin.resolvedMicroAnimation, value: selection)
     }
 }

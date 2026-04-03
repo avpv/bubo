@@ -83,7 +83,7 @@ struct ToastOverlay: View {
                         .contentTransition(.symbolEffect(.replace))
                     Text(toast.text)
                         .font(.caption)
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(skin.resolvedTextPrimary)
 
                     // HIG: Provide undo for destructive actions
                     if let onUndo = toast.onUndo {

@@ -123,7 +123,7 @@ struct RecipeConfigSheet: View {
 
     private var recipeHeader: some View {
         HStack(spacing: DS.Spacing.sm) {
-            Image(systemName: recipe.icon)
+            Image(systemName: recipe.categoryIcon)
                 .font(.title3)
                 .foregroundStyle(skin.accentColor)
             VStack(alignment: .leading, spacing: 2) {
@@ -139,6 +139,8 @@ struct RecipeConfigSheet: View {
         .padding(DS.Spacing.md)
         .skinPlatter(skin)
         .skinPlatterDepth(skin)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(recipe.name): \(recipe.description)")
     }
 
     // MARK: - Settings Section
@@ -251,7 +253,7 @@ struct RecipeConfigSheet: View {
         case .optimizing:
             VStack(spacing: DS.Spacing.md) {
                 ProgressView()
-                    .scaleEffect(0.8)
+                    .controlSize(.regular)
                 Text(recipe.isCreative ? "Finding the best time…" : "Optimizing schedule…")
                     .font(.caption)
                     .foregroundStyle(skin.resolvedTextSecondary)
@@ -326,9 +328,9 @@ struct RecipeConfigSheet: View {
             ForEach(scenario.genes, id: \.eventId) { gene in
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: gene.isFocusBlock ? "brain.head.profile" : "calendar")
-                        .font(.system(size: 10))
+                        .font(.system(size: DS.Size.iconSmall))
                         .foregroundStyle(gene.isFocusBlock ? skin.accentColor : skin.resolvedTextTertiary)
-                        .frame(width: 14)
+                        .frame(width: DS.Size.iconMedium)
 
                     Text(gene.title)
                         .font(.caption.weight(.medium))
@@ -395,6 +397,7 @@ struct RecipeConfigSheet: View {
                     Label("Apply Schedule", systemImage: "checkmark.circle.fill")
                 }
                 .buttonStyle(.action(role: .primary))
+                .keyboardShortcut(.defaultAction)
             } else {
                 // Run optimization
                 Button(action: {
@@ -404,8 +407,7 @@ struct RecipeConfigSheet: View {
                     HStack(spacing: DS.Spacing.xs) {
                         if case .optimizing = optimizationState {
                             ProgressView()
-                                .scaleEffect(0.6)
-                                .frame(width: 16, height: 16)
+                                .controlSize(.small)
                         } else {
                             Image(systemName: recipe.isCreative ? "calendar.badge.plus" : "wand.and.stars")
                         }
@@ -413,6 +415,7 @@ struct RecipeConfigSheet: View {
                     }
                 }
                 .buttonStyle(.action(role: .primary))
+                .keyboardShortcut(.defaultAction)
                 .disabled(!canExecute)
                 .opacity(canExecute ? 1.0 : 0.5)
             }
@@ -483,6 +486,7 @@ struct RecipeConfigSheet: View {
                 Image(systemName: "tray")
                     .font(.system(size: 32))
                     .foregroundStyle(skin.resolvedTextTertiary)
+                    .accessibilityHidden(true)
 
                 VStack(spacing: DS.Spacing.xs) {
                     Text("\(recipe.name) needs tasks")
@@ -511,6 +515,7 @@ struct RecipeConfigSheet: View {
                             .font(.caption2.weight(.medium))
                             .foregroundStyle(skin.resolvedTextTertiary)
                             .padding(.bottom, DS.Spacing.xs)
+                            .accessibilityAddTraits(.isHeader)
 
                         ForEach(suggestedAlternatives) { alt in
                             Button {
@@ -518,10 +523,10 @@ struct RecipeConfigSheet: View {
                                 onSwitchRecipe(alt)
                             } label: {
                                 HStack(spacing: DS.Spacing.sm) {
-                                    Image(systemName: alt.icon)
+                                    Image(systemName: alt.categoryIcon)
                                         .font(.caption)
                                         .foregroundStyle(skin.accentColor)
-                                        .frame(width: 20)
+                                        .frame(width: DS.Size.headerIcon)
                                     VStack(alignment: .leading, spacing: 1) {
                                         Text(alt.name)
                                             .font(.caption.weight(.medium))
@@ -699,7 +704,7 @@ struct RecipeConfigSheet: View {
         } label: {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 16))
+                    .font(.system(size: DS.Size.iconLarge))
                     .foregroundStyle(isSelected ? skin.accentColor : skin.resolvedTextTertiary)
 
                 VStack(alignment: .leading, spacing: 1) {
@@ -723,6 +728,8 @@ struct RecipeConfigSheet: View {
             .clipShape(RoundedRectangle(cornerRadius: DS.Size.previewSmallRadius))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("\(event.title), \(event.formattedTimeRange)")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     // MARK: - Helpers

@@ -15,12 +15,23 @@ struct IntentPickerView: View {
         optimizerService.recipeMonitor?.suggestedRecipes ?? []
     }
 
+    private var recentRecipes: [ScheduleRecipe] {
+        optimizerService.usageTracker
+            .topRecipeIds(limit: 6)
+            .compactMap { RecipeCatalog.allRecipesById[$0] }
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: DS.Spacing.lg) {
                 // AI assistant entry point
                 if onAskAI != nil {
                     askAISection
+                }
+
+                // Recently used (HN-ranked)
+                if !recentRecipes.isEmpty {
+                    recentlyUsedSection
                 }
 
                 // Contextual suggestions (condition-based)
@@ -46,9 +57,9 @@ struct IntentPickerView: View {
         Button { onAskAI?() } label: {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "sparkles")
-                    .font(.system(size: 20))
+                    .font(.system(size: DS.Size.headerIcon))
                     .foregroundStyle(skin.accentColor)
-                    .frame(width: 28)
+                    .frame(width: DS.Size.controlHeight)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Ask AI")
@@ -83,6 +94,25 @@ struct IntentPickerView: View {
             )
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("Ask AI to plan your schedule")
+        .accessibilityHint("Describe what you want in your own words")
+    }
+
+    // MARK: - Recently Used
+
+    private var recentlyUsedSection: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            Label("Recently Used", systemImage: "clock.arrow.circlepath")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(skin.resolvedTextSecondary)
+                .accessibilityAddTraits(.isHeader)
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: DS.Spacing.sm) {
+                ForEach(recentRecipes) { recipe in
+                    RecipeCardView(recipe: recipe, style: .quick, onTap: onSelectRecipe)
+                }
+            }
+        }
     }
 
     // MARK: - Suggestions
@@ -92,6 +122,7 @@ struct IntentPickerView: View {
             Label("Suggested for you", systemImage: "sparkles")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(skin.accentColor)
+                .accessibilityAddTraits(.isHeader)
 
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: DS.Spacing.sm) {
                 ForEach(suggestions) { recipe in
@@ -118,6 +149,7 @@ struct IntentPickerView: View {
                 Text("Create Blocks")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(skin.resolvedTextSecondary)
+                    .accessibilityAddTraits(.isHeader)
 
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: DS.Spacing.sm) {
                     ForEach(creativeActions) { recipe in
@@ -132,6 +164,7 @@ struct IntentPickerView: View {
                     Text("Organize Tasks")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(skin.resolvedTextSecondary)
+                        .accessibilityAddTraits(.isHeader)
 
                     if !hasLocalEvents {
                         Text("needs tasks")
@@ -166,6 +199,7 @@ struct IntentPickerView: View {
             Text("All Recipes")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(skin.resolvedTextSecondary)
+                .accessibilityAddTraits(.isHeader)
 
             ForEach(RecipeCatalog.allCategories) { category in
                 CategorySection(
@@ -209,12 +243,16 @@ struct RecipeCardView: View {
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
         .opacity(dimmed ? 0.45 : 1.0)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(recipe.name)
+        .accessibilityHint(recipe.description)
+        .accessibilityAddTraits(.isButton)
     }
 
     private var quickLayout: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            Image(systemName: recipe.icon)
-                .font(.system(size: 18))
+            Image(systemName: recipe.categoryIcon)
+                .font(.system(size: DS.Size.iconLarge + 2))
                 .foregroundStyle(skin.accentColor)
             Text(recipe.name)
                 .font(.caption2.weight(.semibold))
@@ -230,10 +268,10 @@ struct RecipeCardView: View {
 
     private var suggestedLayout: some View {
         HStack(spacing: DS.Spacing.sm) {
-            Image(systemName: recipe.icon)
-                .font(.system(size: 20))
+            Image(systemName: recipe.categoryIcon)
+                .font(.system(size: DS.Size.headerIcon))
                 .foregroundStyle(skin.accentColor)
-                .frame(width: 28)
+                .frame(width: DS.Size.controlHeight)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(recipe.name)
@@ -254,10 +292,10 @@ struct RecipeCardView: View {
 
     private var listLayout: some View {
         HStack(spacing: DS.Spacing.sm) {
-            Image(systemName: recipe.icon)
+            Image(systemName: recipe.categoryIcon)
                 .font(.caption)
                 .foregroundStyle(skin.accentColor)
-                .frame(width: 20)
+                .frame(width: DS.Size.headerIcon)
 
             Text(recipe.name)
                 .font(.caption)
@@ -300,6 +338,7 @@ struct RecipeCardView: View {
 
 private struct CategorySection: View {
     @Environment(\.activeSkin) private var skin
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let category: RecipeCatalog.Category
     var hasLocalEvents: Bool = true
     let onSelectRecipe: (ScheduleRecipe) -> Void
@@ -309,7 +348,8 @@ private struct CategorySection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             Button {
-                withAnimation(DS.Animation.smoothSpring) {
+                Haptics.tap()
+                withAnimation(reduceMotion ? nil : DS.Animation.smoothSpring) {
                     isExpanded.toggle()
                 }
             } label: {
@@ -317,7 +357,7 @@ private struct CategorySection: View {
                     Image(systemName: category.icon)
                         .font(.caption)
                         .foregroundStyle(skin.accentColor)
-                        .frame(width: 16)
+                        .frame(width: DS.Size.iconLarge)
 
                     Text(category.name)
                         .font(.caption.weight(.medium))
@@ -338,6 +378,9 @@ private struct CategorySection: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("\(category.name), \(category.recipes.count) recipes")
+            .accessibilityHint(isExpanded ? "Double-tap to collapse" : "Double-tap to expand")
+            .accessibilityAddTraits(.isButton)
 
             if isExpanded {
                 VStack(spacing: 0) {

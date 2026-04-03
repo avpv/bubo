@@ -32,6 +32,7 @@ struct AppBackgroundLayer: View {
                 .opacity(customPhotoOpacity)
                 .blur(radius: customPhotoBlur)
                 .ignoresSafeArea()
+                .accessibilityHidden(true)
             }
 
             // Skin background layer

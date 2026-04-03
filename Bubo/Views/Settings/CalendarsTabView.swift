@@ -46,7 +46,7 @@ struct CalendarsTabView: View {
                             .foregroundStyle(skin.resolvedSuccessColor)
                         Spacer()
                         Text("\(viewModel.availableAppleCalendars.count) calendars")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(skin.resolvedTextSecondary)
                             .font(.caption)
                     }
                 } else {
@@ -57,7 +57,7 @@ struct CalendarsTabView: View {
                                 .foregroundStyle(skin.resolvedDestructiveColor)
                             Text("Grant access in System Settings \u{2192} Privacy & Security \u{2192} Calendars")
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(skin.resolvedTextSecondary)
                             Button("Open System Settings") {
                                 if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars") {
                                     NSWorkspace.shared.open(url)
@@ -77,14 +77,14 @@ struct CalendarsTabView: View {
                                 Label("Connect", systemImage: "calendar")
                             }
                         }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.action(role: .primary, size: .compact))
                         .disabled(viewModel.isRequestingCalendarAccess)
                     }
                 }
                 
                 Text("Bubo reads events from all accounts configured in the Calendar app \u{2014} iCloud, Google, Exchange, CalDAV, and others.")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(skin.resolvedTextSecondary)
                     .padding(.top, DS.Spacing.xs)
             }
         }
@@ -110,7 +110,7 @@ struct CalendarsTabView: View {
                 ? "Showing all \(allCalendars.count) calendars"
                 : "Selected: \(settings.selectedCalendarIds.count) of \(allCalendars.count)")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(skin.resolvedTextSecondary)
         }
 
         if !settings.selectedCalendarIds.isEmpty {
@@ -120,7 +120,7 @@ struct CalendarsTabView: View {
                         SkinSeparator().padding(.vertical, DS.Spacing.xs)
                     }
                     GridRow {
-                        Text(group.account).font(.subheadline).foregroundStyle(.secondary)
+                        Text(group.account).font(.subheadline).foregroundStyle(skin.resolvedTextSecondary)
                     }
                     
                     ForEach(group.calendars) { cal in

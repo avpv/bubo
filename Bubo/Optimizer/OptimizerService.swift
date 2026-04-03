@@ -9,6 +9,7 @@ import Foundation
 final class OptimizerService {
 
     let optimizer = BuboOptimizer()
+    let usageTracker = RecipeUsageTracker()
 
     var scenarios: [ScheduleScenario] = []
     private(set) var selectedScenarioIndex: Int? = nil
@@ -267,12 +268,16 @@ final class OptimizerService {
             scenarios = optimizerResult.scenarios
             selectedScenarioIndex = scenarios.isEmpty ? nil : 0
             lastOptimizationDate = Date()
+            usageTracker.recordExecution(recipeId: recipe.id)
 
         case .partialSuccess(let optimizerResult, let warnings):
             scenarios = optimizerResult.scenarios
             selectedScenarioIndex = scenarios.isEmpty ? nil : 0
             lastOptimizationDate = Date()
             error = warnings.first
+            if !optimizerResult.scenarios.isEmpty {
+                usageTracker.recordExecution(recipeId: recipe.id)
+            }
 
         case .noEventsToOptimize:
             error = "No events to optimize"
@@ -321,6 +326,11 @@ final class OptimizerService {
             )
             reminderService.addLocalEvent(event)
             createdEventIds.append(event.id)
+        }
+
+        // Record acceptance for HN ranking
+        if let recipeId = activeRecipe?.id {
+            usageTracker.recordAcceptance(recipeId: recipeId)
         }
 
         // Save undo snapshot

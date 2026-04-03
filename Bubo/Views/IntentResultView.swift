@@ -49,6 +49,7 @@ struct IntentResultView: View {
                 Text("Found \(optimizerService.scenarios.count) option(s)")
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(skin.resolvedTextPrimary)
+                    .accessibilityAddTraits(.isHeader)
 
                 // Scenario picker
                 if optimizerService.scenarios.count > 1 {
@@ -78,6 +79,7 @@ struct IntentResultView: View {
             Image(systemName: "checkmark.circle")
                 .font(.system(size: 40))
                 .foregroundStyle(skin.accentColor)
+                .accessibilityHidden(true)
 
             Text("Schedule adjusted")
                 .font(.headline)
@@ -136,7 +138,7 @@ struct IntentResultView: View {
 
     private var recipeHeader: some View {
         HStack(spacing: DS.Spacing.sm) {
-            Image(systemName: recipe.icon)
+            Image(systemName: recipe.categoryIcon)
                 .font(.title3)
                 .foregroundStyle(skin.accentColor)
             VStack(alignment: .leading, spacing: 2) {
@@ -257,6 +259,7 @@ struct IntentResultView: View {
                 Text("Try Another")
             }
             .buttonStyle(.action(role: .secondary))
+            .keyboardShortcut(.cancelAction)
 
             Spacer()
 
@@ -268,6 +271,7 @@ struct IntentResultView: View {
                     Text("Close")
                 }
                 .buttonStyle(.action(role: .primary))
+                .keyboardShortcut(.defaultAction)
             } else {
                 let isApplied = appliedIndex == selectedScenarioIndex
                 Button(action: {
@@ -284,6 +288,7 @@ struct IntentResultView: View {
                     )
                 }
                 .buttonStyle(.action(role: .primary))
+                .keyboardShortcut(.defaultAction)
                 .disabled(isApplied || optimizerService.scenarios.isEmpty)
             }
         }

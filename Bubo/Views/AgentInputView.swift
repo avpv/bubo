@@ -122,6 +122,7 @@ struct AgentInputView: View {
                 .focused($isTextFieldFocused)
                 .frame(minHeight: 60, maxHeight: 100)
                 .disabled(agentService.isGenerating)
+                .accessibilityLabel("Describe what you want to schedule")
 
             if !prompt.isEmpty {
                 HStack {

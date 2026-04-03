@@ -60,6 +60,8 @@ struct DateTimePickerPills: View {
             .popover(isPresented: $showDatePopover, arrowEdge: .bottom) {
                 DateSuggestionsPopover(date: $date, isPresented: $showDatePopover, range: range)
             }
+            .accessibilityLabel("Date: \(formattedDate)")
+            .accessibilityHint("Opens date picker")
             .layoutPriority(1)
 
             // Time Pill
@@ -94,6 +96,8 @@ struct DateTimePickerPills: View {
             }
             .buttonStyle(.plain)
             .onHover { isTimeHovered = $0 }
+            .accessibilityLabel("Time: \(formattedTime)")
+            .accessibilityHint("Opens time picker")
             .popover(isPresented: $showTimePopover, arrowEdge: .bottom) {
                 VStack(spacing: DS.Spacing.sm) {
                     Text("Select Time")
@@ -139,6 +143,8 @@ struct DateTimePickerPills: View {
                                     )
                             }
                             .buttonStyle(.plain)
+                            .accessibilityLabel(formattedSlotTime(slot))
+                            .accessibilityAddTraits(isActive ? .isSelected : [])
                         }
                     }
                 }

@@ -81,12 +81,14 @@ struct QuickAddTasksView: View {
                         Text("Plan for")
                             .font(.caption.weight(.medium))
                             .foregroundStyle(skin.resolvedTextSecondary)
+                            .accessibilityAddTraits(.isHeader)
 
-                        Picker("", selection: $horizon) {
+                        Picker("Planning horizon", selection: $horizon) {
                             Text("Today").tag(Horizon.today)
                             Text("This Week").tag(Horizon.week)
                         }
                         .pickerStyle(.segmented)
+                        .labelsHidden()
                     }
                 }
                 .padding(.horizontal, DS.Spacing.lg)
@@ -114,6 +116,7 @@ struct QuickAddTasksView: View {
                     Label("Plan Tasks", systemImage: "wand.and.stars")
                 }
                 .buttonStyle(.action(role: .primary))
+                .keyboardShortcut(.defaultAction)
                 .disabled(validTasks.isEmpty || isOptimizing)
             }
             .padding(.horizontal, DS.Spacing.lg)
@@ -129,6 +132,7 @@ struct QuickAddTasksView: View {
             TextField("Task name", text: task.title)
                 .textFieldStyle(.plain)
                 .font(.caption)
+                .accessibilityLabel("Task name")
 
             // Duration picker
             Menu {
@@ -140,12 +144,13 @@ struct QuickAddTasksView: View {
                     .font(.caption2.monospacedDigit())
                     .foregroundStyle(skin.resolvedTextSecondary)
                     .padding(.horizontal, DS.Spacing.xs)
-                    .padding(.vertical, 2)
+                    .padding(.vertical, DS.Spacing.xxs)
                     .background(skin.accentColor.opacity(0.08))
                     .clipShape(Capsule())
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
+            .accessibilityLabel("Duration: \(formatMinutes(task.wrappedValue.minutes))")
 
             // Priority picker
             Menu {
@@ -163,6 +168,7 @@ struct QuickAddTasksView: View {
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
+            .accessibilityLabel("Priority: \(task.wrappedValue.priority.rawValue)")
 
             // Remove button
             if tasks.count > 1 {
@@ -174,6 +180,7 @@ struct QuickAddTasksView: View {
                         .foregroundStyle(skin.resolvedTextTertiary)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Remove task")
             }
         }
         .padding(DS.Spacing.sm)

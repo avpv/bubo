@@ -111,6 +111,7 @@ struct AITabView: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(skin.resolvedTextSecondary)
+                .accessibilityLabel(isKeyVisible ? "Hide API key" : "Show API key")
             }
 
             HStack(spacing: DS.Spacing.sm) {
