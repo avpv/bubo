@@ -149,24 +149,11 @@ enum DS {
     // MARK: Shadows
 
     enum Shadows {
-        static let ambientColor = Color.black.opacity(0.06)
-        static let ambientRadius: CGFloat = 8
-        static let ambientY: CGFloat = 4
-
-        static let hoverColor = Color.black.opacity(0.12)
-        static let hoverRadius: CGFloat = 12
-        static let hoverY: CGFloat = 6
-
-        static let pillRadius: CGFloat = 1
-        static let pillY: CGFloat = 1
-
         // Alert/fullscreen
         static let glowRadius: CGFloat = 20
         static let buttonRadius: CGFloat = 12
-        static let buttonY: CGFloat = 4
 
         // Toast
-        static let toastColor = Color.black.opacity(0.12)
         static let toastRadius: CGFloat = 12
         static let toastY: CGFloat = 6
     }
@@ -230,7 +217,6 @@ enum DS {
         // Overlay / fullscreen alert — contrast-aware
         static let overlayBackground = Color.black
         static let onOverlay = Color.white
-        static let defaultCalendar = Color.gray
 
         // Hover & selection states
         static let hoverFill = Color(nsColor: .labelColor).opacity(0.06)
@@ -248,9 +234,8 @@ enum DS {
     // MARK: Materials (vibrancy)
 
     enum Materials {
-        static let toast: Material = .regularMaterial
+        /// Intentionally ultraThin for maximum translucency on fullscreen overlays.
         static let overlay: Material = .ultraThinMaterial
-        static let hud: Material = .thickMaterial
     }
 
     // MARK: Event Color Tags
