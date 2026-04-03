@@ -361,7 +361,14 @@ private struct CategorySection: View {
                     isExpanded.toggle()
                 }
             } label: {
-                HStack(spacing: DS.Spacing.sm) {
+                HStack(alignment: .center, spacing: 0) {
+                    // Accent bar
+                    Capsule()
+                        .fill(skin.accentColor)
+                        .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
+                        .padding(.trailing, DS.Spacing.md)
+                        .shadow(color: skin.accentColor.opacity(skin.shadowOpacity * 4), radius: skin.shadowRadius * 0.5)
+
                     Text(category.name)
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(skin.resolvedTextPrimary)
@@ -380,8 +387,11 @@ private struct CategorySection: View {
                         .font(.system(size: DS.Size.iconSmall, weight: .semibold))
                         .foregroundStyle(skin.resolvedTextTertiary)
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .padding(.leading, DS.Spacing.xs)
                 }
-                .padding(DS.Spacing.md)
+                .frame(minHeight: DS.Size.eventRowMinHeight)
+                .padding(.vertical, DS.Spacing.sm)
+                .padding(.horizontal, DS.Spacing.sm)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -413,14 +423,35 @@ private struct CategorySection: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .skinPlatter(skin)
-        .skinPlatterDepth(skin)
+        .background(
+            ZStack {
+                SkinPlatterBackground(skin: skin)
+                Rectangle()
+                    .fill(isHovered ? skin.resolvedHoverFill : Color.clear)
+            }
+        )
+        .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
                 .strokeBorder(
-                    isHovered && !isExpanded ? skin.accentColor.opacity(DS.Opacity.faintBorder) : .clear,
-                    lineWidth: DS.Border.standard
+                    LinearGradient(
+                        colors: [
+                            .white.opacity(skin.platterBorderOpacity * 1.5),
+                            .white.opacity(skin.platterBorderOpacity * 0.1),
+                            .clear,
+                            .white.opacity(skin.platterBorderOpacity * 0.4)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: DS.Border.thin
                 )
         )
+        .shadow(
+            color: isHovered ? skin.resolvedHoverShadowColor : skin.resolvedShadowColor,
+            radius: isHovered ? DS.Shadows.hoverRadius : skin.shadowRadius,
+            y: isHovered ? DS.Shadows.hoverY : skin.shadowY
+        )
+        .scaleEffect(isHovered ? 1.02 : 1.0)
     }
 }
