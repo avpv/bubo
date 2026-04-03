@@ -103,9 +103,9 @@ struct ToastOverlay: View {
                 }
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.vertical, DS.Spacing.md)
-                .background(DS.Materials.toast)
+                .background(skin.resolvedPlatterMaterial)
                 .clipShape(Capsule())
-                .shadow(color: DS.Shadows.toastColor, radius: DS.Shadows.toastRadius, y: DS.Shadows.toastY)
+                .shadow(color: skin.resolvedShadowColor, radius: DS.Shadows.toastRadius, y: DS.Shadows.toastY)
                 .padding(.bottom, DS.Spacing.md)
                 .transition(
                     reduceMotion

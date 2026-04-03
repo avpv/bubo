@@ -138,9 +138,9 @@ struct AddEventView: View {
                             .shadow(color: isTitleFocused ? skinAccent.opacity(0.4) : .clear, radius: 4, x: 0, y: 0)
                     )
                     .shadow(
-                        color: isTitleFocused ? skinAccent.opacity(DS.Opacity.subtleBorder) : DS.Shadows.ambientColor,
-                        radius: isTitleFocused ? DS.Shadows.ambientRadius + 1 : DS.Shadows.ambientRadius,
-                        y: DS.Shadows.ambientY
+                        color: isTitleFocused ? skinAccent.opacity(DS.Opacity.subtleBorder) : skin.resolvedShadowColor,
+                        radius: isTitleFocused ? skin.shadowRadius + 1 : skin.shadowRadius,
+                        y: skin.shadowY
                     )
                     .animation(skin.resolvedMicroAnimation, value: isTitleFocused)
                     .disabled(isExternal)
@@ -316,9 +316,9 @@ struct AddEventView: View {
                                 .shadow(color: (isLocationFocused || isNotesFocused) ? skinAccent.opacity(0.4) : .clear, radius: 4, x: 0, y: 0)
                         )
                         .shadow(
-                            color: (isLocationFocused || isNotesFocused) ? skinAccent.opacity(DS.Opacity.subtleBorder) : DS.Shadows.ambientColor,
-                            radius: (isLocationFocused || isNotesFocused) ? DS.Shadows.ambientRadius + 1 : DS.Shadows.ambientRadius,
-                            y: DS.Shadows.ambientY
+                            color: (isLocationFocused || isNotesFocused) ? skinAccent.opacity(DS.Opacity.subtleBorder) : skin.resolvedShadowColor,
+                            radius: (isLocationFocused || isNotesFocused) ? skin.shadowRadius + 1 : skin.shadowRadius,
+                            y: skin.shadowY
                         )
                         .animation(skin.resolvedMicroAnimation, value: isLocationFocused || isNotesFocused)
                     }

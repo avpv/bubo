@@ -109,8 +109,8 @@ struct EventRowView: View {
         )
         .shadow(
             color: isHovered ? skin.resolvedHoverShadowColor : skin.resolvedShadowColor,
-            radius: isHovered ? DS.Shadows.hoverRadius : skin.shadowRadius,
-            y: isHovered ? DS.Shadows.hoverY : skin.shadowY
+            radius: isHovered ? skin.hoverShadowRadius : skin.shadowRadius,
+            y: isHovered ? skin.hoverShadowY : skin.shadowY
         )
         // Hover scale — slightly more pronounced for tactile feel
         .scaleEffect(isHovered ? 1.02 : 1.0)

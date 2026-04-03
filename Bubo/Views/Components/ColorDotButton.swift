@@ -63,8 +63,8 @@ struct ColorDotButton: View {
             // Elevation shadow — matches EventRowView hover depth
             .shadow(
                 color: isHovered ? skin.resolvedHoverShadowColor : .clear,
-                radius: isHovered ? DS.Shadows.hoverRadius : 0,
-                y: isHovered ? DS.Shadows.hoverY : 0
+                radius: isHovered ? skin.hoverShadowRadius : 0,
+                y: isHovered ? skin.hoverShadowY : 0
             )
             // HIG: Expand hit area to minimum comfortable target size
             .padding(DS.Spacing.xs)
