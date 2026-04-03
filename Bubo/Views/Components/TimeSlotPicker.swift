@@ -142,7 +142,7 @@ fileprivate struct TimeSlotChip: View {
         }) {
             Text(slot.label)
                 .font(.system(.body, design: .monospaced, weight: isSelected ? .bold : .regular))
-                .foregroundStyle(isSelected ? .white : skin.resolvedTextPrimary)
+                .foregroundStyle(isSelected ? DS.contrastingForeground(for: chipAccent) : skin.resolvedTextPrimary)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

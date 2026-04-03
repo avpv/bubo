@@ -257,6 +257,16 @@ enum DS {
 
     static let defaultEventColor: Color = .gray
 
+    /// Returns white or black depending on which contrasts better against the given background color.
+    static func contrastingForeground(for color: Color) -> Color {
+        let nsColor = NSColor(color).usingColorSpace(.sRGB) ?? NSColor(color)
+        let r = nsColor.redComponent
+        let g = nsColor.greenComponent
+        let b = nsColor.blueComponent
+        let luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+        return luminance > 0.55 ? .black : .white
+    }
+
     // MARK: Urgency Colors
 
     static func urgencyColor(minutesUntil: Int, skin: SkinDefinition) -> Color {
@@ -440,7 +450,7 @@ struct AdaptiveBadgeFill: ViewModifier {
             )
         case .filled:
             content
-                .foregroundStyle(.white)
+                .foregroundStyle(DS.contrastingForeground(for: tint))
                 .background(tint.opacity(contrast == .increased ? 0.9 : 0.75))
         case .outlined:
             content
@@ -670,15 +680,8 @@ struct ActionButtonStyle: ButtonStyle {
         }
     }
 
-    /// Returns white or black depending on which contrasts better against the given color.
     private static func contrastingForeground(for color: Color) -> Color {
-        let nsColor = NSColor(color).usingColorSpace(.sRGB) ?? NSColor(color)
-        let r = nsColor.redComponent
-        let g = nsColor.greenComponent
-        let b = nsColor.blueComponent
-        // Relative luminance (rec. 709)
-        let luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
-        return luminance > 0.55 ? .black : .white
+        DS.contrastingForeground(for: color)
     }
 
     private func shadowColor(isPressed: Bool) -> Color {

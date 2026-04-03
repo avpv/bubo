@@ -126,7 +126,7 @@ struct DateTimePickerPills: View {
                             }) {
                                 Text(formattedSlotTime(slot))
                                     .font(.system(.body, design: .monospaced, weight: isActive ? .bold : .regular))
-                                    .foregroundStyle(isActive ? .white : skin.resolvedTextPrimary)
+                                    .foregroundStyle(isActive ? DS.contrastingForeground(for: pillAccent) : skin.resolvedTextPrimary)
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, DS.Spacing.xs)
                                     .background(
