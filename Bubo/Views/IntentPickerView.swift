@@ -195,7 +195,7 @@ struct RecipeCardView: View {
                 snippetLayout
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(RecipeCardButtonStyle(skin: skin))
         .onHover { hovering in
             withAnimation(skin.resolvedMicroAnimation) {
                 isHovered = hovering
@@ -217,16 +217,26 @@ struct RecipeCardView: View {
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
-        .padding(DS.Spacing.md)
+        .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.sm)
         .skinPlatter(skin)
         .skinPlatterDepth(skin)
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                .fill(isHovered ? skin.resolvedHoverFill : Color.clear)
+        )
         .overlay(
             RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
                 .strokeBorder(
                     isHovered ? skin.accentColor.opacity(DS.Opacity.glassBorder) : .clear,
                     lineWidth: DS.Border.standard
                 )
+        )
+        .shadow(
+            color: isHovered ? skin.resolvedHoverShadowColor : skin.resolvedShadowColor,
+            radius: isHovered ? DS.Shadows.hoverRadius : skin.shadowRadius,
+            y: isHovered ? DS.Shadows.hoverY : skin.shadowY
         )
         .scaleEffect(isHovered ? 1.02 : 1.0)
     }
@@ -273,8 +283,9 @@ struct RecipeCardView: View {
         .padding(.horizontal, DS.Spacing.md)
         .background(
             RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                .fill(isHovered ? skin.accentColor.opacity(DS.Opacity.subtleFill) : .clear)
+                .fill(isHovered ? skin.resolvedHoverFill : .clear)
         )
+        .scaleEffect(isHovered ? 1.02 : 1.0)
     }
 
     private var snippetLayout: some View {
@@ -338,6 +349,19 @@ struct RecipeCardView: View {
             y: isHovered ? DS.Shadows.hoverY : skin.shadowY
         )
         .scaleEffect(isHovered ? 1.02 : 1.0)
+    }
+}
+
+// MARK: - Recipe Card Button Style
+
+private struct RecipeCardButtonStyle: ButtonStyle {
+    let skin: any SkinProtocol
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .opacity(configuration.isPressed ? 0.85 : 1.0)
+            .animation(skin.resolvedMicroAnimation, value: configuration.isPressed)
     }
 }
 
@@ -413,7 +437,7 @@ private struct CategorySection: View {
                         RecipeCardView(
                             recipe: recipe,
                             style: .list,
-                            dimmed: recipe.needsExistingEvents && !hasLocalEvents,
+                            dimmed: false,
                             onTap: onSelectRecipe
                         )
                     }
