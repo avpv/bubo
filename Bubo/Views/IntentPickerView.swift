@@ -436,7 +436,7 @@ private struct CategorySection: View {
                         RecipeCardView(
                             recipe: recipe,
                             style: .list,
-                            dimmed: recipe.needsExistingEvents && !hasLocalEvents,
+                            dimmed: false,
                             onTap: onSelectRecipe
                         )
                     }
