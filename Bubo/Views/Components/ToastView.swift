@@ -94,7 +94,7 @@ struct ToastOverlay: View {
                         } label: {
                             Text("Undo")
                                 .font(.caption)
-                                .fontWeight(.semibold)
+                                .fontWeight(skin.resolvedFontWeight)
                                 .foregroundStyle(skin.accentColor)
                         }
                         .buttonStyle(.plain)

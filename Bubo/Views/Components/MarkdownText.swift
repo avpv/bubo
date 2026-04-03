@@ -109,16 +109,16 @@ struct MarkdownText: View {
         switch level {
         case 1:
             Text(inlineMarkdown(content))
-                .font(.system(.title2, design: skin.resolvedFontDesign, weight: .bold))
+                .font(.system(.title2, design: skin.resolvedFontDesign, weight: skin.resolvedHeadlineFontWeight))
         case 2:
             Text(inlineMarkdown(content))
-                .font(.system(.title3, design: skin.resolvedFontDesign, weight: .semibold))
+                .font(.system(.title3, design: skin.resolvedFontDesign, weight: skin.resolvedHeadlineFontWeight))
         case 3:
             Text(inlineMarkdown(content))
-                .font(.system(.headline, design: skin.resolvedFontDesign, weight: .semibold))
+                .font(.system(.headline, design: skin.resolvedFontDesign, weight: skin.resolvedHeadlineFontWeight))
         default:
             Text(inlineMarkdown(content))
-                .font(.system(.subheadline, design: skin.resolvedFontDesign, weight: .semibold))
+                .font(.system(.subheadline, design: skin.resolvedFontDesign, weight: skin.resolvedHeadlineFontWeight))
         }
     }
 
