@@ -31,11 +31,9 @@ struct IntentPickerView: View {
                         .staggeredEntrance(index: 0)
                 }
 
-                // Recently used (HN-ranked)
-                if !recentRecipes.isEmpty {
-                    recentlyUsedSection
-                        .staggeredEntrance(index: 1)
-                }
+                // Recently used — always shown, falls back to quick actions
+                recentlySection
+                    .staggeredEntrance(index: 1)
 
                 // Contextual suggestions (condition-based)
                 if !suggestions.isEmpty {
@@ -43,13 +41,9 @@ struct IntentPickerView: View {
                         .staggeredEntrance(index: 2)
                 }
 
-                // Quick actions grid — split into creative + planning
-                quickActionsSection
-                    .staggeredEntrance(index: 3)
-
                 // All categories (expandable)
                 allCategoriesSection
-                    .staggeredEntrance(index: 4)
+                    .staggeredEntrance(index: 3)
             }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.vertical, DS.Spacing.xl)
@@ -103,14 +97,16 @@ struct IntentPickerView: View {
         .accessibilityHint("Describe what you want in your own words")
     }
 
-    // MARK: - Recently Used
+    // MARK: - Recently
 
-    private var recentlyUsedSection: some View {
+    private var recentlySection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            sectionHeader("Recently Used")
+            sectionHeader("Recently")
+
+            let recipes = recentRecipes.isEmpty ? RecipeCatalog.quickActions : recentRecipes
 
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 3), spacing: DS.Spacing.sm) {
-                ForEach(recentRecipes) { recipe in
+                ForEach(recipes) { recipe in
                     RecipeCardView(recipe: recipe, style: .quick, onTap: onSelectRecipe)
                 }
             }
@@ -136,58 +132,6 @@ struct IntentPickerView: View {
         }
     }
 
-    // MARK: - Quick Actions
-
-    private var creativeActions: [ScheduleRecipe] {
-        RecipeCatalog.quickActions.filter { $0.isCreative }
-    }
-
-    private var planningActions: [ScheduleRecipe] {
-        RecipeCatalog.quickActions.filter { $0.needsExistingEvents }
-    }
-
-    private var quickActionsSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.lg) {
-            // Creative recipes — always work
-            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                sectionHeader("Create Blocks")
-
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 3), spacing: DS.Spacing.sm) {
-                    ForEach(creativeActions) { recipe in
-                        RecipeCardView(recipe: recipe, style: .quick, onTap: onSelectRecipe)
-                    }
-                }
-            }
-
-            // Planning recipes — need existing tasks
-            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                HStack(spacing: DS.Spacing.sm) {
-                    sectionHeader("Organize Tasks")
-
-                    if !hasLocalEvents {
-                        Text("needs tasks")
-                            .font(.caption2)
-                            .foregroundStyle(skin.resolvedTextTertiary)
-                            .padding(.horizontal, DS.Spacing.pillHorizontal)
-                            .padding(.vertical, DS.Spacing.xxs)
-                            .adaptiveBadgeFill(skin.resolvedTextTertiary)
-                            .clipShape(Capsule())
-                    }
-                }
-
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 3), spacing: DS.Spacing.sm) {
-                    ForEach(planningActions) { recipe in
-                        RecipeCardView(
-                            recipe: recipe,
-                            style: .quick,
-                            dimmed: !hasLocalEvents,
-                            onTap: onSelectRecipe
-                        )
-                    }
-                }
-            }
-        }
-    }
 
     // MARK: - All Categories
 
@@ -232,6 +176,7 @@ struct RecipeCardView: View {
         case quick       // compact grid card
         case suggested   // wider, highlighted
         case list        // full-width row
+        case snippet     // event-row style — accent bar + title/description
     }
 
     var body: some View {
@@ -246,6 +191,8 @@ struct RecipeCardView: View {
                 suggestedLayout
             case .list:
                 listLayout
+            case .snippet:
+                snippetLayout
             }
         }
         .buttonStyle(.plain)
@@ -318,12 +265,6 @@ struct RecipeCardView: View {
 
             Spacer()
 
-            if !recipe.params.isEmpty {
-                Image(systemName: "slider.horizontal.3")
-                    .font(.system(size: DS.Size.iconSmall))
-                    .foregroundStyle(skin.resolvedTextTertiary)
-            }
-
             Image(systemName: "chevron.right")
                 .font(.system(size: DS.Size.iconSmall))
                 .foregroundStyle(skin.resolvedTextTertiary)
@@ -334,6 +275,69 @@ struct RecipeCardView: View {
             RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
                 .fill(isHovered ? skin.accentColor.opacity(DS.Opacity.subtleFill) : .clear)
         )
+    }
+
+    private var snippetLayout: some View {
+        HStack(alignment: .center, spacing: 0) {
+            // Accent bar — like EventRowView urgency bar
+            Capsule()
+                .fill(skin.accentColor)
+                .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
+                .padding(.trailing, DS.Spacing.md)
+                .shadow(color: skin.accentColor.opacity(skin.shadowOpacity * 4), radius: skin.shadowRadius * 0.5)
+
+            // Title + description
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                Text(recipe.name)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(skin.resolvedTextPrimary)
+                    .lineLimit(1)
+
+                Text(recipe.description)
+                    .font(.caption2)
+                    .foregroundStyle(skin.resolvedTextSecondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: DS.Spacing.md)
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: DS.Size.iconSmall))
+                .foregroundStyle(skin.resolvedTextTertiary)
+        }
+        .frame(minHeight: DS.Size.eventRowMinHeight)
+        .padding(.vertical, DS.Spacing.sm)
+        .padding(.horizontal, DS.Spacing.sm)
+        .background(
+            ZStack {
+                SkinPlatterBackground(skin: skin)
+                Rectangle()
+                    .fill(isHovered ? skin.resolvedHoverFill : Color.clear)
+            }
+        )
+        .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [
+                            .white.opacity(skin.platterBorderOpacity * 1.5),
+                            .white.opacity(skin.platterBorderOpacity * 0.1),
+                            .clear,
+                            .white.opacity(skin.platterBorderOpacity * 0.4)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: DS.Border.thin
+                )
+        )
+        .shadow(
+            color: isHovered ? skin.resolvedHoverShadowColor : skin.resolvedShadowColor,
+            radius: isHovered ? DS.Shadows.hoverRadius : skin.shadowRadius,
+            y: isHovered ? DS.Shadows.hoverY : skin.shadowY
+        )
+        .scaleEffect(isHovered ? 1.02 : 1.0)
     }
 }
 
@@ -357,7 +361,14 @@ private struct CategorySection: View {
                     isExpanded.toggle()
                 }
             } label: {
-                HStack(spacing: DS.Spacing.sm) {
+                HStack(alignment: .center, spacing: 0) {
+                    // Accent bar
+                    Capsule()
+                        .fill(skin.accentColor)
+                        .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
+                        .padding(.trailing, DS.Spacing.md)
+                        .shadow(color: skin.accentColor.opacity(skin.shadowOpacity * 4), radius: skin.shadowRadius * 0.5)
+
                     Text(category.name)
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(skin.resolvedTextPrimary)
@@ -376,8 +387,11 @@ private struct CategorySection: View {
                         .font(.system(size: DS.Size.iconSmall, weight: .semibold))
                         .foregroundStyle(skin.resolvedTextTertiary)
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .padding(.leading, DS.Spacing.xs)
                 }
-                .padding(DS.Spacing.md)
+                .frame(minHeight: DS.Size.eventRowMinHeight)
+                .padding(.vertical, DS.Spacing.sm)
+                .padding(.horizontal, DS.Spacing.sm)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -409,14 +423,35 @@ private struct CategorySection: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .skinPlatter(skin)
-        .skinPlatterDepth(skin)
+        .background(
+            ZStack {
+                SkinPlatterBackground(skin: skin)
+                Rectangle()
+                    .fill(isHovered ? skin.resolvedHoverFill : Color.clear)
+            }
+        )
+        .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
                 .strokeBorder(
-                    isHovered && !isExpanded ? skin.accentColor.opacity(DS.Opacity.faintBorder) : .clear,
-                    lineWidth: DS.Border.standard
+                    LinearGradient(
+                        colors: [
+                            .white.opacity(skin.platterBorderOpacity * 1.5),
+                            .white.opacity(skin.platterBorderOpacity * 0.1),
+                            .clear,
+                            .white.opacity(skin.platterBorderOpacity * 0.4)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: DS.Border.thin
                 )
         )
+        .shadow(
+            color: isHovered ? skin.resolvedHoverShadowColor : skin.resolvedShadowColor,
+            radius: isHovered ? DS.Shadows.hoverRadius : skin.shadowRadius,
+            y: isHovered ? DS.Shadows.hoverY : skin.shadowY
+        )
+        .scaleEffect(isHovered ? 1.02 : 1.0)
     }
 }
