@@ -774,6 +774,7 @@ private struct ColorDotButton: View {
             withAnimation(skin.resolvedMicroAnimation) {
                 isHovered = hovering
             }
+            if hovering { Haptics.tap() }
         }
         // HIG: Support keyboard navigation
         .focusable()
