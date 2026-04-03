@@ -96,8 +96,8 @@ struct EventDetailView: View {
                             } label: {
                                 Label("Join \(serviceName)", systemImage: "video.fill")
                                     .font(.subheadline)
-                                    .fontWeight(.semibold)
-                                    .foregroundStyle(DS.Colors.onOverlay)
+                                    .fontWeight(skin.resolvedHeadlineFontWeight)
+                                    .foregroundStyle(DS.contrastingForeground(for: skinAccent))
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, DS.Spacing.sm)
                                     .background(

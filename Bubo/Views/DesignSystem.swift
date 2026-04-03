@@ -280,7 +280,7 @@ enum DS {
     static func countdownColor(secondsRemaining: Int, skin: SkinDefinition) -> Color {
         if secondsRemaining <= 120 { return skin.resolvedDestructiveColor }
         if secondsRemaining <= 300 { return skin.resolvedWarningColor }
-        return .white
+        return skin.resolvedTextPrimary
     }
 
     // MARK: Snooze Options

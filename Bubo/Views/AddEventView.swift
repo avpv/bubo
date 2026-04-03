@@ -838,8 +838,8 @@ struct AddEventView: View {
                         .overlay {
                             if segWidth > 30 {
                                 Text("\(segment.minutes)m")
-                                    .font(.system(.caption2, design: .rounded, weight: .semibold))
-                                    .foregroundStyle(DS.Colors.onOverlay)
+                                    .font(.system(.caption2, design: skin.resolvedFontDesign, weight: .semibold))
+                                    .foregroundStyle(DS.contrastingForeground(for: color))
                             }
                         }
                     }
@@ -916,7 +916,7 @@ struct AddEventView: View {
                     .overlay {
                         Image(systemName: icon)
                             .font(.system(size: 6, weight: .bold))
-                            .foregroundStyle(DS.Colors.onOverlay)
+                            .foregroundStyle(DS.contrastingForeground(for: color))
                     }
             }
             .frame(width: 12)

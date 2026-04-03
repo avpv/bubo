@@ -54,7 +54,7 @@ struct FullScreenAlertView: View {
 
                 // HIG: Use semantic text styles that scale with Dynamic Type
                 Text(headerText(secondsRemaining))
-                    .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                    .font(.system(.largeTitle, design: skin.resolvedFontDesign, weight: skin.resolvedHeadlineFontWeight))
                     .foregroundStyle(DS.Colors.onOverlay)
 
                 // Live countdown timer
@@ -67,7 +67,7 @@ struct FullScreenAlertView: View {
                     .motionAwareAnimation(.linear(duration: 0.3), value: secondsRemaining, reduceMotion: reduceMotion)
 
                 Text(event.title)
-                    .font(.system(.title, design: .rounded, weight: .semibold))
+                    .font(.system(.title, design: skin.resolvedFontDesign, weight: skin.resolvedHeadlineFontWeight))
                     .foregroundStyle(DS.Colors.onOverlay)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, DS.Spacing.xxxl + DS.Spacing.sm)
@@ -98,7 +98,7 @@ struct FullScreenAlertView: View {
                         }
                     } label: {
                         Text("Snooze")
-                            .font(.system(.title3, design: .rounded, weight: .medium))
+                            .font(.system(.title3, design: skin.resolvedFontDesign, weight: skin.resolvedFontWeight))
                             .foregroundStyle(DS.Colors.onOverlay)
                             .padding(.horizontal, DS.Spacing.xxxl + DS.Spacing.sm)
                             .padding(.vertical, DS.Spacing.md + DS.Spacing.xxs)
@@ -136,8 +136,8 @@ struct FullScreenAlertView: View {
                             onDismiss()
                         } label: {
                             Label("Join \(serviceName)", systemImage: "video.fill")
-                                .font(.system(.title2, design: .rounded, weight: .semibold))
-                                .foregroundStyle(DS.Colors.onOverlay)
+                                .font(.system(.title2, design: skin.resolvedFontDesign, weight: skin.resolvedHeadlineFontWeight))
+                                .foregroundStyle(DS.contrastingForeground(for: skinAccent))
                                 .padding(.horizontal, DS.Spacing.xxxl + DS.Spacing.sm)
                                 .padding(.vertical, DS.Spacing.lg)
                                 .background(
@@ -170,7 +170,7 @@ struct FullScreenAlertView: View {
                         onDismiss()
                     }) {
                         Text("Dismiss")
-                            .font(.system(.title2, design: .rounded, weight: .semibold))
+                            .font(.system(.title2, design: skin.resolvedFontDesign, weight: skin.resolvedHeadlineFontWeight))
                             .foregroundStyle(dismissHovered ? skinAccent : DS.Colors.overlayBackground)
                             .padding(.horizontal, DS.Spacing.xxxl + DS.Spacing.xxl + DS.Spacing.xs)
                             .padding(.vertical, DS.Spacing.lg)
