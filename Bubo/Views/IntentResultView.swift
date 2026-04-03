@@ -138,9 +138,6 @@ struct IntentResultView: View {
 
     private var recipeHeader: some View {
         HStack(spacing: DS.Spacing.sm) {
-            Image(systemName: recipe.categoryIcon)
-                .font(.title3)
-                .foregroundStyle(skin.accentColor)
             VStack(alignment: .leading, spacing: 2) {
                 Text(recipe.name)
                     .font(.subheadline.weight(.semibold))

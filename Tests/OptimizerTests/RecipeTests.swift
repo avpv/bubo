@@ -140,7 +140,6 @@ final class RecipeTests: XCTestCase {
         let allRecipes = RecipeCatalog.allCategories.flatMap(\.recipes)
         for recipe in allRecipes {
             XCTAssertFalse(recipe.name.isEmpty, "Recipe \(recipe.id) has no name")
-            XCTAssertFalse(recipe.icon.isEmpty, "Recipe \(recipe.id) has no icon")
         }
     }
 
@@ -363,7 +362,6 @@ final class RecipeTests: XCTestCase {
         let json = """
         {
             "name": "Событие",
-            "icon": "calendar",
             "events": [
                 {"title": "Встреча", "minutes": 30}
             ]
@@ -373,7 +371,6 @@ final class RecipeTests: XCTestCase {
         let recipe = try JSONDecoder().decode(ScheduleRecipe.self, from: data)
 
         XCTAssertEqual(recipe.name, "Событие")
-        XCTAssertEqual(recipe.icon, "calendar")
         XCTAssertEqual(recipe.events.count, 1)
         XCTAssertEqual(recipe.events[0].title, "Встреча")
         XCTAssertEqual(recipe.events[0].minutes, 30)

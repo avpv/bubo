@@ -251,9 +251,6 @@ struct RecipeCardView: View {
 
     private var quickLayout: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            Image(systemName: recipe.categoryIcon)
-                .font(.system(size: DS.Size.iconLarge + 2))
-                .foregroundStyle(skin.accentColor)
             Text(recipe.name)
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(skin.resolvedTextPrimary)
@@ -268,11 +265,6 @@ struct RecipeCardView: View {
 
     private var suggestedLayout: some View {
         HStack(spacing: DS.Spacing.sm) {
-            Image(systemName: recipe.categoryIcon)
-                .font(.system(size: DS.Size.headerIcon))
-                .foregroundStyle(skin.accentColor)
-                .frame(width: DS.Size.controlHeight)
-
             VStack(alignment: .leading, spacing: 2) {
                 Text(recipe.name)
                     .font(.caption.weight(.semibold))
@@ -292,11 +284,6 @@ struct RecipeCardView: View {
 
     private var listLayout: some View {
         HStack(spacing: DS.Spacing.sm) {
-            Image(systemName: recipe.categoryIcon)
-                .font(.caption)
-                .foregroundStyle(skin.accentColor)
-                .frame(width: DS.Size.headerIcon)
-
             Text(recipe.name)
                 .font(.caption)
                 .foregroundStyle(skin.resolvedTextPrimary)
@@ -354,11 +341,6 @@ private struct CategorySection: View {
                 }
             } label: {
                 HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: category.icon)
-                        .font(.caption)
-                        .foregroundStyle(skin.accentColor)
-                        .frame(width: DS.Size.iconLarge)
-
                     Text(category.name)
                         .font(.caption.weight(.medium))
                         .foregroundStyle(skin.resolvedTextPrimary)

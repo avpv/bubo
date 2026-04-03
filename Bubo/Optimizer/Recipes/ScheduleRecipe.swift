@@ -23,28 +23,8 @@ struct ScheduleRecipe: Codable, Identifiable, Hashable {
     // MARK: - Display
 
     var name: String = ""
-    var icon: String = "wand.and.stars"
     var description: String = ""
     var category: String = ""
-
-    /// Returns the category-based icon, ensuring visual consistency across the UI.
-    /// Falls back to the recipe's own icon if no category match.
-    var categoryIcon: String {
-        Self.categoryIcons[category] ?? icon
-    }
-
-    private static let categoryIcons: [String: String] = [
-        "focus": "brain.head.profile",
-        "planning": "calendar",
-        "deadlines": "flame",
-        "meetings": "person.2",
-        "energy": "bolt.heart",
-        "habits": "repeat",
-        "projects": "folder",
-        "adapt": "clock.arrow.2.circlepath",
-        "workouts": "figure.run",
-        "advanced": "slider.horizontal.3",
-    ]
 
     // MARK: - 1. Events to Create
 
@@ -123,7 +103,6 @@ struct ScheduleRecipe: Codable, Identifiable, Hashable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = (try? c.decode(String.self, forKey: .id)) ?? UUID().uuidString
         name = (try? c.decode(String.self, forKey: .name)) ?? ""
-        icon = (try? c.decode(String.self, forKey: .icon)) ?? "wand.and.stars"
         description = (try? c.decode(String.self, forKey: .description)) ?? ""
         category = (try? c.decode(String.self, forKey: .category)) ?? ""
         events = (try? c.decode([EventSpec].self, forKey: .events)) ?? []
@@ -153,7 +132,6 @@ struct ScheduleRecipe: Codable, Identifiable, Hashable {
     init(
         id: String = UUID().uuidString,
         name: String = "",
-        icon: String = "wand.and.stars",
         description: String = "",
         category: String = "",
         events: [EventSpec] = [],
@@ -180,7 +158,6 @@ struct ScheduleRecipe: Codable, Identifiable, Hashable {
     ) {
         self.id = id
         self.name = name
-        self.icon = icon
         self.description = description
         self.category = category
         self.events = events

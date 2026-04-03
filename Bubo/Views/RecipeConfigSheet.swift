@@ -123,9 +123,6 @@ struct RecipeConfigSheet: View {
 
     private var recipeHeader: some View {
         HStack(spacing: DS.Spacing.sm) {
-            Image(systemName: recipe.categoryIcon)
-                .font(.title3)
-                .foregroundStyle(skin.accentColor)
             VStack(alignment: .leading, spacing: 2) {
                 Text(recipe.name)
                     .font(.headline)
@@ -523,10 +520,6 @@ struct RecipeConfigSheet: View {
                                 onSwitchRecipe(alt)
                             } label: {
                                 HStack(spacing: DS.Spacing.sm) {
-                                    Image(systemName: alt.categoryIcon)
-                                        .font(.caption)
-                                        .foregroundStyle(skin.accentColor)
-                                        .frame(width: DS.Size.headerIcon)
                                     VStack(alignment: .leading, spacing: 1) {
                                         Text(alt.name)
                                             .font(.caption.weight(.medium))
