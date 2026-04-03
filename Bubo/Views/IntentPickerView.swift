@@ -105,9 +105,9 @@ struct IntentPickerView: View {
 
             let recipes = recentRecipes.isEmpty ? RecipeCatalog.quickActions : recentRecipes
 
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 3), spacing: DS.Spacing.sm) {
+            VStack(spacing: DS.Spacing.sm) {
                 ForEach(recipes) { recipe in
-                    RecipeCardView(recipe: recipe, style: .quick, onTap: onSelectRecipe)
+                    RecipeCardView(recipe: recipe, style: .snippet, onTap: onSelectRecipe)
                 }
             }
         }
@@ -176,6 +176,7 @@ struct RecipeCardView: View {
         case quick       // compact grid card
         case suggested   // wider, highlighted
         case list        // full-width row
+        case snippet     // event-row style — accent bar + title/description
     }
 
     var body: some View {
@@ -190,6 +191,8 @@ struct RecipeCardView: View {
                 suggestedLayout
             case .list:
                 listLayout
+            case .snippet:
+                snippetLayout
             }
         }
         .buttonStyle(.plain)
@@ -278,6 +281,69 @@ struct RecipeCardView: View {
             RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
                 .fill(isHovered ? skin.accentColor.opacity(DS.Opacity.subtleFill) : .clear)
         )
+    }
+
+    private var snippetLayout: some View {
+        HStack(alignment: .center, spacing: 0) {
+            // Accent bar — like EventRowView urgency bar
+            Capsule()
+                .fill(skin.accentColor)
+                .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
+                .padding(.trailing, DS.Spacing.md)
+                .shadow(color: skin.accentColor.opacity(skin.shadowOpacity * 4), radius: skin.shadowRadius * 0.5)
+
+            // Title + description
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                Text(recipe.name)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(skin.resolvedTextPrimary)
+                    .lineLimit(1)
+
+                Text(recipe.description)
+                    .font(.caption2)
+                    .foregroundStyle(skin.resolvedTextSecondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: DS.Spacing.md)
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: DS.Size.iconSmall))
+                .foregroundStyle(skin.resolvedTextTertiary)
+        }
+        .frame(minHeight: DS.Size.eventRowMinHeight)
+        .padding(.vertical, DS.Spacing.sm)
+        .padding(.horizontal, DS.Spacing.sm)
+        .background(
+            ZStack {
+                SkinPlatterBackground(skin: skin)
+                Rectangle()
+                    .fill(isHovered ? skin.resolvedHoverFill : Color.clear)
+            }
+        )
+        .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [
+                            .white.opacity(skin.platterBorderOpacity * 1.5),
+                            .white.opacity(skin.platterBorderOpacity * 0.1),
+                            .clear,
+                            .white.opacity(skin.platterBorderOpacity * 0.4)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: DS.Border.thin
+                )
+        )
+        .shadow(
+            color: isHovered ? skin.resolvedHoverShadowColor : skin.resolvedShadowColor,
+            radius: isHovered ? DS.Shadows.hoverRadius : skin.shadowRadius,
+            y: isHovered ? DS.Shadows.hoverY : skin.shadowY
+        )
+        .scaleEffect(isHovered ? 1.02 : 1.0)
     }
 }
 
