@@ -43,7 +43,7 @@ struct DateTimePickerPills: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
                         .strokeBorder(
-                            isDateHovered ? pillAccent.opacity(DS.Opacity.tertiaryText) : DS.Colors.onOverlay.opacity(DS.Opacity.lightFill),
+                            isDateHovered ? pillAccent.opacity(DS.Opacity.tertiaryText) : skin.resolvedTextTertiary.opacity(DS.Opacity.lightFill),
                             lineWidth: DS.Border.thin
                         )
                 )
@@ -82,7 +82,7 @@ struct DateTimePickerPills: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
                         .strokeBorder(
-                            isTimeHovered ? pillAccent.opacity(DS.Opacity.tertiaryText) : DS.Colors.onOverlay.opacity(DS.Opacity.lightFill),
+                            isTimeHovered ? pillAccent.opacity(DS.Opacity.tertiaryText) : skin.resolvedTextTertiary.opacity(DS.Opacity.lightFill),
                             lineWidth: DS.Border.thin
                         )
                 )

@@ -173,7 +173,7 @@ fileprivate struct TimeSlotChip: View {
             Capsule()
                 .strokeBorder(
                     isSelected
-                        ? DS.Colors.onOverlay.opacity(DS.Opacity.glassBorder)
+                        ? DS.contrastingForeground(for: chipAccent).opacity(DS.Opacity.glassBorder)
                         : (isHovered ? chipAccent.opacity(DS.Opacity.strongFill + DS.Opacity.faintBorder) : .clear),
                     lineWidth: DS.Border.thin
                 )

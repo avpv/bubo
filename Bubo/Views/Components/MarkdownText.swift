@@ -134,7 +134,7 @@ struct MarkdownText: View {
                 ForEach(0..<columnCount, id: \.self) { col in
                     Text(inlineMarkdown(header[col]))
                         .font(.caption)
-                        .fontWeight(.semibold)
+                        .fontWeight(skin.resolvedHeadlineFontWeight)
                         .frame(maxWidth: .infinity, alignment: gridAlignment(alignments, col))
                 }
             }
