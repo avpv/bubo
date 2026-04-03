@@ -140,7 +140,6 @@ struct LLMRecipeBridge {
             """
             {
               "name": "Focus Block",
-              "icon": "brain.head.profile",
               "events": [{"title": "Focus Time", "minutes": 120, "priority": 0.9, "energy": 0.7, "period": "morning", "focus": true}],
               "horizon": "tomorrow",
               "weights": {"focusBlock": 2.0}
@@ -152,7 +151,6 @@ struct LLMRecipeBridge {
             """
             {
               "name": "Circuit Training",
-              "icon": "figure.run",
               "events": [
                 {"title": "Round 1", "minutes": 15, "energy": 0.9, "segments": [
                   {"title": "Squats", "minutes": 3, "type": "work"},
@@ -196,7 +194,6 @@ struct LLMRecipeBridge {
             """
             {
               "name": "Yoga Session",
-              "icon": "figure.yoga",
               "events": [{
                 "title": "Yoga",
                 "minutes": 60,

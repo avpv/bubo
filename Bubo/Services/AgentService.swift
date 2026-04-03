@@ -296,7 +296,6 @@ final class AgentService {
 
     Recipe guidelines:
     - Always set a short, descriptive "name".
-    - Pick a relevant SF Symbol for "icon" (e.g. brain.head.profile, figure.run, flame, book, pencil, cup.and.saucer).
     - Set "priority" (0.0-1.0): how important it is to schedule this event. 0.9 = critical, 0.5 = normal, 0.2 = nice-to-have.
     - Set "energy" (0.0-1.0): cognitive load required. 0.9 = intense deep work, 0.5 = moderate, 0.1 = passive/rest.
     - Use "focus": true for deep work that shouldn't be interrupted.

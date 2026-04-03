@@ -6,6 +6,7 @@ import SwiftUI
 /// One View for all recipes — auto-generated from RecipeCatalog.
 struct IntentPickerView: View {
     @Environment(\.activeSkin) private var skin
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var optimizerService: OptimizerService
     var hasLocalEvents: Bool = true
     let onSelectRecipe: (ScheduleRecipe) -> Void
@@ -23,27 +24,32 @@ struct IntentPickerView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: DS.Spacing.lg) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xl) {
                 // AI assistant entry point
                 if onAskAI != nil {
                     askAISection
+                        .staggeredEntrance(index: 0)
                 }
 
                 // Recently used (HN-ranked)
                 if !recentRecipes.isEmpty {
                     recentlyUsedSection
+                        .staggeredEntrance(index: 1)
                 }
 
                 // Contextual suggestions (condition-based)
                 if !suggestions.isEmpty {
                     suggestionsSection
+                        .staggeredEntrance(index: 2)
                 }
 
                 // Quick actions grid — split into creative + planning
                 quickActionsSection
+                    .staggeredEntrance(index: 3)
 
                 // All categories (expandable)
                 allCategoriesSection
+                    .staggeredEntrance(index: 4)
             }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.vertical, DS.Spacing.xl)
@@ -55,18 +61,18 @@ struct IntentPickerView: View {
 
     private var askAISection: some View {
         Button { onAskAI?() } label: {
-            HStack(spacing: DS.Spacing.sm) {
+            HStack(spacing: DS.Spacing.md) {
                 Image(systemName: "sparkles")
-                    .font(.system(size: DS.Size.headerIcon))
+                    .font(.system(size: DS.Size.headerIcon, weight: .medium))
                     .foregroundStyle(skin.accentColor)
-                    .frame(width: DS.Size.controlHeight)
+                    .frame(width: DS.Size.controlHeight, height: DS.Size.controlHeight)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Ask AI")
-                        .font(.caption.weight(.semibold))
+                        .font(.subheadline.weight(.semibold))
                         .foregroundStyle(skin.resolvedTextPrimary)
                     Text("Describe what you want in your own words")
-                        .font(.caption2)
+                        .font(.caption)
                         .foregroundStyle(skin.resolvedTextSecondary)
                         .lineLimit(1)
                 }
@@ -74,23 +80,22 @@ struct IntentPickerView: View {
                 Spacer(minLength: 0)
 
                 Image(systemName: "chevron.right")
-                    .font(.caption2)
+                    .font(.caption)
                     .foregroundStyle(skin.resolvedTextTertiary)
             }
-            .padding(DS.Spacing.sm)
-            .background(
-                RoundedRectangle(cornerRadius: DS.Size.previewSmallRadius)
-                    .fill(
+            .padding(DS.Spacing.md)
+            .skinPlatter(skin)
+            .skinPlatterDepth(skin)
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                    .strokeBorder(
                         LinearGradient(
-                            colors: [skin.accentColor.opacity(0.12), skin.accentColor.opacity(0.04)],
+                            colors: [skin.accentColor.opacity(0.3), skin.accentColor.opacity(0.08)],
                             startPoint: .leading,
                             endPoint: .trailing
-                        )
+                        ),
+                        lineWidth: DS.Border.standard
                     )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Size.previewSmallRadius)
-                    .strokeBorder(skin.accentColor.opacity(0.25), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -102,12 +107,9 @@ struct IntentPickerView: View {
 
     private var recentlyUsedSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            Label("Recently Used", systemImage: "clock.arrow.circlepath")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(skin.resolvedTextSecondary)
-                .accessibilityAddTraits(.isHeader)
+            sectionHeader("Recently Used")
 
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: DS.Spacing.sm) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 3), spacing: DS.Spacing.sm) {
                 ForEach(recentRecipes) { recipe in
                     RecipeCardView(recipe: recipe, style: .quick, onTap: onSelectRecipe)
                 }
@@ -119,12 +121,14 @@ struct IntentPickerView: View {
 
     private var suggestionsSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            Label("Suggested for you", systemImage: "sparkles")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(skin.accentColor)
-                .accessibilityAddTraits(.isHeader)
+            HStack(spacing: DS.Spacing.xs) {
+                Image(systemName: "sparkles")
+                    .font(.caption2)
+                    .foregroundStyle(skin.accentColor)
+                sectionHeader("Suggested for you", color: skin.accentColor)
+            }
 
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: DS.Spacing.sm) {
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: DS.Spacing.sm), GridItem(.flexible(), spacing: DS.Spacing.sm)], spacing: DS.Spacing.sm) {
                 ForEach(suggestions) { recipe in
                     RecipeCardView(recipe: recipe, style: .suggested, onTap: onSelectRecipe)
                 }
@@ -143,15 +147,12 @@ struct IntentPickerView: View {
     }
 
     private var quickActionsSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+        VStack(alignment: .leading, spacing: DS.Spacing.lg) {
             // Creative recipes — always work
             VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                Text("Create Blocks")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(skin.resolvedTextSecondary)
-                    .accessibilityAddTraits(.isHeader)
+                sectionHeader("Create Blocks")
 
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: DS.Spacing.sm) {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 3), spacing: DS.Spacing.sm) {
                     ForEach(creativeActions) { recipe in
                         RecipeCardView(recipe: recipe, style: .quick, onTap: onSelectRecipe)
                     }
@@ -160,25 +161,21 @@ struct IntentPickerView: View {
 
             // Planning recipes — need existing tasks
             VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                HStack(spacing: DS.Spacing.xs) {
-                    Text("Organize Tasks")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(skin.resolvedTextSecondary)
-                        .accessibilityAddTraits(.isHeader)
+                HStack(spacing: DS.Spacing.sm) {
+                    sectionHeader("Organize Tasks")
 
                     if !hasLocalEvents {
                         Text("needs tasks")
                             .font(.caption2)
                             .foregroundStyle(skin.resolvedTextTertiary)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(
-                                Capsule().fill(skin.resolvedTextTertiary.opacity(0.12))
-                            )
+                            .padding(.horizontal, DS.Spacing.pillHorizontal)
+                            .padding(.vertical, DS.Spacing.xxs)
+                            .adaptiveBadgeFill(skin.resolvedTextTertiary)
+                            .clipShape(Capsule())
                     }
                 }
 
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: DS.Spacing.sm) {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 3), spacing: DS.Spacing.sm) {
                     ForEach(planningActions) { recipe in
                         RecipeCardView(
                             recipe: recipe,
@@ -195,20 +192,28 @@ struct IntentPickerView: View {
     // MARK: - All Categories
 
     private var allCategoriesSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            Text("All Recipes")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(skin.resolvedTextSecondary)
-                .accessibilityAddTraits(.isHeader)
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            sectionHeader("All Recipes")
 
-            ForEach(RecipeCatalog.allCategories) { category in
-                CategorySection(
-                    category: category,
-                    hasLocalEvents: hasLocalEvents,
-                    onSelectRecipe: onSelectRecipe
-                )
+            VStack(spacing: DS.Spacing.sm) {
+                ForEach(RecipeCatalog.allCategories) { category in
+                    CategorySection(
+                        category: category,
+                        hasLocalEvents: hasLocalEvents,
+                        onSelectRecipe: onSelectRecipe
+                    )
+                }
             }
         }
+    }
+
+    // MARK: - Helpers
+
+    private func sectionHeader(_ title: String, color: Color? = nil) -> some View {
+        Text(title)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(color ?? skin.resolvedTextSecondary)
+            .accessibilityAddTraits(.isHeader)
     }
 }
 
@@ -230,7 +235,10 @@ struct RecipeCardView: View {
     }
 
     var body: some View {
-        Button { onTap(recipe) } label: {
+        Button {
+            Haptics.tap()
+            onTap(recipe)
+        } label: {
             switch style {
             case .quick:
                 quickLayout
@@ -241,7 +249,11 @@ struct RecipeCardView: View {
             }
         }
         .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
+        .onHover { hovering in
+            withAnimation(skin.resolvedMicroAnimation) {
+                isHovered = hovering
+            }
+        }
         .opacity(dimmed ? 0.45 : 1.0)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(recipe.name)
@@ -251,29 +263,30 @@ struct RecipeCardView: View {
 
     private var quickLayout: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            Image(systemName: recipe.categoryIcon)
-                .font(.system(size: DS.Size.iconLarge + 2))
-                .foregroundStyle(skin.accentColor)
+            Spacer(minLength: 0)
             Text(recipe.name)
-                .font(.caption2.weight(.semibold))
+                .font(.caption.weight(.medium))
                 .foregroundStyle(skin.resolvedTextPrimary)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(maxWidth: .infinity, minHeight: 72, alignment: .leading)
-        .padding(DS.Spacing.sm)
-        .background(cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Size.previewSmallRadius))
+        .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+        .padding(DS.Spacing.md)
+        .skinPlatter(skin)
+        .skinPlatterDepth(skin)
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                .strokeBorder(
+                    isHovered ? skin.accentColor.opacity(DS.Opacity.glassBorder) : .clear,
+                    lineWidth: DS.Border.standard
+                )
+        )
+        .scaleEffect(isHovered ? 1.02 : 1.0)
     }
 
     private var suggestedLayout: some View {
         HStack(spacing: DS.Spacing.sm) {
-            Image(systemName: recipe.categoryIcon)
-                .font(.system(size: DS.Size.headerIcon))
-                .foregroundStyle(skin.accentColor)
-                .frame(width: DS.Size.controlHeight)
-
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(recipe.name)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(skin.resolvedTextPrimary)
@@ -285,52 +298,42 @@ struct RecipeCardView: View {
 
             Spacer(minLength: 0)
         }
-        .padding(DS.Spacing.sm)
-        .background(suggestedBackground)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Size.previewSmallRadius))
+        .padding(DS.Spacing.md)
+        .background(
+            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                .fill(skin.accentColor.opacity(isHovered ? DS.Opacity.mediumFill : DS.Opacity.lightFill))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                .strokeBorder(skin.accentColor.opacity(DS.Opacity.glassBorder), lineWidth: DS.Border.thin)
+        )
+        .scaleEffect(isHovered ? 1.02 : 1.0)
     }
 
     private var listLayout: some View {
         HStack(spacing: DS.Spacing.sm) {
-            Image(systemName: recipe.categoryIcon)
-                .font(.caption)
-                .foregroundStyle(skin.accentColor)
-                .frame(width: DS.Size.headerIcon)
-
             Text(recipe.name)
-                .font(.caption)
+                .font(.caption.weight(.medium))
                 .foregroundStyle(skin.resolvedTextPrimary)
 
             Spacer()
 
             if !recipe.params.isEmpty {
-                Image(systemName: "chevron.right")
-                    .font(.caption2)
+                Image(systemName: "slider.horizontal.3")
+                    .font(.system(size: DS.Size.iconSmall))
                     .foregroundStyle(skin.resolvedTextTertiary)
             }
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: DS.Size.iconSmall))
+                .foregroundStyle(skin.resolvedTextTertiary)
         }
-        .padding(.vertical, DS.Spacing.xs)
-        .padding(.horizontal, DS.Spacing.sm)
-        .background(isHovered ? skin.accentColor.opacity(0.05) : .clear)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Size.previewSmallRadius))
-    }
-
-    private var cardBackground: some View {
-        RoundedRectangle(cornerRadius: DS.Size.previewSmallRadius)
-            .fill(isHovered ? AnyShapeStyle(skin.accentColor.opacity(0.1)) : AnyShapeStyle(skin.resolvedPlatterMaterial.opacity(0.5)))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Size.previewSmallRadius)
-                    .strokeBorder(isHovered ? skin.accentColor.opacity(0.3) : .clear, lineWidth: 1)
-            )
-    }
-
-    private var suggestedBackground: some View {
-        RoundedRectangle(cornerRadius: DS.Size.previewSmallRadius)
-            .fill(skin.accentColor.opacity(isHovered ? 0.15 : 0.08))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Size.previewSmallRadius)
-                    .strokeBorder(skin.accentColor.opacity(0.25), lineWidth: 1)
-            )
+        .padding(.vertical, DS.Spacing.sm)
+        .padding(.horizontal, DS.Spacing.md)
+        .background(
+            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                .fill(isHovered ? skin.accentColor.opacity(DS.Opacity.subtleFill) : .clear)
+        )
     }
 }
 
@@ -344,45 +347,53 @@ private struct CategorySection: View {
     let onSelectRecipe: (ScheduleRecipe) -> Void
 
     @State private var isExpanded = false
+    @State private var isHovered = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+        VStack(alignment: .leading, spacing: 0) {
             Button {
                 Haptics.tap()
                 withAnimation(reduceMotion ? nil : DS.Animation.smoothSpring) {
                     isExpanded.toggle()
                 }
             } label: {
-                HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: category.icon)
-                        .font(.caption)
-                        .foregroundStyle(skin.accentColor)
-                        .frame(width: DS.Size.iconLarge)
-
+                HStack(spacing: DS.Spacing.sm) {
                     Text(category.name)
-                        .font(.caption.weight(.medium))
+                        .font(.subheadline.weight(.medium))
                         .foregroundStyle(skin.resolvedTextPrimary)
 
                     Spacer()
 
                     Text("\(category.recipes.count)")
-                        .font(.caption2)
+                        .font(.caption)
                         .foregroundStyle(skin.resolvedTextTertiary)
+                        .padding(.horizontal, DS.Spacing.sm)
+                        .padding(.vertical, DS.Spacing.xxs)
+                        .background(skin.resolvedTextTertiary.opacity(DS.Opacity.lightFill))
+                        .clipShape(Capsule())
 
                     Image(systemName: "chevron.right")
-                        .font(.caption2)
+                        .font(.system(size: DS.Size.iconSmall, weight: .semibold))
                         .foregroundStyle(skin.resolvedTextTertiary)
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 }
-                .padding(.vertical, DS.Spacing.xs)
+                .padding(DS.Spacing.md)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .onHover { hovering in
+                withAnimation(skin.resolvedMicroAnimation) {
+                    isHovered = hovering
+                }
+            }
             .accessibilityLabel("\(category.name), \(category.recipes.count) recipes")
             .accessibilityHint(isExpanded ? "Double-tap to collapse" : "Double-tap to expand")
             .accessibilityAddTraits(.isButton)
 
             if isExpanded {
+                SkinSeparator()
+                    .padding(.horizontal, DS.Spacing.md)
+
                 VStack(spacing: 0) {
                     ForEach(category.recipes) { recipe in
                         RecipeCardView(
@@ -393,12 +404,19 @@ private struct CategorySection: View {
                         )
                     }
                 }
-                .padding(.leading, DS.Spacing.lg)
+                .padding(.horizontal, DS.Spacing.xs)
+                .padding(.bottom, DS.Spacing.sm)
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .padding(DS.Spacing.sm)
         .skinPlatter(skin)
         .skinPlatterDepth(skin)
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                .strokeBorder(
+                    isHovered && !isExpanded ? skin.accentColor.opacity(DS.Opacity.faintBorder) : .clear,
+                    lineWidth: DS.Border.standard
+                )
+        )
     }
 }

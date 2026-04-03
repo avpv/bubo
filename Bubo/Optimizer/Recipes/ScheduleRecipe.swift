@@ -23,28 +23,8 @@ struct ScheduleRecipe: Codable, Identifiable, Hashable {
     // MARK: - Display
 
     var name: String = ""
-    var icon: String = "wand.and.stars"
     var description: String = ""
     var category: String = ""
-
-    /// Returns the category-based icon, ensuring visual consistency across the UI.
-    /// Falls back to the recipe's own icon if no category match.
-    var categoryIcon: String {
-        Self.categoryIcons[category] ?? icon
-    }
-
-    private static let categoryIcons: [String: String] = [
-        "focus": "brain.head.profile",
-        "planning": "calendar",
-        "deadlines": "flame",
-        "meetings": "person.2",
-        "energy": "bolt.heart",
-        "habits": "repeat",
-        "projects": "folder",
-        "adapt": "clock.arrow.2.circlepath",
-        "workouts": "figure.run",
-        "advanced": "slider.horizontal.3",
-    ]
 
     // MARK: - 1. Events to Create
 
@@ -114,6 +94,94 @@ struct ScheduleRecipe: Codable, Identifiable, Hashable {
     var maxMeetingsPerDay: Int? = nil
     var minBreakMinutes: Int? = nil
     var peakEnergyHour: Int? = nil
+
+    // MARK: - Codable
+
+    /// Custom decoder that tolerates missing keys by falling back to defaults.
+    /// This is essential for LLM-generated JSON which only includes a subset of fields.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decode(String.self, forKey: .id)) ?? UUID().uuidString
+        name = (try? c.decode(String.self, forKey: .name)) ?? ""
+        description = (try? c.decode(String.self, forKey: .description)) ?? ""
+        category = (try? c.decode(String.self, forKey: .category)) ?? ""
+        events = (try? c.decode([EventSpec].self, forKey: .events)) ?? []
+        includeExistingEvents = (try? c.decode(Bool.self, forKey: .includeExistingEvents)) ?? true
+        horizon = (try? c.decode(Horizon.self, forKey: .horizon)) ?? .today
+        weights = (try? c.decode([WeightKey: Double].self, forKey: .weights)) ?? [:]
+        stability = (try? c.decode(Stability.self, forKey: .stability)) ?? .normal
+        speed = (try? c.decode(Speed.self, forKey: .speed)) ?? .quick
+        eventRules = (try? c.decode([EventRule].self, forKey: .eventRules)) ?? []
+        conditions = (try? c.decode([RecipeCondition].self, forKey: .conditions)) ?? []
+        dayStructure = (try? c.decode([TimeBlock].self, forKey: .dayStructure)) ?? []
+        trigger = (try? c.decode(Trigger.self, forKey: .trigger)) ?? .manual
+        display = (try? c.decode(ResultDisplay.self, forKey: .display)) ?? .scenarios
+        postActions = (try? c.decode([PostAction].self, forKey: .postActions)) ?? []
+        params = (try? c.decode([RecipeParam].self, forKey: .params)) ?? []
+        maxScenarios = (try? c.decode(Int.self, forKey: .maxScenarios)) ?? 3
+        diversityThreshold = (try? c.decode(Double.self, forKey: .diversityThreshold)) ?? 0.15
+        learnable = (try? c.decode(Bool.self, forKey: .learnable)) ?? true
+        selectedEventIds = try? c.decode([String].self, forKey: .selectedEventIds)
+        workingHours = try? c.decode(HourRange.self, forKey: .workingHours)
+        maxMeetingsPerDay = try? c.decode(Int.self, forKey: .maxMeetingsPerDay)
+        minBreakMinutes = try? c.decode(Int.self, forKey: .minBreakMinutes)
+        peakEnergyHour = try? c.decode(Int.self, forKey: .peakEnergyHour)
+    }
+
+    /// Memberwise initializer (preserves default construction).
+    init(
+        id: String = UUID().uuidString,
+        name: String = "",
+        description: String = "",
+        category: String = "",
+        events: [EventSpec] = [],
+        includeExistingEvents: Bool = true,
+        horizon: Horizon = .today,
+        weights: [WeightKey: Double] = [:],
+        stability: Stability = .normal,
+        speed: Speed = .quick,
+        eventRules: [EventRule] = [],
+        conditions: [RecipeCondition] = [],
+        dayStructure: [TimeBlock] = [],
+        trigger: Trigger = .manual,
+        display: ResultDisplay = .scenarios,
+        postActions: [PostAction] = [],
+        params: [RecipeParam] = [],
+        maxScenarios: Int = 3,
+        diversityThreshold: Double = 0.15,
+        learnable: Bool = true,
+        selectedEventIds: [String]? = nil,
+        workingHours: HourRange? = nil,
+        maxMeetingsPerDay: Int? = nil,
+        minBreakMinutes: Int? = nil,
+        peakEnergyHour: Int? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.description = description
+        self.category = category
+        self.events = events
+        self.includeExistingEvents = includeExistingEvents
+        self.horizon = horizon
+        self.weights = weights
+        self.stability = stability
+        self.speed = speed
+        self.eventRules = eventRules
+        self.conditions = conditions
+        self.dayStructure = dayStructure
+        self.trigger = trigger
+        self.display = display
+        self.postActions = postActions
+        self.params = params
+        self.maxScenarios = maxScenarios
+        self.diversityThreshold = diversityThreshold
+        self.learnable = learnable
+        self.selectedEventIds = selectedEventIds
+        self.workingHours = workingHours
+        self.maxMeetingsPerDay = maxMeetingsPerDay
+        self.minBreakMinutes = minBreakMinutes
+        self.peakEnergyHour = peakEnergyHour
+    }
 }
 
 // MARK: - Event Spec
@@ -146,6 +214,54 @@ struct EventSpec: Codable, Hashable {
     /// Rendered as a visual timeline in the UI but scheduled as a single
     /// calendar event. Replaces PomodoroConfig for arbitrary structures.
     var segments: [EventSegment]? = nil
+
+    /// Custom decoder that tolerates missing keys by falling back to defaults.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        title = (try? c.decode(String.self, forKey: .title)) ?? "Event"
+        minutes = (try? c.decode(Int.self, forKey: .minutes)) ?? 60
+        count = (try? c.decode(Int.self, forKey: .count)) ?? 1
+        priority = (try? c.decode(Double.self, forKey: .priority)) ?? 0.5
+        energy = (try? c.decode(Double.self, forKey: .energy)) ?? 0.5
+        context = try? c.decode(String.self, forKey: .context)
+        period = try? c.decode(Period.self, forKey: .period)
+        focus = (try? c.decode(Bool.self, forKey: .focus)) ?? false
+        pomodoro = try? c.decode(PomodoroPreset.self, forKey: .pomodoro)
+        participants = (try? c.decode([String].self, forKey: .participants)) ?? []
+        creation = (try? c.decode(CreationMode.self, forKey: .creation)) ?? .fixed
+        chainGap = try? c.decode(Int.self, forKey: .chainGap)
+        segments = try? c.decode([EventSegment].self, forKey: .segments)
+    }
+
+    init(
+        title: String = "Event",
+        minutes: Int = 60,
+        count: Int = 1,
+        priority: Double = 0.5,
+        energy: Double = 0.5,
+        context: String? = nil,
+        period: Period? = nil,
+        focus: Bool = false,
+        pomodoro: PomodoroPreset? = nil,
+        participants: [String] = [],
+        creation: CreationMode = .fixed,
+        chainGap: Int? = nil,
+        segments: [EventSegment]? = nil
+    ) {
+        self.title = title
+        self.minutes = minutes
+        self.count = count
+        self.priority = priority
+        self.energy = energy
+        self.context = context
+        self.period = period
+        self.focus = focus
+        self.pomodoro = pomodoro
+        self.participants = participants
+        self.creation = creation
+        self.chainGap = chainGap
+        self.segments = segments
+    }
 }
 
 // MARK: - Event Segment
@@ -155,6 +271,19 @@ struct EventSegment: Codable, Hashable {
     var title: String
     var minutes: Int
     var type: SegmentType = .work
+
+    init(title: String, minutes: Int, type: SegmentType = .work) {
+        self.title = title
+        self.minutes = minutes
+        self.type = type
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        title = try c.decode(String.self, forKey: .title)
+        minutes = try c.decode(Int.self, forKey: .minutes)
+        type = (try? c.decode(SegmentType.self, forKey: .type)) ?? .work
+    }
 }
 
 /// The type of segment within an event timeline.
