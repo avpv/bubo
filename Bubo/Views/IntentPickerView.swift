@@ -18,11 +18,6 @@ struct IntentPickerView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: DS.Spacing.lg) {
-                // Getting started hint when no tasks exist
-                if !hasLocalEvents {
-                    gettingStartedHint
-                }
-
                 // AI assistant entry point
                 if onAskAI != nil {
                     askAISection
@@ -33,7 +28,7 @@ struct IntentPickerView: View {
                     suggestionsSection
                 }
 
-                // Quick actions grid
+                // Quick actions grid — split into creative + planning
                 quickActionsSection
 
                 // All categories (expandable)
@@ -43,25 +38,6 @@ struct IntentPickerView: View {
             .padding(.vertical, DS.Spacing.xl)
         }
         .scrollContentBackground(.hidden)
-    }
-
-    // MARK: - Getting Started Hint
-
-    private var gettingStartedHint: some View {
-        HStack(spacing: DS.Spacing.sm) {
-            Image(systemName: "lightbulb")
-                .font(.caption)
-                .foregroundStyle(skin.accentColor)
-
-            Text("No tasks yet — pick a recipe that creates blocks (e.g. **Need Focus**, **Pomodoro Session**). Planning recipes like Organize Day need existing tasks.")
-                .font(.caption2)
-                .foregroundStyle(skin.resolvedTextSecondary)
-        }
-        .padding(DS.Spacing.sm)
-        .background(
-            RoundedRectangle(cornerRadius: DS.Size.previewSmallRadius)
-                .fill(skin.accentColor.opacity(0.06))
-        )
     }
 
     // MARK: - Ask AI
@@ -127,15 +103,57 @@ struct IntentPickerView: View {
 
     // MARK: - Quick Actions
 
-    private var quickActionsSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            Text("Quick Actions")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(skin.resolvedTextSecondary)
+    private var creativeActions: [ScheduleRecipe] {
+        RecipeCatalog.quickActions.filter { $0.isCreative }
+    }
 
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: DS.Spacing.sm) {
-                ForEach(RecipeCatalog.quickActions) { recipe in
-                    RecipeCardView(recipe: recipe, style: .quick, onTap: onSelectRecipe)
+    private var planningActions: [ScheduleRecipe] {
+        RecipeCatalog.quickActions.filter { $0.needsExistingEvents }
+    }
+
+    private var quickActionsSection: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            // Creative recipes — always work
+            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                Text("Create Blocks")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(skin.resolvedTextSecondary)
+
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: DS.Spacing.sm) {
+                    ForEach(creativeActions) { recipe in
+                        RecipeCardView(recipe: recipe, style: .quick, onTap: onSelectRecipe)
+                    }
+                }
+            }
+
+            // Planning recipes — need existing tasks
+            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                HStack(spacing: DS.Spacing.xs) {
+                    Text("Organize Tasks")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(skin.resolvedTextSecondary)
+
+                    if !hasLocalEvents {
+                        Text("needs tasks")
+                            .font(.caption2)
+                            .foregroundStyle(skin.resolvedTextTertiary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(
+                                Capsule().fill(skin.resolvedTextTertiary.opacity(0.12))
+                            )
+                    }
+                }
+
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: DS.Spacing.sm) {
+                    ForEach(planningActions) { recipe in
+                        RecipeCardView(
+                            recipe: recipe,
+                            style: .quick,
+                            dimmed: !hasLocalEvents,
+                            onTap: onSelectRecipe
+                        )
+                    }
                 }
             }
         }
@@ -150,7 +168,11 @@ struct IntentPickerView: View {
                 .foregroundStyle(skin.resolvedTextSecondary)
 
             ForEach(RecipeCatalog.allCategories) { category in
-                CategorySection(category: category, onSelectRecipe: onSelectRecipe)
+                CategorySection(
+                    category: category,
+                    hasLocalEvents: hasLocalEvents,
+                    onSelectRecipe: onSelectRecipe
+                )
             }
         }
     }
@@ -162,6 +184,7 @@ struct RecipeCardView: View {
     @Environment(\.activeSkin) private var skin
     let recipe: ScheduleRecipe
     let style: CardStyle
+    var dimmed: Bool = false
     let onTap: (ScheduleRecipe) -> Void
 
     @State private var isHovered = false
@@ -185,6 +208,7 @@ struct RecipeCardView: View {
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
+        .opacity(dimmed ? 0.45 : 1.0)
     }
 
     private var quickLayout: some View {
@@ -277,6 +301,7 @@ struct RecipeCardView: View {
 private struct CategorySection: View {
     @Environment(\.activeSkin) private var skin
     let category: RecipeCatalog.Category
+    var hasLocalEvents: Bool = true
     let onSelectRecipe: (ScheduleRecipe) -> Void
 
     @State private var isExpanded = false
@@ -317,7 +342,12 @@ private struct CategorySection: View {
             if isExpanded {
                 VStack(spacing: 0) {
                     ForEach(category.recipes) { recipe in
-                        RecipeCardView(recipe: recipe, style: .list, onTap: onSelectRecipe)
+                        RecipeCardView(
+                            recipe: recipe,
+                            style: .list,
+                            dimmed: recipe.needsExistingEvents && !hasLocalEvents,
+                            onTap: onSelectRecipe
+                        )
                     }
                 }
                 .padding(.leading, DS.Spacing.lg)
