@@ -132,6 +132,13 @@ struct RecipeConfigSheet: View {
                     .font(.caption)
                     .foregroundStyle(skin.resolvedTextSecondary)
             }
+            if !recipe.params.isEmpty {
+                Text(recipe.isCreative
+                     ? "Pick your settings below, then tap \"\(recipe.actionLabel)\" to find a slot."
+                     : "Adjust settings below, then tap \"\(recipe.actionLabel)\" to rearrange.")
+                    .font(.caption2)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(DS.Spacing.md)
@@ -346,7 +353,7 @@ struct RecipeConfigSheet: View {
                     Text(friendlyErrorTitle(message))
                         .font(.caption.weight(.medium))
                         .foregroundStyle(skin.resolvedTextPrimary)
-                    if !recipe.params.isEmpty {
+                    if !recipe.params.isEmpty && !isAtMinimumDuration {
                         Text("Try adjusting the settings above.")
                             .font(.caption2)
                             .foregroundStyle(skin.resolvedTextSecondary)
@@ -409,15 +416,35 @@ struct RecipeConfigSheet: View {
         }
     }
 
+    /// Whether the current duration param is already at the minimum segmented option.
+    private var isAtMinimumDuration: Bool {
+        guard let param = recipe.params.first(where: {
+            if case .segmented = $0.kind { return true }
+            return false
+        }) else { return false }
+        if case .segmented(let options) = param.kind,
+           let current = paramValues[param.id] as? Int,
+           let smallest = options.min() {
+            return current <= smallest
+        }
+        return false
+    }
+
+    private var durationHint: String {
+        isAtMinimumDuration
+            ? "Try a different day or free up time in your calendar."
+            : "Try a shorter duration."
+    }
+
     private func friendlyErrorTitle(_ raw: String) -> String {
         if raw.contains("largest free gap") {
             return recipe.isCreative
-                ? "No free slot long enough for this block. Try shorter duration or tomorrow."
-                : "No free slot long enough. Try shorter duration or tomorrow."
+                ? "No free slot long enough for this block. \(durationHint)"
+                : "No free slot long enough. \(durationHint)"
         }
         if raw.contains("hard constraints") || raw.contains("Cannot satisfy") {
             return recipe.isCreative
-                ? "Schedule too packed for this block. Try shorter duration."
+                ? "Schedule too packed for this block. \(durationHint)"
                 : "Can't rearrange with these constraints. Try fewer tasks."
         }
         if raw.contains("No events") {
@@ -427,7 +454,7 @@ struct RecipeConfigSheet: View {
             return "Working hours are over for today. Try scheduling for tomorrow."
         }
         if raw.contains("but only") && raw.contains("min") {
-            return "Not enough free time in schedule. Try shorter duration or fewer events."
+            return "Not enough free time in schedule. \(durationHint)"
         }
         return raw
     }
@@ -639,7 +666,13 @@ struct RecipeConfigSheet: View {
     private func segmentedParam(id: String, options: [Int]) -> some View {
         let binding = Binding<Int>(
             get: { paramValues[id] as? Int ?? options.first ?? 0 },
-            set: { paramValues[id] = $0 }
+            set: { newValue in
+                paramValues[id] = newValue
+                // Clear error so user sees "Find Best Time" again after adjusting
+                if case .error = optimizationState {
+                    optimizationState = .idle
+                }
+            }
         )
         return SegmentedPillPicker(
             options: options,
@@ -657,7 +690,12 @@ struct RecipeConfigSheet: View {
     private func stepperParam(id: String, range: ClosedRange<Int>) -> some View {
         let binding = Binding<Int>(
             get: { paramValues[id] as? Int ?? range.lowerBound },
-            set: { paramValues[id] = $0 }
+            set: { newValue in
+                paramValues[id] = newValue
+                if case .error = optimizationState {
+                    optimizationState = .idle
+                }
+            }
         )
         return Stepper(value: binding, in: range) {
             Text("\(binding.wrappedValue)")
