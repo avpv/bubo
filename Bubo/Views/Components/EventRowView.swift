@@ -109,8 +109,8 @@ struct EventRowView: View {
         )
         .shadow(
             color: isHovered ? skin.resolvedHoverShadowColor : skin.resolvedShadowColor,
-            radius: isHovered ? DS.Shadows.hoverRadius : skin.shadowRadius,
-            y: isHovered ? DS.Shadows.hoverY : skin.shadowY
+            radius: isHovered ? skin.hoverShadowRadius : skin.shadowRadius,
+            y: isHovered ? skin.hoverShadowY : skin.shadowY
         )
         // Hover scale — slightly more pronounced for tactile feel
         .scaleEffect(isHovered ? 1.02 : 1.0)
@@ -246,18 +246,18 @@ struct EventRowView: View {
         VStack(spacing: DS.Spacing.xxs) {
             HStack(spacing: 2) {
                 Text(event.formattedTime)
-                    .font(.system(.caption, design: .rounded, weight: .bold)) // Rounded for softer look
+                    .font(.system(.caption, design: skin.resolvedFontDesign, weight: .bold))
                     .foregroundStyle(skin.resolvedTextPrimary)
                 Text("–")
-                    .font(.system(.caption, design: .rounded, weight: .bold))
+                    .font(.system(.caption, design: skin.resolvedFontDesign, weight: .bold))
                     .foregroundStyle(skin.resolvedTextSecondary)
                 Text(event.formattedEndTime)
-                    .font(.system(.caption, design: .rounded, weight: .regular))
+                    .font(.system(.caption, design: skin.resolvedFontDesign, weight: .regular))
                     .foregroundStyle(skin.resolvedTextSecondary)
             }
 
             Text(timeUntilText(now))
-                .font(.system(.caption2, design: .rounded, weight: .semibold)) // Bolder countdown
+                .font(.system(.caption2, design: skin.resolvedFontDesign, weight: .semibold))
                 .foregroundStyle(skin.isClassic ? skin.resolvedTextSecondary : skin.accentColor) // Highlight countdown
                 .contentTransition(.numericText())
         }

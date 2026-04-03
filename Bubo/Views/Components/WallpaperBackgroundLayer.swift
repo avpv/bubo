@@ -807,7 +807,7 @@ struct WallpaperPreviewCard: View {
             )
             .shadow(
                 color: isSelected ? skin.accentColor.opacity(0.3) : .clear,
-                radius: isSelected ? DS.Shadows.ambientY : 0
+                radius: isSelected ? skin.shadowRadius * 0.5 : 0
             )
 
             Text(wallpaper.displayName)

@@ -235,8 +235,8 @@ struct RecipeCardView: View {
         )
         .shadow(
             color: isHovered ? skin.resolvedHoverShadowColor : skin.resolvedShadowColor,
-            radius: isHovered ? DS.Shadows.hoverRadius : skin.shadowRadius,
-            y: isHovered ? DS.Shadows.hoverY : skin.shadowY
+            radius: isHovered ? skin.hoverShadowRadius : skin.shadowRadius,
+            y: isHovered ? skin.hoverShadowY : skin.shadowY
         )
         .scaleEffect(isHovered ? 1.02 : 1.0)
     }
@@ -345,8 +345,8 @@ struct RecipeCardView: View {
         )
         .shadow(
             color: isHovered ? skin.resolvedHoverShadowColor : skin.resolvedShadowColor,
-            radius: isHovered ? DS.Shadows.hoverRadius : skin.shadowRadius,
-            y: isHovered ? DS.Shadows.hoverY : skin.shadowY
+            radius: isHovered ? skin.hoverShadowRadius : skin.shadowRadius,
+            y: isHovered ? skin.hoverShadowY : skin.shadowY
         )
         .scaleEffect(isHovered ? 1.02 : 1.0)
     }
@@ -473,8 +473,8 @@ private struct CategorySection: View {
         )
         .shadow(
             color: isHovered ? skin.resolvedHoverShadowColor : skin.resolvedShadowColor,
-            radius: isHovered ? DS.Shadows.hoverRadius : skin.shadowRadius,
-            y: isHovered ? DS.Shadows.hoverY : skin.shadowY
+            radius: isHovered ? skin.hoverShadowRadius : skin.shadowRadius,
+            y: isHovered ? skin.hoverShadowY : skin.shadowY
         )
         .scaleEffect(isHovered ? 1.02 : 1.0)
     }

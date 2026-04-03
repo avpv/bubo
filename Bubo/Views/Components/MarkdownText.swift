@@ -109,16 +109,16 @@ struct MarkdownText: View {
         switch level {
         case 1:
             Text(inlineMarkdown(content))
-                .font(.system(.title2, design: .rounded, weight: .bold))
+                .font(.system(.title2, design: skin.resolvedFontDesign, weight: skin.resolvedHeadlineFontWeight))
         case 2:
             Text(inlineMarkdown(content))
-                .font(.system(.title3, design: .rounded, weight: .semibold))
+                .font(.system(.title3, design: skin.resolvedFontDesign, weight: skin.resolvedHeadlineFontWeight))
         case 3:
             Text(inlineMarkdown(content))
-                .font(.system(.headline, design: .rounded, weight: .semibold))
+                .font(.system(.headline, design: skin.resolvedFontDesign, weight: skin.resolvedHeadlineFontWeight))
         default:
             Text(inlineMarkdown(content))
-                .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                .font(.system(.subheadline, design: skin.resolvedFontDesign, weight: skin.resolvedHeadlineFontWeight))
         }
     }
 
@@ -134,7 +134,7 @@ struct MarkdownText: View {
                 ForEach(0..<columnCount, id: \.self) { col in
                     Text(inlineMarkdown(header[col]))
                         .font(.caption)
-                        .fontWeight(.semibold)
+                        .fontWeight(skin.resolvedHeadlineFontWeight)
                         .frame(maxWidth: .infinity, alignment: gridAlignment(alignments, col))
                 }
             }

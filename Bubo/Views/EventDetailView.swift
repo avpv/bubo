@@ -48,7 +48,7 @@ struct EventDetailView: View {
                     // Title
                     HStack(spacing: DS.Spacing.sm) {
                         Text(event.title)
-                            .font(.system(.title2, design: .rounded, weight: .bold))
+                            .font(.system(.title2, design: skin.resolvedFontDesign, weight: .bold))
                             .accessibilityAddTraits(.isHeader)
 
                         if event.isRecurring {
@@ -96,8 +96,8 @@ struct EventDetailView: View {
                             } label: {
                                 Label("Join \(serviceName)", systemImage: "video.fill")
                                     .font(.subheadline)
-                                    .fontWeight(.semibold)
-                                    .foregroundStyle(DS.Colors.onOverlay)
+                                    .fontWeight(skin.resolvedHeadlineFontWeight)
+                                    .foregroundStyle(DS.contrastingForeground(for: skinAccent))
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, DS.Spacing.sm)
                                     .background(

@@ -286,7 +286,7 @@ private struct WeekdayChip: View {
                         ? skin.accentColor
                         : (isHovered ? skin.accentColor.opacity(DS.Opacity.lightFill) : DS.Colors.badgeFill(skin.resolvedTextSecondary))
                 )
-                .foregroundStyle(isSelected ? .white : skin.resolvedTextPrimary)
+                .foregroundStyle(isSelected ? DS.contrastingForeground(for: skin.accentColor) : skin.resolvedTextPrimary)
                 .clipShape(Capsule())
         }
         .buttonStyle(.plain)

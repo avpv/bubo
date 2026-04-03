@@ -29,6 +29,7 @@ struct DisintegrationModifier: ViewModifier {
     @State private var collapsedHeight: CGFloat?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.activeSkin) private var skin
 
     private let columns = 28
     private let rows = 8
@@ -135,12 +136,13 @@ struct DisintegrationModifier: ViewModifier {
         let cellW = w / CGFloat(columns)
         let cellH = h / CGFloat(rows)
 
+        let accent = skin.accentColor
         let dustColors: [Color] = [
-            .gray.opacity(0.7),
-            .gray.opacity(0.5),
-            .gray.opacity(0.9),
-            .secondary.opacity(0.6),
-            .primary.opacity(0.35),
+            accent.opacity(0.7),
+            accent.opacity(0.5),
+            accent.opacity(0.9),
+            skin.resolvedTextSecondary.opacity(0.6),
+            skin.resolvedTextPrimary.opacity(0.35),
         ]
 
         var result: [Particle] = []

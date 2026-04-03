@@ -14,7 +14,7 @@ struct DaySectionHeader: View {
         HStack(spacing: DS.Spacing.sm) {
             Text(dayTitle)
                 .font(.subheadline)
-                .fontWeight(.semibold)
+                .fontWeight(skin.resolvedHeadlineFontWeight)
                 .foregroundStyle(skin.resolvedTextPrimary)
             if isToday {
                 Circle()

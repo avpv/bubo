@@ -142,7 +142,7 @@ struct CalendarsTabView: View {
                             )) {
                                 HStack(spacing: DS.Spacing.sm) {
                                     Circle()
-                                        .fill(cal.color.map { Color(cgColor: $0) } ?? DS.Colors.defaultCalendar)
+                                        .fill(cal.color.map { Color(cgColor: $0) } ?? skin.resolvedTextTertiary)
                                         .frame(width: DS.Size.iconSmall, height: DS.Size.iconSmall)
                                     Text(cal.title)
                                 }

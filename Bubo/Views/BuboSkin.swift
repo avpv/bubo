@@ -190,7 +190,7 @@ struct SkinPlatterDepthModifier: ViewModifier {
             )
             // Secondary contact shadow
             .shadow(
-                color: Color.black.opacity(0.12),
+                color: skin.resolvedShadowColor,
                 radius: 2,
                 y: 1
             )

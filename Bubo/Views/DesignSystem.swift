@@ -149,24 +149,11 @@ enum DS {
     // MARK: Shadows
 
     enum Shadows {
-        static let ambientColor = Color.black.opacity(0.06)
-        static let ambientRadius: CGFloat = 8
-        static let ambientY: CGFloat = 4
-
-        static let hoverColor = Color.black.opacity(0.12)
-        static let hoverRadius: CGFloat = 12
-        static let hoverY: CGFloat = 6
-
-        static let pillRadius: CGFloat = 1
-        static let pillY: CGFloat = 1
-
         // Alert/fullscreen
         static let glowRadius: CGFloat = 20
         static let buttonRadius: CGFloat = 12
-        static let buttonY: CGFloat = 4
 
         // Toast
-        static let toastColor = Color.black.opacity(0.12)
         static let toastRadius: CGFloat = 12
         static let toastY: CGFloat = 6
     }
@@ -230,7 +217,6 @@ enum DS {
         // Overlay / fullscreen alert — contrast-aware
         static let overlayBackground = Color.black
         static let onOverlay = Color.white
-        static let defaultCalendar = Color.gray
 
         // Hover & selection states
         static let hoverFill = Color(nsColor: .labelColor).opacity(0.06)
@@ -248,14 +234,23 @@ enum DS {
     // MARK: Materials (vibrancy)
 
     enum Materials {
-        static let toast: Material = .regularMaterial
+        /// Intentionally ultraThin for maximum translucency on fullscreen overlays.
         static let overlay: Material = .ultraThinMaterial
-        static let hud: Material = .thickMaterial
     }
 
     // MARK: Event Color Tags
 
     static let defaultEventColor: Color = .gray
+
+    /// Returns white or black depending on which contrasts better against the given background color.
+    static func contrastingForeground(for color: Color) -> Color {
+        let nsColor = NSColor(color).usingColorSpace(.sRGB) ?? NSColor(color)
+        let r = nsColor.redComponent
+        let g = nsColor.greenComponent
+        let b = nsColor.blueComponent
+        let luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+        return luminance > 0.55 ? .black : .white
+    }
 
     // MARK: Urgency Colors
 
@@ -270,7 +265,7 @@ enum DS {
     static func countdownColor(secondsRemaining: Int, skin: SkinDefinition) -> Color {
         if secondsRemaining <= 120 { return skin.resolvedDestructiveColor }
         if secondsRemaining <= 300 { return skin.resolvedWarningColor }
-        return .white
+        return skin.resolvedTextPrimary
     }
 
     // MARK: Snooze Options
@@ -440,7 +435,7 @@ struct AdaptiveBadgeFill: ViewModifier {
             )
         case .filled:
             content
-                .foregroundStyle(.white)
+                .foregroundStyle(DS.contrastingForeground(for: tint))
                 .background(tint.opacity(contrast == .increased ? 0.9 : 0.75))
         case .outlined:
             content
@@ -670,15 +665,8 @@ struct ActionButtonStyle: ButtonStyle {
         }
     }
 
-    /// Returns white or black depending on which contrasts better against the given color.
     private static func contrastingForeground(for color: Color) -> Color {
-        let nsColor = NSColor(color).usingColorSpace(.sRGB) ?? NSColor(color)
-        let r = nsColor.redComponent
-        let g = nsColor.greenComponent
-        let b = nsColor.blueComponent
-        // Relative luminance (rec. 709)
-        let luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
-        return luminance > 0.55 ? .black : .white
+        DS.contrastingForeground(for: color)
     }
 
     private func shadowColor(isPressed: Bool) -> Color {

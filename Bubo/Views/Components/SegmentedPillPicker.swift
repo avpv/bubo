@@ -18,16 +18,9 @@ struct SegmentedPillPicker<T: Hashable>: View {
                     selection = option
                 } label: {
                     Text(labelProvider(option))
-                        .font(.caption.weight(isSelected ? .semibold : .regular))
-                        .padding(.horizontal, DS.Spacing.sm)
-                        .padding(.vertical, DS.Spacing.xs)
-                        .foregroundStyle(isSelected ? .white : skin.resolvedTextPrimary)
-                        .background(
-                            Capsule()
-                                .fill(isSelected ? skin.accentColor : skin.accentColor.opacity(0.1))
-                        )
+                        .font(.caption)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.action(role: isSelected ? .primary : .secondary, size: .compact))
                 .accessibilityLabel(labelProvider(option))
                 .accessibilityAddTraits(isSelected ? .isSelected : [])
             }

@@ -138,9 +138,9 @@ struct AddEventView: View {
                             .shadow(color: isTitleFocused ? skinAccent.opacity(0.4) : .clear, radius: 4, x: 0, y: 0)
                     )
                     .shadow(
-                        color: isTitleFocused ? skinAccent.opacity(DS.Opacity.subtleBorder) : DS.Shadows.ambientColor,
-                        radius: isTitleFocused ? DS.Shadows.ambientRadius + 1 : DS.Shadows.ambientRadius,
-                        y: DS.Shadows.ambientY
+                        color: isTitleFocused ? skinAccent.opacity(DS.Opacity.subtleBorder) : skin.resolvedShadowColor,
+                        radius: isTitleFocused ? skin.shadowRadius + 1 : skin.shadowRadius,
+                        y: skin.shadowY
                     )
                     .animation(skin.resolvedMicroAnimation, value: isTitleFocused)
                     .disabled(isExternal)
@@ -316,9 +316,9 @@ struct AddEventView: View {
                                 .shadow(color: (isLocationFocused || isNotesFocused) ? skinAccent.opacity(0.4) : .clear, radius: 4, x: 0, y: 0)
                         )
                         .shadow(
-                            color: (isLocationFocused || isNotesFocused) ? skinAccent.opacity(DS.Opacity.subtleBorder) : DS.Shadows.ambientColor,
-                            radius: (isLocationFocused || isNotesFocused) ? DS.Shadows.ambientRadius + 1 : DS.Shadows.ambientRadius,
-                            y: DS.Shadows.ambientY
+                            color: (isLocationFocused || isNotesFocused) ? skinAccent.opacity(DS.Opacity.subtleBorder) : skin.resolvedShadowColor,
+                            radius: (isLocationFocused || isNotesFocused) ? skin.shadowRadius + 1 : skin.shadowRadius,
+                            y: skin.shadowY
                         )
                         .animation(skin.resolvedMicroAnimation, value: isLocationFocused || isNotesFocused)
                     }
@@ -838,8 +838,8 @@ struct AddEventView: View {
                         .overlay {
                             if segWidth > 30 {
                                 Text("\(segment.minutes)m")
-                                    .font(.system(.caption2, design: .rounded, weight: .semibold))
-                                    .foregroundStyle(DS.Colors.onOverlay)
+                                    .font(.system(.caption2, design: skin.resolvedFontDesign, weight: .semibold))
+                                    .foregroundStyle(DS.contrastingForeground(for: color))
                             }
                         }
                     }
@@ -879,7 +879,7 @@ struct AddEventView: View {
                         .frame(width: 1.5, height: 16)
                         .frame(width: 12)
                     Text("\(segments.count - 4) more")
-                        .font(.system(.caption2, design: .rounded))
+                        .font(.system(.caption2, design: skin.resolvedFontDesign))
                         .foregroundStyle(skin.resolvedTextTertiary)
                 }
                 ForEach(Array(segments.suffix(2).enumerated()), id: \.offset) { idx, segment in
@@ -916,7 +916,7 @@ struct AddEventView: View {
                     .overlay {
                         Image(systemName: icon)
                             .font(.system(size: 6, weight: .bold))
-                            .foregroundStyle(DS.Colors.onOverlay)
+                            .foregroundStyle(DS.contrastingForeground(for: color))
                     }
             }
             .frame(width: 12)

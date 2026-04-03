@@ -142,7 +142,7 @@ fileprivate struct TimeSlotChip: View {
         }) {
             Text(slot.label)
                 .font(.system(.body, design: .monospaced, weight: isSelected ? .bold : .regular))
-                .foregroundStyle(isSelected ? .white : skin.resolvedTextPrimary)
+                .foregroundStyle(isSelected ? DS.contrastingForeground(for: chipAccent) : skin.resolvedTextPrimary)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -173,7 +173,7 @@ fileprivate struct TimeSlotChip: View {
             Capsule()
                 .strokeBorder(
                     isSelected
-                        ? DS.Colors.onOverlay.opacity(DS.Opacity.glassBorder)
+                        ? DS.contrastingForeground(for: chipAccent).opacity(DS.Opacity.glassBorder)
                         : (isHovered ? chipAccent.opacity(DS.Opacity.strongFill + DS.Opacity.faintBorder) : .clear),
                     lineWidth: DS.Border.thin
                 )
