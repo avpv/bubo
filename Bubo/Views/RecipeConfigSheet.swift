@@ -275,7 +275,7 @@ struct RecipeConfigSheet: View {
                                 if fraction * geo.size.width > 36 {
                                     Text("\(segment.minutes)m")
                                         .font(.system(size: 9, weight: .semibold, design: .rounded))
-                                        .foregroundStyle(.white.opacity(0.9))
+                                        .foregroundStyle(skin.resolvedTextPrimary.opacity(0.9))
                                 }
                             }
                         )
