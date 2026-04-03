@@ -137,7 +137,7 @@ struct EmojiPickerView: View {
                         } label: {
                             Text(emoji)
                                 .font(.title2)
-                                .frame(width: 32, height: 32)
+                                .frame(width: DS.Size.emojiCellSize, height: DS.Size.emojiCellSize)
                                 .background(Color.clear)
                                 .contentShape(Rectangle())
                         }
@@ -155,7 +155,7 @@ struct EmojiPickerView: View {
                 .padding(.vertical, DS.Spacing.xs)
             }
         }
-        .frame(width: 280, height: 320)
+        .frame(width: DS.Size.emojiPickerWidth, height: DS.Size.emojiPickerHeight)
         .skinPlatter(skin)
     }
 }
@@ -171,7 +171,7 @@ struct EmojiPickerButton: View {
             showPicker.toggle()
         } label: {
             Image(systemName: "face.smiling")
-                .font(.system(size: 16))
+                .font(.system(size: DS.Size.iconLarge))
                 .foregroundStyle(showPicker ? skin.accentColor : skin.resolvedTextTertiary)
         }
         .buttonStyle(.plain)

@@ -24,7 +24,7 @@ struct TimeSlotPicker: View {
         if slots.isEmpty {
             Text("No slots left today")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(skin.resolvedTextSecondary)
                 .padding(.horizontal, DS.Spacing.xs)
                 .task {
                     while !Task.isCancelled {

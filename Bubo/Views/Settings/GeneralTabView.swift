@@ -30,6 +30,7 @@ struct ThemeColorPreview: View {
 struct SkinPreviewCard: View {
     let skin: SkinDefinition
     let isSelected: Bool
+    @Environment(\.activeSkin) private var activeSkin
 
     var body: some View {
         VStack(spacing: 4) {
@@ -87,13 +88,13 @@ struct SkinPreviewCard: View {
                 Text(skin.displayName)
                     .font(.caption2)
                     .fontWeight(isSelected ? .semibold : .regular)
-                    .foregroundStyle(isSelected ? Color.primary : .secondary)
+                    .foregroundStyle(isSelected ? activeSkin.resolvedTextPrimary : activeSkin.resolvedTextSecondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
                 if skin.author != "Bubo" {
                     Text("by \(skin.author)")
                         .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(activeSkin.resolvedTextTertiary)
                         .lineLimit(1)
                         .truncationMode(.tail)
                 }
@@ -106,6 +107,7 @@ struct SkinPreviewCard: View {
 
 struct CustomSkinsSection: View {
     @Bindable var settings: ReminderSettings
+    @Environment(\.activeSkin) private var skin
     @State private var customSkinLoader = CustomSkinLoader.shared
     @State private var importError: String?
 
@@ -116,7 +118,7 @@ struct CustomSkinsSection: View {
             HStack {
                 Text("Community skins")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(skin.resolvedTextSecondary)
                 Spacer()
                 Button {
                     customSkinLoader.revealInFinder()
@@ -125,7 +127,7 @@ struct CustomSkinsSection: View {
                         .font(.caption2)
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(skin.resolvedTextSecondary)
             }
 
             if !customSkinLoader.customSkins.isEmpty {
@@ -161,7 +163,7 @@ struct CustomSkinsSection: View {
                     .font(.subheadline)
             }
             .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(skin.resolvedTextSecondary)
         }
         .alert("Import failed", isPresented: .init(
             get: { importError != nil },
@@ -201,16 +203,17 @@ struct CustomSkinsSection: View {
 
 struct BackgroundPhotoSection: View {
     @Bindable var settings: ReminderSettings
+    @Environment(\.activeSkin) private var skin
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Global Background Photo")
                     .font(.subheadline)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(skin.resolvedTextPrimary)
                 Text("Overrides all themes and built-in wallpapers across the app")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(skin.resolvedTextSecondary)
             }
 
             if !settings.customBackgroundPhotoPath.isEmpty,
@@ -237,7 +240,7 @@ struct BackgroundPhotoSection: View {
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(.body)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(skin.resolvedTextSecondary)
                     }
                     .buttonStyle(.plain)
                     .padding(DS.Spacing.pillVertical)
@@ -248,25 +251,25 @@ struct BackgroundPhotoSection: View {
                     HStack {
                         Text("Opacity")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(skin.resolvedTextSecondary)
                             .frame(width: 50, alignment: .leading)
                         Slider(value: $settings.customBackgroundPhotoOpacity, in: 0.05...1.0, step: 0.05)
                             .accessibilityLabel("Photo opacity")
                         Text("\(Int(settings.customBackgroundPhotoOpacity * 100))%")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(skin.resolvedTextSecondary)
                             .frame(width: 30, alignment: .trailing)
                     }
                     HStack {
                         Text("Blur")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(skin.resolvedTextSecondary)
                             .frame(width: 50, alignment: .leading)
                         Slider(value: $settings.customBackgroundPhotoBlur, in: 0...10, step: 0.5)
                             .accessibilityLabel("Photo blur")
                         Text(String(format: "%.1f", settings.customBackgroundPhotoBlur))
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(skin.resolvedTextSecondary)
                             .frame(width: 30, alignment: .trailing)
                     }
                 }
@@ -284,11 +287,11 @@ struct BackgroundPhotoSection: View {
                 .font(.caption)
             }
             .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(skin.resolvedTextSecondary)
 
             Text("Recommended size: 720\u{00D7}1200 px (3:5)")
                 .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(skin.resolvedTextTertiary)
         }
     }
 
@@ -330,6 +333,7 @@ struct BackgroundPhotoSection: View {
 
 struct WallpaperSectionView: View {
     @Environment(ReminderSettings.self) var settings
+    @Environment(\.activeSkin) private var skin
     @State private var selectedCategory: WallpaperCategory = .solidColor
 
     var body: some View {
@@ -338,7 +342,7 @@ struct WallpaperSectionView: View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             Text("Choose a background wallpaper")
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(skin.resolvedTextSecondary)
 
             // Category picker
             Picker("Category", selection: $selectedCategory) {
@@ -373,7 +377,7 @@ struct WallpaperSectionView: View {
             if selectedCategory == .live {
                 Label("Live wallpapers use animation and may increase energy usage", systemImage: "bolt.fill")
                     .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(skin.resolvedTextTertiary)
             }
         }
     }
@@ -449,7 +453,7 @@ struct GeneralTabView: View {
                 VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                     Text("Choose a visual theme")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(skin.resolvedTextSecondary)
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: DS.Grid.skinCardMinWidth), spacing: DS.Grid.skinCardSpacing)], spacing: 8) {
                         ForEach(SkinCatalog.builtInSkins) { skin in
                             let isSelected = settings.selectedSkinID == skin.id
@@ -473,8 +477,8 @@ struct GeneralTabView: View {
             SettingsPlatter("Background") {
                 WallpaperSectionView()
 
-                Divider()
-                    .padding(.vertical, 4)
+                SkinSeparator()
+                    .padding(.vertical, DS.Spacing.xs)
 
                 BackgroundPhotoSection(settings: settings)
             }
@@ -507,7 +511,7 @@ struct GeneralTabView: View {
                         Spacer()
                         Text("Bubo \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0")")
                             .font(.caption2)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(skin.resolvedTextTertiary)
                         Spacer()
                     }
                     HStack {

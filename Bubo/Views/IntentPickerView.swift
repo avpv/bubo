@@ -46,9 +46,9 @@ struct IntentPickerView: View {
         Button { onAskAI?() } label: {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "sparkles")
-                    .font(.system(size: 20))
+                    .font(.system(size: DS.Size.headerIcon))
                     .foregroundStyle(skin.accentColor)
-                    .frame(width: 28)
+                    .frame(width: DS.Size.controlHeight)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Ask AI")
@@ -214,7 +214,7 @@ struct RecipeCardView: View {
     private var quickLayout: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             Image(systemName: recipe.icon)
-                .font(.system(size: 18))
+                .font(.system(size: DS.Size.iconLarge + 2))
                 .foregroundStyle(skin.accentColor)
             Text(recipe.name)
                 .font(.caption2.weight(.semibold))
@@ -231,9 +231,9 @@ struct RecipeCardView: View {
     private var suggestedLayout: some View {
         HStack(spacing: DS.Spacing.sm) {
             Image(systemName: recipe.icon)
-                .font(.system(size: 20))
+                .font(.system(size: DS.Size.headerIcon))
                 .foregroundStyle(skin.accentColor)
-                .frame(width: 28)
+                .frame(width: DS.Size.controlHeight)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(recipe.name)

@@ -31,7 +31,7 @@ struct WorldClockTabView: View {
                     if settings.isWorldClockEnabled {
                         Text("Displays a row of time pills on the main screen and event creation.")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(skin.resolvedTextSecondary)
                     }
                 }
 
@@ -42,7 +42,7 @@ struct WorldClockTabView: View {
                             VStack(spacing: 0) {
                                 ForEach(Array(selectedCities.enumerated()), id: \.element.id) { index, city in
                                     if index > 0 {
-                                        Divider().padding(.leading, DS.Spacing.sm)
+                                        SkinSeparator().padding(.leading, DS.Spacing.sm)
                                     }
                                     HStack {
                                         VStack(alignment: .leading, spacing: 2) {
@@ -50,14 +50,14 @@ struct WorldClockTabView: View {
                                                 .font(.body)
                                             Text(city.country)
                                                 .font(.caption)
-                                                .foregroundStyle(.secondary)
+                                                .foregroundStyle(skin.resolvedTextSecondary)
                                         }
 
                                         Spacer()
 
                                         Text(city.timezoneID)
                                             .font(.caption2)
-                                            .foregroundStyle(.tertiary)
+                                            .foregroundStyle(skin.resolvedTextTertiary)
 
                                         // Reorder buttons
                                         Button {
@@ -109,7 +109,7 @@ struct WorldClockTabView: View {
                     SettingsPlatter("Add Cities") {
                         HStack {
                             Image(systemName: "magnifyingglass")
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(skin.resolvedTextSecondary)
                             TextField("Search cities...", text: $searchText)
                                 .textFieldStyle(.plain)
                         }
@@ -136,10 +136,10 @@ struct WorldClockTabView: View {
                                             VStack(alignment: .leading, spacing: 1) {
                                                 Text(city.city)
                                                     .font(.body)
-                                                    .foregroundStyle(.primary)
+                                                    .foregroundStyle(skin.resolvedTextPrimary)
                                                 Text(city.country)
                                                     .font(.caption)
-                                                    .foregroundStyle(.secondary)
+                                                    .foregroundStyle(skin.resolvedTextSecondary)
                                             }
 
                                             Spacer()
@@ -155,7 +155,7 @@ struct WorldClockTabView: View {
                                     }
                                     .buttonStyle(.plain)
 
-                                    Divider()
+                                    SkinSeparator()
                                         .padding(.leading, DS.Spacing.sm)
                                 }
                             }

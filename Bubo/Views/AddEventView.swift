@@ -250,7 +250,7 @@ struct AddEventView: View {
                             ForEach(EventColorTag.allCases, id: \.self) { tag in
                                 ColorDotButton(
                                     tag: tag,
-                                    isSelected: selectedColorTag == tag,
+                                    isActive: selectedColorTag == tag,
                                     action: {
                                         Haptics.tap()
                                         selectedColorTag = selectedColorTag == tag ? nil : tag
@@ -1010,44 +1010,4 @@ struct AddEventView: View {
     }
 }
 
-// MARK: - Color Dot Button (with hover)
-
-private struct ColorDotButton: View {
-    let tag: EventColorTag
-    let isSelected: Bool
-    let action: () -> Void
-
-    @State private var isHovered = false
-    @Environment(\.activeSkin) private var skin
-
-    var body: some View {
-        Button(action: action) {
-            Circle()
-                .fill(tag.color)
-                .frame(width: DS.Size.colorDotSize, height: DS.Size.colorDotSize)
-                .overlay(
-                    Circle()
-                        .strokeBorder(
-                            skin.resolvedTextPrimary.opacity(isSelected ? 0.8 : 0),
-                            lineWidth: isSelected ? DS.Border.selection : 0
-                        )
-                )
-                .shadow(
-                    color: isSelected ? tag.color.opacity(DS.Opacity.half) : (isHovered ? tag.color.opacity(DS.Opacity.strongFill) : .clear),
-                    radius: isSelected ? 3 : (isHovered ? 2 : 0)
-                )
-                .scaleEffect(isSelected ? 1.1 : (isHovered ? 1.08 : 1.0))
-                .animation(skin.resolvedMicroAnimation, value: isSelected)
-                .animation(skin.resolvedMicroAnimation, value: isHovered)
-                .padding(DS.Spacing.xs)
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering in
-            isHovered = hovering
-        }
-        .help(tag.rawValue)
-        .accessibilityLabel(tag.rawValue)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-    }
-}
+// ColorDotButton is now a shared component in Components/ColorDotButton.swift
