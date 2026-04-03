@@ -195,7 +195,7 @@ struct RecipeCardView: View {
                 snippetLayout
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(RecipeCardButtonStyle(skin: skin))
         .onHover { hovering in
             withAnimation(skin.resolvedMicroAnimation) {
                 isHovered = hovering
@@ -348,6 +348,19 @@ struct RecipeCardView: View {
             y: isHovered ? DS.Shadows.hoverY : skin.shadowY
         )
         .scaleEffect(isHovered ? 1.02 : 1.0)
+    }
+}
+
+// MARK: - Recipe Card Button Style
+
+private struct RecipeCardButtonStyle: ButtonStyle {
+    let skin: any SkinProtocol
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .opacity(configuration.isPressed ? 0.85 : 1.0)
+            .animation(skin.resolvedMicroAnimation, value: configuration.isPressed)
     }
 }
 
