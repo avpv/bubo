@@ -251,7 +251,7 @@ struct RecipeConfigSheet: View {
         case .optimizing:
             VStack(spacing: DS.Spacing.md) {
                 ProgressView()
-                    .scaleEffect(0.8)
+                    .controlSize(.regular)
                 Text(recipe.isCreative ? "Finding the best time…" : "Optimizing schedule…")
                     .font(.caption)
                     .foregroundStyle(skin.resolvedTextSecondary)
@@ -326,9 +326,9 @@ struct RecipeConfigSheet: View {
             ForEach(scenario.genes, id: \.eventId) { gene in
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: gene.isFocusBlock ? "brain.head.profile" : "calendar")
-                        .font(.system(size: 10))
+                        .font(.system(size: DS.Size.iconSmall))
                         .foregroundStyle(gene.isFocusBlock ? skin.accentColor : skin.resolvedTextTertiary)
-                        .frame(width: 14)
+                        .frame(width: DS.Size.iconMedium)
 
                     Text(gene.title)
                         .font(.caption.weight(.medium))
@@ -404,8 +404,7 @@ struct RecipeConfigSheet: View {
                     HStack(spacing: DS.Spacing.xs) {
                         if case .optimizing = optimizationState {
                             ProgressView()
-                                .scaleEffect(0.6)
-                                .frame(width: 16, height: 16)
+                                .controlSize(.small)
                         } else {
                             Image(systemName: recipe.isCreative ? "calendar.badge.plus" : "wand.and.stars")
                         }
@@ -699,7 +698,7 @@ struct RecipeConfigSheet: View {
         } label: {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 16))
+                    .font(.system(size: DS.Size.iconLarge))
                     .foregroundStyle(isSelected ? skin.accentColor : skin.resolvedTextTertiary)
 
                 VStack(alignment: .leading, spacing: 1) {

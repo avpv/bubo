@@ -378,7 +378,7 @@ struct MenuBarView: View {
 
             if reminderService.isSyncing {
                 ProgressView()
-                    .scaleEffect(0.5)
+                    .controlSize(.mini)
                     .frame(width: DS.Size.syncIndicatorSize, height: DS.Size.syncIndicatorSize)
                     .transition(.scale.combined(with: .opacity))
             }

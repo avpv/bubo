@@ -759,6 +759,7 @@ private struct LiveStarsView: View {
 struct WallpaperPreviewCard: View {
     let wallpaper: WallpaperDefinition
     let isSelected: Bool
+    @Environment(\.activeSkin) private var skin
 
     var body: some View {
         VStack(spacing: 4) {
@@ -780,7 +781,7 @@ struct WallpaperPreviewCard: View {
                             ZStack {
                                 RoundedRectangle(cornerRadius: DS.Size.previewCardRadius).fill(colors.background)
                                 Image(systemName: patternIcon)
-                                    .font(.system(size: 16))
+                                    .font(.system(size: DS.Size.iconLarge))
                                     .foregroundStyle(colors.foreground.opacity(3))
                             }
                         }
@@ -796,23 +797,23 @@ struct WallpaperPreviewCard: View {
                 }
                 .clipShape(RoundedRectangle(cornerRadius: DS.Size.previewCardRadius))
             }
-            .frame(height: 40)
+            .frame(height: DS.Size.previewCardHeight)
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Size.previewCardRadius)
                     .strokeBorder(
-                        isSelected ? Color.accentColor : Color.primary.opacity(0.1),
-                        lineWidth: isSelected ? 2 : 0.5
+                        isSelected ? skin.accentColor : DS.Colors.textPrimary.opacity(0.1),
+                        lineWidth: isSelected ? DS.Border.selection : DS.Border.thin
                     )
             )
             .shadow(
-                color: isSelected ? Color.accentColor.opacity(0.3) : .clear,
-                radius: isSelected ? 4 : 0
+                color: isSelected ? skin.accentColor.opacity(0.3) : .clear,
+                radius: isSelected ? DS.Shadows.ambientY : 0
             )
 
             Text(wallpaper.displayName)
                 .font(.caption2)
                 .fontWeight(isSelected ? .semibold : .regular)
-                .foregroundStyle(isSelected ? Color.primary : .secondary)
+                .foregroundStyle(isSelected ? skin.resolvedTextPrimary : skin.resolvedTextSecondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
         }
