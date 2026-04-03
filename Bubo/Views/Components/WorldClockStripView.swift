@@ -230,6 +230,7 @@ private struct WorldClockPill: View {
                 Image(systemName: "moon.fill")
                     .font(.system(size: DS.Size.worldClockMoonSize, weight: skin.resolvedSymbolWeight))
                     .foregroundStyle(skin.resolvedTextTertiary)
+                    .accessibilityHidden(true)
             }
 
             Text(timeString)

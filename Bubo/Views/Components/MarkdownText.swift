@@ -48,7 +48,7 @@ struct MarkdownText: View {
         case .unorderedItem(let content, let depth):
             HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xs) {
                 Text(depth == 0 ? "•" : "◦")
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(skin.resolvedTextTertiary)
                 Text(inlineMarkdown(content))
                     .lineSpacing(DS.Typography.bodyLineSpacing)
             }
@@ -57,7 +57,7 @@ struct MarkdownText: View {
         case .orderedItem(let index, let content, let depth):
             HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xs) {
                 Text("\(index).")
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(skin.resolvedTextTertiary)
                 Text(inlineMarkdown(content))
                     .lineSpacing(DS.Typography.bodyLineSpacing)
             }

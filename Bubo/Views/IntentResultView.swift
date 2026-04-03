@@ -257,6 +257,7 @@ struct IntentResultView: View {
                 Text("Try Another")
             }
             .buttonStyle(.action(role: .secondary))
+            .keyboardShortcut(.cancelAction)
 
             Spacer()
 
@@ -268,6 +269,7 @@ struct IntentResultView: View {
                     Text("Close")
                 }
                 .buttonStyle(.action(role: .primary))
+                .keyboardShortcut(.defaultAction)
             } else {
                 let isApplied = appliedIndex == selectedScenarioIndex
                 Button(action: {
@@ -284,6 +286,7 @@ struct IntentResultView: View {
                     )
                 }
                 .buttonStyle(.action(role: .primary))
+                .keyboardShortcut(.defaultAction)
                 .disabled(isApplied || optimizerService.scenarios.isEmpty)
             }
         }
