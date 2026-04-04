@@ -933,6 +933,8 @@ struct RecipeConfigSheet: View {
             eventPickerParam(id: param.id)
         case .eventMultiPicker:
             eventMultiPickerParam(id: param.id)
+        case .periodPicker:
+            periodPickerParam(id: param.id)
         }
     }
 
@@ -1002,6 +1004,40 @@ struct RecipeConfigSheet: View {
         }
         .labelsHidden()
         .frame(width: 100)
+    }
+
+    private func periodPickerParam(id: String) -> some View {
+        // Options: nil = any time, then each Period case
+        let options: [(label: String, value: String)] = [
+            ("Any time", ""),
+            ("Morning 7–12", Period.morning.rawValue),
+            ("Afternoon 12–17", Period.afternoon.rawValue),
+            ("Evening 17–21", Period.evening.rawValue),
+        ]
+        let binding = Binding<String>(
+            get: { paramValues[id] as? String ?? findDefaultPeriod(paramId: id) },
+            set: { newValue in
+                paramValues[id] = newValue
+                if case .error = optimizationState {
+                    optimizationState = .idle
+                }
+            }
+        )
+        return SegmentedPillPicker(
+            options: options.map(\.value),
+            selection: binding,
+            labelProvider: { value in
+                options.first { $0.value == value }?.label ?? value
+            }
+        )
+    }
+
+    /// Find the default period for a period param by looking at the recipe's event spec.
+    private func findDefaultPeriod(paramId: String) -> String {
+        guard let param = recipe.params.first(where: { $0.id == paramId }),
+              case .eventPeriod(let index) = param.target,
+              index < recipe.events.count else { return "" }
+        return recipe.events[index].period?.rawValue ?? ""
     }
 
     private func eventPickerParam(id: String) -> some View {

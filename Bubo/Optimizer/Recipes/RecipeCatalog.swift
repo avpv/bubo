@@ -107,6 +107,9 @@ extension ScheduleRecipe {
                 RecipeParam(id: "minutes", label: "How long?",
                            kind: .segmented(Array(stride(from: 30, through: 480, by: 30))),
                            target: .eventMinutes(index: 0)),
+                RecipeParam(id: "period", label: "When?",
+                           kind: .periodPicker,
+                           target: .eventPeriod(index: 0)),
             ]
         )
     }
@@ -144,6 +147,9 @@ extension ScheduleRecipe {
                 RecipeParam(id: "minutes", label: "Total time",
                            kind: .segmented([90, 120, 130, 180]),
                            target: .eventMinutes(index: 0)),
+                RecipeParam(id: "period", label: "When?",
+                           kind: .periodPicker,
+                           target: .eventPeriod(index: 0)),
             ]
         )
     }
