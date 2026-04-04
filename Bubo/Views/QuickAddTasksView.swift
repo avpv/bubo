@@ -45,6 +45,15 @@ struct QuickAddTasksView: View {
             case .high: return "exclamationmark"
             }
         }
+
+        /// Default story points inferred from priority when user doesn't set SP explicitly.
+        var defaultStoryPoints: Int {
+            switch self {
+            case .low: return 2
+            case .medium: return 5
+            case .high: return 8
+            }
+        }
     }
 
     private var validTasks: [TaskEntry] {
@@ -186,12 +195,13 @@ struct QuickAddTasksView: View {
     private func planTasks() {
         isOptimizing = true
         let eventSpecs = validTasks.map { task in
-            EventSpec(
+            let sp = task.storyPoints ?? task.priority.defaultStoryPoints
+            return EventSpec(
                 title: task.title,
                 minutes: task.minutes,
                 priority: task.priority.value,
                 energy: min(1.0, Double(task.minutes) / 180.0),
-                storyPoints: task.storyPoints
+                storyPoints: sp
             )
         }
 
