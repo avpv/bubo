@@ -157,6 +157,11 @@ struct OptimizerPreferences: Codable, Sendable {
     var maxMeetingsPerDay: Int
     var idealFocusBlockMinutes: Int
 
+    // Meeting clustering
+    var preferredClusterWindowStart: Int     // hour — meetings clustered after this
+    var preferredClusterWindowEnd: Int       // hour — meetings clustered before this
+    var maxMeetingsPerCluster: Int           // avoid marathon meeting blocks
+
     init(
         focusBlockWeight: Double = 1.0,
         pomodoroFitWeight: Double = 0.8,
@@ -179,7 +184,10 @@ struct OptimizerPreferences: Codable, Sendable {
         defaultBufferMinutes: Int = 5,
         heavyMeetingBufferMinutes: Int = 15,
         maxMeetingsPerDay: Int = 6,
-        idealFocusBlockMinutes: Int = 120
+        idealFocusBlockMinutes: Int = 120,
+        preferredClusterWindowStart: Int = 9,
+        preferredClusterWindowEnd: Int = 13,
+        maxMeetingsPerCluster: Int = 4
     ) {
         self.focusBlockWeight = focusBlockWeight
         self.pomodoroFitWeight = pomodoroFitWeight
@@ -203,6 +211,9 @@ struct OptimizerPreferences: Codable, Sendable {
         self.heavyMeetingBufferMinutes = heavyMeetingBufferMinutes
         self.maxMeetingsPerDay = maxMeetingsPerDay
         self.idealFocusBlockMinutes = idealFocusBlockMinutes
+        self.preferredClusterWindowStart = preferredClusterWindowStart
+        self.preferredClusterWindowEnd = preferredClusterWindowEnd
+        self.maxMeetingsPerCluster = maxMeetingsPerCluster
     }
 }
 
@@ -220,6 +231,11 @@ struct ScheduleScenario: Identifiable, Sendable {
     let fitness: Double
     let objectiveBreakdown: [String: Double]
     let constraintViolations: [String]
+
+    /// Optimized task execution order within each day's Pomodoro blocks.
+    /// Keys are day start dates; values are event IDs in recommended order.
+    /// Populated by `planDayWithSequencing` — nil when sequencing wasn't applied.
+    var taskSequenceByDay: [Date: [String]]?
 
     /// Convert genes back to CalendarEvents for display.
     func toCalendarEvents() -> [CalendarEvent] {

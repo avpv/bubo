@@ -102,6 +102,11 @@ struct PomodoroSequenceChromosome: Chromosome, Sendable {
 
 /// Evaluates PomodoroSequenceChromosome fitness based on task ordering quality.
 /// Reuses logic from existing objectives (energy, context switch, deadline).
+///
+/// Supports two modes:
+/// - **Weighted sum** (default): collapses four objectives into a scalar fitness.
+/// - **Pareto-aware**: uses NSGA-II crowding distance to preserve diverse
+///   non-dominated solutions, surfacing multiple distinct task orderings.
 struct PomodoroSequenceEvaluator {
 
     /// Weights for the four sub-objectives.
@@ -138,23 +143,161 @@ struct PomodoroSequenceEvaluator {
         chromosome.needsEvaluation = false
     }
 
-    /// Compute fitness in [0, 1] for a task ordering.
+    /// Compute fitness in [0, 1] for a task ordering (weighted sum).
     func evaluate(
         _ chromosome: PomodoroSequenceChromosome,
         context: OptimizerContext
     ) -> Double {
+        let scores = objectiveScores(for: chromosome)
+
+        return scores.energy * weights.energyAlignment
+            + scores.context * weights.contextSwitch
+            + scores.deadline * weights.deadlineProximity
+            + scores.cognitive * weights.cognitiveLoad
+    }
+
+    /// Per-objective scores for a chromosome. Used by both weighted-sum and Pareto modes.
+    func objectiveScores(
+        for chromosome: PomodoroSequenceChromosome
+    ) -> (energy: Double, context: Double, deadline: Double, cognitive: Double) {
         let ordered = chromosome.sequence.map { tasks[$0] }
-        guard !ordered.isEmpty else { return 1.0 }
+        guard !ordered.isEmpty else { return (1.0, 1.0, 1.0, 1.0) }
 
-        let energyScore = evaluateEnergyCurve(ordered, context: context)
-        let contextScore = evaluateContextSwitches(ordered)
-        let deadlineScore = evaluateDeadlineProximity(ordered)
-        let cognitiveScore = evaluateCognitiveLoad(ordered)
+        return (
+            energy: evaluateEnergyCurve(ordered),
+            context: evaluateContextSwitches(ordered),
+            deadline: evaluateDeadlineProximity(ordered),
+            cognitive: evaluateCognitiveLoad(ordered)
+        )
+    }
 
-        return energyScore * weights.energyAlignment
-            + contextScore * weights.contextSwitch
-            + deadlineScore * weights.deadlineProximity
-            + cognitiveScore * weights.cognitiveLoad
+    // MARK: - Pareto Ranking (NSGA-II style)
+
+    /// Assign fitness using Pareto dominance + crowding distance.
+    /// Non-dominated individuals get highest fitness; within the same front,
+    /// individuals in sparse regions score higher (preserving diversity).
+    func evaluatePareto(
+        _ population: inout [PomodoroSequenceChromosome]
+    ) {
+        guard !population.isEmpty else { return }
+
+        // Compute objective vectors
+        let objectiveVectors = population.map { chromosome -> [Double] in
+            let s = objectiveScores(for: chromosome)
+            return [s.energy, s.context, s.deadline, s.cognitive]
+        }
+
+        // Assign Pareto fronts
+        let fronts = nonDominatedSort(objectiveVectors)
+
+        // Assign fitness: front 0 (best) gets [0.8, 1.0], front 1 gets [0.6, 0.8], etc.
+        let frontCount = max(1, fronts.count)
+        for (frontIndex, front) in fronts.enumerated() {
+            let frontBase = 1.0 - Double(frontIndex) / Double(frontCount)
+            let frontRange = 1.0 / Double(frontCount)
+
+            // Crowding distance within this front
+            let distances = crowdingDistance(
+                indices: front,
+                objectiveVectors: objectiveVectors
+            )
+
+            // Normalize crowding distances to [0, 1]
+            let maxDist = distances.max() ?? 1.0
+            let normFactor = maxDist > 0 ? maxDist : 1.0
+
+            for (i, idx) in front.enumerated() {
+                let crowdingBonus = (distances[i] / normFactor) * frontRange * 0.9
+                population[idx].fitness = max(0.01, frontBase - frontRange + crowdingBonus)
+                population[idx].needsEvaluation = false
+            }
+        }
+    }
+
+    /// Non-dominated sorting: returns array of fronts (each front = array of indices).
+    private func nonDominatedSort(_ objectives: [[Double]]) -> [[Int]] {
+        let n = objectives.count
+        var dominationCount = [Int](repeating: 0, count: n)
+        var dominated: [[Int]] = Array(repeating: [], count: n)
+        var fronts: [[Int]] = []
+        var currentFront: [Int] = []
+
+        for i in 0..<n {
+            for j in 0..<n where i != j {
+                if dominates(objectives[i], objectives[j]) {
+                    dominated[i].append(j)
+                } else if dominates(objectives[j], objectives[i]) {
+                    dominationCount[i] += 1
+                }
+            }
+            if dominationCount[i] == 0 {
+                currentFront.append(i)
+            }
+        }
+
+        while !currentFront.isEmpty {
+            fronts.append(currentFront)
+            var nextFront: [Int] = []
+            for i in currentFront {
+                for j in dominated[i] {
+                    dominationCount[j] -= 1
+                    if dominationCount[j] == 0 {
+                        nextFront.append(j)
+                    }
+                }
+            }
+            currentFront = nextFront
+        }
+
+        return fronts
+    }
+
+    /// Returns true if `a` Pareto-dominates `b` (all objectives >= and at least one >).
+    private func dominates(_ a: [Double], _ b: [Double]) -> Bool {
+        var anyBetter = false
+        for (va, vb) in zip(a, b) {
+            if va < vb { return false }
+            if va > vb { anyBetter = true }
+        }
+        return anyBetter
+    }
+
+    /// Crowding distance for individuals in a front.
+    /// Measures how isolated each solution is in objective space — higher = more diverse.
+    private func crowdingDistance(
+        indices: [Int],
+        objectiveVectors: [[Double]]
+    ) -> [Double] {
+        let count = indices.count
+        guard count > 2 else {
+            return [Double](repeating: Double.infinity, count: count)
+        }
+
+        let numObjectives = objectiveVectors[0].count
+        var distances = [Double](repeating: 0, count: count)
+
+        for m in 0..<numObjectives {
+            // Sort indices by objective m
+            let sorted = (0..<count).sorted {
+                objectiveVectors[indices[$0]][m] < objectiveVectors[indices[$1]][m]
+            }
+
+            // Boundary solutions get infinite distance
+            distances[sorted[0]] = .infinity
+            distances[sorted[count - 1]] = .infinity
+
+            let range = objectiveVectors[indices[sorted[count - 1]]][m]
+                - objectiveVectors[indices[sorted[0]]][m]
+            guard range > 0 else { continue }
+
+            for i in 1..<(count - 1) {
+                let prev = objectiveVectors[indices[sorted[i - 1]]][m]
+                let next = objectiveVectors[indices[sorted[i + 1]]][m]
+                distances[sorted[i]] += (next - prev) / range
+            }
+        }
+
+        return distances
     }
 
     // MARK: - Sub-objectives
@@ -162,8 +305,7 @@ struct PomodoroSequenceEvaluator {
     /// High-energy tasks early in the session score better.
     /// Models energy as linearly declining from 1.0 to 0.3 across the session.
     private func evaluateEnergyCurve(
-        _ ordered: [OptimizableEvent],
-        context: OptimizerContext
+        _ ordered: [OptimizableEvent]
     ) -> Double {
         guard ordered.count > 1 else { return 1.0 }
 
@@ -176,7 +318,6 @@ struct PomodoroSequenceEvaluator {
             let availableEnergy = 1.0 - positionFraction * 0.7
 
             // Alignment: high-cost tasks at high-energy positions
-            // Perfect alignment = energyCost matches availableEnergy rank order
             let alignment = 1.0 - abs(task.energyCost - availableEnergy)
             score += alignment
         }
@@ -224,13 +365,10 @@ struct PomodoroSequenceEvaluator {
             let timeUntilDeadline = deadline.timeIntervalSince(taskEnd)
 
             if timeUntilDeadline < 0 {
-                // Past deadline — strong penalty
                 score += 0.0
             } else {
-                // Earlier position for tighter deadlines = better
                 let positionScore = 1.0 - (Double(position) / n)
                 let urgency = 1.0 / (1.0 + timeUntilDeadline / 3600.0)
-                // Urgent tasks in early positions score higher
                 score += positionScore * urgency + (1.0 - urgency) * 0.5
             }
         }
@@ -244,15 +382,12 @@ struct PomodoroSequenceEvaluator {
         guard ordered.count > 1 else { return 1.0 }
 
         var consecutiveHeavy = 0
-        var maxConsecutiveHeavy = 0
         var totalPenalty = 0.0
 
         for task in ordered {
             if task.energyCost > 0.6 {
                 consecutiveHeavy += 1
-                maxConsecutiveHeavy = max(maxConsecutiveHeavy, consecutiveHeavy)
                 if consecutiveHeavy > 1 {
-                    // Penalty grows with each additional consecutive heavy task
                     totalPenalty += Double(consecutiveHeavy - 1) * 0.15
                 }
             } else {
@@ -265,6 +400,20 @@ struct PomodoroSequenceEvaluator {
 }
 
 // MARK: - Pomodoro Sequence Optimizer
+
+/// The result of a Pomodoro sequence optimization, including alternatives.
+struct PomodoroSequenceResult: Sendable {
+    /// The best task ordering (by weighted sum).
+    let bestOrder: [OptimizableEvent]
+
+    /// Alternative orderings from the Pareto front.
+    /// Each represents a different trade-off between objectives.
+    /// Empty when Pareto mode is disabled.
+    let alternatives: [[OptimizableEvent]]
+
+    /// Per-objective scores for the best ordering.
+    let objectiveScores: (energy: Double, context: Double, deadline: Double, cognitive: Double)
+}
 
 /// Convenience wrapper that runs a GA to optimize task order within a Pomodoro session.
 struct PomodoroSequenceOptimizer {
@@ -282,10 +431,33 @@ struct PomodoroSequenceOptimizer {
         config: GAConfiguration = .quick,
         weights: PomodoroSequenceEvaluator.Weights = .default
     ) -> [OptimizableEvent] {
-        guard tasks.count > 1 else { return tasks }
+        optimizeWithAlternatives(
+            tasks: tasks,
+            sessionStart: sessionStart,
+            preferences: preferences,
+            config: config,
+            weights: weights
+        ).bestOrder
+    }
 
-        // Build a context scoped exactly to these tasks.
-        // This ensures random() creates permutations of the correct length.
+    /// Optimize with Pareto-aware selection, returning both the best ordering
+    /// and diverse alternatives that represent different objective trade-offs.
+    static func optimizeWithAlternatives(
+        tasks: [OptimizableEvent],
+        sessionStart: Date,
+        preferences: OptimizerPreferences = OptimizerPreferences(),
+        config: GAConfiguration = .quick,
+        weights: PomodoroSequenceEvaluator.Weights = .default,
+        maxAlternatives: Int = 3
+    ) -> PomodoroSequenceResult {
+        guard tasks.count > 1 else {
+            return PomodoroSequenceResult(
+                bestOrder: tasks,
+                alternatives: [],
+                objectiveScores: (1.0, 1.0, 1.0, 1.0)
+            )
+        }
+
         let context = OptimizerContext(
             movableEvents: tasks,
             preferences: preferences
@@ -305,9 +477,40 @@ struct PomodoroSequenceOptimizer {
             }
         )
 
-        let sorted = ga.run()
-        guard let best = sorted.first else { return tasks }
+        var sorted = ga.run()
 
-        return best.sequence.map { tasks[$0] }
+        // Apply Pareto ranking to final population to identify diverse solutions
+        evaluator.evaluatePareto(&sorted)
+
+        // Re-sort: Pareto ranking updates fitness with crowding distance
+        sorted.sort { $0.fitness > $1.fitness }
+
+        guard let best = sorted.first else {
+            return PomodoroSequenceResult(
+                bestOrder: tasks,
+                alternatives: [],
+                objectiveScores: (1.0, 1.0, 1.0, 1.0)
+            )
+        }
+
+        let bestOrder = best.sequence.map { tasks[$0] }
+        let bestScores = evaluator.objectiveScores(for: best)
+
+        // Collect diverse alternatives (different from best)
+        var alternatives: [[OptimizableEvent]] = []
+        var seenSequences: Set<[Int]> = [best.sequence]
+
+        for candidate in sorted.dropFirst() {
+            guard alternatives.count < maxAlternatives else { break }
+            guard !seenSequences.contains(candidate.sequence) else { continue }
+            seenSequences.insert(candidate.sequence)
+            alternatives.append(candidate.sequence.map { tasks[$0] })
+        }
+
+        return PomodoroSequenceResult(
+            bestOrder: bestOrder,
+            alternatives: alternatives,
+            objectiveScores: bestScores
+        )
     }
 }

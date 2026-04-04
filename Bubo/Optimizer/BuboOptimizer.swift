@@ -338,6 +338,110 @@ final class BuboOptimizer {
         )
     }
 
+    // MARK: - Day Planning with Pomodoro Sequencing
+
+    /// Two-phase optimization:
+    /// 1. Schedule GA places tasks in optimal time slots
+    /// 2. Sequence GA optimizes task execution order within each day
+    ///
+    /// The result includes `taskSequenceByDay` on each scenario, indicating
+    /// the recommended execution order for tasks grouped on the same day.
+    func planDayWithSequencing(
+        tasks: [OptimizableEvent],
+        fixedEvents: [CalendarEvent],
+        workingHours: ClosedRange<Int> = 9...18,
+        sequenceWeights: PomodoroSequenceEvaluator.Weights = .default
+    ) async -> OptimizerResult {
+        // Phase 1: place tasks in time slots
+        var result = await planDay(
+            tasks: tasks,
+            fixedEvents: fixedEvents,
+            workingHours: workingHours
+        )
+
+        // Phase 2: optimize task order within each day per scenario
+        let taskMap = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, $0) })
+        let cal = Calendar.current
+        let capturedPrefs = preferences
+        let capturedWeights = sequenceWeights
+
+        var enhancedScenarios: [ScheduleScenario] = []
+
+        for scenario in result.scenarios {
+            // Group genes by day
+            var genesByDay: [Date: [ScheduleGene]] = [:]
+            for gene in scenario.genes {
+                let day = cal.startOfDay(for: gene.startTime)
+                genesByDay[day, default: []].append(gene)
+            }
+
+            var sequenceByDay: [Date: [String]] = [:]
+
+            for (day, dayGenes) in genesByDay {
+                let dayTasks = dayGenes.compactMap { taskMap[$0.eventId] }
+                guard dayTasks.count > 1 else {
+                    sequenceByDay[day] = dayGenes.map(\.eventId)
+                    continue
+                }
+
+                // Use earliest gene start as session start
+                let sessionStart = dayGenes.map(\.startTime).min() ?? day
+
+                let ordered = await Task.detached(priority: .userInitiated) {
+                    PomodoroSequenceOptimizer.optimize(
+                        tasks: dayTasks,
+                        sessionStart: sessionStart,
+                        preferences: capturedPrefs,
+                        config: .quick,
+                        weights: capturedWeights
+                    )
+                }.value
+
+                sequenceByDay[day] = ordered.map(\.id)
+            }
+
+            var enhanced = scenario
+            enhanced.taskSequenceByDay = sequenceByDay
+            enhancedScenarios.append(enhanced)
+        }
+
+        result = OptimizerResult(
+            scenarios: enhancedScenarios,
+            metadata: result.metadata
+        )
+        lastResult = result
+        return result
+    }
+
+    // MARK: - Meeting Clustering
+
+    /// Optimize meeting placement to cluster meetings together,
+    /// maximizing continuous focus blocks during the rest of the day.
+    func clusterMeetings(
+        meetings: [OptimizableEvent],
+        fixedEvents: [CalendarEvent],
+        workingHours: ClosedRange<Int> = 9...18
+    ) async -> OptimizerResult {
+        // Boost clustering weight for this specific optimization
+        var prefs = preferences
+        prefs.meetingClusteringWeight = max(prefs.meetingClusteringWeight, 2.0)
+        prefs.focusBlockWeight = max(prefs.focusBlockWeight, 1.5)
+
+        let cal = Calendar.current
+        let todayStart = cal.startOfDay(for: Date())
+        let todayEnd = cal.date(byAdding: .day, value: 1, to: todayStart)!
+
+        let context = OptimizerContext(
+            fixedEvents: fixedEvents.filter { $0.startDate >= todayStart && $0.startDate < todayEnd },
+            movableEvents: meetings,
+            workingHours: workingHours,
+            planningHorizon: DateInterval(start: max(Date(), todayStart), end: todayEnd),
+            preferences: prefs
+        )
+
+        return await optimize(context: context, overrideConfig: .quick)
+    }
+
     // MARK: - Week Balancing (#9)
 
     func balanceWeek(

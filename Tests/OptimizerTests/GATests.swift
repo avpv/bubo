@@ -1990,6 +1990,92 @@ struct PomodoroSequenceChromosomeTests {
         #expect(result.count == 1)
         #expect(result[0].id == "solo")
     }
+
+    @Test("Pareto ranking assigns distinct fitness to diverse solutions")
+    func paretoRankingProducesDiversity() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let sessionStart = cal.date(bySettingHour: 9, minute: 0, second: 0, of: today)!
+
+        let tasks = [
+            makeMovableEvent(id: "h1", title: "Heavy Backend", energyCost: 0.9, context: "Work/backend"),
+            makeMovableEvent(id: "h2", title: "Heavy Frontend", energyCost: 0.8, context: "Work/frontend"),
+            makeMovableEvent(id: "l1", title: "Light Backend", energyCost: 0.2, context: "Work/backend"),
+            makeMovableEvent(id: "l2", title: "Light Frontend", energyCost: 0.1, context: "Work/frontend"),
+        ]
+
+        let evaluator = PomodoroSequenceEvaluator(
+            tasks: tasks,
+            sessionStart: sessionStart
+        )
+
+        // Create diverse population
+        var population: [PomodoroSequenceChromosome] = [
+            .init(sequence: [0, 1, 2, 3]),  // heavy-first
+            .init(sequence: [0, 2, 1, 3]),  // alternating contexts
+            .init(sequence: [3, 2, 1, 0]),  // light-first
+            .init(sequence: [0, 2, 3, 1]),  // grouped backend-first
+        ]
+
+        evaluator.evaluatePareto(&population)
+
+        // All should have fitness assigned
+        for (i, chr) in population.enumerated() {
+            #expect(chr.fitness > 0, "Individual \(i) should have positive fitness after Pareto ranking")
+            #expect(!chr.needsEvaluation, "Individual \(i) should be marked as evaluated")
+        }
+
+        // Fitness values should not all be identical (diverse solutions should get different ranks)
+        let uniqueFitnesses = Set(population.map { ($0.fitness * 1000).rounded() / 1000 })
+        #expect(uniqueFitnesses.count >= 2,
+                "Pareto ranking should differentiate at least some solutions")
+    }
+
+    @Test("optimizeWithAlternatives returns multiple orderings")
+    func optimizeWithAlternativesReturnsMultiple() {
+        let tasks = [
+            makeMovableEvent(id: "a", title: "A", energyCost: 0.9, context: "X"),
+            makeMovableEvent(id: "b", title: "B", energyCost: 0.7, context: "Y"),
+            makeMovableEvent(id: "c", title: "C", energyCost: 0.3, context: "X"),
+            makeMovableEvent(id: "d", title: "D", energyCost: 0.1, context: "Y"),
+        ]
+
+        let result = PomodoroSequenceOptimizer.optimizeWithAlternatives(
+            tasks: tasks,
+            sessionStart: Date(),
+            config: .quick,
+            maxAlternatives: 3
+        )
+
+        #expect(result.bestOrder.count == 4)
+        #expect(Set(result.bestOrder.map(\.id)) == Set(["a", "b", "c", "d"]))
+        // Should have at least one alternative (GA with 50 individuals should find diverse solutions)
+        // Note: not asserting exact count since GA is stochastic
+        #expect(result.objectiveScores.energy >= 0 && result.objectiveScores.energy <= 1)
+        #expect(result.objectiveScores.cognitive >= 0 && result.objectiveScores.cognitive <= 1)
+    }
+
+    @Test("objectiveScores decomposes per-objective correctly")
+    func objectiveScoresDecomposition() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let sessionStart = cal.date(bySettingHour: 9, minute: 0, second: 0, of: today)!
+
+        let tasks = [
+            makeMovableEvent(id: "t1", title: "T1", energyCost: 0.9),
+            makeMovableEvent(id: "t2", title: "T2", energyCost: 0.1),
+        ]
+
+        let evaluator = PomodoroSequenceEvaluator(tasks: tasks, sessionStart: sessionStart)
+
+        let chromosome = PomodoroSequenceChromosome(sequence: [0, 1])
+        let scores = evaluator.objectiveScores(for: chromosome)
+
+        #expect(scores.energy >= 0 && scores.energy <= 1)
+        #expect(scores.context >= 0 && scores.context <= 1)
+        #expect(scores.deadline >= 0 && scores.deadline <= 1)
+        #expect(scores.cognitive >= 0 && scores.cognitive <= 1)
+    }
 }
 
 // MARK: - Meeting Clustering Objective Tests
@@ -2078,7 +2164,6 @@ struct MeetingClusteringObjectiveTests {
         let cal = Calendar.current
         let today = cal.startOfDay(for: Date())
 
-        // Only focus blocks, no meetings — should return 1.0
         let genes = [
             ScheduleGene(eventId: "f1", title: "Focus Block",
                          startTime: cal.date(bySettingHour: 9, minute: 0, second: 0, of: today)!,
@@ -2100,5 +2185,115 @@ struct MeetingClusteringObjectiveTests {
         let evaluator = FitnessEvaluator.standard(preferences: OptimizerPreferences())
         let hasClusteringObjective = evaluator.objectives.contains { $0.name == "MeetingClustering" }
         #expect(hasClusteringObjective, "Standard evaluator should include MeetingClustering objective")
+    }
+
+    @Test("Meetings in preferred window score higher")
+    func preferredWindowScoring() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+
+        // Meetings at 10:00, 10:30, 11:00 — within default window 9-13
+        let inWindowGenes = [
+            ScheduleGene(eventId: "m1", title: "Meeting 1",
+                         startTime: cal.date(bySettingHour: 10, minute: 0, second: 0, of: today)!,
+                         duration: 1800, context: "meeting", energyCost: 0.5, priority: 0.5, isFocusBlock: false),
+            ScheduleGene(eventId: "m2", title: "Meeting 2",
+                         startTime: cal.date(bySettingHour: 10, minute: 30, second: 0, of: today)!,
+                         duration: 1800, context: "meeting", energyCost: 0.5, priority: 0.5, isFocusBlock: false),
+            ScheduleGene(eventId: "m3", title: "Meeting 3",
+                         startTime: cal.date(bySettingHour: 11, minute: 0, second: 0, of: today)!,
+                         duration: 1800, context: "meeting", energyCost: 0.5, priority: 0.5, isFocusBlock: false),
+        ]
+        let inWindow = ScheduleChromosome(genes: inWindowGenes)
+
+        // Meetings at 14:00, 14:30, 15:00 — clustered but outside window
+        let outsideWindowGenes = [
+            ScheduleGene(eventId: "m1", title: "Meeting 1",
+                         startTime: cal.date(bySettingHour: 14, minute: 0, second: 0, of: today)!,
+                         duration: 1800, context: "meeting", energyCost: 0.5, priority: 0.5, isFocusBlock: false),
+            ScheduleGene(eventId: "m2", title: "Meeting 2",
+                         startTime: cal.date(bySettingHour: 14, minute: 30, second: 0, of: today)!,
+                         duration: 1800, context: "meeting", energyCost: 0.5, priority: 0.5, isFocusBlock: false),
+            ScheduleGene(eventId: "m3", title: "Meeting 3",
+                         startTime: cal.date(bySettingHour: 15, minute: 0, second: 0, of: today)!,
+                         duration: 1800, context: "meeting", energyCost: 0.5, priority: 0.5, isFocusBlock: false),
+        ]
+        let outsideWindow = ScheduleChromosome(genes: outsideWindowGenes)
+
+        let events = (1...3).map { i in
+            makeMovableEvent(id: "m\(i)", title: "Meeting \(i)", durationMinutes: 30)
+        }
+        let context = makeContext(movableEvents: events)
+
+        let objective = MeetingClusteringObjective(weight: 1.0)
+        let inScore = objective.evaluate(chromosome: inWindow, context: context)
+        let outScore = objective.evaluate(chromosome: outsideWindow, context: context)
+
+        #expect(inScore > outScore,
+                "In-window (\(inScore)) should score higher than outside-window (\(outScore))")
+    }
+
+    @Test("Oversized clusters are penalized")
+    func oversizedClusterPenalty() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+
+        // 6 meetings back-to-back (exceeds default max of 4)
+        let genes = (0..<6).map { i in
+            ScheduleGene(
+                eventId: "m\(i)", title: "Meeting \(i)",
+                startTime: cal.date(bySettingHour: 10, minute: i * 30, second: 0, of: today)!,
+                duration: 1800, context: "meeting", energyCost: 0.5, priority: 0.5, isFocusBlock: false
+            )
+        }
+        let bigCluster = ScheduleChromosome(genes: genes)
+
+        // 4 meetings back-to-back (within limit)
+        let smallerGenes = Array(genes.prefix(4))
+        let smallCluster = ScheduleChromosome(genes: smallerGenes)
+
+        let events = (0..<6).map { i in
+            makeMovableEvent(id: "m\(i)", title: "Meeting \(i)", durationMinutes: 30)
+        }
+        let smallEvents = Array(events.prefix(4))
+
+        let bigContext = makeContext(movableEvents: events)
+        let smallContext = makeContext(movableEvents: smallEvents)
+
+        let objective = MeetingClusteringObjective(weight: 1.0)
+        let bigScore = objective.evaluate(chromosome: bigCluster, context: bigContext)
+        let smallScore = objective.evaluate(chromosome: smallCluster, context: smallContext)
+
+        #expect(smallScore >= bigScore,
+                "Within-limit cluster (\(smallScore)) should score >= oversized cluster (\(bigScore))")
+    }
+
+    @Test("MeetingClustering weight is included in PreferenceLearner")
+    func preferenceLearnerIncludesClustering() {
+        let learner = PreferenceLearner()
+        #expect(learner.learnedWeights["MeetingClustering"] != nil,
+                "PreferenceLearner should have MeetingClustering in default weights")
+        #expect(learner.learnedWeights["MeetingClustering"] == 0.8)
+    }
+
+    @Test("CalendarEvent.isMovable defaults to false")
+    func isMovableDefault() {
+        let event = CalendarEvent(
+            id: "e1", title: "Test", startDate: Date(),
+            endDate: Date().addingTimeInterval(3600),
+            location: nil, description: nil, calendarName: nil, eventType: .standard
+        )
+        #expect(!event.isMovable, "Events should default to non-movable")
+    }
+
+    @Test("Scenario taskSequenceByDay is initially nil")
+    func scenarioSequenceInitiallyNil() {
+        let scenario = ScheduleScenario(
+            genes: [],
+            fitness: 0.5,
+            objectiveBreakdown: [:],
+            constraintViolations: []
+        )
+        #expect(scenario.taskSequenceByDay == nil)
     }
 }

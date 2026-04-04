@@ -116,6 +116,11 @@ struct CalendarEvent: Identifiable, Codable, Hashable, Sendable {
     /// When set, takes priority over colorTag and calendarName for context resolution.
     var context: String?
 
+    /// Whether the optimizer is allowed to move this event to a different time slot.
+    /// Defaults to `false` for events synced from external calendars (apple_ prefix).
+    /// Set to `true` for user-created meetings that can be rescheduled.
+    var isMovable: Bool = false
+
     // MARK: - Static formatters (avoid re-creation per call)
 
     private static let timeFormatter: DateFormatter = {
