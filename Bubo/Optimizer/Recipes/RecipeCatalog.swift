@@ -24,10 +24,11 @@ struct RecipeCatalog {
     static let allCategories: [Category] = [
         Category(id: "focus", name: "Focus & Deep Work", recipes: [
             .needFocus(), .pomodoroSession(), .structuredDeepWork(),
-            .deepWorkDay(), .maxProductivity,
+            .deepWorkDay(), .maxProductivity, .makerSchedule,
         ]),
         Category(id: "planning", name: "Planning", recipes: [
             .organizeDay, .planWeek, .fullRebuild,
+            .showOptions, .likeYesterday,
         ]),
         Category(id: "deadlines", name: "Deadlines", recipes: [
             .deadlineMode, .deadlineCrunch, .multipleDeadlines,
@@ -35,6 +36,7 @@ struct RecipeCatalog {
         Category(id: "meetings", name: "Meetings", recipes: [
             .batchMeetings, .bufferBetweenMeetings(),
             .tooManyMeetings, .prepBeforeMeeting(),
+            .managerSchedule,
         ]),
         Category(id: "energy", name: "Energy & Balance", recipes: [
             .lowEnergyDay, .morningPerson, .postLunchDip,
@@ -57,9 +59,6 @@ struct RecipeCatalog {
         ]),
         Category(id: "workouts", name: "Workouts & Activities", recipes: [
             .circuitTraining(), .yogaSession(), .intervalTraining(),
-        ]),
-        Category(id: "work-styles", name: "Work Styles", recipes: [
-            .showOptions, .likeYesterday, .makerSchedule, .managerSchedule,
         ]),
     ]
 
@@ -748,7 +747,7 @@ extension ScheduleRecipe {
         id: "show-options",
         name: "Show 3 Options",
         description: "Generates 3 different schedule options to compare",
-        category: "work-styles",
+        category: "planning",
         speed: .balanced,
         params: [
             RecipeParam(id: "events", label: "Which tasks to optimize?",
@@ -761,7 +760,7 @@ extension ScheduleRecipe {
         id: "like-yesterday",
         name: "Like Yesterday",
         description: "Rearranges using patterns learned from your past choices",
-        category: "work-styles",
+        category: "planning",
         weights: [.useLearned: 1.0]
     )
 
@@ -769,7 +768,7 @@ extension ScheduleRecipe {
         id: "maker-schedule",
         name: "Maker Schedule",
         description: "Moves focus work to mornings, meetings to afternoons",
-        category: "work-styles",
+        category: "focus",
         weights: [.focusBlock: 2.0, .contextSwitch: 2.0],
         eventRules: [
             EventRule(match: .meetings, action: .setPreferredPeriod(.afternoon)),
@@ -785,7 +784,7 @@ extension ScheduleRecipe {
         id: "manager-schedule",
         name: "Manager Schedule",
         description: "Moves meetings to mornings, admin and focus to afternoons",
-        category: "work-styles",
+        category: "meetings",
         weights: [.contextSwitch: 2.0],
         eventRules: [
             EventRule(match: .meetings, action: .setPreferredPeriod(.morning)),
