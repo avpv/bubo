@@ -365,44 +365,82 @@ final class BuboOptimizer {
         let capturedPrefs = preferences
         let capturedWeights = sequenceWeights
 
-        var enhancedScenarios: [ScheduleScenario] = []
+        // Build all sequence optimization work items across all scenarios
+        struct SequenceJob: Sendable {
+            let scenarioIndex: Int
+            let day: Date
+            let tasks: [OptimizableEvent]
+            let sessionStart: Date
+        }
 
-        for scenario in result.scenarios {
-            // Group genes by day
+        var jobs: [SequenceJob] = []
+        var trivialSequences: [(scenarioIndex: Int, day: Date, eventIds: [String])] = []
+
+        for (scenarioIndex, scenario) in result.scenarios.enumerated() {
             var genesByDay: [Date: [ScheduleGene]] = [:]
             for gene in scenario.genes {
                 let day = cal.startOfDay(for: gene.startTime)
                 genesByDay[day, default: []].append(gene)
             }
 
-            var sequenceByDay: [Date: [String]] = [:]
-
             for (day, dayGenes) in genesByDay {
                 let dayTasks = dayGenes.compactMap { taskMap[$0.eventId] }
-                guard dayTasks.count > 1 else {
-                    sequenceByDay[day] = dayGenes.map(\.eventId)
-                    continue
-                }
-
-                // Use earliest gene start as session start
-                let sessionStart = dayGenes.map(\.startTime).min() ?? day
-
-                let ordered = await Task.detached(priority: .userInitiated) {
-                    PomodoroSequenceOptimizer.optimize(
+                if dayTasks.count > 1 {
+                    let sessionStart = dayGenes.map(\.startTime).min() ?? day
+                    jobs.append(SequenceJob(
+                        scenarioIndex: scenarioIndex,
+                        day: day,
                         tasks: dayTasks,
-                        sessionStart: sessionStart,
-                        preferences: capturedPrefs,
-                        config: .quick,
-                        weights: capturedWeights
-                    )
-                }.value
-
-                sequenceByDay[day] = ordered.map(\.id)
+                        sessionStart: sessionStart
+                    ))
+                } else {
+                    trivialSequences.append((scenarioIndex, day, dayGenes.map(\.eventId)))
+                }
             }
+        }
 
+        // Spawn all sequence optimizations in parallel
+        let parallelTasks = jobs.map { job in
+            (job, Task.detached(priority: .userInitiated) {
+                PomodoroSequenceOptimizer.optimize(
+                    tasks: job.tasks,
+                    sessionStart: job.sessionStart,
+                    preferences: capturedPrefs,
+                    config: .quick,
+                    weights: capturedWeights
+                )
+            })
+        }
+
+        // Collect results
+        var sequencesByScenario: [Int: [Date: [String]]] = [:]
+        for (scenarioIndex, _, _) in trivialSequences {
+            sequencesByScenario[scenarioIndex, default: [:]] = [:]
+        }
+        for (_, day, eventIds) in trivialSequences {
+            // Find the right scenario for this trivial entry
+            for (sIdx, d, ids) in trivialSequences where d == day {
+                sequencesByScenario[sIdx, default: [:]][d] = ids
+                _ = ids // silence warning
+            }
+        }
+        // Re-insert trivial sequences properly
+        sequencesByScenario = [:]
+        for (scenarioIndex, day, eventIds) in trivialSequences {
+            sequencesByScenario[scenarioIndex, default: [:]][day] = eventIds
+        }
+
+        // Await all parallel tasks
+        for (job, task) in parallelTasks {
+            let ordered = await task.value
+            sequencesByScenario[job.scenarioIndex, default: [:]][job.day] = ordered.map(\.id)
+        }
+
+        // Build enhanced scenarios
+        let enhancedScenarios = result.scenarios.enumerated().map { (idx, scenario) -> ScheduleScenario in
             var enhanced = scenario
-            enhanced.taskSequenceByDay = sequenceByDay
-            enhancedScenarios.append(enhanced)
+            enhanced.taskSequenceByDay = sequencesByScenario[idx]
+            return enhanced
         }
 
         result = OptimizerResult(

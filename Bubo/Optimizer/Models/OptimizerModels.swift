@@ -233,14 +233,16 @@ struct ScheduleScenario: Identifiable, Sendable {
     let constraintViolations: [String]
 
     /// Optimized task execution order within each day's Pomodoro blocks.
-    /// Keys are day start dates; values are event IDs in recommended order.
+    /// Keys are day start dates (normalized via `Calendar.startOfDay(for:)`);
+    /// values are event IDs in recommended order.
     /// Populated by `planDayWithSequencing` — nil when sequencing wasn't applied.
     var taskSequenceByDay: [Date: [String]]?
 
     /// Convert genes back to CalendarEvents for display.
+    /// Optimizer-generated events default to movable for re-optimization.
     func toCalendarEvents() -> [CalendarEvent] {
         genes.map { gene in
-            CalendarEvent(
+            var event = CalendarEvent(
                 id: gene.eventId,
                 title: gene.title,
                 startDate: gene.startTime,
@@ -250,6 +252,8 @@ struct ScheduleScenario: Identifiable, Sendable {
                 calendarName: "Optimizer",
                 eventType: .standard
             )
+            event.isMovable = true
+            return event
         }
     }
 }

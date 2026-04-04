@@ -2017,7 +2017,7 @@ struct PomodoroSequenceChromosomeTests {
             .init(sequence: [0, 2, 3, 1]),  // grouped backend-first
         ]
 
-        evaluator.evaluatePareto(&population)
+        evaluator.rankByParetoFronts(&population)
 
         // All should have fitness assigned
         for (i, chr) in population.enumerated() {
@@ -2295,5 +2295,131 @@ struct MeetingClusteringObjectiveTests {
             constraintViolations: []
         )
         #expect(scenario.taskSequenceByDay == nil)
+    }
+
+    @Test("Meeting spanning window boundary gets partial credit")
+    func windowBoundaryPartialCredit() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+
+        // Meeting: 12:30 - 14:00 — spans window end (13:00)
+        // Should get ~50% overlap credit (30 min of 90 min in window)
+        let genes = [
+            ScheduleGene(eventId: "m1", title: "Meeting 1",
+                         startTime: cal.date(bySettingHour: 12, minute: 30, second: 0, of: today)!,
+                         duration: 5400, context: "meeting", energyCost: 0.5, priority: 0.5, isFocusBlock: false),
+            ScheduleGene(eventId: "m2", title: "Meeting 2",
+                         startTime: cal.date(bySettingHour: 10, minute: 0, second: 0, of: today)!,
+                         duration: 1800, context: "meeting", energyCost: 0.5, priority: 0.5, isFocusBlock: false),
+        ]
+        let chromosome = ScheduleChromosome(genes: genes)
+
+        let events = [
+            makeMovableEvent(id: "m1", title: "Meeting 1", durationMinutes: 90),
+            makeMovableEvent(id: "m2", title: "Meeting 2", durationMinutes: 30),
+        ]
+        let context = makeContext(movableEvents: events)
+
+        let objective = MeetingClusteringObjective(weight: 1.0)
+        let score = objective.evaluate(chromosome: chromosome, context: context)
+        // Should not be 0 — partial overlap should count
+        #expect(score > 0, "Boundary-spanning meeting should get partial credit, not zero")
+    }
+
+    @Test("Optimizer output events are movable by default")
+    func optimizerOutputIsMovable() {
+        let gene = ScheduleGene(
+            eventId: "t1", title: "Optimized Task",
+            startTime: Date(), duration: 3600,
+            context: nil, energyCost: 0.5, priority: 0.5, isFocusBlock: false
+        )
+        let event = gene.toCalendarEvent()
+        #expect(event.isMovable, "Optimizer output events should be movable")
+    }
+}
+
+// MARK: - PomodoroSequence Edge Case Tests
+
+@Suite("PomodoroSequence Edge Cases")
+struct PomodoroSequenceEdgeCaseTests {
+
+    @Test("Empty task list returns perfect scores")
+    func emptyTaskList() {
+        let evaluator = PomodoroSequenceEvaluator(tasks: [], sessionStart: Date())
+        let scores = evaluator.objectiveScores(for: PomodoroSequenceChromosome(sequence: []))
+        #expect(scores.energy == 1.0)
+        #expect(scores.context == 1.0)
+        #expect(scores.deadline == 1.0)
+        #expect(scores.cognitive == 1.0)
+    }
+
+    @Test("Single task returns perfect scores")
+    func singleTask() {
+        let task = makeMovableEvent(id: "t1", title: "Task", energyCost: 0.5)
+        let evaluator = PomodoroSequenceEvaluator(tasks: [task], sessionStart: Date())
+        let scores = evaluator.objectiveScores(for: PomodoroSequenceChromosome(sequence: [0]))
+        #expect(scores.energy == 1.0)
+        #expect(scores.context == 1.0)
+        #expect(scores.cognitive == 1.0)
+    }
+
+    @Test("Uniform energy cost produces reasonable scores")
+    func uniformEnergyCost() {
+        let tasks = (0..<4).map { i in
+            makeMovableEvent(id: "t\(i)", title: "Task \(i)", energyCost: 0.5)
+        }
+        let evaluator = PomodoroSequenceEvaluator(tasks: tasks, sessionStart: Date())
+        let scores = evaluator.objectiveScores(for: PomodoroSequenceChromosome(sequence: [0, 1, 2, 3]))
+        // All same energy cost — any ordering is equally aligned
+        #expect(scores.energy > 0.3, "Uniform energy should produce decent score")
+        #expect(scores.cognitive == 1.0, "No heavy tasks → no cognitive penalty")
+    }
+
+    @Test("Two-task crossover returns valid permutations")
+    func twoTaskCrossover() {
+        let tasks = [
+            makeMovableEvent(id: "a", title: "A"),
+            makeMovableEvent(id: "b", title: "B"),
+        ]
+        let context = makeContext(movableEvents: tasks)
+
+        // With only 2 elements, OX1 guard returns (self, other)
+        let p1 = PomodoroSequenceChromosome(sequence: [0, 1])
+        let p2 = PomodoroSequenceChromosome(sequence: [1, 0])
+        let (c1, c2) = p1.crossover(with: p2, context: context)
+
+        #expect(Set(c1.sequence) == Set([0, 1]))
+        #expect(Set(c2.sequence) == Set([0, 1]))
+    }
+
+    @Test("All tasks with deadlines prioritizes urgent ones")
+    func deadlinePrioritization() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let sessionStart = cal.date(bySettingHour: 9, minute: 0, second: 0, of: today)!
+
+        let tasks = [
+            makeMovableEvent(id: "urgent", title: "Urgent",
+                             durationMinutes: 25,
+                             deadline: cal.date(bySettingHour: 11, minute: 0, second: 0, of: today)!),
+            makeMovableEvent(id: "relaxed", title: "Relaxed",
+                             durationMinutes: 25,
+                             deadline: cal.date(byAdding: .day, value: 7, to: today)!),
+        ]
+
+        let evaluator = PomodoroSequenceEvaluator(
+            tasks: tasks,
+            sessionStart: sessionStart,
+            weights: .init(energyAlignment: 0.0, contextSwitch: 0.0, deadlineProximity: 1.0, cognitiveLoad: 0.0)
+        )
+
+        var urgentFirst = PomodoroSequenceChromosome(sequence: [0, 1])
+        evaluator.evaluateAndAssign(&urgentFirst, context: makeContext(movableEvents: tasks))
+
+        var relaxedFirst = PomodoroSequenceChromosome(sequence: [1, 0])
+        evaluator.evaluateAndAssign(&relaxedFirst, context: makeContext(movableEvents: tasks))
+
+        #expect(urgentFirst.fitness >= relaxedFirst.fitness,
+                "Urgent-first (\(urgentFirst.fitness)) should score >= relaxed-first (\(relaxedFirst.fitness))")
     }
 }

@@ -233,9 +233,9 @@ struct MeetingClusteringObjective: FitnessObjective {
 
     // MARK: - Cluster Window Alignment
 
-    /// Rewards meetings that fall within the user's preferred cluster window.
-    /// E.g., if the user prefers meetings 9-13, meetings at 10:00 score high,
-    /// meetings at 16:00 score low.
+    /// Rewards meetings that overlap with the user's preferred cluster window.
+    /// Uses overlap ratio: a meeting fully inside the window scores 1.0,
+    /// a meeting half-inside scores 0.5, completely outside scores 0.0.
     private func clusterWindowAlignment(
         _ meetings: [(start: Date, end: Date, isMovable: Bool)],
         preferredStart: Int,
@@ -248,14 +248,20 @@ struct MeetingClusteringObjective: FitnessObjective {
               let windowEnd = calendar.date(bySettingHour: preferredEnd, minute: 0, second: 0, of: day)
         else { return 0.5 }
 
-        var inWindow = 0
+        var totalOverlapRatio = 0.0
         for meeting in meetings {
-            if meeting.start >= windowStart && meeting.end <= windowEnd {
-                inWindow += 1
-            }
+            let meetingDuration = meeting.end.timeIntervalSince(meeting.start)
+            guard meetingDuration > 0 else { continue }
+
+            // Overlap = intersection of [meeting.start, meeting.end] and [windowStart, windowEnd]
+            let overlapStart = max(meeting.start, windowStart)
+            let overlapEnd = min(meeting.end, windowEnd)
+            let overlap = max(0, overlapEnd.timeIntervalSince(overlapStart))
+
+            totalOverlapRatio += overlap / meetingDuration
         }
 
-        return Double(inWindow) / Double(meetings.count)
+        return totalOverlapRatio / Double(meetings.count)
     }
 
     // MARK: - Cluster Size Constraint

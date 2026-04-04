@@ -82,13 +82,15 @@ extension CalendarEvent {
 extension ScheduleGene {
 
     /// Convert a ScheduleGene back into a CalendarEvent.
+    /// Optimizer output defaults to `isMovable: true` so events can be re-optimized.
     func toCalendarEvent(
         title: String? = nil,
         calendarName: String? = "Optimizer",
         eventType: EventType = .standard,
-        colorTag: EventColorTag? = nil
+        colorTag: EventColorTag? = nil,
+        isMovable: Bool = true
     ) -> CalendarEvent {
-        CalendarEvent(
+        var event = CalendarEvent(
             id: eventId,
             title: title ?? self.title,
             startDate: startTime,
@@ -99,6 +101,8 @@ extension ScheduleGene {
             eventType: eventType,
             colorTag: colorTag
         )
+        event.isMovable = isMovable
+        return event
     }
 }
 

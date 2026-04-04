@@ -103,10 +103,15 @@ struct PomodoroSequenceChromosome: Chromosome, Sendable {
 /// Evaluates PomodoroSequenceChromosome fitness based on task ordering quality.
 /// Reuses logic from existing objectives (energy, context switch, deadline).
 ///
-/// Supports two modes:
+/// Two evaluation modes:
 /// - **Weighted sum** (default): collapses four objectives into a scalar fitness.
-/// - **Pareto-aware**: uses NSGA-II crowding distance to preserve diverse
-///   non-dominated solutions, surfacing multiple distinct task orderings.
+///   Used during GA evolution for selection pressure.
+/// - **Post-hoc Pareto ranking** (`rankByParetoFronts`): applied once after the
+///   GA converges to re-rank the final population using NSGA-II non-dominated
+///   fronts + crowding distance. This surfaces diverse alternatives without
+///   slowing evolution. The GA itself uses weighted-sum, so selection pressure
+///   during evolution is NOT Pareto-aware — this is intentional to avoid O(n²)
+///   per-generation cost for the marginal benefit of intra-session ordering.
 struct PomodoroSequenceEvaluator {
 
     /// Weights for the four sub-objectives.
@@ -173,10 +178,12 @@ struct PomodoroSequenceEvaluator {
 
     // MARK: - Pareto Ranking (NSGA-II style)
 
-    /// Assign fitness using Pareto dominance + crowding distance.
-    /// Non-dominated individuals get highest fitness; within the same front,
-    /// individuals in sparse regions score higher (preserving diversity).
-    func evaluatePareto(
+    /// Post-hoc Pareto ranking: re-assign fitness using non-dominated fronts
+    /// + crowding distance after the GA has converged with weighted-sum fitness.
+    /// Front 0 (non-dominated) gets highest fitness; within the same front,
+    /// individuals in sparse objective-space regions score higher (preserving diversity).
+    /// Complexity: O(n²) — called once on the final population, not per generation.
+    func rankByParetoFronts(
         _ population: inout [PomodoroSequenceChromosome]
     ) {
         guard !population.isEmpty else { return }
@@ -480,7 +487,7 @@ struct PomodoroSequenceOptimizer {
         var sorted = ga.run()
 
         // Apply Pareto ranking to final population to identify diverse solutions
-        evaluator.evaluatePareto(&sorted)
+        evaluator.rankByParetoFronts(&sorted)
 
         // Re-sort: Pareto ranking updates fitness with crowding distance
         sorted.sort { $0.fitness > $1.fitness }
