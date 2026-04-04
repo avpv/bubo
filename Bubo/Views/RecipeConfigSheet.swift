@@ -131,7 +131,6 @@ struct RecipeConfigSheet: View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             Text(recipe.name)
                 .font(.headline)
-                .fontWeight(skin.resolvedHeadlineFontWeight)
                 .foregroundStyle(skin.resolvedTextPrimary)
             if !recipe.description.isEmpty {
                 Text(recipe.description)
@@ -154,7 +153,7 @@ struct RecipeConfigSheet: View {
                     .foregroundStyle(skin.resolvedTextPrimary)
                     .accessibilityAddTraits(.isHeader)
 
-                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                VStack(alignment: .leading, spacing: DS.Spacing.md) {
                     paramControl(for: param)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -292,7 +291,7 @@ struct RecipeConfigSheet: View {
                             Group {
                                 if fraction * geo.size.width > 36 {
                                     Text("\(segment.minutes)m")
-                                        .font(.system(size: 9, weight: .semibold, design: skin.resolvedFontDesign))
+                                        .font(.caption2.weight(.semibold))
                                         .foregroundStyle(skin.resolvedTextPrimary.opacity(0.9))
                                 }
                             }
@@ -365,12 +364,12 @@ struct RecipeConfigSheet: View {
             VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.caption)
+                        .font(.caption2)
                         .foregroundStyle(skin.resolvedWarningColor)
 
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                         Text(friendlyErrorTitle(message))
-                            .font(.caption.weight(.medium))
+                            .font(.caption2.weight(.medium))
                             .foregroundStyle(skin.resolvedTextPrimary)
                         if !recipe.params.isEmpty && !isAtMinimumDuration {
                             Text("Try a shorter duration above.")
@@ -417,7 +416,7 @@ struct RecipeConfigSheet: View {
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(skin.accentColor)
                 .padding(.horizontal, DS.Spacing.sm)
-                .padding(.vertical, 3)
+                .padding(.vertical, DS.Spacing.xxs)
                 .background(skin.accentColor.opacity(0.12))
                 .clipShape(Capsule())
 
@@ -510,7 +509,7 @@ struct RecipeConfigSheet: View {
         let segments = buildTimelineSegments(snapshot)
         let totalDuration = max(segments.reduce(0.0) { $0 + $1.duration }, 1)
 
-        return VStack(alignment: .leading, spacing: 4) {
+        return VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             GeometryReader { geo in
                 HStack(spacing: 1) {
                     ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
@@ -540,7 +539,7 @@ struct RecipeConfigSheet: View {
                                 Group {
                                     if segment.isFree && width > 30 {
                                         Text("\(Int(segment.duration / 60))m")
-                                            .font(.system(size: 9, weight: .semibold, design: skin.resolvedFontDesign))
+                                            .font(.caption2.weight(.semibold))
                                             .foregroundStyle(skin.resolvedTextPrimary.opacity(0.9))
                                     }
                                 }
@@ -554,16 +553,16 @@ struct RecipeConfigSheet: View {
             // Time labels below the bar
             HStack {
                 Text(formatter.string(from: snapshot.planningHorizon.start))
-                    .font(.system(size: 8, design: .monospaced))
+                    .font(.caption2.monospacedDigit())
                     .foregroundStyle(skin.resolvedTextTertiary)
                 Spacer()
                 let freeTotal = Int(snapshot.freeGaps.reduce(0.0) { $0 + $1.duration } / 60)
                 Text("\(freeTotal)m free")
-                    .font(.system(size: 8, weight: .medium))
+                    .font(.caption2.weight(.medium))
                     .foregroundStyle(skin.resolvedTextSecondary)
                 Spacer()
                 Text(formatter.string(from: snapshot.planningHorizon.end))
-                    .font(.system(size: 8, design: .monospaced))
+                    .font(.caption2.monospacedDigit())
                     .foregroundStyle(skin.resolvedTextTertiary)
             }
         }
