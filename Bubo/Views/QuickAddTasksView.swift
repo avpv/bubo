@@ -93,11 +93,9 @@ struct QuickAddTasksView: View {
                             Haptics.tap()
                             tasks.append(TaskEntry())
                         } label: {
-                            Label("Add another task", systemImage: "plus")
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(skin.accentColor)
+                            Label("Add", systemImage: "plus")
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.action(role: .primary, size: .compact))
                         .padding(.leading, DS.Spacing.md)
                     }
                 }
