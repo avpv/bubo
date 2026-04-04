@@ -94,7 +94,7 @@ extension ScheduleRecipe {
         ScheduleRecipe(
             id: "need-focus",
             name: "Need Focus",
-            description: "Places a focus block in the best free slot",
+            description: "Finds a free slot and creates a focus event",
             category: "focus",
             events: [
                 EventSpec(title: "Focus Time", minutes: minutes,
@@ -115,7 +115,7 @@ extension ScheduleRecipe {
         ScheduleRecipe(
             id: "pomodoro",
             name: "Pomodoro Session",
-            description: "Places a pomodoro session in the best free slot",
+            description: "Finds a free slot and creates a pomodoro session",
             category: "focus",
             events: [
                 EventSpec(title: "Pomodoro Session", minutes: preset.totalMinutes,
@@ -131,7 +131,7 @@ extension ScheduleRecipe {
         ScheduleRecipe(
             id: "structured-deep-work",
             name: "Structured Deep Work",
-            description: "Places a focus block with pomodoro intervals in a free slot",
+            description: "Finds a free slot and creates a focus block with pomodoro intervals",
             category: "focus",
             events: [
                 EventSpec(title: "Deep Work", minutes: minutes,
@@ -152,7 +152,7 @@ extension ScheduleRecipe {
         ScheduleRecipe(
             id: "deep-work-day",
             name: "Deep Work Day",
-            description: "Creates focus blocks and rearranges tasks around them",
+            description: "Creates focus block events and rearranges tasks around them",
             category: "focus",
             events: [
                 EventSpec(title: "Focus Block", minutes: minutes, count: count,
@@ -173,7 +173,7 @@ extension ScheduleRecipe {
     static let maxProductivity = ScheduleRecipe(
         id: "max-productivity",
         name: "Max Productivity",
-        description: "Creates 3 deep work blocks, limits meetings to 2/day",
+        description: "Creates 3 deep work events, limits meetings to 2/day",
         category: "focus",
         events: [
             EventSpec(title: "Deep Work", minutes: 120, count: 3,
@@ -323,7 +323,7 @@ extension ScheduleRecipe {
         ScheduleRecipe(
             id: "prep-meeting",
             name: "Prep Before Meeting",
-            description: "Places a prep block right before the chosen meeting",
+            description: "Creates a prep event right before the chosen meeting",
             category: "meetings",
             events: [
                 EventSpec(title: "Prep", minutes: minutes,
@@ -448,7 +448,7 @@ extension ScheduleRecipe {
         ScheduleRecipe(
             id: "morning-routine",
             name: "Morning Routine",
-            description: "Places a daily morning block for the whole week",
+            description: "Finds morning slots and creates a daily routine event for the week",
             category: "habits",
             events: [
                 EventSpec(title: "Morning Routine", minutes: minutes, count: 5,
@@ -471,7 +471,7 @@ extension ScheduleRecipe {
         ScheduleRecipe(
             id: "evening-wrap-up",
             name: "Evening Wrap-up",
-            description: "Places a daily evening wrap-up for the whole week",
+            description: "Finds evening slots and creates a daily wrap-up event for the week",
             category: "habits",
             events: [
                 EventSpec(title: "Day Wrap-up", minutes: minutes, count: 5,
@@ -489,7 +489,7 @@ extension ScheduleRecipe {
         return ScheduleRecipe(
             id: "regular-learning",
             name: "Regular Learning",
-            description: "Places recurring learning sessions across the week",
+            description: "Finds free slots and creates learning sessions across the week",
             category: "habits",
             events: [
                 EventSpec(title: topic, minutes: sessionMinutes, count: sessionCount,
@@ -512,7 +512,7 @@ extension ScheduleRecipe {
     static let movementReminders = ScheduleRecipe(
         id: "movement-reminders",
         name: "Movement Breaks",
-        description: "Places 4 short movement breaks between tasks",
+        description: "Finds gaps between tasks and creates 4 movement break events",
         category: "habits",
         events: [
             EventSpec(title: "Movement Break", minutes: 10, count: 4,
@@ -788,7 +788,7 @@ extension ScheduleRecipe {
         return ScheduleRecipe(
             id: "circuit-training",
             name: "Circuit Training",
-            description: "Places \(rounds) rounds × \(exercises) exercises in a free slot",
+            description: "Finds a free slot and creates a \(rounds)×\(exercises) circuit workout",
             category: "workouts",
             events: events,
             includeExistingEvents: false,
@@ -805,7 +805,7 @@ extension ScheduleRecipe {
         ScheduleRecipe(
             id: "yoga-session",
             name: "Yoga Session",
-            description: "Places a yoga session (warm-up → practice → savasana) in a free slot",
+            description: "Finds a free slot and creates a yoga session event",
             category: "workouts",
             events: [
                 EventSpec(
@@ -848,7 +848,7 @@ extension ScheduleRecipe {
         return ScheduleRecipe(
             id: "interval-training",
             name: "Interval Training",
-            description: "Places \(intervals) intervals (\(workMinutes)min work / \(restMinutes)min rest) in a free slot",
+            description: "Finds a free slot and creates a \(intervals)-interval HIIT event",
             category: "workouts",
             events: [
                 EventSpec(
