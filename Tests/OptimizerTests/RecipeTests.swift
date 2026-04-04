@@ -173,9 +173,10 @@ final class RecipeTests: XCTestCase {
     // MARK: - Period → Hour Range
 
     func testPeriodHourRanges() {
-        XCTAssertEqual(Period.morning.hourRange, 7...12)
-        XCTAssertEqual(Period.afternoon.hourRange, 12...17)
-        XCTAssertEqual(Period.evening.hourRange, 17...21)
+        XCTAssertEqual(Period.night.hourRange, 0...6)
+        XCTAssertEqual(Period.morning.hourRange, 6...12)
+        XCTAssertEqual(Period.afternoon.hourRange, 12...18)
+        XCTAssertEqual(Period.evening.hourRange, 18...23)
     }
 
     // MARK: - HourRange

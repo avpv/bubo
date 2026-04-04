@@ -480,15 +480,17 @@ enum Stability: String, Codable, Hashable, CaseIterable {
 }
 
 enum Period: String, Codable, Hashable, CaseIterable {
+    case night
     case morning
     case afternoon
     case evening
 
     var hourRange: ClosedRange<Int> {
         switch self {
-        case .morning: return 7...12
-        case .afternoon: return 12...17
-        case .evening: return 17...21
+        case .night: return 0...6
+        case .morning: return 6...12
+        case .afternoon: return 12...18
+        case .evening: return 18...23
         }
     }
 }

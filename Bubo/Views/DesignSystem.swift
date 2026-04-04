@@ -454,6 +454,19 @@ extension View {
     }
 }
 
+// MARK: - Navigation Home Environment
+
+private struct NavigateHomeKey: EnvironmentKey {
+    static let defaultValue: (() -> Void)? = nil
+}
+
+extension EnvironmentValues {
+    var navigateHome: (() -> Void)? {
+        get { self[NavigateHomeKey.self] }
+        set { self[NavigateHomeKey.self] = newValue }
+    }
+}
+
 // MARK: - Reusable Header
 
 /// Standard header bar used across popover views.
@@ -468,6 +481,7 @@ struct PopoverHeader: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.activeSkin) private var skin
+    @Environment(\.navigateHome) private var navigateHome
 
     /// HIG: Navigation bar pattern — back button leading, title centered, trailing items trailing.
     var body: some View {
@@ -483,6 +497,19 @@ struct PopoverHeader: View {
 
                 HStack(spacing: DS.Spacing.xs) {
                     if showBack {
+                        Button {
+                            Haptics.tap()
+                            if let navigateHome {
+                                navigateHome()
+                            } else {
+                                onBack?()
+                            }
+                        } label: {
+                            OwlIcon(size: DS.Size.headerIcon)
+                                .foregroundStyle(skin.accentColor)
+                        }
+                        .buttonStyle(.borderless)
+
                         Button {
                             Haptics.tap()
                             onBack?()

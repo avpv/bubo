@@ -198,6 +198,7 @@ struct MenuBarView: View {
         .skinTinted(activeSkin)
         .skinTypography(activeSkin)
         .environment(\.activeSkin, activeSkin)
+        .environment(\.navigateHome, { navigation = .list })
         .frame(width: DS.Popover.width, height: navigation.isTimer ? DS.Popover.timerHeight : DS.Popover.height)
         .onAppear {
             guard !hasStartedSync else { return }
@@ -569,19 +570,17 @@ struct MenuBarView: View {
 
     private var footerActions: some View {
         HStack {
-            Button(action: {
-                Haptics.tap()
-                navigation = .addEvent()
-            }) {
-                Label("Add", systemImage: "plus")
-            }
-            .buttonStyle(.action(role: .primary, size: .regular))
-            .help("Add a new event (\u{2318}N)")
-            .keyboardShortcut("n", modifiers: .command)
+            HStack(spacing: DS.Spacing.sm) {
+                Button(action: {
+                    Haptics.tap()
+                    navigation = .addEvent()
+                }) {
+                    Label("Add", systemImage: "plus")
+                }
+                .buttonStyle(.action(role: .primary, size: .regular))
+                .help("Add a new event (\u{2318}N)")
+                .keyboardShortcut("n", modifiers: .command)
 
-            Spacer()
-
-            HStack(spacing: DS.Spacing.md) {
                 Button(action: {
                     Haptics.tap()
                     optimizerService.activeRecipe = nil
@@ -589,10 +588,19 @@ struct MenuBarView: View {
                     navigation = .optimizer
                 }) {
                     Image(systemName: "wand.and.stars")
+                        .font(.system(size: 14, weight: .semibold))
+                        .frame(width: 32, height: 32)
+                        .background(activeSkin.resolvedPlatterFill)
+                        .clipShape(Circle())
                 }
+                .buttonStyle(.plain)
                 .help("Optimize (\u{2318}O)")
                 .keyboardShortcut("o", modifiers: .command)
+            }
 
+            Spacer()
+
+            HStack(spacing: DS.Spacing.md) {
                 Button(action: {
                     Haptics.tap()
                     reminderService.syncNow()
