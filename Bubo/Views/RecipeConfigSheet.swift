@@ -66,10 +66,6 @@ struct RecipeConfigSheet: View {
         return []
     }
 
-    private var suggestedAlternatives: [ScheduleRecipe] {
-        RecipeCatalog.quickActions.filter { $0.isCreative }
-    }
-
     // MARK: - Body
 
     var body: some View {
@@ -852,50 +848,6 @@ struct RecipeConfigSheet: View {
                     .skinPlatterDepth(skin)
                 }
 
-                // Alternatives section
-                if let onSwitchRecipe, !suggestedAlternatives.isEmpty {
-                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                        Text("Try a recipe that creates new blocks")
-                            .font(.headline)
-                            .foregroundStyle(skin.resolvedTextPrimary)
-                            .accessibilityAddTraits(.isHeader)
-
-                        VStack(spacing: 0) {
-                            ForEach(Array(suggestedAlternatives.enumerated()), id: \.element.id) { index, alt in
-                                Button {
-                                    Haptics.tap()
-                                    onSwitchRecipe(alt)
-                                } label: {
-                                    HStack(spacing: DS.Spacing.sm) {
-                                        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                                            Text(alt.name)
-                                                .font(.caption.weight(.medium))
-                                                .foregroundStyle(skin.resolvedTextPrimary)
-                                            Text(alt.description)
-                                                .font(.caption2)
-                                                .foregroundStyle(skin.resolvedTextSecondary)
-                                                .lineLimit(1)
-                                        }
-                                        Spacer()
-                                        Image(systemName: "chevron.right")
-                                            .font(.caption2)
-                                            .foregroundStyle(skin.resolvedTextTertiary)
-                                    }
-                                    .padding(.vertical, DS.Spacing.sm)
-                                    .padding(.horizontal, DS.Spacing.md)
-                                }
-                                .buttonStyle(.plain)
-
-                                if index < suggestedAlternatives.count - 1 {
-                                    SkinSeparator()
-                                        .padding(.horizontal, DS.Spacing.md)
-                                }
-                            }
-                        }
-                        .skinPlatter(skin)
-                        .skinPlatterDepth(skin)
-                    }
-                }
             }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.vertical, DS.Spacing.xl)
