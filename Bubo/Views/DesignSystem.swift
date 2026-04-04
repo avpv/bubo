@@ -487,29 +487,32 @@ struct PopoverHeader: View {
     var body: some View {
         VStack(spacing: 0) {
             ZStack {
-                // Center: title (only when in navigation / back mode)
-                if let title, showBack {
-                    Text(title)
-                        .font(.headline)
-                        .fontWeight(skin.resolvedHeadlineFontWeight)
-                        .fontDesign(skin.resolvedFontDesign)
-                }
-
+                // Center: owl icon + title always centered
                 HStack(spacing: DS.Spacing.xs) {
-                    if showBack {
+                    if showBack, let navigateHome {
                         Button {
                             Haptics.tap()
-                            if let navigateHome {
-                                navigateHome()
-                            } else {
-                                onBack?()
-                            }
+                            navigateHome()
                         } label: {
                             OwlIcon(size: DS.Size.headerIcon)
                                 .foregroundStyle(skin.accentColor)
                         }
                         .buttonStyle(.borderless)
+                    } else {
+                        OwlIcon(size: DS.Size.headerIcon)
+                            .foregroundStyle(skin.accentColor)
+                    }
 
+                    if let title {
+                        Text(title)
+                            .font(.headline)
+                            .fontWeight(skin.resolvedHeadlineFontWeight)
+                            .fontDesign(skin.resolvedFontDesign)
+                    }
+                }
+
+                HStack(spacing: DS.Spacing.xs) {
+                    if showBack {
                         Button {
                             Haptics.tap()
                             onBack?()
@@ -518,16 +521,6 @@ struct PopoverHeader: View {
                         }
                         .buttonStyle(.borderless)
                         .keyboardShortcut(.escape, modifiers: [])
-                    } else {
-                        OwlIcon(size: DS.Size.headerIcon)
-                            .foregroundStyle(skin.accentColor)
-
-                        if let title {
-                            Text(title)
-                                .font(.headline)
-                                .fontWeight(skin.resolvedHeadlineFontWeight)
-                                .fontDesign(skin.resolvedFontDesign)
-                        }
                     }
 
                     Spacer()
@@ -607,17 +600,18 @@ struct ActionButtonStyle: ButtonStyle {
 
     @ViewBuilder
     private var buttonStrokeOverlay: some View {
-        let opacity = role == .primary ? 0.15 : 0.06
+        let opacity = role == .primary ? 0.3 : 0.06
+        let width: CGFloat = role == .primary ? 1.0 : 0.5
         switch skin.buttonShape {
         case .capsule:
             Capsule()
-                .strokeBorder(.white.opacity(opacity), lineWidth: 0.5)
+                .strokeBorder(.white.opacity(opacity), lineWidth: width)
         case .roundedRect:
             RoundedRectangle(cornerRadius: DS.Size.cornerRadius)
-                .strokeBorder(.white.opacity(opacity), lineWidth: 0.5)
+                .strokeBorder(.white.opacity(opacity), lineWidth: width)
         case .rectangle:
             Rectangle()
-                .strokeBorder(.white.opacity(opacity), lineWidth: 0.5)
+                .strokeBorder(.white.opacity(opacity), lineWidth: width)
         }
     }
 
