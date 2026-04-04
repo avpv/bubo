@@ -280,6 +280,8 @@ struct ScheduleScenario: Identifiable, Sendable {
                 eventType: .standard
             )
             event.isMovable = true
+            event.isTask = gene.storyPoints != nil
+            event.storyPoints = gene.storyPoints
             return event
         }
     }

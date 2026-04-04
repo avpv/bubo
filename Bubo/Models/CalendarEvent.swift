@@ -118,6 +118,10 @@ struct CalendarEvent: Identifiable, Codable, Hashable, Sendable {
     /// Optional story-point estimate for the task (e.g. 1, 2, 3, 5, 8, 13).
     var storyPoints: Int?
 
+    /// Whether this item is a task (as opposed to a calendar event/meeting).
+    /// Tasks support story points and are optimized differently.
+    var isTask: Bool = false
+
     /// Whether the optimizer is allowed to move this event to a different time slot.
     /// Defaults to `false` for events synced from external calendars (apple_ prefix).
     /// Set to `true` for user-created meetings that can be rescheduled.

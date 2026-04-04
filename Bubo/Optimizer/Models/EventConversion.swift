@@ -88,7 +88,8 @@ extension ScheduleGene {
         calendarName: String? = "Optimizer",
         eventType: EventType = .standard,
         colorTag: EventColorTag? = nil,
-        isMovable: Bool = true
+        isMovable: Bool = true,
+        isTask: Bool = false
     ) -> CalendarEvent {
         var event = CalendarEvent(
             id: eventId,
@@ -102,6 +103,8 @@ extension ScheduleGene {
             colorTag: colorTag
         )
         event.isMovable = isMovable
+        event.isTask = isTask
+        event.storyPoints = storyPoints
         return event
     }
 }
@@ -114,7 +117,8 @@ extension ScheduleScenario {
             let event = movableEvents.first { $0.id == gene.eventId }
             return gene.toCalendarEvent(
                 title: event?.title ?? gene.eventId,
-                eventType: event?.pomodoroConfig != nil ? .pomodoro : .standard
+                eventType: event?.pomodoroConfig != nil ? .pomodoro : .standard,
+                isTask: event?.storyPoints != nil
             )
         }
     }

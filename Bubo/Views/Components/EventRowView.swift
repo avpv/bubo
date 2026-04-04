@@ -300,7 +300,7 @@ struct EventRowView: View {
                         .truncationMode(.tail)
                 }
 
-                if let sp = event.storyPoints {
+                if event.isTask, let sp = event.storyPoints {
                     Label("\(sp) SP", systemImage: "number")
                         .font(.caption2.bold())
                         .foregroundStyle(skin.accentColor)

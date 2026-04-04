@@ -20,6 +20,7 @@ final class PersistedLocalEvent {
     var colorTagRaw: String?
     var context: String?
     var storyPoints: Int?
+    var isTask: Bool
 
     init(from event: CalendarEvent) {
         self.eventId = event.id
@@ -36,6 +37,7 @@ final class PersistedLocalEvent {
         self.colorTagRaw = event.colorTag?.rawValue
         self.context = event.context
         self.storyPoints = event.storyPoints
+        self.isTask = event.isTask
     }
 
     func toCalendarEvent() -> CalendarEvent {
@@ -58,6 +60,7 @@ final class PersistedLocalEvent {
             context: context
         )
         event.storyPoints = storyPoints
+        event.isTask = isTask
         return event
     }
 
@@ -75,6 +78,7 @@ final class PersistedLocalEvent {
         self.colorTagRaw = event.colorTag?.rawValue
         self.context = event.context
         self.storyPoints = event.storyPoints
+        self.isTask = event.isTask
     }
 }
 
@@ -97,6 +101,7 @@ final class PersistedCachedEvent {
     var colorTagRaw: String?
     var context: String?
     var storyPoints: Int?
+    var isTask: Bool
     var cachedAt: Date
 
     init(from event: CalendarEvent, cachedAt: Date = Date()) {
@@ -114,6 +119,7 @@ final class PersistedCachedEvent {
         self.colorTagRaw = event.colorTag?.rawValue
         self.context = event.context
         self.storyPoints = event.storyPoints
+        self.isTask = event.isTask
         self.cachedAt = cachedAt
     }
 
@@ -137,6 +143,7 @@ final class PersistedCachedEvent {
             context: context
         )
         event.storyPoints = storyPoints
+        event.isTask = isTask
         return event
     }
 }
