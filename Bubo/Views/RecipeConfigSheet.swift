@@ -855,7 +855,7 @@ struct RecipeConfigSheet: View {
                 // Alternatives section
                 if let onSwitchRecipe, !suggestedAlternatives.isEmpty {
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                        Text("Or try a recipe that creates new blocks")
+                        Text("Try a recipe that creates new blocks")
                             .font(.headline)
                             .foregroundStyle(skin.resolvedTextPrimary)
                             .accessibilityAddTraits(.isHeader)
