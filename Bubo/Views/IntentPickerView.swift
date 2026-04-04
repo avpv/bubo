@@ -69,8 +69,6 @@ struct IntentPickerView: View {
 
                     // All categories (expandable)
                     allCategoriesSection
-                        .staggeredEntrance(index: 3)
-                        .eventScrollTransition()
                 }
             }
             .padding(.horizontal, DS.Spacing.lg)
@@ -472,21 +470,17 @@ private struct RecipeCardButtonStyle: ButtonStyle {
 
 private struct CategorySection: View {
     @Environment(\.activeSkin) private var skin
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let category: RecipeCatalog.Category
     var hasLocalEvents: Bool = true
     let onSelectRecipe: (ScheduleRecipe) -> Void
 
     @State private var isExpanded = false
-    @State private var isHovered = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button {
                 Haptics.tap()
-                withAnimation(reduceMotion ? nil : DS.Animation.smoothSpring) {
-                    isExpanded.toggle()
-                }
+                isExpanded.toggle()
             } label: {
                 HStack(alignment: .center, spacing: 0) {
                     // Accent bar
@@ -513,7 +507,6 @@ private struct CategorySection: View {
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                         .font(.system(size: DS.Size.iconSmall, weight: .semibold))
                         .foregroundStyle(skin.resolvedTextTertiary)
-                        .contentTransition(.symbolEffect(.replace))
                         .padding(.leading, DS.Spacing.xs)
                 }
                 .frame(minHeight: DS.Size.eventRowMinHeight)
@@ -522,11 +515,6 @@ private struct CategorySection: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .onHover { hovering in
-                withAnimation(skin.resolvedMicroAnimation) {
-                    isHovered = hovering
-                }
-            }
             .accessibilityLabel("\(category.name), \(category.recipes.count) recipes")
             .accessibilityHint(isExpanded ? "Double-tap to collapse" : "Double-tap to expand")
             .accessibilityAddTraits(.isButton)
@@ -547,16 +535,9 @@ private struct CategorySection: View {
                 }
                 .padding(.horizontal, DS.Spacing.xs)
                 .padding(.bottom, DS.Spacing.sm)
-                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .background(
-            ZStack {
-                SkinPlatterBackground(skin: skin)
-                Rectangle()
-                    .fill(isHovered ? skin.resolvedHoverFill : Color.clear)
-            }
-        )
+        .background(SkinPlatterBackground(skin: skin))
         .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
@@ -574,11 +555,6 @@ private struct CategorySection: View {
                     lineWidth: DS.Border.thin
                 )
         )
-        .shadow(
-            color: isHovered ? skin.resolvedHoverShadowColor : skin.resolvedShadowColor,
-            radius: isHovered ? skin.hoverShadowRadius : skin.shadowRadius,
-            y: isHovered ? skin.hoverShadowY : skin.shadowY
-        )
-        .scaleEffect(isHovered ? 1.02 : 1.0)
+        .shadow(color: skin.resolvedShadowColor, radius: skin.shadowRadius, y: skin.shadowY)
     }
 }
