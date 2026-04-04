@@ -73,7 +73,7 @@ struct RecipeConfigSheet: View {
     // MARK: - Body
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(spacing: 0) {
             if isBlockedByNoEvents {
                 blockedEmptyState
             } else {
@@ -119,8 +119,7 @@ struct RecipeConfigSheet: View {
                 optimizationResultsSection
             }
             .padding(.horizontal, DS.Spacing.lg)
-            .padding(.top, DS.Spacing.lg)
-            .padding(.bottom, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.xl)
         }
         .scrollContentBackground(.hidden)
         .frame(maxHeight: .infinity)
@@ -614,9 +613,10 @@ struct RecipeConfigSheet: View {
 
     private var footer: some View {
         HStack {
+            Spacer()
+
             Button(action: {
                 if hasResults {
-                    // After results, "Back" goes back to re-configure
                     optimizationState = .idle
                     selectedScenarioIndex = 0
                 } else {
@@ -628,10 +628,7 @@ struct RecipeConfigSheet: View {
             .buttonStyle(.action(role: .secondary))
             .keyboardShortcut(.cancelAction)
 
-            Spacer()
-
             if hasResults {
-                // Apply the selected scenario
                 Button(action: {
                     Haptics.impact()
                     applySelectedScenario()
@@ -641,7 +638,6 @@ struct RecipeConfigSheet: View {
                 .buttonStyle(.action(role: .primary))
                 .keyboardShortcut(.defaultAction)
             } else {
-                // Run optimization
                 Button(action: {
                     Haptics.tap()
                     executeOptimization()
@@ -953,11 +949,11 @@ struct RecipeConfigSheet: View {
                 }
             }
         )
-        return Stepper(value: binding, in: range) {
-            Text("\(binding.wrappedValue)")
-                .font(.system(.body, design: .monospaced, weight: .medium))
-                .foregroundStyle(skin.resolvedTextPrimary)
-        }
+        return SegmentedPillPicker(
+            options: Array(range),
+            selection: binding,
+            labelProvider: { "\($0)" }
+        )
     }
 
     private func textParam(id: String) -> some View {
@@ -967,24 +963,24 @@ struct RecipeConfigSheet: View {
         )
         return TextField("Enter value", text: binding)
             .textFieldStyle(.plain)
-            .font(.body)
-            .padding(DS.Spacing.sm)
-            .background(skin.resolvedPlatterMaterial.opacity(0.5))
-            .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
+            .font(.headline)
     }
 
     private func hourPickerParam(id: String, range: ClosedRange<Int>) -> some View {
         let binding = Binding<Int>(
             get: { paramValues[id] as? Int ?? range.lowerBound },
-            set: { paramValues[id] = $0 }
-        )
-        return Picker("", selection: binding) {
-            ForEach(Array(range), id: \.self) { hour in
-                Text("\(hour):00").tag(hour)
+            set: { newValue in
+                paramValues[id] = newValue
+                if case .error = optimizationState {
+                    optimizationState = .idle
+                }
             }
-        }
-        .labelsHidden()
-        .frame(width: 100)
+        )
+        return SegmentedPillPicker(
+            options: Array(range),
+            selection: binding,
+            labelProvider: { "\($0):00" }
+        )
     }
 
     private func periodPickerParam(id: String) -> some View {
