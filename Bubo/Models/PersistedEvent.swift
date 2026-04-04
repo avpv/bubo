@@ -21,6 +21,9 @@ final class PersistedLocalEvent {
     var context: String?
     var storyPoints: Int?
     var isTask: Bool
+    var deadline: Date?
+    var taskStatusRaw: String
+    var completedAt: Date?
 
     init(from event: CalendarEvent) {
         self.eventId = event.id
@@ -38,6 +41,9 @@ final class PersistedLocalEvent {
         self.context = event.context
         self.storyPoints = event.storyPoints
         self.isTask = event.isTask
+        self.deadline = event.deadline
+        self.taskStatusRaw = event.taskStatus.rawValue
+        self.completedAt = event.completedAt
     }
 
     func toCalendarEvent() -> CalendarEvent {
@@ -61,6 +67,9 @@ final class PersistedLocalEvent {
         )
         event.storyPoints = storyPoints
         event.isTask = isTask
+        event.deadline = deadline
+        event.taskStatus = TaskStatus(rawValue: taskStatusRaw) ?? .todo
+        event.completedAt = completedAt
         return event
     }
 
@@ -79,6 +88,9 @@ final class PersistedLocalEvent {
         self.context = event.context
         self.storyPoints = event.storyPoints
         self.isTask = event.isTask
+        self.deadline = event.deadline
+        self.taskStatusRaw = event.taskStatus.rawValue
+        self.completedAt = event.completedAt
     }
 }
 
@@ -102,6 +114,9 @@ final class PersistedCachedEvent {
     var context: String?
     var storyPoints: Int?
     var isTask: Bool
+    var deadline: Date?
+    var taskStatusRaw: String
+    var completedAt: Date?
     var cachedAt: Date
 
     init(from event: CalendarEvent, cachedAt: Date = Date()) {
@@ -120,6 +135,9 @@ final class PersistedCachedEvent {
         self.context = event.context
         self.storyPoints = event.storyPoints
         self.isTask = event.isTask
+        self.deadline = event.deadline
+        self.taskStatusRaw = event.taskStatus.rawValue
+        self.completedAt = event.completedAt
         self.cachedAt = cachedAt
     }
 
@@ -144,6 +162,9 @@ final class PersistedCachedEvent {
         )
         event.storyPoints = storyPoints
         event.isTask = isTask
+        event.deadline = event.deadline
+        event.taskStatus = TaskStatus(rawValue: taskStatusRaw) ?? .todo
+        event.completedAt = completedAt
         return event
     }
 }

@@ -63,18 +63,24 @@ extension CalendarEvent {
             return energyCost
         }()
 
+        let effectiveDeadline = deadline ?? self.deadline
+        let effectiveEnergy = isTask
+            ? RecipeExecutor.adjustedEnergy(base: inferredEnergy, storyPoints: storyPoints)
+            : inferredEnergy
+
         return OptimizableEvent(
             id: id,
             title: title,
             duration: duration,
-            deadline: deadline,
+            deadline: effectiveDeadline,
             priority: priority,
             context: resolvedContext(override: context),
-            energyCost: inferredEnergy,
+            energyCost: effectiveEnergy,
             requiredParticipants: requiredParticipants,
             preferredHourRange: preferredHourRange,
             isFocusBlock: isFocus,
-            pomodoroConfig: pomConfig
+            pomodoroConfig: pomConfig,
+            storyPoints: storyPoints
         )
     }
 }

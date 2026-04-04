@@ -201,6 +201,7 @@ struct RecipeExecutor {
             OptimizableEvent(
                 title: spec.count > 1 ? "\(spec.title) \(i + 1)" : spec.title,
                 duration: TimeInterval(spec.minutes * 60),
+                deadline: spec.deadline,
                 priority: spec.priority,
                 context: spec.context,
                 energyCost: effectiveEnergy,
