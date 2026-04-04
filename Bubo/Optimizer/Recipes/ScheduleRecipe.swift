@@ -411,6 +411,7 @@ enum ParamTarget: Codable, Hashable {
     case eventTitle(index: Int)
     case eventContext(index: Int)
     case eventPeriod(index: Int)
+    case minBreak
     case workingHoursStart
     case workingHoursEnd
     case maxMeetings
@@ -645,6 +646,9 @@ extension ScheduleRecipe {
                 } else {
                     events[index].period = nil   // "Any time" (empty string)
                 }
+            case .minBreak:
+                guard let v = value as? Int else { continue }
+                minBreakMinutes = v
             case .workingHoursStart:
                 guard let v = value as? Int else { continue }
                 let end = workingHours?.end ?? 18
