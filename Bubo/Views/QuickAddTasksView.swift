@@ -58,6 +58,24 @@ struct QuickAddTasksView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: DS.Spacing.lg) {
+                    // Horizon picker
+                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                        Text("Plan for")
+                            .font(.headline)
+                            .foregroundStyle(skin.resolvedTextPrimary)
+                            .accessibilityAddTraits(.isHeader)
+
+                        Picker("Planning horizon", selection: $horizon) {
+                            Text("Today").tag(Horizon.today)
+                            Text("This Week").tag(Horizon.week)
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .padding(DS.Spacing.md)
+                        .skinPlatter(skin)
+                        .skinPlatterDepth(skin)
+                    }
+
                     // Tasks section
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                         Text("Tasks")
@@ -81,24 +99,6 @@ struct QuickAddTasksView: View {
                         }
                         .buttonStyle(.plain)
                         .padding(.leading, DS.Spacing.md)
-                    }
-
-                    // Horizon picker
-                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                        Text("Plan for")
-                            .font(.headline)
-                            .foregroundStyle(skin.resolvedTextPrimary)
-                            .accessibilityAddTraits(.isHeader)
-
-                        Picker("Planning horizon", selection: $horizon) {
-                            Text("Today").tag(Horizon.today)
-                            Text("This Week").tag(Horizon.week)
-                        }
-                        .pickerStyle(.segmented)
-                        .labelsHidden()
-                        .padding(DS.Spacing.md)
-                        .skinPlatter(skin)
-                        .skinPlatterDepth(skin)
                     }
                 }
                 .padding(.horizontal, DS.Spacing.lg)
