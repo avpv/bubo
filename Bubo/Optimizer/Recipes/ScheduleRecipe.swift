@@ -37,7 +37,7 @@ struct ScheduleRecipe: Codable, Identifiable, Hashable {
         case "projects":  return 6
         case "adapt":     return 7
         case "workouts":  return 8
-        case "advanced":  return 9
+        case "work-styles": return 9
         default:          return 0
         }
     }

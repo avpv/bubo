@@ -58,7 +58,7 @@ struct RecipeCatalog {
         Category(id: "workouts", name: "Workouts & Activities", recipes: [
             .circuitTraining(), .yogaSession(), .intervalTraining(),
         ]),
-        Category(id: "advanced", name: "Advanced", recipes: [
+        Category(id: "work-styles", name: "Work Styles", recipes: [
             .showOptions, .likeYesterday, .makerSchedule, .managerSchedule,
         ]),
     ]
@@ -748,7 +748,7 @@ extension ScheduleRecipe {
         id: "show-options",
         name: "Show 3 Options",
         description: "Generates 3 different schedule options to compare",
-        category: "advanced",
+        category: "work-styles",
         speed: .balanced,
         params: [
             RecipeParam(id: "events", label: "Which tasks to optimize?",
@@ -761,7 +761,7 @@ extension ScheduleRecipe {
         id: "like-yesterday",
         name: "Like Yesterday",
         description: "Rearranges using patterns learned from your past choices",
-        category: "advanced",
+        category: "work-styles",
         weights: [.useLearned: 1.0]
     )
 
@@ -769,7 +769,7 @@ extension ScheduleRecipe {
         id: "maker-schedule",
         name: "Maker Schedule",
         description: "Moves focus work to mornings, meetings to afternoons",
-        category: "advanced",
+        category: "work-styles",
         weights: [.focusBlock: 2.0, .contextSwitch: 2.0],
         eventRules: [
             EventRule(match: .meetings, action: .setPreferredPeriod(.afternoon)),
@@ -785,7 +785,7 @@ extension ScheduleRecipe {
         id: "manager-schedule",
         name: "Manager Schedule",
         description: "Moves meetings to mornings, admin and focus to afternoons",
-        category: "advanced",
+        category: "work-styles",
         weights: [.contextSwitch: 2.0],
         eventRules: [
             EventRule(match: .meetings, action: .setPreferredPeriod(.morning)),
