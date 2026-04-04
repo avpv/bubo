@@ -100,9 +100,9 @@ struct RecipeConfigSheet: View {
                 // Header
                 recipeHeader
 
-                // All parameters in one platter
+                // Parameters — each as its own section
                 if !recipe.params.isEmpty {
-                    settingsSection
+                    settingsSections
                 }
 
                 // Preview for creative recipes with multiple events
@@ -139,49 +139,30 @@ struct RecipeConfigSheet: View {
                     .font(.caption)
                     .foregroundStyle(skin.resolvedTextSecondary)
             }
-            if !recipe.params.isEmpty {
-                Text(recipe.isCreative
-                     ? "Pick your settings below, then tap \"\(recipe.actionLabel)\" to find a slot."
-                     : "Adjust settings below, then tap \"\(recipe.actionLabel)\" to rearrange.")
-                    .font(.caption2)
-                    .foregroundStyle(skin.resolvedTextTertiary)
-            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(DS.Spacing.md)
-        .skinPlatter(skin)
-        .skinPlatterDepth(skin)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(recipe.name): \(recipe.description)")
     }
 
-    // MARK: - Settings Section
+    // MARK: - Settings Sections
 
-    private var settingsSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            Text("Settings")
-                .font(.headline)
-                .foregroundStyle(skin.resolvedTextPrimary)
-                .accessibilityAddTraits(.isHeader)
+    private var settingsSections: some View {
+        ForEach(recipe.params, id: \.id) { param in
+            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                Text(param.label)
+                    .font(.headline)
+                    .foregroundStyle(skin.resolvedTextPrimary)
+                    .accessibilityAddTraits(.isHeader)
 
-            VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                ForEach(Array(recipe.params.enumerated()), id: \.element.id) { index, param in
-                    VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                        Text(param.label)
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(skin.resolvedTextPrimary)
-                        paramControl(for: param)
-                    }
-
-                    if index < recipe.params.count - 1 {
-                        SkinSeparator()
-                    }
+                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                    paramControl(for: param)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(DS.Spacing.md)
+                .skinPlatter(skin)
+                .skinPlatterDepth(skin)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(DS.Spacing.md)
-            .skinPlatter(skin)
-            .skinPlatterDepth(skin)
         }
     }
 
