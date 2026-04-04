@@ -107,6 +107,9 @@ extension ScheduleRecipe {
                 RecipeParam(id: "minutes", label: "How long?",
                            kind: .segmented(Array(stride(from: 30, through: 480, by: 30))),
                            target: .eventMinutes(index: 0)),
+                RecipeParam(id: "period", label: "When?",
+                           kind: .periodPicker,
+                           target: .eventPeriod(index: 0)),
             ]
         )
     }
@@ -123,7 +126,12 @@ extension ScheduleRecipe {
                          period: .morning, focus: true, pomodoro: preset),
             ],
             findSlotOnly: true,
-            weights: [.pomodoroFit: 1.5, .energyCurve: 1.5]
+            weights: [.pomodoroFit: 1.5, .energyCurve: 1.5],
+            params: [
+                RecipeParam(id: "period", label: "When?",
+                           kind: .periodPicker,
+                           target: .eventPeriod(index: 0)),
+            ]
         )
     }
 
@@ -144,6 +152,9 @@ extension ScheduleRecipe {
                 RecipeParam(id: "minutes", label: "Total time",
                            kind: .segmented([90, 120, 130, 180]),
                            target: .eventMinutes(index: 0)),
+                RecipeParam(id: "period", label: "When?",
+                           kind: .periodPicker,
+                           target: .eventPeriod(index: 0)),
             ]
         )
     }
@@ -180,6 +191,11 @@ extension ScheduleRecipe {
                      priority: 0.95, energy: 0.7, focus: true),
         ],
         weights: [.focusBlock: 3.0, .contextSwitch: 2.0, .energyCurve: 2.0],
+        params: [
+            RecipeParam(id: "maxMeetings", label: "Max meetings/day",
+                       kind: .segmented([1, 2, 3, 4, 5]),
+                       target: .maxMeetings),
+        ],
         maxMeetingsPerDay: 2
     )
 
@@ -210,6 +226,8 @@ extension ScheduleRecipe {
         params: [
             RecipeParam(id: "events", label: "Which tasks to plan?",
                        kind: .eventMultiPicker, target: .selectedEventIds),
+            RecipeParam(id: "horizon", label: "Time range",
+                       kind: .horizonPicker, target: .horizon),
         ]
     )
 
@@ -255,6 +273,11 @@ extension ScheduleRecipe {
         eventRules: [
             EventRule(match: .withDeadline, action: .setPriority(1.0)),
             EventRule(match: .lowEnergy, action: .exclude),
+        ],
+        params: [
+            RecipeParam(id: "minBreak", label: "Min break between tasks",
+                       kind: .segmented([0, 5, 10, 15]),
+                       target: .minBreak),
         ],
         conditions: [.hasDeadlineWithin(days: 1)],
         minBreakMinutes: 5
@@ -315,6 +338,11 @@ extension ScheduleRecipe {
         horizon: .week,
         weights: [.weekBalance: 2.0],
         speed: .balanced,
+        params: [
+            RecipeParam(id: "maxMeetings", label: "Max meetings/day",
+                       kind: .segmented([2, 3, 4, 5, 6]),
+                       target: .maxMeetings),
+        ],
         conditions: [.meetingHeavy(threshold: 5)],
         maxMeetingsPerDay: 4
     )
@@ -351,6 +379,11 @@ extension ScheduleRecipe {
         description: "Adds longer breaks, reduces back-to-back tasks",
         category: "energy",
         weights: [.breakPlacement: 2.5, .buffer: 1.5, .focusBlock: 0.5],
+        params: [
+            RecipeParam(id: "minBreak", label: "Min break between tasks",
+                       kind: .segmented([10, 15, 20, 30, 45]),
+                       target: .minBreak),
+        ],
         minBreakMinutes: 20
     )
 
@@ -363,6 +396,11 @@ extension ScheduleRecipe {
         eventRules: [
             EventRule(match: .highEnergy, action: .setPreferredPeriod(.morning)),
         ],
+        params: [
+            RecipeParam(id: "peakHour", label: "Peak energy hour",
+                       kind: .hourPicker(7...12),
+                       target: .peakEnergy),
+        ],
         peakEnergyHour: 9
     )
 
@@ -374,6 +412,11 @@ extension ScheduleRecipe {
         weights: [.energyCurve: 2.0],
         eventRules: [
             EventRule(match: .highEnergy, action: .setPreferredPeriod(.morning)),
+        ],
+        params: [
+            RecipeParam(id: "peakHour", label: "Peak energy hour",
+                       kind: .hourPicker(8...13),
+                       target: .peakEnergy),
         ],
         peakEnergyHour: 10
     )
@@ -396,6 +439,13 @@ extension ScheduleRecipe {
         category: "energy",
         horizon: .tomorrow,
         weights: [.breakPlacement: 2.0],
+        params: [
+            RecipeParam(id: "maxMeetings", label: "Max meetings/day",
+                       kind: .segmented([1, 2, 3, 4, 5]),
+                       target: .maxMeetings),
+            RecipeParam(id: "horizon", label: "Apply to",
+                       kind: .horizonPicker, target: .horizon),
+        ],
         maxMeetingsPerDay: 3
     )
 
@@ -410,6 +460,8 @@ extension ScheduleRecipe {
         params: [
             RecipeParam(id: "events", label: "Which tasks to balance?",
                        kind: .eventMultiPicker, target: .selectedEventIds),
+            RecipeParam(id: "horizon", label: "Time range",
+                       kind: .horizonPicker, target: .horizon),
         ]
     )
 

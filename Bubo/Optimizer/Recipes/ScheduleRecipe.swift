@@ -401,6 +401,8 @@ enum ParamKind: Codable, Hashable {
     case eventPicker
     case eventMultiPicker
     case hourPicker(ClosedRange<Int>)
+    case periodPicker
+    case horizonPicker
 }
 
 /// Where to apply the parameter value in the recipe.
@@ -409,11 +411,14 @@ enum ParamTarget: Codable, Hashable {
     case eventCount(index: Int)
     case eventTitle(index: Int)
     case eventContext(index: Int)
+    case eventPeriod(index: Int)
+    case minBreak
     case workingHoursStart
     case workingHoursEnd
     case maxMeetings
     case peakEnergy
     case selectedEventIds
+    case horizon
     case placeholder(String)
 }
 
@@ -636,6 +641,16 @@ extension ScheduleRecipe {
             case .eventContext(let index):
                 guard index < events.count, let v = value as? String else { continue }
                 events[index].context = v
+            case .eventPeriod(let index):
+                guard index < events.count, let v = value as? String else { continue }
+                if let period = Period(rawValue: v) {
+                    events[index].period = period
+                } else {
+                    events[index].period = nil   // "Any time" (empty string)
+                }
+            case .minBreak:
+                guard let v = value as? Int else { continue }
+                minBreakMinutes = v
             case .workingHoursStart:
                 guard let v = value as? Int else { continue }
                 let end = workingHours?.end ?? 18
@@ -650,6 +665,9 @@ extension ScheduleRecipe {
             case .peakEnergy:
                 guard let v = value as? Int else { continue }
                 peakEnergyHour = v
+            case .horizon:
+                guard let v = value as? String, let h = Horizon(rawValue: v) else { continue }
+                horizon = h
             case .selectedEventIds:
                 if let ids = value as? [String] {
                     selectedEventIds = ids
