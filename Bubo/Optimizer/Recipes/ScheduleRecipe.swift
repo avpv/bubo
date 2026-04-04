@@ -34,6 +34,11 @@ struct ScheduleRecipe: Codable, Identifiable, Hashable {
 
     var includeExistingEvents: Bool = true
 
+    /// When true, existing local events are kept in place (treated as fixed obstacles)
+    /// and only the new synthetic blocks are optimized. When false (default), local
+    /// events are included as movable and may be rearranged by the optimizer.
+    var findSlotOnly: Bool = false
+
     // MARK: - 3. Time Range
 
     var horizon: Horizon = .today
@@ -107,6 +112,7 @@ struct ScheduleRecipe: Codable, Identifiable, Hashable {
         category = (try? c.decode(String.self, forKey: .category)) ?? ""
         events = (try? c.decode([EventSpec].self, forKey: .events)) ?? []
         includeExistingEvents = (try? c.decode(Bool.self, forKey: .includeExistingEvents)) ?? true
+        findSlotOnly = (try? c.decode(Bool.self, forKey: .findSlotOnly)) ?? false
         horizon = (try? c.decode(Horizon.self, forKey: .horizon)) ?? .today
         weights = (try? c.decode([WeightKey: Double].self, forKey: .weights)) ?? [:]
         stability = (try? c.decode(Stability.self, forKey: .stability)) ?? .normal
@@ -136,6 +142,7 @@ struct ScheduleRecipe: Codable, Identifiable, Hashable {
         category: String = "",
         events: [EventSpec] = [],
         includeExistingEvents: Bool = true,
+        findSlotOnly: Bool = false,
         horizon: Horizon = .today,
         weights: [WeightKey: Double] = [:],
         stability: Stability = .normal,
@@ -162,6 +169,7 @@ struct ScheduleRecipe: Codable, Identifiable, Hashable {
         self.category = category
         self.events = events
         self.includeExistingEvents = includeExistingEvents
+        self.findSlotOnly = findSlotOnly
         self.horizon = horizon
         self.weights = weights
         self.stability = stability
