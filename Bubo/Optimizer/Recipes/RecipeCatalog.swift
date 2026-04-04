@@ -274,12 +274,12 @@ extension ScheduleRecipe {
             EventRule(match: .withDeadline, action: .setPriority(1.0)),
             EventRule(match: .lowEnergy, action: .exclude),
         ],
+        conditions: [.hasDeadlineWithin(days: 1)],
         params: [
             RecipeParam(id: "minBreak", label: "Min break between tasks",
                        kind: .segmented([0, 5, 10, 15]),
                        target: .minBreak),
         ],
-        conditions: [.hasDeadlineWithin(days: 1)],
         minBreakMinutes: 5
     )
 
@@ -338,12 +338,12 @@ extension ScheduleRecipe {
         horizon: .week,
         weights: [.weekBalance: 2.0],
         speed: .balanced,
+        conditions: [.meetingHeavy(threshold: 5)],
         params: [
             RecipeParam(id: "maxMeetings", label: "Max meetings/day",
                        kind: .segmented([2, 3, 4, 5, 6]),
                        target: .maxMeetings),
         ],
-        conditions: [.meetingHeavy(threshold: 5)],
         maxMeetingsPerDay: 4
     )
 

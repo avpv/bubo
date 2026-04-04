@@ -1200,7 +1200,7 @@ struct RecipeConfigSheet: View {
                 if paramValues[param.id] == nil {
                     paramValues[param.id] = defaultForParam(param) ?? range.lowerBound
                 }
-            case .text, .eventPicker:
+            case .text, .eventPicker, .periodPicker, .horizonPicker:
                 break
             case .eventMultiPicker:
                 if selectedEventIds.isEmpty {
