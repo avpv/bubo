@@ -198,6 +198,7 @@ struct MenuBarView: View {
         .skinTinted(activeSkin)
         .skinTypography(activeSkin)
         .environment(\.activeSkin, activeSkin)
+        .environment(\.navigateHome, { navigation = .list })
         .frame(width: DS.Popover.width, height: navigation.isTimer ? DS.Popover.timerHeight : DS.Popover.height)
         .onAppear {
             guard !hasStartedSync else { return }
