@@ -292,11 +292,15 @@ struct RecipeCardView: View {
         .accessibilityAddTraits(.isButton)
     }
 
+    private var categoryDotColor: Color {
+        DS.Colors.categoryPalette[recipe.categoryColorIndex]
+    }
+
     private var quickLayout: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            Image(systemName: recipe.resolvedIcon)
-                .font(.system(size: DS.Size.iconMedium))
-                .foregroundStyle(skin.accentColor)
+            Circle()
+                .fill(categoryDotColor)
+                .frame(width: DS.Size.recipeDotSize, height: DS.Size.recipeDotSize)
 
             Text(recipe.name)
                 .font(.caption.weight(.medium))
@@ -356,9 +360,9 @@ struct RecipeCardView: View {
 
     private var listLayout: some View {
         HStack(spacing: DS.Spacing.sm) {
-            Image(systemName: recipe.resolvedIcon)
-                .font(.system(size: DS.Size.iconSmall))
-                .foregroundStyle(skin.accentColor.opacity(0.7))
+            Circle()
+                .fill(categoryDotColor.opacity(0.7))
+                .frame(width: DS.Size.recipeDotSize, height: DS.Size.recipeDotSize)
                 .frame(width: DS.Size.iconLarge)
 
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
@@ -390,10 +394,10 @@ struct RecipeCardView: View {
 
     private var snippetLayout: some View {
         HStack(alignment: .center, spacing: 0) {
-            // Recipe icon
-            Image(systemName: recipe.resolvedIcon)
-                .font(.system(size: DS.Size.iconMedium))
-                .foregroundStyle(skin.accentColor)
+            // Category dot
+            Circle()
+                .fill(categoryDotColor)
+                .frame(width: DS.Size.recipeDotSize, height: DS.Size.recipeDotSize)
                 .frame(width: DS.Size.controlHeight)
                 .padding(.trailing, DS.Spacing.sm)
 
