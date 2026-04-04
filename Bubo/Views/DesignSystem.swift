@@ -105,6 +105,7 @@ enum DS {
 
         // Color tag
         static let colorDotSize: CGFloat = 14
+        static let recipeDotSize: CGFloat = 8
 
         // Progress bar
         static let progressBarHeight: CGFloat = 6
@@ -226,6 +227,20 @@ enum DS {
         static func badgeFill(_ tint: Color, highContrast: Bool = false) -> Color {
             tint.opacity(highContrast ? 0.22 : 0.12)
         }
+
+        // Recipe category dot palette (10 distinct hues)
+        static let categoryPalette: [Color] = [
+            Color(nsColor: .systemBlue),    // focus
+            Color(nsColor: .systemIndigo),  // planning
+            Color(nsColor: .systemRed),     // deadlines
+            Color(nsColor: .systemTeal),    // meetings
+            Color(nsColor: .systemGreen),   // energy
+            Color(nsColor: .systemOrange),  // habits
+            Color(nsColor: .systemPurple),  // projects
+            Color(nsColor: .systemYellow),  // adapt
+            Color(nsColor: .systemPink),    // workouts
+            Color(nsColor: .systemGray),    // advanced
+        ]
 
         // Calendar-specific
         static let calendarLabel = Color(nsColor: .systemBlue)

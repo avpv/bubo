@@ -18,10 +18,12 @@ struct IntentPickerView: View {
         optimizerService.recipeMonitor?.suggestedRecipes ?? []
     }
 
-    private var recentRecipes: [ScheduleRecipe] {
-        optimizerService.usageTracker
+    /// Top recipes ranked by HN score, falling back to hardcoded quick actions.
+    private var quickActionRecipes: [ScheduleRecipe] {
+        let ranked = optimizerService.usageTracker
             .topRecipeIds(limit: 6)
             .compactMap { RecipeCatalog.allRecipesById[$0] }
+        return ranked.isEmpty ? RecipeCatalog.quickActions : ranked
     }
 
     private var isSearching: Bool { !searchText.isEmpty }
@@ -53,8 +55,8 @@ struct IntentPickerView: View {
                             .eventScrollTransition()
                     }
 
-                    // Recently used — always shown, falls back to quick actions
-                    recentlySection
+                    // Quick actions — HN-ranked by usage, falls back to defaults
+                    quickActionsSection
                         .staggeredEntrance(index: 1)
                         .eventScrollTransition()
 
@@ -180,15 +182,12 @@ struct IntentPickerView: View {
 
     // MARK: - Recently
 
-    private var recentlySection: some View {
+    private var quickActionsSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            let hasRecents = !recentRecipes.isEmpty
-            sectionHeader(hasRecents ? "Recently" : "Quick Actions")
-
-            let recipes = hasRecents ? recentRecipes : RecipeCatalog.quickActions
+            sectionHeader("Quick Actions")
 
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 3), spacing: DS.Spacing.sm) {
-                ForEach(recipes) { recipe in
+                ForEach(quickActionRecipes) { recipe in
                     RecipeCardView(recipe: recipe, style: .quick, onTap: onSelectRecipe)
                 }
             }
@@ -292,11 +291,15 @@ struct RecipeCardView: View {
         .accessibilityAddTraits(.isButton)
     }
 
+    private var categoryDotColor: Color {
+        DS.Colors.categoryPalette[recipe.categoryColorIndex]
+    }
+
     private var quickLayout: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            Image(systemName: recipe.resolvedIcon)
-                .font(.system(size: DS.Size.iconMedium))
-                .foregroundStyle(skin.accentColor)
+            Circle()
+                .fill(categoryDotColor)
+                .frame(width: DS.Size.recipeDotSize, height: DS.Size.recipeDotSize)
 
             Text(recipe.name)
                 .font(.caption.weight(.medium))
@@ -356,9 +359,9 @@ struct RecipeCardView: View {
 
     private var listLayout: some View {
         HStack(spacing: DS.Spacing.sm) {
-            Image(systemName: recipe.resolvedIcon)
-                .font(.system(size: DS.Size.iconSmall))
-                .foregroundStyle(skin.accentColor.opacity(0.7))
+            Circle()
+                .fill(categoryDotColor.opacity(0.7))
+                .frame(width: DS.Size.recipeDotSize, height: DS.Size.recipeDotSize)
                 .frame(width: DS.Size.iconLarge)
 
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
@@ -390,10 +393,10 @@ struct RecipeCardView: View {
 
     private var snippetLayout: some View {
         HStack(alignment: .center, spacing: 0) {
-            // Recipe icon
-            Image(systemName: recipe.resolvedIcon)
-                .font(.system(size: DS.Size.iconMedium))
-                .foregroundStyle(skin.accentColor)
+            // Category dot
+            Circle()
+                .fill(categoryDotColor)
+                .frame(width: DS.Size.recipeDotSize, height: DS.Size.recipeDotSize)
                 .frame(width: DS.Size.controlHeight)
                 .padding(.trailing, DS.Spacing.sm)
 
