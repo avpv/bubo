@@ -41,6 +41,7 @@ final class PreferenceLearner {
         "Deadline": 3.0,
         "ContextSwitch": 0.7,
         "Buffer": 0.6,
+        "MeetingClustering": 0.8,
     ]
 
     // MARK: - Record Feedback
@@ -266,6 +267,7 @@ final class PreferenceLearner {
         preferences.deadlineWeight = blended(preferences.deadlineWeight, key: "Deadline")
         preferences.contextSwitchWeight = blended(preferences.contextSwitchWeight, key: "ContextSwitch")
         preferences.bufferWeight = blended(preferences.bufferWeight, key: "Buffer")
+        preferences.meetingClusteringWeight = blended(preferences.meetingClusteringWeight, key: "MeetingClustering")
     }
 
     // MARK: - Persistence

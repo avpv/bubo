@@ -45,6 +45,7 @@ final class FitnessEvaluator: @unchecked Sendable {
                 DeadlineObjective(weight: preferences.deadlineWeight),
                 ContextSwitchObjective(weight: preferences.contextSwitchWeight),
                 BufferObjective(weight: preferences.bufferWeight),
+                MeetingClusteringObjective(weight: preferences.meetingClusteringWeight),
             ],
             constraintEngine: .standard
         )
@@ -126,7 +127,8 @@ final class FitnessEvaluator: @unchecked Sendable {
             case "BreakPlacement":  objectives[i].weight = preferences.breakWeight
             case "Deadline":        objectives[i].weight = preferences.deadlineWeight
             case "ContextSwitch":   objectives[i].weight = preferences.contextSwitchWeight
-            case "Buffer":          objectives[i].weight = preferences.bufferWeight
+            case "Buffer":              objectives[i].weight = preferences.bufferWeight
+            case "MeetingClustering":   objectives[i].weight = preferences.meetingClusteringWeight
             default: break
             }
         }

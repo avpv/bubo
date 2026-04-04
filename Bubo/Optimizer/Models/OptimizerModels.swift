@@ -137,6 +137,7 @@ struct OptimizerPreferences: Codable, Sendable {
     var deadlineWeight: Double
     var contextSwitchWeight: Double
     var bufferWeight: Double
+    var meetingClusteringWeight: Double
 
     // Energy model
     var peakEnergyHour: Int           // hour of day with peak energy
@@ -156,6 +157,11 @@ struct OptimizerPreferences: Codable, Sendable {
     var maxMeetingsPerDay: Int
     var idealFocusBlockMinutes: Int
 
+    // Meeting clustering
+    var preferredClusterWindowStart: Int     // hour — meetings clustered after this
+    var preferredClusterWindowEnd: Int       // hour — meetings clustered before this
+    var maxMeetingsPerCluster: Int           // avoid marathon meeting blocks
+
     init(
         focusBlockWeight: Double = 1.0,
         pomodoroFitWeight: Double = 0.8,
@@ -168,6 +174,7 @@ struct OptimizerPreferences: Codable, Sendable {
         deadlineWeight: Double = 3.0,       // important
         contextSwitchWeight: Double = 0.7,
         bufferWeight: Double = 0.6,
+        meetingClusteringWeight: Double = 0.8,
         peakEnergyHour: Int = 10,
         energyDecayRate: Double = 0.1,
         maxConsecutiveMeetingMinutes: Int = 120,
@@ -177,7 +184,10 @@ struct OptimizerPreferences: Codable, Sendable {
         defaultBufferMinutes: Int = 5,
         heavyMeetingBufferMinutes: Int = 15,
         maxMeetingsPerDay: Int = 6,
-        idealFocusBlockMinutes: Int = 120
+        idealFocusBlockMinutes: Int = 120,
+        preferredClusterWindowStart: Int = 9,
+        preferredClusterWindowEnd: Int = 13,
+        maxMeetingsPerCluster: Int = 4
     ) {
         self.focusBlockWeight = focusBlockWeight
         self.pomodoroFitWeight = pomodoroFitWeight
@@ -190,6 +200,7 @@ struct OptimizerPreferences: Codable, Sendable {
         self.deadlineWeight = deadlineWeight
         self.contextSwitchWeight = contextSwitchWeight
         self.bufferWeight = bufferWeight
+        self.meetingClusteringWeight = meetingClusteringWeight
         self.peakEnergyHour = peakEnergyHour
         self.energyDecayRate = energyDecayRate
         self.maxConsecutiveMeetingMinutes = maxConsecutiveMeetingMinutes
@@ -200,6 +211,9 @@ struct OptimizerPreferences: Codable, Sendable {
         self.heavyMeetingBufferMinutes = heavyMeetingBufferMinutes
         self.maxMeetingsPerDay = maxMeetingsPerDay
         self.idealFocusBlockMinutes = idealFocusBlockMinutes
+        self.preferredClusterWindowStart = preferredClusterWindowStart
+        self.preferredClusterWindowEnd = preferredClusterWindowEnd
+        self.maxMeetingsPerCluster = maxMeetingsPerCluster
     }
 }
 
@@ -218,10 +232,17 @@ struct ScheduleScenario: Identifiable, Sendable {
     let objectiveBreakdown: [String: Double]
     let constraintViolations: [String]
 
+    /// Optimized task execution order within each day's Pomodoro blocks.
+    /// Keys are day start dates (normalized via `Calendar.startOfDay(for:)`);
+    /// values are event IDs in recommended order.
+    /// Populated by `planDayWithSequencing` — nil when sequencing wasn't applied.
+    var taskSequenceByDay: [Date: [String]]?
+
     /// Convert genes back to CalendarEvents for display.
+    /// Optimizer-generated events default to movable for re-optimization.
     func toCalendarEvents() -> [CalendarEvent] {
         genes.map { gene in
-            CalendarEvent(
+            var event = CalendarEvent(
                 id: gene.eventId,
                 title: gene.title,
                 startDate: gene.startTime,
@@ -231,6 +252,8 @@ struct ScheduleScenario: Identifiable, Sendable {
                 calendarName: "Optimizer",
                 eventType: .standard
             )
+            event.isMovable = true
+            return event
         }
     }
 }
