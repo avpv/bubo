@@ -75,6 +75,7 @@ struct QuickAddTasksView: View {
                         .skinPlatter(skin)
                         .skinPlatterDepth(skin)
                     }
+                    .staggeredEntrance(index: 0)
 
                     // Tasks section
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
@@ -84,8 +85,10 @@ struct QuickAddTasksView: View {
                             .accessibilityAddTraits(.isHeader)
 
                         VStack(spacing: DS.Spacing.sm) {
-                            ForEach($tasks) { $task in
+                            ForEach(Array($tasks.enumerated()), id: \.element.id) { index, $task in
                                 taskRow(task: $task)
+                                    .staggeredEntrance(index: index)
+                                    .eventScrollTransition()
                             }
                         }
 
