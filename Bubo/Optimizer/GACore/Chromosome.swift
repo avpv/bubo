@@ -100,6 +100,7 @@ struct ScheduleChromosome: Chromosome, Sendable {
     mutating func mutate(rate: Double, context: OptimizerContext) {
         needsEvaluation = true
         let cal = context.calendar
+        let horizonStart = context.planningHorizon.start
         for i in genes.indices {
             guard Double.random(in: 0...1) < rate else { continue }
 
@@ -113,20 +114,22 @@ struct ScheduleChromosome: Chromosome, Sendable {
                 let shift = Double.random(in: -1800...1800)
                 var newStart = genes[i].startTime.addingTimeInterval(shift)
                 if let earliest, newStart < earliest { newStart = earliest }
+                if newStart < horizonStart { newStart = horizonStart }
                 genes[i] = genes[i].withStartTime(
                     clampToWorkingHours(newStart, duration: genes[i].duration, workingHours: context.workingHours, calendar: cal)
                 )
             case 1:
                 // Move to different day within horizon
                 let daysInHorizon = context.calendar.dateComponents(
-                    [.day], from: context.planningHorizon.start, to: context.planningHorizon.end
+                    [.day], from: horizonStart, to: context.planningHorizon.end
                 ).day ?? 1
                 guard daysInHorizon > 0 else { break }
                 let dayOffset = Int.random(in: 0..<daysInHorizon)
-                let newDay = cal.date(byAdding: .day, value: dayOffset, to: context.planningHorizon.start)!
+                let newDay = cal.date(byAdding: .day, value: dayOffset, to: horizonStart)!
                 let hour = event?.preferredHourRange?.randomElement() ?? Int.random(in: context.workingHours)
                 var rawStart = cal.date(bySettingHour: hour, minute: Int.random(in: 0...3) * 15, second: 0, of: newDay)!
                 if let earliest, rawStart < earliest { rawStart = earliest }
+                if rawStart < horizonStart { rawStart = horizonStart }
                 genes[i] = genes[i].withStartTime(
                     clampToWorkingHours(rawStart, duration: genes[i].duration, workingHours: context.workingHours, calendar: cal)
                 )
@@ -136,6 +139,7 @@ struct ScheduleChromosome: Chromosome, Sendable {
                 let rounded = (timeInterval / 1800).rounded() * 1800
                 var snapped = Date(timeIntervalSinceReferenceDate: rounded)
                 if let earliest, snapped < earliest { snapped = earliest }
+                if snapped < horizonStart { snapped = horizonStart }
                 genes[i] = genes[i].withStartTime(
                     clampToWorkingHours(snapped, duration: genes[i].duration, workingHours: context.workingHours, calendar: cal)
                 )
@@ -166,6 +170,11 @@ struct ScheduleChromosome: Chromosome, Sendable {
         // Respect earliestStart — don't place before it
         if let earliest = event.earliestStart, result < earliest {
             result = earliest
+        }
+
+        // Never place before the planning horizon start (e.g. in the past)
+        if result < horizon.start {
+            result = horizon.start
         }
 
         return result
