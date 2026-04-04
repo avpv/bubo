@@ -18,10 +18,12 @@ struct IntentPickerView: View {
         optimizerService.recipeMonitor?.suggestedRecipes ?? []
     }
 
-    private var recentRecipes: [ScheduleRecipe] {
-        optimizerService.usageTracker
+    /// Top recipes ranked by HN score, falling back to hardcoded quick actions.
+    private var quickActionRecipes: [ScheduleRecipe] {
+        let ranked = optimizerService.usageTracker
             .topRecipeIds(limit: 6)
             .compactMap { RecipeCatalog.allRecipesById[$0] }
+        return ranked.isEmpty ? RecipeCatalog.quickActions : ranked
     }
 
     private var isSearching: Bool { !searchText.isEmpty }
@@ -53,8 +55,8 @@ struct IntentPickerView: View {
                             .eventScrollTransition()
                     }
 
-                    // Recently used — always shown, falls back to quick actions
-                    recentlySection
+                    // Quick actions — HN-ranked by usage, falls back to defaults
+                    quickActionsSection
                         .staggeredEntrance(index: 1)
                         .eventScrollTransition()
 
@@ -180,15 +182,12 @@ struct IntentPickerView: View {
 
     // MARK: - Recently
 
-    private var recentlySection: some View {
+    private var quickActionsSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            let hasRecents = !recentRecipes.isEmpty
-            sectionHeader(hasRecents ? "Recently" : "Quick Actions")
-
-            let recipes = hasRecents ? recentRecipes : RecipeCatalog.quickActions
+            sectionHeader("Quick Actions")
 
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 3), spacing: DS.Spacing.sm) {
-                ForEach(recipes) { recipe in
+                ForEach(quickActionRecipes) { recipe in
                     RecipeCardView(recipe: recipe, style: .quick, onTap: onSelectRecipe)
                 }
             }
