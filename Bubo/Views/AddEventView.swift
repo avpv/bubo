@@ -27,6 +27,7 @@ struct AddEventView: View {
     @State private var addToCalendar = false
     @State private var selectedColorTag: EventColorTag? = nil
     @State private var contextTag = ""
+    @State private var storyPoints: Int? = nil
     @State private var showDiscardConfirmation = false
 
     // MARK: - Pomodoro state
@@ -284,6 +285,38 @@ struct AddEventView: View {
                     .disabled(isExternal)
                     .opacity(isExternal ? 0.6 : 1.0)
 
+                    // Story Points
+                    if !isExternal {
+                        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                            Text("Story Points")
+                                .font(.headline)
+                                .foregroundStyle(skin.resolvedTextPrimary)
+                                .accessibilityAddTraits(.isHeader)
+
+                            HStack(spacing: DS.Spacing.xs) {
+                                ForEach([1, 2, 3, 5, 8, 13], id: \.self) { sp in
+                                    Button {
+                                        Haptics.tap()
+                                        storyPoints = storyPoints == sp ? nil : sp
+                                    } label: {
+                                        Text("\(sp)")
+                                            .font(.caption.bold().monospacedDigit())
+                                            .foregroundStyle(storyPoints == sp ? .white : skin.resolvedTextSecondary)
+                                            .frame(width: 32, height: 28)
+                                            .background(storyPoints == sp ? skinAccent : skinAccent.opacity(DS.Opacity.lightFill))
+                                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, DS.Spacing.md)
+                            .padding(.vertical, DS.Spacing.sm)
+                            .skinPlatter(skin)
+                            .skinPlatterDepth(skin)
+                        }
+                    }
+
                     // Details
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                         Text("Details")
@@ -487,6 +520,7 @@ struct AddEventView: View {
                 selectedEventType = event.eventType
                 selectedColorTag = event.colorTag
                 contextTag = event.context ?? ""
+                storyPoints = event.storyPoints
                 // Load Pomodoro parameters when editing a Pomodoro event
                 if event.eventType == .pomodoro, let rule = event.recurrenceRule, rule.pomodoroMode {
                     if case .afterCount(let rounds) = rule.end {
@@ -986,6 +1020,7 @@ struct AddEventView: View {
         )
         event.colorTag = selectedColorTag
         event.context = contextTag.isEmpty ? nil : contextTag
+        event.storyPoints = storyPoints
         if isEditing {
             reminderService.updateLocalEvent(event)
         } else if addToCalendar {

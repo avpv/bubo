@@ -19,6 +19,7 @@ final class PersistedLocalEvent {
     var eventTypeRaw: String
     var colorTagRaw: String?
     var context: String?
+    var storyPoints: Int?
 
     init(from event: CalendarEvent) {
         self.eventId = event.id
@@ -34,13 +35,14 @@ final class PersistedLocalEvent {
         self.eventTypeRaw = event.eventType.rawValue
         self.colorTagRaw = event.colorTag?.rawValue
         self.context = event.context
+        self.storyPoints = event.storyPoints
     }
 
     func toCalendarEvent() -> CalendarEvent {
         let recurrenceRule: RecurrenceRule? = recurrenceRuleData.flatMap {
             try? JSONDecoder().decode(RecurrenceRule.self, from: $0)
         }
-        return CalendarEvent(
+        var event = CalendarEvent(
             id: eventId,
             title: title,
             startDate: startDate,
@@ -55,6 +57,8 @@ final class PersistedLocalEvent {
             colorTag: colorTagRaw.flatMap { EventColorTag(rawValue: $0) },
             context: context
         )
+        event.storyPoints = storyPoints
+        return event
     }
 
     func update(from event: CalendarEvent) {
@@ -70,6 +74,7 @@ final class PersistedLocalEvent {
         self.eventTypeRaw = event.eventType.rawValue
         self.colorTagRaw = event.colorTag?.rawValue
         self.context = event.context
+        self.storyPoints = event.storyPoints
     }
 }
 
@@ -91,6 +96,7 @@ final class PersistedCachedEvent {
     var eventTypeRaw: String
     var colorTagRaw: String?
     var context: String?
+    var storyPoints: Int?
     var cachedAt: Date
 
     init(from event: CalendarEvent, cachedAt: Date = Date()) {
@@ -107,6 +113,7 @@ final class PersistedCachedEvent {
         self.eventTypeRaw = event.eventType.rawValue
         self.colorTagRaw = event.colorTag?.rawValue
         self.context = event.context
+        self.storyPoints = event.storyPoints
         self.cachedAt = cachedAt
     }
 
@@ -114,7 +121,7 @@ final class PersistedCachedEvent {
         let recurrenceRule: RecurrenceRule? = recurrenceRuleData.flatMap {
             try? JSONDecoder().decode(RecurrenceRule.self, from: $0)
         }
-        return CalendarEvent(
+        var event = CalendarEvent(
             id: eventId,
             title: title,
             startDate: startDate,
@@ -129,6 +136,8 @@ final class PersistedCachedEvent {
             colorTag: colorTagRaw.flatMap { EventColorTag(rawValue: $0) },
             context: context
         )
+        event.storyPoints = storyPoints
+        return event
     }
 }
 

@@ -115,6 +115,8 @@ struct CalendarEvent: Identifiable, Codable, Hashable, Sendable {
     /// Optional project/category tag for optimizer context grouping.
     /// When set, takes priority over colorTag and calendarName for context resolution.
     var context: String?
+    /// Optional story-point estimate for the task (e.g. 1, 2, 3, 5, 8, 13).
+    var storyPoints: Int?
 
     /// Whether the optimizer is allowed to move this event to a different time slot.
     /// Defaults to `false` for events synced from external calendars (apple_ prefix).

@@ -20,7 +20,10 @@ struct QuickAddTasksView: View {
         var title: String = ""
         var minutes: Int = 60
         var priority: TaskPriority = .medium
+        var storyPoints: Int? = nil
     }
+
+    static let fibonacciPoints = [1, 2, 3, 5, 8, 13]
 
     enum TaskPriority: String, CaseIterable {
         case low = "Low"
@@ -149,6 +152,7 @@ struct QuickAddTasksView: View {
         VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
             legendRow(icon: "clock", label: "Duration", description: "how long the task will take")
             legendRow(icon: "exclamationmark", label: "Priority", description: "Low / Med / High — affects scheduling order")
+            legendRow(icon: "number", label: "Story Points", description: "effort estimate (Fibonacci: 1, 2, 3, 5, 8, 13)")
         }
         .padding(.top, DS.Spacing.sm)
         .padding(.leading, DS.Spacing.md)
@@ -186,7 +190,8 @@ struct QuickAddTasksView: View {
                 title: task.title,
                 minutes: task.minutes,
                 priority: task.priority.value,
-                energy: min(1.0, Double(task.minutes) / 180.0)
+                energy: min(1.0, Double(task.minutes) / 180.0),
+                storyPoints: task.storyPoints
             )
         }
 
@@ -281,6 +286,26 @@ private struct TaskRowCard: View {
             .fixedSize()
             .padding(.leading, DS.Spacing.xs)
             .accessibilityLabel("Priority: \(task.priority.rawValue)")
+
+            // Story points picker
+            Menu {
+                Button("—") { task.storyPoints = nil }
+                ForEach(QuickAddTasksView.fibonacciPoints, id: \.self) { sp in
+                    Button("\(sp) SP") { task.storyPoints = sp }
+                }
+            } label: {
+                Text(task.storyPoints.map { "\($0) SP" } ?? "SP")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(task.storyPoints != nil ? skin.accentColor : skin.resolvedTextTertiary)
+                    .padding(.horizontal, DS.Spacing.sm)
+                    .padding(.vertical, DS.Spacing.xxs)
+                    .background(skin.accentColor.opacity(DS.Opacity.lightFill))
+                    .clipShape(Capsule())
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .padding(.leading, DS.Spacing.xs)
+            .accessibilityLabel("Story points: \(task.storyPoints.map { "\($0)" } ?? "none")")
 
             // Remove button
             if taskCount > 1 {

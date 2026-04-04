@@ -300,6 +300,12 @@ struct EventRowView: View {
                         .truncationMode(.tail)
                 }
 
+                if let sp = event.storyPoints {
+                    Label("\(sp) SP", systemImage: "number")
+                        .font(.caption2.bold())
+                        .foregroundStyle(skin.accentColor)
+                }
+
                 if let calName = event.calendarName {
                     Text(calName)
                         .font(.caption2)

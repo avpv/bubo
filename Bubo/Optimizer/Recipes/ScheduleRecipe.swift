@@ -244,6 +244,9 @@ struct EventSpec: Codable, Hashable {
     /// Example: "in 5 minutes" → startOffsetMinutes = 5
     var startOffsetMinutes: Int? = nil
 
+    /// Optional story-point estimate (e.g. 1, 2, 3, 5, 8, 13).
+    var storyPoints: Int? = nil
+
     /// Custom decoder that tolerates missing keys by falling back to defaults.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -261,6 +264,7 @@ struct EventSpec: Codable, Hashable {
         chainGap = try? c.decode(Int.self, forKey: .chainGap)
         segments = try? c.decode([EventSegment].self, forKey: .segments)
         startOffsetMinutes = try? c.decode(Int.self, forKey: .startOffsetMinutes)
+        storyPoints = try? c.decode(Int.self, forKey: .storyPoints)
     }
 
     init(
@@ -277,7 +281,8 @@ struct EventSpec: Codable, Hashable {
         creation: CreationMode = .fixed,
         chainGap: Int? = nil,
         segments: [EventSegment]? = nil,
-        startOffsetMinutes: Int? = nil
+        startOffsetMinutes: Int? = nil,
+        storyPoints: Int? = nil
     ) {
         self.title = title
         self.minutes = minutes
@@ -293,6 +298,7 @@ struct EventSpec: Codable, Hashable {
         self.chainGap = chainGap
         self.segments = segments
         self.startOffsetMinutes = startOffsetMinutes
+        self.storyPoints = storyPoints
     }
 }
 

@@ -70,8 +70,31 @@ struct ScheduleGene: Codable, Hashable, Sendable {
     let energyCost: Double
     let priority: Double
     let isFocusBlock: Bool
+    let storyPoints: Int?
 
     var endTime: Date { startTime.addingTimeInterval(duration) }
+
+    init(
+        eventId: String,
+        title: String,
+        startTime: Date,
+        duration: TimeInterval,
+        context: String?,
+        energyCost: Double,
+        priority: Double,
+        isFocusBlock: Bool,
+        storyPoints: Int? = nil
+    ) {
+        self.eventId = eventId
+        self.title = title
+        self.startTime = startTime
+        self.duration = duration
+        self.context = context
+        self.energyCost = energyCost
+        self.priority = priority
+        self.isFocusBlock = isFocusBlock
+        self.storyPoints = storyPoints
+    }
 
     /// Create a copy with a new start time (preserves all other fields).
     func withStartTime(_ newStart: Date) -> ScheduleGene {
@@ -83,7 +106,8 @@ struct ScheduleGene: Codable, Hashable, Sendable {
             context: context,
             energyCost: energyCost,
             priority: priority,
-            isFocusBlock: isFocusBlock
+            isFocusBlock: isFocusBlock,
+            storyPoints: storyPoints
         )
     }
 }
