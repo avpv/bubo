@@ -821,75 +821,87 @@ struct RecipeConfigSheet: View {
     private var blockedEmptyState: some View {
         ScrollView {
             VStack(spacing: DS.Spacing.lg) {
-                Spacer(minLength: DS.Spacing.xl)
+                // Header — same style as normal flow
+                recipeHeader
 
-                Image(systemName: "tray")
-                    .font(.system(size: 32))
-                    .foregroundStyle(skin.resolvedTextTertiary)
-                    .accessibilityHidden(true)
-
-                VStack(spacing: DS.Spacing.xs) {
-                    Text("\(recipe.name) needs tasks")
-                        .font(.subheadline.weight(.semibold))
+                // Status section
+                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                    Text("Tasks")
+                        .font(.headline)
                         .foregroundStyle(skin.resolvedTextPrimary)
-                    Text("This recipe rearranges your existing tasks.\nAdd some first, or try one that creates new blocks.")
-                        .font(.caption)
-                        .foregroundStyle(skin.resolvedTextSecondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, DS.Spacing.lg)
-                }
+                        .accessibilityAddTraits(.isHeader)
 
-                if onAddTasks != nil {
-                    Button {
-                        Haptics.tap()
-                        onAddTasks?()
-                    } label: {
-                        Label("Add tasks", systemImage: "plus")
-                    }
-                    .buttonStyle(.action(role: .primary, size: .compact))
-                }
+                    VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                        Label("This recipe rearranges your existing tasks. Add some first to get started.", systemImage: "tray")
+                            .font(.caption)
+                            .foregroundStyle(skin.resolvedTextSecondary)
 
-                if let onSwitchRecipe, !suggestedAlternatives.isEmpty {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text("Try instead")
-                            .font(.caption2.weight(.medium))
-                            .foregroundStyle(skin.resolvedTextTertiary)
-                            .padding(.bottom, DS.Spacing.xs)
-                            .accessibilityAddTraits(.isHeader)
-
-                        ForEach(suggestedAlternatives) { alt in
+                        if onAddTasks != nil {
                             Button {
                                 Haptics.tap()
-                                onSwitchRecipe(alt)
+                                onAddTasks?()
                             } label: {
-                                HStack(spacing: DS.Spacing.sm) {
-                                    VStack(alignment: .leading, spacing: 1) {
-                                        Text(alt.name)
-                                            .font(.caption.weight(.medium))
-                                            .foregroundStyle(skin.resolvedTextPrimary)
-                                        Text(alt.description)
-                                            .font(.caption2)
-                                            .foregroundStyle(skin.resolvedTextSecondary)
-                                            .lineLimit(1)
-                                    }
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .font(.caption2)
-                                        .foregroundStyle(skin.resolvedTextTertiary)
-                                }
-                                .padding(.vertical, DS.Spacing.sm)
-                                .padding(.horizontal, DS.Spacing.sm)
+                                Label("Add tasks", systemImage: "plus")
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.action(role: .primary, size: .compact))
                         }
                     }
-                    .padding(.horizontal, DS.Spacing.lg)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(DS.Spacing.md)
+                    .skinPlatter(skin)
+                    .skinPlatterDepth(skin)
                 }
 
-                Spacer(minLength: DS.Spacing.xl)
+                // Alternatives section
+                if let onSwitchRecipe, !suggestedAlternatives.isEmpty {
+                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                        Text("Or try a recipe that creates new blocks")
+                            .font(.headline)
+                            .foregroundStyle(skin.resolvedTextPrimary)
+                            .accessibilityAddTraits(.isHeader)
+
+                        VStack(spacing: 0) {
+                            ForEach(Array(suggestedAlternatives.enumerated()), id: \.element.id) { index, alt in
+                                Button {
+                                    Haptics.tap()
+                                    onSwitchRecipe(alt)
+                                } label: {
+                                    HStack(spacing: DS.Spacing.sm) {
+                                        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                                            Text(alt.name)
+                                                .font(.caption.weight(.medium))
+                                                .foregroundStyle(skin.resolvedTextPrimary)
+                                            Text(alt.description)
+                                                .font(.caption2)
+                                                .foregroundStyle(skin.resolvedTextSecondary)
+                                                .lineLimit(1)
+                                        }
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .font(.caption2)
+                                            .foregroundStyle(skin.resolvedTextTertiary)
+                                    }
+                                    .padding(.vertical, DS.Spacing.sm)
+                                    .padding(.horizontal, DS.Spacing.md)
+                                }
+                                .buttonStyle(.plain)
+
+                                if index < suggestedAlternatives.count - 1 {
+                                    SkinSeparator()
+                                        .padding(.horizontal, DS.Spacing.md)
+                                }
+                            }
+                        }
+                        .skinPlatter(skin)
+                        .skinPlatterDepth(skin)
+                    }
+                }
             }
-            .frame(maxWidth: .infinity)
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.vertical, DS.Spacing.xl)
         }
+        .scrollContentBackground(.hidden)
+        .frame(maxHeight: .infinity)
     }
 
     // MARK: - Parameter Controls
