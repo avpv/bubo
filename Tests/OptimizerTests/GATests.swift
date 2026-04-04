@@ -1981,12 +1981,10 @@ struct PomodoroSequenceChromosomeTests {
     @Test("Single task returns immediately without GA")
     func singleTaskOptimization() {
         let task = makeMovableEvent(id: "solo", title: "Solo Task")
-        let context = makeContext(movableEvents: [task])
 
         let result = PomodoroSequenceOptimizer.optimize(
             tasks: [task],
-            sessionStart: Date(),
-            context: context
+            sessionStart: Date()
         )
 
         #expect(result.count == 1)

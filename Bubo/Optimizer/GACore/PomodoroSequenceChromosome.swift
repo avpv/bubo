@@ -270,15 +270,26 @@ struct PomodoroSequenceEvaluator {
 struct PomodoroSequenceOptimizer {
 
     /// Optimize the ordering of tasks within a Pomodoro session.
+    /// Builds its own OptimizerContext from the provided tasks to guarantee
+    /// that `context.movableEvents.count == tasks.count` (required for safe
+    /// index-based permutation in PomodoroSequenceChromosome).
+    ///
     /// Returns tasks in the optimized order.
     static func optimize(
         tasks: [OptimizableEvent],
         sessionStart: Date,
-        context: OptimizerContext,
+        preferences: OptimizerPreferences = OptimizerPreferences(),
         config: GAConfiguration = .quick,
         weights: PomodoroSequenceEvaluator.Weights = .default
     ) -> [OptimizableEvent] {
         guard tasks.count > 1 else { return tasks }
+
+        // Build a context scoped exactly to these tasks.
+        // This ensures random() creates permutations of the correct length.
+        let context = OptimizerContext(
+            movableEvents: tasks,
+            preferences: preferences
+        )
 
         let evaluator = PomodoroSequenceEvaluator(
             tasks: tasks,

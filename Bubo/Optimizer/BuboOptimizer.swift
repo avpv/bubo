@@ -314,14 +314,10 @@ final class BuboOptimizer {
         let capturedPrefs = preferences
 
         return await Task.detached(priority: .userInitiated) {
-            let context = OptimizerContext(
-                movableEvents: capturedTasks,
-                preferences: capturedPrefs
-            )
-            return PomodoroSequenceOptimizer.optimize(
+            PomodoroSequenceOptimizer.optimize(
                 tasks: capturedTasks,
                 sessionStart: capturedStart,
-                context: context,
+                preferences: capturedPrefs,
                 config: .quick,
                 weights: capturedWeights
             )

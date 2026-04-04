@@ -210,12 +210,17 @@ struct MeetingClusteringObjective: FitnessObjective {
         return clusters
     }
 
-    /// Heuristic: an event is a "meeting" if it has participants,
-    /// a meeting link, or a short duration (< 90 min, non-focus).
+    /// Heuristic: an event is a "meeting" if it has a meeting link
+    /// or its title contains common meeting-related keywords.
+    /// Pure duration-based guessing is avoided to prevent false positives
+    /// (e.g., a 30-min personal task is not a meeting).
     private func isMeeting(_ event: CalendarEvent) -> Bool {
         if event.meetingLink != nil { return true }
-        let duration = event.endDate.timeIntervalSince(event.startDate)
-        if duration <= 90 * 60 && event.eventType == .standard { return true }
-        return false
+
+        let title = event.title.lowercased()
+        let meetingKeywords = ["meeting", "standup", "stand-up", "sync", "1:1",
+                               "1-on-1", "review", "retro", "planning", "demo",
+                               "interview", "call", "huddle"]
+        return meetingKeywords.contains { title.contains($0) }
     }
 }
