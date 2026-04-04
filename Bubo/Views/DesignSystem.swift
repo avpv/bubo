@@ -487,29 +487,32 @@ struct PopoverHeader: View {
     var body: some View {
         VStack(spacing: 0) {
             ZStack {
-                // Center: title (only when in navigation / back mode)
-                if let title, showBack {
-                    Text(title)
-                        .font(.headline)
-                        .fontWeight(skin.resolvedHeadlineFontWeight)
-                        .fontDesign(skin.resolvedFontDesign)
-                }
-
-                if showBack {
-                    HStack(spacing: DS.Spacing.xs) {
+                // Center: owl icon + title always centered
+                HStack(spacing: DS.Spacing.xs) {
+                    if showBack, let navigateHome {
                         Button {
                             Haptics.tap()
-                            if let navigateHome {
-                                navigateHome()
-                            } else {
-                                onBack?()
-                            }
+                            navigateHome()
                         } label: {
                             OwlIcon(size: DS.Size.headerIcon)
                                 .foregroundStyle(skin.accentColor)
                         }
                         .buttonStyle(.borderless)
+                    } else {
+                        OwlIcon(size: DS.Size.headerIcon)
+                            .foregroundStyle(skin.accentColor)
+                    }
 
+                    if let title {
+                        Text(title)
+                            .font(.headline)
+                            .fontWeight(skin.resolvedHeadlineFontWeight)
+                            .fontDesign(skin.resolvedFontDesign)
+                    }
+                }
+
+                HStack(spacing: DS.Spacing.xs) {
+                    if showBack {
                         Button {
                             Haptics.tap()
                             onBack?()
@@ -518,30 +521,12 @@ struct PopoverHeader: View {
                         }
                         .buttonStyle(.borderless)
                         .keyboardShortcut(.escape, modifiers: [])
-
-                        Spacer()
-
-                        if let trailing {
-                            trailing
-                        }
                     }
-                } else {
-                    HStack(spacing: DS.Spacing.xs) {
-                        OwlIcon(size: DS.Size.headerIcon)
-                            .foregroundStyle(skin.accentColor)
 
-                        if let title {
-                            Text(title)
-                                .font(.headline)
-                                .fontWeight(skin.resolvedHeadlineFontWeight)
-                                .fontDesign(skin.resolvedFontDesign)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .overlay(alignment: .trailing) {
-                        if let trailing {
-                            trailing
-                        }
+                    Spacer()
+
+                    if let trailing {
+                        trailing
                     }
                 }
             }
