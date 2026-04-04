@@ -25,6 +25,75 @@ struct ScheduleRecipe: Codable, Identifiable, Hashable {
     var name: String = ""
     var description: String = ""
     var category: String = ""
+    var icon: String = ""
+
+    /// SF Symbol derived from explicit icon, recipe ID, or category.
+    var resolvedIcon: String {
+        if !icon.isEmpty { return icon }
+        // Per-recipe icons
+        switch id {
+        case "need-focus":          return "scope"
+        case "pomodoro":            return "timer"
+        case "structured-deep-work": return "brain.head.profile"
+        case "deep-work-day":       return "rectangle.stack"
+        case "max-productivity":    return "bolt.fill"
+        case "organize-day":        return "calendar.day.timeline.leading"
+        case "plan-week":           return "calendar"
+        case "full-rebuild":        return "arrow.triangle.2.circlepath"
+        case "deadline-mode":       return "flame"
+        case "deadline-crunch":     return "flame.fill"
+        case "multiple-deadlines":  return "checklist"
+        case "batch-meetings":      return "person.3"
+        case "buffer-meetings":     return "pause.rectangle"
+        case "too-many-meetings":   return "person.crop.circle.badge.minus"
+        case "prep-meeting":        return "note.text"
+        case "low-energy":          return "battery.25percent"
+        case "morning-person":      return "sunrise"
+        case "post-lunch-dip":      return "cup.and.saucer"
+        case "wind-down":           return "moon"
+        case "lighten-tomorrow":    return "leaf"
+        case "balance-week":        return "scale.3d"
+        case "focus-meeting-split": return "arrow.left.arrow.right"
+        case "free-friday":         return "party.popper"
+        case "morning-routine":     return "sunrise.fill"
+        case "evening-wrap-up":     return "sunset"
+        case "regular-learning":    return "book"
+        case "movement-reminders":  return "figure.walk"
+        case "group-by-project":    return "folder"
+        case "prioritize-project":  return "star"
+        case "split-task":          return "scissors"
+        case "alternate-types":     return "arrow.up.arrow.down"
+        case "carry-over":          return "arrow.uturn.forward"
+        case "short-day":           return "clock.arrow.circlepath"
+        case "late-start":          return "alarm"
+        case "wfh":                 return "house"
+        case "half-day-blocked":    return "square.lefthalf.filled"
+        case "morning-only":        return "sun.max"
+        case "no-meetings-before":  return "hand.raised"
+        case "show-options":        return "square.stack.3d.up"
+        case "like-yesterday":      return "clock.arrow.2.circlepath"
+        case "maker-schedule":      return "hammer"
+        case "manager-schedule":    return "briefcase"
+        case "circuit-training":    return "figure.strengthtraining.traditional"
+        case "yoga-session":        return "figure.yoga"
+        case "interval-training":   return "figure.highintensity.intervaltraining"
+        default: break
+        }
+        // Fallback: category-based
+        switch category {
+        case "focus":     return "scope"
+        case "planning":  return "calendar"
+        case "deadlines": return "flame"
+        case "meetings":  return "person.3"
+        case "energy":    return "battery.75percent"
+        case "habits":    return "repeat"
+        case "projects":  return "folder"
+        case "adapt":     return "slider.horizontal.3"
+        case "workouts":  return "figure.run"
+        case "advanced":  return "gearshape"
+        default:          return "sparkles"
+        }
+    }
 
     // MARK: - 1. Events to Create
 
@@ -110,6 +179,7 @@ struct ScheduleRecipe: Codable, Identifiable, Hashable {
         name = (try? c.decode(String.self, forKey: .name)) ?? ""
         description = (try? c.decode(String.self, forKey: .description)) ?? ""
         category = (try? c.decode(String.self, forKey: .category)) ?? ""
+        icon = (try? c.decode(String.self, forKey: .icon)) ?? ""
         events = (try? c.decode([EventSpec].self, forKey: .events)) ?? []
         includeExistingEvents = (try? c.decode(Bool.self, forKey: .includeExistingEvents)) ?? true
         findSlotOnly = (try? c.decode(Bool.self, forKey: .findSlotOnly)) ?? false

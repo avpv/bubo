@@ -159,8 +159,10 @@ struct IntentPickerView: View {
 
     private func sectionHeader(_ title: String, color: Color? = nil) -> some View {
         Text(title)
-            .font(.caption.weight(.semibold))
+            .font(.subheadline.weight(.medium))
             .foregroundStyle(color ?? skin.resolvedTextSecondary)
+            .textCase(.uppercase)
+            .tracking(0.5)
             .accessibilityAddTraits(.isHeader)
     }
 }
@@ -213,14 +215,18 @@ struct RecipeCardView: View {
     }
 
     private var quickLayout: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            Image(systemName: recipe.resolvedIcon)
+                .font(.system(size: DS.Size.iconMedium))
+                .foregroundStyle(skin.accentColor)
+
             Text(recipe.name)
                 .font(.caption.weight(.medium))
                 .foregroundStyle(skin.resolvedTextPrimary)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
         .padding(.horizontal, DS.Spacing.md)
         .padding(.vertical, DS.Spacing.sm)
         .skinPlatter(skin)
@@ -272,6 +278,11 @@ struct RecipeCardView: View {
 
     private var listLayout: some View {
         HStack(spacing: DS.Spacing.sm) {
+            Image(systemName: recipe.resolvedIcon)
+                .font(.system(size: DS.Size.iconSmall))
+                .foregroundStyle(skin.accentColor.opacity(0.7))
+                .frame(width: DS.Size.iconLarge)
+
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(recipe.name)
                     .font(.caption.weight(.medium))
@@ -418,10 +429,10 @@ private struct CategorySection: View {
                         .background(skin.resolvedTextTertiary.opacity(DS.Opacity.lightFill))
                         .clipShape(Capsule())
 
-                    Image(systemName: "chevron.right")
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                         .font(.system(size: DS.Size.iconSmall, weight: .semibold))
                         .foregroundStyle(skin.resolvedTextTertiary)
-                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .contentTransition(.symbolEffect(.replace))
                         .padding(.leading, DS.Spacing.xs)
                 }
                 .frame(minHeight: DS.Size.eventRowMinHeight)
