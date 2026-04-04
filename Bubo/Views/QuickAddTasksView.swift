@@ -81,13 +81,20 @@ struct QuickAddTasksView: View {
                             .foregroundStyle(skin.resolvedTextPrimary)
                             .accessibilityAddTraits(.isHeader)
 
-                        VStack(spacing: DS.Spacing.sm) {
+                        VStack(spacing: 0) {
                             ForEach(Array($tasks.enumerated()), id: \.element.id) { index, $task in
                                 taskRow(task: $task)
                                     .staggeredEntrance(index: index)
                                     .eventScrollTransition()
+
+                                if index < tasks.count - 1 {
+                                    SkinSeparator()
+                                        .padding(.horizontal, DS.Spacing.sm)
+                                }
                             }
                         }
+                        .skinPlatter(skin)
+                        .skinPlatterDepth(skin)
 
                         Button {
                             Haptics.tap()
@@ -190,20 +197,12 @@ private struct TaskRowCard: View {
     let onRemove: () -> Void
 
     @Environment(\.activeSkin) private var skin
-    @State private var isHovered = false
 
     var body: some View {
         HStack(alignment: .center, spacing: 0) {
-            // Accent bar
-            Capsule()
-                .fill(skin.accentColor)
-                .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
-                .padding(.trailing, DS.Spacing.md)
-                .shadow(color: skin.accentColor.opacity(skin.shadowOpacity * 4), radius: skin.shadowRadius * 0.5)
-
             TextField("Task name", text: $task.title)
                 .textFieldStyle(.plain)
-                .font(.subheadline)
+                .font(.headline)
                 .accessibilityLabel("Task name")
 
             Spacer()
@@ -268,43 +267,8 @@ private struct TaskRowCard: View {
                 .accessibilityLabel("Remove task")
             }
         }
+        .padding(.horizontal, DS.Spacing.md)
         .padding(.vertical, DS.Spacing.sm)
-        .padding(.horizontal, DS.Spacing.sm)
-        .background(
-            ZStack {
-                SkinPlatterBackground(skin: skin)
-                Rectangle()
-                    .fill(isHovered ? skin.resolvedHoverFill : Color.clear)
-            }
-        )
-        .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                .strokeBorder(
-                    LinearGradient(
-                        colors: [
-                            .white.opacity(skin.platterBorderOpacity * 1.5),
-                            .white.opacity(skin.platterBorderOpacity * 0.1),
-                            .clear,
-                            .white.opacity(skin.platterBorderOpacity * 0.4)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: DS.Border.thin
-                )
-        )
-        .shadow(
-            color: isHovered ? skin.resolvedHoverShadowColor : skin.resolvedShadowColor,
-            radius: isHovered ? skin.hoverShadowRadius : skin.shadowRadius,
-            y: isHovered ? skin.hoverShadowY : skin.shadowY
-        )
-        .scaleEffect(isHovered ? 1.02 : 1.0)
-        .onHover { hovering in
-            withAnimation(skin.resolvedMicroAnimation) {
-                isHovered = hovering
-            }
-        }
     }
 
     private func formatMinutes(_ m: Int) -> String {
