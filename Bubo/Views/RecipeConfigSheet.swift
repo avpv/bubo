@@ -1001,9 +1001,10 @@ struct RecipeConfigSheet: View {
     private func periodPickerParam(id: String) -> some View {
         let options: [(label: String, value: String)] = [
             ("Any time", Self.periodAnyValue),
-            ("Morning 7–12", Period.morning.rawValue),
-            ("Afternoon 12–17", Period.afternoon.rawValue),
-            ("Evening 17–21", Period.evening.rawValue),
+            ("Night 0–6", Period.night.rawValue),
+            ("Morning 6–12", Period.morning.rawValue),
+            ("Afternoon 12–18", Period.afternoon.rawValue),
+            ("Evening 18–23", Period.evening.rawValue),
         ]
         let binding = Binding<String>(
             get: { paramValues[id] as? String ?? findDefaultPeriod(paramId: id) },
