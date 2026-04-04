@@ -294,6 +294,40 @@ final class BuboOptimizer {
         )
     }
 
+    // MARK: - Pomodoro Task Sequence Optimization
+
+    /// Optimize the order of tasks within a Pomodoro session.
+    /// Uses a dedicated permutation GA (PomodoroSequenceChromosome) that considers
+    /// energy curve, context switches, deadline urgency, and cognitive load alternation.
+    ///
+    /// Returns tasks reordered for optimal execution within the session.
+    func optimizePomodoroSequence(
+        tasks: [OptimizableEvent],
+        sessionStart: Date = Date(),
+        weights: PomodoroSequenceEvaluator.Weights = .default
+    ) async -> [OptimizableEvent] {
+        guard tasks.count > 1 else { return tasks }
+
+        let capturedTasks = tasks
+        let capturedStart = sessionStart
+        let capturedWeights = weights
+        let capturedPrefs = preferences
+
+        return await Task.detached(priority: .userInitiated) {
+            let context = OptimizerContext(
+                movableEvents: capturedTasks,
+                preferences: capturedPrefs
+            )
+            return PomodoroSequenceOptimizer.optimize(
+                tasks: capturedTasks,
+                sessionStart: capturedStart,
+                context: context,
+                config: .quick,
+                weights: capturedWeights
+            )
+        }.value
+    }
+
     // MARK: - Day Planning (#6)
 
     func planDay(

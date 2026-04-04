@@ -1832,3 +1832,275 @@ struct EarliestStartConstraintTests {
         }
     }
 }
+
+// MARK: - Pomodoro Sequence Chromosome Tests
+
+@Suite("PomodoroSequenceChromosome Tests")
+struct PomodoroSequenceChromosomeTests {
+
+    @Test("Random chromosome creates valid permutation")
+    func randomCreatesPermutation() {
+        let tasks = (0..<5).map { i in
+            makeMovableEvent(id: "t\(i)", title: "Task \(i)", energyCost: Double(i) * 0.2)
+        }
+        let context = makeContext(movableEvents: tasks)
+
+        let chromosome = PomodoroSequenceChromosome.random(context: context)
+        #expect(chromosome.sequence.count == 5)
+        #expect(Set(chromosome.sequence) == Set(0..<5))
+    }
+
+    @Test("Crossover produces valid permutations")
+    func crossoverProducesValidPermutations() {
+        let tasks = (0..<6).map { i in
+            makeMovableEvent(id: "t\(i)", title: "Task \(i)")
+        }
+        let context = makeContext(movableEvents: tasks)
+
+        let parent1 = PomodoroSequenceChromosome.random(context: context)
+        let parent2 = PomodoroSequenceChromosome.random(context: context)
+
+        let (child1, child2) = parent1.crossover(with: parent2, context: context)
+
+        #expect(Set(child1.sequence) == Set(0..<6), "Child 1 must be valid permutation")
+        #expect(Set(child2.sequence) == Set(0..<6), "Child 2 must be valid permutation")
+        #expect(child1.needsEvaluation)
+        #expect(child2.needsEvaluation)
+    }
+
+    @Test("Mutation preserves valid permutation")
+    func mutationPreservesPermutation() {
+        let tasks = (0..<8).map { i in
+            makeMovableEvent(id: "t\(i)", title: "Task \(i)")
+        }
+        let context = makeContext(movableEvents: tasks)
+
+        var chromosome = PomodoroSequenceChromosome.random(context: context)
+        chromosome.mutate(rate: 1.0, context: context)
+
+        #expect(Set(chromosome.sequence) == Set(0..<8), "Mutated chromosome must be valid permutation")
+        #expect(chromosome.needsEvaluation)
+    }
+
+    @Test("Evaluator scores heavy-first ordering higher for energy")
+    func energyCurveRewardsHeavyFirst() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let sessionStart = cal.date(bySettingHour: 9, minute: 0, second: 0, of: today)!
+
+        // Tasks with decreasing energy cost
+        let tasks = [
+            makeMovableEvent(id: "heavy", title: "Heavy", durationMinutes: 25, energyCost: 0.9),
+            makeMovableEvent(id: "medium", title: "Medium", durationMinutes: 25, energyCost: 0.5),
+            makeMovableEvent(id: "light", title: "Light", durationMinutes: 25, energyCost: 0.1),
+        ]
+        let context = makeContext(movableEvents: tasks)
+
+        let evaluator = PomodoroSequenceEvaluator(
+            tasks: tasks,
+            sessionStart: sessionStart,
+            weights: .init(energyAlignment: 1.0, contextSwitch: 0.0, deadlineProximity: 0.0, cognitiveLoad: 0.0)
+        )
+
+        // Heavy → Medium → Light (optimal)
+        var optimal = PomodoroSequenceChromosome(sequence: [0, 1, 2])
+        evaluator.evaluateAndAssign(&optimal, context: context)
+
+        // Light → Medium → Heavy (worst)
+        var reversed = PomodoroSequenceChromosome(sequence: [2, 1, 0])
+        evaluator.evaluateAndAssign(&reversed, context: context)
+
+        #expect(optimal.fitness > reversed.fitness,
+                "Heavy-first (\(optimal.fitness)) should score higher than light-first (\(reversed.fitness))")
+    }
+
+    @Test("Evaluator rewards same-context grouping")
+    func contextSwitchRewardsSameContext() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let sessionStart = cal.date(bySettingHour: 9, minute: 0, second: 0, of: today)!
+
+        let tasks = [
+            makeMovableEvent(id: "a1", title: "API 1", context: "Work/backend"),
+            makeMovableEvent(id: "a2", title: "API 2", context: "Work/backend"),
+            makeMovableEvent(id: "d1", title: "Design", context: "Work/frontend"),
+            makeMovableEvent(id: "d2", title: "CSS", context: "Work/frontend"),
+        ]
+        let context = makeContext(movableEvents: tasks)
+
+        let evaluator = PomodoroSequenceEvaluator(
+            tasks: tasks,
+            sessionStart: sessionStart,
+            weights: .init(energyAlignment: 0.0, contextSwitch: 1.0, deadlineProximity: 0.0, cognitiveLoad: 0.0)
+        )
+
+        // Grouped: backend, backend, frontend, frontend
+        var grouped = PomodoroSequenceChromosome(sequence: [0, 1, 2, 3])
+        evaluator.evaluateAndAssign(&grouped, context: context)
+
+        // Interleaved: backend, frontend, backend, frontend
+        var interleaved = PomodoroSequenceChromosome(sequence: [0, 2, 1, 3])
+        evaluator.evaluateAndAssign(&interleaved, context: context)
+
+        #expect(grouped.fitness > interleaved.fitness,
+                "Grouped (\(grouped.fitness)) should score higher than interleaved (\(interleaved.fitness))")
+    }
+
+    @Test("Evaluator penalizes consecutive heavy tasks")
+    func cognitiveLoadPenalizesConsecutiveHeavy() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let sessionStart = cal.date(bySettingHour: 9, minute: 0, second: 0, of: today)!
+
+        let tasks = [
+            makeMovableEvent(id: "h1", title: "Heavy 1", energyCost: 0.9),
+            makeMovableEvent(id: "h2", title: "Heavy 2", energyCost: 0.8),
+            makeMovableEvent(id: "l1", title: "Light 1", energyCost: 0.2),
+            makeMovableEvent(id: "h3", title: "Heavy 3", energyCost: 0.7),
+        ]
+        let context = makeContext(movableEvents: tasks)
+
+        let evaluator = PomodoroSequenceEvaluator(
+            tasks: tasks,
+            sessionStart: sessionStart,
+            weights: .init(energyAlignment: 0.0, contextSwitch: 0.0, deadlineProximity: 0.0, cognitiveLoad: 1.0)
+        )
+
+        // Alternating: heavy, light, heavy, heavy
+        var alternating = PomodoroSequenceChromosome(sequence: [0, 2, 1, 3])
+        evaluator.evaluateAndAssign(&alternating, context: context)
+
+        // All heavy first: heavy, heavy, heavy, light
+        var heavyFirst = PomodoroSequenceChromosome(sequence: [0, 1, 3, 2])
+        evaluator.evaluateAndAssign(&heavyFirst, context: context)
+
+        #expect(alternating.fitness > heavyFirst.fitness,
+                "Alternating (\(alternating.fitness)) should score higher than heavy-clustered (\(heavyFirst.fitness))")
+    }
+
+    @Test("Single task returns immediately without GA")
+    func singleTaskOptimization() {
+        let task = makeMovableEvent(id: "solo", title: "Solo Task")
+        let context = makeContext(movableEvents: [task])
+
+        let result = PomodoroSequenceOptimizer.optimize(
+            tasks: [task],
+            sessionStart: Date(),
+            context: context
+        )
+
+        #expect(result.count == 1)
+        #expect(result[0].id == "solo")
+    }
+}
+
+// MARK: - Meeting Clustering Objective Tests
+
+@Suite("MeetingClusteringObjective Tests")
+struct MeetingClusteringObjectiveTests {
+
+    @Test("Clustered meetings score higher than scattered")
+    func clusteredBeatScattered() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+
+        // Clustered: meetings at 10:00, 10:30, 11:00
+        let clusteredGenes = [
+            ScheduleGene(eventId: "m1", title: "Meeting 1",
+                         startTime: cal.date(bySettingHour: 10, minute: 0, second: 0, of: today)!,
+                         duration: 1800, context: "meeting", energyCost: 0.5, priority: 0.5, isFocusBlock: false),
+            ScheduleGene(eventId: "m2", title: "Meeting 2",
+                         startTime: cal.date(bySettingHour: 10, minute: 30, second: 0, of: today)!,
+                         duration: 1800, context: "meeting", energyCost: 0.5, priority: 0.5, isFocusBlock: false),
+            ScheduleGene(eventId: "m3", title: "Meeting 3",
+                         startTime: cal.date(bySettingHour: 11, minute: 0, second: 0, of: today)!,
+                         duration: 1800, context: "meeting", energyCost: 0.5, priority: 0.5, isFocusBlock: false),
+        ]
+        let clustered = ScheduleChromosome(genes: clusteredGenes)
+
+        // Scattered: meetings at 9:00, 12:00, 16:00
+        let scatteredGenes = [
+            ScheduleGene(eventId: "m1", title: "Meeting 1",
+                         startTime: cal.date(bySettingHour: 9, minute: 0, second: 0, of: today)!,
+                         duration: 1800, context: "meeting", energyCost: 0.5, priority: 0.5, isFocusBlock: false),
+            ScheduleGene(eventId: "m2", title: "Meeting 2",
+                         startTime: cal.date(bySettingHour: 12, minute: 0, second: 0, of: today)!,
+                         duration: 1800, context: "meeting", energyCost: 0.5, priority: 0.5, isFocusBlock: false),
+            ScheduleGene(eventId: "m3", title: "Meeting 3",
+                         startTime: cal.date(bySettingHour: 16, minute: 0, second: 0, of: today)!,
+                         duration: 1800, context: "meeting", energyCost: 0.5, priority: 0.5, isFocusBlock: false),
+        ]
+        let scattered = ScheduleChromosome(genes: scatteredGenes)
+
+        let events = (1...3).map { i in
+            makeMovableEvent(id: "m\(i)", title: "Meeting \(i)", durationMinutes: 30)
+        }
+        let context = makeContext(movableEvents: events)
+
+        let objective = MeetingClusteringObjective(weight: 1.0)
+        let clusteredScore = objective.evaluate(chromosome: clustered, context: context)
+        let scatteredScore = objective.evaluate(chromosome: scattered, context: context)
+
+        #expect(clusteredScore > scatteredScore,
+                "Clustered (\(clusteredScore)) should score higher than scattered (\(scatteredScore))")
+    }
+
+    @Test("No meetings returns perfect score")
+    func noMeetingsReturnsPerfect() {
+        let context = makeContext()
+        let chromosome = ScheduleChromosome(genes: [])
+        let objective = MeetingClusteringObjective(weight: 1.0)
+
+        let score = objective.evaluate(chromosome: chromosome, context: context)
+        #expect(score == 1.0)
+    }
+
+    @Test("Single meeting returns perfect score")
+    func singleMeetingPerfect() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+
+        let genes = [
+            ScheduleGene(eventId: "m1", title: "Meeting 1",
+                         startTime: cal.date(bySettingHour: 10, minute: 0, second: 0, of: today)!,
+                         duration: 3600, context: "meeting", energyCost: 0.5, priority: 0.5, isFocusBlock: false),
+        ]
+        let chromosome = ScheduleChromosome(genes: genes)
+
+        let events = [makeMovableEvent(id: "m1", title: "Meeting 1")]
+        let context = makeContext(movableEvents: events)
+
+        let objective = MeetingClusteringObjective(weight: 1.0)
+        let score = objective.evaluate(chromosome: chromosome, context: context)
+        #expect(score == 1.0)
+    }
+
+    @Test("Focus blocks are excluded from meeting clustering")
+    func focusBlocksExcluded() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+
+        // Only focus blocks, no meetings — should return 1.0
+        let genes = [
+            ScheduleGene(eventId: "f1", title: "Focus Block",
+                         startTime: cal.date(bySettingHour: 9, minute: 0, second: 0, of: today)!,
+                         duration: 7200, context: "focus", energyCost: 0.7, priority: 0.8, isFocusBlock: true),
+            ScheduleGene(eventId: "f2", title: "Focus Block 2",
+                         startTime: cal.date(bySettingHour: 14, minute: 0, second: 0, of: today)!,
+                         duration: 7200, context: "focus", energyCost: 0.7, priority: 0.8, isFocusBlock: true),
+        ]
+        let chromosome = ScheduleChromosome(genes: genes)
+        let context = makeContext()
+
+        let objective = MeetingClusteringObjective(weight: 1.0)
+        let score = objective.evaluate(chromosome: chromosome, context: context)
+        #expect(score == 1.0, "Focus-only schedule should get perfect clustering score")
+    }
+
+    @Test("MeetingClustering is included in standard FitnessEvaluator")
+    func includedInStandardEvaluator() {
+        let evaluator = FitnessEvaluator.standard(preferences: OptimizerPreferences())
+        let hasClusteringObjective = evaluator.objectives.contains { $0.name == "MeetingClustering" }
+        #expect(hasClusteringObjective, "Standard evaluator should include MeetingClustering objective")
+    }
+}

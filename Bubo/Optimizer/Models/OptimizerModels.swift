@@ -137,6 +137,7 @@ struct OptimizerPreferences: Codable, Sendable {
     var deadlineWeight: Double
     var contextSwitchWeight: Double
     var bufferWeight: Double
+    var meetingClusteringWeight: Double
 
     // Energy model
     var peakEnergyHour: Int           // hour of day with peak energy
@@ -168,6 +169,7 @@ struct OptimizerPreferences: Codable, Sendable {
         deadlineWeight: Double = 3.0,       // important
         contextSwitchWeight: Double = 0.7,
         bufferWeight: Double = 0.6,
+        meetingClusteringWeight: Double = 0.8,
         peakEnergyHour: Int = 10,
         energyDecayRate: Double = 0.1,
         maxConsecutiveMeetingMinutes: Int = 120,
@@ -190,6 +192,7 @@ struct OptimizerPreferences: Codable, Sendable {
         self.deadlineWeight = deadlineWeight
         self.contextSwitchWeight = contextSwitchWeight
         self.bufferWeight = bufferWeight
+        self.meetingClusteringWeight = meetingClusteringWeight
         self.peakEnergyHour = peakEnergyHour
         self.energyDecayRate = energyDecayRate
         self.maxConsecutiveMeetingMinutes = maxConsecutiveMeetingMinutes
