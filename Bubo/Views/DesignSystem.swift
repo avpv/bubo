@@ -607,17 +607,18 @@ struct ActionButtonStyle: ButtonStyle {
 
     @ViewBuilder
     private var buttonStrokeOverlay: some View {
-        let opacity = role == .primary ? 0.15 : 0.06
+        let opacity = role == .primary ? 0.3 : 0.06
+        let width: CGFloat = role == .primary ? 1.0 : 0.5
         switch skin.buttonShape {
         case .capsule:
             Capsule()
-                .strokeBorder(.white.opacity(opacity), lineWidth: 0.5)
+                .strokeBorder(.white.opacity(opacity), lineWidth: width)
         case .roundedRect:
             RoundedRectangle(cornerRadius: DS.Size.cornerRadius)
-                .strokeBorder(.white.opacity(opacity), lineWidth: 0.5)
+                .strokeBorder(.white.opacity(opacity), lineWidth: width)
         case .rectangle:
             Rectangle()
-                .strokeBorder(.white.opacity(opacity), lineWidth: 0.5)
+                .strokeBorder(.white.opacity(opacity), lineWidth: width)
         }
     }
 
