@@ -209,13 +209,18 @@ struct RecipeCardView: View {
     }
 
     private var quickLayout: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            Spacer(minLength: 0)
+        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
             Text(recipe.name)
                 .font(.caption.weight(.medium))
                 .foregroundStyle(skin.resolvedTextPrimary)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
+            if !recipe.description.isEmpty {
+                Text(recipe.description)
+                    .font(.system(size: 9))
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                    .lineLimit(2)
+            }
         }
         .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
         .padding(.horizontal, DS.Spacing.md)
@@ -269,9 +274,17 @@ struct RecipeCardView: View {
 
     private var listLayout: some View {
         HStack(spacing: DS.Spacing.sm) {
-            Text(recipe.name)
-                .font(.caption.weight(.medium))
-                .foregroundStyle(skin.resolvedTextPrimary)
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                Text(recipe.name)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(skin.resolvedTextPrimary)
+                if !recipe.description.isEmpty {
+                    Text(recipe.description)
+                        .font(.caption2)
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                        .lineLimit(1)
+                }
+            }
 
             Spacer()
 
