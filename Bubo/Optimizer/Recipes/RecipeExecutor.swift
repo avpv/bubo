@@ -30,7 +30,7 @@ struct RecipeExecutor {
         // are treated as fixed obstacles rather than movable — we only optimize the
         // placement of the new synthetic blocks, not rearrange existing tasks.
         var localEvents: [OptimizableEvent] = []
-        if recipe.includeExistingEvents && !recipe.isCreative {
+        if recipe.includeExistingEvents && !recipe.findSlotOnly {
             localEvents = collectLocalEvents(for: recipe.horizon)
         }
 
@@ -76,7 +76,7 @@ struct RecipeExecutor {
         // For creative recipes, also include local events as fixed so the new
         // block avoids overlapping with existing tasks.
         let calendarFixed = reminderService.allEvents.filter { !$0.isLocalEvent }
-        let localAsFixed: [CalendarEvent] = recipe.isCreative
+        let localAsFixed: [CalendarEvent] = recipe.findSlotOnly
             ? reminderService.allEvents.filter { $0.isLocalEvent }
             : []
         let allFixed = calendarFixed + fixedFromRules + localAsFixed
@@ -621,7 +621,7 @@ extension RecipeExecutor {
 
         // For creative recipes, local events are fixed obstacles (not rearranged).
         var localEvents: [OptimizableEvent] = []
-        if recipe.includeExistingEvents && !recipe.isCreative {
+        if recipe.includeExistingEvents && !recipe.findSlotOnly {
             localEvents = collectLocalEvents(for: recipe.horizon)
 
             // Filter to user-selected events when specified
@@ -661,7 +661,7 @@ extension RecipeExecutor {
         let horizon = resolveHorizon(recipe.horizon, workingHours: workingHours, minRequiredMinutes: maxEventMinutes)
 
         let calendarFixed = reminderService.allEvents.filter { !$0.isLocalEvent }
-        let localAsFixed: [CalendarEvent] = recipe.isCreative
+        let localAsFixed: [CalendarEvent] = recipe.findSlotOnly
             ? reminderService.allEvents.filter { $0.isLocalEvent }
             : []
         let allFixed = calendarFixed + fixedFromRules + localAsFixed

@@ -101,6 +101,7 @@ extension ScheduleRecipe {
                          priority: 0.9, energy: 0.7,
                          period: .morning, focus: true),
             ],
+            findSlotOnly: true,
             weights: [.focusBlock: 2.0],
             params: [
                 RecipeParam(id: "minutes", label: "How long?",
@@ -121,6 +122,7 @@ extension ScheduleRecipe {
                          priority: 0.7, energy: 0.8,
                          period: .morning, focus: true, pomodoro: preset),
             ],
+            findSlotOnly: true,
             weights: [.pomodoroFit: 1.5, .energyCurve: 1.5]
         )
     }
@@ -136,6 +138,7 @@ extension ScheduleRecipe {
                          priority: 0.9, energy: 0.8,
                          period: .morning, focus: true, pomodoro: .classic),
             ],
+            findSlotOnly: true,
             weights: [.focusBlock: 2.5, .pomodoroFit: 2.0],
             params: [
                 RecipeParam(id: "minutes", label: "Total time",
@@ -452,6 +455,7 @@ extension ScheduleRecipe {
                          priority: 0.85, energy: 0.2,
                          period: .morning, focus: true),
             ],
+            findSlotOnly: true,
             horizon: .week,
             weights: [.focusBlock: 1.5],
             speed: .balanced,
@@ -473,6 +477,7 @@ extension ScheduleRecipe {
                 EventSpec(title: "Day Wrap-up", minutes: minutes, count: 5,
                          priority: 0.7, energy: 0.2, period: .evening),
             ],
+            findSlotOnly: true,
             horizon: .week,
             weights: [.energyCurve: 1.5],
             speed: .balanced
@@ -490,6 +495,7 @@ extension ScheduleRecipe {
                 EventSpec(title: topic, minutes: sessionMinutes, count: sessionCount,
                          priority: 0.7, energy: 0.7, context: topic, focus: true),
             ],
+            findSlotOnly: true,
             horizon: .week,
             weights: [.weekBalance: 1.5, .focusBlock: 1.5],
             speed: .balanced,
@@ -512,6 +518,7 @@ extension ScheduleRecipe {
             EventSpec(title: "Movement Break", minutes: 10, count: 4,
                      priority: 0.6, energy: 0.0),
         ],
+        findSlotOnly: true,
         weights: [.breakPlacement: 2.0]
     )
 

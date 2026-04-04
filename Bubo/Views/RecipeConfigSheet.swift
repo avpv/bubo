@@ -718,9 +718,9 @@ struct RecipeConfigSheet: View {
             horizon = DateInterval(start: now, end: weekEnd)
         }
 
-        // For creative recipes, include local events as occupied time too — the optimizer
+        // For find-slot recipes, include local events as occupied time too — the optimizer
         // treats them as fixed obstacles, so the snapshot should reflect that.
-        let fixedEvents = recipe.isCreative
+        let fixedEvents = recipe.findSlotOnly
             ? rs.allEvents
             : rs.allEvents.filter { !$0.isLocalEvent }
         var gaps: [DateInterval] = []
