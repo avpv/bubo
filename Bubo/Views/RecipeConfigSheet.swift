@@ -923,6 +923,8 @@ struct RecipeConfigSheet: View {
             eventMultiPickerParam(id: param.id)
         case .periodPicker:
             periodPickerParam(id: param.id)
+        case .horizonPicker:
+            horizonPickerParam(id: param.id)
         }
     }
 
@@ -994,10 +996,11 @@ struct RecipeConfigSheet: View {
         )
     }
 
+    private static let periodAnyValue = "any"
+
     private func periodPickerParam(id: String) -> some View {
-        // Options: nil = any time, then each Period case
         let options: [(label: String, value: String)] = [
-            ("Any time", ""),
+            ("Any time", Self.periodAnyValue),
             ("Morning 7–12", Period.morning.rawValue),
             ("Afternoon 12–17", Period.afternoon.rawValue),
             ("Evening 17–21", Period.evening.rawValue),
@@ -1024,8 +1027,32 @@ struct RecipeConfigSheet: View {
     private func findDefaultPeriod(paramId: String) -> String {
         guard let param = recipe.params.first(where: { $0.id == paramId }),
               case .eventPeriod(let index) = param.target,
-              index < recipe.events.count else { return "" }
-        return recipe.events[index].period?.rawValue ?? ""
+              index < recipe.events.count else { return Self.periodAnyValue }
+        return recipe.events[index].period?.rawValue ?? Self.periodAnyValue
+    }
+
+    private func horizonPickerParam(id: String) -> some View {
+        let options: [(label: String, value: String)] = [
+            ("Today", Horizon.today.rawValue),
+            ("Tomorrow", Horizon.tomorrow.rawValue),
+            ("This Week", Horizon.week.rawValue),
+        ]
+        let binding = Binding<String>(
+            get: { paramValues[id] as? String ?? recipe.horizon.rawValue },
+            set: { newValue in
+                paramValues[id] = newValue
+                if case .error = optimizationState {
+                    optimizationState = .idle
+                }
+            }
+        )
+        return SegmentedPillPicker(
+            options: options.map(\.value),
+            selection: binding,
+            labelProvider: { value in
+                options.first { $0.value == value }?.label ?? value
+            }
+        )
     }
 
     private func eventPickerParam(id: String) -> some View {

@@ -226,6 +226,8 @@ extension ScheduleRecipe {
         params: [
             RecipeParam(id: "events", label: "Which tasks to plan?",
                        kind: .eventMultiPicker, target: .selectedEventIds),
+            RecipeParam(id: "horizon", label: "Time range",
+                       kind: .horizonPicker, target: .horizon),
         ]
     )
 
@@ -441,6 +443,8 @@ extension ScheduleRecipe {
             RecipeParam(id: "maxMeetings", label: "Max meetings/day",
                        kind: .segmented([1, 2, 3, 4, 5]),
                        target: .maxMeetings),
+            RecipeParam(id: "horizon", label: "Apply to",
+                       kind: .horizonPicker, target: .horizon),
         ],
         maxMeetingsPerDay: 3
     )
@@ -456,6 +460,8 @@ extension ScheduleRecipe {
         params: [
             RecipeParam(id: "events", label: "Which tasks to balance?",
                        kind: .eventMultiPicker, target: .selectedEventIds),
+            RecipeParam(id: "horizon", label: "Time range",
+                       kind: .horizonPicker, target: .horizon),
         ]
     )
 

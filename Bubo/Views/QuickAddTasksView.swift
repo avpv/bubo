@@ -58,29 +58,36 @@ struct QuickAddTasksView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: DS.Spacing.lg) {
-                    // Task entries
-                    VStack(spacing: DS.Spacing.sm) {
-                        ForEach($tasks) { $task in
-                            taskRow(task: $task)
+                    // Tasks section
+                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                        Text("Tasks")
+                            .font(.headline)
+                            .foregroundStyle(skin.resolvedTextPrimary)
+                            .accessibilityAddTraits(.isHeader)
+
+                        VStack(spacing: DS.Spacing.sm) {
+                            ForEach($tasks) { $task in
+                                taskRow(task: $task)
+                            }
                         }
 
                         Button {
                             Haptics.tap()
                             tasks.append(TaskEntry())
                         } label: {
-                            Label("Add task", systemImage: "plus")
-                                .font(.caption)
+                            Label("Add another task", systemImage: "plus")
+                                .font(.caption.weight(.medium))
                                 .foregroundStyle(skin.accentColor)
                         }
                         .buttonStyle(.plain)
-                        .padding(.leading, DS.Spacing.sm)
+                        .padding(.leading, DS.Spacing.md)
                     }
 
                     // Horizon picker
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                         Text("Plan for")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(skin.resolvedTextSecondary)
+                            .font(.headline)
+                            .foregroundStyle(skin.resolvedTextPrimary)
                             .accessibilityAddTraits(.isHeader)
 
                         Picker("Planning horizon", selection: $horizon) {
@@ -89,25 +96,28 @@ struct QuickAddTasksView: View {
                         }
                         .pickerStyle(.segmented)
                         .labelsHidden()
+                        .padding(DS.Spacing.md)
+                        .skinPlatter(skin)
+                        .skinPlatterDepth(skin)
                     }
                 }
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.vertical, DS.Spacing.xl)
             }
             .scrollContentBackground(.hidden)
+            .frame(maxHeight: .infinity)
 
-            Spacer(minLength: 0)
             SkinSeparator()
 
-            // Footer
+            // Footer — right-aligned buttons like AddEventView
             HStack {
+                Spacer()
+
                 Button(action: onBack) {
                     Text("Cancel")
                 }
                 .buttonStyle(.action(role: .secondary))
                 .keyboardShortcut(.cancelAction)
-
-                Spacer()
 
                 Button {
                     Haptics.tap()
@@ -131,7 +141,7 @@ struct QuickAddTasksView: View {
         HStack(spacing: DS.Spacing.sm) {
             TextField("Task name", text: task.title)
                 .textFieldStyle(.plain)
-                .font(.caption)
+                .font(.subheadline)
                 .accessibilityLabel("Task name")
 
             // Duration picker
@@ -141,11 +151,11 @@ struct QuickAddTasksView: View {
                 }
             } label: {
                 Text(formatMinutes(task.wrappedValue.minutes))
-                    .font(.caption2.monospacedDigit())
+                    .font(.caption.monospacedDigit())
                     .foregroundStyle(skin.resolvedTextSecondary)
-                    .padding(.horizontal, DS.Spacing.xs)
+                    .padding(.horizontal, DS.Spacing.sm)
                     .padding(.vertical, DS.Spacing.xxs)
-                    .background(skin.accentColor.opacity(0.08))
+                    .background(skin.accentColor.opacity(DS.Opacity.lightFill))
                     .clipShape(Capsule())
             }
             .menuStyle(.borderlessButton)
@@ -163,7 +173,7 @@ struct QuickAddTasksView: View {
                 }
             } label: {
                 Image(systemName: task.wrappedValue.priority.icon)
-                    .font(.caption2)
+                    .font(.caption)
                     .foregroundStyle(task.wrappedValue.priority == .high ? skin.accentColor : skin.resolvedTextTertiary)
             }
             .menuStyle(.borderlessButton)
@@ -176,14 +186,15 @@ struct QuickAddTasksView: View {
                     tasks.removeAll { $0.id == task.wrappedValue.id }
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.caption2)
+                        .font(.caption)
                         .foregroundStyle(skin.resolvedTextTertiary)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Remove task")
             }
         }
-        .padding(DS.Spacing.sm)
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.sm)
         .skinPlatter(skin)
         .skinPlatterDepth(skin)
     }

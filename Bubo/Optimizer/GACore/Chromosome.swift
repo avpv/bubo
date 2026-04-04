@@ -106,42 +106,33 @@ struct ScheduleChromosome: Chromosome, Sendable {
 
             let event = context.movableEvents.first { $0.id == genes[i].eventId }
             let earliest = event?.earliestStart
+            let floor = [horizonStart, earliest].compactMap { $0 }.max() ?? horizonStart
             let strategy = Int.random(in: 0...2)
 
             switch strategy {
             case 0:
                 // Small time shift: +-30 min
-                let shift = Double.random(in: -1800...1800)
-                var newStart = genes[i].startTime.addingTimeInterval(shift)
-                if let earliest, newStart < earliest { newStart = earliest }
-                if newStart < horizonStart { newStart = horizonStart }
+                let newStart = max(genes[i].startTime.addingTimeInterval(.random(in: -1800...1800)), floor)
                 genes[i] = genes[i].withStartTime(
-                    clampToWorkingHours(newStart, duration: genes[i].duration, workingHours: context.workingHours, calendar: cal)
+                    clampToWorkingHours(newStart, duration: genes[i].duration, workingHours: context.workingHours, calendar: cal, floor: floor)
                 )
             case 1:
                 // Move to different day within horizon
-                let daysInHorizon = context.calendar.dateComponents(
-                    [.day], from: horizonStart, to: context.planningHorizon.end
-                ).day ?? 1
+                let daysInHorizon = cal.dateComponents([.day], from: horizonStart, to: context.planningHorizon.end).day ?? 1
                 guard daysInHorizon > 0 else { break }
                 let dayOffset = Int.random(in: 0..<daysInHorizon)
                 let newDay = cal.date(byAdding: .day, value: dayOffset, to: horizonStart)!
                 let hour = event?.preferredHourRange?.randomElement() ?? Int.random(in: context.workingHours)
-                var rawStart = cal.date(bySettingHour: hour, minute: Int.random(in: 0...3) * 15, second: 0, of: newDay)!
-                if let earliest, rawStart < earliest { rawStart = earliest }
-                if rawStart < horizonStart { rawStart = horizonStart }
+                let rawStart = max(cal.date(bySettingHour: hour, minute: Int.random(in: 0...3) * 15, second: 0, of: newDay)!, floor)
                 genes[i] = genes[i].withStartTime(
-                    clampToWorkingHours(rawStart, duration: genes[i].duration, workingHours: context.workingHours, calendar: cal)
+                    clampToWorkingHours(rawStart, duration: genes[i].duration, workingHours: context.workingHours, calendar: cal, floor: floor)
                 )
             default:
                 // Snap to nearest half-hour
                 let timeInterval = genes[i].startTime.timeIntervalSinceReferenceDate
-                let rounded = (timeInterval / 1800).rounded() * 1800
-                var snapped = Date(timeIntervalSinceReferenceDate: rounded)
-                if let earliest, snapped < earliest { snapped = earliest }
-                if snapped < horizonStart { snapped = horizonStart }
+                let snapped = max(Date(timeIntervalSinceReferenceDate: (timeInterval / 1800).rounded() * 1800), floor)
                 genes[i] = genes[i].withStartTime(
-                    clampToWorkingHours(snapped, duration: genes[i].duration, workingHours: context.workingHours, calendar: cal)
+                    clampToWorkingHours(snapped, duration: genes[i].duration, workingHours: context.workingHours, calendar: cal, floor: floor)
                 )
             }
         }
@@ -187,7 +178,8 @@ func clampToWorkingHours(
     _ date: Date,
     duration: TimeInterval,
     workingHours: ClosedRange<Int>,
-    calendar: Calendar
+    calendar: Calendar,
+    floor: Date? = nil
 ) -> Date {
     let day = calendar.startOfDay(for: date)
     guard let workStart = calendar.date(bySettingHour: workingHours.lowerBound, minute: 0, second: 0, of: day),
@@ -195,16 +187,17 @@ func clampToWorkingHours(
         return date
     }
 
-    // Clamp start so event doesn't begin before working hours
-    var clamped = max(date, workStart)
+    // Clamp start so event doesn't begin before working hours or floor
+    let lowerBound = if let floor { max(workStart, floor) } else { workStart }
+    var clamped = max(date, lowerBound)
 
     // Clamp start so event doesn't end after working hours
     let latestStart = workEnd.addingTimeInterval(-duration)
-    if latestStart >= workStart {
+    if latestStart >= lowerBound {
         clamped = min(clamped, latestStart)
     } else {
-        // Duration exceeds working hours — start at workStart
-        clamped = workStart
+        // Duration exceeds available window — start at lower bound
+        clamped = lowerBound
     }
 
     return clamped
