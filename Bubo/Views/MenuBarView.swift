@@ -592,6 +592,7 @@ struct MenuBarView: View {
                         .frame(width: 32, height: 32)
                         .background(activeSkin.resolvedPlatterMaterial)
                         .clipShape(Circle())
+                        .overlay(Circle().strokeBorder(.white.opacity(0.06), lineWidth: 0.5))
                 }
                 .buttonStyle(.plain)
                 .help("Optimize (\u{2318}O)")
