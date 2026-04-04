@@ -588,13 +588,8 @@ struct MenuBarView: View {
                     navigation = .optimizer
                 }) {
                     Image(systemName: "wand.and.stars")
-                        .font(.system(size: 14, weight: .semibold))
-                        .frame(width: 32, height: 32)
-                        .background(activeSkin.resolvedPlatterMaterial)
-                        .clipShape(Circle())
-                        .overlay(Circle().strokeBorder(.white.opacity(0.06), lineWidth: 0.5))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.action(role: .secondary, size: .compact))
                 .help("Optimize (\u{2318}O)")
                 .keyboardShortcut("o", modifiers: .command)
             }
