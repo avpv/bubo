@@ -139,65 +139,9 @@ struct QuickAddTasksView: View {
     // MARK: - Task Row
 
     private func taskRow(task: Binding<TaskEntry>) -> some View {
-        HStack(spacing: DS.Spacing.sm) {
-            TextField("Task name", text: task.title)
-                .textFieldStyle(.plain)
-                .font(.subheadline)
-                .accessibilityLabel("Task name")
-
-            // Duration picker
-            Menu {
-                ForEach([15, 30, 45, 60, 90, 120, 180], id: \.self) { min in
-                    Button(formatMinutes(min)) { task.minutes.wrappedValue = min }
-                }
-            } label: {
-                Text(formatMinutes(task.wrappedValue.minutes))
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(skin.resolvedTextSecondary)
-                    .padding(.horizontal, DS.Spacing.sm)
-                    .padding(.vertical, DS.Spacing.xxs)
-                    .background(skin.accentColor.opacity(DS.Opacity.lightFill))
-                    .clipShape(Capsule())
-            }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
-            .accessibilityLabel("Duration: \(formatMinutes(task.wrappedValue.minutes))")
-
-            // Priority picker
-            Menu {
-                ForEach(TaskPriority.allCases, id: \.self) { p in
-                    Button {
-                        task.priority.wrappedValue = p
-                    } label: {
-                        Label(p.rawValue, systemImage: p.icon)
-                    }
-                }
-            } label: {
-                Image(systemName: task.wrappedValue.priority.icon)
-                    .font(.caption)
-                    .foregroundStyle(task.wrappedValue.priority == .high ? skin.accentColor : skin.resolvedTextTertiary)
-            }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
-            .accessibilityLabel("Priority: \(task.wrappedValue.priority.rawValue)")
-
-            // Remove button
-            if tasks.count > 1 {
-                Button {
-                    tasks.removeAll { $0.id == task.wrappedValue.id }
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.caption)
-                        .foregroundStyle(skin.resolvedTextTertiary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Remove task")
-            }
+        TaskRowCard(task: task, taskCount: tasks.count) {
+            tasks.removeAll { $0.id == task.wrappedValue.id }
         }
-        .padding(.horizontal, DS.Spacing.md)
-        .padding(.vertical, DS.Spacing.sm)
-        .skinPlatter(skin)
-        .skinPlatterDepth(skin)
     }
 
     // MARK: - Actions
@@ -229,6 +173,130 @@ struct QuickAddTasksView: View {
             isOptimizing = false
             if result.optimizerResult != nil {
                 onShowResults?()
+            }
+        }
+    }
+
+    private func formatMinutes(_ m: Int) -> String {
+        if m < 60 { return "\(m)m" }
+        let h = m / 60
+        let r = m % 60
+        return r == 0 ? "\(h)h" : "\(h)h\(r)m"
+    }
+}
+
+// MARK: - Task Row Card
+
+private struct TaskRowCard: View {
+    @Binding var task: QuickAddTasksView.TaskEntry
+    let taskCount: Int
+    let onRemove: () -> Void
+
+    @Environment(\.activeSkin) private var skin
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 0) {
+            // Accent bar
+            Capsule()
+                .fill(skin.accentColor)
+                .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
+                .padding(.trailing, DS.Spacing.md)
+                .shadow(color: skin.accentColor.opacity(skin.shadowOpacity * 4), radius: skin.shadowRadius * 0.5)
+
+            TextField("Task name", text: $task.title)
+                .textFieldStyle(.plain)
+                .font(.subheadline)
+                .accessibilityLabel("Task name")
+
+            Spacer()
+
+            // Duration picker
+            Menu {
+                ForEach([15, 30, 45, 60, 90, 120, 180], id: \.self) { min in
+                    Button(formatMinutes(min)) { task.minutes = min }
+                }
+            } label: {
+                Text(formatMinutes(task.minutes))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(skin.resolvedTextSecondary)
+                    .padding(.horizontal, DS.Spacing.sm)
+                    .padding(.vertical, DS.Spacing.xxs)
+                    .background(skin.accentColor.opacity(DS.Opacity.lightFill))
+                    .clipShape(Capsule())
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .accessibilityLabel("Duration: \(formatMinutes(task.minutes))")
+
+            // Priority picker
+            Menu {
+                ForEach(QuickAddTasksView.TaskPriority.allCases, id: \.self) { p in
+                    Button {
+                        task.priority = p
+                    } label: {
+                        Label(p.rawValue, systemImage: p.icon)
+                    }
+                }
+            } label: {
+                Image(systemName: task.priority.icon)
+                    .font(.caption)
+                    .foregroundStyle(task.priority == .high ? skin.accentColor : skin.resolvedTextTertiary)
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .padding(.leading, DS.Spacing.xs)
+            .accessibilityLabel("Priority: \(task.priority.rawValue)")
+
+            // Remove button
+            if taskCount > 1 {
+                Button {
+                    onRemove()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.caption)
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                }
+                .buttonStyle(.plain)
+                .padding(.leading, DS.Spacing.xs)
+                .accessibilityLabel("Remove task")
+            }
+        }
+        .padding(.vertical, DS.Spacing.sm)
+        .padding(.horizontal, DS.Spacing.sm)
+        .background(
+            ZStack {
+                SkinPlatterBackground(skin: skin)
+                Rectangle()
+                    .fill(isHovered ? skin.resolvedHoverFill : Color.clear)
+            }
+        )
+        .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [
+                            .white.opacity(skin.platterBorderOpacity * 1.5),
+                            .white.opacity(skin.platterBorderOpacity * 0.1),
+                            .clear,
+                            .white.opacity(skin.platterBorderOpacity * 0.4)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: DS.Border.thin
+                )
+        )
+        .shadow(
+            color: isHovered ? skin.resolvedHoverShadowColor : skin.resolvedShadowColor,
+            radius: isHovered ? skin.hoverShadowRadius : skin.shadowRadius,
+            y: isHovered ? skin.hoverShadowY : skin.shadowY
+        )
+        .scaleEffect(isHovered ? 1.02 : 1.0)
+        .onHover { hovering in
+            withAnimation(skin.resolvedMicroAnimation) {
+                isHovered = hovering
             }
         }
     }
