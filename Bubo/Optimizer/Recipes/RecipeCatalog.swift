@@ -94,7 +94,7 @@ extension ScheduleRecipe {
         ScheduleRecipe(
             id: "need-focus",
             name: "Need Focus",
-            description: "Find uninterrupted focus time",
+            description: "Places a focus block in the best free slot",
             category: "focus",
             events: [
                 EventSpec(title: "Focus Time", minutes: minutes,
@@ -115,7 +115,7 @@ extension ScheduleRecipe {
         ScheduleRecipe(
             id: "pomodoro",
             name: "Pomodoro Session",
-            description: "Find best slot for pomodoro",
+            description: "Places a pomodoro session in the best free slot",
             category: "focus",
             events: [
                 EventSpec(title: "Pomodoro Session", minutes: preset.totalMinutes,
@@ -131,7 +131,7 @@ extension ScheduleRecipe {
         ScheduleRecipe(
             id: "structured-deep-work",
             name: "Structured Deep Work",
-            description: "Focus block with pomodoro structure inside",
+            description: "Places a focus block with pomodoro intervals in a free slot",
             category: "focus",
             events: [
                 EventSpec(title: "Deep Work", minutes: minutes,
@@ -152,7 +152,7 @@ extension ScheduleRecipe {
         ScheduleRecipe(
             id: "deep-work-day",
             name: "Deep Work Day",
-            description: "Focus blocks as anchors, tasks arranged around them",
+            description: "Creates focus blocks and rearranges tasks around them",
             category: "focus",
             events: [
                 EventSpec(title: "Focus Block", minutes: minutes, count: count,
@@ -173,7 +173,7 @@ extension ScheduleRecipe {
     static let maxProductivity = ScheduleRecipe(
         id: "max-productivity",
         name: "Max Productivity",
-        description: "Maximum deep work, minimum interruptions",
+        description: "Creates 3 deep work blocks, limits meetings to 2/day",
         category: "focus",
         events: [
             EventSpec(title: "Deep Work", minutes: 120, count: 3,
@@ -190,7 +190,7 @@ extension ScheduleRecipe {
     static let organizeDay = ScheduleRecipe(
         id: "organize-day",
         name: "Organize Day",
-        description: "Rearrange today's tasks for best flow",
+        description: "Moves tasks to reduce context switches and match energy",
         category: "planning",
         weights: [.energyCurve: 1.5, .contextSwitch: 1.2],
         params: [
@@ -202,7 +202,7 @@ extension ScheduleRecipe {
     static let planWeek = ScheduleRecipe(
         id: "plan-week",
         name: "Plan Week",
-        description: "Balance workload across the week",
+        description: "Spreads tasks evenly across days of the week",
         category: "planning",
         horizon: .week,
         weights: [.weekBalance: 1.5, .energyCurve: 1.5],
@@ -216,7 +216,7 @@ extension ScheduleRecipe {
     static let fullRebuild = ScheduleRecipe(
         id: "full-rebuild",
         name: "Full Rebuild",
-        description: "Optimize everything from scratch",
+        description: "Rebuilds the entire week schedule from scratch",
         category: "planning",
         horizon: .week,
         stability: .full,
@@ -234,7 +234,7 @@ extension ScheduleRecipe {
     static let deadlineMode = ScheduleRecipe(
         id: "deadline-mode",
         name: "Deadline Mode",
-        description: "Clear path to your deadline",
+        description: "Moves deadline tasks first, pushes the rest aside",
         category: "deadlines",
         weights: [.deadline: 8.0, .breakPlacement: 0.6,
                   .buffer: 0.3, .contextSwitch: 0.2],
@@ -248,7 +248,7 @@ extension ScheduleRecipe {
     static let deadlineCrunch = ScheduleRecipe(
         id: "deadline-crunch",
         name: "Deadline Crunch",
-        description: "Aggressive mode — minimize everything else",
+        description: "Drops low-priority tasks, fills the day with deadline work",
         category: "deadlines",
         weights: [.deadline: 10.0, .breakPlacement: 0.3, .buffer: 0.1],
         speed: .balanced,
@@ -263,7 +263,7 @@ extension ScheduleRecipe {
     static let multipleDeadlines = ScheduleRecipe(
         id: "multiple-deadlines",
         name: "Multiple Deadlines",
-        description: "Spread deadline tasks across the week",
+        description: "Distributes deadline tasks across the week by urgency",
         category: "deadlines",
         horizon: .week,
         weights: [.deadline: 5.0, .weekBalance: 1.5],
@@ -281,7 +281,7 @@ extension ScheduleRecipe {
     static let batchMeetings = ScheduleRecipe(
         id: "batch-meetings",
         name: "Batch Meetings",
-        description: "Group all meetings together",
+        description: "Moves meetings into one block to free up focus time",
         category: "meetings",
         weights: [.contextSwitch: 4.0],
         eventRules: [
@@ -293,7 +293,7 @@ extension ScheduleRecipe {
         ScheduleRecipe(
             id: "buffer-meetings",
             name: "Buffer Between Meetings",
-            description: "\(minutes) min gap after each meeting",
+            description: "Adds \(minutes)-min breaks between back-to-back meetings",
             category: "meetings",
             horizon: .week,
             weights: [.buffer: 2.0],
@@ -310,7 +310,7 @@ extension ScheduleRecipe {
     static let tooManyMeetings = ScheduleRecipe(
         id: "too-many-meetings",
         name: "Too Many Meetings",
-        description: "Redistribute meetings across the week",
+        description: "Caps meetings at 4/day, moves extras to other days",
         category: "meetings",
         horizon: .week,
         weights: [.weekBalance: 2.0],
@@ -323,7 +323,7 @@ extension ScheduleRecipe {
         ScheduleRecipe(
             id: "prep-meeting",
             name: "Prep Before Meeting",
-            description: "Add preparation time before a meeting",
+            description: "Places a prep block right before the chosen meeting",
             category: "meetings",
             events: [
                 EventSpec(title: "Prep", minutes: minutes,
@@ -348,7 +348,7 @@ extension ScheduleRecipe {
     static let lowEnergyDay = ScheduleRecipe(
         id: "low-energy",
         name: "Low Energy Day",
-        description: "More breaks, lighter load",
+        description: "Adds longer breaks, reduces back-to-back tasks",
         category: "energy",
         weights: [.breakPlacement: 2.5, .buffer: 1.5, .focusBlock: 0.5],
         minBreakMinutes: 20
@@ -357,7 +357,7 @@ extension ScheduleRecipe {
     static let morningPerson = ScheduleRecipe(
         id: "morning-person",
         name: "Morning Person",
-        description: "Hard tasks AM, light tasks PM",
+        description: "Moves heavy tasks to the morning, light ones to PM",
         category: "energy",
         weights: [.energyCurve: 2.0],
         eventRules: [
@@ -369,7 +369,7 @@ extension ScheduleRecipe {
     static let postLunchDip = ScheduleRecipe(
         id: "post-lunch-dip",
         name: "Post-Lunch Dip",
-        description: "Nothing hard after lunch",
+        description: "Moves demanding tasks before lunch, easy ones after",
         category: "energy",
         weights: [.energyCurve: 2.0],
         eventRules: [
@@ -381,7 +381,7 @@ extension ScheduleRecipe {
     static let windDownLastHour = ScheduleRecipe(
         id: "wind-down",
         name: "Wind Down",
-        description: "Only light tasks in the last hour",
+        description: "Keeps only light tasks in the last working hour",
         category: "energy",
         weights: [.energyCurve: 2.0],
         dayStructure: [
@@ -392,7 +392,7 @@ extension ScheduleRecipe {
     static let lightenTomorrow = ScheduleRecipe(
         id: "lighten-tomorrow",
         name: "Lighten Tomorrow",
-        description: "Make tomorrow easier",
+        description: "Caps meetings at 3 and adds breaks for tomorrow",
         category: "energy",
         horizon: .tomorrow,
         weights: [.breakPlacement: 2.0],
@@ -402,7 +402,7 @@ extension ScheduleRecipe {
     static let balanceWeek = ScheduleRecipe(
         id: "balance-week",
         name: "Balance Week",
-        description: "Even out daily workload",
+        description: "Redistributes tasks so no day is overloaded",
         category: "energy",
         horizon: .week,
         weights: [.weekBalance: 2.0],
@@ -416,7 +416,7 @@ extension ScheduleRecipe {
     static let focusMeetingSplit = ScheduleRecipe(
         id: "focus-meeting-split",
         name: "Focus / Meeting Days",
-        description: "Separate focus days and meeting days",
+        description: "Moves meetings to Tue/Thu, focus work to Mon/Wed/Fri",
         category: "energy",
         horizon: .week,
         weights: [.contextSwitch: 5.0, .weekBalance: 0.5],
@@ -430,7 +430,7 @@ extension ScheduleRecipe {
     static let freeFriday = ScheduleRecipe(
         id: "free-friday",
         name: "Free Friday",
-        description: "Compress work into Mon-Thu",
+        description: "Moves all tasks to Mon–Thu, clears Friday",
         category: "energy",
         horizon: .week,
         weights: [.weekBalance: 2.0],
@@ -448,7 +448,7 @@ extension ScheduleRecipe {
         ScheduleRecipe(
             id: "morning-routine",
             name: "Morning Routine",
-            description: "Protected morning ritual",
+            description: "Places a daily morning block for the whole week",
             category: "habits",
             events: [
                 EventSpec(title: "Morning Routine", minutes: minutes, count: 5,
@@ -471,7 +471,7 @@ extension ScheduleRecipe {
         ScheduleRecipe(
             id: "evening-wrap-up",
             name: "Evening Wrap-up",
-            description: "Daily review and planning",
+            description: "Places a daily evening wrap-up for the whole week",
             category: "habits",
             events: [
                 EventSpec(title: "Day Wrap-up", minutes: minutes, count: 5,
@@ -489,7 +489,7 @@ extension ScheduleRecipe {
         return ScheduleRecipe(
             id: "regular-learning",
             name: "Regular Learning",
-            description: "Dedicated time for learning",
+            description: "Places recurring learning sessions across the week",
             category: "habits",
             events: [
                 EventSpec(title: topic, minutes: sessionMinutes, count: sessionCount,
@@ -512,7 +512,7 @@ extension ScheduleRecipe {
     static let movementReminders = ScheduleRecipe(
         id: "movement-reminders",
         name: "Movement Breaks",
-        description: "Regular breaks to move",
+        description: "Places 4 short movement breaks between tasks",
         category: "habits",
         events: [
             EventSpec(title: "Movement Break", minutes: 10, count: 4,
@@ -529,7 +529,7 @@ extension ScheduleRecipe {
     static let groupByProject = ScheduleRecipe(
         id: "group-by-project",
         name: "Group by Project",
-        description: "Batch similar tasks together",
+        description: "Groups tasks by project to reduce context switches",
         category: "projects",
         weights: [.contextSwitch: 4.0],
         speed: .balanced,
@@ -543,7 +543,7 @@ extension ScheduleRecipe {
         ScheduleRecipe(
             id: "prioritize-project",
             name: "Prioritize Project",
-            description: "Give a project the best time slots",
+            description: "Moves project tasks to morning peak-energy slots",
             category: "projects",
             horizon: .week,
             weights: [.energyCurve: 1.5],
@@ -563,7 +563,7 @@ extension ScheduleRecipe {
         ScheduleRecipe(
             id: "split-task",
             name: "Split Large Task",
-            description: "Break a big task into sessions",
+            description: "Splits a task into sessions and spreads across the week",
             category: "projects",
             events: [
                 EventSpec(title: "Session", minutes: sessionMinutes, count: sessions,
@@ -587,7 +587,7 @@ extension ScheduleRecipe {
     static let alternateTaskTypes = ScheduleRecipe(
         id: "alternate-types",
         name: "Alternate Task Types",
-        description: "Mix different types of work for variety",
+        description: "Alternates task types so similar work isn't back-to-back",
         category: "projects",
         weights: [.contextSwitch: 0.1],
         params: [
@@ -599,7 +599,7 @@ extension ScheduleRecipe {
     static let carryOverUnfinished = ScheduleRecipe(
         id: "carry-over",
         name: "Carry Over Unfinished",
-        description: "Move last week's unfinished tasks",
+        description: "Finds unfinished tasks and schedules them this week",
         category: "projects",
         events: [
             EventSpec(creation: .fromUnfinished),
@@ -617,7 +617,7 @@ extension ScheduleRecipe {
         ScheduleRecipe(
             id: "short-day",
             name: "Short Day",
-            description: "Leaving early today",
+            description: "Compresses tasks into a shorter working day",
             category: "adapt",
             display: .confirmation,
             params: [
@@ -633,7 +633,7 @@ extension ScheduleRecipe {
         ScheduleRecipe(
             id: "late-start",
             name: "Late Start",
-            description: "Starting late today",
+            description: "Shifts tasks later, frees up the morning",
             category: "adapt",
             display: .confirmation,
             params: [
@@ -648,7 +648,7 @@ extension ScheduleRecipe {
     static let workFromHome = ScheduleRecipe(
         id: "wfh",
         name: "Work from Home",
-        description: "Wider hours, longer focus blocks",
+        description: "Extends working hours to 8–19, favors longer focus blocks",
         category: "adapt",
         weights: [.focusBlock: 1.5],
         workingHours: HourRange(start: 8, end: 19)
@@ -657,14 +657,14 @@ extension ScheduleRecipe {
     static let halfDayBlocked = ScheduleRecipe(
         id: "half-day-blocked",
         name: "Half Day Blocked",
-        description: "Morning or afternoon is unavailable",
+        description: "Squeezes tasks into the available half of the day",
         category: "adapt"
     )
 
     static let optimizeMorningOnly = ScheduleRecipe(
         id: "morning-only",
         name: "Morning Only",
-        description: "Optimize only the morning",
+        description: "Rearranges tasks within the 9–13 window only",
         category: "adapt",
         workingHours: HourRange(start: 9, end: 13)
     )
@@ -673,7 +673,7 @@ extension ScheduleRecipe {
         ScheduleRecipe(
             id: "no-meetings-before",
             name: "No Meetings Before \(hour)",
-            description: "Keep mornings meeting-free",
+            description: "Moves meetings to the afternoon, protects mornings",
             category: "adapt",
             horizon: .week,
             speed: .balanced,
@@ -695,7 +695,7 @@ extension ScheduleRecipe {
     static let showOptions = ScheduleRecipe(
         id: "show-options",
         name: "Show 3 Options",
-        description: "See diverse schedule alternatives",
+        description: "Generates 3 different schedule options to compare",
         category: "advanced",
         speed: .balanced,
         params: [
@@ -708,7 +708,7 @@ extension ScheduleRecipe {
     static let likeYesterday = ScheduleRecipe(
         id: "like-yesterday",
         name: "Like Yesterday",
-        description: "Optimize using your learned preferences",
+        description: "Rearranges using patterns learned from your past choices",
         category: "advanced",
         weights: [.useLearned: 1.0]
     )
@@ -716,7 +716,7 @@ extension ScheduleRecipe {
     static let makerSchedule = ScheduleRecipe(
         id: "maker-schedule",
         name: "Maker Schedule",
-        description: "Focus mornings, meetings afternoon",
+        description: "Moves focus work to mornings, meetings to afternoons",
         category: "advanced",
         weights: [.focusBlock: 2.0, .contextSwitch: 2.0],
         eventRules: [
@@ -732,7 +732,7 @@ extension ScheduleRecipe {
     static let managerSchedule = ScheduleRecipe(
         id: "manager-schedule",
         name: "Manager Schedule",
-        description: "Meetings morning, admin afternoon",
+        description: "Moves meetings to mornings, admin and focus to afternoons",
         category: "advanced",
         weights: [.contextSwitch: 2.0],
         eventRules: [
@@ -788,7 +788,7 @@ extension ScheduleRecipe {
         return ScheduleRecipe(
             id: "circuit-training",
             name: "Circuit Training",
-            description: "\(rounds) rounds × \(exercises) exercises",
+            description: "Places \(rounds) rounds × \(exercises) exercises in a free slot",
             category: "workouts",
             events: events,
             includeExistingEvents: false,
@@ -805,7 +805,7 @@ extension ScheduleRecipe {
         ScheduleRecipe(
             id: "yoga-session",
             name: "Yoga Session",
-            description: "Warm-up, practice, savasana",
+            description: "Places a yoga session (warm-up → practice → savasana) in a free slot",
             category: "workouts",
             events: [
                 EventSpec(
@@ -848,7 +848,7 @@ extension ScheduleRecipe {
         return ScheduleRecipe(
             id: "interval-training",
             name: "Interval Training",
-            description: "\(intervals) intervals of \(workMinutes)min work / \(restMinutes)min rest",
+            description: "Places \(intervals) intervals (\(workMinutes)min work / \(restMinutes)min rest) in a free slot",
             category: "workouts",
             events: [
                 EventSpec(
