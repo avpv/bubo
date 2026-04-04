@@ -71,9 +71,6 @@ struct QuickAddTasksView: View {
                         }
                         .pickerStyle(.segmented)
                         .labelsHidden()
-                        .padding(DS.Spacing.md)
-                        .skinPlatter(skin)
-                        .skinPlatterDepth(skin)
                     }
                     .staggeredEntrance(index: 0)
 
@@ -98,7 +95,7 @@ struct QuickAddTasksView: View {
                         } label: {
                             Label("Add", systemImage: "plus")
                         }
-                        .buttonStyle(.action(role: .primary, size: .compact))
+                        .buttonStyle(.action(role: .secondary, size: .compact))
                         .padding(.leading, DS.Spacing.md)
                     }
                 }
@@ -239,9 +236,18 @@ private struct TaskRowCard: View {
                     }
                 }
             } label: {
-                Image(systemName: task.priority.icon)
-                    .font(.caption)
-                    .foregroundStyle(task.priority == .high ? skin.accentColor : skin.resolvedTextTertiary)
+                Label {
+                    Text(task.priority.rawValue)
+                        .font(.caption)
+                } icon: {
+                    Image(systemName: task.priority.icon)
+                        .font(.caption)
+                }
+                .foregroundStyle(task.priority == .high ? skin.accentColor : skin.resolvedTextSecondary)
+                .padding(.horizontal, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xxs)
+                .background(skin.accentColor.opacity(DS.Opacity.lightFill))
+                .clipShape(Capsule())
             }
             .menuStyle(.borderlessButton)
             .fixedSize()

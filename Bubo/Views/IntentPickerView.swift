@@ -12,6 +12,8 @@ struct IntentPickerView: View {
     let onSelectRecipe: (ScheduleRecipe) -> Void
     var onAskAI: (() -> Void)? = nil
 
+    @State private var searchText = ""
+
     private var suggestions: [ScheduleRecipe] {
         optimizerService.recipeMonitor?.suggestedRecipes ?? []
     }
@@ -22,37 +24,112 @@ struct IntentPickerView: View {
             .compactMap { RecipeCatalog.allRecipesById[$0] }
     }
 
+    private var isSearching: Bool { !searchText.isEmpty }
+
+    /// Flat list of all recipes matching the search query (name, description, category).
+    private var searchResults: [ScheduleRecipe] {
+        let query = searchText.lowercased()
+        return RecipeCatalog.allCategories.flatMap(\.recipes).filter { recipe in
+            recipe.name.lowercased().contains(query)
+            || recipe.description.lowercased().contains(query)
+            || recipe.category.lowercased().contains(query)
+        }
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: DS.Spacing.xl) {
-                // AI assistant entry point
-                if onAskAI != nil {
-                    askAISection
-                        .staggeredEntrance(index: 0)
+                // Search bar
+                searchBar
+
+                if isSearching {
+                    // Search results
+                    searchResultsSection
+                } else {
+                    // AI assistant entry point
+                    if onAskAI != nil {
+                        askAISection
+                            .staggeredEntrance(index: 0)
+                            .eventScrollTransition()
+                    }
+
+                    // Recently used — always shown, falls back to quick actions
+                    recentlySection
+                        .staggeredEntrance(index: 1)
+                        .eventScrollTransition()
+
+                    // Contextual suggestions (condition-based)
+                    if !suggestions.isEmpty {
+                        suggestionsSection
+                            .staggeredEntrance(index: 2)
+                            .eventScrollTransition()
+                    }
+
+                    // All categories (expandable)
+                    allCategoriesSection
+                        .staggeredEntrance(index: 3)
                         .eventScrollTransition()
                 }
-
-                // Recently used — always shown, falls back to quick actions
-                recentlySection
-                    .staggeredEntrance(index: 1)
-                    .eventScrollTransition()
-
-                // Contextual suggestions (condition-based)
-                if !suggestions.isEmpty {
-                    suggestionsSection
-                        .staggeredEntrance(index: 2)
-                        .eventScrollTransition()
-                }
-
-                // All categories (expandable)
-                allCategoriesSection
-                    .staggeredEntrance(index: 3)
-                    .eventScrollTransition()
             }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.vertical, DS.Spacing.xl)
         }
         .scrollContentBackground(.hidden)
+    }
+
+    // MARK: - Search
+
+    private var searchBar: some View {
+        HStack(spacing: DS.Spacing.sm) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(skin.resolvedTextTertiary)
+                .font(.caption)
+                .accessibilityHidden(true)
+            TextField("Search recipes…", text: $searchText)
+                .textFieldStyle(.plain)
+                .font(.subheadline)
+                .accessibilityLabel("Search recipes")
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                        .font(.caption)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
+            }
+        }
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.sm)
+        .skinPlatter(skin)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
+    }
+
+    private var searchResultsSection: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            if searchResults.isEmpty {
+                VStack(spacing: DS.Spacing.md) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.title2)
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                    Text("No recipes found")
+                        .font(.subheadline)
+                        .foregroundStyle(skin.resolvedTextSecondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, DS.Spacing.xxxl)
+            } else {
+                sectionHeader("\(searchResults.count) results")
+
+                VStack(spacing: DS.Spacing.xs) {
+                    ForEach(searchResults) { recipe in
+                        RecipeCardView(recipe: recipe, style: .snippet, onTap: onSelectRecipe)
+                    }
+                }
+            }
+        }
     }
 
     // MARK: - Ask AI
@@ -105,9 +182,10 @@ struct IntentPickerView: View {
 
     private var recentlySection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            sectionHeader("Recently")
+            let hasRecents = !recentRecipes.isEmpty
+            sectionHeader(hasRecents ? "Recently" : "Quick Actions")
 
-            let recipes = recentRecipes.isEmpty ? RecipeCatalog.quickActions : recentRecipes
+            let recipes = hasRecents ? recentRecipes : RecipeCatalog.quickActions
 
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 3), spacing: DS.Spacing.sm) {
                 ForEach(recipes) { recipe in
@@ -122,10 +200,10 @@ struct IntentPickerView: View {
     private var suggestionsSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack(spacing: DS.Spacing.xs) {
-                Image(systemName: "sparkles")
+                Image(systemName: "lightbulb.max")
                     .font(.caption2)
                     .foregroundStyle(skin.accentColor)
-                sectionHeader("Suggested for you", color: skin.accentColor)
+                sectionHeader("Suggested", color: skin.accentColor)
             }
 
             LazyVGrid(columns: [GridItem(.flexible(), spacing: DS.Spacing.sm), GridItem(.flexible(), spacing: DS.Spacing.sm)], spacing: DS.Spacing.sm) {
@@ -159,8 +237,10 @@ struct IntentPickerView: View {
 
     private func sectionHeader(_ title: String, color: Color? = nil) -> some View {
         Text(title)
-            .font(.caption.weight(.semibold))
+            .font(.subheadline.weight(.medium))
             .foregroundStyle(color ?? skin.resolvedTextSecondary)
+            .textCase(.uppercase)
+            .tracking(0.5)
             .accessibilityAddTraits(.isHeader)
     }
 }
@@ -213,14 +293,18 @@ struct RecipeCardView: View {
     }
 
     private var quickLayout: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            Image(systemName: recipe.resolvedIcon)
+                .font(.system(size: DS.Size.iconMedium))
+                .foregroundStyle(skin.accentColor)
+
             Text(recipe.name)
                 .font(.caption.weight(.medium))
                 .foregroundStyle(skin.resolvedTextPrimary)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
         .padding(.horizontal, DS.Spacing.md)
         .padding(.vertical, DS.Spacing.sm)
         .skinPlatter(skin)
@@ -272,6 +356,11 @@ struct RecipeCardView: View {
 
     private var listLayout: some View {
         HStack(spacing: DS.Spacing.sm) {
+            Image(systemName: recipe.resolvedIcon)
+                .font(.system(size: DS.Size.iconSmall))
+                .foregroundStyle(skin.accentColor.opacity(0.7))
+                .frame(width: DS.Size.iconLarge)
+
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(recipe.name)
                     .font(.caption.weight(.medium))
@@ -301,12 +390,12 @@ struct RecipeCardView: View {
 
     private var snippetLayout: some View {
         HStack(alignment: .center, spacing: 0) {
-            // Accent bar — like EventRowView urgency bar
-            Capsule()
-                .fill(skin.accentColor)
-                .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
-                .padding(.trailing, DS.Spacing.md)
-                .shadow(color: skin.accentColor.opacity(skin.shadowOpacity * 4), radius: skin.shadowRadius * 0.5)
+            // Recipe icon
+            Image(systemName: recipe.resolvedIcon)
+                .font(.system(size: DS.Size.iconMedium))
+                .foregroundStyle(skin.accentColor)
+                .frame(width: DS.Size.controlHeight)
+                .padding(.trailing, DS.Spacing.sm)
 
             // Title + description
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
@@ -418,10 +507,10 @@ private struct CategorySection: View {
                         .background(skin.resolvedTextTertiary.opacity(DS.Opacity.lightFill))
                         .clipShape(Capsule())
 
-                    Image(systemName: "chevron.right")
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                         .font(.system(size: DS.Size.iconSmall, weight: .semibold))
                         .foregroundStyle(skin.resolvedTextTertiary)
-                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .contentTransition(.symbolEffect(.replace))
                         .padding(.leading, DS.Spacing.xs)
                 }
                 .frame(minHeight: DS.Size.eventRowMinHeight)
