@@ -105,9 +105,10 @@ struct IntentPickerView: View {
 
     private var recentlySection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            sectionHeader("Recently")
+            let hasRecents = !recentRecipes.isEmpty
+            sectionHeader(hasRecents ? "Recently" : "Quick Actions")
 
-            let recipes = recentRecipes.isEmpty ? RecipeCatalog.quickActions : recentRecipes
+            let recipes = hasRecents ? recentRecipes : RecipeCatalog.quickActions
 
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 3), spacing: DS.Spacing.sm) {
                 ForEach(recipes) { recipe in
@@ -122,10 +123,10 @@ struct IntentPickerView: View {
     private var suggestionsSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack(spacing: DS.Spacing.xs) {
-                Image(systemName: "sparkles")
+                Image(systemName: "lightbulb.max")
                     .font(.caption2)
                     .foregroundStyle(skin.accentColor)
-                sectionHeader("Suggested for you", color: skin.accentColor)
+                sectionHeader("Suggested", color: skin.accentColor)
             }
 
             LazyVGrid(columns: [GridItem(.flexible(), spacing: DS.Spacing.sm), GridItem(.flexible(), spacing: DS.Spacing.sm)], spacing: DS.Spacing.sm) {
@@ -312,12 +313,12 @@ struct RecipeCardView: View {
 
     private var snippetLayout: some View {
         HStack(alignment: .center, spacing: 0) {
-            // Accent bar — like EventRowView urgency bar
-            Capsule()
-                .fill(skin.accentColor)
-                .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
-                .padding(.trailing, DS.Spacing.md)
-                .shadow(color: skin.accentColor.opacity(skin.shadowOpacity * 4), radius: skin.shadowRadius * 0.5)
+            // Recipe icon
+            Image(systemName: recipe.resolvedIcon)
+                .font(.system(size: DS.Size.iconMedium))
+                .foregroundStyle(skin.accentColor)
+                .frame(width: DS.Size.controlHeight)
+                .padding(.trailing, DS.Spacing.sm)
 
             // Title + description
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
