@@ -45,6 +45,8 @@ final class FitnessEvaluator: @unchecked Sendable {
                 DeadlineObjective(weight: preferences.deadlineWeight),
                 ContextSwitchObjective(weight: preferences.contextSwitchWeight),
                 BufferObjective(weight: preferences.bufferWeight),
+                TravelTimeObjective(weight: preferences.travelTimeWeight),
+                LocationBatchingObjective(weight: preferences.locationBatchingWeight),
             ],
             constraintEngine: .standard
         )
@@ -127,6 +129,8 @@ final class FitnessEvaluator: @unchecked Sendable {
             case "Deadline":        objectives[i].weight = preferences.deadlineWeight
             case "ContextSwitch":   objectives[i].weight = preferences.contextSwitchWeight
             case "Buffer":          objectives[i].weight = preferences.bufferWeight
+            case "TravelTime":     objectives[i].weight = preferences.travelTimeWeight
+            case "LocationBatching": objectives[i].weight = preferences.locationBatchingWeight
             default: break
             }
         }

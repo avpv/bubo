@@ -58,6 +58,9 @@ struct RecipeCatalog {
         Category(id: "workouts", name: "Workouts & Activities", recipes: [
             .circuitTraining(), .yogaSession(), .intervalTraining(),
         ]),
+        Category(id: "location", name: "Location & Travel", recipes: [
+            .minimizeCommute, .locationBatching, .workFromMultipleOffices,
+        ]),
         Category(id: "advanced", name: "Advanced", recipes: [
             .showOptions, .likeYesterday, .makerSchedule, .managerSchedule,
         ]),
@@ -869,6 +872,50 @@ extension ScheduleRecipe {
             ]
         )
     }
+
+    // ═══════════════════════════════════════════════════════
+    // LOCATION & TRAVEL
+    // ═══════════════════════════════════════════════════════
+
+    static let minimizeCommute = ScheduleRecipe(
+        id: "minimize-commute",
+        name: "Minimize Commute",
+        description: "Reorders events to reduce total travel time between locations",
+        category: "location",
+        weights: [.travelTime: 3.0, .locationBatching: 2.0],
+        speed: .balanced,
+        params: [
+            RecipeParam(id: "events", label: "Which tasks to optimize?",
+                       kind: .eventMultiPicker, target: .selectedEventIds),
+        ]
+    )
+
+    static let locationBatching = ScheduleRecipe(
+        id: "location-batching",
+        name: "Batch by Location",
+        description: "Groups events at the same location together to avoid back-and-forth trips",
+        category: "location",
+        weights: [.locationBatching: 4.0, .travelTime: 2.0, .contextSwitch: 0.3],
+        speed: .balanced,
+        params: [
+            RecipeParam(id: "events", label: "Which tasks to group?",
+                       kind: .eventMultiPicker, target: .selectedEventIds),
+        ]
+    )
+
+    static let workFromMultipleOffices = ScheduleRecipe(
+        id: "multi-office",
+        name: "Multiple Offices",
+        description: "Assigns office days so you visit each location at most once per day",
+        category: "location",
+        horizon: .week,
+        weights: [.travelTime: 3.0, .locationBatching: 3.0, .weekBalance: 1.0],
+        speed: .thorough,
+        params: [
+            RecipeParam(id: "events", label: "Which tasks to plan?",
+                       kind: .eventMultiPicker, target: .selectedEventIds),
+        ]
+    )
 
     // ═══════════════════════════════════════════════════════
     // REACTIONS (auto-triggered)

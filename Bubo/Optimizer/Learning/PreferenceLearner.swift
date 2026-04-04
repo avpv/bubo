@@ -266,6 +266,8 @@ final class PreferenceLearner {
         preferences.deadlineWeight = blended(preferences.deadlineWeight, key: "Deadline")
         preferences.contextSwitchWeight = blended(preferences.contextSwitchWeight, key: "ContextSwitch")
         preferences.bufferWeight = blended(preferences.bufferWeight, key: "Buffer")
+        preferences.travelTimeWeight = blended(preferences.travelTimeWeight, key: "TravelTime")
+        preferences.locationBatchingWeight = blended(preferences.locationBatchingWeight, key: "LocationBatching")
     }
 
     // MARK: - Persistence

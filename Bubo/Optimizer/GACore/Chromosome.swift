@@ -62,7 +62,8 @@ struct ScheduleChromosome: Chromosome, Sendable {
                 context: event.context,
                 energyCost: event.energyCost,
                 priority: event.priority,
-                isFocusBlock: event.isFocusBlock
+                isFocusBlock: event.isFocusBlock,
+                location: event.location
             )
         }
         return ScheduleChromosome(genes: genes, needsEvaluation: true)

@@ -35,7 +35,8 @@ extension CalendarEvent {
         energyCost: Double = 0.5,
         deadline: Date? = nil,
         requiredParticipants: [String] = [],
-        preferredHourRange: ClosedRange<Int>? = nil
+        preferredHourRange: ClosedRange<Int>? = nil,
+        location: EventLocation? = nil
     ) -> OptimizableEvent {
         let duration = endDate.timeIntervalSince(startDate)
 
@@ -74,7 +75,8 @@ extension CalendarEvent {
             requiredParticipants: requiredParticipants,
             preferredHourRange: preferredHourRange,
             isFocusBlock: isFocus,
-            pomodoroConfig: pomConfig
+            pomodoroConfig: pomConfig,
+            location: location
         )
     }
 }
@@ -93,7 +95,7 @@ extension ScheduleGene {
             title: title ?? self.title,
             startDate: startTime,
             endDate: endTime,
-            location: nil,
+            location: location?.name,
             description: nil,
             calendarName: calendarName,
             eventType: eventType,

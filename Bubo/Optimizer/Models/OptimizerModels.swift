@@ -1,5 +1,38 @@
 import Foundation
 
+// MARK: - Event Location
+
+/// A physical location associated with an event, used for travel-aware scheduling.
+struct EventLocation: Codable, Hashable, Sendable {
+    let name: String
+    let latitude: Double
+    let longitude: Double
+
+    /// Approximate travel time in minutes to another location using Haversine distance.
+    /// Assumes average city travel speed of 30 km/h.
+    func travelMinutes(to other: EventLocation) -> Double {
+        let km = haversineDistanceKm(to: other)
+        // Under 0.5 km — same building / walking distance, no meaningful travel
+        guard km > 0.5 else { return 0 }
+        let averageSpeedKmPerMinute = 30.0 / 60.0  // 30 km/h
+        return km / averageSpeedKmPerMinute
+    }
+
+    /// Great-circle distance in kilometers.
+    private func haversineDistanceKm(to other: EventLocation) -> Double {
+        let R = 6371.0  // Earth radius in km
+        let dLat = (other.latitude - latitude) * .pi / 180
+        let dLon = (other.longitude - longitude) * .pi / 180
+        let lat1 = latitude * .pi / 180
+        let lat2 = other.latitude * .pi / 180
+
+        let a = sin(dLat / 2) * sin(dLat / 2) +
+                cos(lat1) * cos(lat2) * sin(dLon / 2) * sin(dLon / 2)
+        let c = 2 * atan2(sqrt(a), sqrt(1 - a))
+        return R * c
+    }
+}
+
 // MARK: - Optimizable Event
 
 /// An event that the optimizer can move around in the schedule.
@@ -16,6 +49,7 @@ struct OptimizableEvent: Identifiable, Codable, Hashable, Sendable {
     let isFocusBlock: Bool
     let pomodoroConfig: PomodoroConfig?
     let earliestStart: Date?        // don't schedule before this time
+    let location: EventLocation?    // physical location for travel optimization
 
     init(
         id: String = UUID().uuidString,
@@ -29,7 +63,8 @@ struct OptimizableEvent: Identifiable, Codable, Hashable, Sendable {
         preferredHourRange: ClosedRange<Int>? = nil,
         isFocusBlock: Bool = false,
         pomodoroConfig: PomodoroConfig? = nil,
-        earliestStart: Date? = nil
+        earliestStart: Date? = nil,
+        location: EventLocation? = nil
     ) {
         self.id = id
         self.title = title
@@ -43,6 +78,7 @@ struct OptimizableEvent: Identifiable, Codable, Hashable, Sendable {
         self.isFocusBlock = isFocusBlock
         self.pomodoroConfig = pomodoroConfig
         self.earliestStart = earliestStart
+        self.location = location
     }
 }
 
@@ -70,6 +106,7 @@ struct ScheduleGene: Codable, Hashable, Sendable {
     let energyCost: Double
     let priority: Double
     let isFocusBlock: Bool
+    let location: EventLocation?
 
     var endTime: Date { startTime.addingTimeInterval(duration) }
 
@@ -83,7 +120,8 @@ struct ScheduleGene: Codable, Hashable, Sendable {
             context: context,
             energyCost: energyCost,
             priority: priority,
-            isFocusBlock: isFocusBlock
+            isFocusBlock: isFocusBlock,
+            location: location
         )
     }
 }
@@ -137,6 +175,8 @@ struct OptimizerPreferences: Codable, Sendable {
     var deadlineWeight: Double
     var contextSwitchWeight: Double
     var bufferWeight: Double
+    var travelTimeWeight: Double
+    var locationBatchingWeight: Double
 
     // Energy model
     var peakEnergyHour: Int           // hour of day with peak energy
@@ -168,6 +208,8 @@ struct OptimizerPreferences: Codable, Sendable {
         deadlineWeight: Double = 3.0,       // important
         contextSwitchWeight: Double = 0.7,
         bufferWeight: Double = 0.6,
+        travelTimeWeight: Double = 0.8,
+        locationBatchingWeight: Double = 0.6,
         peakEnergyHour: Int = 10,
         energyDecayRate: Double = 0.1,
         maxConsecutiveMeetingMinutes: Int = 120,
@@ -190,6 +232,8 @@ struct OptimizerPreferences: Codable, Sendable {
         self.deadlineWeight = deadlineWeight
         self.contextSwitchWeight = contextSwitchWeight
         self.bufferWeight = bufferWeight
+        self.travelTimeWeight = travelTimeWeight
+        self.locationBatchingWeight = locationBatchingWeight
         self.peakEnergyHour = peakEnergyHour
         self.energyDecayRate = energyDecayRate
         self.maxConsecutiveMeetingMinutes = maxConsecutiveMeetingMinutes
@@ -226,7 +270,7 @@ struct ScheduleScenario: Identifiable, Sendable {
                 title: gene.title,
                 startDate: gene.startTime,
                 endDate: gene.endTime,
-                location: nil,
+                location: gene.location?.name,
                 description: nil,
                 calendarName: "Optimizer",
                 eventType: .standard

@@ -162,7 +162,8 @@ struct RecipeExecutor {
                             energyCost: spec.energy,
                             preferredHourRange: spec.period?.hourRange,
                             isFocusBlock: spec.focus,
-                            pomodoroConfig: spec.pomodoro?.config
+                            pomodoroConfig: spec.pomodoro?.config,
+                            location: spec.location
                         )
                     }
 
@@ -181,7 +182,8 @@ struct RecipeExecutor {
                         priority: spec.priority,
                         context: original.title,
                         energyCost: spec.energy,
-                        isFocusBlock: spec.focus
+                        isFocusBlock: spec.focus,
+                        location: spec.location
                     )
                 }
             }
@@ -203,7 +205,8 @@ struct RecipeExecutor {
                 preferredHourRange: spec.period?.hourRange,
                 isFocusBlock: spec.focus,
                 pomodoroConfig: spec.pomodoro?.config,
-                earliestStart: earliest
+                earliestStart: earliest,
+                location: spec.location
             )
         }
     }
@@ -260,7 +263,8 @@ struct RecipeExecutor {
                 context: event.context, energyCost: event.energyCost,
                 requiredParticipants: event.requiredParticipants,
                 preferredHourRange: event.preferredHourRange,
-                isFocusBlock: event.isFocusBlock, pomodoroConfig: event.pomodoroConfig
+                isFocusBlock: event.isFocusBlock, pomodoroConfig: event.pomodoroConfig,
+                location: event.location
             )
         case .setPreferredPeriod(let period):
             return OptimizableEvent(
@@ -269,7 +273,8 @@ struct RecipeExecutor {
                 context: event.context, energyCost: event.energyCost,
                 requiredParticipants: event.requiredParticipants,
                 preferredHourRange: period.hourRange,
-                isFocusBlock: event.isFocusBlock, pomodoroConfig: event.pomodoroConfig
+                isFocusBlock: event.isFocusBlock, pomodoroConfig: event.pomodoroConfig,
+                location: event.location
             )
         case .markFixed:
             // Handled separately in partitionFixed
@@ -283,7 +288,8 @@ struct RecipeExecutor {
                 context: event.context, energyCost: e,
                 requiredParticipants: event.requiredParticipants,
                 preferredHourRange: event.preferredHourRange,
-                isFocusBlock: event.isFocusBlock, pomodoroConfig: event.pomodoroConfig
+                isFocusBlock: event.isFocusBlock, pomodoroConfig: event.pomodoroConfig,
+                location: event.location
             )
         case .restrictToDays:
             // Day restriction is enforced by adding preferredHourRange constraints
@@ -318,7 +324,8 @@ struct RecipeExecutor {
                     context: event.context, energyCost: event.energyCost,
                     requiredParticipants: event.requiredParticipants,
                     preferredHourRange: preferred.hourRange,
-                    isFocusBlock: event.isFocusBlock, pomodoroConfig: event.pomodoroConfig
+                    isFocusBlock: event.isFocusBlock, pomodoroConfig: event.pomodoroConfig,
+                    location: event.location
                 )
             }
 
@@ -350,6 +357,8 @@ struct RecipeExecutor {
             case .deadline:      prefs.deadlineWeight = value
             case .contextSwitch: prefs.contextSwitchWeight = value
             case .buffer:        prefs.bufferWeight = value
+            case .travelTime:    prefs.travelTimeWeight = value
+            case .locationBatching: prefs.locationBatchingWeight = value
             case .useLearned:    break // handled separately
             }
         }
@@ -822,7 +831,8 @@ extension RecipeExecutor {
                         context: followerEvent.context,
                         energyCost: followerEvent.energyCost,
                         priority: followerEvent.priority,
-                        isFocusBlock: followerEvent.isFocusBlock
+                        isFocusBlock: followerEvent.isFocusBlock,
+                        location: followerEvent.location
                     )
 
                     result.append(followerGene)

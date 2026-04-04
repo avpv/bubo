@@ -206,6 +206,7 @@ struct EventSpec: Codable, Hashable {
     var focus: Bool = false
     var pomodoro: PomodoroPreset? = nil
     var participants: [String] = []
+    var location: EventLocation? = nil
 
     /// How to create events at execution time.
     var creation: CreationMode = .fixed
@@ -241,6 +242,7 @@ struct EventSpec: Codable, Hashable {
         focus = (try? c.decode(Bool.self, forKey: .focus)) ?? false
         pomodoro = try? c.decode(PomodoroPreset.self, forKey: .pomodoro)
         participants = (try? c.decode([String].self, forKey: .participants)) ?? []
+        location = try? c.decode(EventLocation.self, forKey: .location)
         creation = (try? c.decode(CreationMode.self, forKey: .creation)) ?? .fixed
         chainGap = try? c.decode(Int.self, forKey: .chainGap)
         segments = try? c.decode([EventSegment].self, forKey: .segments)
@@ -258,6 +260,7 @@ struct EventSpec: Codable, Hashable {
         focus: Bool = false,
         pomodoro: PomodoroPreset? = nil,
         participants: [String] = [],
+        location: EventLocation? = nil,
         creation: CreationMode = .fixed,
         chainGap: Int? = nil,
         segments: [EventSegment]? = nil,
@@ -273,6 +276,7 @@ struct EventSpec: Codable, Hashable {
         self.focus = focus
         self.pomodoro = pomodoro
         self.participants = participants
+        self.location = location
         self.creation = creation
         self.chainGap = chainGap
         self.segments = segments
@@ -535,6 +539,8 @@ enum WeightKey: String, Codable, Hashable, CaseIterable {
     case deadline
     case contextSwitch
     case buffer
+    case travelTime
+    case locationBatching
     case useLearned = "_useLearned"
 }
 
