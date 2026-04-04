@@ -104,6 +104,9 @@ struct QuickAddTasksView: View {
                         }
                         .buttonStyle(.action(role: .secondary, size: .compact))
                         .padding(.leading, DS.Spacing.md)
+
+                        // Legend
+                        pickerLegend
                     }
                 }
                 .padding(.horizontal, DS.Spacing.lg)
@@ -137,6 +140,32 @@ struct QuickAddTasksView: View {
             .padding(.horizontal, DS.Spacing.lg)
             .frame(height: DS.Size.actionFooterHeight)
             .skinBarBackground(skin)
+        }
+    }
+
+    // MARK: - Picker Legend
+
+    private var pickerLegend: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+            legendRow(icon: "clock", label: "Duration", description: "how long the task will take")
+            legendRow(icon: "exclamationmark", label: "Priority", description: "Low / Med / High — affects scheduling order")
+        }
+        .padding(.top, DS.Spacing.sm)
+        .padding(.leading, DS.Spacing.md)
+    }
+
+    private func legendRow(icon: String, label: String, description: String) -> some View {
+        HStack(spacing: DS.Spacing.xs) {
+            Image(systemName: icon)
+                .font(.caption2)
+                .foregroundStyle(skin.resolvedTextTertiary)
+                .frame(width: 14)
+            Text("\(label)")
+                .font(.caption2.bold())
+                .foregroundStyle(skin.resolvedTextSecondary)
+            Text("— \(description)")
+                .font(.caption2)
+                .foregroundStyle(skin.resolvedTextTertiary)
         }
     }
 
