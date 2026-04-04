@@ -215,12 +215,6 @@ struct RecipeCardView: View {
                 .foregroundStyle(skin.resolvedTextPrimary)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
-            if !recipe.description.isEmpty {
-                Text(recipe.description)
-                    .font(.system(size: 9))
-                    .foregroundStyle(skin.resolvedTextTertiary)
-                    .lineLimit(2)
-            }
         }
         .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
         .padding(.horizontal, DS.Spacing.md)
