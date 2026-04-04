@@ -590,7 +590,7 @@ struct MenuBarView: View {
                     Image(systemName: "wand.and.stars")
                         .font(.system(size: 14, weight: .semibold))
                         .frame(width: 32, height: 32)
-                        .background(activeSkin.resolvedPlatterFill)
+                        .background(activeSkin.resolvedPlatterMaterial)
                         .clipShape(Circle())
                 }
                 .buttonStyle(.plain)
