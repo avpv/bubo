@@ -29,21 +29,25 @@ struct IntentPickerView: View {
                 if onAskAI != nil {
                     askAISection
                         .staggeredEntrance(index: 0)
+                        .eventScrollTransition()
                 }
 
                 // Recently used — always shown, falls back to quick actions
                 recentlySection
                     .staggeredEntrance(index: 1)
+                    .eventScrollTransition()
 
                 // Contextual suggestions (condition-based)
                 if !suggestions.isEmpty {
                     suggestionsSection
                         .staggeredEntrance(index: 2)
+                        .eventScrollTransition()
                 }
 
                 // All categories (expandable)
                 allCategoriesSection
                     .staggeredEntrance(index: 3)
+                    .eventScrollTransition()
             }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.vertical, DS.Spacing.xl)
