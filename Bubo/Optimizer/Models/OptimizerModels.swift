@@ -17,6 +17,7 @@ struct OptimizableEvent: Identifiable, Codable, Hashable, Sendable {
     let pomodoroConfig: PomodoroConfig?
     let earliestStart: Date?        // don't schedule before this time
     let storyPoints: Int?           // effort estimate (1, 2, 3, 5, 8, 13)
+    let dependsOn: [String]         // IDs of tasks that must finish first
 
     init(
         id: String = UUID().uuidString,
@@ -31,7 +32,8 @@ struct OptimizableEvent: Identifiable, Codable, Hashable, Sendable {
         isFocusBlock: Bool = false,
         pomodoroConfig: PomodoroConfig? = nil,
         earliestStart: Date? = nil,
-        storyPoints: Int? = nil
+        storyPoints: Int? = nil,
+        dependsOn: [String] = []
     ) {
         self.id = id
         self.title = title
@@ -46,6 +48,7 @@ struct OptimizableEvent: Identifiable, Codable, Hashable, Sendable {
         self.pomodoroConfig = pomodoroConfig
         self.earliestStart = earliestStart
         self.storyPoints = storyPoints
+        self.dependsOn = dependsOn
     }
 }
 

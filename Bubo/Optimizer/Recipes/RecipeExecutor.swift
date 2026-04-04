@@ -199,6 +199,7 @@ struct RecipeExecutor {
         let effectiveEnergy = Self.adjustedEnergy(base: spec.energy, storyPoints: spec.storyPoints)
         return (0..<spec.count).map { i in
             OptimizableEvent(
+                id: spec.count > 1 ? "\(spec.specId)_\(i)" : spec.specId,
                 title: spec.count > 1 ? "\(spec.title) \(i + 1)" : spec.title,
                 duration: TimeInterval(spec.minutes * 60),
                 deadline: spec.deadline,
@@ -210,7 +211,8 @@ struct RecipeExecutor {
                 isFocusBlock: spec.focus,
                 pomodoroConfig: spec.pomodoro?.config,
                 earliestStart: earliest,
-                storyPoints: spec.storyPoints
+                storyPoints: spec.storyPoints,
+                dependsOn: spec.dependsOn
             )
         }
     }

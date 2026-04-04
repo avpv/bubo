@@ -24,6 +24,7 @@ final class PersistedLocalEvent {
     var deadline: Date?
     var taskStatusRaw: String
     var completedAt: Date?
+    var dependsOn: [String]
 
     init(from event: CalendarEvent) {
         self.eventId = event.id
@@ -44,6 +45,7 @@ final class PersistedLocalEvent {
         self.deadline = event.deadline
         self.taskStatusRaw = event.taskStatus.rawValue
         self.completedAt = event.completedAt
+        self.dependsOn = event.dependsOn
     }
 
     func toCalendarEvent() -> CalendarEvent {
@@ -70,6 +72,7 @@ final class PersistedLocalEvent {
         event.deadline = deadline
         event.taskStatus = TaskStatus(rawValue: taskStatusRaw) ?? .todo
         event.completedAt = completedAt
+        event.dependsOn = dependsOn
         return event
     }
 
@@ -91,6 +94,7 @@ final class PersistedLocalEvent {
         self.deadline = event.deadline
         self.taskStatusRaw = event.taskStatus.rawValue
         self.completedAt = event.completedAt
+        self.dependsOn = event.dependsOn
     }
 }
 
@@ -117,6 +121,7 @@ final class PersistedCachedEvent {
     var deadline: Date?
     var taskStatusRaw: String
     var completedAt: Date?
+    var dependsOn: [String]
     var cachedAt: Date
 
     init(from event: CalendarEvent, cachedAt: Date = Date()) {
@@ -138,6 +143,7 @@ final class PersistedCachedEvent {
         self.deadline = event.deadline
         self.taskStatusRaw = event.taskStatus.rawValue
         self.completedAt = event.completedAt
+        self.dependsOn = event.dependsOn
         self.cachedAt = cachedAt
     }
 
@@ -162,9 +168,10 @@ final class PersistedCachedEvent {
         )
         event.storyPoints = storyPoints
         event.isTask = isTask
-        event.deadline = event.deadline
+        event.deadline = deadline
         event.taskStatus = TaskStatus(rawValue: taskStatusRaw) ?? .todo
         event.completedAt = completedAt
+        event.dependsOn = dependsOn
         return event
     }
 }

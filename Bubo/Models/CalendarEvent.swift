@@ -134,6 +134,8 @@ struct CalendarEvent: Identifiable, Codable, Hashable, Sendable {
     var taskStatus: TaskStatus = .todo
     /// When the task was marked as done.
     var completedAt: Date?
+    /// IDs of tasks that must be completed before this one can start.
+    var dependsOn: [String] = []
 
     /// Whether the optimizer is allowed to move this event to a different time slot.
     /// Defaults to `false` for events synced from external calendars (apple_ prefix).

@@ -14,6 +14,7 @@ struct QuickAddTasksView: View {
     @State private var horizon: Horizon = .today
     @State private var isOptimizing = false
     @State private var showResults = false
+    @State private var sequentialOrder = false
 
     struct TaskEntry: Identifiable {
         let id = UUID()
@@ -87,6 +88,16 @@ struct QuickAddTasksView: View {
                     }
                     .staggeredEntrance(index: 0)
 
+                    // Sequential order toggle
+                    Toggle(isOn: $sequentialOrder) {
+                        Label("Sequential order", systemImage: "arrow.down.line")
+                            .font(.subheadline)
+                    }
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .tint(skin.accentColor)
+                    .staggeredEntrance(index: 1)
+
                     // Tasks section
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                         Text("Tasks")
@@ -96,7 +107,15 @@ struct QuickAddTasksView: View {
 
                         VStack(spacing: 0) {
                             ForEach(Array($tasks.enumerated()), id: \.element.id) { index, $task in
-                                taskRow(task: $task)
+                                HStack(spacing: 0) {
+                                    if sequentialOrder {
+                                        Text("\(index + 1)")
+                                            .font(.caption2.bold().monospacedDigit())
+                                            .foregroundStyle(skin.resolvedTextTertiary)
+                                            .frame(width: 20)
+                                    }
+                                    taskRow(task: $task)
+                                }
                                     .staggeredEntrance(index: index)
                                     .eventScrollTransition()
 
@@ -196,15 +215,22 @@ struct QuickAddTasksView: View {
 
     private func planTasks() {
         isOptimizing = true
-        let eventSpecs = validTasks.map { task in
+
+        // Assign stable IDs so dependencies can reference them
+        let taskIds = validTasks.map { _ in UUID().uuidString }
+
+        let eventSpecs = validTasks.enumerated().map { index, task in
             let sp = task.storyPoints ?? task.priority.defaultStoryPoints
+            let deps: [String] = sequentialOrder && index > 0 ? [taskIds[index - 1]] : []
             return EventSpec(
+                specId: taskIds[index],
                 title: task.title,
                 minutes: task.minutes,
                 priority: task.priority.value,
                 energy: min(1.0, Double(task.minutes) / 180.0),
                 storyPoints: sp,
-                deadline: task.deadline
+                deadline: task.deadline,
+                dependsOn: deps
             )
         }
 
