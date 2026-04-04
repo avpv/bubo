@@ -495,8 +495,8 @@ struct PopoverHeader: View {
                         .fontDesign(skin.resolvedFontDesign)
                 }
 
-                HStack(spacing: DS.Spacing.xs) {
-                    if showBack {
+                if showBack {
+                    HStack(spacing: DS.Spacing.xs) {
                         Button {
                             Haptics.tap()
                             if let navigateHome {
@@ -518,7 +518,15 @@ struct PopoverHeader: View {
                         }
                         .buttonStyle(.borderless)
                         .keyboardShortcut(.escape, modifiers: [])
-                    } else {
+
+                        Spacer()
+
+                        if let trailing {
+                            trailing
+                        }
+                    }
+                } else {
+                    HStack(spacing: DS.Spacing.xs) {
                         OwlIcon(size: DS.Size.headerIcon)
                             .foregroundStyle(skin.accentColor)
 
@@ -529,11 +537,11 @@ struct PopoverHeader: View {
                                 .fontDesign(skin.resolvedFontDesign)
                         }
                     }
-
-                    Spacer()
-
-                    if let trailing {
-                        trailing
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .overlay(alignment: .trailing) {
+                        if let trailing {
+                            trailing
+                        }
                     }
                 }
             }
