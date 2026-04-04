@@ -476,6 +476,11 @@ private struct CategorySection: View {
 
     @State private var isExpanded = false
 
+    private var categoryColor: Color {
+        guard let first = category.recipes.first else { return skin.accentColor }
+        return DS.Colors.categoryPalette[first.categoryColorIndex]
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button {
@@ -485,10 +490,10 @@ private struct CategorySection: View {
                 HStack(alignment: .center, spacing: 0) {
                     // Accent bar
                     Capsule()
-                        .fill(skin.accentColor)
+                        .fill(categoryColor)
                         .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
                         .padding(.trailing, DS.Spacing.md)
-                        .shadow(color: skin.accentColor.opacity(skin.shadowOpacity * 4), radius: skin.shadowRadius * 0.5)
+                        .shadow(color: categoryColor.opacity(skin.shadowOpacity * 4), radius: skin.shadowRadius * 0.5)
 
                     Text(category.name)
                         .font(.subheadline.weight(.medium))
