@@ -126,7 +126,6 @@ struct ScheduleRecipe: Codable, Identifiable, Hashable {
         name = (try? c.decode(String.self, forKey: .name)) ?? ""
         description = (try? c.decode(String.self, forKey: .description)) ?? ""
         category = (try? c.decode(String.self, forKey: .category)) ?? ""
-        icon = (try? c.decode(String.self, forKey: .icon)) ?? ""
         events = (try? c.decode([EventSpec].self, forKey: .events)) ?? []
         includeExistingEvents = (try? c.decode(Bool.self, forKey: .includeExistingEvents)) ?? true
         findSlotOnly = (try? c.decode(Bool.self, forKey: .findSlotOnly)) ?? false
