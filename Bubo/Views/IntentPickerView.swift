@@ -12,6 +12,8 @@ struct IntentPickerView: View {
     let onSelectRecipe: (ScheduleRecipe) -> Void
     var onAskAI: (() -> Void)? = nil
 
+    @State private var searchText = ""
+
     private var suggestions: [ScheduleRecipe] {
         optimizerService.recipeMonitor?.suggestedRecipes ?? []
     }
@@ -22,37 +24,112 @@ struct IntentPickerView: View {
             .compactMap { RecipeCatalog.allRecipesById[$0] }
     }
 
+    private var isSearching: Bool { !searchText.isEmpty }
+
+    /// Flat list of all recipes matching the search query (name, description, category).
+    private var searchResults: [ScheduleRecipe] {
+        let query = searchText.lowercased()
+        return RecipeCatalog.allCategories.flatMap(\.recipes).filter { recipe in
+            recipe.name.lowercased().contains(query)
+            || recipe.description.lowercased().contains(query)
+            || recipe.category.lowercased().contains(query)
+        }
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: DS.Spacing.xl) {
-                // AI assistant entry point
-                if onAskAI != nil {
-                    askAISection
-                        .staggeredEntrance(index: 0)
+                // Search bar
+                searchBar
+
+                if isSearching {
+                    // Search results
+                    searchResultsSection
+                } else {
+                    // AI assistant entry point
+                    if onAskAI != nil {
+                        askAISection
+                            .staggeredEntrance(index: 0)
+                            .eventScrollTransition()
+                    }
+
+                    // Recently used — always shown, falls back to quick actions
+                    recentlySection
+                        .staggeredEntrance(index: 1)
+                        .eventScrollTransition()
+
+                    // Contextual suggestions (condition-based)
+                    if !suggestions.isEmpty {
+                        suggestionsSection
+                            .staggeredEntrance(index: 2)
+                            .eventScrollTransition()
+                    }
+
+                    // All categories (expandable)
+                    allCategoriesSection
+                        .staggeredEntrance(index: 3)
                         .eventScrollTransition()
                 }
-
-                // Recently used — always shown, falls back to quick actions
-                recentlySection
-                    .staggeredEntrance(index: 1)
-                    .eventScrollTransition()
-
-                // Contextual suggestions (condition-based)
-                if !suggestions.isEmpty {
-                    suggestionsSection
-                        .staggeredEntrance(index: 2)
-                        .eventScrollTransition()
-                }
-
-                // All categories (expandable)
-                allCategoriesSection
-                    .staggeredEntrance(index: 3)
-                    .eventScrollTransition()
             }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.vertical, DS.Spacing.xl)
         }
         .scrollContentBackground(.hidden)
+    }
+
+    // MARK: - Search
+
+    private var searchBar: some View {
+        HStack(spacing: DS.Spacing.sm) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(skin.resolvedTextTertiary)
+                .font(.caption)
+                .accessibilityHidden(true)
+            TextField("Search recipes…", text: $searchText)
+                .textFieldStyle(.plain)
+                .font(.subheadline)
+                .accessibilityLabel("Search recipes")
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                        .font(.caption)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
+            }
+        }
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.sm)
+        .skinPlatter(skin)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
+    }
+
+    private var searchResultsSection: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            if searchResults.isEmpty {
+                VStack(spacing: DS.Spacing.md) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.title2)
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                    Text("No recipes found")
+                        .font(.subheadline)
+                        .foregroundStyle(skin.resolvedTextSecondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, DS.Spacing.xxxl)
+            } else {
+                sectionHeader("\(searchResults.count) results")
+
+                VStack(spacing: DS.Spacing.xs) {
+                    ForEach(searchResults) { recipe in
+                        RecipeCardView(recipe: recipe, style: .snippet, onTap: onSelectRecipe)
+                    }
+                }
+            }
+        }
     }
 
     // MARK: - Ask AI
