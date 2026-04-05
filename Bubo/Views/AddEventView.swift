@@ -115,18 +115,11 @@ struct AddEventView: View {
                     
                     // Title section
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                        TextField("Title", text: $title, prompt: Text("Event title (required)").foregroundStyle(skin.resolvedTextSecondary))
+                        TextField("Title", text: $title, prompt: Text("Meeting with Anna, Deep work, etc.").foregroundStyle(skin.resolvedTextSecondary))
                             .textFieldStyle(.plain)
                             .font(.headline)
                             .focused($isTitleFocused)
                             .defaultFocus($isTitleFocused, true)
-
-                        if showValidation && !isTitleValid {
-                            Label("Title is required", systemImage: "exclamationmark.triangle.fill")
-                                .font(.caption)
-                                .foregroundStyle(skin.resolvedDestructiveColor)
-                                .transition(.move(edge: .top).combined(with: .opacity))
-                        }
                     }
                     .padding(.horizontal, DS.Spacing.md)
                     .padding(.vertical, DS.Spacing.sm)
@@ -292,7 +285,7 @@ struct AddEventView: View {
                             .accessibilityAddTraits(.isHeader)
                         
                         VStack(spacing: DS.Spacing.md) {
-                            TextField("Location", text: $location, prompt: Text("Add a location or video call link").foregroundStyle(skin.resolvedTextSecondary))
+                            TextField("Location", text: $location, prompt: Text("Zoom link or room 302").foregroundStyle(skin.resolvedTextSecondary))
                                 .textFieldStyle(.plain)
                                 .focused($isLocationFocused)
 

@@ -7,7 +7,6 @@ struct FullScreenAlertView: View {
     let onSnooze: (Int) -> Void
 
     @State private var isVisible = false
-    @State private var snoozeHovered = false
     @State private var joinHovered = false
     @State private var dismissHovered = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -86,111 +85,105 @@ struct FullScreenAlertView: View {
 
                 Spacer()
 
-                // Action buttons
-                HStack(spacing: DS.Spacing.xl) {
-                    // Snooze button — outlined, skin-tinted
-                    Menu {
-                        ForEach(DS.snoozeOptions) { option in
-                            Button("In \(option.label)") {
-                                Haptics.tap()
-                                onSnooze(option.minutes)
-                            }
-                        }
-                    } label: {
-                        Text("Snooze")
-                            .font(.system(.title3, design: skin.resolvedFontDesign, weight: skin.resolvedFontWeight))
-                            .foregroundStyle(DS.Colors.onOverlay)
-                            .padding(.horizontal, DS.Spacing.xxxl + DS.Spacing.sm)
-                            .padding(.vertical, DS.Spacing.md + DS.Spacing.xxs)
-                            .background(
-                                Capsule()
-                                    .fill(DS.Materials.overlay)
+                // Action buttons — inline snooze for quick access
+                VStack(spacing: DS.Spacing.xl) {
+                    // Primary row: Join (if meeting) + Dismiss
+                    HStack(spacing: DS.Spacing.xl) {
+                        // Join meeting button — skin gradient fill
+                        if let meetingURL = event.meetingLink, let serviceName = event.meetingServiceName {
+                            Button {
+                                Haptics.impact()
+                                NSWorkspace.shared.open(meetingURL)
+                                onDismiss()
+                            } label: {
+                                Label("Join \(serviceName)", systemImage: "video.fill")
+                                    .font(.system(.title2, design: skin.resolvedFontDesign, weight: skin.resolvedHeadlineFontWeight))
+                                    .foregroundStyle(DS.contrastingForeground(for: skinAccent))
+                                    .padding(.horizontal, DS.Spacing.xxxl + DS.Spacing.sm)
+                                    .padding(.vertical, DS.Spacing.lg)
+                                    .background(
+                                        Capsule()
+                                            .fill(
+                                                LinearGradient(
+                                                    colors: [skinAccent, skinSecondary],
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
+                                                )
+                                            )
+                                    )
                                     .overlay(
                                         Capsule()
-                                            .fill(skinAccent.opacity(snoozeHovered ? skin.hoverFillOpacity * 2.5 : 0))
+                                            .strokeBorder(DS.Colors.onOverlay.opacity(DS.Opacity.glassBorder), lineWidth: DS.Border.thin)
                                     )
-                            )
-                            .overlay(
-                                Capsule()
-                                    .strokeBorder(
-                                        LinearGradient(
-                                            colors: [skinAccent.opacity(DS.Opacity.overlayLight), skinSecondary.opacity(0.3)],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        lineWidth: DS.Border.medium
-                                    )
-                            )
-                            .shadow(color: skinAccent.opacity(snoozeHovered ? skin.hoverShadowOpacity * 1.5 : 0), radius: skin.hoverShadowRadius, y: skin.hoverShadowY)
-                            .scaleEffect(snoozeHovered ? 1.03 : 1.0)
-                            .animation(skin.resolvedMicroAnimation, value: snoozeHovered)
-                    }
-                    .buttonStyle(.plain)
-                    .onHover { snoozeHovered = $0 }
+                                    .shadow(color: skinAccent.opacity(0.5), radius: joinHovered ? skin.hoverShadowRadius * 1.3 : skin.hoverShadowRadius * 0.8, y: joinHovered ? skin.hoverShadowY : skin.shadowY)
+                                    .scaleEffect(joinHovered ? 1.04 : 1.0)
+                                    .animation(skin.resolvedMicroAnimation, value: joinHovered)
+                            }
+                            .buttonStyle(.plain)
+                            .onHover { joinHovered = $0 }
+                            .keyboardShortcut(.return, modifiers: [])
+                            .accessibilityLabel("Join \(serviceName)")
+                        }
 
-                    // Join meeting button — skin gradient fill
-                    if let meetingURL = event.meetingLink, let serviceName = event.meetingServiceName {
-                        Button {
+                        // Dismiss button — white pill with skin accent on hover
+                        Button(action: {
                             Haptics.impact()
-                            NSWorkspace.shared.open(meetingURL)
                             onDismiss()
-                        } label: {
-                            Label("Join \(serviceName)", systemImage: "video.fill")
+                        }) {
+                            Text("Dismiss")
                                 .font(.system(.title2, design: skin.resolvedFontDesign, weight: skin.resolvedHeadlineFontWeight))
-                                .foregroundStyle(DS.contrastingForeground(for: skinAccent))
-                                .padding(.horizontal, DS.Spacing.xxxl + DS.Spacing.sm)
+                                .foregroundStyle(dismissHovered ? skinAccent : DS.Colors.overlayBackground)
+                                .padding(.horizontal, DS.Spacing.xxxl + DS.Spacing.xxl + DS.Spacing.xs)
                                 .padding(.vertical, DS.Spacing.lg)
                                 .background(
                                     Capsule()
-                                        .fill(
-                                            LinearGradient(
-                                                colors: [skinAccent, skinSecondary],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            )
-                                        )
+                                        .fill(DS.Colors.onOverlay)
                                 )
                                 .overlay(
                                     Capsule()
-                                        .strokeBorder(DS.Colors.onOverlay.opacity(DS.Opacity.glassBorder), lineWidth: DS.Border.thin)
+                                        .strokeBorder(skinAccent.opacity(dismissHovered ? 0.5 : 0), lineWidth: DS.Border.medium)
                                 )
-                                .shadow(color: skinAccent.opacity(0.5), radius: joinHovered ? skin.hoverShadowRadius * 1.3 : skin.hoverShadowRadius * 0.8, y: joinHovered ? skin.hoverShadowY : skin.shadowY)
-                                .scaleEffect(joinHovered ? 1.04 : 1.0)
-                                .animation(skin.resolvedMicroAnimation, value: joinHovered)
+                                .shadow(color: DS.Colors.onOverlay.opacity(dismissHovered ? skin.hoverShadowOpacity * 1.5 : skin.shadowOpacity * 2), radius: dismissHovered ? skin.hoverShadowRadius : skin.shadowRadius, y: dismissHovered ? skin.hoverShadowY : skin.shadowY)
+                                .scaleEffect(dismissHovered ? 1.03 : 1.0)
+                                .animation(skin.resolvedMicroAnimation, value: dismissHovered)
                         }
                         .buttonStyle(.plain)
-                        .onHover { joinHovered = $0 }
-                        .keyboardShortcut(.return, modifiers: [])
-                        .accessibilityLabel("Join \(serviceName)")
+                        .onHover { dismissHovered = $0 }
+                        .keyboardShortcut(event.meetingLink != nil ? .escape : .return, modifiers: [])
+                        .accessibilityLabel("Dismiss alert")
                     }
 
-                    // Dismiss button — white pill with skin accent on hover
-                    Button(action: {
-                        Haptics.impact()
-                        onDismiss()
-                    }) {
-                        Text("Dismiss")
-                            .font(.system(.title2, design: skin.resolvedFontDesign, weight: skin.resolvedHeadlineFontWeight))
-                            .foregroundStyle(dismissHovered ? skinAccent : DS.Colors.overlayBackground)
-                            .padding(.horizontal, DS.Spacing.xxxl + DS.Spacing.xxl + DS.Spacing.xs)
-                            .padding(.vertical, DS.Spacing.lg)
-                            .background(
-                                Capsule()
-                                    .fill(DS.Colors.onOverlay)
-                            )
-                            .overlay(
-                                Capsule()
-                                    .strokeBorder(skinAccent.opacity(dismissHovered ? 0.5 : 0), lineWidth: DS.Border.medium)
-                            )
-                            .shadow(color: DS.Colors.onOverlay.opacity(dismissHovered ? skin.hoverShadowOpacity * 1.5 : skin.shadowOpacity * 2), radius: dismissHovered ? skin.hoverShadowRadius : skin.shadowRadius, y: dismissHovered ? skin.hoverShadowY : skin.shadowY)
-                            .scaleEffect(dismissHovered ? 1.03 : 1.0)
-                            .animation(skin.resolvedMicroAnimation, value: dismissHovered)
+                    // Snooze row — direct buttons, no dropdown
+                    HStack(spacing: DS.Spacing.md) {
+                        Text("Snooze")
+                            .font(.system(.callout, design: skin.resolvedFontDesign, weight: .medium))
+                            .foregroundStyle(DS.Colors.onOverlay.opacity(DS.Opacity.tertiaryText))
+
+                        ForEach([5, 10, 15], id: \.self) { minutes in
+                            Button {
+                                Haptics.tap()
+                                onSnooze(minutes)
+                            } label: {
+                                Text("\(minutes) min")
+                                    .font(.system(.callout, design: skin.resolvedFontDesign, weight: skin.resolvedFontWeight))
+                                    .foregroundStyle(DS.Colors.onOverlay)
+                                    .padding(.horizontal, DS.Spacing.xl)
+                                    .padding(.vertical, DS.Spacing.sm)
+                                    .background(
+                                        Capsule()
+                                            .fill(DS.Materials.overlay)
+                                    )
+                                    .overlay(
+                                        Capsule()
+                                            .strokeBorder(
+                                                skinAccent.opacity(DS.Opacity.subtleBorder),
+                                                lineWidth: DS.Border.thin
+                                            )
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
-                    .buttonStyle(.plain)
-                    .onHover { dismissHovered = $0 }
-                    .keyboardShortcut(event.meetingLink != nil ? .escape : .return, modifiers: [])
-                    .accessibilityLabel("Dismiss alert")
-                    .accessibilityHint(event.meetingLink != nil ? "Press Escape to dismiss" : "Press Enter to dismiss")
                 }
 
                 Text(event.meetingLink != nil ? "Enter to join \u{00B7} Esc to dismiss" : "Press Enter or Esc to dismiss")

@@ -13,6 +13,7 @@ struct IntentPickerView: View {
     var onAskAI: (() -> Void)? = nil
 
     @State private var searchText = ""
+    @FocusState private var isSearchFocused: Bool
 
     private var suggestions: [ScheduleRecipe] {
         optimizerService.recipeMonitor?.suggestedRecipes ?? []
@@ -41,16 +42,16 @@ struct IntentPickerView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: DS.Spacing.xl) {
-                // Search bar
-                searchBar
+                // Unified search + AI input
+                unifiedSearchField
 
                 if isSearching {
-                    // Search results
+                    // Search results — recipes first, AI fallback
                     searchResultsSection
                 } else {
-                    // AI assistant entry point
-                    if onAskAI != nil {
-                        askAISection
+                    // Contextual suggestions first (most relevant)
+                    if !suggestions.isEmpty {
+                        suggestionsSection
                             .staggeredEntrance(index: 0)
                             .eventScrollTransition()
                     }
@@ -59,13 +60,6 @@ struct IntentPickerView: View {
                     quickActionsSection
                         .staggeredEntrance(index: 1)
                         .eventScrollTransition()
-
-                    // Contextual suggestions (condition-based)
-                    if !suggestions.isEmpty {
-                        suggestionsSection
-                            .staggeredEntrance(index: 2)
-                            .eventScrollTransition()
-                    }
 
                     // All categories (expandable)
                     allCategoriesSection
@@ -77,18 +71,30 @@ struct IntentPickerView: View {
         .scrollContentBackground(.hidden)
     }
 
-    // MARK: - Search
+    // MARK: - Unified Search + AI Field
 
-    private var searchBar: some View {
+    private var unifiedSearchField: some View {
         HStack(spacing: DS.Spacing.sm) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(skin.resolvedTextTertiary)
+            Image(systemName: "sparkles")
+                .foregroundStyle(isSearchFocused ? skin.accentColor : skin.resolvedTextTertiary)
                 .font(.caption)
                 .accessibilityHidden(true)
-            TextField("Search recipes…", text: $searchText)
+                .animation(skin.resolvedMicroAnimation, value: isSearchFocused)
+
+            TextField("Find focus time, rearrange tasks, or ask anything…", text: $searchText)
                 .textFieldStyle(.plain)
                 .font(.subheadline)
-                .accessibilityLabel("Search recipes")
+                .focused($isSearchFocused)
+                .onSubmit {
+                    // If no recipe matches, treat as AI query
+                    if searchResults.isEmpty && !searchText.isEmpty {
+                        onAskAI?()
+                    } else if searchResults.count == 1 {
+                        onSelectRecipe(searchResults[0])
+                    }
+                }
+                .accessibilityLabel("Search recipes or ask AI")
+
             if !searchText.isEmpty {
                 Button {
                     searchText = ""
@@ -98,28 +104,59 @@ struct IntentPickerView: View {
                         .font(.caption)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Clear search")
+                .accessibilityLabel("Clear")
             }
         }
         .padding(.horizontal, DS.Spacing.md)
         .padding(.vertical, DS.Spacing.sm)
         .skinPlatter(skin)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
+        .skinPlatterDepth(skin)
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                .strokeBorder(
+                    isSearchFocused
+                        ? skin.accentColor.opacity(0.3)
+                        : Color.clear,
+                    lineWidth: DS.Border.standard
+                )
+        )
     }
 
     private var searchResultsSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             if searchResults.isEmpty {
-                VStack(spacing: DS.Spacing.md) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.title2)
-                        .foregroundStyle(skin.resolvedTextTertiary)
-                    Text("No recipes found")
-                        .font(.subheadline)
-                        .foregroundStyle(skin.resolvedTextSecondary)
+                // No recipe match — offer AI as the action
+                if onAskAI != nil {
+                    VStack(spacing: DS.Spacing.md) {
+                        Image(systemName: "sparkles")
+                            .font(.title2)
+                            .foregroundStyle(skin.accentColor)
+                        Text("No recipes match \u{201C}\(searchText)\u{201D}")
+                            .font(.subheadline)
+                            .foregroundStyle(skin.resolvedTextSecondary)
+
+                        Button {
+                            onAskAI?()
+                        } label: {
+                            Label("Ask AI instead", systemImage: "sparkles")
+                                .font(.caption.weight(.medium))
+                        }
+                        .buttonStyle(.action(role: .primary, size: .compact))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, DS.Spacing.xxxl)
+                } else {
+                    VStack(spacing: DS.Spacing.md) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.title2)
+                            .foregroundStyle(skin.resolvedTextTertiary)
+                        Text("No recipes found")
+                            .font(.subheadline)
+                            .foregroundStyle(skin.resolvedTextSecondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, DS.Spacing.xxxl)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, DS.Spacing.xxxl)
             } else {
                 sectionHeader("\(searchResults.count) results")
 
@@ -128,57 +165,28 @@ struct IntentPickerView: View {
                         RecipeCardView(recipe: recipe, style: .snippet, onTap: onSelectRecipe)
                     }
                 }
-            }
-        }
-    }
 
-    // MARK: - Ask AI
-
-    private var askAISection: some View {
-        Button { onAskAI?() } label: {
-            HStack(spacing: DS.Spacing.md) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: DS.Size.headerIcon, weight: .medium))
-                    .foregroundStyle(skin.accentColor)
-                    .frame(width: DS.Size.controlHeight, height: DS.Size.controlHeight)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Ask AI")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(skin.resolvedTextPrimary)
-                    Text("Describe what you want in your own words")
-                        .font(.caption)
-                        .foregroundStyle(skin.resolvedTextSecondary)
-                        .lineLimit(1)
+                // AI fallback at the bottom of results
+                if onAskAI != nil {
+                    Button { onAskAI?() } label: {
+                        HStack(spacing: DS.Spacing.sm) {
+                            Image(systemName: "sparkles")
+                                .font(.caption)
+                                .foregroundStyle(skin.accentColor)
+                            Text("Not what you need? Ask AI")
+                                .font(.caption)
+                                .foregroundStyle(skin.resolvedTextSecondary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, DS.Spacing.sm)
                 }
-
-                Spacer(minLength: 0)
-
-                Image(systemName: "chevron.right")
-                    .font(.caption)
-                    .foregroundStyle(skin.resolvedTextTertiary)
             }
-            .padding(DS.Spacing.md)
-            .skinPlatter(skin)
-            .skinPlatterDepth(skin)
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                    .strokeBorder(
-                        LinearGradient(
-                            colors: [skin.accentColor.opacity(0.3), skin.accentColor.opacity(0.08)],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        ),
-                        lineWidth: DS.Border.standard
-                    )
-            )
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Ask AI to plan your schedule")
-        .accessibilityHint("Describe what you want in your own words")
     }
 
-    // MARK: - Recently
+    // MARK: - Quick Actions
 
     private var quickActionsSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {

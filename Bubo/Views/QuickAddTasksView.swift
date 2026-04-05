@@ -13,8 +13,23 @@ struct QuickAddTasksView: View {
     @State private var tasks: [TaskEntry] = [TaskEntry()]
     @State private var horizon: Horizon = .today
     @State private var isOptimizing = false
-    @State private var showResults = false
     @State private var sequentialOrder = false
+    @State private var inlineResult: InlineResult? = nil
+
+    enum InlineResult: Equatable {
+        case success([ScheduleScenario])
+        case error(String)
+
+        static func == (lhs: InlineResult, rhs: InlineResult) -> Bool {
+            switch (lhs, rhs) {
+            case (.success(let a), .success(let b)):
+                return a.map(\.fitness) == b.map(\.fitness)
+            case (.error(let a), .error(let b)):
+                return a == b
+            default: return false
+            }
+        }
+    }
 
     struct TaskEntry: Identifiable {
         let id = UUID()
@@ -137,8 +152,12 @@ struct QuickAddTasksView: View {
                         .buttonStyle(.action(role: .secondary, size: .compact))
                         .padding(.leading, DS.Spacing.md)
 
-                        // Legend
-                        pickerLegend
+                    }
+
+                    // Inline results — shown right below tasks after optimization
+                    if let result = inlineResult {
+                        inlineResultSection(result)
+                            .transition(.opacity.combined(with: .move(edge: .bottom)))
                     }
                 }
                 .padding(.horizontal, DS.Spacing.lg)
@@ -146,28 +165,59 @@ struct QuickAddTasksView: View {
             }
             .scrollContentBackground(.hidden)
             .frame(maxHeight: .infinity)
+            .animation(skin.resolvedMicroAnimation, value: inlineResult != nil)
 
             SkinSeparator()
 
-            // Footer — right-aligned buttons like AddEventView
+            // Footer adapts to result state
             HStack {
                 Spacer()
 
-                Button(action: onBack) {
-                    Text("Cancel")
-                }
-                .buttonStyle(.action(role: .secondary))
-                .keyboardShortcut(.cancelAction)
+                if case .success = inlineResult {
+                    Button {
+                        withAnimation(skin.resolvedMicroAnimation) {
+                            inlineResult = nil
+                        }
+                    } label: {
+                        Text("Back")
+                    }
+                    .buttonStyle(.action(role: .secondary))
+                    .keyboardShortcut(.cancelAction)
 
-                Button {
-                    Haptics.tap()
-                    planTasks()
-                } label: {
-                    Label("Plan Tasks", systemImage: "wand.and.stars")
+                    Button {
+                        Haptics.impact()
+                        optimizerService.applyRecipeScenario(at: 0, to: reminderService)
+                        onBack()
+                    } label: {
+                        Label("Apply Schedule", systemImage: "checkmark.circle.fill")
+                    }
+                    .buttonStyle(.action(role: .primary))
+                    .keyboardShortcut(.defaultAction)
+                } else {
+                    Button(action: onBack) {
+                        Text("Cancel")
+                    }
+                    .buttonStyle(.action(role: .secondary))
+                    .keyboardShortcut(.cancelAction)
+
+                    Button {
+                        Haptics.tap()
+                        planTasks()
+                    } label: {
+                        HStack(spacing: DS.Spacing.xs) {
+                            if isOptimizing {
+                                ProgressView()
+                                    .controlSize(.small)
+                            } else {
+                                Image(systemName: "wand.and.stars")
+                            }
+                            Text(isOptimizing ? "Planning…" : "Plan Tasks")
+                        }
+                    }
+                    .buttonStyle(.action(role: .primary))
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(validTasks.isEmpty || isOptimizing)
                 }
-                .buttonStyle(.action(role: .primary))
-                .keyboardShortcut(.defaultAction)
-                .disabled(validTasks.isEmpty || isOptimizing)
             }
             .padding(.horizontal, DS.Spacing.lg)
             .frame(height: DS.Size.actionFooterHeight)
@@ -175,31 +225,64 @@ struct QuickAddTasksView: View {
         }
     }
 
-    // MARK: - Picker Legend
+    // MARK: - Inline Results
 
-    private var pickerLegend: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-            legendRow(icon: "clock", label: "Duration", description: "how long the task will take")
-            legendRow(icon: "exclamationmark", label: "Priority", description: "Low / Med / High — affects scheduling order")
-            legendRow(icon: "number", label: "Story Points", description: "effort estimate (Fibonacci: 1, 2, 3, 5, 8, 13)")
-            legendRow(icon: "calendar.badge.clock", label: "Deadline", description: "when the task must be completed")
-        }
-        .padding(.top, DS.Spacing.sm)
-        .padding(.leading, DS.Spacing.md)
-    }
+    @ViewBuilder
+    private func inlineResultSection(_ result: InlineResult) -> some View {
+        switch result {
+        case .success(let scenarios):
+            if let scenario = scenarios.first {
+                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.caption2)
+                            .foregroundStyle(skin.resolvedSuccessColor)
+                        Text("Schedule ready")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(skin.resolvedSuccessColor)
+                    }
 
-    private func legendRow(icon: String, label: String, description: String) -> some View {
-        HStack(spacing: DS.Spacing.xs) {
-            Image(systemName: icon)
-                .font(.caption2)
-                .foregroundStyle(skin.resolvedTextTertiary)
-                .frame(width: 14)
-            Text("\(label)")
-                .font(.caption2.bold())
-                .foregroundStyle(skin.resolvedTextSecondary)
-            Text("— \(description)")
-                .font(.caption2)
-                .foregroundStyle(skin.resolvedTextTertiary)
+                    ForEach(scenario.genes, id: \.eventId) { gene in
+                        HStack(spacing: DS.Spacing.sm) {
+                            Image(systemName: gene.isFocusBlock ? "brain.head.profile" : "calendar")
+                                .font(.system(size: DS.Size.iconSmall))
+                                .foregroundStyle(gene.isFocusBlock ? skin.accentColor : skin.resolvedTextTertiary)
+                                .frame(width: DS.Size.iconMedium)
+
+                            Text(gene.title)
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(skin.resolvedTextPrimary)
+                                .lineLimit(1)
+
+                            Spacer()
+
+                            Text("\(DS.timeFormatter.string(from: gene.startTime))\u{2009}\u{2013}\u{2009}\(DS.timeFormatter.string(from: gene.endTime))")
+                                .font(.caption2.monospacedDigit())
+                                .foregroundStyle(skin.resolvedTextSecondary)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(DS.Spacing.md)
+                .skinPlatter(skin)
+                .skinPlatterDepth(skin)
+            }
+
+        case .error(let message):
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.caption2)
+                    .foregroundStyle(skin.resolvedWarningColor)
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(skin.resolvedTextSecondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(DS.Spacing.md)
+            .background(
+                RoundedRectangle(cornerRadius: DS.Size.cornerRadius)
+                    .fill(skin.resolvedWarningColor.opacity(0.08))
+            )
         }
     }
 
@@ -248,8 +331,31 @@ struct QuickAddTasksView: View {
                 reminderService: reminderService
             )
             isOptimizing = false
-            if result.optimizerResult != nil {
-                onShowResults?()
+            switch result {
+            case .success(let r):
+                withAnimation(skin.resolvedMicroAnimation) {
+                    inlineResult = .success(r.scenarios)
+                }
+                Haptics.impact()
+            case .partialSuccess(let r, let warnings):
+                if r.scenarios.isEmpty {
+                    withAnimation(skin.resolvedMicroAnimation) {
+                        inlineResult = .error(warnings.first ?? "Could not plan tasks")
+                    }
+                } else {
+                    withAnimation(skin.resolvedMicroAnimation) {
+                        inlineResult = .success(r.scenarios)
+                    }
+                    Haptics.impact()
+                }
+            case .noEventsToOptimize:
+                withAnimation(skin.resolvedMicroAnimation) {
+                    inlineResult = .error("No tasks to plan")
+                }
+            case .infeasible(let reason, _):
+                withAnimation(skin.resolvedMicroAnimation) {
+                    inlineResult = .error(reason)
+                }
             }
         }
     }
@@ -325,26 +431,6 @@ private struct TaskRowCard: View {
             .fixedSize()
             .padding(.leading, DS.Spacing.xs)
             .accessibilityLabel("Priority: \(task.priority.rawValue)")
-
-            // Story points picker
-            Menu {
-                Button("—") { task.storyPoints = nil }
-                ForEach(QuickAddTasksView.fibonacciPoints, id: \.self) { sp in
-                    Button("\(sp) SP") { task.storyPoints = sp }
-                }
-            } label: {
-                Text(task.storyPoints.map { "\($0) SP" } ?? "SP")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(task.storyPoints != nil ? skin.accentColor : skin.resolvedTextTertiary)
-                    .padding(.horizontal, DS.Spacing.sm)
-                    .padding(.vertical, DS.Spacing.xxs)
-                    .background(skin.accentColor.opacity(DS.Opacity.lightFill))
-                    .clipShape(Capsule())
-            }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
-            .padding(.leading, DS.Spacing.xs)
-            .accessibilityLabel("Story points: \(task.storyPoints.map { "\($0)" } ?? "none")")
 
             // Deadline picker
             Menu {

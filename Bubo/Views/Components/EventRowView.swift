@@ -126,7 +126,6 @@ struct EventRowView: View {
             withAnimation(skin.resolvedMicroAnimation) {
                 isHovered = hovering
             }
-            if hovering { Haptics.tap() }
         }
         // HIG: Support keyboard navigation — focusable rows, Enter to open
         .focusable()
