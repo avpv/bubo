@@ -260,7 +260,7 @@ struct EventRowView: View {
                 Text(event.formattedTime)
                     .font(.system(.caption, design: skin.resolvedFontDesign, weight: .bold))
                     .foregroundStyle(skin.resolvedTextPrimary)
-                Text("–")
+                Text("\u{00A0}–\u{00A0}")
                     .font(.system(.caption, design: skin.resolvedFontDesign, weight: .bold))
                     .foregroundStyle(skin.resolvedTextSecondary)
                 Text(event.formattedEndTime)
