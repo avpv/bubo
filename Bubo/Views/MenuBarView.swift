@@ -331,8 +331,8 @@ struct MenuBarView: View {
             WorldClockStripView(settings: settings)
                 .fixedSize(horizontal: false, vertical: true)
 
-            // Color filter — show only when events use at least 2 different colors
-            if usedColorTags.count >= 2 {
+            // Color filter — show when at least one event has a color assigned
+            if !usedColorTags.isEmpty {
                 colorFilterBar
             }
 
