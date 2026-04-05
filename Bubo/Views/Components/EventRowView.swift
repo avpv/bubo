@@ -9,6 +9,9 @@ struct EventRowView: View {
     var onDeleteSeries: ((CalendarEvent) -> Void)? = nil
     var onTap: ((CalendarEvent) -> Void)? = nil
 
+    // Task actions
+    var onCompleteTask: ((CalendarEvent) -> Void)? = nil
+
     // Optimizer context menu actions
     var onFindBetterTime: ((CalendarEvent) -> Void)? = nil
     var onSplitTask: ((CalendarEvent) -> Void)? = nil
@@ -173,6 +176,16 @@ struct EventRowView: View {
 
             if isLocal {
                 Divider()
+
+                // Task actions
+                if event.isTask, event.taskStatus != .done, let onCompleteTask {
+                    Button {
+                        Haptics.impact()
+                        onCompleteTask(event)
+                    } label: {
+                        Label("Complete Task", systemImage: "checkmark.circle.fill")
+                    }
+                }
 
                 // Optimizer actions
                 if let onFindBetterTime {

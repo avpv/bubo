@@ -14,13 +14,18 @@ struct QuickAddTasksView: View {
     @State private var horizon: Horizon = .today
     @State private var isOptimizing = false
     @State private var showResults = false
+    @State private var sequentialOrder = false
 
     struct TaskEntry: Identifiable {
         let id = UUID()
         var title: String = ""
         var minutes: Int = 60
         var priority: TaskPriority = .medium
+        var storyPoints: Int? = nil
+        var deadline: Date? = nil
     }
+
+    static let fibonacciPoints = [1, 2, 3, 5, 8, 13]
 
     enum TaskPriority: String, CaseIterable {
         case low = "Low"
@@ -40,6 +45,15 @@ struct QuickAddTasksView: View {
             case .low: return "arrow.down"
             case .medium: return "minus"
             case .high: return "exclamationmark"
+            }
+        }
+
+        /// Default story points inferred from priority when user doesn't set SP explicitly.
+        var defaultStoryPoints: Int {
+            switch self {
+            case .low: return 2
+            case .medium: return 5
+            case .high: return 8
             }
         }
     }
@@ -74,6 +88,16 @@ struct QuickAddTasksView: View {
                     }
                     .staggeredEntrance(index: 0)
 
+                    // Sequential order toggle
+                    Toggle(isOn: $sequentialOrder) {
+                        Label("Sequential order", systemImage: "arrow.down.line")
+                            .font(.subheadline)
+                    }
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .tint(skin.accentColor)
+                    .staggeredEntrance(index: 1)
+
                     // Tasks section
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                         Text("Tasks")
@@ -83,7 +107,15 @@ struct QuickAddTasksView: View {
 
                         VStack(spacing: 0) {
                             ForEach(Array($tasks.enumerated()), id: \.element.id) { index, $task in
-                                taskRow(task: $task)
+                                HStack(spacing: 0) {
+                                    if sequentialOrder {
+                                        Text("\(index + 1)")
+                                            .font(.caption2.bold().monospacedDigit())
+                                            .foregroundStyle(skin.resolvedTextTertiary)
+                                            .frame(width: 20)
+                                    }
+                                    taskRow(task: $task)
+                                }
                                     .staggeredEntrance(index: index)
                                     .eventScrollTransition()
 
@@ -149,6 +181,8 @@ struct QuickAddTasksView: View {
         VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
             legendRow(icon: "clock", label: "Duration", description: "how long the task will take")
             legendRow(icon: "exclamationmark", label: "Priority", description: "Low / Med / High — affects scheduling order")
+            legendRow(icon: "number", label: "Story Points", description: "effort estimate (Fibonacci: 1, 2, 3, 5, 8, 13)")
+            legendRow(icon: "calendar.badge.clock", label: "Deadline", description: "when the task must be completed")
         }
         .padding(.top, DS.Spacing.sm)
         .padding(.leading, DS.Spacing.md)
@@ -181,12 +215,22 @@ struct QuickAddTasksView: View {
 
     private func planTasks() {
         isOptimizing = true
-        let eventSpecs = validTasks.map { task in
-            EventSpec(
+
+        // Assign stable IDs so dependencies can reference them
+        let taskIds = validTasks.map { _ in UUID().uuidString }
+
+        let eventSpecs = validTasks.enumerated().map { index, task in
+            let sp = task.storyPoints ?? task.priority.defaultStoryPoints
+            let deps: [String] = sequentialOrder && index > 0 ? [taskIds[index - 1]] : []
+            return EventSpec(
+                specId: taskIds[index],
                 title: task.title,
                 minutes: task.minutes,
                 priority: task.priority.value,
-                energy: min(1.0, Double(task.minutes) / 180.0)
+                energy: min(1.0, Double(task.minutes) / 180.0),
+                storyPoints: sp,
+                deadline: task.deadline,
+                dependsOn: deps
             )
         }
 
@@ -282,6 +326,52 @@ private struct TaskRowCard: View {
             .padding(.leading, DS.Spacing.xs)
             .accessibilityLabel("Priority: \(task.priority.rawValue)")
 
+            // Story points picker
+            Menu {
+                Button("—") { task.storyPoints = nil }
+                ForEach(QuickAddTasksView.fibonacciPoints, id: \.self) { sp in
+                    Button("\(sp) SP") { task.storyPoints = sp }
+                }
+            } label: {
+                Text(task.storyPoints.map { "\($0) SP" } ?? "SP")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(task.storyPoints != nil ? skin.accentColor : skin.resolvedTextTertiary)
+                    .padding(.horizontal, DS.Spacing.sm)
+                    .padding(.vertical, DS.Spacing.xxs)
+                    .background(skin.accentColor.opacity(DS.Opacity.lightFill))
+                    .clipShape(Capsule())
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .padding(.leading, DS.Spacing.xs)
+            .accessibilityLabel("Story points: \(task.storyPoints.map { "\($0)" } ?? "none")")
+
+            // Deadline picker
+            Menu {
+                Button("No deadline") { task.deadline = nil }
+                Button("Today") { task.deadline = Calendar.current.startOfDay(for: Date()).addingTimeInterval(86399) }
+                Button("Tomorrow") { task.deadline = Calendar.current.startOfDay(for: Date()).addingTimeInterval(86400 + 86399) }
+                Button("This week") { task.deadline = endOfWeek() }
+                Button("Next week") { task.deadline = endOfWeek()?.addingTimeInterval(7 * 86400) }
+            } label: {
+                Label {
+                    Text(deadlineLabel(task.deadline))
+                        .font(.caption)
+                } icon: {
+                    Image(systemName: "calendar.badge.clock")
+                        .font(.caption)
+                }
+                .foregroundStyle(deadlineColor(task.deadline))
+                .padding(.horizontal, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xxs)
+                .background(skin.accentColor.opacity(DS.Opacity.lightFill))
+                .clipShape(Capsule())
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .padding(.leading, DS.Spacing.xs)
+            .accessibilityLabel("Deadline: \(deadlineLabel(task.deadline))")
+
             // Remove button
             if taskCount > 1 {
                 Button {
@@ -305,5 +395,30 @@ private struct TaskRowCard: View {
         let h = m / 60
         let r = m % 60
         return r == 0 ? "\(h)h" : "\(h)h\(r)m"
+    }
+
+    private func deadlineLabel(_ date: Date?) -> String {
+        guard let date else { return "Due" }
+        let cal = Calendar.current
+        if cal.isDateInToday(date) { return "Today" }
+        if cal.isDateInTomorrow(date) { return "Tomorrow" }
+        let formatter = DateFormatter()
+        formatter.setLocalizedDateFormatFromTemplate("MMMd")
+        return formatter.string(from: date)
+    }
+
+    private func deadlineColor(_ date: Date?) -> Color {
+        guard let date else { return skin.resolvedTextTertiary }
+        if date < Date() { return skin.resolvedDestructiveColor }
+        return skin.accentColor
+    }
+
+    private func endOfWeek() -> Date? {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let weekday = cal.component(.weekday, from: today)
+        let daysUntilSunday = (8 - weekday) % 7
+        return cal.date(byAdding: .day, value: max(1, daysUntilSunday), to: today)?
+            .addingTimeInterval(86399)
     }
 }

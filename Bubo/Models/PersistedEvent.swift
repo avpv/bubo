@@ -19,6 +19,12 @@ final class PersistedLocalEvent {
     var eventTypeRaw: String
     var colorTagRaw: String?
     var context: String?
+    var storyPoints: Int?
+    var isTask: Bool
+    var deadline: Date?
+    var taskStatusRaw: String
+    var completedAt: Date?
+    var dependsOn: [String]
 
     init(from event: CalendarEvent) {
         self.eventId = event.id
@@ -34,13 +40,19 @@ final class PersistedLocalEvent {
         self.eventTypeRaw = event.eventType.rawValue
         self.colorTagRaw = event.colorTag?.rawValue
         self.context = event.context
+        self.storyPoints = event.storyPoints
+        self.isTask = event.isTask
+        self.deadline = event.deadline
+        self.taskStatusRaw = event.taskStatus.rawValue
+        self.completedAt = event.completedAt
+        self.dependsOn = event.dependsOn
     }
 
     func toCalendarEvent() -> CalendarEvent {
         let recurrenceRule: RecurrenceRule? = recurrenceRuleData.flatMap {
             try? JSONDecoder().decode(RecurrenceRule.self, from: $0)
         }
-        return CalendarEvent(
+        var event = CalendarEvent(
             id: eventId,
             title: title,
             startDate: startDate,
@@ -55,6 +67,13 @@ final class PersistedLocalEvent {
             colorTag: colorTagRaw.flatMap { EventColorTag(rawValue: $0) },
             context: context
         )
+        event.storyPoints = storyPoints
+        event.isTask = isTask
+        event.deadline = deadline
+        event.taskStatus = TaskStatus(rawValue: taskStatusRaw) ?? .todo
+        event.completedAt = completedAt
+        event.dependsOn = dependsOn
+        return event
     }
 
     func update(from event: CalendarEvent) {
@@ -70,6 +89,12 @@ final class PersistedLocalEvent {
         self.eventTypeRaw = event.eventType.rawValue
         self.colorTagRaw = event.colorTag?.rawValue
         self.context = event.context
+        self.storyPoints = event.storyPoints
+        self.isTask = event.isTask
+        self.deadline = event.deadline
+        self.taskStatusRaw = event.taskStatus.rawValue
+        self.completedAt = event.completedAt
+        self.dependsOn = event.dependsOn
     }
 }
 
@@ -91,6 +116,12 @@ final class PersistedCachedEvent {
     var eventTypeRaw: String
     var colorTagRaw: String?
     var context: String?
+    var storyPoints: Int?
+    var isTask: Bool
+    var deadline: Date?
+    var taskStatusRaw: String
+    var completedAt: Date?
+    var dependsOn: [String]
     var cachedAt: Date
 
     init(from event: CalendarEvent, cachedAt: Date = Date()) {
@@ -107,6 +138,12 @@ final class PersistedCachedEvent {
         self.eventTypeRaw = event.eventType.rawValue
         self.colorTagRaw = event.colorTag?.rawValue
         self.context = event.context
+        self.storyPoints = event.storyPoints
+        self.isTask = event.isTask
+        self.deadline = event.deadline
+        self.taskStatusRaw = event.taskStatus.rawValue
+        self.completedAt = event.completedAt
+        self.dependsOn = event.dependsOn
         self.cachedAt = cachedAt
     }
 
@@ -114,7 +151,7 @@ final class PersistedCachedEvent {
         let recurrenceRule: RecurrenceRule? = recurrenceRuleData.flatMap {
             try? JSONDecoder().decode(RecurrenceRule.self, from: $0)
         }
-        return CalendarEvent(
+        var event = CalendarEvent(
             id: eventId,
             title: title,
             startDate: startDate,
@@ -129,6 +166,13 @@ final class PersistedCachedEvent {
             colorTag: colorTagRaw.flatMap { EventColorTag(rawValue: $0) },
             context: context
         )
+        event.storyPoints = storyPoints
+        event.isTask = isTask
+        event.deadline = deadline
+        event.taskStatus = TaskStatus(rawValue: taskStatusRaw) ?? .todo
+        event.completedAt = completedAt
+        event.dependsOn = dependsOn
+        return event
     }
 }
 

@@ -205,3 +205,37 @@ struct LunchWindowConstraint: ScheduleConstraint {
         return penalty
     }
 }
+
+// MARK: - Task Dependency Constraint (Hard)
+
+/// Tasks with dependencies must be scheduled after all their prerequisites finish.
+struct TaskDependencyConstraint: ScheduleConstraint {
+    let name = "TaskDependency"
+    let isHard = true
+
+    func penalty(for chromosome: ScheduleChromosome, context: OptimizerContext) -> Double {
+        var totalViolation = 0.0
+
+        for gene in chromosome.genes {
+            guard let event = context.movableEvents.first(where: { $0.id == gene.eventId }),
+                  !event.dependsOn.isEmpty else { continue }
+
+            for depId in event.dependsOn {
+                // Dependency may be in movable genes or in fixed events
+                if let depGene = chromosome.genes.first(where: { $0.eventId == depId }) {
+                    // Movable dependency: this task must start after dependency ends
+                    if gene.startTime < depGene.endTime {
+                        totalViolation += depGene.endTime.timeIntervalSince(gene.startTime) / 60
+                    }
+                } else if let depFixed = context.fixedEvents.first(where: { $0.id == depId }) {
+                    // Fixed dependency: this task must start after fixed event ends
+                    if gene.startTime < depFixed.endDate {
+                        totalViolation += depFixed.endDate.timeIntervalSince(gene.startTime) / 60
+                    }
+                }
+                // If dependency not found in schedule, skip (already completed or external)
+            }
+        }
+        return totalViolation
+    }
+}

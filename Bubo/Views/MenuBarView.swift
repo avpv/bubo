@@ -515,6 +515,13 @@ struct MenuBarView: View {
                             onTap: { event in
                                 navigation = .detail(event)
                             },
+                            onCompleteTask: { event in
+                                var completed = event
+                                completed.taskStatus = .done
+                                completed.completedAt = Date()
+                                reminderService.updateLocalEvent(completed)
+                                toastState.showSuccess("Task completed", icon: "checkmark.circle.fill")
+                            },
                             onFindBetterTime: { event in
                                 // Navigate to optimizer with a whatIf recipe for this event
                                 optimizerService.activeRecipe = ScheduleRecipe(

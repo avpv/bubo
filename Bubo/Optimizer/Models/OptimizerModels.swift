@@ -16,6 +16,8 @@ struct OptimizableEvent: Identifiable, Codable, Hashable, Sendable {
     let isFocusBlock: Bool
     let pomodoroConfig: PomodoroConfig?
     let earliestStart: Date?        // don't schedule before this time
+    let storyPoints: Int?           // effort estimate (1, 2, 3, 5, 8, 13)
+    let dependsOn: [String]         // IDs of tasks that must finish first
 
     init(
         id: String = UUID().uuidString,
@@ -29,7 +31,9 @@ struct OptimizableEvent: Identifiable, Codable, Hashable, Sendable {
         preferredHourRange: ClosedRange<Int>? = nil,
         isFocusBlock: Bool = false,
         pomodoroConfig: PomodoroConfig? = nil,
-        earliestStart: Date? = nil
+        earliestStart: Date? = nil,
+        storyPoints: Int? = nil,
+        dependsOn: [String] = []
     ) {
         self.id = id
         self.title = title
@@ -43,6 +47,8 @@ struct OptimizableEvent: Identifiable, Codable, Hashable, Sendable {
         self.isFocusBlock = isFocusBlock
         self.pomodoroConfig = pomodoroConfig
         self.earliestStart = earliestStart
+        self.storyPoints = storyPoints
+        self.dependsOn = dependsOn
     }
 }
 
@@ -70,8 +76,31 @@ struct ScheduleGene: Codable, Hashable, Sendable {
     let energyCost: Double
     let priority: Double
     let isFocusBlock: Bool
+    let storyPoints: Int?
 
     var endTime: Date { startTime.addingTimeInterval(duration) }
+
+    init(
+        eventId: String,
+        title: String,
+        startTime: Date,
+        duration: TimeInterval,
+        context: String?,
+        energyCost: Double,
+        priority: Double,
+        isFocusBlock: Bool,
+        storyPoints: Int? = nil
+    ) {
+        self.eventId = eventId
+        self.title = title
+        self.startTime = startTime
+        self.duration = duration
+        self.context = context
+        self.energyCost = energyCost
+        self.priority = priority
+        self.isFocusBlock = isFocusBlock
+        self.storyPoints = storyPoints
+    }
 
     /// Create a copy with a new start time (preserves all other fields).
     func withStartTime(_ newStart: Date) -> ScheduleGene {
@@ -83,7 +112,8 @@ struct ScheduleGene: Codable, Hashable, Sendable {
             context: context,
             energyCost: energyCost,
             priority: priority,
-            isFocusBlock: isFocusBlock
+            isFocusBlock: isFocusBlock,
+            storyPoints: storyPoints
         )
     }
 }
@@ -253,6 +283,8 @@ struct ScheduleScenario: Identifiable, Sendable {
                 eventType: .standard
             )
             event.isMovable = true
+            event.isTask = gene.storyPoints != nil
+            event.storyPoints = gene.storyPoints
             return event
         }
     }

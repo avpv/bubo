@@ -96,6 +96,13 @@ enum EventType: String, Codable, Hashable, Sendable {
     case pomodoro
 }
 
+/// Tracks the lifecycle of a task.
+enum TaskStatus: String, Codable, Hashable, Sendable, CaseIterable {
+    case todo
+    case inProgress
+    case done
+}
+
 struct CalendarEvent: Identifiable, Codable, Hashable, Sendable {
     let id: String
     let title: String
@@ -115,6 +122,20 @@ struct CalendarEvent: Identifiable, Codable, Hashable, Sendable {
     /// Optional project/category tag for optimizer context grouping.
     /// When set, takes priority over colorTag and calendarName for context resolution.
     var context: String?
+    /// Optional story-point estimate for the task (e.g. 1, 2, 3, 5, 8, 13).
+    var storyPoints: Int?
+
+    /// Whether this item is a task (as opposed to a calendar event/meeting).
+    /// Tasks support story points and are optimized differently.
+    var isTask: Bool = false
+    /// Task deadline — the date by which this task must be completed.
+    var deadline: Date?
+    /// Task status — tracks lifecycle from creation to completion.
+    var taskStatus: TaskStatus = .todo
+    /// When the task was marked as done.
+    var completedAt: Date?
+    /// IDs of tasks that must be completed before this one can start.
+    var dependsOn: [String] = []
 
     /// Whether the optimizer is allowed to move this event to a different time slot.
     /// Defaults to `false` for events synced from external calendars (apple_ prefix).

@@ -37,7 +37,6 @@ struct ScheduleRecipe: Codable, Identifiable, Hashable {
         case "projects":  return 6
         case "adapt":     return 7
         case "workouts":  return 8
-        case "advanced":  return 9
         default:          return 0
         }
     }
@@ -212,6 +211,7 @@ struct ScheduleRecipe: Codable, Identifiable, Hashable {
 
 /// Specification for creating synthetic events at execution time.
 struct EventSpec: Codable, Hashable {
+    var specId: String = UUID().uuidString
     var title: String = "Event"
     var minutes: Int = 60
     var count: Int = 1
@@ -244,9 +244,19 @@ struct EventSpec: Codable, Hashable {
     /// Example: "in 5 minutes" → startOffsetMinutes = 5
     var startOffsetMinutes: Int? = nil
 
+    /// Optional story-point estimate (e.g. 1, 2, 3, 5, 8, 13).
+    var storyPoints: Int? = nil
+
+    /// Task deadline — must be completed by this date.
+    var deadline: Date? = nil
+
+    /// IDs of EventSpecs that must be scheduled before this one.
+    var dependsOn: [String] = []
+
     /// Custom decoder that tolerates missing keys by falling back to defaults.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        specId = (try? c.decode(String.self, forKey: .specId)) ?? UUID().uuidString
         title = (try? c.decode(String.self, forKey: .title)) ?? "Event"
         minutes = (try? c.decode(Int.self, forKey: .minutes)) ?? 60
         count = (try? c.decode(Int.self, forKey: .count)) ?? 1
@@ -261,9 +271,13 @@ struct EventSpec: Codable, Hashable {
         chainGap = try? c.decode(Int.self, forKey: .chainGap)
         segments = try? c.decode([EventSegment].self, forKey: .segments)
         startOffsetMinutes = try? c.decode(Int.self, forKey: .startOffsetMinutes)
+        storyPoints = try? c.decode(Int.self, forKey: .storyPoints)
+        deadline = try? c.decode(Date.self, forKey: .deadline)
+        dependsOn = (try? c.decode([String].self, forKey: .dependsOn)) ?? []
     }
 
     init(
+        specId: String = UUID().uuidString,
         title: String = "Event",
         minutes: Int = 60,
         count: Int = 1,
@@ -277,8 +291,12 @@ struct EventSpec: Codable, Hashable {
         creation: CreationMode = .fixed,
         chainGap: Int? = nil,
         segments: [EventSegment]? = nil,
-        startOffsetMinutes: Int? = nil
+        startOffsetMinutes: Int? = nil,
+        storyPoints: Int? = nil,
+        deadline: Date? = nil,
+        dependsOn: [String] = []
     ) {
+        self.specId = specId
         self.title = title
         self.minutes = minutes
         self.count = count
@@ -293,6 +311,9 @@ struct EventSpec: Codable, Hashable {
         self.chainGap = chainGap
         self.segments = segments
         self.startOffsetMinutes = startOffsetMinutes
+        self.storyPoints = storyPoints
+        self.deadline = deadline
+        self.dependsOn = dependsOn
     }
 }
 

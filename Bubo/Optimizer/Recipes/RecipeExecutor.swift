@@ -151,6 +151,7 @@ struct RecipeExecutor {
 
             case .fillGaps:
                 let gaps = findFreeGaps()
+                let effectiveEnergy = Self.adjustedEnergy(base: spec.energy, storyPoints: spec.storyPoints)
                 return gaps
                     .filter { $0.duration >= 1800 } // at least 30 min
                     .map { gap in
@@ -159,10 +160,11 @@ struct RecipeExecutor {
                             duration: gap.duration,
                             priority: spec.priority,
                             context: spec.context,
-                            energyCost: spec.energy,
+                            energyCost: effectiveEnergy,
                             preferredHourRange: spec.period?.hourRange,
                             isFocusBlock: spec.focus,
-                            pomodoroConfig: spec.pomodoro?.config
+                            pomodoroConfig: spec.pomodoro?.config,
+                            storyPoints: spec.storyPoints
                         )
                     }
 
@@ -174,14 +176,16 @@ struct RecipeExecutor {
                 let originalMinutes = Int(original.duration / 60)
                 let partMinutes = max(5, min(originalMinutes, originalMinutes / max(1, spec.count)))
                 let actualCount = max(1, originalMinutes / max(1, partMinutes))
+                let effectiveEnergy = Self.adjustedEnergy(base: spec.energy, storyPoints: spec.storyPoints)
                 return (0..<actualCount).map { i in
                     OptimizableEvent(
                         title: "\(original.title) (\(i + 1)/\(actualCount))",
                         duration: TimeInterval(partMinutes * 60),
                         priority: spec.priority,
                         context: original.title,
-                        energyCost: spec.energy,
-                        isFocusBlock: spec.focus
+                        energyCost: effectiveEnergy,
+                        isFocusBlock: spec.focus,
+                        storyPoints: spec.storyPoints
                     )
                 }
             }
@@ -192,20 +196,37 @@ struct RecipeExecutor {
         let earliest: Date? = spec.startOffsetMinutes.map {
             Date().addingTimeInterval(TimeInterval($0 * 60))
         }
+        let effectiveEnergy = Self.adjustedEnergy(base: spec.energy, storyPoints: spec.storyPoints)
         return (0..<spec.count).map { i in
             OptimizableEvent(
+                id: spec.count > 1 ? "\(spec.specId)_\(i)" : spec.specId,
                 title: spec.count > 1 ? "\(spec.title) \(i + 1)" : spec.title,
                 duration: TimeInterval(spec.minutes * 60),
+                deadline: spec.deadline,
                 priority: spec.priority,
                 context: spec.context,
-                energyCost: spec.energy,
+                energyCost: effectiveEnergy,
                 requiredParticipants: spec.participants,
                 preferredHourRange: spec.period?.hourRange,
                 isFocusBlock: spec.focus,
                 pomodoroConfig: spec.pomodoro?.config,
-                earliestStart: earliest
+                earliestStart: earliest,
+                storyPoints: spec.storyPoints,
+                dependsOn: spec.dependsOn
             )
         }
+    }
+
+    /// Adjust energy cost based on story points.
+    /// Higher SP → higher cognitive load → schedule at peak energy.
+    /// Maps SP 1…13 to a 0.3…0.95 energy range, blended with the base energy.
+    static func adjustedEnergy(base: Double, storyPoints: Int?) -> Double {
+        guard let sp = storyPoints, sp > 0 else { return base }
+        // Normalize SP on a log scale: ln(1)=0 → ln(13)≈2.56
+        let normalized = min(1.0, log(Double(sp)) / log(13.0))
+        let spEnergy = 0.3 + normalized * 0.65  // 0.3…0.95
+        // Blend: SP signal (60%) + original energy (40%)
+        return min(1.0, spEnergy * 0.6 + base * 0.4)
     }
 
     // MARK: - Apply Event Rules
