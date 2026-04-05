@@ -11,6 +11,7 @@ struct SettingsView: View {
 
     enum SettingsPane: String, CaseIterable, Hashable, Identifiable {
         case general = "General"
+        case appearance = "Appearance"
         case calendars = "Calendars"
         case reminders = "Reminders"
         case worldClock = "World Clock"
@@ -21,6 +22,7 @@ struct SettingsView: View {
         var icon: String {
             switch self {
             case .general: "gear"
+            case .appearance: "paintbrush"
             case .calendars: "calendar"
             case .reminders: "bell"
             case .worldClock: "globe"
@@ -45,6 +47,8 @@ struct SettingsView: View {
                 switch selectedPane {
                 case .general:
                     GeneralTabView()
+                case .appearance:
+                    AppearanceTabView()
                 case .calendars:
                     CalendarsTabView()
                 case .reminders:
