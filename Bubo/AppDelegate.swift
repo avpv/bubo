@@ -13,7 +13,7 @@ private class KeyablePanel: NSPanel {
 
 @MainActor
 class AppDelegate: NSObject, NSApplicationDelegate {
-    private var alertWindow: NSWindow?
+    private var alertWindows: [NSWindow] = []
     private var alertObserver: Any?
     private var autoDismissTask: Task<Void, Never>?
     private var pinnedTimerWindow: NSPanel?
@@ -92,10 +92,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func dismissAlert() {
         autoDismissTask?.cancel()
         autoDismissTask = nil
-        guard let window = alertWindow else { return }
-        alertWindow = nil
-        window.orderOut(nil)
-        window.close()
+        guard !alertWindows.isEmpty else { return }
+        let windows = alertWindows
+        alertWindows = []
+        for window in windows {
+            window.orderOut(nil)
+            window.close()
+        }
     }
 
     // MARK: - Pinned Timer Window
@@ -171,49 +174,59 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func showAlert(event: CalendarEvent, minutesBefore: Int) {
         dismissAlert()
 
-        guard let screen = NSScreen.main else { return }
+        let screens = NSScreen.screens
+        guard !screens.isEmpty else { return }
 
         let settings = ReminderSettings.load()
         let activeSkin = settings.selectedSkin
 
-        let alertView = FullScreenAlertView(
-            event: event,
-            minutesBefore: minutesBefore,
-            onDismiss: { [weak self] in
-                self?.dismissAlert()
-            },
-            onSnooze: { [weak self] minutes in
-                self?.dismissAlert()
-                NotificationCenter.default.post(
-                    name: .snoozeReminder,
-                    object: nil,
-                    userInfo: ["event": event, "minutes": minutes]
-                )
+        for (index, screen) in screens.enumerated() {
+            let isMainScreen = index == 0
+
+            let alertView = FullScreenAlertView(
+                event: event,
+                minutesBefore: minutesBefore,
+                onDismiss: { [weak self] in
+                    self?.dismissAlert()
+                },
+                onSnooze: { [weak self] minutes in
+                    self?.dismissAlert()
+                    NotificationCenter.default.post(
+                        name: .snoozeReminder,
+                        object: nil,
+                        userInfo: ["event": event, "minutes": minutes]
+                    )
+                }
+            )
+            .environment(\.activeSkin, activeSkin)
+            .skinTinted(activeSkin)
+
+            let hostingView = NSHostingView(rootView: alertView)
+
+            let window = KeyableWindow(
+                contentRect: screen.frame,
+                styleMask: [.borderless],
+                backing: .buffered,
+                defer: false
+            )
+            window.isReleasedWhenClosed = false
+            window.contentView = hostingView
+            window.level = .screenSaver
+            window.isOpaque = false
+            window.backgroundColor = .clear
+            window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+            window.setFrame(screen.frame, display: true)
+
+            if isMainScreen {
+                window.makeKeyAndOrderFront(nil)
+            } else {
+                window.orderFront(nil)
             }
-        )
-        .environment(\.activeSkin, activeSkin)
-        .skinTinted(activeSkin)
 
-        let hostingView = NSHostingView(rootView: alertView)
-
-        let window = KeyableWindow(
-            contentRect: screen.frame,
-            styleMask: [.borderless],
-            backing: .buffered,
-            defer: false
-        )
-        window.isReleasedWhenClosed = false
-        window.contentView = hostingView
-        // HIG: Apps must not block access to the system. Use modalPanel
-        // instead of screenSaver to remain prominent without hijacking the screen.
-        window.level = .modalPanel
-        window.isOpaque = false
-        window.backgroundColor = .clear
-        window.setFrame(screen.frame, display: true)
-        window.makeKeyAndOrderFront(nil)
+            alertWindows.append(window)
+        }
 
         NSApplication.shared.activate()
-        alertWindow = window
 
         // Auto-dismiss when the event starts (countdown reaches 0)
         autoDismissTask?.cancel()
