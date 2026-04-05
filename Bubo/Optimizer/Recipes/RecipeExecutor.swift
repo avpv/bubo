@@ -220,7 +220,7 @@ struct RecipeExecutor {
     /// Adjust energy cost based on story points.
     /// Higher SP → higher cognitive load → schedule at peak energy.
     /// Maps SP 1…13 to a 0.3…0.95 energy range, blended with the base energy.
-    static func adjustedEnergy(base: Double, storyPoints: Int?) -> Double {
+    nonisolated static func adjustedEnergy(base: Double, storyPoints: Int?) -> Double {
         guard let sp = storyPoints, sp > 0 else { return base }
         // Normalize SP on a log scale: ln(1)=0 → ln(13)≈2.56
         let normalized = min(1.0, log(Double(sp)) / log(13.0))
