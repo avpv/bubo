@@ -287,7 +287,7 @@ struct MenuBarView: View {
         ScrollViewReader { scrollProxy in
         VStack(alignment: .leading, spacing: 0) {
             PopoverHeader(
-                title: "Bubo",
+                title: dayProgressTitle,
                 trailing: AnyView(
                     HStack(spacing: DS.Spacing.sm) {
                         statusIndicators
@@ -403,6 +403,56 @@ struct MenuBarView: View {
         .animation(skin.resolvedMicroAnimation, value: reminderService.isSyncing)
     }
 
+    /// Dynamic header title showing today's progress (e.g. "3\u{00A0}of\u{00A0}7 done").
+    private var dayProgressTitle: String {
+        let cal = Calendar.current
+        let now = Date()
+        guard let todayGroup = reminderService.eventsByDay.first(where: { cal.isDateInToday($0.date) }) else {
+            return "Bubo"
+        }
+        let todayEvents = todayGroup.events.filter { !reminderService.disintegratingEventIDs.contains($0.id) }
+        let total = todayEvents.count
+        guard total > 0 else { return "Bubo" }
+        let done = todayEvents.filter { $0.endDate <= now }.count
+        if done == 0 { return "\(total)\u{00A0}events today" }
+        if done == total { return "All\u{00A0}\(total) done" }
+        return "\(done)\u{00A0}of\u{00A0}\(total) done"
+    }
+
+    /// Context-aware subtitle for the empty state.
+    private var emptyStateSubtitle: String {
+        let cal = Calendar.current
+        let now = Date()
+
+        // Check if there are any future events across all days (including ones currently filtered out by the time window)
+        let allUpcoming = reminderService.allEvents
+            .filter { $0.startDate > now }
+            .sorted { $0.startDate < $1.startDate }
+
+        if let next = allUpcoming.first {
+            let interval = next.startDate.timeIntervalSince(now)
+            let hours = Int(interval / 3600)
+            let minutes = Int(interval / 60) % 60
+
+            if cal.isDateInToday(next.startDate) {
+                if hours > 0 {
+                    return "Next: \(next.title) in\u{00A0}\(hours)h\u{00A0}\(minutes)m"
+                }
+                return "Next: \(next.title) in\u{00A0}\(minutes)m"
+            } else if cal.isDateInTomorrow(next.startDate) {
+                let fmt = DateFormatter()
+                fmt.dateFormat = "H:mm"
+                return "Tomorrow: \(next.title) at\u{00A0}\(fmt.string(from: next.startDate))"
+            } else {
+                let fmt = DateFormatter()
+                fmt.setLocalizedDateFormatFromTemplate("EEE")
+                return "Next: \(next.title) on\u{00A0}\(fmt.string(from: next.startDate))"
+            }
+        }
+
+        return "No upcoming events"
+    }
+
     private var emptyState: some View {
         VStack(spacing: DS.EmptyState.spacing * 1.5) {
             ZStack {
@@ -432,9 +482,11 @@ struct MenuBarView: View {
                     .font(.headline)
                     .fontWeight(skin.resolvedHeadlineFontWeight)
                     .foregroundStyle(skin.resolvedTextPrimary)
-                Text("No upcoming events")
+                Text(emptyStateSubtitle)
                     .font(.subheadline)
                     .foregroundStyle(skin.resolvedTextSecondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
             }
 
             Button {

@@ -77,13 +77,13 @@ struct AgentInputView: View {
                     .foregroundStyle(skin.resolvedTextPrimary)
             }
 
-            Text("Add your DeepSeek API key in Settings → AI Assistant → Own API key to enable this feature.")
+            Text("Add your DeepSeek API key in Settings\u{00A0}→ Assistant\u{00A0}→ Own API key to enable this feature.")
                 .font(.caption)
                 .foregroundStyle(skin.resolvedTextSecondary)
 
             Button("Open Settings") {
                 Haptics.tap()
-                SettingsViewModel.pendingPane = .ai
+                SettingsViewModel.pendingPane = .assistant
                 openSettings()
             }
             .buttonStyle(.action(role: .primary, size: .compact))
