@@ -255,7 +255,7 @@ struct AgentInputView: View {
     static let examples: [String] = [
         "2 hours of deep work tomorrow morning",
         "Fit 5 tasks into my week",
-        "30 min yoga before lunch",
+        "30\u{00A0}min yoga before lunch",
         "3 pomodoro sessions for a report",
         "Batch my meetings in the afternoon",
     ]

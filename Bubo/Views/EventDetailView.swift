@@ -339,10 +339,10 @@ struct EventDetailView: View {
                 let workMin = Int(event.endDate.timeIntervalSince(event.startDate) / 60)
                 let breakMin = max(rule.interval - workMin, 0)
                 FlowLayout(spacing: DS.Spacing.xs) {
-                    pomodoroBadge("\(workMin) min work", icon: "brain.head.profile", color: skinAccent)
-                    pomodoroBadge("\(breakMin) min break", icon: "cup.and.saucer", color: skin.resolvedSuccessColor)
+                    pomodoroBadge("\(workMin)\u{00A0}min work", icon: "brain.head.profile", color: skinAccent)
+                    pomodoroBadge("\(breakMin)\u{00A0}min break", icon: "cup.and.saucer", color: skin.resolvedSuccessColor)
                     if rule.pomodoroLongBreak > 0 {
-                        pomodoroBadge("\(rule.pomodoroLongBreak) min long break", icon: "moon.zzz", color: DS.Colors.info)
+                        pomodoroBadge("\(rule.pomodoroLongBreak)\u{00A0}min long break", icon: "moon.zzz", color: DS.Colors.info)
                     }
                 }
             }

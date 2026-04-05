@@ -121,7 +121,6 @@ struct TimerScreenView: View {
                             .rotationEffect(.degrees(isPinned ? 0 : 45))
                     }
                     .buttonStyle(.borderless)
-                    .accessibilityLabel(isPinned ? "Unpin timer window" : "Pin timer window")
                     .help(isPinned ? "Unpin window" : "Pin on top")
                     .accessibilityLabel(isPinned ? "Unpin timer window" : "Pin timer window on top")
                 )
