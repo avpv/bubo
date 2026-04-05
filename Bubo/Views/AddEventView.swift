@@ -683,7 +683,7 @@ struct AddEventView: View {
             VStack(alignment: .leading, spacing: DS.Spacing.md) {
                 Grid(alignment: .leading, horizontalSpacing: DS.Spacing.md, verticalSpacing: DS.Spacing.sm) {
                     GridRow {
-                        Label("Work: \(pomodoroWork) min", systemImage: "brain.head.profile")
+                        Label("Work: \(pomodoroWork)\u{00A0}min", systemImage: "brain.head.profile")
                             .foregroundStyle(skin.resolvedTextPrimary)
                             .gridColumnAlignment(.leading)
                         Stepper("Work duration", value: $pomodoroWork, in: 1...90)
@@ -699,7 +699,7 @@ struct AddEventView: View {
 
                     if pomodoroRounds > 1 {
                         GridRow {
-                            Label("Break: \(pomodoroBreak) min", systemImage: "cup.and.saucer")
+                            Label("Break: \(pomodoroBreak)\u{00A0}min", systemImage: "cup.and.saucer")
                                 .foregroundStyle(skin.resolvedTextPrimary)
                             Stepper("Break duration", value: $pomodoroBreak, in: 1...30)
                                 .labelsHidden()
@@ -715,7 +715,7 @@ struct AddEventView: View {
 
                         if pomodoroLongBreakEnabled {
                             GridRow {
-                                Label("Duration: \(pomodoroLongBreak) min", systemImage: "moon.zzz")
+                                Label("Duration: \(pomodoroLongBreak)\u{00A0}min", systemImage: "moon.zzz")
                                     .foregroundStyle(skin.resolvedTextPrimary)
                                     .padding(.leading, DS.Spacing.lg)
                                 Stepper("Long break duration", value: $pomodoroLongBreak, in: 5...60, step: 5)
@@ -854,7 +854,7 @@ struct AddEventView: View {
                         .frame(width: segWidth)
                         .overlay {
                             if segWidth > 30 {
-                                Text("\(segment.minutes)m")
+                                Text("\(segment.minutes)\u{00A0}m")
                                     .font(.system(.caption2, design: skin.resolvedFontDesign, weight: .semibold))
                                     .foregroundStyle(DS.contrastingForeground(for: color))
                             }
@@ -865,8 +865,8 @@ struct AddEventView: View {
             .frame(height: DS.Size.controlHeight)
             .accessibilityElement()
             .accessibilityLabel(
-                "Pomodoro timeline: \(pomodoroRounds) rounds of \(pomodoroWork) min work and \(pomodoroBreak) min break"
-                + (pomodoroLongBreakEnabled ? ", then \(pomodoroLongBreak) min long break" : "")
+                "Pomodoro timeline: \(pomodoroRounds) rounds of \(pomodoroWork)\u{00A0}min work and \(pomodoroBreak)\u{00A0}min break"
+                + (pomodoroLongBreakEnabled ? ", then \(pomodoroLongBreak)\u{00A0}min long break" : "")
             )
 
             // Session schedule
@@ -943,7 +943,7 @@ struct AddEventView: View {
                 Text("\(DS.timeFormatter.string(from: start)) – \(DS.timeFormatter.string(from: end))")
                     .font(.system(.caption, design: .monospaced, weight: .medium))
                     .foregroundStyle(skin.resolvedTextPrimary)
-                Text("\(label) · \(segment.minutes) min")
+                Text("\(label) · \(segment.minutes)\u{00A0}min")
                     .font(.caption2)
                     .foregroundStyle(skin.resolvedTextSecondary)
             }

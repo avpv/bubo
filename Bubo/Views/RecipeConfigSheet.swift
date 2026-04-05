@@ -270,8 +270,8 @@ struct RecipeConfigSheet: View {
                 scheduleTimeline(snapshot)
 
                 HStack(spacing: DS.Spacing.md) {
-                    Label("\(freeTotal)m free", systemImage: "clock")
-                    Label("longest gap \(longestGap)m", systemImage: "arrow.left.and.right")
+                    Label("\(freeTotal)\u{00A0}m free", systemImage: "clock")
+                    Label("longest gap \(longestGap)\u{00A0}m", systemImage: "arrow.left.and.right")
                 }
                 .font(.caption2)
                 .foregroundStyle(skin.resolvedTextSecondary)
@@ -309,7 +309,7 @@ struct RecipeConfigSheet: View {
                         .overlay(
                             Group {
                                 if fraction * geo.size.width > 36 {
-                                    Text("\(segment.minutes)m")
+                                    Text("\(segment.minutes)\u{00A0}m")
                                         .font(.caption2.weight(.semibold))
                                         .foregroundStyle(skin.resolvedTextPrimary.opacity(0.9))
                                 }
@@ -548,7 +548,7 @@ struct RecipeConfigSheet: View {
         }
         if raw.contains("but only") && raw.contains("min") {
             let available = extractMinutes(from: raw, after: "only")
-            let detail = available.map { " (\($0)m free)" } ?? ""
+            let detail = available.map { " (\($0)\u{00A0}m free)" } ?? ""
             return "Not enough free time in schedule\(detail). \(durationHint)"
         }
         return raw
@@ -592,7 +592,7 @@ struct RecipeConfigSheet: View {
                             .overlay(
                                 Group {
                                     if segment.isFree && width > 30 {
-                                        Text("\(Int(segment.duration / 60))m")
+                                        Text("\(Int(segment.duration / 60))\u{00A0}m")
                                             .font(.caption2.weight(.semibold))
                                             .foregroundStyle(skin.resolvedTextPrimary.opacity(0.9))
                                     }
@@ -611,7 +611,7 @@ struct RecipeConfigSheet: View {
                     .foregroundStyle(skin.resolvedTextTertiary)
                 Spacer()
                 let freeTotal = Int(snapshot.freeGaps.reduce(0.0) { $0 + $1.duration } / 60)
-                Text("\(freeTotal)m free")
+                Text("\(freeTotal)\u{00A0}m free")
                     .font(.caption2.weight(.medium))
                     .foregroundStyle(skin.resolvedTextSecondary)
                 Spacer()
@@ -953,11 +953,11 @@ struct RecipeConfigSheet: View {
             options: options,
             selection: binding,
             labelProvider: { minutes in
-                if minutes < 60 { return "\(minutes)m" }
+                if minutes < 60 { return "\(minutes)\u{00A0}m" }
                 let hours = minutes / 60
                 let rem = minutes % 60
-                if rem == 0 { return "\(hours)h" }
-                return "\(hours)h\(rem)m"
+                if rem == 0 { return "\(hours)\u{00A0}h" }
+                return "\(hours)\u{00A0}h\u{00A0}\(rem)\u{00A0}m"
             }
         )
     }
@@ -1151,7 +1151,7 @@ struct RecipeConfigSheet: View {
 
                 Spacer()
 
-                Text("\(Int(event.duration / 60))m")
+                Text("\(Int(event.duration / 60))\u{00A0}m")
                     .font(.caption2)
                     .foregroundStyle(skin.resolvedTextTertiary)
             }
@@ -1187,11 +1187,11 @@ struct RecipeConfigSheet: View {
     }
 
     private func formatDuration(_ minutes: Int) -> String {
-        if minutes < 60 { return "\(minutes)m" }
+        if minutes < 60 { return "\(minutes)\u{00A0}m" }
         let h = minutes / 60
         let m = minutes % 60
-        if m == 0 { return "\(h)h" }
-        return "\(h)h \(m)m"
+        if m == 0 { return "\(h)\u{00A0}h" }
+        return "\(h)\u{00A0}h \(m)\u{00A0}m"
     }
 
     // MARK: - Default Values

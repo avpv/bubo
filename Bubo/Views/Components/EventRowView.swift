@@ -375,6 +375,7 @@ struct EventRowView: View {
                     .menuStyle(.borderlessButton)
                     .fixedSize()
                     .help("Delete recurring event")
+                    .accessibilityLabel("Delete recurring event")
                 } else {
                     Button {
                         Haptics.impact()
@@ -403,32 +404,32 @@ struct EventRowView: View {
         let secondsUntilStart = Int(event.startDate.timeIntervalSince(now))
         if secondsUntilStart > 0 {
             // Event hasn't started yet
-            if secondsUntilStart < 60 { return "in \(secondsUntilStart)s" }
+            if secondsUntilStart < 60 { return "in\u{00A0}\(secondsUntilStart)\u{00A0}s" }
             let minutes = secondsUntilStart / 60
-            if minutes < 60 { return "in \(minutes)m" }
+            if minutes < 60 { return "in\u{00A0}\(minutes)\u{00A0}m" }
             let hours = minutes / 60
             if hours >= 24 {
                 let days = hours / 24
                 let remainingHours = hours % 24
-                if remainingHours == 0 { return "in \(days)d" }
-                return "in \(days)d \(remainingHours)h"
+                if remainingHours == 0 { return "in\u{00A0}\(days)\u{00A0}d" }
+                return "in\u{00A0}\(days)\u{00A0}d\u{00A0}\(remainingHours)\u{00A0}h"
             }
             let mins = minutes % 60
-            if mins == 0 { return "in \(hours)h" }
-            return "in \(hours)h \(mins)m"
+            if mins == 0 { return "in\u{00A0}\(hours)\u{00A0}h" }
+            return "in\u{00A0}\(hours)\u{00A0}h\u{00A0}\(mins)\u{00A0}m"
         }
         // Event has started or starting now
         let secondsUntilEnd = Int(event.endDate.timeIntervalSince(now))
         if secondsUntilEnd > 0 {
             if secondsUntilEnd < 60 {
-                return "\(secondsUntilEnd)s left"
+                return "\(secondsUntilEnd)\u{00A0}s left"
             }
             let minutesEnd = secondsUntilEnd / 60
             let hours = minutesEnd / 60
             let mins = minutesEnd % 60
-            if hours == 0 { return "\(mins)m left" }
-            if mins == 0 { return "\(hours)h left" }
-            return "\(hours)h \(mins)m left"
+            if hours == 0 { return "\(mins)\u{00A0}m left" }
+            if mins == 0 { return "\(hours)\u{00A0}h left" }
+            return "\(hours)\u{00A0}h\u{00A0}\(mins)\u{00A0}m left"
         }
         return "now"
     }

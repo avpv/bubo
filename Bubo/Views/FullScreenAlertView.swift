@@ -155,7 +155,7 @@ struct FullScreenAlertView: View {
 
                     // Snooze row — direct buttons, no dropdown
                     HStack(spacing: DS.Spacing.md) {
-                        Text("Snooze")
+                        Text("Snooze for")
                             .font(.system(.callout, design: skin.resolvedFontDesign, weight: .medium))
                             .foregroundStyle(DS.Colors.onOverlay.opacity(DS.Opacity.tertiaryText))
 
@@ -164,7 +164,7 @@ struct FullScreenAlertView: View {
                                 Haptics.tap()
                                 onSnooze(minutes)
                             } label: {
-                                Text("\(minutes) min")
+                                Text("\(minutes)\u{00A0}min")
                                     .font(.system(.callout, design: skin.resolvedFontDesign, weight: skin.resolvedFontWeight))
                                     .foregroundStyle(DS.Colors.onOverlay)
                                     .padding(.horizontal, DS.Spacing.xl)

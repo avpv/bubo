@@ -150,9 +150,12 @@ struct IntentPickerView: View {
                         Image(systemName: "magnifyingglass")
                             .font(.title2)
                             .foregroundStyle(skin.resolvedTextTertiary)
-                        Text("No recipes found")
+                        Text("Nothing matches this search")
                             .font(.subheadline)
                             .foregroundStyle(skin.resolvedTextSecondary)
+                        Text("Try different keywords or ask\u{00A0}AI")
+                            .font(.caption)
+                            .foregroundStyle(skin.resolvedTextTertiary)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, DS.Spacing.xxxl)

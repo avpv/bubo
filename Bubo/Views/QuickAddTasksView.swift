@@ -361,10 +361,10 @@ struct QuickAddTasksView: View {
     }
 
     private func formatMinutes(_ m: Int) -> String {
-        if m < 60 { return "\(m)m" }
+        if m < 60 { return "\(m)\u{00A0}m" }
         let h = m / 60
         let r = m % 60
-        return r == 0 ? "\(h)h" : "\(h)h\(r)m"
+        return r == 0 ? "\(h)\u{00A0}h" : "\(h)\u{00A0}h\u{00A0}\(r)\u{00A0}m"
     }
 }
 
@@ -461,6 +461,7 @@ private struct TaskRowCard: View {
             // Remove button
             if taskCount > 1 {
                 Button {
+                    Haptics.tap()
                     onRemove()
                 } label: {
                     Image(systemName: "xmark")
@@ -477,10 +478,10 @@ private struct TaskRowCard: View {
     }
 
     private func formatMinutes(_ m: Int) -> String {
-        if m < 60 { return "\(m)m" }
+        if m < 60 { return "\(m)\u{00A0}m" }
         let h = m / 60
         let r = m % 60
-        return r == 0 ? "\(h)h" : "\(h)h\(r)m"
+        return r == 0 ? "\(h)\u{00A0}h" : "\(h)\u{00A0}h\u{00A0}\(r)\u{00A0}m"
     }
 
     private func deadlineLabel(_ date: Date?) -> String {

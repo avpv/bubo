@@ -205,9 +205,9 @@ private struct WorldClockPill: View {
         if diffHours == 0 { return "" }
         let sign = diffHours > 0 ? "+" : ""
         if diffHours == diffHours.rounded() {
-            return "\(sign)\(Int(diffHours))h"
+            return "\(sign)\(Int(diffHours))\u{00A0}h"
         }
-        return "\(sign)\(String(format: "%.1f", diffHours))h"
+        return "\(sign)\(String(format: "%.1f", diffHours))\u{00A0}h"
     }
 
     private var isNighttime: Bool {

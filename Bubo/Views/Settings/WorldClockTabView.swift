@@ -61,6 +61,7 @@ struct WorldClockTabView: View {
 
                                         // Reorder buttons
                                         Button {
+                                            Haptics.tap()
                                             withAnimation(DS.Animation.smoothSpring) {
                                                 settings.worldClockCityIDs.swapAt(index, index - 1)
                                             }
@@ -72,8 +73,11 @@ struct WorldClockTabView: View {
                                         .buttonStyle(.plain)
                                         .disabled(index == 0)
                                         .opacity(index == 0 ? 0.3 : 1)
+                                        .accessibilityLabel("Move \(city.city) up")
+                                        .help("Move up")
 
                                         Button {
+                                            Haptics.tap()
                                             withAnimation(DS.Animation.smoothSpring) {
                                                 settings.worldClockCityIDs.swapAt(index, index + 1)
                                             }
@@ -85,8 +89,11 @@ struct WorldClockTabView: View {
                                         .buttonStyle(.plain)
                                         .disabled(index == selectedCities.count - 1)
                                         .opacity(index == selectedCities.count - 1 ? 0.3 : 1)
+                                        .accessibilityLabel("Move \(city.city) down")
+                                        .help("Move down")
 
                                         Button {
+                                            Haptics.tap()
                                             withAnimation(DS.Animation.smoothSpring) {
                                                 settings.worldClockCityIDs.removeAll { $0 == city.id }
                                             }
