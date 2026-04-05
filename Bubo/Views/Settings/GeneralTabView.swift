@@ -244,6 +244,8 @@ struct BackgroundPhotoSection: View {
                     }
                     .buttonStyle(.plain)
                     .padding(DS.Spacing.pillVertical)
+                    .help("Remove photo")
+                    .accessibilityLabel("Remove background photo")
                 }
 
                 // Controls

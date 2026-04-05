@@ -104,7 +104,8 @@ struct IntentPickerView: View {
                         .font(.caption)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Clear")
+                .accessibilityLabel("Clear search")
+                .help("Clear search")
             }
         }
         .padding(.horizontal, DS.Spacing.md)
