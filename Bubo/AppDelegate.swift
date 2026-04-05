@@ -204,11 +204,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
         window.isReleasedWhenClosed = false
         window.contentView = hostingView
-        // HIG: Apps must not block access to the system. Use modalPanel
-        // instead of screenSaver to remain prominent without hijacking the screen.
-        window.level = .modalPanel
+        window.level = .screenSaver
         window.isOpaque = false
         window.backgroundColor = .clear
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.setFrame(screen.frame, display: true)
         window.makeKeyAndOrderFront(nil)
 
