@@ -139,11 +139,24 @@ struct MenuBarView: View {
                     AddEventView(
                         reminderService: reminderService,
                         editingEvent: editing,
-                        onDismiss: { navigation = .list },
+                        onDismiss: {
+                            // Return to detail if we were editing, otherwise list
+                            if let event = editing,
+                               let updated = reminderService.allEvents.first(where: { $0.id == event.id }) {
+                                navigation = .detail(updated)
+                            } else {
+                                navigation = .list
+                            }
+                        },
                         onSave: { isEdit in
-                            navigation = .list
+                            // After saving an edit, return to detail view with updated data
+                            if isEdit, let eventId = editing?.id,
+                               let updated = reminderService.allEvents.first(where: { $0.id == eventId }) {
+                                navigation = .detail(updated)
+                            } else {
+                                navigation = .list
+                            }
                             toastState.showSuccess(isEdit ? "Event updated" : "Event created")
-                            // Notify monitor when editing existing event (time may have changed)
                             if isEdit, let eventId = editing?.id {
                                 notifyRecipeMonitor(.moved(eventId: eventId))
                             }
@@ -327,9 +340,11 @@ struct MenuBarView: View {
                     .frame(maxWidth: .infinity, alignment: .center)
             }
 
-            // World Clock — pinned at top, never compressed
-            WorldClockStripView(settings: settings)
-                .fixedSize(horizontal: false, vertical: true)
+            // World Clock — only show when user has cities configured
+            if !settings.worldClockCityIDs.isEmpty {
+                WorldClockStripView(settings: settings)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             // Color filter — show when at least one event has a color assigned
             if !usedColorTags.isEmpty {

@@ -28,6 +28,7 @@ struct AddEventView: View {
     @State private var selectedColorTag: EventColorTag? = nil
     @State private var contextTag = ""
     @State private var showDiscardConfirmation = false
+    @State private var showMoreOptions = false
 
     // MARK: - Pomodoro state
 
@@ -232,94 +233,115 @@ struct AddEventView: View {
                         }
                     }
 
-                    // Color
-                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                        Text("Color")
-                            .font(.headline)
-                            .foregroundStyle(skin.resolvedTextPrimary)
-                            .accessibilityAddTraits(.isHeader)
-
-                        HStack(spacing: DS.Spacing.xs) {
-                            ForEach(EventColorTag.allCases, id: \.self) { tag in
-                                ColorDotButton(
-                                    tag: tag,
-                                    isActive: selectedColorTag == tag,
-                                    action: {
-                                        Haptics.tap()
-                                        selectedColorTag = selectedColorTag == tag ? nil : tag
-                                    }
-                                )
+                    // More options — collapsed by default for new events
+                    if !isExternal {
+                        Button {
+                            withAnimation(skin.resolvedMicroAnimation) {
+                                showMoreOptions.toggle()
+                            }
+                        } label: {
+                            HStack(spacing: DS.Spacing.xs) {
+                                Text("More options")
+                                    .font(.caption.weight(.medium))
+                                    .foregroundStyle(skinAccent)
+                                Image(systemName: showMoreOptions ? "chevron.up" : "chevron.down")
+                                    .font(.caption2)
+                                    .foregroundStyle(skinAccent)
+                                Spacer()
                             }
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, DS.Spacing.md)
-                        .padding(.vertical, DS.Spacing.sm)
-                        .skinPlatter(skin)
-                        .skinPlatterDepth(skin)
+                        .buttonStyle(.plain)
                     }
-                    .disabled(isExternal)
-                    .opacity(isExternal ? 0.6 : 1.0)
 
-                    // Context (Project / Category)
-                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                        Text("Context")
-                            .font(.headline)
-                            .foregroundStyle(skin.resolvedTextPrimary)
-                            .accessibilityAddTraits(.isHeader)
+                    if showMoreOptions || isExternal {
+                        // Color
+                        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                            Text("Color")
+                                .font(.headline)
+                                .foregroundStyle(skin.resolvedTextPrimary)
+                                .accessibilityAddTraits(.isHeader)
 
-                        TextField("Project or category", text: $contextTag, prompt: Text("e.g. backend, design, personal").foregroundStyle(skin.resolvedTextSecondary))
-                            .textFieldStyle(.plain)
+                            HStack(spacing: DS.Spacing.xs) {
+                                ForEach(EventColorTag.allCases, id: \.self) { tag in
+                                    ColorDotButton(
+                                        tag: tag,
+                                        isActive: selectedColorTag == tag,
+                                        action: {
+                                            Haptics.tap()
+                                            selectedColorTag = selectedColorTag == tag ? nil : tag
+                                        }
+                                    )
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, DS.Spacing.md)
                             .padding(.vertical, DS.Spacing.sm)
                             .skinPlatter(skin)
                             .skinPlatterDepth(skin)
-                    }
-                    .disabled(isExternal)
-                    .opacity(isExternal ? 0.6 : 1.0)
-
-                    // Details
-                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                        Text("Details")
-                            .font(.headline)
-                            .foregroundStyle(skin.resolvedTextPrimary)
-                            .accessibilityAddTraits(.isHeader)
-                        
-                        VStack(spacing: DS.Spacing.md) {
-                            TextField("Location", text: $location, prompt: Text("Zoom link or room 302").foregroundStyle(skin.resolvedTextSecondary))
-                                .textFieldStyle(.plain)
-                                .focused($isLocationFocused)
-
-                            SkinSeparator()
-
-                            HStack(alignment: .top, spacing: DS.Spacing.sm) {
-                                FormattableTextView(text: $description, prompt: "Add notes, agenda, or attachments", promptStyle: skin.resolvedTextSecondary)
-                                    .frame(minHeight: 60, maxHeight: 160)
-
-                                EmojiPickerButton(text: $description)
-                                    .padding(.top, DS.Spacing.xxs)
-                            }
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(DS.Spacing.md)
-                        .skinPlatter(skin)
-                        .skinPlatterDepth(skin)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                                .strokeBorder((isLocationFocused || isNotesFocused) ? skinAccent.opacity(DS.Opacity.overlayDark) : Color.clear, lineWidth: DS.Size.focusRingWidth)
-                                .shadow(color: (isLocationFocused || isNotesFocused) ? skinAccent.opacity(0.4) : .clear, radius: 4, x: 0, y: 0)
-                        )
-                        .shadow(
-                            color: (isLocationFocused || isNotesFocused) ? skinAccent.opacity(DS.Opacity.subtleBorder) : skin.resolvedShadowColor,
-                            radius: (isLocationFocused || isNotesFocused) ? skin.shadowRadius + 1 : skin.shadowRadius,
-                            y: skin.shadowY
-                        )
-                        .animation(skin.resolvedMicroAnimation, value: isLocationFocused || isNotesFocused)
-                    }
-                    .disabled(isExternal)
-                    .opacity(isExternal ? 0.6 : 1.0)
+                        .disabled(isExternal)
+                        .opacity(isExternal ? 0.6 : 1.0)
 
-                    // Recurrence (only for standard events)
-                    if !isPomodoroMode {
+                        // Context (Project / Category)
+                        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                            Text("Context")
+                                .font(.headline)
+                                .foregroundStyle(skin.resolvedTextPrimary)
+                                .accessibilityAddTraits(.isHeader)
+
+                            TextField("Project or category", text: $contextTag, prompt: Text("e.g. backend, design, personal").foregroundStyle(skin.resolvedTextSecondary))
+                                .textFieldStyle(.plain)
+                                .padding(.horizontal, DS.Spacing.md)
+                                .padding(.vertical, DS.Spacing.sm)
+                                .skinPlatter(skin)
+                                .skinPlatterDepth(skin)
+                        }
+                        .disabled(isExternal)
+                        .opacity(isExternal ? 0.6 : 1.0)
+
+                        // Details
+                        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                            Text("Details")
+                                .font(.headline)
+                                .foregroundStyle(skin.resolvedTextPrimary)
+                                .accessibilityAddTraits(.isHeader)
+
+                            VStack(spacing: DS.Spacing.md) {
+                                TextField("Location", text: $location, prompt: Text("Zoom link or room 302").foregroundStyle(skin.resolvedTextSecondary))
+                                    .textFieldStyle(.plain)
+                                    .focused($isLocationFocused)
+
+                                SkinSeparator()
+
+                                HStack(alignment: .top, spacing: DS.Spacing.sm) {
+                                    FormattableTextView(text: $description, prompt: "Add notes, agenda, or attachments", promptStyle: skin.resolvedTextSecondary)
+                                        .frame(minHeight: 60, maxHeight: 160)
+
+                                    EmojiPickerButton(text: $description)
+                                        .padding(.top, DS.Spacing.xxs)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(DS.Spacing.md)
+                            .skinPlatter(skin)
+                            .skinPlatterDepth(skin)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                                    .strokeBorder((isLocationFocused || isNotesFocused) ? skinAccent.opacity(DS.Opacity.overlayDark) : Color.clear, lineWidth: DS.Size.focusRingWidth)
+                                    .shadow(color: (isLocationFocused || isNotesFocused) ? skinAccent.opacity(0.4) : .clear, radius: 4, x: 0, y: 0)
+                            )
+                            .shadow(
+                                color: (isLocationFocused || isNotesFocused) ? skinAccent.opacity(DS.Opacity.subtleBorder) : skin.resolvedShadowColor,
+                                radius: (isLocationFocused || isNotesFocused) ? skin.shadowRadius + 1 : skin.shadowRadius,
+                                y: skin.shadowY
+                            )
+                            .animation(skin.resolvedMicroAnimation, value: isLocationFocused || isNotesFocused)
+                        }
+                        .disabled(isExternal)
+                        .opacity(isExternal ? 0.6 : 1.0)
+
+                        // Recurrence (only for standard events)
+                        if !isPomodoroMode {
                         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                             RecurrencePickerView(rule: $recurrenceRule, eventDuration: $duration, eventStartDate: date)
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -329,9 +351,9 @@ struct AddEventView: View {
                         }
                         .disabled(isExternal)
                         .opacity(isExternal ? 0.6 : 1.0)
-                    }
+                        }
 
-                    // Reminders
+                        // Reminders
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                         Text("Reminders")
                             .font(.headline)
@@ -405,6 +427,7 @@ struct AddEventView: View {
                         .skinPlatter(skin)
                         .skinPlatterDepth(skin)
                     }
+                    } // end showMoreOptions
                 }
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.vertical, DS.Spacing.xl)
@@ -467,6 +490,7 @@ struct AddEventView: View {
             selectedCalendarId = AppleCalendarService.shared.defaultCalendarId ?? availableCalendars.first?.id ?? ""
             reminderMinutes = reminderService.defaultReminderMinutesList
             if let event = editingEvent {
+                showMoreOptions = true  // Show all fields when editing
                 title = event.title
                 date = event.startDate
                 duration = event.endDate.timeIntervalSince(event.startDate) / 60
