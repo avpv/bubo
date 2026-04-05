@@ -289,7 +289,7 @@ struct BackgroundPhotoSection: View {
             .buttonStyle(.plain)
             .foregroundStyle(skin.resolvedTextSecondary)
 
-            Text("Recommended size: 720\u{00D7}1200 px (3:5)")
+            Text("Recommended size: 720\u{00D7}1200\u{00A0}px (3:5)")
                 .font(.caption2)
                 .foregroundStyle(skin.resolvedTextTertiary)
         }
@@ -441,7 +441,7 @@ struct GeneralTabView: View {
 
                     if settings.badgeCountMode == .timeWindow {
                         Stepper(
-                            "Time window: \(settings.badgeTimeWindowHours) h",
+                            "Time window: \(settings.badgeTimeWindowHours)\u{00A0}h",
                             value: $settings.badgeTimeWindowHours,
                             in: 1...ReminderService.fetchWindowDays * 24
                         )

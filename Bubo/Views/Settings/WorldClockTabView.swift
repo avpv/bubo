@@ -110,7 +110,7 @@ struct WorldClockTabView: View {
                         HStack {
                             Image(systemName: "magnifyingglass")
                                 .foregroundStyle(skin.resolvedTextSecondary)
-                            TextField("Search cities...", text: $searchText)
+                            TextField("Search cities or countries\u{2026}", text: $searchText)
                                 .textFieldStyle(.plain)
                         }
                         .padding(DS.Spacing.sm)

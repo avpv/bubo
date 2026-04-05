@@ -55,7 +55,7 @@ struct CalendarsTabView: View {
                         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                             Label("Calendar access denied", systemImage: "xmark.circle.fill")
                                 .foregroundStyle(skin.resolvedDestructiveColor)
-                            Text("Grant access in System Settings \u{2192} Privacy & Security \u{2192} Calendars")
+                            Text("Grant access in System Settings\u{00A0}\u{2192}\u{00A0}Privacy & Security\u{00A0}\u{2192}\u{00A0}Calendars")
                                 .font(.caption)
                                 .foregroundStyle(skin.resolvedTextSecondary)
                             Button("Open System Settings") {
@@ -64,6 +64,7 @@ struct CalendarsTabView: View {
                                 }
                             }
                             .controlSize(.small)
+                            .help("Opens System Settings to configure Calendar privacy")
                         }
                     } else {
                         Button {
