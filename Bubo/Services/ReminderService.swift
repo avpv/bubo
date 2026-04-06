@@ -300,6 +300,15 @@ class ReminderService {
             try? await Task.sleep(for: .seconds(12))
             guard !Task.isCancelled else { return }
             self?.fetchAndUpdate()
+
+            // 3rd follow-up: when Calendar.app is closed, calendard can take
+            // 30-60s to actually pull from remote servers. Prod once more and
+            // re-fetch after a longer delay to catch these late responses.
+            AppleCalendarService.shared.triggerRemoteRefresh()
+
+            try? await Task.sleep(for: .seconds(30))
+            guard !Task.isCancelled else { return }
+            self?.fetchAndUpdate()
         }
     }
 
