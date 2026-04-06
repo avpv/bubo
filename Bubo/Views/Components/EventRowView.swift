@@ -258,27 +258,17 @@ struct EventRowView: View {
 
     // MARK: - Urgency Bar
 
-    /// When a color tag is set, use that color. Otherwise, reflect urgency:
-    /// green (plenty of time) → orange (soon) → red (imminent) → muted (past).
-    private func accentBarColor(_ now: Date) -> Color {
-        if let tag = event.colorTag { return tag.color }
-        // Past events: muted
-        guard event.endDate > now else { return skin.resolvedTextTertiary }
-        // Events without a color tag: show urgency based on minutes until start
-        let minutesUntil = max(Int(event.startDate.timeIntervalSince(now)) / 60, 0)
-        // Already in progress: use accent
-        if event.startDate <= now { return skin.isClassic ? DS.Colors.accent : skin.accentColor }
-        return DS.urgencyColor(minutesUntil: minutesUntil, skin: skin)
+    private var accentBarColor: Color {
+        event.colorTag?.color ?? (skin.isClassic ? DS.defaultEventColor : skin.accentColor)
     }
 
     private func urgencyBar(_ now: Date) -> some View {
-        let color = accentBarColor(now)
-        return Capsule()
-            .fill(color)
+        Capsule()
+            .fill(accentBarColor)
             .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
             .padding(.trailing, DS.Spacing.md)
             .shadow(
-                color: color.opacity(event.isUpcoming ? 0.6 : skin.shadowOpacity * 4),
+                color: accentBarColor.opacity(event.isUpcoming ? 0.6 : skin.shadowOpacity * 4),
                 radius: event.isUpcoming ? 4 : skin.shadowRadius * 0.5
             )
     }
