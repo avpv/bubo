@@ -443,7 +443,7 @@ struct GeneralTabView: View {
 
                     if settings.badgeCountMode == .timeWindow {
                         Stepper(
-                            "Time window: \(settings.badgeTimeWindowHours)\u{00A0}h",
+                            "Time window: \(settings.badgeTimeWindowHours)\u{00A0}hr",
                             value: $settings.badgeTimeWindowHours,
                             in: 1...ReminderService.fetchWindowDays * 24
                         )
