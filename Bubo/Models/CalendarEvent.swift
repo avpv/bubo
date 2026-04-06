@@ -106,8 +106,8 @@ enum TaskStatus: String, Codable, Hashable, Sendable, CaseIterable {
 struct CalendarEvent: Identifiable, Codable, Hashable, Sendable {
     var id: String
     let title: String
-    let startDate: Date
-    let endDate: Date
+    var startDate: Date
+    var endDate: Date
     let location: String?
     let description: String?
     let calendarName: String?
