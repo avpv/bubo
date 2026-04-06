@@ -192,6 +192,32 @@ struct TimerScreenView: View {
                     }
                     .staggeredEntrance(index: 0)
 
+                    // Pomodoro segment indicator — round number and work/break status
+                    if let segment = event.pomodoroSegment {
+                        HStack(spacing: DS.Spacing.sm) {
+                            Image(systemName: segment.iconName)
+                                .font(.system(size: DS.Size.iconMedium, weight: .medium))
+                                .foregroundStyle(pomodoroSegmentColor(segment))
+
+                            Text(segment.label)
+                                .font(.system(.subheadline, design: skin.resolvedFontDesign, weight: .semibold))
+                                .foregroundStyle(pomodoroSegmentColor(segment))
+
+                            if let round = event.pomodoroRoundNumber, let total = event.pomodoroTotalRounds {
+                                Text("·")
+                                    .foregroundStyle(skin.resolvedTextTertiary)
+                                Text("Round \(round) of \(total)")
+                                    .font(.system(.subheadline, design: skin.resolvedFontDesign, weight: .medium))
+                                    .foregroundStyle(skin.resolvedTextSecondary)
+                            }
+                        }
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.sm)
+                        .adaptiveBadgeFill(pomodoroSegmentColor(segment))
+                        .clipShape(Capsule())
+                        .staggeredEntrance(index: 1)
+                    }
+
                     // Event info card
                     VStack(alignment: .leading, spacing: DS.Spacing.md) {
                         Text(event.title)
@@ -248,7 +274,7 @@ struct TimerScreenView: View {
                     .padding(DS.Spacing.lg)
                     .skinPlatter(skin)
                     .skinPlatterDepth(skin)
-                    .staggeredEntrance(index: 1)
+                    .staggeredEntrance(index: event.pomodoroSegment != nil ? 2 : 1)
                 }
                 .padding(.horizontal, DS.Spacing.xl)
                 .padding(.top, DS.Spacing.lg)
@@ -272,6 +298,16 @@ struct TimerScreenView: View {
                         .foregroundStyle(skin.resolvedTextTertiary)
                 }
             }
+        }
+    }
+
+    // MARK: - Pomodoro Colors
+
+    private func pomodoroSegmentColor(_ segment: CalendarEvent.PomodoroSegment) -> Color {
+        switch segment {
+        case .work: skin.accentColor
+        case .shortBreak: skin.resolvedSuccessColor
+        case .longBreak: DS.Colors.info
         }
     }
 

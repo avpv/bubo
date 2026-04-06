@@ -35,8 +35,8 @@ struct EventRowView: View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
         let now = context.date
         HStack(alignment: .center, spacing: 0) {
-            // Urgency accent bar with glow for imminent events
-            urgencyBar
+            // Urgency accent bar — color reflects time-to-start when no color tag is set
+            urgencyBar(now)
 
             // Time indicator
             timeColumn(now)
@@ -258,19 +258,23 @@ struct EventRowView: View {
 
     // MARK: - Urgency Bar
 
-    private var accentBarColor: Color {
-        event.colorTag?.color ?? (skin.isClassic ? DS.defaultEventColor : skin.accentColor)
-    }
-
-    private var urgencyBar: some View {
-        Capsule()
-            .fill(accentBarColor)
-            .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
-            .padding(.trailing, DS.Spacing.md)
-            .shadow(
-                color: accentBarColor.opacity(event.isUpcoming ? 0.6 : skin.shadowOpacity * 4),
-                radius: event.isUpcoming ? 4 : skin.shadowRadius * 0.5
-            )
+    @ViewBuilder
+    private func urgencyBar(_ now: Date) -> some View {
+        if let tag = event.colorTag {
+            Capsule()
+                .fill(tag.color)
+                .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
+                .padding(.trailing, DS.Spacing.md)
+                .shadow(
+                    color: tag.color.opacity(event.isUpcoming ? 0.6 : skin.shadowOpacity * 4),
+                    radius: event.isUpcoming ? 4 : skin.shadowRadius * 0.5
+                )
+        } else {
+            // Preserve alignment without visual noise
+            Color.clear
+                .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
+                .padding(.trailing, DS.Spacing.md)
+        }
     }
 
     // MARK: - Time Column

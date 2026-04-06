@@ -77,9 +77,20 @@ struct OptimizerView: View {
 
     // MARK: - Header
 
+    private var headerTitle: String {
+        switch phase {
+        case .picking:
+            return "Schedule Assistant"
+        case .agentInput:
+            return "Ask AI"
+        case .recipeDetail:
+            return selectedRecipe?.name ?? "Schedule Assistant"
+        }
+    }
+
     private var header: some View {
         PopoverHeader(
-            title: "Schedule Assistant",
+            title: headerTitle,
             showBack: true,
             onBack: {
                 switch phase {

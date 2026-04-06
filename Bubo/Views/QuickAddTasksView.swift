@@ -129,15 +129,42 @@ struct QuickAddTasksView: View {
                             ForEach(Array($tasks.enumerated()), id: \.element.id) { index, $task in
                                 HStack(spacing: 0) {
                                     if sequentialOrder {
+                                        // Drag handle + order number
+                                        Image(systemName: "line.3.horizontal")
+                                            .font(.caption2)
+                                            .foregroundStyle(skin.resolvedTextTertiary.opacity(0.6))
+                                            .frame(width: 14)
+                                            .padding(.trailing, DS.Spacing.xxs)
+
                                         Text("\(index + 1)")
                                             .font(.caption2.bold().monospacedDigit())
                                             .foregroundStyle(skin.resolvedTextTertiary)
-                                            .frame(width: 20)
+                                            .frame(width: 16)
                                     }
                                     taskRow(task: $task)
                                 }
-                                    .staggeredEntrance(index: index)
-                                    .eventScrollTransition()
+                                .staggeredEntrance(index: index)
+                                .eventScrollTransition()
+                                .draggable(task.wrappedValue.id.uuidString) {
+                                    // Drag preview
+                                    Text(task.wrappedValue.title.isEmpty ? "Task \(index + 1)" : task.wrappedValue.title)
+                                        .font(.caption)
+                                        .padding(.horizontal, DS.Spacing.md)
+                                        .padding(.vertical, DS.Spacing.xs)
+                                        .background(.ultraThinMaterial)
+                                        .clipShape(Capsule())
+                                }
+                                .dropDestination(for: String.self) { items, _ in
+                                    guard let draggedIdString = items.first,
+                                          let fromIndex = tasks.firstIndex(where: { $0.id.uuidString == draggedIdString }) else { return false }
+                                    let toIndex = index
+                                    guard fromIndex != toIndex else { return false }
+                                    withAnimation(skin.resolvedMicroAnimation) {
+                                        tasks.move(fromOffsets: IndexSet(integer: fromIndex), toOffset: toIndex > fromIndex ? toIndex + 1 : toIndex)
+                                    }
+                                    Haptics.alignment()
+                                    return true
+                                }
 
                                 if index < tasks.count - 1 {
                                     SkinSeparator()

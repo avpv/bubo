@@ -272,4 +272,27 @@ struct CalendarEvent: Identifiable, Codable, Hashable, Sendable {
         if id.contains("_break") { return .shortBreak }
         return .work
     }
+
+    /// The 1-based round number within a Pomodoro session, extracted from the event ID suffix.
+    /// Work events use `_occ{N}` (0-based), breaks use `_break{N}` (0-based).
+    var pomodoroRoundNumber: Int? {
+        guard eventType == .pomodoro else { return nil }
+        if id.contains("_longbreak") { return nil } // long break is after all rounds
+        // Extract trailing digit(s) from _occ{N} or _break{N}
+        if let range = id.range(of: #"_(occ|break)(\d+)$"#, options: .regularExpression) {
+            let suffix = id[range]
+            if let digits = suffix.split(whereSeparator: { !$0.isNumber }).last,
+               let index = Int(digits) {
+                return index + 1 // convert 0-based to 1-based
+            }
+        }
+        return 1 // standalone pomodoro = round 1
+    }
+
+    /// Total number of rounds in this Pomodoro session, from the recurrence rule.
+    var pomodoroTotalRounds: Int? {
+        guard eventType == .pomodoro, let rule = recurrenceRule, rule.pomodoroMode else { return nil }
+        if case .afterCount(let count) = rule.end { return count }
+        return nil
+    }
 }
