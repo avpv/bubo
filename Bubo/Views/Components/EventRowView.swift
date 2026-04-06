@@ -35,8 +35,8 @@ struct EventRowView: View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
         let now = context.date
         HStack(alignment: .center, spacing: 0) {
-            // Urgency accent bar with glow for imminent events
-            urgencyBar
+            // Urgency accent bar — color reflects time-to-start when no color tag is set
+            urgencyBar(now)
 
             // Time indicator
             timeColumn(now)
@@ -258,17 +258,27 @@ struct EventRowView: View {
 
     // MARK: - Urgency Bar
 
-    private var accentBarColor: Color {
-        event.colorTag?.color ?? (skin.isClassic ? DS.defaultEventColor : skin.accentColor)
+    /// When a color tag is set, use that color. Otherwise, reflect urgency:
+    /// green (plenty of time) → orange (soon) → red (imminent) → muted (past).
+    private func accentBarColor(_ now: Date) -> Color {
+        if let tag = event.colorTag { return tag.color }
+        // Past events: muted
+        guard event.endDate > now else { return skin.resolvedTextTertiary }
+        // Events without a color tag: show urgency based on minutes until start
+        let minutesUntil = max(Int(event.startDate.timeIntervalSince(now)) / 60, 0)
+        // Already in progress: use accent
+        if event.startDate <= now { return skin.isClassic ? DS.Colors.accent : skin.accentColor }
+        return DS.urgencyColor(minutesUntil: minutesUntil, skin: skin)
     }
 
-    private var urgencyBar: some View {
-        Capsule()
-            .fill(accentBarColor)
+    private func urgencyBar(_ now: Date) -> some View {
+        let color = accentBarColor(now)
+        return Capsule()
+            .fill(color)
             .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
             .padding(.trailing, DS.Spacing.md)
             .shadow(
-                color: accentBarColor.opacity(event.isUpcoming ? 0.6 : skin.shadowOpacity * 4),
+                color: color.opacity(event.isUpcoming ? 0.6 : skin.shadowOpacity * 4),
                 radius: event.isUpcoming ? 4 : skin.shadowRadius * 0.5
             )
     }

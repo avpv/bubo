@@ -16,13 +16,14 @@ struct DaySectionHeader: View {
                 .font(.subheadline)
                 .fontWeight(skin.resolvedHeadlineFontWeight)
                 .foregroundStyle(skin.resolvedTextPrimary)
+                .fixedSize(horizontal: true, vertical: false)
             if isToday {
                 Circle()
                     .fill(skinAccent)
                     .frame(width: DS.Size.todayDotSize, height: DS.Size.todayDotSize)
                     .scaleEffect(appeared ? 1 : 0)
             }
-            Spacer()
+            Spacer(minLength: DS.Spacing.xs)
             Text("\(count)")
                 .font(.caption)
                 .foregroundStyle(skin.resolvedTextSecondary)
