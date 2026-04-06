@@ -417,7 +417,7 @@ final class BuboOptimizer {
         for (scenarioIndex, _, _) in trivialSequences {
             sequencesByScenario[scenarioIndex, default: [:]] = [:]
         }
-        for (_, day, eventIds) in trivialSequences {
+        for (_, day, _) in trivialSequences {
             // Find the right scenario for this trivial entry
             for (sIdx, d, ids) in trivialSequences where d == day {
                 sequencesByScenario[sIdx, default: [:]][d] = ids
