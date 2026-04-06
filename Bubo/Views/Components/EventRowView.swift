@@ -258,19 +258,23 @@ struct EventRowView: View {
 
     // MARK: - Urgency Bar
 
-    private var accentBarColor: Color {
-        event.colorTag?.color ?? (skin.isClassic ? DS.defaultEventColor : skin.accentColor)
-    }
-
+    @ViewBuilder
     private func urgencyBar(_ now: Date) -> some View {
-        Capsule()
-            .fill(accentBarColor)
-            .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
-            .padding(.trailing, DS.Spacing.md)
-            .shadow(
-                color: accentBarColor.opacity(event.isUpcoming ? 0.6 : skin.shadowOpacity * 4),
-                radius: event.isUpcoming ? 4 : skin.shadowRadius * 0.5
-            )
+        if let tag = event.colorTag {
+            Capsule()
+                .fill(tag.color)
+                .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
+                .padding(.trailing, DS.Spacing.md)
+                .shadow(
+                    color: tag.color.opacity(event.isUpcoming ? 0.6 : skin.shadowOpacity * 4),
+                    radius: event.isUpcoming ? 4 : skin.shadowRadius * 0.5
+                )
+        } else {
+            // Preserve alignment without visual noise
+            Color.clear
+                .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
+                .padding(.trailing, DS.Spacing.md)
+        }
     }
 
     // MARK: - Time Column
