@@ -225,10 +225,11 @@ class ReminderService {
 
         // Ask EventKit to pull fresh data from remote calendar servers
         // (iCloud, Google, Exchange, CalDAV) BEFORE we read events.
-        // refreshSourcesIfNecessary() is async — changes from a previous
-        // trigger should have landed by now, and this trigger primes the
-        // next read. We also schedule a follow-up fetch below to catch
-        // updates that arrive after this fetch completes.
+        // Rebuilding the store forces a fresh IPC connection to the calendard
+        // background daemon, which is necessary because the daemon often stops
+        // sending updates to long-lived EventKit connections, especially when
+        // Apple Calendar.app is closed.
+        AppleCalendarService.shared.rebuildStore()
         AppleCalendarService.shared.triggerRemoteRefresh()
 
         let now = Date()

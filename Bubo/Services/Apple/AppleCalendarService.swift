@@ -11,7 +11,7 @@ class AppleCalendarService {
     /// Shared event store — creating multiple instances is expensive and discouraged by Apple.
     static let shared = AppleCalendarService()
 
-    private let store = EKEventStore()
+    private var store = EKEventStore()
 
     /// Posted when the underlying EKEventStore detects changes (events added/modified/deleted
     /// in Calendar.app or via iCloud sync). Observers should re-fetch events.
@@ -99,6 +99,23 @@ class AppleCalendarService {
     /// data arrives later via an `EKEventStoreChanged` notification.
     func triggerRemoteRefresh() {
         store.refreshSourcesIfNecessary()
+    }
+
+    /// Rebuild the EventKit store to force a fresh connection to the sync daemon.
+    /// This resolves issues where long-running instances lose sync with the
+    /// background calendard process, especially when Apple Calendar is closed.
+    func rebuildStore() {
+        if let observer = storeChangedObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        store = EKEventStore()
+        storeChangedObserver = NotificationCenter.default.addObserver(
+            forName: .EKEventStoreChanged,
+            object: store,
+            queue: .main
+        ) { _ in
+            NotificationCenter.default.post(name: Self.calendarDataChanged, object: nil)
+        }
     }
 
     /// Fetch events from selected Apple calendars within a date range.
