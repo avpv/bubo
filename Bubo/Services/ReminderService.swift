@@ -156,6 +156,7 @@ class ReminderService {
             NotificationCenter.default.removeObserver(observer)
         }
         pendingAppleRefreshTask?.cancel()
+        pendingPostSyncTask?.cancel()
         for timers in reminderTimers.values {
             timers.forEach { $0.invalidate() }
         }
@@ -187,6 +188,8 @@ class ReminderService {
     func stopSync() {
         syncTimer?.invalidate()
         syncTimer = nil
+        pendingPostSyncTask?.cancel()
+        pendingPostSyncTask = nil
         for timers in reminderTimers.values {
             timers.forEach { $0.invalidate() }
         }
@@ -220,6 +223,14 @@ class ReminderService {
         isSyncing = true
         syncError = nil
 
+        // Ask EventKit to pull fresh data from remote calendar servers
+        // (iCloud, Google, Exchange, CalDAV) BEFORE we read events.
+        // refreshSourcesIfNecessary() is async — changes from a previous
+        // trigger should have landed by now, and this trigger primes the
+        // next read. We also schedule a follow-up fetch below to catch
+        // updates that arrive after this fetch completes.
+        AppleCalendarService.shared.triggerRemoteRefresh()
+
         let now = Date()
         let endDate = Calendar.current.date(byAdding: .day, value: Self.fetchWindowDays, to: now) ?? now
 
@@ -234,7 +245,7 @@ class ReminderService {
             let uniqueId = events[i].id
             let seriesOverrides = events[i].seriesId.flatMap { localRemindersOverrides[$0] }
             let exactOverrides = localRemindersOverrides[uniqueId]
-            
+
             if let active = exactOverrides ?? seriesOverrides {
                 events[i].customReminderMinutes = active.isEmpty ? nil : active
             }
@@ -256,11 +267,70 @@ class ReminderService {
 
         scheduleReminders(for: events)
 
-        // Ask EventKit to pull fresh data from remote calendar servers
-        // (iCloud, Google, Exchange, CalDAV). If there are changes (e.g. a
-        // deletion made on the remote side), EventKit will fire
-        // EKEventStoreChanged and we'll sync again automatically.
-        AppleCalendarService.shared.triggerRemoteRefresh()
+        Task {
+            await eventCache.save(events: events)
+        }
+
+        // Schedule a delayed follow-up fetch so that changes arriving from the
+        // async remote refresh we just triggered are picked up promptly, rather
+        // than waiting for the next full sync cycle (up to 5 minutes).
+        schedulePostSyncRefresh()
+    }
+
+    /// Re-fetches events a few seconds after a sync so that any data pulled by
+    /// the async `refreshSourcesIfNecessary()` call is picked up quickly.
+    private var pendingPostSyncTask: Task<Void, Never>?
+
+    private func schedulePostSyncRefresh() {
+        pendingPostSyncTask?.cancel()
+        pendingPostSyncTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(4))
+            guard !Task.isCancelled else { return }
+            self?.fetchAndUpdate()
+        }
+    }
+
+    /// Lightweight re-fetch: reads events from EventKit and updates the UI
+    /// without triggering another remote refresh (avoids infinite loop).
+    private func fetchAndUpdate() {
+        guard settings.isCalendarSyncEnabled, AppleCalendarService.hasAccess else { return }
+
+        let now = Date()
+        let endDate = Calendar.current.date(byAdding: .day, value: Self.fetchWindowDays, to: now) ?? now
+
+        var events = AppleCalendarService.shared.fetchEvents(
+            from: now,
+            to: endDate,
+            onlyCalendarIds: settings.selectedCalendarIds
+        )
+
+        for i in events.indices {
+            let uniqueId = events[i].id
+            let seriesOverrides = events[i].seriesId.flatMap { localRemindersOverrides[$0] }
+            let exactOverrides = localRemindersOverrides[uniqueId]
+            if let active = exactOverrides ?? seriesOverrides {
+                events[i].customReminderMinutes = active.isEmpty ? nil : active
+            }
+        }
+
+        let updated = events.sorted { $0.startDate < $1.startDate }
+
+        // Only update if the event set actually changed to avoid unnecessary UI churn
+        let oldIds = Set(upcomingEvents.map { $0.id })
+        let newIds = Set(updated.map { $0.id })
+        guard oldIds != newIds else { return }
+
+        upcomingEvents = updated
+        lastSyncDate = Date()
+
+        let currentEventIds = newIds
+        firedReminders = firedReminders.filter { key in
+            guard let lastUnderscore = key.lastIndex(of: "_") else { return false }
+            let eventId = String(key[..<lastUnderscore])
+            return currentEventIds.contains(eventId)
+        }
+
+        scheduleReminders(for: events)
 
         Task {
             await eventCache.save(events: events)
