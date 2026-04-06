@@ -18,7 +18,6 @@ struct AddEventView: View {
     @State private var duration: Double = 30
     @State private var location = ""
     @State private var description = ""
-    @State private var showValidation = false
     @State private var useCustomReminders = false
     @State private var reminderMinutes: [Int] = [5]
     @State private var newReminderValue = 10
@@ -463,16 +462,13 @@ struct AddEventView: View {
                 .buttonStyle(.action(role: .secondary))
 
                 Button(action: {
-                    if isTitleValid {
-                        saveEvent()
-                    } else {
-                        showValidation = true
-                    }
+                    saveEvent()
                 }) {
                     Label(isEditing ? "Save" : "Add Event", systemImage: isEditing ? "checkmark.circle" : "calendar.badge.plus")
                 }
                 .buttonStyle(.action(role: .primary))
                 .keyboardShortcut(.defaultAction)
+                .disabled(!isTitleValid)
             }
             .padding(.horizontal, DS.Spacing.lg)
             .frame(height: DS.Size.actionFooterHeight)
