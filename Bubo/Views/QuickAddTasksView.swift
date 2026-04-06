@@ -87,106 +87,10 @@ struct QuickAddTasksView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: DS.Spacing.lg) {
-                    // Horizon picker
-                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                        Text("Plan for")
-                            .font(.headline)
-                            .foregroundStyle(skin.resolvedTextPrimary)
-                            .accessibilityAddTraits(.isHeader)
+                    horizonSection
+                    sequentialOrderToggle
+                    tasksSection
 
-                        Picker("Planning horizon", selection: $horizon) {
-                            Text("Today").tag(Horizon.today)
-                            Text("This Week").tag(Horizon.week)
-                        }
-                        .pickerStyle(.segmented)
-                        .labelsHidden()
-                    }
-                    .staggeredEntrance(index: 0)
-
-                    // Sequential order toggle
-                    Toggle(isOn: $sequentialOrder) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Label("Run in order", systemImage: "arrow.down.line")
-                                .font(.subheadline)
-                            Text("Tasks are scheduled one after another, without reordering")
-                                .font(.caption)
-                                .foregroundStyle(skin.resolvedTextSecondary)
-                        }
-                    }
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-                    .tint(skin.accentColor)
-                    .staggeredEntrance(index: 1)
-
-                    // Tasks section
-                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                        Text("Tasks")
-                            .font(.headline)
-                            .foregroundStyle(skin.resolvedTextPrimary)
-                            .accessibilityAddTraits(.isHeader)
-
-                        VStack(spacing: 0) {
-                            ForEach(Array($tasks.enumerated()), id: \.element.id) { index, $task in
-                                HStack(spacing: 0) {
-                                    if sequentialOrder {
-                                        // Drag handle + order number
-                                        Image(systemName: "line.3.horizontal")
-                                            .font(.caption2)
-                                            .foregroundStyle(skin.resolvedTextTertiary.opacity(0.6))
-                                            .frame(width: 14)
-                                            .padding(.trailing, DS.Spacing.xxs)
-
-                                        Text("\(index + 1)")
-                                            .font(.caption2.bold().monospacedDigit())
-                                            .foregroundStyle(skin.resolvedTextTertiary)
-                                            .frame(width: 16)
-                                    }
-                                    taskRow(task: $task)
-                                }
-                                .staggeredEntrance(index: index)
-                                .eventScrollTransition()
-                                .draggable(task.wrappedValue.id.uuidString) {
-                                    // Drag preview
-                                    Text(task.wrappedValue.title.isEmpty ? "Task \(index + 1)" : task.wrappedValue.title)
-                                        .font(.caption)
-                                        .padding(.horizontal, DS.Spacing.md)
-                                        .padding(.vertical, DS.Spacing.xs)
-                                        .background(.ultraThinMaterial)
-                                        .clipShape(Capsule())
-                                }
-                                .dropDestination(for: String.self) { items, _ in
-                                    guard let draggedIdString = items.first,
-                                          let fromIndex = tasks.firstIndex(where: { $0.id.uuidString == draggedIdString }) else { return false }
-                                    let toIndex = index
-                                    guard fromIndex != toIndex else { return false }
-                                    withAnimation(skin.resolvedMicroAnimation) {
-                                        tasks.move(fromOffsets: IndexSet(integer: fromIndex), toOffset: toIndex > fromIndex ? toIndex + 1 : toIndex)
-                                    }
-                                    Haptics.alignment()
-                                    return true
-                                }
-
-                                if index < tasks.count - 1 {
-                                    SkinSeparator()
-                                        .padding(.horizontal, DS.Spacing.sm)
-                                }
-                            }
-                        }
-                        .skinPlatter(skin)
-                        .skinPlatterDepth(skin)
-
-                        Button {
-                            Haptics.tap()
-                            tasks.append(TaskEntry())
-                        } label: {
-                            Label("Add", systemImage: "plus")
-                        }
-                        .buttonStyle(.action(role: .secondary, size: .compact))
-                        .padding(.leading, DS.Spacing.md)
-
-                    }
-
-                    // Inline results — shown right below tasks after optimization
                     if let result = inlineResult {
                         inlineResultSection(result)
                             .transition(.opacity.combined(with: .move(edge: .bottom)))
@@ -201,59 +105,179 @@ struct QuickAddTasksView: View {
 
             SkinSeparator()
 
-            // Footer adapts to result state
-            HStack {
-                Spacer()
+            footerSection
+        }
+    }
 
-                if case .success = inlineResult {
-                    Button {
-                        withAnimation(skin.resolvedMicroAnimation) {
-                            inlineResult = nil
-                        }
-                    } label: {
-                        Text("Back")
-                    }
-                    .buttonStyle(.action(role: .secondary))
-                    .keyboardShortcut(.cancelAction)
+    // MARK: - Body Subsections
 
-                    Button {
-                        Haptics.impact()
-                        optimizerService.applyRecipeScenario(at: 0, to: reminderService)
-                        onBack()
-                    } label: {
-                        Label("Apply Schedule", systemImage: "checkmark.circle.fill")
-                    }
-                    .buttonStyle(.action(role: .primary))
-                    .keyboardShortcut(.defaultAction)
-                } else {
-                    Button(action: onBack) {
-                        Text("Cancel")
-                    }
-                    .buttonStyle(.action(role: .secondary))
-                    .keyboardShortcut(.cancelAction)
+    private var horizonSection: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            Text("Plan for")
+                .font(.headline)
+                .foregroundStyle(skin.resolvedTextPrimary)
+                .accessibilityAddTraits(.isHeader)
 
-                    Button {
-                        Haptics.tap()
-                        planTasks()
-                    } label: {
-                        HStack(spacing: DS.Spacing.xs) {
-                            if isOptimizing {
-                                ProgressView()
-                                    .controlSize(.small)
-                            } else {
-                                Image(systemName: "wand.and.stars")
-                            }
-                            Text(isOptimizing ? "Planning…" : "Plan Tasks")
-                        }
+            Picker("Planning horizon", selection: $horizon) {
+                Text("Today").tag(Horizon.today)
+                Text("This Week").tag(Horizon.week)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+        }
+        .staggeredEntrance(index: 0)
+    }
+
+    private var sequentialOrderToggle: some View {
+        Toggle(isOn: $sequentialOrder) {
+            VStack(alignment: .leading, spacing: 2) {
+                Label("Run in order", systemImage: "arrow.down.line")
+                    .font(.subheadline)
+                Text("Tasks are scheduled one after another, without reordering")
+                    .font(.caption)
+                    .foregroundStyle(skin.resolvedTextSecondary)
+            }
+        }
+        .toggleStyle(.switch)
+        .controlSize(.small)
+        .tint(skin.accentColor)
+        .staggeredEntrance(index: 1)
+    }
+
+    private var tasksSection: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            Text("Tasks")
+                .font(.headline)
+                .foregroundStyle(skin.resolvedTextPrimary)
+                .accessibilityAddTraits(.isHeader)
+
+            VStack(spacing: 0) {
+                ForEach(Array($tasks.enumerated()), id: \.element.id) { index, $task in
+                    taskRowWithDragDrop(index: index, task: $task)
+
+                    if index < tasks.count - 1 {
+                        SkinSeparator()
+                            .padding(.horizontal, DS.Spacing.sm)
                     }
-                    .buttonStyle(.action(role: .primary))
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(validTasks.isEmpty || isOptimizing)
                 }
             }
-            .padding(.horizontal, DS.Spacing.lg)
-            .frame(height: DS.Size.actionFooterHeight)
-            .skinBarBackground(skin)
+            .skinPlatter(skin)
+            .skinPlatterDepth(skin)
+
+            Button {
+                Haptics.tap()
+                tasks.append(TaskEntry())
+            } label: {
+                Label("Add", systemImage: "plus")
+            }
+            .buttonStyle(.action(role: .secondary, size: .compact))
+            .padding(.leading, DS.Spacing.md)
+        }
+    }
+
+    private func taskRowWithDragDrop(index: Int, task: Binding<TaskEntry>) -> some View {
+        HStack(spacing: 0) {
+            if sequentialOrder {
+                Image(systemName: "line.3.horizontal")
+                    .font(.caption2)
+                    .foregroundStyle(skin.resolvedTextTertiary.opacity(0.6))
+                    .frame(width: 14)
+                    .padding(.trailing, DS.Spacing.xxs)
+
+                Text("\(index + 1)")
+                    .font(.caption2.bold().monospacedDigit())
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                    .frame(width: 16)
+            }
+            taskRow(task: task)
+        }
+        .staggeredEntrance(index: index)
+        .eventScrollTransition()
+        .draggable(task.wrappedValue.id.uuidString) {
+            Text(task.wrappedValue.title.isEmpty ? "Task \(index + 1)" : task.wrappedValue.title)
+                .font(.caption)
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.xs)
+                .background(.ultraThinMaterial)
+                .clipShape(Capsule())
+        }
+        .dropDestination(for: String.self) { items, _ in
+            guard let draggedIdString = items.first,
+                  let fromIndex = tasks.firstIndex(where: { $0.id.uuidString == draggedIdString }) else { return false }
+            let toIndex = index
+            guard fromIndex != toIndex else { return false }
+            withAnimation(skin.resolvedMicroAnimation) {
+                tasks.move(fromOffsets: IndexSet(integer: fromIndex), toOffset: toIndex > fromIndex ? toIndex + 1 : toIndex)
+            }
+            Haptics.alignment()
+            return true
+        }
+    }
+
+    private var footerSection: some View {
+        HStack {
+            Spacer()
+
+            if case .success = inlineResult {
+                footerSuccessButtons
+            } else {
+                footerDefaultButtons
+            }
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+        .frame(height: DS.Size.actionFooterHeight)
+        .skinBarBackground(skin)
+    }
+
+    private var footerSuccessButtons: some View {
+        Group {
+            Button {
+                withAnimation(skin.resolvedMicroAnimation) {
+                    inlineResult = nil
+                }
+            } label: {
+                Text("Back")
+            }
+            .buttonStyle(.action(role: .secondary))
+            .keyboardShortcut(.cancelAction)
+
+            Button {
+                Haptics.impact()
+                optimizerService.applyRecipeScenario(at: 0, to: reminderService)
+                onBack()
+            } label: {
+                Label("Apply Schedule", systemImage: "checkmark.circle.fill")
+            }
+            .buttonStyle(.action(role: .primary))
+            .keyboardShortcut(.defaultAction)
+        }
+    }
+
+    private var footerDefaultButtons: some View {
+        Group {
+            Button(action: onBack) {
+                Text("Cancel")
+            }
+            .buttonStyle(.action(role: .secondary))
+            .keyboardShortcut(.cancelAction)
+
+            Button {
+                Haptics.tap()
+                planTasks()
+            } label: {
+                HStack(spacing: DS.Spacing.xs) {
+                    if isOptimizing {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Image(systemName: "wand.and.stars")
+                    }
+                    Text(isOptimizing ? "Planning…" : "Plan Tasks")
+                }
+            }
+            .buttonStyle(.action(role: .primary))
+            .keyboardShortcut(.defaultAction)
+            .disabled(validTasks.isEmpty || isOptimizing)
         }
     }
 
