@@ -425,6 +425,7 @@ struct MenuBarView: View {
         let todayEvents = todayGroup.events.filter { !reminderService.disintegratingEventIDs.contains($0.id) }
         let total = todayEvents.count
         guard total > 0 else { return "Bubo" }
+        let remaining = todayEvents.filter { $0.startDate >= now }.count
         let done = todayEvents.filter { $0.endDate <= now }.count
 
         // Time until next upcoming event
@@ -439,9 +440,9 @@ struct MenuBarView: View {
             return " \u{00B7} in\u{00A0}\(h)\u{00A0}hr\u{00A0}\(m)\u{00A0}min"
         }()
 
-        if done == 0 { return "\(total)\u{00A0}events\(nextSuffix)" }
         if done == total { return "All\u{00A0}\(total) done" }
-        return "\(done)\u{00A0}of\u{00A0}\(total)\(nextSuffix)"
+        if remaining == total { return "\(total)\u{00A0}events today\(nextSuffix)" }
+        return "\(remaining)\u{00A0}of\u{00A0}\(total)\(nextSuffix)"
     }
 
     /// Context-aware subtitle for the empty state.
