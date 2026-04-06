@@ -154,35 +154,37 @@ struct FullScreenAlertView: View {
                         .accessibilityLabel("Dismiss alert")
                     }
 
-                    // Snooze row — direct buttons, no dropdown
-                    HStack(spacing: DS.Spacing.md) {
-                        Text("Snooze for")
-                            .font(.system(.callout, design: skin.resolvedFontDesign, weight: .medium))
-                            .foregroundStyle(DS.Colors.onOverlay.opacity(DS.Opacity.tertiaryText))
+                    // Snooze row — adaptive to remaining time
+                    if !adaptiveSnoozeOptions(secondsRemaining).isEmpty {
+                        HStack(spacing: DS.Spacing.md) {
+                            Text("Snooze for")
+                                .font(.system(.callout, design: skin.resolvedFontDesign, weight: .medium))
+                                .foregroundStyle(DS.Colors.onOverlay.opacity(DS.Opacity.tertiaryText))
 
-                        ForEach([5, 10, 15], id: \.self) { minutes in
-                            Button {
-                                Haptics.tap()
-                                onSnooze(minutes)
-                            } label: {
-                                Text("\(minutes)\u{00A0}min")
-                                    .font(.system(.callout, design: skin.resolvedFontDesign, weight: skin.resolvedFontWeight))
-                                    .foregroundStyle(DS.Colors.onOverlay)
-                                    .padding(.horizontal, DS.Spacing.xl)
-                                    .padding(.vertical, DS.Spacing.sm)
-                                    .background(
-                                        Capsule()
-                                            .fill(DS.Materials.overlay)
-                                    )
-                                    .overlay(
-                                        Capsule()
-                                            .strokeBorder(
-                                                skinAccent.opacity(DS.Opacity.subtleBorder),
-                                                lineWidth: DS.Border.thin
-                                            )
-                                    )
+                            ForEach(adaptiveSnoozeOptions(secondsRemaining), id: \.self) { minutes in
+                                Button {
+                                    Haptics.tap()
+                                    onSnooze(minutes)
+                                } label: {
+                                    Text(DS.formatMinutes(minutes))
+                                        .font(.system(.callout, design: skin.resolvedFontDesign, weight: skin.resolvedFontWeight))
+                                        .foregroundStyle(DS.Colors.onOverlay)
+                                        .padding(.horizontal, DS.Spacing.xl)
+                                        .padding(.vertical, DS.Spacing.sm)
+                                        .background(
+                                            Capsule()
+                                                .fill(DS.Materials.overlay)
+                                        )
+                                        .overlay(
+                                            Capsule()
+                                                .strokeBorder(
+                                                    skinAccent.opacity(DS.Opacity.subtleBorder),
+                                                    lineWidth: DS.Border.thin
+                                                )
+                                        )
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -224,6 +226,18 @@ struct FullScreenAlertView: View {
                 }
             }
         }
+    }
+
+    /// Snooze options adapted to how much time remains before the event starts.
+    /// Shows shorter intervals when time is tight, longer ones when there's plenty of room.
+    private func adaptiveSnoozeOptions(_ secondsRemaining: Int) -> [Int] {
+        let minutesLeft = secondsRemaining / 60
+        if minutesLeft <= 0 { return [] } // event already started
+        if minutesLeft <= 3 { return [1, 2] }
+        if minutesLeft <= 7 { return [2, 5] }
+        if minutesLeft <= 15 { return [5, 10] }
+        if minutesLeft <= 30 { return [5, 10, 15] }
+        return [10, 20, 30]
     }
 
     /// Countdown color: uses skin accent when plenty of time remains,
