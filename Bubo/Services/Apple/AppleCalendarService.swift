@@ -98,6 +98,9 @@ class AppleCalendarService {
     /// (iCloud, Google, Exchange, CalDAV). This is asynchronous — the actual
     /// data arrives later via an `EKEventStoreChanged` notification.
     func triggerRemoteRefresh() {
+        // Reset BEFORE requesting refresh so we don't accidentally abort
+        // an ongoing sync request to calendard.
+        store.reset()
         store.refreshSourcesIfNecessary()
     }
 
@@ -120,11 +123,6 @@ class AppleCalendarService {
 
     /// Fetch events from selected Apple calendars within a date range.
     func fetchEvents(from: Date, to: Date, onlyCalendarIds: [String] = []) -> [CalendarEvent] {
-        // Reset the in-memory cache so EventKit re-reads from the on-disk
-        // calendar database. Without this, deleted events from remote
-        // calendars can linger in the store's in-process cache.
-        store.reset()
-
         let calendars: [EKCalendar]?
         if onlyCalendarIds.isEmpty {
             calendars = nil
@@ -143,6 +141,11 @@ class AppleCalendarService {
             // Exchange, iCloud) may keep them around with a .canceled status
             // for a while before fully removing them from the database.
             guard ek.status != .canceled else { return nil }
+
+            // Explicitly force EventKit to confirm the event still exists in the
+            // local database. This catches "ghost" deleted events that EventKit's
+            // index still returns when Apple Calendar is closed, even after a sync.
+            guard ek.refresh() else { return nil }
 
             let baseId = "apple_\(ek.eventIdentifier ?? UUID().uuidString)"
             let uniqueId = "\(baseId)_\(ek.startDate.timeIntervalSince1970)"
