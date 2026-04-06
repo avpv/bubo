@@ -261,8 +261,8 @@ struct FullScreenAlertView: View {
 
     private func headerText(_ secondsRemaining: Int) -> String {
         if secondsRemaining <= 0 {
-            return "Meeting started!"
+            return "Started!"
         }
-        return "Meeting in"
+        return "Starts in"
     }
 }

@@ -154,9 +154,9 @@ struct IntentResultView: View {
 
     private func scenarioDetail(_ scenario: ScheduleScenario) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            // Fitness pill
+            // Fit summary
             HStack {
-                Label("Match: \(Int(max(0, scenario.fitness) * 100))%", systemImage: "sparkles")
+                Label("Fits \(Int(max(0, scenario.fitness) * 100))%", systemImage: "sparkles")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(skin.accentColor)
                     .padding(.horizontal, DS.Spacing.sm)
@@ -189,11 +189,6 @@ struct IntentResultView: View {
                 .skinPlatterDepth(skin)
             }
 
-            // Objective breakdown
-            if !scenario.objectiveBreakdown.isEmpty {
-                objectiveBreakdown(scenario.objectiveBreakdown)
-            }
-
             // Warnings
             if !scenario.constraintViolations.isEmpty {
                 VStack(alignment: .leading, spacing: 2) {
@@ -205,35 +200,6 @@ struct IntentResultView: View {
                             .font(.caption2)
                             .foregroundStyle(skin.resolvedWarningColor)
                     }
-                }
-            }
-        }
-    }
-
-    private func objectiveBreakdown(_ breakdown: [String: Double]) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            Text("Breakdown:")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(skin.resolvedTextSecondary)
-
-            ForEach(breakdown.sorted(by: { $0.key < $1.key }), id: \.key) { key, value in
-                HStack(spacing: DS.Spacing.sm) {
-                    Text(key)
-                        .font(.caption2)
-                        .foregroundStyle(skin.resolvedTextSecondary)
-                        .frame(width: 80, alignment: .leading)
-
-                    GeometryReader { geo in
-                        RoundedRectangle(cornerRadius: DS.Size.previewSmallRadius)
-                            .fill(skin.accentColor.opacity(0.3))
-                            .frame(width: geo.size.width * max(0, min(1, value)))
-                    }
-                    .frame(height: 6)
-
-                    Text(String(format: "%.0f%%", value * 100))
-                        .font(.caption2)
-                        .foregroundStyle(skin.resolvedTextTertiary)
-                        .frame(width: 32, alignment: .trailing)
                 }
             }
         }
@@ -253,7 +219,7 @@ struct IntentResultView: View {
                 }
                 onBack()
             }) {
-                Text("Try Another")
+                Text("Other Options")
             }
             .buttonStyle(.action(role: .secondary))
             .keyboardShortcut(.cancelAction)

@@ -4,6 +4,7 @@ import AppKit
 struct AddEventView: View {
     var reminderService: ReminderService
     var editingEvent: CalendarEvent? = nil
+    var initialEventType: EventType = .standard
     var onDismiss: () -> Void
     var onSave: (_ isEdit: Bool) -> Void
 
@@ -26,7 +27,6 @@ struct AddEventView: View {
     @State private var addToCalendar = false
     @State private var selectedColorTag: EventColorTag? = nil
     @State private var contextTag = ""
-    @State private var showDiscardConfirmation = false
     @State private var showMoreOptions = false
 
     // MARK: - Pomodoro state
@@ -138,16 +138,6 @@ struct AddEventView: View {
                     .animation(skin.resolvedMicroAnimation, value: isTitleFocused)
                     .disabled(isExternal)
                     .opacity(isExternal ? 0.6 : 1.0)
-
-                    // Event Type
-                    if !isExternal {
-                        Picker("Type", selection: $selectedEventType) {
-                            Label("Event", systemImage: "calendar").tag(EventType.standard)
-                            Label("Pomodoro", systemImage: "timer").tag(EventType.pomodoro)
-                        }
-                        .pickerStyle(.segmented)
-                        .padding(.horizontal, DS.Spacing.md)
-                    }
 
                     // Date & Time
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
@@ -449,12 +439,11 @@ struct AddEventView: View {
             HStack {
                 Spacer()
                 Button(action: {
-                    // HIG: Warn before discarding unsaved changes
+                    // Save draft for recovery on next open, then dismiss without confirmation
                     if hasUnsavedChanges && !isEditing {
-                        showDiscardConfirmation = true
-                    } else {
-                        onDismiss()
+                        saveDraft()
                     }
+                    onDismiss()
                 }) {
                     Text("Cancel")
                 }
@@ -462,6 +451,7 @@ struct AddEventView: View {
                 .buttonStyle(.action(role: .secondary))
 
                 Button(action: {
+                    clearDraft()
                     saveEvent()
                 }) {
                     Label(isEditing ? "Save" : "Add Event", systemImage: isEditing ? "checkmark.circle" : "calendar.badge.plus")
@@ -473,12 +463,6 @@ struct AddEventView: View {
             .padding(.horizontal, DS.Spacing.lg)
             .frame(height: DS.Size.actionFooterHeight)
             .skinBarBackground(skin)
-            .confirmationDialog("Discard Changes?", isPresented: $showDiscardConfirmation, titleVisibility: .visible) {
-                Button("Discard", role: .destructive) { onDismiss() }
-                Button("Keep Editing", role: .cancel) {}
-            } message: {
-                Text("You have unsaved changes that will be lost.")
-            }
         }
         .frame(width: DS.Popover.width, height: DS.Popover.height)
         .onAppear {
@@ -519,12 +503,46 @@ struct AddEventView: View {
                 let currentMins = comps.minute ?? 0
                 comps.minute = currentMins + (30 - (currentMins % 30))
                 date = cal.date(from: comps) ?? now
+                selectedEventType = initialEventType
+                loadDraft()
+                clearDraft()
             }
             // Focus title field after brief delay for popover to settle
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(100))
                 isTitleFocused = true
             }
+        }
+    }
+
+    // MARK: - Draft Persistence
+
+    private static let draftTitleKey = "bubo.draft.title"
+    private static let draftLocationKey = "bubo.draft.location"
+    private static let draftDescriptionKey = "bubo.draft.description"
+
+    private func saveDraft() {
+        UserDefaults.standard.set(title, forKey: Self.draftTitleKey)
+        UserDefaults.standard.set(location, forKey: Self.draftLocationKey)
+        UserDefaults.standard.set(description, forKey: Self.draftDescriptionKey)
+    }
+
+    private func clearDraft() {
+        UserDefaults.standard.removeObject(forKey: Self.draftTitleKey)
+        UserDefaults.standard.removeObject(forKey: Self.draftLocationKey)
+        UserDefaults.standard.removeObject(forKey: Self.draftDescriptionKey)
+    }
+
+    private func loadDraft() {
+        if let t = UserDefaults.standard.string(forKey: Self.draftTitleKey), !t.isEmpty {
+            title = t
+        }
+        if let l = UserDefaults.standard.string(forKey: Self.draftLocationKey), !l.isEmpty {
+            location = l
+        }
+        if let d = UserDefaults.standard.string(forKey: Self.draftDescriptionKey), !d.isEmpty {
+            description = d
+            showMoreOptions = true
         }
     }
 

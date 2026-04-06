@@ -105,8 +105,13 @@ struct QuickAddTasksView: View {
 
                     // Sequential order toggle
                     Toggle(isOn: $sequentialOrder) {
-                        Label("Sequential order", systemImage: "arrow.down.line")
-                            .font(.subheadline)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Label("Run in order", systemImage: "arrow.down.line")
+                                .font(.subheadline)
+                            Text("Tasks are scheduled one after another, without reordering")
+                                .font(.caption)
+                                .foregroundStyle(skin.resolvedTextSecondary)
+                        }
                     }
                     .toggleStyle(.switch)
                     .controlSize(.small)
@@ -376,101 +381,127 @@ private struct TaskRowCard: View {
     let onRemove: () -> Void
 
     @Environment(\.activeSkin) private var skin
+    @State private var showMore = false
+
+    private var hasCustomValues: Bool {
+        task.priority != .medium || task.deadline != nil
+    }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 0) {
-            TextField("Task name", text: $task.title)
-                .textFieldStyle(.plain)
-                .font(.headline)
-                .accessibilityLabel("Task name")
+        VStack(spacing: 0) {
+            HStack(alignment: .center, spacing: 0) {
+                TextField("Task name", text: $task.title)
+                    .textFieldStyle(.plain)
+                    .font(.headline)
+                    .accessibilityLabel("Task name")
 
-            Spacer()
+                Spacer()
 
-            // Duration picker
-            Menu {
-                ForEach([15, 30, 45, 60, 90, 120, 180], id: \.self) { min in
-                    Button(formatMinutes(min)) { task.minutes = min }
-                }
-            } label: {
-                Text(formatMinutes(task.minutes))
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(skin.resolvedTextSecondary)
-                    .padding(.horizontal, DS.Spacing.sm)
-                    .padding(.vertical, DS.Spacing.xxs)
-                    .background(skin.accentColor.opacity(DS.Opacity.lightFill))
-                    .clipShape(Capsule())
-            }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
-            .accessibilityLabel("Duration: \(formatMinutes(task.minutes))")
-
-            // Priority picker
-            Menu {
-                ForEach(QuickAddTasksView.TaskPriority.allCases, id: \.self) { p in
-                    Button {
-                        task.priority = p
-                    } label: {
-                        Label(p.rawValue, systemImage: p.icon)
+                // Duration picker — always visible
+                Menu {
+                    ForEach([15, 30, 45, 60, 90, 120, 180], id: \.self) { min in
+                        Button(formatMinutes(min)) { task.minutes = min }
                     }
-                }
-            } label: {
-                Label {
-                    Text(task.priority.rawValue)
-                        .font(.caption)
-                } icon: {
-                    Image(systemName: task.priority.icon)
-                        .font(.caption)
-                }
-                .foregroundStyle(task.priority == .high ? skin.accentColor : skin.resolvedTextSecondary)
-                .padding(.horizontal, DS.Spacing.sm)
-                .padding(.vertical, DS.Spacing.xxs)
-                .background(skin.accentColor.opacity(DS.Opacity.lightFill))
-                .clipShape(Capsule())
-            }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
-            .padding(.leading, DS.Spacing.xs)
-            .accessibilityLabel("Priority: \(task.priority.rawValue)")
-
-            // Deadline picker
-            Menu {
-                Button("No deadline") { task.deadline = nil }
-                Button("Today") { task.deadline = Calendar.current.startOfDay(for: Date()).addingTimeInterval(86399) }
-                Button("Tomorrow") { task.deadline = Calendar.current.startOfDay(for: Date()).addingTimeInterval(86400 + 86399) }
-                Button("This week") { task.deadline = endOfWeek() }
-                Button("Next week") { task.deadline = endOfWeek()?.addingTimeInterval(7 * 86400) }
-            } label: {
-                Label {
-                    Text(deadlineLabel(task.deadline))
-                        .font(.caption)
-                } icon: {
-                    Image(systemName: "calendar.badge.clock")
-                        .font(.caption)
-                }
-                .foregroundStyle(deadlineColor(task.deadline))
-                .padding(.horizontal, DS.Spacing.sm)
-                .padding(.vertical, DS.Spacing.xxs)
-                .background(skin.accentColor.opacity(DS.Opacity.lightFill))
-                .clipShape(Capsule())
-            }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
-            .padding(.leading, DS.Spacing.xs)
-            .accessibilityLabel("Deadline: \(deadlineLabel(task.deadline))")
-
-            // Remove button
-            if taskCount > 1 {
-                Button {
-                    Haptics.tap()
-                    onRemove()
                 } label: {
-                    Image(systemName: "xmark")
+                    Text(formatMinutes(task.minutes))
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(skin.resolvedTextSecondary)
+                        .padding(.horizontal, DS.Spacing.sm)
+                        .padding(.vertical, DS.Spacing.xxs)
+                        .background(skin.accentColor.opacity(DS.Opacity.lightFill))
+                        .clipShape(Capsule())
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .accessibilityLabel("Duration: \(formatMinutes(task.minutes))")
+
+                // More options toggle
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) { showMore.toggle() }
+                } label: {
+                    Image(systemName: "ellipsis")
                         .font(.caption)
-                        .foregroundStyle(skin.resolvedTextTertiary)
+                        .foregroundStyle(hasCustomValues ? skin.accentColor : skin.resolvedTextTertiary)
                 }
                 .buttonStyle(.plain)
                 .padding(.leading, DS.Spacing.xs)
-                .accessibilityLabel("Remove task")
+                .help("Priority & deadline")
+
+                // Remove button
+                if taskCount > 1 {
+                    Button {
+                        Haptics.tap()
+                        onRemove()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.caption)
+                            .foregroundStyle(skin.resolvedTextTertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.leading, DS.Spacing.xs)
+                    .accessibilityLabel("Remove task")
+                }
+            }
+
+            // Expandable priority & deadline row
+            if showMore || hasCustomValues {
+                HStack(spacing: DS.Spacing.xs) {
+                    // Priority picker
+                    Menu {
+                        ForEach(QuickAddTasksView.TaskPriority.allCases, id: \.self) { p in
+                            Button {
+                                task.priority = p
+                            } label: {
+                                Label(p.rawValue, systemImage: p.icon)
+                            }
+                        }
+                    } label: {
+                        Label {
+                            Text(task.priority.rawValue)
+                                .font(.caption)
+                        } icon: {
+                            Image(systemName: task.priority.icon)
+                                .font(.caption)
+                        }
+                        .foregroundStyle(task.priority == .high ? skin.accentColor : skin.resolvedTextSecondary)
+                        .padding(.horizontal, DS.Spacing.sm)
+                        .padding(.vertical, DS.Spacing.xxs)
+                        .background(skin.accentColor.opacity(DS.Opacity.lightFill))
+                        .clipShape(Capsule())
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                    .accessibilityLabel("Priority: \(task.priority.rawValue)")
+
+                    // Deadline picker
+                    Menu {
+                        Button("No deadline") { task.deadline = nil }
+                        Button("Today") { task.deadline = Calendar.current.startOfDay(for: Date()).addingTimeInterval(86399) }
+                        Button("Tomorrow") { task.deadline = Calendar.current.startOfDay(for: Date()).addingTimeInterval(86400 + 86399) }
+                        Button("This week") { task.deadline = endOfWeek() }
+                        Button("Next week") { task.deadline = endOfWeek()?.addingTimeInterval(7 * 86400) }
+                    } label: {
+                        Label {
+                            Text(deadlineLabel(task.deadline))
+                                .font(.caption)
+                        } icon: {
+                            Image(systemName: "calendar.badge.clock")
+                                .font(.caption)
+                        }
+                        .foregroundStyle(deadlineColor(task.deadline))
+                        .padding(.horizontal, DS.Spacing.sm)
+                        .padding(.vertical, DS.Spacing.xxs)
+                        .background(skin.accentColor.opacity(DS.Opacity.lightFill))
+                        .clipShape(Capsule())
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                    .accessibilityLabel("Deadline: \(deadlineLabel(task.deadline))")
+
+                    Spacer()
+                }
+                .padding(.top, DS.Spacing.xs)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
         .padding(.horizontal, DS.Spacing.md)

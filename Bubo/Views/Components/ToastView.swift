@@ -36,7 +36,7 @@ final class ToastState {
         dismissTask?.cancel()
         Haptics.tap()
         // Show undo toasts longer so users have time to react
-        let effectiveDuration = message.onUndo != nil ? max(duration, 4.0) : duration
+        let effectiveDuration = message.onUndo != nil ? max(duration, 6.0) : duration
         withAnimation(DS.Animation.standard) {
             current = message
         }

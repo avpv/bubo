@@ -121,7 +121,7 @@ struct AssistantTabView: View {
                     )) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Auto-adjust schedule")
-                            Text("Automatically reoptimize when events change")
+                            Text("When a meeting moves, Bubo reshuffles focus blocks and breaks to keep your day balanced")
                                 .font(.caption)
                                 .foregroundStyle(skin.resolvedTextSecondary)
                         }

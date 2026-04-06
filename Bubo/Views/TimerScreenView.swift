@@ -5,6 +5,7 @@ struct TimerScreenView: View {
     let event: CalendarEvent
     var onBack: () -> Void
     var isPinned: Bool = false
+    var onRepeat: ((CalendarEvent) -> Void)? = nil
     var onScheduleNext: ((CalendarEvent) -> Void)? = nil
 
     var wallpaper: WallpaperDefinition = WallpaperCatalog.none
@@ -16,6 +17,7 @@ struct TimerScreenView: View {
     @State private var pulseRing = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.navigateHome) private var navigateHome
 
     private var totalDuration: TimeInterval {
         event.endDate.timeIntervalSince(event.startDate)
@@ -97,10 +99,21 @@ struct TimerScreenView: View {
             PopoverHeader(
                 title: "Timer",
                 showBack: !isPinned,
-                onBack: {
-                    onBack()
-                },
+                onBack: onBack,
                 trailing: AnyView(
+                    HStack(spacing: DS.Spacing.sm) {
+                    if !isPinned {
+                        Button {
+                            Haptics.tap()
+                            navigateHome?()
+                        } label: {
+                            Text("Done")
+                                .font(.system(size: DS.Size.iconMedium, weight: .medium))
+                                .foregroundStyle(skin.accentColor)
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Return to event list")
+                    }
                     Button {
                         Haptics.tap()
                         if isPinned {
@@ -115,15 +128,14 @@ struct TimerScreenView: View {
                             )
                         }
                     } label: {
-                        Image(systemName: isPinned ? "pin.fill" : "pin")
+                        Label(isPinned ? "Unpin" : "Pin", systemImage: isPinned ? "pin.fill" : "pin")
                             .font(.system(size: DS.Size.iconMedium, weight: .medium))
                             .foregroundStyle(isPinned ? DS.Colors.accent : skin.resolvedTextSecondary)
-                            .rotationEffect(.degrees(isPinned ? 0 : 45))
                     }
                     .buttonStyle(.borderless)
                     .help(isPinned ? "Unpin window" : "Pin on top")
                     .accessibilityLabel(isPinned ? "Unpin timer window" : "Pin timer window on top")
-                )
+                    })
             )
 
             ScrollView {
@@ -205,16 +217,29 @@ struct TimerScreenView: View {
                                 .truncationMode(.tail)
                         }
 
-                        // Post-session action for Pomodoro
-                        if ended, event.eventType == .pomodoro, let onScheduleNext {
-                            Button {
-                                Haptics.tap()
-                                onScheduleNext(event)
-                            } label: {
-                                Label("Schedule Next Session", systemImage: "wand.and.stars")
-                                    .font(.caption.weight(.medium))
+                        // Post-session actions for Pomodoro
+                        if ended, event.eventType == .pomodoro {
+                            HStack(spacing: DS.Spacing.sm) {
+                                Button {
+                                    Haptics.tap()
+                                    onRepeat?(event)
+                                } label: {
+                                    Label("Repeat", systemImage: "arrow.counterclockwise")
+                                        .font(.caption.weight(.medium))
+                                }
+                                .buttonStyle(.action(role: .primary, size: .compact))
+
+                                if let onScheduleNext {
+                                    Button {
+                                        Haptics.tap()
+                                        onScheduleNext(event)
+                                    } label: {
+                                        Label("Plan Next", systemImage: "wand.and.stars")
+                                            .font(.caption.weight(.medium))
+                                    }
+                                    .buttonStyle(.action(role: .secondary, size: .compact))
+                                }
                             }
-                            .buttonStyle(.action(role: .primary, size: .compact))
                             .padding(.top, DS.Spacing.sm)
                             .transition(.opacity.combined(with: .move(edge: .bottom)))
                         }
