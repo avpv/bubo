@@ -104,6 +104,14 @@ class AppleCalendarService {
         store.refreshSourcesIfNecessary()
     }
 
+    /// Clear the in-memory event cache so the next fetch reads fresh data
+    /// from the calendard daemon's database. Use this before re-fetching
+    /// events when you suspect the daemon has processed remote changes
+    /// that the current EKEventStore cache doesn't reflect yet.
+    func resetCache() {
+        store.reset()
+    }
+
     /// Rebuild the EventKit store to force a fresh connection to the sync daemon.
     /// This resolves issues where long-running instances lose sync with the
     /// background calendard process, especially when Apple Calendar is closed.

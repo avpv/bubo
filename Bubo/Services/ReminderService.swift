@@ -310,13 +310,28 @@ class ReminderService {
             try? await Task.sleep(for: .seconds(30))
             guard !Task.isCancelled else { return }
             self?.fetchAndUpdate()
+
+            // 4th follow-up: calendard can be very slow when Calendar.app has
+            // not been opened for a while. Give it another prod and a final
+            // long-delay re-fetch to catch deletions that take 60-90s to arrive.
+            AppleCalendarService.shared.triggerRemoteRefresh()
+
+            try? await Task.sleep(for: .seconds(60))
+            guard !Task.isCancelled else { return }
+            self?.fetchAndUpdate()
         }
     }
 
     /// Lightweight re-fetch: reads events from EventKit and updates the UI
     /// without triggering another remote refresh (avoids infinite loop).
+    /// Resets the store's in-memory cache first so we pick up any changes
+    /// the calendard daemon has processed since our last read.
     private func fetchAndUpdate() {
         guard settings.isCalendarSyncEnabled, AppleCalendarService.hasAccess else { return }
+
+        // Flush the EKEventStore's in-memory cache so we read the latest
+        // state from the calendard daemon's database, not stale cache.
+        AppleCalendarService.shared.resetCache()
 
         let now = Date()
         let endDate = Calendar.current.date(byAdding: .day, value: Self.fetchWindowDays, to: now) ?? now
