@@ -122,7 +122,11 @@ class AppleCalendarService {
 
         return ekEvents.compactMap { ek in
             guard !ek.isAllDay else { return nil }
-            
+            // Skip cancelled/deleted events — remote calendars (Google,
+            // Exchange, iCloud) may keep them around with a .canceled status
+            // for a while before fully removing them from the database.
+            guard ek.status != .canceled else { return nil }
+
             let baseId = "apple_\(ek.eventIdentifier ?? UUID().uuidString)"
             let uniqueId = "\(baseId)_\(ek.startDate.timeIntervalSince1970)"
 

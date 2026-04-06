@@ -328,10 +328,12 @@ class ReminderService {
 
         let updated = events.sorted { $0.startDate < $1.startDate }
 
-        // Only update if the event set actually changed to avoid unnecessary UI churn
+        // Only update if the event set actually changed to avoid unnecessary UI churn.
+        // Compare both IDs and event count — cancelled/deleted events that are now
+        // filtered out change the count even when the remaining IDs overlap.
         let oldIds = Set(upcomingEvents.map { $0.id })
         let newIds = Set(updated.map { $0.id })
-        guard oldIds != newIds else { return }
+        guard oldIds != newIds || upcomingEvents.count != updated.count else { return }
 
         upcomingEvents = updated
         lastSyncDate = Date()
