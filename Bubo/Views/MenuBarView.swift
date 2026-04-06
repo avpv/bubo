@@ -440,9 +440,10 @@ struct MenuBarView: View {
             return " \u{00B7} in\u{00A0}\(h)\u{00A0}hr\u{00A0}\(m)\u{00A0}min"
         }()
 
-        if done == total { return "All\u{00A0}\(total) done" }
+        if done == total { return "All done" }
         if remaining == total { return "\(total)\u{00A0}events today\(nextSuffix)" }
-        return "\(remaining)\u{00A0}of\u{00A0}\(total)\(nextSuffix)"
+        if nextSuffix.isEmpty { return "All done" }
+        return "Next\(nextSuffix)"
     }
 
     /// Context-aware subtitle for the empty state.
