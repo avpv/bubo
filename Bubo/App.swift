@@ -22,7 +22,27 @@ struct BuboApp: App {
                 PersistedReminderOverride.self
             )
         } catch {
-            fatalError("Failed to create ModelContainer: \(error)")
+            // Schema migration failed — delete the corrupted store and retry
+            // so the app can launch instead of crashing on every open.
+            let storeURL = URL.applicationSupportDirectory
+                .appending(path: "default.store")
+            try? FileManager.default.removeItem(at: storeURL)
+            // Also remove WAL/SHM sidecar files
+            for suffix in ["-wal", "-shm"] {
+                let sidecar = storeURL.deletingPathExtension()
+                    .appendingPathExtension(storeURL.pathExtension + suffix)
+                try? FileManager.default.removeItem(at: sidecar)
+            }
+            do {
+                container = try ModelContainer(for:
+                    PersistedLocalEvent.self,
+                    PersistedCachedEvent.self,
+                    PersistedExcludedOccurrence.self,
+                    PersistedReminderOverride.self
+                )
+            } catch {
+                fatalError("Failed to create ModelContainer after reset: \(error)")
+            }
         }
         self.modelContainer = container
 

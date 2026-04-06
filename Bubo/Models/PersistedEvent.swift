@@ -20,11 +20,11 @@ final class PersistedLocalEvent {
     var colorTagRaw: String?
     var context: String?
     var storyPoints: Int?
-    var isTask: Bool
+    var isTask: Bool = false
     var deadline: Date?
-    var taskStatusRaw: String
+    var taskStatusRaw: String = "todo"
     var completedAt: Date?
-    var dependsOn: [String]
+    var dependsOn: [String] = []
 
     init(from event: CalendarEvent) {
         self.eventId = event.id
@@ -117,11 +117,11 @@ final class PersistedCachedEvent {
     var colorTagRaw: String?
     var context: String?
     var storyPoints: Int?
-    var isTask: Bool
+    var isTask: Bool = false
     var deadline: Date?
-    var taskStatusRaw: String
+    var taskStatusRaw: String = "todo"
     var completedAt: Date?
-    var dependsOn: [String]
+    var dependsOn: [String] = []
     var cachedAt: Date
 
     init(from event: CalendarEvent, cachedAt: Date = Date()) {
