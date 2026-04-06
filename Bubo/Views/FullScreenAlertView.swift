@@ -9,6 +9,7 @@ struct FullScreenAlertView: View {
     @State private var isVisible = false
     @State private var joinHovered = false
     @State private var dismissHovered = false
+    @FocusState private var isFocused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.activeSkin) private var skin
@@ -200,11 +201,21 @@ struct FullScreenAlertView: View {
             onDismiss()
             return .handled
         }
+        .onKeyPress(.return) {
+            if let meetingURL = event.meetingLink {
+                NSWorkspace.shared.open(meetingURL)
+            }
+            onDismiss()
+            return .handled
+        }
+        .focusable()
+        .focused($isFocused)
         } // TimelineView
         .opacity(isVisible ? 1 : 0)
         .scaleEffect(isVisible ? 1 : (reduceMotion ? 1 : 0.92))
         .onAppear {
             Haptics.impact()
+            isFocused = true
             if reduceMotion {
                 isVisible = true
             } else {
