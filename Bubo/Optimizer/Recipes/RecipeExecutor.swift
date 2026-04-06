@@ -82,7 +82,7 @@ struct RecipeExecutor {
         let allFixed = calendarFixed + fixedFromRules + localAsFixed
 
         // 11. Collect participant availability
-        let allParticipants = allMovable.flatMap(\.requiredParticipants)
+        let _ = allMovable.flatMap(\.requiredParticipants)
         let availability: [String: [DateInterval]] = [:]
         // TODO: Fetch real availability when CalendarService supports it
 
@@ -114,7 +114,7 @@ struct RecipeExecutor {
         }
 
         // 15. Configure scenario generation
-        let scenarioGen = ScenarioGenerator()
+        let _ = ScenarioGenerator()
         // scenarioGen uses default values; maxScenarios/diversityThreshold
         // are passed through GAConfiguration or handled post-optimization
 
