@@ -46,7 +46,12 @@ struct EventRowView: View {
 
             Spacer(minLength: DS.Spacing.md)
 
-            // Actions on hover — slide in from right
+            // Join meeting — always visible when meeting link exists
+            if let meetingURL = event.meetingLink {
+                joinButton(meetingURL)
+            }
+
+            // Other actions on hover — slide in from right
             if isHovered {
                 hoverActions
             }
@@ -235,6 +240,22 @@ struct EventRowView: View {
         } // TimelineView
     }
 
+    // MARK: - Join Button (always visible)
+
+    private func joinButton(_ url: URL) -> some View {
+        Button {
+            Haptics.tap()
+            NSWorkspace.shared.open(url)
+        } label: {
+            Label("Join", systemImage: "video.fill")
+                .font(.caption2)
+                .fontWeight(.medium)
+        }
+        .buttonStyle(.action(role: .primary, size: .compact))
+        .help("Join \(event.meetingServiceName ?? "meeting")")
+        .accessibilityLabel("Join \(event.meetingServiceName ?? "meeting")")
+    }
+
     // MARK: - Urgency Bar
 
     private var accentBarColor: Color {
@@ -325,20 +346,6 @@ struct EventRowView: View {
 
     private var hoverActions: some View {
         HStack(spacing: DS.Spacing.xs) {
-            if let meetingURL = event.meetingLink {
-                Button {
-                    Haptics.tap()
-                    NSWorkspace.shared.open(meetingURL)
-                } label: {
-                    Image(systemName: "video.fill")
-                        .font(.system(size: DS.Size.iconMedium, weight: .medium))
-                        .foregroundStyle(DS.Colors.accent)
-                }
-                .buttonStyle(.borderless)
-                .help("Join \(event.meetingServiceName ?? "meeting")")
-                .accessibilityLabel("Join \(event.meetingServiceName ?? "meeting")")
-            }
-
             if event.isUpcoming {
                 Menu {
                     reminderMenuItems

@@ -20,10 +20,12 @@ struct MenuBarView: View {
     enum Navigation: Equatable {
         case list
         case detail(CalendarEvent)
-        case addEvent(editing: CalendarEvent? = nil)
+        case addEvent(editing: CalendarEvent? = nil, initialType: EventType = .standard)
         case timer(CalendarEvent)
         case optimizer
         case quickAddTasks
+
+        static var addPomodoro: Navigation { .addEvent(initialType: .pomodoro) }
 
         var isTimer: Bool {
             if case .timer = self { return true }
@@ -39,7 +41,7 @@ struct MenuBarView: View {
             switch (lhs, rhs) {
             case (.list, .list): return true
             case (.detail(let a), .detail(let b)): return a.id == b.id
-            case (.addEvent(let a), .addEvent(let b)): return a?.id == b?.id
+            case (.addEvent(let a, let t1), .addEvent(let b, let t2)): return a?.id == b?.id && t1 == t2
             case (.timer(let a), .timer(let b)): return a.id == b.id
             case (.optimizer, .optimizer): return true
             case (.quickAddTasks, .quickAddTasks): return true
@@ -122,8 +124,17 @@ struct MenuBarView: View {
                     TimerScreenView(
                         event: event,
                         onBack: { navigation = .detail(event) },
+                        onRepeat: { finishedEvent in
+                            // Re-create the same pomodoro session starting now
+                            var repeat_ = finishedEvent
+                            repeat_.id = UUID().uuidString
+                            repeat_.startDate = Date()
+                            repeat_.endDate = Date().addingTimeInterval(finishedEvent.duration)
+                            reminderService.addLocalEvent(repeat_)
+                            navigation = .timer(repeat_)
+                            toastState.showSuccess("Session restarted")
+                        },
                         onScheduleNext: { finishedEvent in
-                            // Pre-set a pomodoro recipe and navigate to optimizer
                             optimizerService.activeRecipe = .pomodoroSession()
                             navigation = .optimizer
                         }
@@ -135,10 +146,11 @@ struct MenuBarView: View {
                         )
                     )
 
-                case .addEvent(let editing):
+                case .addEvent(let editing, let initialType):
                     AddEventView(
                         reminderService: reminderService,
                         editingEvent: editing,
+                        initialEventType: initialType,
                         onDismiss: {
                             // Return to detail if we were editing, otherwise list
                             if let event = editing,
@@ -403,7 +415,7 @@ struct MenuBarView: View {
         .animation(skin.resolvedMicroAnimation, value: reminderService.isSyncing)
     }
 
-    /// Dynamic header title showing today's progress (e.g. "3\u{00A0}of\u{00A0}7 done").
+    /// Dynamic header title showing today's progress and time until next event.
     private var dayProgressTitle: String {
         let cal = Calendar.current
         let now = Date()
@@ -414,9 +426,22 @@ struct MenuBarView: View {
         let total = todayEvents.count
         guard total > 0 else { return "Bubo" }
         let done = todayEvents.filter { $0.endDate <= now }.count
-        if done == 0 { return "\(total)\u{00A0}events today" }
+
+        // Time until next upcoming event
+        let nextSuffix: String = {
+            guard let next = todayEvents.first(where: { $0.startDate > now }) else { return "" }
+            let mins = Int(next.startDate.timeIntervalSince(now)) / 60
+            if mins < 1 { return " \u{00B7} now" }
+            if mins < 60 { return " \u{00B7} in\u{00A0}\(mins)\u{00A0}m" }
+            let h = mins / 60
+            let m = mins % 60
+            if m == 0 { return " \u{00B7} in\u{00A0}\(h)\u{00A0}h" }
+            return " \u{00B7} in\u{00A0}\(h)\u{00A0}h\u{00A0}\(m)\u{00A0}m"
+        }()
+
+        if done == 0 { return "\(total)\u{00A0}events today\(nextSuffix)" }
         if done == total { return "All\u{00A0}\(total) done" }
-        return "\(done)\u{00A0}of\u{00A0}\(total) done"
+        return "\(done)\u{00A0}of\u{00A0}\(total)\(nextSuffix)"
     }
 
     /// Context-aware subtitle for the empty state.
@@ -645,11 +670,24 @@ struct MenuBarView: View {
     private var footerActions: some View {
         HStack {
             HStack(spacing: DS.Spacing.sm) {
-                Button(action: {
+                Menu {
+                    Button {
+                        Haptics.tap()
+                        navigation = .addEvent()
+                    } label: {
+                        Label("New Event", systemImage: "calendar.badge.plus")
+                    }
+                    Button {
+                        Haptics.tap()
+                        navigation = .addPomodoro
+                    } label: {
+                        Label("New Pomodoro", systemImage: "timer")
+                    }
+                } label: {
+                    Label("Add", systemImage: "plus")
+                } primaryAction: {
                     Haptics.tap()
                     navigation = .addEvent()
-                }) {
-                    Label("Add", systemImage: "plus")
                 }
                 .buttonStyle(.action(role: .primary, size: .regular))
                 .help("Add a new event (\u{2318}N)")
@@ -672,7 +710,7 @@ struct MenuBarView: View {
                     optimizerService.scenarios = []
                     navigation = .optimizer
                 }) {
-                    Image(systemName: "wand.and.stars")
+                    Label("Plan", systemImage: "wand.and.stars")
                 }
                 .buttonStyle(.action(role: .secondary, size: .compact))
                 .help("Schedule Assistant (\u{2318}O)")
