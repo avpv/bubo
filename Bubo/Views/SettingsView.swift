@@ -15,8 +15,7 @@ struct SettingsView: View {
         case calendars = "Calendars"
         case reminders = "Reminders"
         case worldClock = "World Clock"
-        case optimizer = "Schedule Assistant"
-        case ai = "AI Assistant"
+        case assistant = "Assistant"
 
         var id: String { rawValue }
 
@@ -27,8 +26,7 @@ struct SettingsView: View {
             case .calendars: "calendar"
             case .reminders: "bell"
             case .worldClock: "globe"
-            case .optimizer: "wand.and.stars.inverse"
-            case .ai: "sparkles"
+            case .assistant: "wand.and.sparkles"
             }
         }
     }
@@ -57,10 +55,8 @@ struct SettingsView: View {
                     RemindersTabView()
                 case .worldClock:
                     WorldClockTabView()
-                case .optimizer:
-                    OptimizerTabView()
-                case .ai:
-                    AITabView(agentService: agentService)
+                case .assistant:
+                    AssistantTabView(agentService: agentService)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

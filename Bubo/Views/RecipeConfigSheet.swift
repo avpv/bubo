@@ -40,6 +40,8 @@ struct RecipeConfigSheet: View {
     @State private var optimizationState: OptimizationState = .idle
     @State private var selectedScenarioIndex = 0
     @State private var currentSnapshot: ScheduleSnapshot?
+    @State private var showCustomize = false
+    @State private var showAlternatives = false
 
     // MARK: - Computed
 
@@ -96,13 +98,34 @@ struct RecipeConfigSheet: View {
                 // Header
                 recipeHeader
 
-                // Parameters — each as its own section
+                // Parameters — collapsed by default, show on "Customize"
                 if !recipe.params.isEmpty {
-                    settingsSections
+                    VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                        Button {
+                            withAnimation(skin.resolvedMicroAnimation) {
+                                showCustomize.toggle()
+                            }
+                        } label: {
+                            HStack(spacing: DS.Spacing.xs) {
+                                Text("Customize")
+                                    .font(.caption.weight(.medium))
+                                    .foregroundStyle(skin.accentColor)
+                                Image(systemName: showCustomize ? "chevron.up" : "chevron.down")
+                                    .font(.caption2)
+                                    .foregroundStyle(skin.accentColor)
+                            }
+                        }
+                        .buttonStyle(.plain)
+
+                        if showCustomize {
+                            settingsSections
+                                .transition(.opacity.combined(with: .move(edge: .top)))
+                        }
+                    }
                 }
 
                 // Preview for creative recipes with multiple events
-                if recipe.isCreative && recipe.events.count > 1 {
+                if recipe.isCreative && recipe.events.count > 1 && showCustomize {
                     creativePreviewSection
                 }
 
@@ -247,8 +270,8 @@ struct RecipeConfigSheet: View {
                 scheduleTimeline(snapshot)
 
                 HStack(spacing: DS.Spacing.md) {
-                    Label("\(freeTotal)m free", systemImage: "clock")
-                    Label("longest gap \(longestGap)m", systemImage: "arrow.left.and.right")
+                    Label("\(freeTotal)\u{00A0}m free", systemImage: "clock")
+                    Label("longest gap \(longestGap)\u{00A0}m", systemImage: "arrow.left.and.right")
                 }
                 .font(.caption2)
                 .foregroundStyle(skin.resolvedTextSecondary)
@@ -286,7 +309,7 @@ struct RecipeConfigSheet: View {
                         .overlay(
                             Group {
                                 if fraction * geo.size.width > 36 {
-                                    Text("\(segment.minutes)m")
+                                    Text("\(segment.minutes)\u{00A0}m")
                                         .font(.caption2.weight(.semibold))
                                         .foregroundStyle(skin.resolvedTextPrimary.opacity(0.9))
                                 }
@@ -336,19 +359,40 @@ struct RecipeConfigSheet: View {
                     }
                 }
 
-                // Scenario picker (segmented) when multiple options
-                if results.count > 1 {
-                    Picker("Option", selection: $selectedScenarioIndex) {
-                        ForEach(0..<results.count, id: \.self) { idx in
-                            Text("Option \(idx + 1)").tag(idx)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                }
-
-                // Selected scenario detail
+                // Show best scenario by default
                 if selectedScenarioIndex < results.count {
                     scenarioDetail(results[selectedScenarioIndex])
+                }
+
+                // Show alternatives toggle only when multiple options exist
+                if results.count > 1 {
+                    VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                        Button {
+                            withAnimation(skin.resolvedMicroAnimation) {
+                                showAlternatives.toggle()
+                            }
+                        } label: {
+                            HStack(spacing: DS.Spacing.xs) {
+                                Text(showAlternatives ? "Hide alternatives" : "\(results.count - 1) more option\(results.count > 2 ? "s" : "")")
+                                    .font(.caption2.weight(.medium))
+                                    .foregroundStyle(skin.accentColor)
+                                Image(systemName: showAlternatives ? "chevron.up" : "chevron.down")
+                                    .font(.caption2)
+                                    .foregroundStyle(skin.accentColor)
+                            }
+                        }
+                        .buttonStyle(.plain)
+
+                        if showAlternatives {
+                            Picker("Option", selection: $selectedScenarioIndex) {
+                                ForEach(0..<results.count, id: \.self) { idx in
+                                    Text("Option \(idx + 1)").tag(idx)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                        }
+                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -407,14 +451,15 @@ struct RecipeConfigSheet: View {
 
     private func scenarioDetail(_ scenario: ScheduleScenario) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            // Fitness badge
-            Label("\(Int(max(0, scenario.fitness) * 100))% match", systemImage: "sparkles")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(skin.accentColor)
-                .padding(.horizontal, DS.Spacing.sm)
-                .padding(.vertical, DS.Spacing.xxs)
-                .background(skin.accentColor.opacity(0.12))
-                .clipShape(Capsule())
+            // Human-readable quality indicator instead of fitness %
+            HStack(spacing: DS.Spacing.xs) {
+                Image(systemName: scenarioQualityIcon(scenario))
+                    .font(.caption2)
+                    .foregroundStyle(scenarioQualityColor(scenario))
+                Text(scenarioQualityText(scenario))
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(scenarioQualityColor(scenario))
+            }
 
             // Events list
             ForEach(scenario.genes, id: \.eventId) { gene in
@@ -431,21 +476,34 @@ struct RecipeConfigSheet: View {
 
                     Spacer()
 
-                    Text("\(DS.timeFormatter.string(from: gene.startTime)) – \(DS.timeFormatter.string(from: gene.endTime))")
+                    Text("\(DS.timeFormatter.string(from: gene.startTime))\u{2009}–\u{2009}\(DS.timeFormatter.string(from: gene.endTime))")
                         .font(.caption2.monospacedDigit())
                         .foregroundStyle(skin.resolvedTextSecondary)
                 }
             }
-
-            // Warnings
-            if !scenario.constraintViolations.isEmpty {
-                ForEach(scenario.constraintViolations, id: \.self) { v in
-                    Label(v, systemImage: "exclamationmark.triangle")
-                        .font(.caption2)
-                        .foregroundStyle(skin.resolvedWarningColor)
-                }
-            }
         }
+    }
+
+    private func scenarioQualityText(_ scenario: ScheduleScenario) -> String {
+        let pct = Int(max(0, scenario.fitness) * 100)
+        if pct >= 90 { return "Great fit, no conflicts" }
+        if pct >= 70 { return "Good fit" }
+        if pct >= 50 { return "Acceptable, minor trade-offs" }
+        return "Best available option"
+    }
+
+    private func scenarioQualityIcon(_ scenario: ScheduleScenario) -> String {
+        let pct = Int(max(0, scenario.fitness) * 100)
+        if pct >= 70 { return "checkmark.circle.fill" }
+        if pct >= 50 { return "checkmark.circle" }
+        return "info.circle"
+    }
+
+    private func scenarioQualityColor(_ scenario: ScheduleScenario) -> Color {
+        let pct = Int(max(0, scenario.fitness) * 100)
+        if pct >= 70 { return skin.resolvedSuccessColor }
+        if pct >= 50 { return skin.accentColor }
+        return skin.resolvedWarningColor
     }
 
     /// Whether the current duration param is already at the minimum segmented option.
@@ -490,7 +548,7 @@ struct RecipeConfigSheet: View {
         }
         if raw.contains("but only") && raw.contains("min") {
             let available = extractMinutes(from: raw, after: "only")
-            let detail = available.map { " (\($0)m free)" } ?? ""
+            let detail = available.map { " (\($0)\u{00A0}m free)" } ?? ""
             return "Not enough free time in schedule\(detail). \(durationHint)"
         }
         return raw
@@ -534,7 +592,7 @@ struct RecipeConfigSheet: View {
                             .overlay(
                                 Group {
                                     if segment.isFree && width > 30 {
-                                        Text("\(Int(segment.duration / 60))m")
+                                        Text("\(Int(segment.duration / 60))\u{00A0}m")
                                             .font(.caption2.weight(.semibold))
                                             .foregroundStyle(skin.resolvedTextPrimary.opacity(0.9))
                                     }
@@ -553,7 +611,7 @@ struct RecipeConfigSheet: View {
                     .foregroundStyle(skin.resolvedTextTertiary)
                 Spacer()
                 let freeTotal = Int(snapshot.freeGaps.reduce(0.0) { $0 + $1.duration } / 60)
-                Text("\(freeTotal)m free")
+                Text("\(freeTotal)\u{00A0}m free")
                     .font(.caption2.weight(.medium))
                     .foregroundStyle(skin.resolvedTextSecondary)
                 Spacer()
@@ -895,11 +953,11 @@ struct RecipeConfigSheet: View {
             options: options,
             selection: binding,
             labelProvider: { minutes in
-                if minutes < 60 { return "\(minutes)m" }
+                if minutes < 60 { return "\(minutes)\u{00A0}m" }
                 let hours = minutes / 60
                 let rem = minutes % 60
-                if rem == 0 { return "\(hours)h" }
-                return "\(hours)h\(rem)m"
+                if rem == 0 { return "\(hours)\u{00A0}h" }
+                return "\(hours)\u{00A0}h\u{00A0}\(rem)\u{00A0}m"
             }
         )
     }
@@ -1093,7 +1151,7 @@ struct RecipeConfigSheet: View {
 
                 Spacer()
 
-                Text("\(Int(event.duration / 60))m")
+                Text("\(Int(event.duration / 60))\u{00A0}m")
                     .font(.caption2)
                     .foregroundStyle(skin.resolvedTextTertiary)
             }
@@ -1129,11 +1187,11 @@ struct RecipeConfigSheet: View {
     }
 
     private func formatDuration(_ minutes: Int) -> String {
-        if minutes < 60 { return "\(minutes)m" }
+        if minutes < 60 { return "\(minutes)\u{00A0}m" }
         let h = minutes / 60
         let m = minutes % 60
-        if m == 0 { return "\(h)h" }
-        return "\(h)h \(m)m"
+        if m == 0 { return "\(h)\u{00A0}h" }
+        return "\(h)\u{00A0}h \(m)\u{00A0}m"
     }
 
     // MARK: - Default Values

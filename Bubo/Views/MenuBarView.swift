@@ -87,7 +87,7 @@ struct MenuBarView: View {
                             let deletedEvent = event
                             reminderService.removeLocalEvent(id: event.id)
                             navigation = .list
-                            toastState.showSuccess("Event deleted", icon: "trash.fill") {
+                            toastState.showSuccess("\u{201C}\(deletedEvent.title)\u{201D} deleted", icon: "trash.fill") {
                                 reminderService.addLocalEvent(deletedEvent)
                             }
                             notifyRecipeMonitor(.deleted(eventId: event.id))
@@ -97,7 +97,7 @@ struct MenuBarView: View {
                             let seriesEvent = reminderService.seriesEvent(for: event) ?? event
                             reminderService.removeLocalEvent(id: seriesId)
                             navigation = .list
-                            toastState.showSuccess("All occurrences deleted", icon: "trash.fill") {
+                            toastState.showSuccess("All \u{201C}\(event.title)\u{201D} deleted", icon: "trash.fill") {
                                 reminderService.addLocalEvent(seriesEvent)
                             }
                             notifyRecipeMonitor(.deleted(eventId: seriesId))
@@ -105,7 +105,7 @@ struct MenuBarView: View {
                         onDeleteOccurrence: { event in
                             reminderService.excludeOccurrence(occurrenceId: event.id)
                             navigation = .list
-                            toastState.showSuccess("Occurrence skipped", icon: "trash.fill")
+                            toastState.showSuccess("\u{201C}\(event.title)\u{201D} removed", icon: "trash.fill")
                         },
                         onTimer: { event in
                             navigation = .timer(event)
@@ -139,11 +139,24 @@ struct MenuBarView: View {
                     AddEventView(
                         reminderService: reminderService,
                         editingEvent: editing,
-                        onDismiss: { navigation = .list },
+                        onDismiss: {
+                            // Return to detail if we were editing, otherwise list
+                            if let event = editing,
+                               let updated = reminderService.allEvents.first(where: { $0.id == event.id }) {
+                                navigation = .detail(updated)
+                            } else {
+                                navigation = .list
+                            }
+                        },
                         onSave: { isEdit in
-                            navigation = .list
-                            toastState.showSuccess(isEdit ? "Event updated" : "Event added")
-                            // Notify monitor when editing existing event (time may have changed)
+                            // After saving an edit, return to detail view with updated data
+                            if isEdit, let eventId = editing?.id,
+                               let updated = reminderService.allEvents.first(where: { $0.id == eventId }) {
+                                navigation = .detail(updated)
+                            } else {
+                                navigation = .list
+                            }
+                            toastState.showSuccess(isEdit ? "Event updated" : "Event created")
                             if isEdit, let eventId = editing?.id {
                                 notifyRecipeMonitor(.moved(eventId: eventId))
                             }
@@ -250,7 +263,7 @@ struct MenuBarView: View {
     private func handleDelete(_ event: CalendarEvent) {
         let deletedEvent = event
         reminderService.removeLocalEvent(id: event.id)
-        toastState.showSuccess("Event deleted", icon: "trash.fill") {
+        toastState.showSuccess("\u{201C}\(deletedEvent.title)\u{201D} deleted", icon: "trash.fill") {
             reminderService.addLocalEvent(deletedEvent)
         }
         notifyRecipeMonitor(.deleted(eventId: event.id))
@@ -274,7 +287,7 @@ struct MenuBarView: View {
         ScrollViewReader { scrollProxy in
         VStack(alignment: .leading, spacing: 0) {
             PopoverHeader(
-                title: "Bubo",
+                title: dayProgressTitle,
                 trailing: AnyView(
                     HStack(spacing: DS.Spacing.sm) {
                         statusIndicators
@@ -327,12 +340,14 @@ struct MenuBarView: View {
                     .frame(maxWidth: .infinity, alignment: .center)
             }
 
-            // World Clock — pinned at top, never compressed
-            WorldClockStripView(settings: settings)
-                .fixedSize(horizontal: false, vertical: true)
+            // World Clock — only show when user has cities configured
+            if !settings.worldClockCityIDs.isEmpty {
+                WorldClockStripView(settings: settings)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
-            // Color filter — show whenever there are events so users discover the feature
-            if reminderService.nonDisintegratingEventCount > 0 {
+            // Color filter — show when at least one event has a color assigned
+            if !usedColorTags.isEmpty {
                 colorFilterBar
             }
 
@@ -388,6 +403,56 @@ struct MenuBarView: View {
         .animation(skin.resolvedMicroAnimation, value: reminderService.isSyncing)
     }
 
+    /// Dynamic header title showing today's progress (e.g. "3\u{00A0}of\u{00A0}7 done").
+    private var dayProgressTitle: String {
+        let cal = Calendar.current
+        let now = Date()
+        guard let todayGroup = reminderService.eventsByDay.first(where: { cal.isDateInToday($0.date) }) else {
+            return "Bubo"
+        }
+        let todayEvents = todayGroup.events.filter { !reminderService.disintegratingEventIDs.contains($0.id) }
+        let total = todayEvents.count
+        guard total > 0 else { return "Bubo" }
+        let done = todayEvents.filter { $0.endDate <= now }.count
+        if done == 0 { return "\(total)\u{00A0}events today" }
+        if done == total { return "All\u{00A0}\(total) done" }
+        return "\(done)\u{00A0}of\u{00A0}\(total) done"
+    }
+
+    /// Context-aware subtitle for the empty state.
+    private var emptyStateSubtitle: String {
+        let cal = Calendar.current
+        let now = Date()
+
+        // Check if there are any future events across all days (including ones currently filtered out by the time window)
+        let allUpcoming = reminderService.allEvents
+            .filter { $0.startDate > now }
+            .sorted { $0.startDate < $1.startDate }
+
+        if let next = allUpcoming.first {
+            let interval = next.startDate.timeIntervalSince(now)
+            let hours = Int(interval / 3600)
+            let minutes = Int(interval / 60) % 60
+
+            if cal.isDateInToday(next.startDate) {
+                if hours > 0 {
+                    return "Next: \(next.title) in\u{00A0}\(hours)h\u{00A0}\(minutes)m"
+                }
+                return "Next: \(next.title) in\u{00A0}\(minutes)m"
+            } else if cal.isDateInTomorrow(next.startDate) {
+                let fmt = DateFormatter()
+                fmt.dateFormat = "H:mm"
+                return "Tomorrow: \(next.title) at\u{00A0}\(fmt.string(from: next.startDate))"
+            } else {
+                let fmt = DateFormatter()
+                fmt.setLocalizedDateFormatFromTemplate("EEE")
+                return "Next: \(next.title) on\u{00A0}\(fmt.string(from: next.startDate))"
+            }
+        }
+
+        return "No upcoming events"
+    }
+
     private var emptyState: some View {
         VStack(spacing: DS.EmptyState.spacing * 1.5) {
             ZStack {
@@ -413,13 +478,15 @@ struct MenuBarView: View {
             }
 
             VStack(spacing: DS.Spacing.xs) {
-                Text("No upcoming meetings")
+                Text("All clear")
                     .font(.headline)
                     .fontWeight(skin.resolvedHeadlineFontWeight)
                     .foregroundStyle(skin.resolvedTextPrimary)
-                Text("Your schedule is clear.")
+                Text(emptyStateSubtitle)
                     .font(.subheadline)
                     .foregroundStyle(skin.resolvedTextSecondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
             }
 
             Button {
@@ -505,12 +572,12 @@ struct MenuBarView: View {
                             onDelete: { event in handleDelete(event) },
                             onDeleteOccurrence: { event in
                                 reminderService.excludeOccurrence(occurrenceId: event.id)
-                                toastState.showSuccess("Occurrence skipped", icon: "trash.fill")
+                                toastState.showSuccess("\u{201C}\(event.title)\u{201D} removed", icon: "trash.fill")
                             },
                             onDeleteSeries: { event in
                                 let seriesId = event.seriesId ?? event.id
                                 reminderService.removeLocalEvent(id: seriesId)
-                                toastState.showSuccess("All occurrences deleted", icon: "trash.fill")
+                                toastState.showSuccess("All \u{201C}\(event.title)\u{201D} deleted", icon: "trash.fill")
                             },
                             onTap: { event in
                                 navigation = .detail(event)
@@ -590,6 +657,17 @@ struct MenuBarView: View {
 
                 Button(action: {
                     Haptics.tap()
+                    optimizerService.activeRecipe = .needFocus()
+                    navigation = .optimizer
+                }) {
+                    Label("Focus", systemImage: "brain.head.profile")
+                }
+                .buttonStyle(.action(role: .secondary, size: .compact))
+                .help("Start focus block (\u{2318}F)")
+                .keyboardShortcut("f", modifiers: .command)
+
+                Button(action: {
+                    Haptics.tap()
                     optimizerService.activeRecipe = nil
                     optimizerService.scenarios = []
                     navigation = .optimizer
@@ -597,24 +675,23 @@ struct MenuBarView: View {
                     Image(systemName: "wand.and.stars")
                 }
                 .buttonStyle(.action(role: .secondary, size: .compact))
-                .help("Optimize (\u{2318}O)")
+                .help("Schedule Assistant (\u{2318}O)")
                 .keyboardShortcut("o", modifiers: .command)
             }
 
             Spacer()
 
             HStack(spacing: DS.Spacing.md) {
-                Button(action: {
-                    Haptics.tap()
-                    reminderService.syncNow()
-                    toastState.showInfo("Refreshing calendars…", icon: "arrow.clockwise")
-                }) {
-                    Image(systemName: "arrow.clockwise")
-                }
-                .help("Refresh (\u{2318}R)")
-                .keyboardShortcut("r", modifiers: .command)
-
                 Menu {
+                    Button {
+                        Haptics.tap()
+                        reminderService.syncNow()
+                        toastState.showInfo("Refreshing…", icon: "arrow.clockwise")
+                    } label: {
+                        Label("Refresh Calendars", systemImage: "arrow.clockwise")
+                    }
+                    .keyboardShortcut("r", modifiers: .command)
+
                     OpenSettingsButton()
                         .keyboardShortcut(",", modifiers: .command)
                     Divider()

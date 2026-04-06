@@ -18,6 +18,7 @@ struct DateSuggestionsPopover: View {
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.regular)
+                        .keyboardShortcut(.cancelAction)
 
                         Spacer()
                     }

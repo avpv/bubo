@@ -319,9 +319,9 @@ enum DS {
         if minutes >= 60 {
             let h = minutes / 60
             let m = minutes % 60
-            return m == 0 ? "\(h) h" : "\(h) h \(m) min"
+            return m == 0 ? "\(h)\u{00A0}h" : "\(h)\u{00A0}h \(m)\u{00A0}min"
         }
-        return "\(minutes) min"
+        return "\(minutes)\u{00A0}min"
     }
 
     // MARK: Shared Formatters

@@ -33,16 +33,17 @@ struct RemindersTabView: View {
 
                 Grid(alignment: .leading, horizontalSpacing: DS.Spacing.sm) {
                     GridRow {
-                        Text("Add: \(viewModel.newIntervalMinutes) min")
+                        Text("Add: \(viewModel.newIntervalMinutes)\u{00A0}min")
                             .frame(minWidth: 100, alignment: .leading)
                             .monospacedDigit()
-                        
+
                         Stepper("Reminder interval minutes", value: $viewModel.newIntervalMinutes, in: 1...120)
                             .labelsHidden()
 
-                        Button("Add") {
+                        Button("Add Reminder") {
                             settings.intervals.append(ReminderInterval(minutes: viewModel.newIntervalMinutes))
                         }
+                        .keyboardShortcut(.defaultAction)
                     }
                 }
             }
