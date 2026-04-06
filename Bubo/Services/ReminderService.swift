@@ -300,6 +300,15 @@ class ReminderService {
             try? await Task.sleep(for: .seconds(12))
             guard !Task.isCancelled else { return }
             self?.fetchAndUpdate()
+
+            // 3rd follow-up: when Calendar.app is closed, calendard can take
+            // 30-60s to actually pull from remote servers. Prod once more and
+            // re-fetch after a longer delay to catch these late responses.
+            AppleCalendarService.shared.triggerRemoteRefresh()
+
+            try? await Task.sleep(for: .seconds(30))
+            guard !Task.isCancelled else { return }
+            self?.fetchAndUpdate()
         }
     }
 
@@ -328,10 +337,12 @@ class ReminderService {
 
         let updated = events.sorted { $0.startDate < $1.startDate }
 
-        // Only update if the event set actually changed to avoid unnecessary UI churn
+        // Only update if the event set actually changed to avoid unnecessary UI churn.
+        // Compare both IDs and event count — cancelled/deleted events that are now
+        // filtered out change the count even when the remaining IDs overlap.
         let oldIds = Set(upcomingEvents.map { $0.id })
         let newIds = Set(updated.map { $0.id })
-        guard oldIds != newIds else { return }
+        guard oldIds != newIds || upcomingEvents.count != updated.count else { return }
 
         upcomingEvents = updated
         lastSyncDate = Date()
