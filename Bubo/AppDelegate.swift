@@ -4,6 +4,15 @@ import SwiftUI
 private class KeyableWindow: NSWindow {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
+
+    override func keyDown(with event: NSEvent) {
+        // Let SwiftUI handle the event first via the responder chain.
+        // Without this override the borderless window beeps on every key press
+        // and .keyboardShortcut / .onKeyPress never fire.
+        if let responder = firstResponder, responder !== self {
+            responder.keyDown(with: event)
+        }
+    }
 }
 
 private class KeyablePanel: NSPanel {
@@ -210,6 +219,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.setFrame(screen.frame, display: true)
         window.makeKeyAndOrderFront(nil)
+        window.makeFirstResponder(hostingView)
 
         NSApplication.shared.activate()
         alertWindow = window
