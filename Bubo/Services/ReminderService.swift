@@ -279,7 +279,7 @@ class ReminderService {
 
     /// Re-fetches events a few seconds after a sync so that any data pulled by
     /// the async `refreshSourcesIfNecessary()` call is picked up quickly.
-    private var pendingPostSyncTask: Task<Void, Never>?
+    private nonisolated(unsafe) var pendingPostSyncTask: Task<Void, Never>?
 
     private func schedulePostSyncRefresh() {
         pendingPostSyncTask?.cancel()
