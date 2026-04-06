@@ -244,8 +244,11 @@ struct MenuBarView: View {
                 return filtered.isEmpty ? nil : (date: dayGroup.date, events: filtered)
             }
         } else {
-            // Skip empty day groups (e.g. "Today" with 0 events when tomorrow has events)
-            base = reminderService.eventsByDay.filter { !$0.events.isEmpty }
+            // Only show events that have a color tag assigned
+            base = reminderService.eventsByDay.compactMap { dayGroup in
+                let colored = dayGroup.events.filter { $0.colorTag != nil }
+                return colored.isEmpty ? nil : (date: dayGroup.date, events: colored)
+            }
         }
         return base
     }
@@ -367,7 +370,7 @@ struct MenuBarView: View {
             Group {
                 if reminderService.nonDisintegratingEventCount == 0 {
                     emptyState
-                } else if filteredEventsByDay.isEmpty {
+                } else if filteredEventsByDay.isEmpty && colorFilter != nil {
                     VStack(spacing: DS.Spacing.sm) {
                         Text("No events with this color")
                             .font(.subheadline)
@@ -377,6 +380,8 @@ struct MenuBarView: View {
                             .controlSize(.small)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if filteredEventsByDay.isEmpty {
+                    emptyState
                 } else {
                     eventList
                 }
