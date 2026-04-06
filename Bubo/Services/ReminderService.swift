@@ -277,14 +277,27 @@ class ReminderService {
         schedulePostSyncRefresh()
     }
 
-    /// Re-fetches events a few seconds after a sync so that any data pulled by
-    /// the async `refreshSourcesIfNecessary()` call is picked up quickly.
+    /// Re-fetches events after a sync so that any data pulled by the async
+    /// `refreshSourcesIfNecessary()` call is picked up. When Calendar.app is
+    /// not running the `calendard` daemon may take longer to sync with remote
+    /// servers, so we perform multiple follow-ups at increasing intervals and
+    /// prod the daemon again between them.
     private nonisolated(unsafe) var pendingPostSyncTask: Task<Void, Never>?
 
     private func schedulePostSyncRefresh() {
         pendingPostSyncTask?.cancel()
         pendingPostSyncTask = Task { @MainActor [weak self] in
+            // 1st follow-up: quick catch for fast servers / local changes
             try? await Task.sleep(for: .seconds(4))
+            guard !Task.isCancelled else { return }
+            self?.fetchAndUpdate()
+
+            // Prod the sync daemon again — the first
+            // refreshSourcesIfNecessary() may have been throttled.
+            AppleCalendarService.shared.triggerRemoteRefresh()
+
+            // 2nd follow-up: catch slower remote responses (Google, Exchange)
+            try? await Task.sleep(for: .seconds(12))
             guard !Task.isCancelled else { return }
             self?.fetchAndUpdate()
         }
