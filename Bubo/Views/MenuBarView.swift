@@ -432,14 +432,14 @@ struct MenuBarView: View {
             guard let next = todayEvents.first(where: { $0.startDate > now }) else { return "" }
             let mins = Int(next.startDate.timeIntervalSince(now)) / 60
             if mins < 1 { return " \u{00B7} now" }
-            if mins < 60 { return " \u{00B7} in\u{00A0}\(mins)\u{00A0}m" }
+            if mins < 60 { return " \u{00B7} in\u{00A0}\(mins)\u{00A0}min" }
             let h = mins / 60
             let m = mins % 60
-            if m == 0 { return " \u{00B7} in\u{00A0}\(h)\u{00A0}h" }
-            return " \u{00B7} in\u{00A0}\(h)\u{00A0}h\u{00A0}\(m)\u{00A0}m"
+            if m == 0 { return " \u{00B7} in\u{00A0}\(h)\u{00A0}hr" }
+            return " \u{00B7} in\u{00A0}\(h)\u{00A0}hr\u{00A0}\(m)\u{00A0}min"
         }()
 
-        if done == 0 { return "\(total)\u{00A0}events today\(nextSuffix)" }
+        if done == 0 { return "\(total)\u{00A0}events\(nextSuffix)" }
         if done == total { return "All\u{00A0}\(total) done" }
         return "\(done)\u{00A0}of\u{00A0}\(total)\(nextSuffix)"
     }
