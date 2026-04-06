@@ -672,7 +672,7 @@ struct MenuBarView: View {
                     optimizerService.scenarios = []
                     navigation = .optimizer
                 }) {
-                    Image(systemName: "wand.and.stars")
+                    Label("Plan", systemImage: "wand.and.stars")
                 }
                 .buttonStyle(.action(role: .secondary, size: .compact))
                 .help("Schedule Assistant (\u{2318}O)")
