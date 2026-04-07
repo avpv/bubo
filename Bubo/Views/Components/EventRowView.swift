@@ -68,7 +68,7 @@ struct EventRowView: View {
                         let fillWidth = max(geo.size.width * eventProgress(now), DS.Size.cornerRadius * 2)
                         let baseColor = skin.isClassic ? DS.Colors.accent : skin.accentColor
                         let fillOpacity = contrast == .increased ? DS.Opacity.strongFill : DS.Opacity.mediumFill
-                        
+
                         Rectangle()
                             .fill(
                                 LinearGradient(
@@ -92,12 +92,16 @@ struct EventRowView: View {
                             )
                     }
                 }
-
-                Rectangle()
-                    .fill(isHovered ? skin.resolvedHoverFill : Color.clear)
             }
         )
         .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
+        // Hover tint drawn as a rounded overlay to avoid aliasing seams at the
+        // corners that appear when an opaque rectangle is composited under
+        // .clipShape on top of the platter material.
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                .fill(isHovered ? skin.resolvedHoverFill : Color.clear)
+        )
         .overlay(
             RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
                 .strokeBorder(
