@@ -24,6 +24,7 @@ private class KeyablePanel: NSPanel {
 class AppDelegate: NSObject, NSApplicationDelegate {
     private var alertWindow: NSWindow?
     private var alertObserver: Any?
+    private var alertKeyMonitor: Any?
     private var autoDismissTask: Task<Void, Never>?
     private var pinnedTimerWindow: NSPanel?
     private var pinObserver: Any?
@@ -101,6 +102,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func dismissAlert() {
         autoDismissTask?.cancel()
         autoDismissTask = nil
+        if let monitor = alertKeyMonitor {
+            NSEvent.removeMonitor(monitor)
+            alertKeyMonitor = nil
+        }
         guard let window = alertWindow else { return }
         alertWindow = nil
         window.orderOut(nil)
@@ -223,6 +228,33 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         NSApplication.shared.activate()
         alertWindow = window
+
+        // Install a local keyDown monitor as a reliable fallback for Esc/Return.
+        // SwiftUI's .onKeyPress / .keyboardShortcut inside an NSHostingView hosted
+        // by a borderless screenSaver-level window does not consistently receive
+        // key events, so we handle them at the AppKit level here.
+        let meetingURL = event.meetingLink
+        alertKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self, weak window] nsEvent in
+            // Only intercept events targeted at our alert window.
+            guard let alertWin = window, nsEvent.window === alertWin else { return nsEvent }
+            switch nsEvent.keyCode {
+            case 53: // Escape
+                MainActor.assumeIsolated {
+                    self?.dismissAlert()
+                }
+                return nil
+            case 36, 76: // Return, Enter (numpad)
+                if let url = meetingURL {
+                    NSWorkspace.shared.open(url)
+                }
+                MainActor.assumeIsolated {
+                    self?.dismissAlert()
+                }
+                return nil
+            default:
+                return nsEvent
+            }
+        }
 
         // Auto-dismiss when the event starts (countdown reaches 0)
         autoDismissTask?.cancel()
