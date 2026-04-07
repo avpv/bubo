@@ -325,13 +325,10 @@ struct EventRowView: View {
             }
 
             HStack(spacing: DS.Spacing.md) {
-                if event.meetingLink != nil, let serviceName = event.meetingServiceName {
-                    Label(serviceName, systemImage: "video.fill")
-                        .font(.caption2)
-                        .foregroundStyle(skin.isClassic ? DS.Colors.accent : skin.accentColor)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                } else if let location = event.location, !location.isEmpty {
+                // Meeting service name is omitted here — the Join button already
+                // conveys it via tooltip/accessibility label, so showing it
+                // alongside would duplicate the same information.
+                if let location = event.location, !location.isEmpty {
                     Label(location, systemImage: "mappin")
                         .font(.caption2)
                         .foregroundStyle(skin.resolvedTextSecondary)
