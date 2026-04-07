@@ -432,14 +432,15 @@ struct RecipeCardView: View {
         .frame(minHeight: DS.Size.eventRowMinHeight)
         .padding(.vertical, DS.Spacing.sm)
         .padding(.horizontal, DS.Spacing.sm)
-        .background(
-            ZStack {
-                SkinPlatterBackground(skin: skin)
-                Rectangle()
-                    .fill(isHovered ? skin.resolvedHoverFill : Color.clear)
-            }
-        )
+        .background(SkinPlatterBackground(skin: skin))
         .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
+        // Hover tint as a rounded overlay (avoids corner aliasing seams that
+        // appear when a sharp Rectangle is composited under .clipShape on top
+        // of the platter material).
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                .fill(isHovered ? skin.resolvedHoverFill : Color.clear)
+        )
         .overlay(
             RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
                 .strokeBorder(
