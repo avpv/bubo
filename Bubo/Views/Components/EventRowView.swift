@@ -270,8 +270,10 @@ struct EventRowView: View {
                     radius: event.isUpcoming ? 4 : skin.shadowRadius * 0.5
                 )
         } else {
-            // Preserve alignment without visual noise
-            Color.clear
+            // No user-assigned color: show an unfilled outline so the bar
+            // remains a visible shape without injecting a color accent.
+            Capsule()
+                .strokeBorder(skin.resolvedTextTertiary.opacity(0.5), lineWidth: 1)
                 .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
                 .padding(.trailing, DS.Spacing.md)
         }
