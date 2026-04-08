@@ -14,6 +14,10 @@ struct MenuBarView: View {
     @State private var scrollPositionID: String?
     @State private var colorFilter: EventColorTag? = nil
 
+    // Command palette — the single entry point for all optimize flows.
+    @State private var paletteContext: PaletteContext? = nil
+    @State private var dismissedBannerIds: Set<String> = []
+
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Enum-based navigation state machine replaces fragile boolean flags.
@@ -22,7 +26,6 @@ struct MenuBarView: View {
         case detail(CalendarEvent)
         case addEvent(editing: CalendarEvent? = nil, initialType: EventType = .standard)
         case timer(CalendarEvent)
-        case optimizer
         case quickAddTasks
 
         static var addPomodoro: Navigation { .addEvent(initialType: .pomodoro) }
@@ -32,22 +35,23 @@ struct MenuBarView: View {
             return false
         }
 
-        var isOptimizer: Bool {
-            if case .optimizer = self { return true }
-            return false
-        }
-
         static func == (lhs: Navigation, rhs: Navigation) -> Bool {
             switch (lhs, rhs) {
             case (.list, .list): return true
             case (.detail(let a), .detail(let b)): return a.id == b.id
             case (.addEvent(let a, let t1), .addEvent(let b, let t2)): return a?.id == b?.id && t1 == t2
             case (.timer(let a), .timer(let b)): return a.id == b.id
-            case (.optimizer, .optimizer): return true
             case (.quickAddTasks, .quickAddTasks): return true
             default: return false
             }
         }
+    }
+
+    /// Context for the command palette overlay. nil = hidden.
+    struct PaletteContext: Equatable {
+        var seedEvent: CalendarEvent? = nil
+        var seedSlotMinutes: Int? = nil
+        var seedRecipeId: String? = nil
     }
 
     private var activeSkin: SkinDefinition { settings.selectedSkin }
@@ -134,9 +138,9 @@ struct MenuBarView: View {
                             navigation = .timer(repeat_)
                             toastState.showSuccess("Session restarted")
                         },
-                        onScheduleNext: { finishedEvent in
-                            optimizerService.activeRecipe = .pomodoroSession()
-                            navigation = .optimizer
+                        onScheduleNext: { _ in
+                            navigation = .list
+                            paletteContext = PaletteContext(seedRecipeId: "pomodoro")
                         }
                     )
                     .transition(
@@ -183,27 +187,11 @@ struct MenuBarView: View {
                         )
                     )
 
-                case .optimizer:
-                    OptimizerView(
-                        optimizerService: optimizerService,
-                        reminderService: reminderService,
-                        agentService: agentService,
-                        onBack: { navigation = .list },
-                        onAddTasks: { navigation = .quickAddTasks }
-                    )
-                    .transition(
-                        reduceMotion ? .opacity : .asymmetric(
-                            insertion: .move(edge: .trailing).combined(with: .opacity),
-                            removal: .move(edge: .trailing).combined(with: .opacity).combined(with: .scale(scale: 0.98))
-                        )
-                    )
-
                 case .quickAddTasks:
                     QuickAddTasksView(
                         optimizerService: optimizerService,
                         reminderService: reminderService,
-                        onBack: { navigation = .list },
-                        onShowResults: { navigation = .optimizer }
+                        onBack: { navigation = .list }
                     )
                     .transition(
                         reduceMotion ? .opacity : .asymmetric(
@@ -218,7 +206,48 @@ struct MenuBarView: View {
                 value: navigation
             )
 
+            // Command palette — inline overlay on top of everything else.
+            if let context = paletteContext {
+                CommandPalette(
+                    optimizerService: optimizerService,
+                    reminderService: reminderService,
+                    agentService: agentService,
+                    seedEvent: context.seedEvent,
+                    seedSlotMinutes: context.seedSlotMinutes,
+                    seedRecipe: context.seedRecipeId.flatMap { RecipeCatalog.allRecipesById[$0] },
+                    onDismiss: {
+                        withAnimation(DS.Animation.quick) { paletteContext = nil }
+                    },
+                    onApplied: { recipe, undo in
+                        toastState.showSuccess(
+                            "\(recipe.name) applied",
+                            icon: "sparkles",
+                            onUndo: undo
+                        )
+                    }
+                )
+                .transition(.opacity)
+                .zIndex(10)
+            }
+
             ToastOverlay(toastState: toastState)
+
+            // Hidden button for ⌘K shortcut — lives outside the palette so it
+            // can toggle the palette from the list.
+            Button("") {
+                Haptics.tap()
+                withAnimation(DS.Animation.quick) {
+                    if paletteContext == nil {
+                        paletteContext = PaletteContext()
+                    } else {
+                        paletteContext = nil
+                    }
+                }
+            }
+            .keyboardShortcut("k", modifiers: .command)
+            .opacity(0)
+            .frame(width: 0, height: 0)
+            .accessibilityHidden(true)
         }
         .skinTinted(activeSkin)
         .skinTypography(activeSkin)
@@ -582,6 +611,24 @@ struct MenuBarView: View {
     private var eventList: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: DS.Spacing.md) {
+                // Smart banner — at most one contextual suggestion.
+                if let banner = activeBannerRecipe {
+                    SmartBanner(
+                        recipe: banner,
+                        reason: SmartBannerReason.text(for: banner),
+                        onTap: {
+                            withAnimation(DS.Animation.quick) {
+                                paletteContext = PaletteContext(seedRecipeId: banner.id)
+                            }
+                        },
+                        onDismiss: {
+                            withAnimation(DS.Animation.quick) {
+                                dismissedBannerIds.insert(banner.id)
+                            }
+                        }
+                    )
+                }
+
                 ForEach(filteredEventsByDay, id: \.date) { dayGroup in
                     let visibleCount = visibleEventCount(for: dayGroup.events)
 
@@ -589,8 +636,16 @@ struct MenuBarView: View {
                         .padding(.horizontal, DS.Spacing.sm)
                         .padding(.top, dayGroup.date == reminderService.eventsByDay.first?.date ? 0 : DS.Spacing.sm)
 
-                    ForEach(dayGroup.events) { event in
-                        EventRowView(
+                    let freeSlots = FreeSlotFinder.slots(
+                        for: dayGroup.events,
+                        on: dayGroup.date,
+                        workingHours: optimizerService.workingHours
+                    )
+
+                    ForEach(interleave(events: dayGroup.events, freeSlots: freeSlots), id: \.id) { item in
+                        switch item {
+                        case .event(let event):
+                            EventRowView(
                             event: event,
                             reminderService: reminderService,
                             onEdit: { event in resolveEdit(event) },
@@ -615,25 +670,16 @@ struct MenuBarView: View {
                                 toastState.showSuccess("Task completed", icon: "checkmark.circle.fill")
                             },
                             onFindBetterTime: { event in
-                                // Navigate to optimizer with a whatIf recipe for this event
-                                optimizerService.activeRecipe = ScheduleRecipe(
-                                    id: "find-better-time",
-                                    name: "Find Better Time",
-                                    description: "Find a better slot for \(event.title)",
-                                    events: [EventSpec(
-                                        title: event.title,
-                                        minutes: Int(event.duration / 60),
-                                        priority: 0.8,
-                                        focus: event.eventType == .pomodoro
-                                    )],
-                                    includeExistingEvents: false,
-                                    display: .scenarios
-                                )
-                                navigation = .optimizer
+                                // Open the palette seeded with this event so the user can
+                                // pick any applicable recipe (find time, reschedule, etc.).
+                                withAnimation(DS.Animation.quick) {
+                                    paletteContext = PaletteContext(seedEvent: event)
+                                }
                             },
-                            onSplitTask: { event in
-                                optimizerService.activeRecipe = ScheduleRecipe.splitLargeTask()
-                                navigation = .optimizer
+                            onSplitTask: { _ in
+                                withAnimation(DS.Animation.quick) {
+                                    paletteContext = PaletteContext(seedRecipeId: "split-task")
+                                }
                             },
                             onProtectBlock: { event in
                                 let recipe = ScheduleRecipe(
@@ -648,11 +694,18 @@ struct MenuBarView: View {
                                 }
                             },
                             onAddPrep: { event in
-                                var recipe = ScheduleRecipe.prepBeforeMeeting()
-                                recipe.applyParamValues(["eventId": event.id])
-                                navigation = .optimizer
+                                withAnimation(DS.Animation.quick) {
+                                    paletteContext = PaletteContext(seedEvent: event, seedRecipeId: "prep-meeting")
+                                }
                             }
                         )
+                        case .slot(let start, let end):
+                            FreeSlotRow(start: start, end: end) { minutes in
+                                withAnimation(DS.Animation.quick) {
+                                    paletteContext = PaletteContext(seedSlotMinutes: minutes)
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -665,6 +718,49 @@ struct MenuBarView: View {
         }
         .scrollPosition(id: $scrollPositionID)
         .scrollContentBackground(.hidden)
+    }
+
+    // MARK: - List Items (events + free slots interleaved)
+
+    /// A row in the day list — either a real event or an empty slot.
+    private enum DayListItem: Identifiable {
+        case event(CalendarEvent)
+        case slot(Date, Date)
+
+        var id: String {
+            switch self {
+            case .event(let e): return "event:\(e.id)"
+            case .slot(let s, let e): return "slot:\(s.timeIntervalSinceReferenceDate)-\(e.timeIntervalSinceReferenceDate)"
+            }
+        }
+    }
+
+    /// Interleaves events and free-slot pairs chronologically so the list reads
+    /// top-to-bottom like a real timeline.
+    private func interleave(
+        events: [CalendarEvent],
+        freeSlots: [(start: Date, end: Date)]
+    ) -> [DayListItem] {
+        var result: [DayListItem] = events.map(DayListItem.event)
+        result += freeSlots.map { DayListItem.slot($0.start, $0.end) }
+        result.sort { startOf($0) < startOf($1) }
+        return result
+    }
+
+    private func startOf(_ item: DayListItem) -> Date {
+        switch item {
+        case .event(let e): return e.startDate
+        case .slot(let s, _): return s
+        }
+    }
+
+    // MARK: - Smart Banner
+
+    /// The first non-dismissed suggested recipe from the monitor, or nil when
+    /// nothing is worth suggesting.
+    private var activeBannerRecipe: ScheduleRecipe? {
+        guard let monitor = optimizerService.recipeMonitor else { return nil }
+        return monitor.suggestedRecipes.first { !dismissedBannerIds.contains($0.id) }
     }
 
     private var footerActions: some View {
@@ -683,6 +779,12 @@ struct MenuBarView: View {
                     } label: {
                         Label("New Pomodoro", systemImage: "timer")
                     }
+                    Button {
+                        Haptics.tap()
+                        navigation = .quickAddTasks
+                    } label: {
+                        Label("Batch Add Tasks", systemImage: "list.bullet.rectangle")
+                    }
                 } label: {
                     Label("Add", systemImage: "plus")
                 } primaryAction: {
@@ -693,28 +795,32 @@ struct MenuBarView: View {
                 .help("Add a new event (\u{2318}N)")
                 .keyboardShortcut("n", modifiers: .command)
 
-                Button(action: {
+                // Palette hint — also serves as the clickable entry point for
+                // users who don't know the ⌘K shortcut.
+                Button {
                     Haptics.tap()
-                    optimizerService.activeRecipe = .needFocus()
-                    navigation = .optimizer
-                }) {
-                    Label("Focus", systemImage: "brain.head.profile")
+                    withAnimation(DS.Animation.quick) {
+                        paletteContext = PaletteContext()
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "sparkles")
+                            .font(.caption.weight(.medium))
+                        Text("\u{2318}K")
+                            .font(.caption2.monospaced())
+                    }
+                    .foregroundStyle(skin.resolvedTextSecondary)
+                    .padding(.horizontal, DS.Spacing.sm)
+                    .padding(.vertical, 4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .strokeBorder(skin.resolvedTextTertiary.opacity(0.35), lineWidth: 0.5)
+                    )
+                    .contentShape(Rectangle())
                 }
-                .buttonStyle(.action(role: .secondary, size: .compact))
-                .help("Start focus block (\u{2318}F)")
-                .keyboardShortcut("f", modifiers: .command)
-
-                Button(action: {
-                    Haptics.tap()
-                    optimizerService.activeRecipe = nil
-                    optimizerService.scenarios = []
-                    navigation = .optimizer
-                }) {
-                    Label("Plan", systemImage: "wand.and.stars")
-                }
-                .buttonStyle(.action(role: .secondary, size: .compact))
-                .help("Schedule Assistant (\u{2318}O)")
-                .keyboardShortcut("o", modifiers: .command)
+                .buttonStyle(.plain)
+                .help("Open command palette (\u{2318}K)")
+                .accessibilityLabel("Open command palette")
             }
 
             Spacer()
