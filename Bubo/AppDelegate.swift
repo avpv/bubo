@@ -221,7 +221,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.level = .screenSaver
         window.isOpaque = false
         window.backgroundColor = .clear
-        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        // Show the alert on every Space, including the dedicated Space that
+        // macOS creates for full-screen apps (Zoom, Google Meet, Teams, etc.).
+        // `.canJoinAllSpaces` alone is not enough: when the active Space is a
+        // full-screen app's Space, the window must also be `.fullScreenAuxiliary`
+        // to be allowed to render over it, and `.stationary` so it stays put as
+        // the user switches Spaces instead of being pulled back to the Space it
+        // was created on. Without `.stationary` the alert silently fails to
+        // appear when another meeting is currently running in full-screen.
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         window.setFrame(screen.frame, display: true)
         window.makeKeyAndOrderFront(nil)
         window.makeFirstResponder(hostingView)
