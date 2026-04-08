@@ -139,6 +139,17 @@ struct AddEventView: View {
                     .disabled(isExternal)
                     .opacity(isExternal ? 0.6 : 1.0)
 
+                    // Event Type
+                    if !isExternal {
+                        Picker("Type", selection: $selectedEventType) {
+                            Label("Event", systemImage: "calendar").tag(EventType.standard)
+                            Label("Pomodoro", systemImage: "timer").tag(EventType.pomodoro)
+                        }
+                        .pickerStyle(.segmented)
+                        .padding(.horizontal, DS.Spacing.md)
+                        .accessibilityLabel("Event type")
+                    }
+
                     // Date & Time
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                         Text("Date & Time")
