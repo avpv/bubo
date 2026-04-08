@@ -8,7 +8,6 @@ struct QuickAddTasksView: View {
     var optimizerService: OptimizerService
     var reminderService: ReminderService
     var onBack: () -> Void
-    var onShowResults: (() -> Void)? = nil
 
     @State private var tasks: [TaskEntry] = [TaskEntry()]
     @State private var horizon: Horizon = .today
