@@ -212,13 +212,11 @@ struct CommandPalette: View {
             guard !recipes.isEmpty else { return .ignored }
             let idx = min(selectedIndex, recipes.count - 1)
             let recipe = recipes[idx]
-            guard !recipe.params.isEmpty else { return .ignored }
             withAnimation(DS.Animation.quick) {
                 if expandedRecipeId == recipe.id {
                     expandedRecipeId = nil
                 } else {
                     expandedRecipeId = recipe.id
-                    prepopulateDefaults(for: recipe)
                 }
             }
             return .handled
@@ -392,6 +390,9 @@ struct CommandPalette: View {
     // MARK: - Intent Composer
 
     @ViewBuilder
+    @State private var composerPreview: String? = nil
+    @State private var composerPreviewTask: Task<Void, Never>? = nil
+
     private func intentComposer(for request: OptimizationRequest) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             // Active intents (removable)
@@ -406,6 +407,7 @@ struct CommandPalette: View {
                         var modified = request
                         modified.removeIntent(at: index)
                         replaceExpandedPreset(modified)
+                        refreshComposerPreview(modified)
                     }
                 }
             }
@@ -425,9 +427,25 @@ struct CommandPalette: View {
                             var modified = request
                             modified.add(intent)
                             replaceExpandedPreset(modified)
+                            refreshComposerPreview(modified)
                         }
                     }
                 }
+            }
+
+            // Live preview — shows what will happen when you run this
+            if let preview = composerPreview {
+                HStack(spacing: DS.Spacing.xs) {
+                    Image(systemName: "eye.fill")
+                        .font(.caption2)
+                        .foregroundStyle(skin.accentColor.opacity(0.6))
+                    Text(preview)
+                        .font(.caption2)
+                        .foregroundStyle(skin.accentColor.opacity(0.8))
+                        .lineLimit(2)
+                }
+                .padding(.top, DS.Spacing.xs)
+                .transition(.opacity)
             }
         }
         .padding(.horizontal, DS.Spacing.md)
@@ -438,6 +456,40 @@ struct CommandPalette: View {
         )
         .padding(.horizontal, DS.Spacing.sm)
         .transition(.opacity.combined(with: .move(edge: .top)))
+        .onAppear { refreshComposerPreview(request) }
+    }
+
+    /// Refresh the live preview asynchronously via a fast dry-run.
+    private func refreshComposerPreview(_ request: OptimizationRequest) {
+        composerPreviewTask?.cancel()
+        guard request.isCreative || request.findSlotOnly else {
+            // Non-creative requests: show a static description
+            composerPreview = request.intents.map(\.label).joined(separator: " + ")
+            return
+        }
+
+        composerPreviewTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled else { return }
+
+            var working = request
+            working.speed = .quick
+            working.maxScenarios = 1
+
+            let genes = await optimizerService.executeDryRun(working, reminderService: reminderService)
+            guard !Task.isCancelled else { return }
+
+            if let genes, !genes.isEmpty {
+                let fmt = DateFormatter()
+                fmt.setLocalizedDateFormatFromTemplate("H:mm")
+                let descriptions = genes.prefix(3).map { gene in
+                    "\(gene.title) \(fmt.string(from: gene.startTime))–\(fmt.string(from: gene.endTime))"
+                }
+                composerPreview = descriptions.joined(separator: " · ")
+            } else {
+                composerPreview = "No feasible slot found"
+            }
+        }
     }
 
     private func intentChip(_ label: String, isActive: Bool, action: @escaping () -> Void) -> some View {
@@ -514,13 +566,6 @@ struct CommandPalette: View {
                             reminderService: reminderService,
                             workingHours: optimizerService.workingHours
                         ),
-                    availableEvents: reminderService.localEvents.filter { $0.isUpcoming },
-                    paramValue: { paramId in localParams[recipe.id]?[paramId] },
-                    setParamValue: { paramId, value in
-                        var dict = localParams[recipe.id] ?? [:]
-                        dict[paramId] = value
-                        localParams[recipe.id] = dict
-                    },
                     onTap: {
                         selectedIndex = index
                         runRecipe(recipe)
@@ -810,36 +855,10 @@ struct CommandPalette: View {
 
     // MARK: - Prepopulate Defaults
 
-    /// When expanding a recipe's params, fill in default values so the user
-    /// sees what will happen without guessing (Birman: show information).
+    /// No-op: intents don't use param values. Kept for call-site compatibility.
     private func prepopulateDefaults(for recipe: OptimizationRequest) {
-        guard localParams[recipe.id] == nil || localParams[recipe.id]!.isEmpty else { return }
-        var defaults: [String: Any] = [:]
-        for param in recipe.params {
-            switch param.target {
-            case .eventMinutes(let index):
-                guard index < recipe.events.count else { continue }
-                defaults[param.id] = recipe.events[index].minutes
-            case .eventCount(let index):
-                guard index < recipe.events.count else { continue }
-                defaults[param.id] = recipe.events[index].count
-            case .minBreak:
-                if let v = recipe.minBreakMinutes { defaults[param.id] = v }
-            case .maxMeetings:
-                if let v = recipe.maxMeetingsPerDay { defaults[param.id] = v }
-            case .peakEnergy:
-                if let v = recipe.peakEnergyHour { defaults[param.id] = v }
-            case .horizon:
-                defaults[param.id] = recipe.horizon.rawValue
-            case .workingHoursStart:
-                defaults[param.id] = recipe.workingHours?.start ?? optimizerService.workingHoursStart
-            case .workingHoursEnd:
-                defaults[param.id] = recipe.workingHours?.end ?? optimizerService.workingHoursEnd
-            default:
-                continue
-            }
-        }
-        if !defaults.isEmpty {
+        // Intent composer handles customization directly.
+        if false {
             localParams[recipe.id] = defaults
         }
     }
@@ -979,9 +998,6 @@ private struct RecipeRow: View {
     let isExpanded: Bool
     let isTopSuggestion: Bool
     let previewText: String?
-    let availableEvents: [CalendarEvent]
-    let paramValue: (String) -> Any?
-    let setParamValue: (String, Any) -> Void
     let onTap: () -> Void
     let onExpand: () -> Void
 
@@ -1026,18 +1042,16 @@ private struct RecipeRow: View {
                 }
                 .buttonStyle(.plain)
 
-                // Separate expand chevron — sibling button so taps aren't swallowed.
-                if !recipe.params.isEmpty {
-                    Button(action: onExpand) {
-                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(skin.resolvedTextTertiary)
-                            .frame(width: 20, height: 20)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(isExpanded ? "Collapse parameters" : "Expand parameters")
+                // Expand chevron — opens intent composer
+                Button(action: onExpand) {
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                        .frame(width: 20, height: 20)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel(isExpanded ? "Collapse" : "Customize intents")
             }
             .padding(.vertical, isTopSuggestion ? DS.Spacing.sm : DS.Spacing.xs)
             .padding(.horizontal, DS.Spacing.sm)
@@ -1058,202 +1072,32 @@ private struct RecipeRow: View {
                     )
             )
 
-            if isExpanded && !recipe.params.isEmpty {
-                paramPills
-                    .padding(.horizontal, DS.Spacing.md)
-                    .padding(.bottom, DS.Spacing.xs)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-            }
-        }
-    }
-
-    // MARK: - Param Pills
-
-    private var paramPills: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            ForEach(recipe.params, id: \.id) { param in
-                paramControl(for: param)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func paramControl(for param: RecipeParam) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(param.label)
-                .font(.caption2.weight(.medium))
-                .foregroundStyle(skin.resolvedTextSecondary)
-
-            switch param.kind {
-            case .segmented(let options):
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: DS.Spacing.xs) {
-                        ForEach(options, id: \.self) { opt in
-                            pill(
-                                label: "\(opt)",
-                                isActive: (paramValue(param.id) as? Int) == opt
-                            ) {
-                                setParamValue(param.id, opt)
-                            }
-                        }
-                    }
-                }
-
-            case .stepper(let lower, let upper):
+            // Intent summary when expanded (composer is in the parent view)
+            if isExpanded {
                 HStack(spacing: DS.Spacing.xs) {
-                    let current = (paramValue(param.id) as? Int) ?? lower
-                    Button("−") {
-                        setParamValue(param.id, max(lower, current - 1))
-                    }
-                    .buttonStyle(.plain)
-                    Text("\(current)")
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(skin.resolvedTextPrimary)
-                        .frame(minWidth: 24)
-                    Button("+") {
-                        setParamValue(param.id, min(upper, current + 1))
-                    }
-                    .buttonStyle(.plain)
-                }
-
-            case .hourPicker(let range):
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: DS.Spacing.xs) {
-                        ForEach(Array(stride(from: range.lowerBound, through: range.upperBound, by: 1)), id: \.self) { h in
-                            pill(
-                                label: "\(h):00",
-                                isActive: (paramValue(param.id) as? Int) == h
-                            ) {
-                                setParamValue(param.id, h)
-                            }
-                        }
-                    }
-                }
-
-            case .periodPicker:
-                HStack(spacing: DS.Spacing.xs) {
-                    ForEach(Period.allCases, id: \.self) { p in
-                        pill(
-                            label: p.rawValue.capitalized,
-                            isActive: (paramValue(param.id) as? String) == p.rawValue
-                        ) {
-                            setParamValue(param.id, p.rawValue)
-                        }
-                    }
-                    pill(
-                        label: "Any",
-                        isActive: (paramValue(param.id) as? String) == ""
-                    ) {
-                        setParamValue(param.id, "")
-                    }
-                }
-
-            case .horizonPicker:
-                HStack(spacing: DS.Spacing.xs) {
-                    ForEach(Horizon.allCases, id: \.self) { h in
-                        pill(
-                            label: h.rawValue.capitalized,
-                            isActive: (paramValue(param.id) as? String) == h.rawValue
-                        ) {
-                            setParamValue(param.id, h.rawValue)
-                        }
-                    }
-                }
-
-            case .text:
-                TextField(param.label, text: Binding(
-                    get: { (paramValue(param.id) as? String) ?? "" },
-                    set: { setParamValue(param.id, $0) }
-                ))
-                .textFieldStyle(.roundedBorder)
-                .font(.caption)
-
-            case .eventPicker:
-                inlineEventPicker(paramId: param.id, multiSelect: false)
-
-            case .eventMultiPicker:
-                inlineEventPicker(paramId: param.id, multiSelect: true)
-            }
-        }
-    }
-
-    // MARK: - Inline Event Picker
-
-    /// Replaces the dead-end "Pick an event" text with an actual inline list
-    /// of events the user can tap to select. Closes the flow gap.
-    @ViewBuilder
-    private func inlineEventPicker(paramId: String, multiSelect: Bool) -> some View {
-        let selected: Set<String> = {
-            if multiSelect, let ids = paramValue(paramId) as? [String] {
-                return Set(ids)
-            } else if let id = paramValue(paramId) as? String {
-                return [id]
-            }
-            return []
-        }()
-
-        if availableEvents.isEmpty {
-            Text("No events available")
-                .font(.caption2)
-                .foregroundStyle(skin.resolvedTextTertiary)
-        } else {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 2) {
-                    ForEach(availableEvents.prefix(8), id: \.id) { event in
-                        Button {
-                            if multiSelect {
-                                var current = (paramValue(paramId) as? [String]) ?? []
-                                if current.contains(event.id) {
-                                    current.removeAll { $0 == event.id }
-                                } else {
-                                    current.append(event.id)
-                                }
-                                setParamValue(paramId, current)
-                            } else {
-                                setParamValue(paramId, event.id)
-                            }
-                        } label: {
-                            HStack(spacing: DS.Spacing.xs) {
-                                Image(systemName: selected.contains(event.id) ? "checkmark.circle.fill" : "circle")
-                                    .font(.caption)
-                                    .foregroundStyle(selected.contains(event.id) ? skin.accentColor : skin.resolvedTextTertiary)
-                                    .frame(width: 16)
-
-                                VStack(alignment: .leading, spacing: 0) {
-                                    Text(event.title)
-                                        .font(.caption.weight(.medium))
-                                        .foregroundStyle(skin.resolvedTextPrimary)
-                                        .lineLimit(1)
-                                    if let fmt = Self.timeFormatter {
-                                        Text(fmt.string(from: event.startDate))
-                                            .font(.caption2.monospacedDigit())
-                                            .foregroundStyle(skin.resolvedTextTertiary)
-                                    }
-                                }
-
-                                Spacer()
-                            }
-                            .padding(.vertical, 3)
+                    ForEach(Array(recipe.intents.prefix(5).enumerated()), id: \.offset) { _, intent in
+                        Text(intent.label)
+                            .font(.caption2)
+                            .foregroundStyle(skin.accentColor.opacity(0.7))
                             .padding(.horizontal, DS.Spacing.xs)
-                            .background(
-                                RoundedRectangle(cornerRadius: 4)
-                                    .fill(selected.contains(event.id) ? skin.accentColor.opacity(0.10) : Color.clear)
-                            )
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(skin.accentColor.opacity(0.08)))
+                    }
+                    if recipe.intents.count > 5 {
+                        Text("+\(recipe.intents.count - 5)")
+                            .font(.caption2)
+                            .foregroundStyle(skin.resolvedTextTertiary)
                     }
                 }
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.bottom, DS.Spacing.xs)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
-            .frame(maxHeight: 160)
         }
     }
 
-    private static let timeFormatter: DateFormatter? = {
-        let fmt = DateFormatter()
-        fmt.setLocalizedDateFormatFromTemplate("E H:mm")
-        return fmt
-    }()
+    // Legacy param UI removed — replaced by intent composer in parent view.
+    // RecipeRow now shows intent summary chips instead.
 
     private func pill(label: String, isActive: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {

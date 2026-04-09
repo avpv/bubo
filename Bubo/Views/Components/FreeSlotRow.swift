@@ -15,8 +15,11 @@ struct FreeSlotRow: View {
     let start: Date
     let end: Date
     let onFillTapped: (_ minutes: Int) -> Void
+    /// Called when a backlog task is dropped onto this slot.
+    var onTaskDropped: ((_ taskId: String) -> Void)? = nil
 
     @State private var isHovered: Bool = false
+    @State private var isDropTargeted: Bool = false
 
     private var durationMinutes: Int {
         max(0, Int(end.timeIntervalSince(start) / 60))
@@ -90,6 +93,23 @@ struct FreeSlotRow: View {
             }
         }
         .contentShape(Rectangle())
+        .dropDestination(for: String.self) { items, _ in
+            guard let taskId = items.first, onTaskDropped != nil else { return false }
+            onTaskDropped?(taskId)
+            return true
+        } isTargeted: { targeted in
+            withAnimation(skin.resolvedMicroAnimation) {
+                isDropTargeted = targeted
+            }
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                .strokeBorder(
+                    isDropTargeted ? skin.accentColor : Color.clear,
+                    lineWidth: isDropTargeted ? 2 : 0
+                )
+                .animation(skin.resolvedMicroAnimation, value: isDropTargeted)
+        )
         .accessibilityElement(children: .combine)
     }
 }

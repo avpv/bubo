@@ -22,7 +22,12 @@ struct BacklogView: View {
     @State private var newTaskTitle = ""
     @State private var isExpanded = true
     @State private var editingTaskId: String? = nil
+    @State private var ghostPreview: String? = nil
+    @State private var ghostPreviewTask: Task<Void, Never>? = nil
     @FocusState private var isInputFocused: Bool
+
+    /// Currently dragged task ID (for drag-to-schedule).
+    @State private var draggingTaskId: String? = nil
 
     private var activeTasks: [BacklogTask] {
         backlogService.tasks.filter { $0.status != .done }
@@ -37,6 +42,7 @@ struct BacklogView: View {
                 }
             }
             addTaskField
+            ghostPreviewRow
         }
     }
 
@@ -149,9 +155,109 @@ struct BacklogView: View {
                 .font(.callout)
                 .focused($isInputFocused)
                 .onSubmit { addTask() }
+                .onChange(of: newTaskTitle) {
+                    computeGhostPreview()
+                }
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.sm)
+    }
+
+    // MARK: - Ghost Preview
+
+    /// Shows where a new task would land in the schedule while the user is typing.
+    /// Birman: "sequential magic" — anticipate the result before the action completes.
+    @ViewBuilder
+    private var ghostPreviewRow: some View {
+        if let preview = ghostPreview, !newTaskTitle.trimmingCharacters(in: .whitespaces).isEmpty {
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: "arrow.right.circle.fill")
+                    .font(.caption)
+                    .foregroundStyle(skin.accentColor.opacity(0.5))
+
+                Text(preview)
+                    .font(.caption2)
+                    .foregroundStyle(skin.accentColor.opacity(0.7))
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.vertical, DS.Spacing.xxs)
+            .transition(.opacity.combined(with: .move(edge: .top)))
+            .animation(.easeInOut(duration: 0.2), value: preview)
+        }
+    }
+
+    private func computeGhostPreview() {
+        ghostPreviewTask?.cancel()
+        let title = newTaskTitle.trimmingCharacters(in: .whitespaces)
+        guard !title.isEmpty else {
+            ghostPreview = nil
+            return
+        }
+
+        ghostPreviewTask = Task { @MainActor in
+            // Debounce: wait 300ms after last keystroke
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+
+            // Find the next free slot heuristically (no GA, instant)
+            let slot = findNextFreeSlot(durationMinutes: 60)
+            guard !Task.isCancelled else { return }
+
+            if let slot {
+                let fmt = DateFormatter()
+                fmt.setLocalizedDateFormatFromTemplate("H:mm")
+                ghostPreview = "\(fmt.string(from: slot.start))–\(fmt.string(from: slot.end))"
+            } else {
+                ghostPreview = "no free slot today"
+            }
+        }
+    }
+
+    /// Fast heuristic: find the next free slot in today's schedule.
+    /// No GA — just gap detection between events.
+    private func findNextFreeSlot(durationMinutes: Int) -> DateInterval? {
+        let cal = Calendar.current
+        let now = Date()
+        let todayEnd = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now))!
+        let workEnd = cal.date(
+            bySettingHour: optimizerService.workingHoursEnd,
+            minute: 0, second: 0, of: now
+        ) ?? todayEnd
+        let effectiveEnd = min(workEnd, todayEnd)
+
+        let events = reminderService.allEvents
+            .filter { $0.startDate >= now && $0.startDate < effectiveEnd }
+            .sorted { $0.startDate < $1.startDate }
+
+        let needed = TimeInterval(durationMinutes * 60)
+        var cursor = now
+
+        // Snap cursor to next half-hour
+        let minute = cal.component(.minute, from: cursor)
+        if minute > 0 && minute <= 30 {
+            cursor = cal.date(bySettingHour: cal.component(.hour, from: cursor),
+                             minute: 30, second: 0, of: cursor) ?? cursor
+        } else if minute > 30 {
+            cursor = cal.date(byAdding: .hour, value: 1, to:
+                cal.date(bySettingHour: cal.component(.hour, from: cursor),
+                         minute: 0, second: 0, of: cursor) ?? cursor) ?? cursor
+        }
+
+        for event in events {
+            let gap = event.startDate.timeIntervalSince(cursor)
+            if gap >= needed {
+                return DateInterval(start: cursor, duration: needed)
+            }
+            cursor = max(cursor, event.endDate)
+        }
+
+        // Check trailing gap
+        if effectiveEnd.timeIntervalSince(cursor) >= needed {
+            return DateInterval(start: cursor, duration: needed)
+        }
+
+        return nil
     }
 
     private func addTask() {
@@ -167,6 +273,8 @@ struct BacklogView: View {
             backlogService.addTask(task)
         }
         newTaskTitle = ""
+        ghostPreview = nil
+        ghostPreviewTask?.cancel()
     }
 }
 
@@ -249,6 +357,21 @@ struct BacklogTaskRow: View {
         .padding(.vertical, DS.Spacing.xs)
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
+        .draggable(task.id) {
+            // Drag preview — lightweight label shown while dragging
+            HStack(spacing: DS.Spacing.xs) {
+                Image(systemName: "calendar.badge.plus")
+                    .font(.caption)
+                Text(task.title)
+                    .font(.caption.weight(.medium))
+                Text("\(task.durationMinutes)m")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, DS.Spacing.sm)
+            .padding(.vertical, DS.Spacing.xs)
+            .background(.ultraThinMaterial, in: Capsule())
+        }
         .contextMenu {
             Button("Complete") { onComplete() }
             Button("Edit") { onEdit() }

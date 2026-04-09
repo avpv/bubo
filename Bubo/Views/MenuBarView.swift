@@ -311,6 +311,44 @@ struct MenuBarView: View {
         optimizerService.suggestionEngine?.evaluate()
     }
 
+    /// Handle a backlog task being dropped onto a free slot.
+    /// Creates a calendar event at the slot time and marks the task as scheduled.
+    private func handleTaskDrop(taskId: String, slotStart: Date, slotEnd: Date) {
+        guard let backlog = optimizerService.backlogService,
+              let task = backlog.tasks.first(where: { $0.id == taskId }) else { return }
+
+        let duration = min(
+            TimeInterval(task.durationMinutes * 60),
+            slotEnd.timeIntervalSince(slotStart)
+        )
+        let eventId = "task-\(task.id)"
+        let event = CalendarEvent(
+            id: eventId,
+            title: task.title,
+            startDate: slotStart,
+            endDate: slotStart.addingTimeInterval(duration),
+            location: nil,
+            description: nil,
+            calendarName: nil,
+            eventType: .standard,
+            colorTag: .green
+        )
+        reminderService.addLocalEvent(event)
+        backlog.markScheduled(id: task.id, eventId: eventId, date: slotStart)
+
+        let fmt = DateFormatter()
+        fmt.setLocalizedDateFormatFromTemplate("H:mm")
+        toastState.showSuccess(
+            "\(task.title) → \(fmt.string(from: slotStart))",
+            icon: "calendar.badge.plus"
+        ) {
+            // Undo: remove event and unschedule task
+            reminderService.removeLocalEvent(id: eventId)
+            backlog.unschedule(id: task.id)
+        }
+        notifyScheduleChange()
+    }
+
     // MARK: - Main Content
 
     private var mainContent: some View {
@@ -705,11 +743,18 @@ struct MenuBarView: View {
                     }
                 )
             case .slot(let start, let end):
-                FreeSlotRow(start: start, end: end) { minutes in
-                    withAnimation(DS.Animation.quick) {
-                        paletteContext = PaletteContext(seedSlotMinutes: minutes)
+                FreeSlotRow(
+                    start: start,
+                    end: end,
+                    onFillTapped: { minutes in
+                        withAnimation(DS.Animation.quick) {
+                            paletteContext = PaletteContext(seedSlotMinutes: minutes)
+                        }
+                    },
+                    onTaskDropped: { taskId in
+                        handleTaskDrop(taskId: taskId, slotStart: start, slotEnd: end)
                     }
-                }
+                )
             }
         }
     }
