@@ -398,4 +398,152 @@ final class OptimizerService {
         recipeMonitor = RecipeMonitor(optimizer: optimizer, reminderService: reminderService)
         recipeMonitor?.evaluateSuggestions()
     }
+
+    // MARK: - Intent-Based Execution (New System)
+
+    /// The backlog service for persistent task management.
+    var backlogService: BacklogService?
+
+    /// The suggestion engine (replaces RecipeMonitor for new system).
+    private(set) var suggestionEngine: SuggestionEngine?
+
+    /// Execute an OptimizationRequest (array of composable intents).
+    /// This is the new entry point that replaces executeRecipe for the intent system.
+    func executeRequest(
+        _ request: OptimizationRequest,
+        reminderService: ReminderService? = nil
+    ) async -> RecipeResult {
+        guard let reminderSvc = reminderService ?? findReminderService(),
+              let backlogSvc = backlogService else {
+            return .infeasible(reason: "Services not initialized")
+        }
+
+        isOptimizing = true
+        defer { isOptimizing = false }
+        error = nil
+
+        let compiler = IntentCompiler(
+            optimizer: optimizer,
+            reminderService: reminderSvc,
+            backlogService: backlogSvc
+        )
+        let result = await compiler.execute(request, defaultWorkingHours: workingHours)
+
+        switch result {
+        case .success(let optimizerResult):
+            scenarios = optimizerResult.scenarios
+            selectedScenarioIndex = scenarios.isEmpty ? nil : 0
+            lastOptimizationDate = Date()
+
+        case .partialSuccess(let optimizerResult, let warnings):
+            scenarios = optimizerResult.scenarios
+            selectedScenarioIndex = scenarios.isEmpty ? nil : 0
+            lastOptimizationDate = Date()
+            error = warnings.first
+
+        case .noEventsToOptimize:
+            error = "No events to optimize"
+
+        case .infeasible(let reason, _):
+            error = reason
+        }
+
+        return result
+    }
+
+    /// Dry-run an optimization request for preview.
+    func executeRequestDryRun(
+        _ request: OptimizationRequest,
+        reminderService: ReminderService
+    ) async -> [ScheduleGene]? {
+        guard let backlogSvc = backlogService else { return nil }
+        let compiler = IntentCompiler(
+            optimizer: optimizer,
+            reminderService: reminderService,
+            backlogService: backlogSvc
+        )
+        let result = await compiler.execute(request, defaultWorkingHours: workingHours)
+        switch result {
+        case .success(let r), .partialSuccess(let r, _):
+            return r.scenarios.first?.genes
+        default:
+            return nil
+        }
+    }
+
+    /// Apply a scenario from intent execution and link backlog tasks.
+    func applyRequestScenario(
+        at index: Int,
+        to reminderService: ReminderService,
+        titleOverride: String? = nil,
+        colorOverride: EventColorTag? = nil
+    ) {
+        guard index < scenarios.count else { return }
+        let scenario = scenarios[index]
+        var createdEventIds: [String] = []
+        let previousGenes = optimizer.currentSchedule
+
+        optimizer.acceptScenario(scenario)
+
+        for (i, gene) in scenario.genes.enumerated() {
+            let title: String
+            if let override = titleOverride, !override.isEmpty {
+                title = scenario.genes.count > 1 ? "\(override) \(i + 1)" : override
+            } else {
+                title = gene.title
+            }
+            let event = CalendarEvent(
+                id: gene.eventId,
+                title: title,
+                startDate: gene.startTime,
+                endDate: gene.endTime,
+                location: nil,
+                description: "Created by Schedule Assistant",
+                calendarName: nil,
+                eventType: gene.isFocusBlock ? .pomodoro : .standard,
+                colorTag: colorOverride ?? (gene.isFocusBlock ? .blue : .green)
+            )
+            reminderService.addLocalEvent(event)
+            createdEventIds.append(event.id)
+
+            // Link backlog tasks to their scheduled events
+            backlogService?.markScheduled(
+                id: gene.eventId,
+                eventId: event.id,
+                date: gene.startTime
+            )
+        }
+
+        // Save undo snapshot
+        lastSnapshot = AppliedRecipeSnapshot(
+            recipeId: "intent-request",
+            appliedAt: Date(),
+            previousGenes: previousGenes,
+            appliedGenes: scenario.genes,
+            createdEventIds: createdEventIds
+        )
+
+        freshlyCreatedEventIds = Set(createdEventIds)
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2))
+            freshlyCreatedEventIds = []
+        }
+
+        selectedScenarioIndex = index
+    }
+
+    /// Initialize the suggestion engine (new system).
+    func setupSuggestionEngine(reminderService: ReminderService, backlogService: BacklogService) {
+        self.backlogService = backlogService
+        suggestionEngine = SuggestionEngine(
+            reminderService: reminderService,
+            backlogService: backlogService
+        )
+    }
+
+    /// Convenience: find ReminderService if not passed explicitly.
+    /// Falls back to nil — caller should provide it.
+    private func findReminderService() -> ReminderService? {
+        nil
+    }
 }
