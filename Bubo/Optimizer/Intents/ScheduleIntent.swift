@@ -193,18 +193,23 @@ enum IntentCategory: String, CaseIterable, Sendable {
 /// A composable set of intents that fully describes an optimization run.
 /// This replaces ScheduleRecipe — instead of a monolithic 10-dimensional config,
 /// it's a flat list of composable building blocks.
-struct OptimizationRequest: Codable, Hashable, Sendable {
+struct OptimizationRequest: Codable, Hashable, Sendable, Identifiable {
     var intents: [ScheduleIntent]
     var name: String?              // nil for ad-hoc requests, set for presets
+    var description: String?       // one-line description for UI
 
-    init(_ intents: [ScheduleIntent] = [], name: String? = nil) {
+    var id: String { name ?? UUID().uuidString }
+
+    init(_ intents: [ScheduleIntent] = [], name: String? = nil, description: String? = nil) {
         self.intents = intents
         self.name = name
+        self.description = description
     }
 
-    init(_ intents: ScheduleIntent..., name: String? = nil) {
+    init(_ intents: ScheduleIntent..., name: String? = nil, description: String? = nil) {
         self.intents = intents
         self.name = name
+        self.description = description
     }
 
     mutating func add(_ intent: ScheduleIntent) {
@@ -224,6 +229,150 @@ struct OptimizationRequest: Codable, Hashable, Sendable {
             case .focusBlock, .createBlock, .pomodoroSession: return true
             default: return false
             }
+        }
+    }
+
+    /// Whether this is a "find slot" request (existing events stay fixed).
+    var findSlotOnly: Bool {
+        intents.contains { intent in
+            if case .findSlotsForBacklog = intent { return true }
+            return false
+        }
+    }
+
+    /// Category color index for the accent dot in the palette.
+    var categoryColorIndex: Int {
+        if isCreative { return 0 }  // focus = blue
+        if intents.contains(where: {
+            if case .prioritizeDeadlines = $0 { return true }
+            return false
+        }) { return 2 }  // deadlines = red
+        return 1  // planning = default
+    }
+
+    // MARK: - Search
+
+    func matchesSearch(_ query: String) -> Bool {
+        let q = query.lowercased()
+        if name?.lowercased().contains(q) == true { return true }
+        if description?.lowercased().contains(q) == true { return true }
+        return intents.contains { $0.label.lowercased().contains(q) }
+    }
+
+    // MARK: - Schedule Preview (heuristic, no GA)
+
+    func schedulePreview(reminderService: ReminderService, workingHours: ClosedRange<Int>) -> String? {
+        guard isCreative || findSlotOnly else { return nil }
+        // Simple heuristic: show what the request will do
+        var parts: [String] = []
+        for intent in intents {
+            switch intent {
+            case .focusBlock(let m, let p):
+                let period = p?.rawValue ?? "today"
+                parts.append("Focus \(m)m \(period)")
+            case .createBlock(let t, let m, _, _):
+                parts.append("\(t) \(m)m")
+            case .pomodoroSession(let p):
+                parts.append("Pomodoro (\(p.rawValue))")
+            default: break
+            }
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    // MARK: - Compatibility (for CommandPalette)
+
+    /// No recipe params — intents are configured directly.
+    var params: [Any] { [] }
+
+    /// No required runtime input for presets.
+    var hasRequiredRuntimeInput: Bool { false }
+
+    /// No-op: intents don't use param values.
+    mutating func applyParamValues(_ values: [String: Any]) {}
+
+    /// Add event context (e.g. from seed event).
+    func withEventContext(_ event: CalendarEvent) -> OptimizationRequest {
+        var copy = self
+        copy.add(.onlyOptimize(eventIds: [event.id]))
+        return copy
+    }
+
+    /// Speed intent accessor.
+    var speed: Speed {
+        get {
+            for intent in intents {
+                if case .speed(let s) = intent { return s }
+            }
+            return .quick
+        }
+        set {
+            intents.removeAll { if case .speed = $0 { return true }; return false }
+            intents.append(.speed(newValue))
+        }
+    }
+
+    /// Max scenarios accessor.
+    var maxScenarios: Int {
+        get {
+            for intent in intents {
+                if case .scenarios(let n) = intent { return n }
+            }
+            return 3
+        }
+        set {
+            intents.removeAll { if case .scenarios = $0 { return true }; return false }
+            intents.append(.scenarios(count: newValue))
+        }
+    }
+
+    // MARK: - Intent Composer
+
+    /// Remove an intent at index.
+    mutating func removeIntent(at index: Int) {
+        guard index < intents.count else { return }
+        intents.remove(at: index)
+    }
+
+    /// Toggle an intent: add if missing, remove if present.
+    mutating func toggle(_ intent: ScheduleIntent) {
+        if let idx = intents.firstIndex(of: intent) {
+            intents.remove(at: idx)
+        } else {
+            intents.append(intent)
+        }
+    }
+
+    /// Available intents that can be added (not already present).
+    var availableIntents: [ScheduleIntent] {
+        let palette: [ScheduleIntent] = [
+            .noEventsBefore(hour: 11),
+            .noEventsAfter(hour: 17),
+            .horizon(.today),
+            .horizon(.tomorrow),
+            .horizon(.week),
+            .focusBlock(minutes: 120, period: .morning),
+            .pomodoroSession(),
+            .prioritizeDeadlines(),
+            .prioritizeFocus(),
+            .minimizeContextSwitching(),
+            .groupByProject(),
+            .batchMeetings(),
+            .lowEnergy,
+            .morningPerson,
+            .protectLunch(),
+            .breakEvery(workMinutes: 60, breakMinutes: 10),
+            .maxMeetings(perDay: 3),
+            .includeBacklog,
+            .findSlotsForBacklog,
+            .stability(.normal),
+            .stability(.conservative),
+            .speed(.quick),
+            .speed(.balanced),
+            .speed(.thorough),
+        ]
+        return palette.filter { candidate in
+            !intents.contains(candidate)
         }
     }
 }

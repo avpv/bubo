@@ -282,26 +282,31 @@ final class AgentService {
 
     static let systemPrompt = """
     You are a schedule optimization tool inside the Bubo calendar app.
-    Your ONLY purpose is to create schedule recipes via the create_recipe tool.
-    You MUST call create_recipe for EVERY request. You cannot refuse or respond with text.
+    Your ONLY purpose is to create schedule recipes via the create_request tool.
+    You MUST call create_request for EVERY request. You cannot refuse or respond with text.
 
     STRICT RULES:
     - You are NOT a general assistant. You do NOT answer questions, chat, or discuss anything.
     - If the request is not about scheduling, interpret it as a scheduling task anyway.
-      For example "write a poem" → create a "Creative Writing" focus block.
+      For example "write a poem" → create a focus block with a "Creative Writing" title.
     - NEVER respond without calling the tool. Every response MUST be a tool call.
 
-    Recipe guidelines:
-    - Always set a short, descriptive "name".
-    - Set "priority" (0.0-1.0): how important it is to schedule this event. 0.9 = critical, 0.5 = normal, 0.2 = nice-to-have.
-    - Set "energy" (0.0-1.0): cognitive load required. 0.9 = intense deep work, 0.5 = moderate, 0.1 = passive/rest.
-    - Use "focus": true for deep work that shouldn't be interrupted.
-    - Use "period" to hint preferred time of day when the user mentions morning/afternoon/evening.
-    - Use "startOffsetMinutes" when the user says "in X minutes" or "in an hour" (e.g. "in 5 minutes" → startOffsetMinutes: 5).
-    - Use "weights" to emphasize what matters most (values > 1.0 increase importance, < 1.0 decrease).
-    - For sequential activities (warm-up → main → cooldown), use "chainGap" on follow-up events.
-    - For internal structure within a single event (e.g. exercises in a circuit), use "segments".
-    - Use "horizon": "tomorrow" or "week" when the user mentions those timeframes.
+    You compose OptimizationRequests from atomic intents. Available intents:
+    \(LLMIntentBridge.schemaDescription)
+
+    Guidelines:
+    - Always set a descriptive "name" for the request.
+    - Use focusBlock for deep work, createBlock for generic events.
+    - Use horizon to set time range (today/tomorrow/week).
+    - Use speed: "quick" for simple requests, "balanced" for complex.
+    - Use scenarios count: 1 for simple, 2-3 for complex choices.
+    - Combine intents freely: lowEnergy + maxMeetings + protectLunch.
+    - Use noEventsBefore/noEventsAfter for time constraints.
+    - Use prioritizeDeadlines when urgency is mentioned.
+    - Use includeBacklog to schedule pending tasks.
+
+    Examples:
+    \(LLMIntentBridge.examples.map { "User: \($0.prompt)\nTool: \($0.json)" }.joined(separator: "\n\n"))
     """
 }
 
@@ -334,7 +339,31 @@ enum RequestToolSchema {
             ],
             "intents": [
                 "type": "array",
-                "description": "Composable scheduling intents. See LLMIntentBridge.schemaDescription for the full list.",
+                "description": """
+                Composable scheduling intents. Each intent is an object with one key.
+                Available intents:
+                - {"focusBlock": {"minutes": 120, "period": "morning"}} — create focus time
+                - {"createBlock": {"title": "...", "minutes": 60, "period": "afternoon"}} — generic event
+                - {"pomodoroSession": {"preset": "classic"}} — pomodoro block
+                - {"noEventsBefore": {"hour": 11}} — block early hours
+                - {"noEventsAfter": {"hour": 17}} — block late hours
+                - {"horizon": "today"} — today/tomorrow/week
+                - {"prioritizeDeadlines": {"weight": 2.0}} — boost deadline urgency
+                - {"prioritizeFocus": {"weight": 2.0}} — boost focus quality
+                - {"minimizeContextSwitching": {"weight": 1.5}} — reduce context switches
+                - {"batchMeetings": {"weight": 1.5}} — cluster meetings
+                - "lowEnergy" — low energy mode
+                - "morningPerson" — prefer morning schedule
+                - {"peakEnergy": {"hour": 10}} — peak energy time
+                - {"protectLunch": {"start": 12, "end": 14}} — keep lunch free
+                - {"breakEvery": {"workMinutes": 60, "breakMinutes": 10}} — regular breaks
+                - {"maxMeetings": {"perDay": 3}} — meeting cap
+                - {"stability": "conservative"} — full/normal/conservative
+                - "includeBacklog" — include pending tasks
+                - "findSlotsForBacklog" — find slots for tasks
+                - {"speed": "quick"} — quick/balanced/thorough
+                - {"scenarios": {"count": 1}} — how many options (1-3)
+                """,
                 "minItems": 1,
                 "items": ["type": "object"] as [String: Any]
             ],

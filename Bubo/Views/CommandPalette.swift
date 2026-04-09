@@ -80,29 +80,18 @@ struct CommandPalette: View {
     /// Recipes surfaced as contextual suggestions when the search field is empty.
     /// Order: banner-worthy suggestions → usage-based top recipes → curated defaults.
     private var contextualSuggestions: [OptimizationRequest] {
-        var seen = Set<String>()
         var result: [OptimizationRequest] = []
 
-        // 1. Monitor-driven (condition matches)
-        if let monitor = optimizerService.recipeMonitor {
-            for recipe in monitor.suggestedRecipes {
-                if seen.insert(recipe.id).inserted { result.append(recipe) }
-                if result.count >= 5 { return result }
-            }
+        // 1. Suggestion engine recommendations
+        if let suggestion = optimizerService.suggestionEngine?.suggestion {
+            result.append(suggestion.request)
         }
 
-        // 2. Usage-driven
-        for id in optimizerService.usageTracker.topRecipeIds(limit: 5) {
-            if let recipe = IntentPresets.all.first[id],
-               seen.insert(recipe.id).inserted {
-                result.append(recipe)
-                if result.count >= 5 { return result }
+        // 2. Time-of-day defaults
+        for preset in defaultSuggestionsByTimeOfDay {
+            if !result.contains(where: { $0.name == preset.name }) {
+                result.append(preset)
             }
-        }
-
-        // 3. Time-of-day defaults
-        for recipe in defaultSuggestionsByTimeOfDay {
-            if seen.insert(recipe.id).inserted { result.append(recipe) }
             if result.count >= 5 { return result }
         }
 
@@ -112,10 +101,10 @@ struct CommandPalette: View {
     private var defaultSuggestionsByTimeOfDay: [OptimizationRequest] {
         let hour = Calendar.current.component(.hour, from: Date())
         switch hour {
-        case 0..<11:   return [.organizeDay, .needFocus(), .pomodoroSession()]
-        case 11..<15:  return [.needFocus(), .pomodoroSession(), .lowEnergyDay]
-        case 15..<19:  return [.pomodoroSession(), .organizeDay, .lightenTomorrow]
-        default:       return [.lightenTomorrow, .planWeek, .eveningWrapUp()]
+        case 0..<11:   return [.organizeDay, .findFocus(), .scheduleBacklog]
+        case 11..<15:  return [.findFocus(), .scheduleBacklog, .lowEnergyDay]
+        case 15..<19:  return [.scheduleBacklog, .organizeDay, .planWeek]
+        default:       return [.planWeek, .organizeDay, .scheduleBacklog]
         }
     }
 
@@ -126,11 +115,11 @@ struct CommandPalette: View {
         let all: [OptimizationRequest] = {
             if let seedEvent {
                 return IntentPresets.all
-                    .sorted { $0.name < $1.name }
+                    .sorted { ($0.name ?? "") < ($1.name ?? "") }
             }
             if let minutes = seedSlotMinutes {
                 return IntentPresets.all
-                    .sorted { $0.name < $1.name }
+                    .sorted { ($0.name ?? "") < ($1.name ?? "") }
             }
             return IntentPresets.all
         }()
@@ -145,8 +134,8 @@ struct CommandPalette: View {
         return all.filter { $0.matchesSearch(query) }
             .sorted { lhs, rhs in
                 // Name hits first, then description/category hits.
-                let lName = lhs.name.lowercased().contains(query.lowercased())
-                let rName = rhs.name.lowercased().contains(query.lowercased())
+                let lName = (lhs.name ?? "").lowercased().contains(query.lowercased())
+                let rName = (rhs.name ?? "").lowercased().contains(query.lowercased())
                 if lName != rName { return lName }
                 return lhs.name < rhs.name
             }
@@ -376,6 +365,12 @@ struct CommandPalette: View {
         } else {
             contextStrip
             recipeList
+
+            // Intent composer — add/remove individual intents
+            if let selected = composerRequest {
+                intentComposer(for: selected)
+            }
+
             footerHints
         }
 
@@ -387,6 +382,92 @@ struct CommandPalette: View {
                 .padding(.top, DS.Spacing.xs)
         }
     }
+
+    // The request being composed (expanded preset or custom)
+    private var composerRequest: OptimizationRequest? {
+        guard let id = expandedRecipeId else { return nil }
+        return filteredRecipes.first { $0.id == id }
+    }
+
+    // MARK: - Intent Composer
+
+    @ViewBuilder
+    private func intentComposer(for request: OptimizationRequest) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            // Active intents (removable)
+            Text("Active intents")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(skin.resolvedTextTertiary)
+                .tracking(0.5)
+
+            FlowLayout(spacing: DS.Spacing.xs) {
+                ForEach(Array(request.intents.enumerated()), id: \.offset) { index, intent in
+                    intentChip(intent.label, isActive: true) {
+                        var modified = request
+                        modified.removeIntent(at: index)
+                        replaceExpandedPreset(modified)
+                    }
+                }
+            }
+
+            // Available intents (addable)
+            let available = request.availableIntents
+            if !available.isEmpty {
+                Text("Add")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                    .tracking(0.5)
+                    .padding(.top, DS.Spacing.xs)
+
+                FlowLayout(spacing: DS.Spacing.xs) {
+                    ForEach(Array(available.prefix(12).enumerated()), id: \.offset) { _, intent in
+                        intentChip(intent.label, isActive: false) {
+                            var modified = request
+                            modified.add(intent)
+                            replaceExpandedPreset(modified)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.sm)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(skin.accentColor.opacity(0.04))
+        )
+        .padding(.horizontal, DS.Spacing.sm)
+        .transition(.opacity.combined(with: .move(edge: .top)))
+    }
+
+    private func intentChip(_ label: String, isActive: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 3) {
+                Text(label)
+                    .font(.caption2.weight(.medium))
+                if isActive {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 8, weight: .bold))
+                }
+            }
+            .foregroundStyle(isActive ? Color.white : skin.resolvedTextPrimary)
+            .padding(.horizontal, DS.Spacing.sm)
+            .padding(.vertical, 4)
+            .background(
+                Capsule().fill(isActive ? skin.accentColor : skin.accentColor.opacity(0.10))
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Replace the expanded preset in the filtered list with a modified version.
+    private func replaceExpandedPreset(_ modified: OptimizationRequest) {
+        // Store modified version for the next run
+        // Since presets are static, we store modifications as a local override
+        expandedModifiedRequest = modified
+    }
+
+    @State private var expandedModifiedRequest: OptimizationRequest? = nil
 
     // MARK: - Context Strip
 
@@ -516,7 +597,7 @@ struct CommandPalette: View {
                         .padding(.horizontal, DS.Spacing.sm)
                         .padding(.top, DS.Spacing.sm)
 
-                    ForEach(category.recipes) { recipe in
+                    ForEach(category.presets) { recipe in
                         RecipeRow(
                             recipe: recipe,
                             isSelected: false,
@@ -699,18 +780,13 @@ struct CommandPalette: View {
         guard recipe.findSlotOnly || recipe.isCreative else { return }
 
         dryRunTask = Task { @MainActor in
-            // Small delay so the palette renders first.
             try? await Task.sleep(for: .milliseconds(200))
             guard !Task.isCancelled else { return }
 
             var working = recipe
-            if let values = localParams[recipe.id] {
-                working.applyParamValues(values)
-            }
             if let seedEvent {
                 working = working.withEventContext(seedEvent)
             }
-            // Force quick speed for preview.
             working.speed = .quick
             working.maxScenarios = 1
 
@@ -782,28 +858,17 @@ struct CommandPalette: View {
 
     private func runRecipe(_ recipe: OptimizationRequest) {
         Haptics.tap()
-        var working = recipe
+        // Use the composer-modified version if available, otherwise original
+        var working = expandedModifiedRequest?.id == recipe.id
+            ? expandedModifiedRequest!
+            : recipe
 
-        // Apply any inline parameter overrides the user has set.
-        if let values = localParams[recipe.id] {
-            working.applyParamValues(values)
-        }
-        // If the palette was seeded with an event, bind it to the recipe.
         if let seedEvent {
             working = working.withEventContext(seedEvent)
         }
 
-        // If the recipe still needs required runtime input, expand it instead
-        // of silently failing.
-        if working.hasRequiredRuntimeInput && seedEvent == nil {
-            withAnimation(DS.Animation.quick) {
-                expandedRecipeId = recipe.id
-            }
-            return
-        }
-
         phase = .working("Optimizing…")
-        appliedRecipeName = recipe.name
+        appliedRecipeName = (recipe.name ?? "Optimize")
 
         Task {
             let result = await optimizerService.executeRequest(
@@ -818,7 +883,7 @@ struct CommandPalette: View {
                         return
                     }
                     let scenario = optimizerService.scenarios[0]
-                    optimizerService.applyRecipeScenario(at: 0, to: reminderService)
+                    optimizerService.applyScenario(at: 0, to: reminderService)
 
                     // Show brief inline confirmation with concrete event details
                     // so the user's brain connects action → result.
@@ -835,7 +900,7 @@ struct CommandPalette: View {
 
                     // Offer undo via the host toast.
                     onApplied(recipe, {
-                        optimizerService.undoLastRecipe(reminderService: reminderService)
+                        optimizerService.undoLast(reminderService: reminderService)
                     })
 
                     // Auto-dismiss after 1 second — enough to read but not to wait.
@@ -935,7 +1000,7 @@ private struct RecipeRow: View {
                             .frame(width: 18)
 
                         VStack(alignment: .leading, spacing: isTopSuggestion ? 2 : 1) {
-                            Text(recipe.name)
+                            Text((recipe.name ?? "Optimize"))
                                 .font(isTopSuggestion ? .headline.weight(.semibold) : .subheadline.weight(isSelected ? .semibold : .medium))
                                 .foregroundStyle(skin.resolvedTextPrimary)
                                 .lineLimit(1)
@@ -948,7 +1013,7 @@ private struct RecipeRow: View {
                                     .foregroundStyle(skin.accentColor.opacity(0.85))
                                     .lineLimit(1)
                             } else {
-                                Text(recipe.description)
+                                Text((recipe.description ?? recipe.intents.map(\.label).joined(separator: " · ")))
                                     .font(.caption2)
                                     .foregroundStyle(skin.resolvedTextSecondary)
                                     .lineLimit(1)
