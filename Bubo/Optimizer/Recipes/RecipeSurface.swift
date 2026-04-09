@@ -126,7 +126,7 @@ extension ScheduleRecipe {
     /// the user's ACTUAL schedule, e.g. "09:30–11:30 · free slot available"
     /// instead of the generic description. Returns nil when no meaningful
     /// preview can be computed.
-    func schedulePreview(reminderService: ReminderService, workingHours: ClosedRange<Int>) -> String? {
+    @MainActor func schedulePreview(reminderService: ReminderService, workingHours: ClosedRange<Int>) -> String? {
         let cal = Calendar.current
         let now = Date()
         let fmt = DateFormatter()

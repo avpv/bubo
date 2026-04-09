@@ -637,84 +637,7 @@ struct MenuBarView: View {
                 }
 
                 ForEach(filteredEventsByDay, id: \.date) { dayGroup in
-                    let visibleCount = visibleEventCount(for: dayGroup.events)
-
-                    DaySectionHeader(date: dayGroup.date, count: visibleCount)
-                        .padding(.horizontal, DS.Spacing.sm)
-                        .padding(.top, dayGroup.date == reminderService.eventsByDay.first?.date ? 0 : DS.Spacing.sm)
-
-                    let freeSlots = FreeSlotFinder.slots(
-                        for: dayGroup.events,
-                        on: dayGroup.date,
-                        workingHours: optimizerService.workingHours
-                    )
-
-                    ForEach(interleave(events: dayGroup.events, freeSlots: freeSlots), id: \.id) { item in
-                        switch item {
-                        case .event(let event):
-                            EventRowView(
-                            event: event,
-                            reminderService: reminderService,
-                            isFreshlyCreated: optimizerService.freshlyCreatedEventIds.contains(event.id),
-                            onEdit: { event in resolveEdit(event) },
-                            onDelete: { event in handleDelete(event) },
-                            onDeleteOccurrence: { event in
-                                reminderService.excludeOccurrence(occurrenceId: event.id)
-                                toastState.showSuccess("\u{201C}\(event.title)\u{201D} removed", icon: "trash.fill")
-                            },
-                            onDeleteSeries: { event in
-                                let seriesId = event.seriesId ?? event.id
-                                reminderService.removeLocalEvent(id: seriesId)
-                                toastState.showSuccess("All \u{201C}\(event.title)\u{201D} deleted", icon: "trash.fill")
-                            },
-                            onTap: { event in
-                                navigation = .detail(event)
-                            },
-                            onCompleteTask: { event in
-                                var completed = event
-                                completed.taskStatus = .done
-                                completed.completedAt = Date()
-                                reminderService.updateLocalEvent(completed)
-                                toastState.showSuccess("Task completed", icon: "checkmark.circle.fill")
-                            },
-                            onFindBetterTime: { event in
-                                // Open the palette seeded with this event so the user can
-                                // pick any applicable recipe (find time, reschedule, etc.).
-                                withAnimation(DS.Animation.quick) {
-                                    paletteContext = PaletteContext(seedEvent: event)
-                                }
-                            },
-                            onSplitTask: { _ in
-                                withAnimation(DS.Animation.quick) {
-                                    paletteContext = PaletteContext(seedRecipeId: "split-task")
-                                }
-                            },
-                            onProtectBlock: { event in
-                                let recipe = ScheduleRecipe(
-                                    id: "protect-block",
-                                    name: "Protect Block",
-                                    eventRules: [EventRule(match: .id(event.id), action: .markFixed)],
-                                    display: .confirmation
-                                )
-                                Task {
-                                    _ = await optimizerService.executeRecipe(recipe, reminderService: reminderService)
-                                    toastState.showSuccess("Focus block protected", icon: "shield.fill")
-                                }
-                            },
-                            onAddPrep: { event in
-                                withAnimation(DS.Animation.quick) {
-                                    paletteContext = PaletteContext(seedEvent: event, seedRecipeId: "prep-meeting")
-                                }
-                            }
-                        )
-                        case .slot(let start, let end):
-                            FreeSlotRow(start: start, end: end) { minutes in
-                                withAnimation(DS.Animation.quick) {
-                                    paletteContext = PaletteContext(seedSlotMinutes: minutes)
-                                }
-                            }
-                        }
-                    }
+                    dayGroupSection(dayGroup)
                 }
             }
             .padding(.horizontal, DS.Spacing.md)
@@ -726,6 +649,88 @@ struct MenuBarView: View {
         }
         .scrollPosition(id: $scrollPositionID)
         .scrollContentBackground(.hidden)
+    }
+
+    // MARK: - Day Group Section (extracted for release-mode type checker)
+
+    @ViewBuilder
+    private func dayGroupSection(_ dayGroup: (date: Date, events: [CalendarEvent])) -> some View {
+        let visibleCount = visibleEventCount(for: dayGroup.events)
+
+        DaySectionHeader(date: dayGroup.date, count: visibleCount)
+            .padding(.horizontal, DS.Spacing.sm)
+            .padding(.top, dayGroup.date == reminderService.eventsByDay.first?.date ? 0 : DS.Spacing.sm)
+
+        let freeSlots = FreeSlotFinder.slots(
+            for: dayGroup.events,
+            on: dayGroup.date,
+            workingHours: optimizerService.workingHours
+        )
+
+        ForEach(interleave(events: dayGroup.events, freeSlots: freeSlots), id: \.id) { item in
+            switch item {
+            case .event(let event):
+                EventRowView(
+                    event: event,
+                    reminderService: reminderService,
+                    isFreshlyCreated: optimizerService.freshlyCreatedEventIds.contains(event.id),
+                    onEdit: { event in resolveEdit(event) },
+                    onDelete: { event in handleDelete(event) },
+                    onDeleteOccurrence: { event in
+                        reminderService.excludeOccurrence(occurrenceId: event.id)
+                        toastState.showSuccess("\u{201C}\(event.title)\u{201D} removed", icon: "trash.fill")
+                    },
+                    onDeleteSeries: { event in
+                        let seriesId = event.seriesId ?? event.id
+                        reminderService.removeLocalEvent(id: seriesId)
+                        toastState.showSuccess("All \u{201C}\(event.title)\u{201D} deleted", icon: "trash.fill")
+                    },
+                    onTap: { event in
+                        navigation = .detail(event)
+                    },
+                    onCompleteTask: { event in
+                        var completed = event
+                        completed.taskStatus = .done
+                        completed.completedAt = Date()
+                        reminderService.updateLocalEvent(completed)
+                        toastState.showSuccess("Task completed", icon: "checkmark.circle.fill")
+                    },
+                    onFindBetterTime: { event in
+                        withAnimation(DS.Animation.quick) {
+                            paletteContext = PaletteContext(seedEvent: event)
+                        }
+                    },
+                    onSplitTask: { _ in
+                        withAnimation(DS.Animation.quick) {
+                            paletteContext = PaletteContext(seedRecipeId: "split-task")
+                        }
+                    },
+                    onProtectBlock: { event in
+                        let recipe = ScheduleRecipe(
+                            id: "protect-block",
+                            name: "Protect Block",
+                            eventRules: [EventRule(match: .id(event.id), action: .markFixed)],
+                            display: .confirmation
+                        )
+                        Task {
+                            _ = await optimizerService.executeRecipe(recipe, reminderService: reminderService)
+                            toastState.showSuccess("Focus block protected", icon: "shield.fill")
+                        }
+                    },
+                    onAddPrep: { event in
+                        withAnimation(DS.Animation.quick) {
+                            paletteContext = PaletteContext(seedEvent: event, seedRecipeId: "prep-meeting")
+                        }
+                    }
+                )
+            case .slot(let start, let end):
+                FreeSlotRow(start: start, end: end) { minutes in
+                    withAnimation(DS.Animation.quick) {
+                        paletteContext = PaletteContext(seedSlotMinutes: minutes)
+                    }
+                }
+            }
+        }
     }
 
     // MARK: - List Items (events + free slots interleaved)
