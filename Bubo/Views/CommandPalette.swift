@@ -54,12 +54,25 @@ struct CommandPalette: View {
     @State private var phase: Phase = .picking
     @State private var appliedRecipeName: String = ""
     @State private var aiError: String? = nil
+    /// Async dry-run preview for the top suggestion — shows concrete event times
+    /// computed by actually running the recipe through the GA (fast config).
+    @State private var dryRunPreview: String? = nil
+    @State private var dryRunTask: Task<Void, Never>? = nil
     @FocusState private var isSearchFocused: Bool
 
     private enum Phase: Equatable {
         case picking
         case working(String)    // status label, e.g. "Optimizing…"
+        case applied([AppliedEventInfo])  // brief confirmation with concrete data
         case failed(String)     // error message + optional retry
+    }
+
+    /// Info about a single event created/placed by a recipe, shown in the
+    /// applied confirmation phase so the user sees exactly what changed.
+    struct AppliedEventInfo: Equatable, Identifiable {
+        let id: String
+        let title: String
+        let timeRange: String   // e.g. "14:30–15:30"
     }
 
     // MARK: - Context
@@ -165,11 +178,14 @@ struct CommandPalette: View {
             if let seed = seedRecipe {
                 expandedRecipeId = seed.id
                 prepopulateDefaults(for: seed)
-                // Find the index of the seeded recipe and select it.
                 if let idx = filteredRecipes.firstIndex(where: { $0.id == seed.id }) {
                     selectedIndex = idx
                 }
             }
+            startDryRunPreview()
+        }
+        .onDisappear {
+            dryRunTask?.cancel()
         }
     }
 
@@ -199,9 +215,10 @@ struct CommandPalette: View {
             return .handled
         }
         .onKeyPress(.rightArrow) {
-            // → expands the selected recipe's params (only when search is empty
-            // or cursor is at end — but SwiftUI text field consumes → for cursor,
-            // so this only fires when the text field doesn't need it).
+            // → expands/collapses the selected recipe's params.
+            // Only handle when the search field is empty — otherwise let
+            // the TextField use → for normal cursor movement.
+            guard searchText.isEmpty else { return .ignored }
             let recipes = filteredRecipes
             guard !recipes.isEmpty else { return .ignored }
             let idx = min(selectedIndex, recipes.count - 1)
@@ -287,6 +304,7 @@ struct CommandPalette: View {
         switch phase {
         case .picking:       return "sparkles"
         case .working:       return "hourglass"
+        case .applied:       return "checkmark.circle.fill"
         case .failed:        return "exclamationmark.triangle.fill"
         }
     }
@@ -295,13 +313,16 @@ struct CommandPalette: View {
         switch phase {
         case .picking:       return skin.accentColor
         case .working:       return skin.accentColor
+        case .applied:       return skin.resolvedSuccessColor
         case .failed:        return skin.resolvedWarningColor
         }
     }
 
     private var isBusy: Bool {
-        if case .working = phase { return true }
-        return false
+        switch phase {
+        case .working, .applied: return true
+        default: return false
+        }
     }
 
     private var placeholder: String {
@@ -336,6 +357,8 @@ struct CommandPalette: View {
                     pickingContent
                 case .working(let label):
                     statusView(icon: "hourglass", text: label, color: skin.accentColor)
+                case .applied(let events):
+                    appliedView(events: events)
                 case .failed(let message):
                     failedView(message: message)
                 }
@@ -404,10 +427,12 @@ struct CommandPalette: View {
                     isSelected: index == selectedIndex,
                     isExpanded: expandedRecipeId == recipe.id,
                     isTopSuggestion: index == 0 && searchText.isEmpty && seedEvent == nil && seedSlotMinutes == nil,
-                    previewText: recipe.schedulePreview(
-                        reminderService: reminderService,
-                        workingHours: optimizerService.workingHours
-                    ),
+                    previewText: (index == 0 && dryRunPreview != nil)
+                        ? dryRunPreview
+                        : recipe.schedulePreview(
+                            reminderService: reminderService,
+                            workingHours: optimizerService.workingHours
+                        ),
                     availableEvents: reminderService.localEvents.filter { $0.isUpcoming },
                     paramValue: { paramId in localParams[recipe.id]?[paramId] },
                     setParamValue: { paramId, value in
@@ -590,6 +615,37 @@ struct CommandPalette: View {
         .padding(.vertical, DS.Spacing.xxl)
     }
 
+    /// Brief inline confirmation showing exactly what was created/placed.
+    /// Connects action → result in the user's mind (Birman: show the consequence).
+    private func appliedView(events: [AppliedEventInfo]) -> some View {
+        VStack(spacing: DS.Spacing.sm) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.title)
+                .foregroundStyle(skin.resolvedSuccessColor)
+
+            ForEach(events) { info in
+                HStack(spacing: DS.Spacing.xs) {
+                    Text(info.title)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(skin.resolvedTextPrimary)
+                        .lineLimit(1)
+                    Text(info.timeRange)
+                        .font(.subheadline.monospacedDigit())
+                        .foregroundStyle(skin.accentColor)
+                }
+            }
+
+            if events.count < (optimizerService.scenarios.first?.genes.count ?? 0) {
+                Text("+\(optimizerService.scenarios.first!.genes.count - events.count) more")
+                    .font(.caption)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, DS.Spacing.xl)
+        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+    }
+
     private func failedView(message: String) -> some View {
         VStack(spacing: DS.Spacing.md) {
             Image(systemName: "exclamationmark.triangle.fill")
@@ -626,6 +682,54 @@ struct CommandPalette: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, DS.Spacing.xxl)
+    }
+
+    // MARK: - Dry-Run Preview
+
+    /// Asynchronously runs the top suggestion through a fast GA to get concrete
+    /// event placement, then formats "Focus Time 14:30–15:30" as the preview.
+    /// Only runs for the top-1 recipe (the card) to avoid burning CPU.
+    private func startDryRunPreview() {
+        dryRunTask?.cancel()
+        dryRunPreview = nil
+
+        guard let recipe = filteredRecipes.first else { return }
+        // Only creative/findSlotOnly recipes benefit from dry-run — organizing
+        // recipes are too slow and the heuristic preview is good enough.
+        guard recipe.findSlotOnly || recipe.isCreative else { return }
+
+        dryRunTask = Task { @MainActor in
+            // Small delay so the palette renders first.
+            try? await Task.sleep(for: .milliseconds(200))
+            guard !Task.isCancelled else { return }
+
+            var working = recipe
+            if let values = localParams[recipe.id] {
+                working.applyParamValues(values)
+            }
+            if let seedEvent {
+                working = working.withEventContext(seedEvent)
+            }
+            // Force quick speed for preview.
+            working.speed = .quick
+            working.maxScenarios = 1
+
+            let result = await optimizerService.executeRecipeDryRun(
+                working,
+                reminderService: reminderService
+            )
+            guard !Task.isCancelled else { return }
+
+            if let genes = result {
+                let fmt = DateFormatter()
+                fmt.setLocalizedDateFormatFromTemplate("H:mm")
+                let descriptions = genes.prefix(2).map { gene in
+                    "\(gene.title) \(fmt.string(from: gene.startTime))–\(fmt.string(from: gene.endTime))"
+                }
+                let suffix = genes.count > 2 ? " +\(genes.count - 2)" : ""
+                dryRunPreview = descriptions.joined(separator: " · ") + suffix
+            }
+        }
     }
 
     // MARK: - Prepopulate Defaults
@@ -713,13 +817,32 @@ struct CommandPalette: View {
                         phase = .failed("No valid schedule found")
                         return
                     }
+                    let scenario = optimizerService.scenarios[0]
                     optimizerService.applyRecipeScenario(at: 0, to: reminderService)
 
-                    // Dismiss immediately — toast is the single feedback source.
+                    // Show brief inline confirmation with concrete event details
+                    // so the user's brain connects action → result.
+                    let fmt = DateFormatter()
+                    fmt.setLocalizedDateFormatFromTemplate("H:mm")
+                    let eventInfos = scenario.genes.prefix(3).map { gene in
+                        AppliedEventInfo(
+                            id: gene.eventId,
+                            title: gene.title,
+                            timeRange: "\(fmt.string(from: gene.startTime))–\(fmt.string(from: gene.endTime))"
+                        )
+                    }
+                    phase = .applied(eventInfos)
+
+                    // Offer undo via the host toast.
                     onApplied(recipe, {
                         optimizerService.undoLastRecipe(reminderService: reminderService)
                     })
-                    dismiss()
+
+                    // Auto-dismiss after 1 second — enough to read but not to wait.
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .seconds(1))
+                        dismiss()
+                    }
 
                 case .noEventsToOptimize:
                     phase = .failed("Nothing to optimize — add events first")

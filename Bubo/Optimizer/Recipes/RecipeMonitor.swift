@@ -33,10 +33,15 @@ final class RecipeMonitor {
     }
 
     private var periodicTimer: Timer?
+    /// Always-on timer that re-evaluates suggestions every 15 minutes
+    /// so the SmartBanner stays contextually relevant as time passes
+    /// (e.g. conditions like afterHour, noFocusBlocks change throughout the day).
+    private var suggestionTimer: Timer?
 
     init(optimizer: BuboOptimizer, reminderService: ReminderService) {
         self.optimizer = optimizer
         self.reminderService = reminderService
+        startSuggestionTimer()
     }
 
     // MARK: - Event Change Handling
@@ -160,6 +165,19 @@ final class RecipeMonitor {
     private func stopPeriodicChecks() {
         periodicTimer?.invalidate()
         periodicTimer = nil
+    }
+
+    // MARK: - Suggestion Timer
+
+    private func startSuggestionTimer() {
+        suggestionTimer?.invalidate()
+        // Re-evaluate every 15 minutes so time-of-day conditions stay fresh.
+        suggestionTimer = Timer.scheduledTimer(withTimeInterval: 15 * 60, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in
+                self.evaluateSuggestions()
+            }
+        }
     }
 
     // MARK: - Clear

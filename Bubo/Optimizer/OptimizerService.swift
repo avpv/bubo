@@ -301,6 +301,23 @@ final class OptimizerService {
         return result
     }
 
+    /// Dry-run a recipe: execute it through the GA but don't store results or
+    /// record usage. Returns the genes from the best scenario, or nil on failure.
+    /// Used by the command palette to show a concrete preview ("Focus 14:30–15:30").
+    func executeRecipeDryRun(
+        _ recipe: ScheduleRecipe,
+        reminderService: ReminderService
+    ) async -> [ScheduleGene]? {
+        let executor = RecipeExecutor(optimizer: optimizer, reminderService: reminderService)
+        let result = await executor.execute(recipe, defaultWorkingHours: workingHours)
+        switch result {
+        case .success(let r), .partialSuccess(let r, _):
+            return r.scenarios.first?.genes
+        default:
+            return nil
+        }
+    }
+
     /// Apply the selected scenario and record feedback for learning.
     func applyRecipeScenario(
         at index: Int,
