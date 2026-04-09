@@ -18,6 +18,10 @@ struct EventRowView: View {
     var onProtectBlock: ((CalendarEvent) -> Void)? = nil
     var onAddPrep: ((CalendarEvent) -> Void)? = nil
 
+    /// When true, the row plays a brief highlight glow to draw attention
+    /// to newly created/changed events after recipe application.
+    var isFreshlyCreated: Bool = false
+
     @State private var isHovered = false
     @State private var isDisintegrating = false
     @State private var pendingDeleteAction: (() -> Void)?
@@ -123,6 +127,12 @@ struct EventRowView: View {
             color: isHovered ? skin.resolvedHoverShadowColor : skin.resolvedShadowColor,
             radius: isHovered ? skin.hoverShadowRadius : skin.shadowRadius,
             y: isHovered ? skin.hoverShadowY : skin.shadowY
+        )
+        // Freshly created highlight — brief glow after recipe application
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                .fill(skin.accentColor.opacity(isFreshlyCreated ? 0.20 : 0))
+                .animation(.easeInOut(duration: 0.6).repeatCount(3, autoreverses: true), value: isFreshlyCreated)
         )
         // Hover scale — slightly more pronounced for tactile feel
         .scaleEffect(isHovered ? 1.02 : 1.0)

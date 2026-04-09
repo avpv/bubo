@@ -9,15 +9,13 @@ import SwiftUI
 //  - One input field, one action, one Undo — no phases, no modals, no Apply button.
 //  - Main input is a text field that searches across all recipes AND acts as the
 //    AI prompt fallback when nothing matches.
-//  - Top suggestions are contextual: morning/afternoon/evening + usage history +
-//    schedule state (via RecipeMonitor).
-//  - Enter applies the top suggestion immediately and optimistically, then shows
-//    a 1.2 s confirmation before self-dismissing. Undo is always available via
-//    the toast.
-//  - Pressing → on a selected row expands parameter pills inline so the user can
-//    tweak before applying. No separate Customize screen.
-//  - Pressing Tab toggles "All recipes" — a flat, searchable list grouped by
-//    category, rendered inside the same palette.
+//  - Top suggestion is visually prominent (card) with a schedule-aware preview
+//    showing what will happen to YOUR schedule, not a generic description.
+//  - Enter applies the top suggestion immediately, closes the palette, and shows
+//    an Undo toast — the single feedback source (no redundant inline confirmation).
+//  - ↑/↓ navigate, → expands parameter pills inline, Tab toggles "All recipes".
+//  - Inline event picker replaces dead-end "Pick an event" text — no flow breaks.
+//  - Expanding params pre-fills defaults so the user sees what will happen.
 //
 // The palette is shown as an inline overlay on top of the current popover
 // content so the user never loses sight of the schedule underneath.
@@ -56,13 +54,25 @@ struct CommandPalette: View {
     @State private var phase: Phase = .picking
     @State private var appliedRecipeName: String = ""
     @State private var aiError: String? = nil
+    /// Async dry-run preview for the top suggestion — shows concrete event times
+    /// computed by actually running the recipe through the GA (fast config).
+    @State private var dryRunPreview: String? = nil
+    @State private var dryRunTask: Task<Void, Never>? = nil
     @FocusState private var isSearchFocused: Bool
 
     private enum Phase: Equatable {
         case picking
         case working(String)    // status label, e.g. "Optimizing…"
-        case applied            // brief confirmation (1.2 s)
-        case failed(String)
+        case applied([AppliedEventInfo])  // brief confirmation with concrete data
+        case failed(String)     // error message + optional retry
+    }
+
+    /// Info about a single event created/placed by a recipe, shown in the
+    /// applied confirmation phase so the user sees exactly what changed.
+    struct AppliedEventInfo: Equatable, Identifiable {
+        let id: String
+        let title: String
+        let timeRange: String   // e.g. "14:30–15:30"
     }
 
     // MARK: - Context
@@ -167,7 +177,15 @@ struct CommandPalette: View {
             isSearchFocused = true
             if let seed = seedRecipe {
                 expandedRecipeId = seed.id
+                prepopulateDefaults(for: seed)
+                if let idx = filteredRecipes.firstIndex(where: { $0.id == seed.id }) {
+                    selectedIndex = idx
+                }
             }
+            startDryRunPreview()
+        }
+        .onDisappear {
+            dryRunTask?.cancel()
         }
     }
 
@@ -188,6 +206,41 @@ struct CommandPalette: View {
                 .strokeBorder(skin.accentColor.opacity(0.25), lineWidth: DS.Border.standard)
         )
         .shadow(color: Color.black.opacity(0.25), radius: 18, y: 8)
+        .onKeyPress(.upArrow) {
+            moveSelection(by: -1)
+            return .handled
+        }
+        .onKeyPress(.downArrow) {
+            moveSelection(by: 1)
+            return .handled
+        }
+        .onKeyPress(.rightArrow) {
+            // → expands/collapses the selected recipe's params.
+            // Only handle when the search field is empty — otherwise let
+            // the TextField use → for normal cursor movement.
+            guard searchText.isEmpty else { return .ignored }
+            let recipes = filteredRecipes
+            guard !recipes.isEmpty else { return .ignored }
+            let idx = min(selectedIndex, recipes.count - 1)
+            let recipe = recipes[idx]
+            guard !recipe.params.isEmpty else { return .ignored }
+            withAnimation(DS.Animation.quick) {
+                if expandedRecipeId == recipe.id {
+                    expandedRecipeId = nil
+                } else {
+                    expandedRecipeId = recipe.id
+                    prepopulateDefaults(for: recipe)
+                }
+            }
+            return .handled
+        }
+        .onKeyPress(.tab) {
+            // Tab toggles "All recipes" flat list.
+            withAnimation(DS.Animation.quick) {
+                showAllRecipes.toggle()
+            }
+            return .handled
+        }
         .transition(
             reduceMotion
                 ? .opacity
@@ -196,6 +249,12 @@ struct CommandPalette: View {
                     removal: .opacity
                 )
         )
+    }
+
+    private func moveSelection(by delta: Int) {
+        let count = filteredRecipes.count
+        guard count > 0 else { return }
+        selectedIndex = max(0, min(count - 1, selectedIndex + delta))
     }
 
     // MARK: - Search Field
@@ -213,7 +272,7 @@ struct CommandPalette: View {
                 .textFieldStyle(.plain)
                 .font(.headline)
                 .focused($isSearchFocused)
-                .disabled(isBusy || phase == .applied)
+                .disabled(isBusy)
                 .onSubmit { handlePrimaryAction() }
                 .onChange(of: searchText) {
                     selectedIndex = 0
@@ -260,8 +319,10 @@ struct CommandPalette: View {
     }
 
     private var isBusy: Bool {
-        if case .working = phase { return true }
-        return false
+        switch phase {
+        case .working, .applied: return true
+        default: return false
+        }
     }
 
     private var placeholder: String {
@@ -296,14 +357,10 @@ struct CommandPalette: View {
                     pickingContent
                 case .working(let label):
                     statusView(icon: "hourglass", text: label, color: skin.accentColor)
-                case .applied:
-                    statusView(icon: "checkmark.circle.fill",
-                               text: "\(appliedRecipeName) applied",
-                               color: skin.resolvedSuccessColor)
+                case .applied(let events):
+                    appliedView(events: events)
                 case .failed(let message):
-                    statusView(icon: "exclamationmark.triangle.fill",
-                               text: message,
-                               color: skin.resolvedWarningColor)
+                    failedView(message: message)
                 }
             }
             .padding(.vertical, DS.Spacing.sm)
@@ -369,6 +426,14 @@ struct CommandPalette: View {
                     recipe: recipe,
                     isSelected: index == selectedIndex,
                     isExpanded: expandedRecipeId == recipe.id,
+                    isTopSuggestion: index == 0 && searchText.isEmpty && seedEvent == nil && seedSlotMinutes == nil,
+                    previewText: (index == 0 && dryRunPreview != nil)
+                        ? dryRunPreview
+                        : recipe.schedulePreview(
+                            reminderService: reminderService,
+                            workingHours: optimizerService.workingHours
+                        ),
+                    availableEvents: reminderService.localEvents.filter { $0.isUpcoming },
                     paramValue: { paramId in localParams[recipe.id]?[paramId] },
                     setParamValue: { paramId, value in
                         var dict = localParams[recipe.id] ?? [:]
@@ -381,13 +446,19 @@ struct CommandPalette: View {
                     },
                     onExpand: {
                         withAnimation(DS.Animation.quick) {
-                            expandedRecipeId = (expandedRecipeId == recipe.id) ? nil : recipe.id
+                            if expandedRecipeId == recipe.id {
+                                expandedRecipeId = nil
+                            } else {
+                                expandedRecipeId = recipe.id
+                                prepopulateDefaults(for: recipe)
+                            }
                         }
                     }
                 )
                 .onHover { hovering in
                     if hovering { selectedIndex = index }
                 }
+                .id("recipe-\(recipe.id)")
             }
 
             if filteredRecipes.isEmpty {
@@ -404,8 +475,9 @@ struct CommandPalette: View {
     private var footerHints: some View {
         HStack(spacing: DS.Spacing.md) {
             hintKey("↵", "run")
-            hintKey("click ›", "tweak")
-            hintKey("⌘⇧A", "all recipes")
+            hintKey("↑↓", "navigate")
+            hintKey("→", "tweak")
+            hintKey("tab", "all")
             Spacer()
             hintKey("esc", "close")
         }
@@ -449,6 +521,9 @@ struct CommandPalette: View {
                             recipe: recipe,
                             isSelected: false,
                             isExpanded: expandedRecipeId == recipe.id,
+                            isTopSuggestion: false,
+                            previewText: nil,
+                            availableEvents: reminderService.localEvents.filter { $0.isUpcoming },
                             paramValue: { paramId in localParams[recipe.id]?[paramId] },
                             setParamValue: { paramId, value in
                                 var dict = localParams[recipe.id] ?? [:]
@@ -458,7 +533,12 @@ struct CommandPalette: View {
                             onTap: { runRecipe(recipe) },
                             onExpand: {
                                 withAnimation(DS.Animation.quick) {
-                                    expandedRecipeId = (expandedRecipeId == recipe.id) ? nil : recipe.id
+                                    if expandedRecipeId == recipe.id {
+                                        expandedRecipeId = nil
+                                    } else {
+                                        expandedRecipeId = recipe.id
+                                        prepopulateDefaults(for: recipe)
+                                    }
                                 }
                             }
                         )
@@ -518,7 +598,7 @@ struct CommandPalette: View {
         }
     }
 
-    // MARK: - Status view (working / applied / failed)
+    // MARK: - Status views
 
     private func statusView(icon: String, text: String, color: Color) -> some View {
         VStack(spacing: DS.Spacing.sm) {
@@ -533,6 +613,159 @@ struct CommandPalette: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, DS.Spacing.xxl)
+    }
+
+    /// Brief inline confirmation showing exactly what was created/placed.
+    /// Connects action → result in the user's mind (Birman: show the consequence).
+    private func appliedView(events: [AppliedEventInfo]) -> some View {
+        VStack(spacing: DS.Spacing.sm) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.title)
+                .foregroundStyle(skin.resolvedSuccessColor)
+
+            ForEach(events) { info in
+                HStack(spacing: DS.Spacing.xs) {
+                    Text(info.title)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(skin.resolvedTextPrimary)
+                        .lineLimit(1)
+                    Text(info.timeRange)
+                        .font(.subheadline.monospacedDigit())
+                        .foregroundStyle(skin.accentColor)
+                }
+            }
+
+            if events.count < (optimizerService.scenarios.first?.genes.count ?? 0) {
+                Text("+\(optimizerService.scenarios.first!.genes.count - events.count) more")
+                    .font(.caption)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, DS.Spacing.xl)
+        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+    }
+
+    private func failedView(message: String) -> some View {
+        VStack(spacing: DS.Spacing.md) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.largeTitle)
+                .foregroundStyle(skin.resolvedWarningColor)
+
+            Text(message)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(skin.resolvedTextPrimary)
+                .multilineTextAlignment(.center)
+
+            HStack(spacing: DS.Spacing.sm) {
+                Button {
+                    withAnimation(DS.Animation.quick) {
+                        phase = .picking
+                        aiError = nil
+                    }
+                } label: {
+                    Text("Try again")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(skin.accentColor)
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    dismiss()
+                } label: {
+                    Text("Close")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(skin.resolvedTextSecondary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, DS.Spacing.xxl)
+    }
+
+    // MARK: - Dry-Run Preview
+
+    /// Asynchronously runs the top suggestion through a fast GA to get concrete
+    /// event placement, then formats "Focus Time 14:30–15:30" as the preview.
+    /// Only runs for the top-1 recipe (the card) to avoid burning CPU.
+    private func startDryRunPreview() {
+        dryRunTask?.cancel()
+        dryRunPreview = nil
+
+        guard let recipe = filteredRecipes.first else { return }
+        // Only creative/findSlotOnly recipes benefit from dry-run — organizing
+        // recipes are too slow and the heuristic preview is good enough.
+        guard recipe.findSlotOnly || recipe.isCreative else { return }
+
+        dryRunTask = Task { @MainActor in
+            // Small delay so the palette renders first.
+            try? await Task.sleep(for: .milliseconds(200))
+            guard !Task.isCancelled else { return }
+
+            var working = recipe
+            if let values = localParams[recipe.id] {
+                working.applyParamValues(values)
+            }
+            if let seedEvent {
+                working = working.withEventContext(seedEvent)
+            }
+            // Force quick speed for preview.
+            working.speed = .quick
+            working.maxScenarios = 1
+
+            let result = await optimizerService.executeRecipeDryRun(
+                working,
+                reminderService: reminderService
+            )
+            guard !Task.isCancelled else { return }
+
+            if let genes = result {
+                let fmt = DateFormatter()
+                fmt.setLocalizedDateFormatFromTemplate("H:mm")
+                let descriptions = genes.prefix(2).map { gene in
+                    "\(gene.title) \(fmt.string(from: gene.startTime))–\(fmt.string(from: gene.endTime))"
+                }
+                let suffix = genes.count > 2 ? " +\(genes.count - 2)" : ""
+                dryRunPreview = descriptions.joined(separator: " · ") + suffix
+            }
+        }
+    }
+
+    // MARK: - Prepopulate Defaults
+
+    /// When expanding a recipe's params, fill in default values so the user
+    /// sees what will happen without guessing (Birman: show information).
+    private func prepopulateDefaults(for recipe: ScheduleRecipe) {
+        guard localParams[recipe.id] == nil || localParams[recipe.id]!.isEmpty else { return }
+        var defaults: [String: Any] = [:]
+        for param in recipe.params {
+            switch param.target {
+            case .eventMinutes(let index):
+                guard index < recipe.events.count else { continue }
+                defaults[param.id] = recipe.events[index].minutes
+            case .eventCount(let index):
+                guard index < recipe.events.count else { continue }
+                defaults[param.id] = recipe.events[index].count
+            case .minBreak:
+                if let v = recipe.minBreakMinutes { defaults[param.id] = v }
+            case .maxMeetings:
+                if let v = recipe.maxMeetingsPerDay { defaults[param.id] = v }
+            case .peakEnergy:
+                if let v = recipe.peakEnergyHour { defaults[param.id] = v }
+            case .horizon:
+                defaults[param.id] = recipe.horizon.rawValue
+            case .workingHoursStart:
+                defaults[param.id] = recipe.workingHours?.start ?? optimizerService.workingHoursStart
+            case .workingHoursEnd:
+                defaults[param.id] = recipe.workingHours?.end ?? optimizerService.workingHoursEnd
+            default:
+                continue
+            }
+        }
+        if !defaults.isEmpty {
+            localParams[recipe.id] = defaults
+        }
     }
 
     // MARK: - Actions
@@ -584,17 +817,30 @@ struct CommandPalette: View {
                         phase = .failed("No valid schedule found")
                         return
                     }
+                    let scenario = optimizerService.scenarios[0]
                     optimizerService.applyRecipeScenario(at: 0, to: reminderService)
-                    phase = .applied
+
+                    // Show brief inline confirmation with concrete event details
+                    // so the user's brain connects action → result.
+                    let fmt = DateFormatter()
+                    fmt.setLocalizedDateFormatFromTemplate("H:mm")
+                    let eventInfos = scenario.genes.prefix(3).map { gene in
+                        AppliedEventInfo(
+                            id: gene.eventId,
+                            title: gene.title,
+                            timeRange: "\(fmt.string(from: gene.startTime))–\(fmt.string(from: gene.endTime))"
+                        )
+                    }
+                    phase = .applied(eventInfos)
 
                     // Offer undo via the host toast.
                     onApplied(recipe, {
                         optimizerService.undoLastRecipe(reminderService: reminderService)
                     })
 
-                    // Auto-dismiss after a short confirmation pause.
+                    // Auto-dismiss after 1 second — enough to read but not to wait.
                     Task { @MainActor in
-                        try? await Task.sleep(for: .milliseconds(1200))
+                        try? await Task.sleep(for: .seconds(1))
                         dismiss()
                     }
 
@@ -637,9 +883,8 @@ struct CommandPalette: View {
     // MARK: - Keyboard
 
     /// Keyboard shortcuts rendered as invisible buttons so SwiftUI can pick them up.
-    /// Only Esc and ⌘⇧A (toggle all recipes) are bound here — arrow keys inside
-    /// a focused TextField are handled by the field itself. Enter is handled via
-    /// the field's `.onSubmit`.
+    /// Arrow keys and Tab are handled via `.onKeyPress` on the palette card.
+    /// Esc and ⌘⇧A are handled here as fallbacks.
     @ViewBuilder
     var keyboardShortcuts: some View {
         Group {
@@ -667,6 +912,9 @@ private struct RecipeRow: View {
     let recipe: ScheduleRecipe
     let isSelected: Bool
     let isExpanded: Bool
+    let isTopSuggestion: Bool
+    let previewText: String?
+    let availableEvents: [CalendarEvent]
     let paramValue: (String) -> Any?
     let setParamValue: (String, Any) -> Void
     let onTap: () -> Void
@@ -680,18 +928,31 @@ private struct RecipeRow: View {
                     HStack(spacing: DS.Spacing.sm) {
                         Circle()
                             .fill(DS.Colors.categoryPalette[recipe.categoryColorIndex])
-                            .frame(width: DS.Size.recipeDotSize, height: DS.Size.recipeDotSize)
+                            .frame(
+                                width: isTopSuggestion ? 10 : DS.Size.recipeDotSize,
+                                height: isTopSuggestion ? 10 : DS.Size.recipeDotSize
+                            )
                             .frame(width: 18)
 
-                        VStack(alignment: .leading, spacing: 1) {
+                        VStack(alignment: .leading, spacing: isTopSuggestion ? 2 : 1) {
                             Text(recipe.name)
-                                .font(.subheadline.weight(isSelected ? .semibold : .medium))
+                                .font(isTopSuggestion ? .headline.weight(.semibold) : .subheadline.weight(isSelected ? .semibold : .medium))
                                 .foregroundStyle(skin.resolvedTextPrimary)
                                 .lineLimit(1)
-                            Text(recipe.description)
-                                .font(.caption2)
-                                .foregroundStyle(skin.resolvedTextSecondary)
-                                .lineLimit(1)
+
+                            // Preview text replaces the generic description
+                            // when schedule-aware info is available (Birman: information > description).
+                            if let preview = previewText {
+                                Text(preview)
+                                    .font(isTopSuggestion ? .caption : .caption2)
+                                    .foregroundStyle(skin.accentColor.opacity(0.85))
+                                    .lineLimit(1)
+                            } else {
+                                Text(recipe.description)
+                                    .font(.caption2)
+                                    .foregroundStyle(skin.resolvedTextSecondary)
+                                    .lineLimit(1)
+                            }
                         }
 
                         Spacer(minLength: DS.Spacing.sm)
@@ -713,12 +974,23 @@ private struct RecipeRow: View {
                     .accessibilityLabel(isExpanded ? "Collapse parameters" : "Expand parameters")
                 }
             }
-            .padding(.vertical, DS.Spacing.xs)
+            .padding(.vertical, isTopSuggestion ? DS.Spacing.sm : DS.Spacing.xs)
             .padding(.horizontal, DS.Spacing.sm)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(isSelected ? skin.accentColor.opacity(0.14) : Color.clear)
+                    .fill(
+                        isTopSuggestion
+                            ? skin.accentColor.opacity(isSelected ? 0.18 : 0.08)
+                            : (isSelected ? skin.accentColor.opacity(0.14) : Color.clear)
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(
+                        isTopSuggestion ? skin.accentColor.opacity(0.20) : Color.clear,
+                        lineWidth: 0.5
+                    )
             )
 
             if isExpanded && !recipe.params.isEmpty {
@@ -749,13 +1021,15 @@ private struct RecipeRow: View {
 
             switch param.kind {
             case .segmented(let options):
-                HStack(spacing: DS.Spacing.xs) {
-                    ForEach(options, id: \.self) { opt in
-                        pill(
-                            label: "\(opt)",
-                            isActive: (paramValue(param.id) as? Int) == opt
-                        ) {
-                            setParamValue(param.id, opt)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: DS.Spacing.xs) {
+                        ForEach(options, id: \.self) { opt in
+                            pill(
+                                label: "\(opt)",
+                                isActive: (paramValue(param.id) as? Int) == opt
+                            ) {
+                                setParamValue(param.id, opt)
+                            }
                         }
                     }
                 }
@@ -778,13 +1052,15 @@ private struct RecipeRow: View {
                 }
 
             case .hourPicker(let range):
-                HStack(spacing: DS.Spacing.xs) {
-                    ForEach(Array(stride(from: range.lowerBound, through: range.upperBound, by: 1)), id: \.self) { h in
-                        pill(
-                            label: "\(h):00",
-                            isActive: (paramValue(param.id) as? Int) == h
-                        ) {
-                            setParamValue(param.id, h)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: DS.Spacing.xs) {
+                        ForEach(Array(stride(from: range.lowerBound, through: range.upperBound, by: 1)), id: \.self) { h in
+                            pill(
+                                label: "\(h):00",
+                                isActive: (paramValue(param.id) as? Int) == h
+                            ) {
+                                setParamValue(param.id, h)
+                            }
                         }
                     }
                 }
@@ -827,13 +1103,92 @@ private struct RecipeRow: View {
                 .textFieldStyle(.roundedBorder)
                 .font(.caption)
 
-            case .eventPicker, .eventMultiPicker:
-                Text("Pick an event from the list")
-                    .font(.caption2)
-                    .foregroundStyle(skin.resolvedTextTertiary)
+            case .eventPicker:
+                inlineEventPicker(paramId: param.id, multiSelect: false)
+
+            case .eventMultiPicker:
+                inlineEventPicker(paramId: param.id, multiSelect: true)
             }
         }
     }
+
+    // MARK: - Inline Event Picker
+
+    /// Replaces the dead-end "Pick an event" text with an actual inline list
+    /// of events the user can tap to select. Closes the flow gap.
+    @ViewBuilder
+    private func inlineEventPicker(paramId: String, multiSelect: Bool) -> some View {
+        let selected: Set<String> = {
+            if multiSelect, let ids = paramValue(paramId) as? [String] {
+                return Set(ids)
+            } else if let id = paramValue(paramId) as? String {
+                return [id]
+            }
+            return []
+        }()
+
+        if availableEvents.isEmpty {
+            Text("No events available")
+                .font(.caption2)
+                .foregroundStyle(skin.resolvedTextTertiary)
+        } else {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(availableEvents.prefix(8), id: \.id) { event in
+                        Button {
+                            if multiSelect {
+                                var current = (paramValue(paramId) as? [String]) ?? []
+                                if current.contains(event.id) {
+                                    current.removeAll { $0 == event.id }
+                                } else {
+                                    current.append(event.id)
+                                }
+                                setParamValue(paramId, current)
+                            } else {
+                                setParamValue(paramId, event.id)
+                            }
+                        } label: {
+                            HStack(spacing: DS.Spacing.xs) {
+                                Image(systemName: selected.contains(event.id) ? "checkmark.circle.fill" : "circle")
+                                    .font(.caption)
+                                    .foregroundStyle(selected.contains(event.id) ? skin.accentColor : skin.resolvedTextTertiary)
+                                    .frame(width: 16)
+
+                                VStack(alignment: .leading, spacing: 0) {
+                                    Text(event.title)
+                                        .font(.caption.weight(.medium))
+                                        .foregroundStyle(skin.resolvedTextPrimary)
+                                        .lineLimit(1)
+                                    if let fmt = Self.timeFormatter {
+                                        Text(fmt.string(from: event.startDate))
+                                            .font(.caption2.monospacedDigit())
+                                            .foregroundStyle(skin.resolvedTextTertiary)
+                                    }
+                                }
+
+                                Spacer()
+                            }
+                            .padding(.vertical, 3)
+                            .padding(.horizontal, DS.Spacing.xs)
+                            .background(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(selected.contains(event.id) ? skin.accentColor.opacity(0.10) : Color.clear)
+                            )
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .frame(maxHeight: 160)
+        }
+    }
+
+    private static let timeFormatter: DateFormatter? = {
+        let fmt = DateFormatter()
+        fmt.setLocalizedDateFormatFromTemplate("E H:mm")
+        return fmt
+    }()
 
     private func pill(label: String, isActive: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {

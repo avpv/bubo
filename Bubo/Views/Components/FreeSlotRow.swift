@@ -100,16 +100,18 @@ struct FreeSlotRow: View {
 // Kept here so it can be unit-tested separately from MenuBarView.
 
 enum FreeSlotFinder {
-    /// Minimum slot length (in minutes) below which we hide the row to avoid
-    /// cluttering the list with tiny gaps.
-    static let minSlotMinutes: Int = 30
+    /// Default minimum slot length (in minutes) below which we hide the row
+    /// to avoid cluttering the list with tiny gaps. Callers can override.
+    static let defaultMinSlotMinutes: Int = 30
 
     /// Returns the free gaps for today between `events` within working hours.
     /// The caller passes already-sorted events for the day.
+    /// `minSlotMinutes` controls the shortest gap shown (defaults to 30).
     static func slots(
         for events: [CalendarEvent],
         on date: Date,
-        workingHours: ClosedRange<Int>
+        workingHours: ClosedRange<Int>,
+        minSlotMinutes: Int = defaultMinSlotMinutes
     ) -> [(start: Date, end: Date)] {
         let cal = Calendar.current
         guard let dayStart = cal.date(bySettingHour: workingHours.lowerBound, minute: 0, second: 0, of: date),
