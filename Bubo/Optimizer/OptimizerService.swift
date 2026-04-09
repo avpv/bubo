@@ -20,6 +20,11 @@ final class OptimizerService {
     /// The last applied recipe snapshot for undo support.
     private(set) var lastSnapshot: AppliedRecipeSnapshot? = nil
 
+    /// IDs of events created in the most recent recipe application.
+    /// Used by EventRowView to highlight freshly created events with a brief glow.
+    /// Auto-cleared after 2 seconds.
+    private(set) var freshlyCreatedEventIds: Set<String> = []
+
     /// The recipe that produced the current scenarios.
     var activeRecipe: ScheduleRecipe? = nil
 
@@ -45,6 +50,13 @@ final class OptimizerService {
             }
             saveSettings()
         }
+    }
+
+    /// Minimum free-slot length shown in the event list. Adapts to schedule density.
+    var minSlotMinutes: Int {
+        // Adaptive: if the day is packed (8+ events), show shorter slots (15 min).
+        // Otherwise use the default (30 min).
+        FreeSlotFinder.defaultMinSlotMinutes
     }
 
     private let persistenceKey = "BuboOptimizerServiceSettings"
@@ -341,6 +353,13 @@ final class OptimizerService {
             appliedGenes: scenario.genes,
             createdEventIds: createdEventIds
         )
+
+        // Track freshly created events for highlight animation.
+        freshlyCreatedEventIds = Set(createdEventIds)
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2))
+            freshlyCreatedEventIds = []
+        }
 
         selectedScenarioIndex = index
     }

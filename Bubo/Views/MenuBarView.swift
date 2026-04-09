@@ -16,7 +16,10 @@ struct MenuBarView: View {
 
     // Command palette — the single entry point for all optimize flows.
     @State private var paletteContext: PaletteContext? = nil
-    @State private var dismissedBannerIds: Set<String> = []
+    @State private var dismissedBannerIds: Set<String> = {
+        let stored = UserDefaults.standard.stringArray(forKey: "BuboDismissedBannerIds") ?? []
+        return Set(stored)
+    }()
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -316,6 +319,9 @@ struct MenuBarView: View {
                 change,
                 workingHours: optimizerService.workingHours
             )
+            // Re-evaluate suggestions after every schedule change so the
+            // SmartBanner stays alive and contextually relevant.
+            optimizerService.recipeMonitor?.evaluateSuggestions()
             if optimizerService.recipeMonitor?.lastReaction != nil {
                 toastState.showInfo("Schedule adjusted", icon: "wand.and.stars")
             }
@@ -624,6 +630,7 @@ struct MenuBarView: View {
                         onDismiss: {
                             withAnimation(DS.Animation.quick) {
                                 dismissedBannerIds.insert(banner.id)
+                                UserDefaults.standard.set(Array(dismissedBannerIds), forKey: "BuboDismissedBannerIds")
                             }
                         }
                     )
@@ -648,6 +655,7 @@ struct MenuBarView: View {
                             EventRowView(
                             event: event,
                             reminderService: reminderService,
+                            isFreshlyCreated: optimizerService.freshlyCreatedEventIds.contains(event.id),
                             onEdit: { event in resolveEdit(event) },
                             onDelete: { event in handleDelete(event) },
                             onDeleteOccurrence: { event in
@@ -785,6 +793,7 @@ struct MenuBarView: View {
                     } label: {
                         Label("Batch Add Tasks", systemImage: "list.bullet.rectangle")
                     }
+                    .keyboardShortcut("n", modifiers: [.command, .shift])
                 } label: {
                     Label("Add", systemImage: "plus")
                 } primaryAction: {

@@ -120,6 +120,95 @@ extension ScheduleRecipe {
         return false
     }
 
+    // MARK: - Schedule-Aware Preview
+
+    /// Returns a short context-aware preview of what this recipe will do to
+    /// the user's ACTUAL schedule, e.g. "09:30–11:30 · free slot available"
+    /// instead of the generic description. Returns nil when no meaningful
+    /// preview can be computed.
+    func schedulePreview(reminderService: ReminderService, workingHours: ClosedRange<Int>) -> String? {
+        let cal = Calendar.current
+        let now = Date()
+        let fmt = DateFormatter()
+        fmt.setLocalizedDateFormatFromTemplate("H:mm")
+
+        let todayStart = cal.startOfDay(for: now)
+        let todayEnd = cal.date(byAdding: .day, value: 1, to: todayStart)!
+        let todayEvents = reminderService.allEvents.filter {
+            $0.startDate >= todayStart && $0.startDate < todayEnd
+        }
+
+        // Creative recipes (findSlotOnly) — show actual next free slot
+        if findSlotOnly, let eventSpec = events.first {
+            let needed = eventSpec.minutes
+            let calEvents = todayEvents.sorted { $0.startDate < $1.startDate }
+            guard let workStart = cal.date(bySettingHour: workingHours.lowerBound, minute: 0, second: 0, of: now),
+                  let workEnd = cal.date(bySettingHour: workingHours.upperBound, minute: 0, second: 0, of: now)
+            else { return nil }
+            let effectiveStart = max(workStart, now)
+            guard effectiveStart < workEnd else {
+                return "No working time left today"
+            }
+
+            var cursor = effectiveStart
+            for event in calEvents where event.endDate > effectiveStart && event.startDate < workEnd {
+                let eStart = max(event.startDate, effectiveStart)
+                if eStart > cursor {
+                    let gapMinutes = Int(eStart.timeIntervalSince(cursor) / 60)
+                    if gapMinutes >= needed {
+                        let slotEnd = cursor.addingTimeInterval(TimeInterval(needed * 60))
+                        return "\(fmt.string(from: cursor))–\(fmt.string(from: slotEnd)) · \(needed) min slot"
+                    }
+                }
+                cursor = max(cursor, event.endDate)
+            }
+            if cursor < workEnd {
+                let gapMinutes = Int(workEnd.timeIntervalSince(cursor) / 60)
+                if gapMinutes >= needed {
+                    let slotEnd = cursor.addingTimeInterval(TimeInterval(needed * 60))
+                    return "\(fmt.string(from: cursor))–\(fmt.string(from: slotEnd)) · \(needed) min slot"
+                }
+            }
+            return "No \(needed)-min slot available today"
+        }
+
+        // Deadline recipes — count deadline tasks
+        if conditions.contains(where: { if case .hasDeadlineWithin = $0 { return true } else { return false } }) {
+            let deadlineTasks = reminderService.localEvents.filter { $0.endDate > now && $0.isTask }
+            if deadlineTasks.isEmpty { return "No deadline tasks right now" }
+            return "\(deadlineTasks.count) task\(deadlineTasks.count == 1 ? "" : "s") with upcoming deadline\(deadlineTasks.count == 1 ? "" : "s")"
+        }
+
+        // Meeting recipes — count meetings
+        if conditions.contains(where: { if case .meetingHeavy = $0 { return true } else { return false } }) ||
+           category == "meetings" {
+            let meetingCount = todayEvents.filter { $0.meetingLink != nil || $0.calendarName != nil }.count
+            if meetingCount == 0 { return "No meetings today" }
+            return "\(meetingCount) meeting\(meetingCount == 1 ? "" : "s") today"
+        }
+
+        // Organizing recipes — count movable tasks
+        if includeExistingEvents && events.isEmpty {
+            let localToday = reminderService.localEvents.filter {
+                $0.startDate >= now && $0.startDate < todayEnd && $0.isUpcoming
+            }
+            if localToday.isEmpty { return "No tasks to rearrange" }
+            return "Will rearrange \(localToday.count) task\(localToday.count == 1 ? "" : "s")"
+        }
+
+        // Creative non-findSlotOnly recipes — show what gets created
+        if !events.isEmpty {
+            let totalBlocks = events.reduce(0) { $0 + $1.count }
+            let totalMinutes = events.reduce(0) { $0 + $1.minutes * $1.count }
+            if totalBlocks == 1 {
+                return "Creates a \(totalMinutes)-min block"
+            }
+            return "Creates \(totalBlocks) blocks · \(totalMinutes) min total"
+        }
+
+        return nil
+    }
+
     /// Hand-tuned extra aliases that map common intents to recipe ids.
     /// Keeps the user from having to know the exact recipe name.
     private static let searchAliases: [String: [String]] = [
