@@ -4,7 +4,7 @@ import Foundation
 
 /// Bridges user natural-language requests with the recipe system via an LLM.
 /// Uses Claude tool_use to guarantee structured output that matches
-/// the ScheduleRecipe schema exactly — no free-form JSON parsing.
+/// the OptimizationRequest schema — no free-form JSON parsing.
 ///
 /// Supports two modes:
 /// - **Built-in** (default): requests go through the Bubo proxy which holds
@@ -122,8 +122,8 @@ final class AgentService {
 
     // MARK: - Generate Recipe
 
-    /// Takes a natural-language request and returns a parsed ScheduleRecipe.
-    func generateRecipe(from userPrompt: String) async -> Result<ScheduleRecipe, AgentError> {
+    /// Takes a natural-language request and returns a parsed OptimizationRequest.
+    func generateRequest(from userPrompt: String) async -> Result<OptimizationRequest, AgentError> {
         guard isConfigured else {
             return .failure(.noAPIKey)
         }
@@ -139,10 +139,10 @@ final class AgentService {
                 .init(role: "system", content: Self.systemPrompt),
                 .init(role: "user", content: userPrompt),
             ],
-            tools: [RecipeToolSchema.openAITool],
+            tools: [RequestToolSchema.openAITool],
             tool_choice: .init(
                 type: "function",
-                function: .init(name: RecipeToolSchema.toolName)
+                function: .init(name: RequestToolSchema.toolName)
             ),
             max_tokens: 4096
         )
@@ -237,7 +237,7 @@ final class AgentService {
 
     // MARK: - Response Parsing
 
-    private func parseToolResponse(data: Data) -> Result<ScheduleRecipe, AgentError> {
+    private func parseToolResponse(data: Data) -> Result<OptimizationRequest, AgentError> {
         let response: ChatCompletionResponse
         do {
             response = try JSONDecoder().decode(ChatCompletionResponse.self, from: data)
@@ -255,22 +255,16 @@ final class AgentService {
         }
 
         do {
-            var recipe = try JSONDecoder().decode(ScheduleRecipe.self, from: argumentsData)
-            recipe = RecipeValidator.sanitize(recipe)
-
-            if let error = RecipeValidator.validate(recipe) {
-                return fail(.validation(error))
-            }
-
-            return .success(recipe)
+            let request = try JSONDecoder().decode(OptimizationRequest.self, from: argumentsData)
+            return .success(request)
         } catch {
-            return fail(.parsing("Could not decode recipe: \(error.localizedDescription)"))
+            return fail(.parsing("Could not decode optimization request: \(error.localizedDescription)"))
         }
     }
 
     // MARK: - Helpers
 
-    private func fail(_ error: AgentError) -> Result<ScheduleRecipe, AgentError> {
+    private func fail(_ error: AgentError) -> Result<OptimizationRequest, AgentError> {
         lastError = error.localizedDescription
         return .failure(error)
     }
@@ -313,320 +307,39 @@ final class AgentService {
 
 // MARK: - Recipe Tool Schema
 
-/// Defines the create_recipe tool with a JSON Schema matching ScheduleRecipe.
-/// All enums are expressed as `enum` constraints so the LLM can only produce valid values.
-enum RecipeToolSchema {
+/// Defines the create_request tool with a JSON Schema matching OptimizationRequest.
+enum RequestToolSchema {
 
-    static let toolName = "create_recipe"
+    static let toolName = "create_request"
 
     /// Tool definition in OpenAI-compatible format (used by DeepSeek API).
     static let openAITool = OpenAITool(
         function: .init(
             name: toolName,
-            description: "Create a schedule optimization recipe from the user's request. The recipe defines what events to create and how to optimize them.",
-            parameters: recipeSchema
+            description: "Create a schedule optimization request from composable intents. Each intent is an atomic scheduling instruction.",
+            parameters: requestSchema
         )
     )
 
     // MARK: - Root Schema
 
-    static let recipeSchema: [String: Any] = [
+    static let requestSchema: [String: Any] = [
         "type": "object",
-        "required": ["name", "events"],
+        "required": ["intents"],
         "additionalProperties": false,
         "properties": [
             "name": [
                 "type": "string",
-                "description": "Short display name for the recipe (e.g. 'Focus Block', 'Weekly Tasks')"
+                "description": "Short display name (e.g. 'Focus Block', 'Weekly Plan')"
             ],
-            "description": [
-                "type": "string",
-                "description": "One-line description of what this recipe does"
-            ],
-            "events": [
+            "intents": [
                 "type": "array",
+                "description": "Composable scheduling intents. See LLMIntentBridge.schemaDescription for the full list.",
                 "minItems": 1,
-                "description": "Events to create and optimize",
-                "items": eventSpecSchema
-            ],
-            "includeExistingEvents": [
-                "type": "boolean",
-                "description": "Whether to include existing local calendar events in optimization",
-                "default": true
-            ],
-            "horizon": [
-                "type": "string",
-                "enum": ["today", "tomorrow", "week"],
-                "description": "Time range to optimize",
-                "default": "today"
-            ],
-            "weights": [
-                "type": "object",
-                "description": "Objective weight overrides (values > 1.0 increase importance)",
-                "properties": weightProperties,
-                "additionalProperties": false
-            ],
-            "stability": [
-                "type": "string",
-                "enum": ["full", "normal", "conservative"],
-                "description": "How much change from current schedule is ok. full = rearrange freely, conservative = minimal changes",
-                "default": "normal"
-            ],
-            "speed": [
-                "type": "string",
-                "enum": ["quick", "balanced", "thorough"],
-                "description": "Optimizer speed vs quality tradeoff",
-                "default": "quick"
-            ],
-            "maxScenarios": [
-                "type": "integer",
-                "minimum": 1,
-                "maximum": 5,
-                "description": "Number of alternative schedule scenarios to generate",
-                "default": 3
-            ],
-            "workingHours": [
-                "type": "object",
-                "description": "Override working hours for this recipe",
-                "properties": [
-                    "start": ["type": "integer", "minimum": 0, "maximum": 23],
-                    "end": ["type": "integer", "minimum": 0, "maximum": 23]
-                ] as [String: Any],
-                "required": ["start", "end"],
-                "additionalProperties": false
-            ],
-            "maxMeetingsPerDay": [
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 20,
-                "description": "Maximum meetings allowed per day"
-            ],
-            "peakEnergyHour": [
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 23,
-                "description": "Hour of day when user has peak energy"
-            ],
-            "dayStructure": [
-                "type": "array",
-                "description": "Time block pattern for the day",
-                "items": timeBlockSchema
+                "items": ["type": "object"] as [String: Any]
             ],
         ] as [String: Any]
     ]
-
-    // MARK: - EventSpec Schema
-
-    static let eventSpecSchema: [String: Any] = [
-        "type": "object",
-        "required": ["title", "minutes"],
-        "additionalProperties": false,
-        "properties": [
-            "title": [
-                "type": "string",
-                "description": "Event title displayed in calendar"
-            ],
-            "minutes": [
-                "type": "integer",
-                "minimum": 5,
-                "maximum": 480,
-                "description": "Duration in minutes"
-            ],
-            "count": [
-                "type": "integer",
-                "minimum": 1,
-                "maximum": 10,
-                "description": "Number of copies to create",
-                "default": 1
-            ],
-            "priority": [
-                "type": "number",
-                "minimum": 0.0,
-                "maximum": 1.0,
-                "description": "Scheduling priority (0.0 = low, 1.0 = critical)",
-                "default": 0.5
-            ],
-            "energy": [
-                "type": "number",
-                "minimum": 0.0,
-                "maximum": 1.0,
-                "description": "Cognitive energy required (0.0 = passive, 1.0 = intense)",
-                "default": 0.5
-            ],
-            "context": [
-                "type": "string",
-                "description": "Project or category tag for grouping related events"
-            ],
-            "period": [
-                "type": "string",
-                "enum": ["morning", "afternoon", "evening"],
-                "description": "Preferred time of day"
-            ],
-            "focus": [
-                "type": "boolean",
-                "description": "Mark as uninterruptible focus block",
-                "default": false
-            ],
-            "pomodoro": [
-                "type": "string",
-                "enum": ["classic", "deepWork"],
-                "description": "Pomodoro timer preset to attach"
-            ],
-            "chainGap": [
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 60,
-                "description": "Minutes gap after previous event in a chain. null = independent event, 0 = immediately after, 5 = 5 min gap. Only first event in chain is optimized by GA."
-            ],
-            "segments": [
-                "type": "array",
-                "description": "Internal sub-structure (e.g. exercises in a circuit). Rendered as timeline within one calendar event.",
-                "items": segmentSchema
-            ],
-            "startOffsetMinutes": [
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 480,
-                "description": "Earliest start time as offset in minutes from now. Use when the user says 'in 5 minutes', 'in an hour', etc. 5 = not before 5 min from now, 60 = not before 1 hour from now."
-            ],
-        ] as [String: Any]
-    ]
-
-    // MARK: - Segment Schema
-
-    static let segmentSchema: [String: Any] = [
-        "type": "object",
-        "required": ["title", "minutes"],
-        "additionalProperties": false,
-        "properties": [
-            "title": [
-                "type": "string",
-                "description": "Segment title"
-            ],
-            "minutes": [
-                "type": "integer",
-                "minimum": 1,
-                "maximum": 120,
-                "description": "Segment duration in minutes"
-            ],
-            "type": [
-                "type": "string",
-                "enum": ["work", "rest", "transition"],
-                "description": "Segment type",
-                "default": "work"
-            ],
-        ] as [String: Any]
-    ]
-
-    // MARK: - TimeBlock Schema
-
-    static let timeBlockSchema: [String: Any] = [
-        "type": "object",
-        "required": ["period", "allowedTypes"],
-        "additionalProperties": false,
-        "properties": [
-            "period": [
-                "type": "string",
-                "enum": ["morning", "afternoon", "evening"]
-            ],
-            "allowedTypes": [
-                "type": "array",
-                "items": [
-                    "type": "string",
-                    "enum": ["focus", "meetings", "tasks", "breaks", "free"]
-                ] as [String: Any]
-            ],
-        ] as [String: Any]
-    ]
-
-    // MARK: - Weight Properties
-
-    static let weightProperties: [String: Any] = [
-        "focusBlock": ["type": "number", "description": "Weight for uninterrupted focus blocks"],
-        "pomodoroFit": ["type": "number", "description": "Weight for pomodoro timing fit"],
-        "conflict": ["type": "number", "description": "Weight for avoiding scheduling conflicts"],
-        "taskPlacement": ["type": "number", "description": "Weight for optimal task time placement"],
-        "weekBalance": ["type": "number", "description": "Weight for balanced distribution across the week"],
-        "energyCurve": ["type": "number", "description": "Weight for matching tasks to energy levels"],
-        "multiPerson": ["type": "number", "description": "Weight for multi-person availability"],
-        "break": ["type": "number", "description": "Weight for break placement"],
-        "deadline": ["type": "number", "description": "Weight for deadline proximity"],
-        "contextSwitch": ["type": "number", "description": "Weight for minimizing context switches"],
-        "buffer": ["type": "number", "description": "Weight for buffer time between events"],
-    ]
-}
-
-// MARK: - Recipe Validator
-
-/// Post-parse validation and sanitization for agent-generated recipes.
-enum RecipeValidator {
-
-    /// Clamp values to valid ranges and fill in defaults.
-    static func sanitize(_ recipe: ScheduleRecipe) -> ScheduleRecipe {
-        var r = recipe
-
-        if r.id.isEmpty { r.id = UUID().uuidString }
-
-        for i in r.events.indices {
-            r.events[i].minutes = max(5, min(480, r.events[i].minutes))
-            r.events[i].count = max(1, min(10, r.events[i].count))
-            r.events[i].priority = max(0, min(1, r.events[i].priority))
-            r.events[i].energy = max(0, min(1, r.events[i].energy))
-            if let gap = r.events[i].chainGap {
-                r.events[i].chainGap = max(0, min(60, gap))
-            }
-            if let offset = r.events[i].startOffsetMinutes {
-                r.events[i].startOffsetMinutes = max(0, min(480, offset))
-            }
-            if let segments = r.events[i].segments {
-                r.events[i].segments = segments.map { seg in
-                    var s = seg
-                    s.minutes = max(1, min(120, s.minutes))
-                    return s
-                }
-            }
-        }
-
-        r.maxScenarios = max(1, min(5, r.maxScenarios))
-
-        if var wh = r.workingHours {
-            wh.start = max(0, min(22, wh.start))
-            wh.end = max(1, min(23, wh.end))
-            if wh.start >= wh.end {
-                swap(&wh.start, &wh.end)
-                if wh.start == wh.end { wh.end = wh.start + 1 }
-            }
-            r.workingHours = wh
-        }
-
-        var sanitizedWeights: [WeightKey: Double] = [:]
-        for (key, value) in r.weights {
-            sanitizedWeights[key] = max(0, min(10, value))
-        }
-        r.weights = sanitizedWeights
-
-        r.trigger = .manual
-        r.display = .scenarios
-        r.learnable = true
-
-        return r
-    }
-
-    /// Returns an error message if the recipe is invalid, nil if valid.
-    static func validate(_ recipe: ScheduleRecipe) -> String? {
-        if recipe.name.trimmingCharacters(in: .whitespaces).isEmpty {
-            return "Recipe must have a name"
-        }
-        if recipe.events.isEmpty {
-            return "Recipe must have at least one event"
-        }
-        for (i, event) in recipe.events.enumerated() {
-            if event.title.trimmingCharacters(in: .whitespaces).isEmpty {
-                return "Event \(i + 1) must have a title"
-            }
-        }
-        return nil
-    }
 }
 
 // MARK: - Errors

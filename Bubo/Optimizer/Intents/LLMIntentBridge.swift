@@ -15,7 +15,7 @@ struct LLMIntentBridge {
 
     // MARK: - Execute from JSON
 
-    func executeFromJSON(_ json: String) async -> RecipeResult {
+    func executeFromJSON(_ json: String) async -> OptimizationResult {
         guard let data = json.data(using: .utf8) else {
             return .infeasible(reason: "Invalid JSON string")
         }

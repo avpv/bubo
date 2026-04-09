@@ -99,7 +99,7 @@ struct MenuBarView: View {
                             toastState.showSuccess("\u{201C}\(deletedEvent.title)\u{201D} deleted", icon: "trash.fill") {
                                 reminderService.addLocalEvent(deletedEvent)
                             }
-                            notifyRecipeMonitor(.deleted(eventId: event.id))
+                            notifyScheduleChange()
                         },
                         onDeleteSeries: { event in
                             let seriesId = event.seriesId ?? event.id
@@ -109,7 +109,7 @@ struct MenuBarView: View {
                             toastState.showSuccess("All \u{201C}\(event.title)\u{201D} deleted", icon: "trash.fill") {
                                 reminderService.addLocalEvent(seriesEvent)
                             }
-                            notifyRecipeMonitor(.deleted(eventId: seriesId))
+                            notifyScheduleChange()
                         },
                         onDeleteOccurrence: { event in
                             reminderService.excludeOccurrence(occurrenceId: event.id)
@@ -177,7 +177,7 @@ struct MenuBarView: View {
                             }
                             toastState.showSuccess(isEdit ? "Event updated" : "Event created")
                             if isEdit, let eventId = editing?.id {
-                                notifyRecipeMonitor(.moved(eventId: eventId))
+                                notifyScheduleChange()
                             }
                         },
                         settings: settings,
@@ -191,17 +191,9 @@ struct MenuBarView: View {
                     )
 
                 case .quickAddTasks:
-                    QuickAddTasksView(
-                        optimizerService: optimizerService,
-                        reminderService: reminderService,
-                        onBack: { navigation = .list }
-                    )
-                    .transition(
-                        reduceMotion ? .opacity : .asymmetric(
-                            insertion: .move(edge: .trailing).combined(with: .opacity),
-                            removal: .move(edge: .trailing).combined(with: .opacity).combined(with: .scale(scale: 0.98))
-                        )
-                    )
+                    // Replaced by inline BacklogView — navigate back to list
+                    EmptyView()
+                        .onAppear { navigation = .list }
                 }
             }
             .animation(
@@ -217,13 +209,13 @@ struct MenuBarView: View {
                     agentService: agentService,
                     seedEvent: context.seedEvent,
                     seedSlotMinutes: context.seedSlotMinutes,
-                    seedRecipe: context.seedRecipeId.flatMap { RecipeCatalog.allRecipesById[$0] },
+                    seedPreset: context.seedRecipeId.flatMap { id in IntentPresets.all.first { $0.name == id } },
                     onDismiss: {
                         withAnimation(DS.Animation.quick) { paletteContext = nil }
                     },
-                    onApplied: { recipe, undo in
+                    onApplied: { request, undo in
                         toastState.showSuccess(
-                            "\(recipe.name) applied",
+                            "\(request.name ?? "Schedule") applied",
                             icon: "sparkles",
                             onUndo: undo
                         )
@@ -262,7 +254,9 @@ struct MenuBarView: View {
             hasStartedSync = true
             reminderService.updateSettings(settings)
             reminderService.startSync()
-            optimizerService.setupRecipeMonitor(reminderService: reminderService)
+            if let backlog = optimizerService.backlogService {
+                optimizerService.setup(reminderService: reminderService, backlogService: backlog)
+            }
         }
     }
 
@@ -310,22 +304,11 @@ struct MenuBarView: View {
         toastState.showSuccess("\u{201C}\(deletedEvent.title)\u{201D} deleted", icon: "trash.fill") {
             reminderService.addLocalEvent(deletedEvent)
         }
-        notifyRecipeMonitor(.deleted(eventId: event.id))
+        notifyScheduleChange()
     }
 
-    private func notifyRecipeMonitor(_ change: RecipeMonitor.EventChange) {
-        Task {
-            await optimizerService.recipeMonitor?.onEventChange(
-                change,
-                workingHours: optimizerService.workingHours
-            )
-            // Re-evaluate suggestions after every schedule change so the
-            // SmartBanner stays alive and contextually relevant.
-            optimizerService.recipeMonitor?.evaluateSuggestions()
-            if optimizerService.recipeMonitor?.lastReaction != nil {
-                toastState.showInfo("Schedule adjusted", icon: "wand.and.stars")
-            }
-        }
+    private func notifyScheduleChange() {
+        optimizerService.suggestionEngine?.evaluate()
     }
 
     // MARK: - Main Content
@@ -618,19 +601,18 @@ struct MenuBarView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: DS.Spacing.md) {
                 // Smart banner — at most one contextual suggestion.
-                if let banner = activeBannerRecipe {
+                if let suggestion = activeBannerSuggestion {
                     SmartBanner(
-                        recipe: banner,
-                        reason: SmartBannerReason.text(for: banner),
+                        request: suggestion.request,
+                        reason: suggestion.reason,
                         onTap: {
                             withAnimation(DS.Animation.quick) {
-                                paletteContext = PaletteContext(seedRecipeId: banner.id)
+                                paletteContext = PaletteContext(seedRecipeId: suggestion.request.name)
                             }
                         },
                         onDismiss: {
                             withAnimation(DS.Animation.quick) {
-                                dismissedBannerIds.insert(banner.id)
-                                UserDefaults.standard.set(Array(dismissedBannerIds), forKey: "BuboDismissedBannerIds")
+                                optimizerService.suggestionEngine?.suggestion = nil
                             }
                         }
                     )
@@ -706,14 +688,13 @@ struct MenuBarView: View {
                         }
                     },
                     onProtectBlock: { event in
-                        let recipe = ScheduleRecipe(
-                            id: "protect-block",
-                            name: "Protect Block",
-                            eventRules: [EventRule(match: .id(event.id), action: .markFixed)],
-                            display: .confirmation
+                        let request = OptimizationRequest(
+                            .keepFixed(eventIds: [event.id]),
+                            .horizon(.today), .speed(.quick), .scenarios(count: 1),
+                            name: "Protect Block"
                         )
                         Task {
-                            _ = await optimizerService.executeRecipe(recipe, reminderService: reminderService)
+                            _ = await optimizerService.executeRequest(request, reminderService: reminderService)
                             toastState.showSuccess("Focus block protected", icon: "shield.fill")
                         }
                     },
@@ -771,9 +752,8 @@ struct MenuBarView: View {
 
     /// The first non-dismissed suggested recipe from the monitor, or nil when
     /// nothing is worth suggesting.
-    private var activeBannerRecipe: ScheduleRecipe? {
-        guard let monitor = optimizerService.recipeMonitor else { return nil }
-        return monitor.suggestedRecipes.first { !dismissedBannerIds.contains($0.id) }
+    private var activeBannerSuggestion: SuggestionEngine.Suggestion? {
+        optimizerService.suggestionEngine?.suggestion
     }
 
     private var footerActions: some View {

@@ -37,12 +37,12 @@ struct CommandPalette: View {
     var seedSlotMinutes: Int? = nil
 
     /// Optional recipe to open pre-selected (e.g. from a smart banner tap).
-    var seedRecipe: ScheduleRecipe? = nil
+    var seedPreset: OptimizationRequest? = nil
 
     /// Called when the palette wants to dismiss itself.
     var onDismiss: () -> Void
     /// Called after a recipe has been applied, so the host can show an Undo toast.
-    var onApplied: (_ recipe: ScheduleRecipe, _ undo: @escaping () -> Void) -> Void
+    var onApplied: (_ recipe: OptimizationRequest, _ undo: @escaping () -> Void) -> Void
 
     // MARK: State
 
@@ -79,9 +79,9 @@ struct CommandPalette: View {
 
     /// Recipes surfaced as contextual suggestions when the search field is empty.
     /// Order: banner-worthy suggestions → usage-based top recipes → curated defaults.
-    private var contextualSuggestions: [ScheduleRecipe] {
+    private var contextualSuggestions: [OptimizationRequest] {
         var seen = Set<String>()
-        var result: [ScheduleRecipe] = []
+        var result: [OptimizationRequest] = []
 
         // 1. Monitor-driven (condition matches)
         if let monitor = optimizerService.recipeMonitor {
@@ -93,7 +93,7 @@ struct CommandPalette: View {
 
         // 2. Usage-driven
         for id in optimizerService.usageTracker.topRecipeIds(limit: 5) {
-            if let recipe = RecipeCatalog.allRecipesById[id],
+            if let recipe = IntentPresets.all.first[id],
                seen.insert(recipe.id).inserted {
                 result.append(recipe)
                 if result.count >= 5 { return result }
@@ -109,7 +109,7 @@ struct CommandPalette: View {
         return result
     }
 
-    private var defaultSuggestionsByTimeOfDay: [ScheduleRecipe] {
+    private var defaultSuggestionsByTimeOfDay: [OptimizationRequest] {
         let hour = Calendar.current.component(.hour, from: Date())
         switch hour {
         case 0..<11:   return [.organizeDay, .needFocus(), .pomodoroSession()]
@@ -122,17 +122,17 @@ struct CommandPalette: View {
     /// The flat list that the search field filters.
     /// Empty search → contextual suggestions. Typed search → matching recipes.
     /// Seed event/slot → narrowed to applicable recipes.
-    private var filteredRecipes: [ScheduleRecipe] {
-        let all: [ScheduleRecipe] = {
+    private var filteredRecipes: [OptimizationRequest] {
+        let all: [OptimizationRequest] = {
             if let seedEvent {
-                return RecipeCatalog.allRecipesById.values.filter { $0.applies(to: seedEvent) }
+                return IntentPresets.all
                     .sorted { $0.name < $1.name }
             }
             if let minutes = seedSlotMinutes {
-                return RecipeCatalog.allRecipesById.values.filter { $0.fitsInFreeSlot(minutes: minutes) }
+                return IntentPresets.all
                     .sorted { $0.name < $1.name }
             }
-            return Array(RecipeCatalog.allRecipesById.values)
+            return IntentPresets.all
         }()
 
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -175,7 +175,7 @@ struct CommandPalette: View {
         }
         .onAppear {
             isSearchFocused = true
-            if let seed = seedRecipe {
+            if let seed = seedPreset {
                 expandedRecipeId = seed.id
                 prepopulateDefaults(for: seed)
                 if let idx = filteredRecipes.firstIndex(where: { $0.id == seed.id }) {
@@ -507,7 +507,7 @@ struct CommandPalette: View {
 
     private var allRecipesSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            ForEach(RecipeCatalog.allCategories) { category in
+            ForEach(IntentPresets.allCategories) { category in
                 VStack(alignment: .leading, spacing: 2) {
                     Text(category.name.uppercased())
                         .font(.caption2.weight(.semibold))
@@ -714,7 +714,7 @@ struct CommandPalette: View {
             working.speed = .quick
             working.maxScenarios = 1
 
-            let result = await optimizerService.executeRecipeDryRun(
+            let result = await optimizerService.executeDryRun(
                 working,
                 reminderService: reminderService
             )
@@ -736,7 +736,7 @@ struct CommandPalette: View {
 
     /// When expanding a recipe's params, fill in default values so the user
     /// sees what will happen without guessing (Birman: show information).
-    private func prepopulateDefaults(for recipe: ScheduleRecipe) {
+    private func prepopulateDefaults(for recipe: OptimizationRequest) {
         guard localParams[recipe.id] == nil || localParams[recipe.id]!.isEmpty else { return }
         var defaults: [String: Any] = [:]
         for param in recipe.params {
@@ -780,7 +780,7 @@ struct CommandPalette: View {
         runRecipe(filteredRecipes[idx])
     }
 
-    private func runRecipe(_ recipe: ScheduleRecipe) {
+    private func runRecipe(_ recipe: OptimizationRequest) {
         Haptics.tap()
         var working = recipe
 
@@ -806,7 +806,7 @@ struct CommandPalette: View {
         appliedRecipeName = recipe.name
 
         Task {
-            let result = await optimizerService.executeRecipe(
+            let result = await optimizerService.executeRequest(
                 working,
                 reminderService: reminderService
             )
@@ -864,7 +864,7 @@ struct CommandPalette: View {
         appliedRecipeName = "AI recipe"
 
         Task {
-            let result = await agentService.generateRecipe(from: prompt)
+            let result = await agentService.generateRequest(from: prompt)
             await MainActor.run {
                 switch result {
                 case .success(let recipe):
@@ -909,7 +909,7 @@ struct CommandPalette: View {
 private struct RecipeRow: View {
     @Environment(\.activeSkin) private var skin
 
-    let recipe: ScheduleRecipe
+    let recipe: OptimizationRequest
     let isSelected: Bool
     let isExpanded: Bool
     let isTopSuggestion: Bool

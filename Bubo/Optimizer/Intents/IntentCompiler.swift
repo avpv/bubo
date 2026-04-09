@@ -19,7 +19,7 @@ struct IntentCompiler {
     func execute(
         _ request: OptimizationRequest,
         defaultWorkingHours: ClosedRange<Int>
-    ) async -> RecipeResult {
+    ) async -> OptimizationResult {
         // Phase 1: Resolve intents into intermediate representation
         var config = ResolvedConfig(defaultWorkingHours: defaultWorkingHours)
 
@@ -252,7 +252,7 @@ private extension IntentCompiler {
 
     func resolveSyntheticEvents(_ config: ResolvedConfig) -> [OptimizableEvent] {
         config.syntheticEvents.flatMap { spec -> [OptimizableEvent] in
-            let effectiveEnergy = RecipeExecutor.adjustedEnergy(base: spec.energy, storyPoints: spec.storyPoints)
+            let effectiveEnergy = adjustedEnergy(base: spec.energy, storyPoints: spec.storyPoints)
             return (0..<spec.count).map { i in
                 OptimizableEvent(
                     id: spec.count > 1 ? "\(spec.specId)_\(i)" : spec.specId,

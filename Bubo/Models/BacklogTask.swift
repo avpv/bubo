@@ -93,7 +93,7 @@ extension BacklogTask {
 
     /// Convert a backlog task to an OptimizableEvent for the GA.
     func toOptimizableEvent() -> OptimizableEvent {
-        let effectiveEnergy = RecipeExecutor.adjustedEnergy(
+        let effectiveEnergy = adjustedEnergy(
             base: priority == .high ? 0.7 : 0.5,
             storyPoints: storyPoints
         )
