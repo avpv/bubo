@@ -25,7 +25,7 @@ struct QuickActions: View {
             reminderService: reminderService,
             intentLearner: optimizerService.intentLearner
         )
-        return ranker.rank(limit: 2)
+        return ranker.rank(limit: 3)
     }
 
     var body: some View {

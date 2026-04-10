@@ -667,6 +667,22 @@ struct MenuBarView: View {
                     )
                 }
 
+                // Quick actions — context-aware shortcuts
+                QuickActions(
+                    optimizerService: optimizerService,
+                    reminderService: reminderService,
+                    onExecuted: { label, undo in
+                        toastState.showSuccess(label, icon: "sparkles", onUndo: undo)
+                        notifyScheduleChange()
+                    },
+                    onOpenPalette: {
+                        Haptics.tap()
+                        withAnimation(DS.Animation.quick) {
+                            paletteContext = PaletteContext()
+                        }
+                    }
+                )
+
                 ForEach(filteredEventsByDay, id: \.date) { dayGroup in
                     dayGroupSection(dayGroup)
                 }
