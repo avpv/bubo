@@ -159,6 +159,70 @@ enum ScheduleIntent: Codable, Hashable, Sendable {
     /// Time-box: enforce strict maximum duration per task.
     case timeBox(maxMinutes: Int)
 
+    // MARK: - Social / Team
+
+    /// Sync with a colleague's availability.
+    case syncWith(person: String)
+
+    /// Open "office hours" slot for ad-hoc questions.
+    case officeHours(start: Int, end: Int)
+
+    /// Schedule pair work — find a shared free slot.
+    case pairWork(person: String, minutes: Int)
+
+    /// No overlapping events across multiple calendars.
+    case noOverlap
+
+    // MARK: - Health / Habits
+
+    /// Micro-break every N minutes (water, stretch).
+    case microBreak(everyMinutes: Int, durationMinutes: Int)
+
+    /// Walk break after N minutes of sitting.
+    case walkBreak(afterMinutes: Int, durationMinutes: Int)
+
+    /// Pin an event at exact time (like lunch at 13:00).
+    case pinAt(title: String, hour: Int, minutes: Int)
+
+    /// No screens after this hour (digital sunset).
+    case noScreensAfter(hour: Int)
+
+    // MARK: - Context / Batching
+
+    /// Batch events by tool (all Zoom together, all Figma together).
+    case batchByTool(tool: String)
+
+    /// Deep/shallow split: deep work in one period, shallow in another.
+    case deepShallowSplit(deepPeriod: Period, shallowPeriod: Period)
+
+    /// Group events at the same location together.
+    case groupByLocation
+
+    /// Guarantee N consecutive hours on one project.
+    case uninterruptedBlock(project: String, hours: Int)
+
+    // MARK: - Adaptive
+
+    /// If main tasks fit, add stretch goals from backlog.
+    case stretchGoals(maxExtra: Int)
+
+    /// Explicitly overflow unfinished tasks to tomorrow.
+    case overflowToTomorrow
+
+    /// Mid-day energy check-in: re-evaluate and suggest adjustments.
+    case energyCheckIn(atHour: Int)
+
+    // MARK: - Temporal Scope
+
+    /// This intent applies only today (not saved to pipeline).
+    case todayOnly(ScheduleIntent)
+
+    /// This intent applies until a specific date.
+    case until(Date, ScheduleIntent)
+
+    /// Skip weekends in planning horizon.
+    case skipWeekends
+
     // MARK: - Sources (where data comes from)
 
     /// Only include events from a specific calendar.
@@ -327,6 +391,29 @@ extension ScheduleIntent {
         case .endOfDayReview(let m): return "EOD review \(m)m"
         case .matchEnergyCurve: return "Match energy curve"
         case .timeBox(let m): return "Time-box \(m)m max"
+        // Social
+        case .syncWith(let p): return "Sync with \(p)"
+        case .officeHours(let s, let e): return "Office hours \(s)–\(e)"
+        case .pairWork(let p, let m): return "Pair with \(p) \(m)m"
+        case .noOverlap: return "No overlapping events"
+        // Health
+        case .microBreak(let e, let d): return "Break \(d)m every \(e)m"
+        case .walkBreak(let a, let d): return "Walk \(d)m after \(a)m"
+        case .pinAt(let t, let h, _): return "\(t) at \(h):00"
+        case .noScreensAfter(let h): return "No screens after \(h):00"
+        // Context
+        case .batchByTool(let t): return "Batch \(t) calls"
+        case .deepShallowSplit(let d, let s): return "Deep \(d.rawValue) / shallow \(s.rawValue)"
+        case .groupByLocation: return "Group by location"
+        case .uninterruptedBlock(let p, let h): return "\(p) \(h)h uninterrupted"
+        // Adaptive
+        case .stretchGoals(let n): return "Stretch +\(n) tasks"
+        case .overflowToTomorrow: return "Overflow → tomorrow"
+        case .energyCheckIn(let h): return "Energy check at \(h):00"
+        // Temporal
+        case .todayOnly(let i): return "\(i.label) (today only)"
+        case .until(_, let i): return "\(i.label) (temporary)"
+        case .skipWeekends: return "Skip weekends"
         // Sources
         case .fromCalendar(let n): return "From: \(n)"
         case .fromProject(let n): return "Project: \(n)"
@@ -378,6 +465,18 @@ extension ScheduleIntent {
             return .rules
         case .likeYesterday, .halfDay, .matchEnergyCurve:
             return .energy
+        case .syncWith, .officeHours, .pairWork, .noOverlap:
+            return .social
+        case .microBreak, .walkBreak, .noScreensAfter:
+            return .energy
+        case .pinAt:
+            return .create
+        case .batchByTool, .deepShallowSplit, .groupByLocation, .uninterruptedBlock:
+            return .rules
+        case .stretchGoals, .overflowToTomorrow, .energyCheckIn:
+            return .output
+        case .todayOnly, .until, .skipWeekends:
+            return .time
         case .fromCalendar, .fromProject, .fromTimeRange:
             return .source
         case .splitLong, .addBuffer, .capTotal, .mergeAdjacent:
@@ -422,6 +521,7 @@ enum IntentCategory: String, CaseIterable, Sendable {
     case energy = "Energy"
     case rules = "Rules"
     case condition = "Condition"
+    case social = "Social"
     case meta = "Config"
     case output = "Output"
     case rules = "Rules"

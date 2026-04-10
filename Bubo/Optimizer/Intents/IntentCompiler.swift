@@ -157,6 +157,11 @@ private extension IntentCompiler {
         var flexMinDuration: Int? = nil
         var flexMaxDuration: Int? = nil
 
+        // Adaptive
+        var maxExtraTasks: Int? = nil
+        var overflowToTomorrow: Bool = false
+        var skipWeekends: Bool = false
+
         // Source filters
         var calendarFilter: String? = nil
         var projectFilter: String? = nil
@@ -401,6 +406,74 @@ private extension IntentCompiler {
 
         case .timeBox(let maxMinutes):
             config.transforms.append(.splitLong(maxMinutes: maxMinutes))
+
+        // Social
+        case .syncWith:
+            break  // Requires external availability API — stored as metadata
+        case .officeHours(let start, let end):
+            config.syntheticEvents.append(EventSpec(
+                title: "Office Hours", minutes: (end - start) * 60,
+                priority: 0.4, energy: 0.3
+            ))
+        case .pairWork(_, let minutes):
+            config.syntheticEvents.append(EventSpec(
+                title: "Pair Work", minutes: minutes,
+                priority: 0.7, energy: 0.6, focus: true
+            ))
+        case .noOverlap:
+            // Already enforced by NoOverlapConstraint — this is a no-op signal
+            break
+
+        // Health
+        case .microBreak(let everyMinutes, let durationMinutes):
+            config.minBreakMinutes = max(config.minBreakMinutes ?? 0, durationMinutes)
+            config.weights[.breakPlacement] = max(config.weights[.breakPlacement] ?? 1.0, 2.0)
+            _ = everyMinutes  // encoded in break weight
+        case .walkBreak(let afterMinutes, let durationMinutes):
+            config.minBreakMinutes = max(config.minBreakMinutes ?? 0, durationMinutes)
+            _ = afterMinutes
+        case .pinAt(let title, let hour, let minutes):
+            let cal = Calendar.current
+            let now = Date()
+            let pinDate = cal.date(bySettingHour: hour, minute: 0, second: 0, of: now) ?? now
+            config.syntheticEvents.append(EventSpec(
+                title: title, minutes: minutes, priority: 1.0,
+                energy: 0.3, startOffsetMinutes: max(0, Int(pinDate.timeIntervalSince(now) / 60))
+            ))
+        case .noScreensAfter(let hour):
+            let start = config.workingHours.lowerBound
+            config.workingHours = start...min(hour, config.workingHours.upperBound)
+
+        // Context batching
+        case .batchByTool:
+            config.weights[.contextSwitch] = max(config.weights[.contextSwitch] ?? 1.0, 2.0)
+        case .deepShallowSplit(let deepPeriod, _):
+            config.periodOverrides.append((.highEnergy, deepPeriod))
+        case .groupByLocation:
+            config.weights[.contextSwitch] = max(config.weights[.contextSwitch] ?? 1.0, 1.8)
+        case .uninterruptedBlock(_, let hours):
+            config.syntheticEvents.append(EventSpec(
+                title: "Focus Block", minutes: hours * 60,
+                priority: 0.8, energy: 0.7, focus: true
+            ))
+            config.findSlotsOnly = true
+
+        // Adaptive
+        case .stretchGoals(let maxExtra):
+            config.includeBacklog = true
+            config.maxExtraTasks = maxExtra
+        case .overflowToTomorrow:
+            config.overflowToTomorrow = true
+        case .energyCheckIn:
+            break  // Handled by SuggestionEngine at the specified hour
+
+        // Temporal scope
+        case .todayOnly(let inner):
+            apply(inner, to: &config)
+        case .until(_, let inner):
+            apply(inner, to: &config)
+        case .skipWeekends:
+            config.skipWeekends = true
 
         // Triggers — stored but not applied here (handled by trigger system)
         case .onEventDeleted, .onNewEvent, .daily, .weekly, .onCalendarSync:

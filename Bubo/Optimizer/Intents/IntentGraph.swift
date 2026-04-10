@@ -297,6 +297,29 @@ struct IntentGraph: Sendable {
         case .endOfDayReview: return "endOfDayReview"
         case .matchEnergyCurve: return "matchEnergyCurve"
         case .timeBox: return "timeBox"
+        // Social
+        case .syncWith(let p): return "syncWith.\(p)"
+        case .officeHours: return "officeHours"
+        case .pairWork(let p, _): return "pairWork.\(p)"
+        case .noOverlap: return "noOverlap"
+        // Health
+        case .microBreak: return "microBreak"
+        case .walkBreak: return "walkBreak"
+        case .pinAt(let t, _, _): return "pinAt.\(t)"
+        case .noScreensAfter: return "noScreensAfter"
+        // Context
+        case .batchByTool(let t): return "batchByTool.\(t)"
+        case .deepShallowSplit: return "deepShallowSplit"
+        case .groupByLocation: return "groupByLocation"
+        case .uninterruptedBlock(let p, _): return "uninterruptedBlock.\(p)"
+        // Adaptive
+        case .stretchGoals: return "stretchGoals"
+        case .overflowToTomorrow: return "overflowToTomorrow"
+        case .energyCheckIn: return "energyCheckIn"
+        // Temporal
+        case .todayOnly: return "todayOnly"
+        case .until: return "until"
+        case .skipWeekends: return "skipWeekends"
         // Sources
         case .fromCalendar(let n): return "fromCalendar.\(n)"
         case .fromProject(let n): return "fromProject.\(n)"
@@ -353,12 +376,26 @@ struct IntentGraph: Sendable {
              .breakEvery, .maxMeetings,
              .contingencyBuffer, .focusProtection, .meetingPrep, .windDown,
              .warmUp, .coolDown, .travelBuffer, .endOfDayReview,
-             .likeYesterday, .halfDay, .matchEnergyCurve:
+             .likeYesterday, .halfDay, .matchEnergyCurve,
+             .microBreak, .walkBreak, .noScreensAfter:
             return .energy
+        // Social
+        case .syncWith, .officeHours, .pairWork, .noOverlap:
+            return .context
+        // Create (pinned events)
+        case .pinAt:
+            return .create
         // Rules
         case .keepFixed, .exclude, .onlyOptimize, .preferPeriod, .stability,
-             .taskOrder, .minGap, .flexDuration, .timeBox:
+             .taskOrder, .minGap, .flexDuration, .timeBox,
+             .batchByTool, .deepShallowSplit, .groupByLocation, .uninterruptedBlock:
             return .rules
+        // Output
+        case .stretchGoals, .overflowToTomorrow, .energyCheckIn:
+            return .output
+        // Temporal scope → context phase
+        case .todayOnly, .until, .skipWeekends:
+            return .context
         // Condition
         case .when:
             return .condition
@@ -426,6 +463,18 @@ struct IntentGraph: Sendable {
             return [.morningPerson]
         case .matchEnergyCurve:
             return [.peakEnergy(hour: 10)]
+        case .microBreak:
+            return [.walkBreak(afterMinutes: 90, durationMinutes: 10)]
+        case .deepShallowSplit:
+            return [.minimizeContextSwitching(), .matchEnergyCurve]
+        case .uninterruptedBlock:
+            return [.focusProtection(bufferMinutes: 15), .minimizeContextSwitching()]
+        case .officeHours:
+            return [.batchMeetings()]
+        case .overflowToTomorrow:
+            return [.includeBacklog]
+        case .stretchGoals:
+            return [.includeBacklog]
         default:
             return []
         }
@@ -512,6 +561,20 @@ struct IntentGraph: Sendable {
         .timeBox(maxMinutes: 90),
         .halfDay(.morningOnly), .halfDay(.afternoonOnly),
         .likeYesterday,
+        // Social
+        .officeHours(start: 14, end: 16),
+        .noOverlap,
+        // Health
+        .microBreak(everyMinutes: 60, durationMinutes: 5),
+        .walkBreak(afterMinutes: 90, durationMinutes: 10),
+        .noScreensAfter(hour: 20),
+        // Context
+        .deepShallowSplit(deepPeriod: .morning, shallowPeriod: .afternoon),
+        .groupByLocation,
+        // Adaptive
+        .stretchGoals(maxExtra: 2),
+        .overflowToTomorrow,
+        .skipWeekends,
         // Output
         .autoApply, .saveAsPreset(name: ""),
     ]
