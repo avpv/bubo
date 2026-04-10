@@ -97,6 +97,9 @@ struct CommandPalette: View {
             }
 
             var backlogRequest = OptimizationRequest.scheduleBacklog
+            // Cap total task duration to slot size so the optimizer
+            // schedules a subset that fits instead of failing.
+            backlogRequest.add(.capTotal(minutesPerDay: minutes))
             pinToSlot(&backlogRequest)
             let taskSuggestion = SmartSuggestion(
                 label: "Fill with tasks (\(backlog.pending.count))",

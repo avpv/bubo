@@ -357,6 +357,87 @@ struct MenuBarView: View {
         notifyScheduleChange(created: true)
     }
 
+    /// Reschedule overdue tasks into a free slot.
+    /// Removes old events, creates new ones packed from slot start, registers batch undo.
+    private func rescheduleOverdue(into start: Date, end: Date) {
+        guard let backlog = optimizerService.backlogService else { return }
+        Haptics.tap()
+
+        let slotDuration = end.timeIntervalSince(start)
+        // Pick overdue tasks sorted by deadline (soonest first), fitting into the slot.
+        let sorted = backlog.overdue.sorted {
+            ($0.deadline ?? .distantFuture) < ($1.deadline ?? .distantFuture)
+        }
+        var remaining = slotDuration
+        var toReschedule: [BacklogTask] = []
+        for task in sorted {
+            let dur = TimeInterval(task.durationMinutes * 60)
+            guard dur <= remaining else { continue }
+            toReschedule.append(task)
+            remaining -= dur
+        }
+        guard !toReschedule.isEmpty else { return }
+
+        // Remove old events, create new ones packed sequentially from slot start.
+        struct Snapshot { let task: BacklogTask; let oldEventId: String?; let newEventId: String }
+        var snapshots: [Snapshot] = []
+        var cursor = start
+        for task in toReschedule {
+            let oldEventId = task.scheduledEventId
+            if let old = oldEventId { reminderService.removeLocalEvent(id: old) }
+
+            let dur = TimeInterval(task.durationMinutes * 60)
+            let newEventId = "task-\(task.id)"
+            let event = CalendarEvent(
+                id: newEventId,
+                title: task.title,
+                startDate: cursor,
+                endDate: cursor.addingTimeInterval(dur),
+                location: nil,
+                description: nil,
+                calendarName: nil,
+                eventType: .standard,
+                colorTag: .green
+            )
+            reminderService.addLocalEvent(event)
+            backlog.markScheduled(id: task.id, eventId: newEventId, date: cursor)
+            snapshots.append(Snapshot(task: task, oldEventId: oldEventId, newEventId: newEventId))
+            cursor = cursor.addingTimeInterval(dur)
+        }
+
+        let count = toReschedule.count
+        toastState.showSuccess(
+            "Rescheduled \(count) task\(count == 1 ? "" : "s")",
+            icon: "arrow.uturn.forward"
+        ) {
+            // Undo: remove new events, restore old events and scheduled state
+            for snap in snapshots {
+                reminderService.removeLocalEvent(id: snap.newEventId)
+                if let old = snap.oldEventId {
+                    // Restore the original event if we removed it
+                    let original = CalendarEvent(
+                        id: old,
+                        title: snap.task.title,
+                        startDate: snap.task.scheduledDate ?? start,
+                        endDate: (snap.task.scheduledDate ?? start).addingTimeInterval(TimeInterval(snap.task.durationMinutes * 60)),
+                        location: nil,
+                        description: nil,
+                        calendarName: nil,
+                        eventType: .standard,
+                        colorTag: .green
+                    )
+                    reminderService.addLocalEvent(original)
+                }
+                backlog.markScheduled(
+                    id: snap.task.id,
+                    eventId: snap.oldEventId ?? snap.newEventId,
+                    date: snap.task.scheduledDate ?? start
+                )
+            }
+        }
+        notifyScheduleChange(created: true)
+    }
+
     /// Handle a backlog task being dropped onto a free slot.
     /// Creates a calendar event at the slot time and marks the task as scheduled.
     private func handleTaskDrop(taskId: String, slotStart: Date, slotEnd: Date) {
@@ -807,10 +888,18 @@ struct MenuBarView: View {
                     start: start,
                     end: end,
                     onFillTapped: { _ in
-                        // Birman: unambiguous intent → act immediately, undo replaces confirmation.
-                        if optimizerService.backlogService?.pending.isEmpty ?? true {
+                        let backlog = optimizerService.backlogService
+                        let hasPending = !(backlog?.pending.isEmpty ?? true)
+                        let hasOverdue = !(backlog?.overdue.isEmpty ?? true)
+
+                        if !hasPending && !hasOverdue {
+                            // No tasks at all → direct focus fill.
                             fillSlotWithFocus(start: start, end: end)
+                        } else if !hasPending && hasOverdue {
+                            // Only overdue → reschedule directly, no palette.
+                            rescheduleOverdue(into: start, end: end)
                         } else {
+                            // Pending tasks (maybe overdue too) → show palette for choice.
                             withAnimation(DS.Animation.quick) {
                                 paletteContext = PaletteContext(
                                     seedSlotMinutes: Int(end.timeIntervalSince(start) / 60),
