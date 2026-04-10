@@ -2,11 +2,11 @@ import SwiftUI
 
 // MARK: - Quick Actions
 //
-// 2-3 context-aware action buttons in the footer.
-// One tap → execute → undo toast. No palette, no configuration.
+// Context-aware action buttons ranked by algorithm.
+// One tap → execute → undo toast. No palette needed.
 //
-// Birman: "Пусть потеет машина" — system picks the right actions.
-// Buttons change based on what's happening in the schedule.
+// Ranking: HN-inspired score = (usage × context) / time^gravity
+// Most relevant actions float to top. Irrelevant ones hidden.
 
 struct QuickActions: View {
     @Environment(\.activeSkin) private var skin
@@ -18,71 +18,33 @@ struct QuickActions: View {
 
     @State private var isRunning = false
 
-    private var actions: [QuickAction] {
-        var result: [QuickAction] = []
-        let pending = optimizerService.backlogService?.pending ?? []
-        let urgent = optimizerService.backlogService?.urgent(withinDays: 2) ?? []
-        let cal = Calendar.current
-        let now = Date()
-        let hour = cal.component(.hour, from: now)
-        let todayEnd = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now))!
-        let todayEvents = reminderService.allEvents.filter { $0.startDate >= now && $0.startDate < todayEnd }
-        let hasFocus = todayEvents.contains { $0.eventType == .pomodoro }
-
-        // Priority order — show most relevant 2 actions
-        if !urgent.isEmpty {
-            result.append(QuickAction(
-                label: "Deadlines",
-                icon: "exclamationmark.circle.fill",
-                request: .deadlineMode
-            ))
-        }
-
-        if !pending.isEmpty {
-            result.append(QuickAction(
-                label: "Schedule \(pending.count)",
-                icon: "calendar.badge.plus",
-                request: .scheduleBacklog
-            ))
-        }
-
-        if !hasFocus && hour < 15 && result.count < 2 {
-            result.append(QuickAction(
-                label: "Focus",
-                icon: "scope",
-                request: .findFocus()
-            ))
-        }
-
-        if hour < 10 && todayEvents.count >= 3 && result.count < 2 {
-            result.append(QuickAction(
-                label: "Organize",
-                icon: "wand.and.stars",
-                request: .organizeDay
-            ))
-        }
-
-        return Array(result.prefix(2))
+    private var rankedActions: [QuickActionRanker.ScoredAction] {
+        guard let backlog = optimizerService.backlogService else { return [] }
+        let ranker = QuickActionRanker(
+            backlogService: backlog,
+            reminderService: reminderService,
+            intentLearner: optimizerService.intentLearner
+        )
+        return ranker.rank(limit: 3)
     }
 
     var body: some View {
         HStack(spacing: DS.Spacing.sm) {
-            ForEach(actions) { action in
+            ForEach(rankedActions) { scored in
                 Button {
-                    run(action)
+                    run(scored.action)
                 } label: {
                     HStack(spacing: 4) {
-                        Image(systemName: action.icon)
+                        Image(systemName: scored.action.icon)
                             .font(.caption2.weight(.semibold))
-                        Text(action.label)
+                        Text(scored.action.label)
                             .font(.caption.weight(.medium))
                     }
                     .foregroundStyle(skin.accentColor)
                     .padding(.horizontal, DS.Spacing.sm)
                     .padding(.vertical, 4)
                     .background(
-                        Capsule()
-                            .fill(skin.accentColor.opacity(0.10))
+                        Capsule().fill(skin.accentColor.opacity(0.10))
                     )
                     .contentShape(Capsule())
                 }
@@ -91,7 +53,7 @@ struct QuickActions: View {
                 .opacity(isRunning ? 0.5 : 1)
             }
 
-            // Palette button (always present)
+            // Palette button
             Button {
                 Haptics.tap()
                 onOpenPalette()
@@ -116,7 +78,7 @@ struct QuickActions: View {
         }
     }
 
-    private func run(_ action: QuickAction) {
+    private func run(_ action: QuickActionCandidate) {
         Haptics.tap()
         isRunning = true
 
@@ -128,7 +90,6 @@ struct QuickActions: View {
 
             await MainActor.run {
                 isRunning = false
-
                 switch result {
                 case .success, .partialSuccess:
                     guard !optimizerService.scenarios.isEmpty else { return }
@@ -141,12 +102,5 @@ struct QuickActions: View {
                 }
             }
         }
-    }
-
-    struct QuickAction: Identifiable {
-        let id = UUID()
-        let label: String
-        let icon: String
-        let request: OptimizationRequest
     }
 }

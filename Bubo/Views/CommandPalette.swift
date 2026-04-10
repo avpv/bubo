@@ -53,47 +53,37 @@ struct CommandPalette: View {
 
     // MARK: - Smart Suggestions
 
-    /// 3-5 context-aware suggestions. The system decides, not the user.
+    /// 3-5 context-aware suggestions ranked by algorithm.
     private var suggestions: [SmartSuggestion] {
-        var result: [SmartSuggestion] = []
-        let now = Date()
-        let cal = Calendar.current
-        let hour = cal.component(.hour, from: now)
-        let events = reminderService.allEvents
-        let todayEnd = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now))!
-        let todayEvents = events.filter { $0.startDate >= now && $0.startDate < todayEnd }
-        let meetings = todayEvents.filter { !$0.isLocalEvent }
-        let pending = optimizerService.backlogService?.pending ?? []
-        let urgent = optimizerService.backlogService?.urgent(withinDays: 2) ?? []
-
-        // Seed context overrides
+        // Seed context overrides (not ranked — explicit user intent)
         if let event = seedEvent {
-            result.append(SmartSuggestion(
-                label: "Reschedule \u{201C}\(event.title)\u{201D}",
-                request: OptimizationRequest(
-                    .onlyOptimize(eventIds: [event.id]),
-                    .horizon(.today), .speed(.quick), .scenarios(count: 3),
-                    name: "Reschedule"
-                )
-            ))
-            result.append(SmartSuggestion(
-                label: "Find better time",
-                request: OptimizationRequest(
-                    .onlyOptimize(eventIds: [event.id]),
-                    .findSlotsForBacklog,
-                    .horizon(.today), .speed(.quick), .scenarios(count: 1),
-                    name: "Find better time"
-                )
-            ))
-            return result
+            return [
+                SmartSuggestion(
+                    label: "Reschedule \u{201C}\(event.title)\u{201D}",
+                    request: OptimizationRequest(
+                        .onlyOptimize(eventIds: [event.id]),
+                        .horizon(.today), .speed(.quick), .scenarios(count: 3),
+                        name: "Reschedule"
+                    )
+                ),
+                SmartSuggestion(
+                    label: "Find better time",
+                    request: OptimizationRequest(
+                        .onlyOptimize(eventIds: [event.id]),
+                        .findSlotsForBacklog,
+                        .horizon(.today), .speed(.quick), .scenarios(count: 1),
+                        name: "Find better time"
+                    )
+                ),
+            ]
         }
 
         if let minutes = seedSlotMinutes {
-            result.append(SmartSuggestion(
+            var result = [SmartSuggestion(
                 label: "Focus \(minutes) min",
                 request: .findFocus(minutes: minutes)
-            ))
-            if !pending.isEmpty {
+            )]
+            if !(optimizerService.backlogService?.pending.isEmpty ?? true) {
                 result.append(SmartSuggestion(
                     label: "Fill with tasks",
                     request: .scheduleBacklog
@@ -102,64 +92,18 @@ struct CommandPalette: View {
             return result
         }
 
-        // Context-driven (system decides)
-        if !urgent.isEmpty {
-            let names = urgent.prefix(2).map(\.title).joined(separator: ", ")
-            result.append(SmartSuggestion(
-                label: "Deadline: \(names)",
-                request: .deadlineMode
-            ))
+        // Algorithm-ranked suggestions
+        guard let backlog = optimizerService.backlogService else {
+            return [SmartSuggestion(label: "Organize day", request: .organizeDay)]
         }
-
-        if pending.count >= 3 {
-            result.append(SmartSuggestion(
-                label: "Schedule \(pending.count) tasks",
-                request: .scheduleBacklog
-            ))
+        let ranker = QuickActionRanker(
+            backlogService: backlog,
+            reminderService: reminderService,
+            intentLearner: optimizerService.intentLearner
+        )
+        return ranker.rank(limit: 5).map { scored in
+            SmartSuggestion(label: scored.action.label, request: scored.action.request)
         }
-
-        if meetings.count >= 5 {
-            result.append(SmartSuggestion(
-                label: "Batch \(meetings.count) meetings",
-                request: .batchMeetingsPreset
-            ))
-        }
-
-        let hasFocus = todayEvents.contains { $0.eventType == .pomodoro || ($0.isLocalEvent && $0.duration >= 3600) }
-        if !hasFocus && hour < 14 {
-            result.append(SmartSuggestion(
-                label: "Find focus time",
-                request: .findFocus()
-            ))
-        }
-
-        if hour < 10 && (todayEvents.count >= 3 || !pending.isEmpty) {
-            result.append(SmartSuggestion(
-                label: "Organize today",
-                request: .organizeDay
-            ))
-        }
-
-        if hour >= 15 {
-            result.append(SmartSuggestion(
-                label: "Plan tomorrow",
-                request: OptimizationRequest(
-                    .horizon(.tomorrow), .includeBacklog,
-                    .speed(.balanced), .scenarios(count: 2),
-                    name: "Plan tomorrow"
-                )
-            ))
-        }
-
-        // Always offer at least one option
-        if result.isEmpty {
-            result.append(SmartSuggestion(
-                label: "Organize day",
-                request: .organizeDay
-            ))
-        }
-
-        return Array(result.prefix(5))
     }
 
     struct SmartSuggestion: Identifiable {
