@@ -28,16 +28,16 @@ struct FreeSlotRow: View {
     private var formattedRange: String {
         let fmt = DateFormatter()
         fmt.setLocalizedDateFormatFromTemplate("H:mm")
-        return "\(fmt.string(from: start)) – \(fmt.string(from: end))"
+        return "\(fmt.string(from: start))–\(fmt.string(from: end))"
     }
 
     private var durationLabel: String {
         if durationMinutes < 60 {
-            return "\(durationMinutes) min"
+            return "\(durationMinutes)\u{00A0}min"
         }
         let h = durationMinutes / 60
         let m = durationMinutes % 60
-        return m == 0 ? "\(h) h" : "\(h) h \(m) m"
+        return m == 0 ? "\(h)\u{00A0}h" : "\(h)\u{00A0}h \(m)\u{00A0}min"
     }
 
     var body: some View {

@@ -297,11 +297,11 @@ struct EventRowView: View {
 
     private func timeColumn(_ now: Date) -> some View {
         VStack(spacing: DS.Spacing.xxs) {
-            HStack(spacing: 2) {
+            HStack(spacing: 0) {
                 Text(event.formattedTime)
                     .font(.system(.caption, design: skin.resolvedFontDesign, weight: .bold))
                     .foregroundStyle(skin.resolvedTextPrimary)
-                Text("\u{00A0}–\u{00A0}")
+                Text("–")
                     .font(.system(.caption, design: skin.resolvedFontDesign, weight: .bold))
                     .foregroundStyle(skin.resolvedTextSecondary)
                 Text(event.formattedEndTime)
@@ -430,7 +430,7 @@ struct EventRowView: View {
             // Event hasn't started yet
             if secondsUntilStart < 60 { return "in\u{00A0}\(secondsUntilStart)\u{00A0}s" }
             let minutes = secondsUntilStart / 60
-            if minutes < 60 { return "in\u{00A0}\(minutes)\u{00A0}m" }
+            if minutes < 60 { return "in\u{00A0}\(minutes)\u{00A0}min" }
             let hours = minutes / 60
             if hours >= 24 {
                 let days = hours / 24
@@ -440,7 +440,7 @@ struct EventRowView: View {
             }
             let mins = minutes % 60
             if mins == 0 { return "in\u{00A0}\(hours)\u{00A0}h" }
-            return "in\u{00A0}\(hours)\u{00A0}h\u{00A0}\(mins)\u{00A0}m"
+            return "in\u{00A0}\(hours)\u{00A0}h\u{00A0}\(mins)\u{00A0}min"
         }
         // Event has started or starting now
         let secondsUntilEnd = Int(event.endDate.timeIntervalSince(now))
@@ -451,9 +451,9 @@ struct EventRowView: View {
             let minutesEnd = secondsUntilEnd / 60
             let hours = minutesEnd / 60
             let mins = minutesEnd % 60
-            if hours == 0 { return "\(mins)\u{00A0}m left" }
+            if hours == 0 { return "\(mins)\u{00A0}min left" }
             if mins == 0 { return "\(hours)\u{00A0}h left" }
-            return "\(hours)\u{00A0}h\u{00A0}\(mins)\u{00A0}m left"
+            return "\(hours)\u{00A0}h\u{00A0}\(mins)\u{00A0}min left"
         }
         return "now"
     }

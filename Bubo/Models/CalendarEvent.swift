@@ -166,7 +166,7 @@ struct CalendarEvent: Identifiable, Codable, Hashable, Sendable {
     }
 
     var formattedTimeRange: String {
-        "\(Self.timeFormatter.string(from: startDate)) – \(Self.timeFormatter.string(from: endDate))"
+        "\(Self.timeFormatter.string(from: startDate))–\(Self.timeFormatter.string(from: endDate))"
     }
 
     // MARK: - Meeting Link Detection
