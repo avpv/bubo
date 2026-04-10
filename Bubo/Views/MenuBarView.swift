@@ -831,62 +831,59 @@ struct MenuBarView: View {
 
     private var footerActions: some View {
         HStack {
-            HStack(spacing: DS.Spacing.sm) {
-                Menu {
-                    Button {
-                        Haptics.tap()
-                        navigation = .addEvent()
-                    } label: {
-                        Label("New Event", systemImage: "calendar.badge.plus")
-                    }
-                    Button {
-                        Haptics.tap()
-                        navigation = .addPomodoro
-                    } label: {
-                        Label("New Pomodoro", systemImage: "timer")
-                    }
-                    Button {
-                        Haptics.tap()
-                        navigation = .quickAddTasks
-                    } label: {
-                        Label("Batch Add Tasks", systemImage: "list.bullet.rectangle")
-                    }
-                    .keyboardShortcut("n", modifiers: [.command, .shift])
-                } label: {
-                    Label("Add", systemImage: "plus")
-                } primaryAction: {
+            Menu {
+                Button {
                     Haptics.tap()
                     navigation = .addEvent()
+                } label: {
+                    Label("New Event", systemImage: "calendar.badge.plus")
                 }
-                .buttonStyle(.action(role: .primary, size: .regular))
-                .help("Add a new event (\u{2318}N)")
-                .keyboardShortcut("n", modifiers: .command)
-
-                // Quick actions + palette button
-                QuickActions(
-                    optimizerService: optimizerService,
-                    reminderService: reminderService,
-                    onExecuted: { label, undo in
-                        toastState.showSuccess(label, icon: "sparkles", onUndo: undo)
-                        notifyScheduleChange()
-                    },
-                    onOpenPalette: {
-                        Haptics.tap()
-                        withAnimation(DS.Animation.quick) {
-                            paletteContext = PaletteContext()
-                        }
-                    }
-                )
+                Button {
+                    Haptics.tap()
+                    navigation = .addPomodoro
+                } label: {
+                    Label("New Pomodoro", systemImage: "timer")
+                }
+                Button {
+                    Haptics.tap()
+                    navigation = .quickAddTasks
+                } label: {
+                    Label("Batch Add Tasks", systemImage: "list.bullet.rectangle")
+                }
+                .keyboardShortcut("n", modifiers: [.command, .shift])
+            } label: {
+                Label("Add", systemImage: "plus")
+            } primaryAction: {
+                Haptics.tap()
+                navigation = .addEvent()
             }
+            .buttonStyle(.action(role: .primary, size: .regular))
+            .help("Add a new event (\u{2318}N)")
+            .keyboardShortcut("n", modifiers: .command)
 
             Spacer()
 
             HStack(spacing: DS.Spacing.md) {
+                // Palette shortcut
+                Button {
+                    Haptics.tap()
+                    withAnimation(DS.Animation.quick) {
+                        paletteContext = PaletteContext()
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "sparkles")
+                        Text("\u{2318}K")
+                            .font(.caption2.monospaced())
+                    }
+                }
+                .help("Command palette (\u{2318}K)")
+
                 Menu {
                     Button {
                         Haptics.tap()
                         reminderService.syncNow()
-                        toastState.showInfo("Refreshing…", icon: "arrow.clockwise")
+                        toastState.showInfo("Refreshing\u{2026}", icon: "arrow.clockwise")
                     } label: {
                         Label("Refresh Calendars", systemImage: "arrow.clockwise")
                     }
