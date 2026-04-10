@@ -112,6 +112,53 @@ enum ScheduleIntent: Codable, Hashable, Sendable {
     /// How many scenarios to show (1 = auto-apply best).
     case scenarios(count: Int)
 
+    // MARK: - Smart Scheduling
+
+    /// Reserve % of day for unplanned work (contingency buffer).
+    case contingencyBuffer(percent: Int)
+
+    /// No meetings within N minutes of focus blocks.
+    case focusProtection(bufferMinutes: Int)
+
+    /// Auto-add prep time before meetings.
+    case meetingPrep(minutes: Int)
+
+    /// Wind down: lighter tasks toward end of day.
+    case windDown(lastHours: Int)
+
+    /// Task ordering strategy.
+    case taskOrder(TaskOrderStrategy)
+
+    /// Minimum gap between any two events (no back-to-back).
+    case minGap(minutes: Int)
+
+    /// Flexible duration: task can shrink/expand within a range. GA decides.
+    case flexDuration(minMinutes: Int, maxMinutes: Int)
+
+    /// Repeat yesterday's schedule structure.
+    case likeYesterday
+
+    /// Half day — only morning or afternoon.
+    case halfDay(HalfDayMode)
+
+    /// Warm-up: schedule an easy task before a hard one.
+    case warmUp(minutes: Int)
+
+    /// Cool-down: schedule an easy task after a hard one.
+    case coolDown(minutes: Int)
+
+    /// Commute/travel buffer between events at different locations.
+    case travelBuffer(minutes: Int)
+
+    /// Reserve end-of-day review block.
+    case endOfDayReview(minutes: Int)
+
+    /// Match energy curve: high-energy tasks at peak, low-energy at trough.
+    case matchEnergyCurve
+
+    /// Time-box: enforce strict maximum duration per task.
+    case timeBox(maxMinutes: Int)
+
     // MARK: - Sources (where data comes from)
 
     /// Only include events from a specific calendar.
@@ -176,6 +223,36 @@ enum ScheduleIntent: Codable, Hashable, Sendable {
 
 // MARK: - Intent Condition
 
+/// Task ordering strategy for the optimizer.
+enum TaskOrderStrategy: String, Codable, Hashable, Sendable, CaseIterable {
+    /// Shortest tasks first (quick wins).
+    case shortestFirst
+    /// Longest/hardest tasks first (eat the frog).
+    case hardestFirst
+    /// Deadline-nearest first.
+    case urgentFirst
+    /// Highest priority first.
+    case priorityFirst
+    /// Alternate between hard and easy.
+    case alternating
+
+    var label: String {
+        switch self {
+        case .shortestFirst: return "Shortest first"
+        case .hardestFirst: return "Hardest first"
+        case .urgentFirst: return "Urgent first"
+        case .priorityFirst: return "Priority first"
+        case .alternating: return "Alternate hard/easy"
+        }
+    }
+}
+
+/// Half-day mode.
+enum HalfDayMode: String, Codable, Hashable, Sendable, CaseIterable {
+    case morningOnly
+    case afternoonOnly
+}
+
 /// Runtime condition for `.when` nodes.
 enum IntentCondition: Codable, Hashable, Sendable {
     /// Schedule has N or more meetings today.
@@ -234,6 +311,22 @@ extension ScheduleIntent {
         case .findSlotsForBacklog: return "Find slots for tasks"
         case .speed(let s): return "Speed: \(s.rawValue)"
         case .scenarios(let n): return n == 1 ? "Auto-apply" : "\(n) scenarios"
+        // Smart scheduling
+        case .contingencyBuffer(let p): return "Reserve \(p)% for unplanned"
+        case .focusProtection(let m): return "Protect focus ±\(m)m"
+        case .meetingPrep(let m): return "Prep \(m)m before meetings"
+        case .windDown(let h): return "Wind down last \(h)h"
+        case .taskOrder(let s): return s.label
+        case .minGap(let m): return "Min \(m)m between events"
+        case .flexDuration(let min, let max): return "Flex \(min)–\(max)m"
+        case .likeYesterday: return "Like yesterday"
+        case .halfDay(let m): return m == .morningOnly ? "Morning only" : "Afternoon only"
+        case .warmUp(let m): return "Warm-up \(m)m"
+        case .coolDown(let m): return "Cool-down \(m)m"
+        case .travelBuffer(let m): return "Travel buffer \(m)m"
+        case .endOfDayReview(let m): return "EOD review \(m)m"
+        case .matchEnergyCurve: return "Match energy curve"
+        case .timeBox(let m): return "Time-box \(m)m max"
         // Sources
         case .fromCalendar(let n): return "From: \(n)"
         case .fromProject(let n): return "Project: \(n)"
@@ -278,6 +371,13 @@ extension ScheduleIntent {
             return .tasks
         case .speed, .scenarios:
             return .meta
+        case .contingencyBuffer, .focusProtection, .meetingPrep, .windDown,
+             .warmUp, .coolDown, .travelBuffer, .endOfDayReview:
+            return .energy
+        case .taskOrder, .minGap, .flexDuration, .timeBox:
+            return .rules
+        case .likeYesterday, .halfDay, .matchEnergyCurve:
+            return .energy
         case .fromCalendar, .fromProject, .fromTimeRange:
             return .source
         case .splitLong, .addBuffer, .capTotal, .mergeAdjacent:

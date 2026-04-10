@@ -152,6 +152,11 @@ private extension IntentCompiler {
         var includeBacklog: Bool = false
         var backlogTaskIds: Set<String>? = nil  // nil = all pending
 
+        // Task ordering
+        var taskOrderStrategy: TaskOrderStrategy? = nil
+        var flexMinDuration: Int? = nil
+        var flexMaxDuration: Int? = nil
+
         // Source filters
         var calendarFilter: String? = nil
         var projectFilter: String? = nil
@@ -322,9 +327,84 @@ private extension IntentCompiler {
         case .saveAsPreset(let name):
             config.savePresetName = name
 
+        // Smart scheduling
+        case .contingencyBuffer(let percent):
+            // Reserve % of working time — reduce available slots
+            let totalMinutes = Double((config.workingHours.upperBound - config.workingHours.lowerBound) * 60)
+            let reserveMinutes = Int(totalMinutes * Double(percent) / 100.0)
+            config.transforms.append(.capTotal(minutesPerDay: Int(totalMinutes) - reserveMinutes))
+
+        case .focusProtection(let bufferMinutes):
+            config.minBreakMinutes = max(config.minBreakMinutes ?? 0, bufferMinutes)
+            config.weights[.focusBlock] = max(config.weights[.focusBlock] ?? 1.0, 1.5)
+
+        case .meetingPrep(let minutes):
+            config.transforms.append(.addBuffer(minutes: minutes))
+
+        case .windDown(let lastHours):
+            let endHour = config.workingHours.upperBound
+            let windDownStart = endHour - lastHours
+            // Lower energy for wind-down period — achieved by boosting energy curve weight
+            config.weights[.energyCurve] = max(config.weights[.energyCurve] ?? 1.0, 1.8)
+            _ = windDownStart
+
+        case .taskOrder(let strategy):
+            config.taskOrderStrategy = strategy
+
+        case .minGap(let minutes):
+            config.minBreakMinutes = max(config.minBreakMinutes ?? 0, minutes)
+
+        case .flexDuration(let minMinutes, let maxMinutes):
+            // Store range — applied during event collection
+            config.flexMinDuration = minMinutes
+            config.flexMaxDuration = maxMinutes
+
+        case .likeYesterday:
+            // Copy yesterday's time structure via stability
+            config.stability = .conservative
+
+        case .halfDay(let mode):
+            switch mode {
+            case .morningOnly:
+                let midpoint = (config.workingHours.lowerBound + config.workingHours.upperBound) / 2
+                config.workingHours = config.workingHours.lowerBound...midpoint
+            case .afternoonOnly:
+                let midpoint = (config.workingHours.lowerBound + config.workingHours.upperBound) / 2
+                config.workingHours = midpoint...config.workingHours.upperBound
+            }
+
+        case .warmUp(let minutes):
+            // Add a light warm-up block before the first task
+            config.syntheticEvents.append(EventSpec(
+                title: "Warm-up", minutes: minutes, priority: 0.3,
+                energy: 0.2, period: .morning
+            ))
+
+        case .coolDown(let minutes):
+            // Add a cool-down block after the last hard task
+            config.syntheticEvents.append(EventSpec(
+                title: "Cool-down", minutes: minutes, priority: 0.3,
+                energy: 0.1, period: .evening
+            ))
+
+        case .travelBuffer(let minutes):
+            config.transforms.append(.addBuffer(minutes: minutes))
+
+        case .endOfDayReview(let minutes):
+            config.syntheticEvents.append(EventSpec(
+                title: "Review", minutes: minutes, priority: 0.4,
+                energy: 0.3, period: .evening
+            ))
+
+        case .matchEnergyCurve:
+            config.weights[.energyCurve] = 2.5
+
+        case .timeBox(let maxMinutes):
+            config.transforms.append(.splitLong(maxMinutes: maxMinutes))
+
         // Triggers — stored but not applied here (handled by trigger system)
         case .onEventDeleted, .onNewEvent, .daily, .weekly, .onCalendarSync:
-            break  // Triggers are metadata, not compilation directives
+            break
         }
     }
 

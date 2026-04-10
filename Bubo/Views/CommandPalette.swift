@@ -628,7 +628,10 @@ struct CommandPalette: View {
         request.intents.contains {
             switch $0 {
             case .focusBlock, .noEventsBefore, .noEventsAfter, .maxMeetings,
-                 .breakEvery, .splitLong, .capTotal:
+                 .breakEvery, .splitLong, .capTotal,
+                 .contingencyBuffer, .focusProtection, .meetingPrep, .windDown,
+                 .minGap, .warmUp, .coolDown, .travelBuffer, .endOfDayReview,
+                 .timeBox:
                 return true
             default: return false
             }
@@ -680,6 +683,66 @@ struct CommandPalette: View {
                     variableSlider("Daily cap", value: m, range: 120...480, step: 30, unit: "min") { newVal in
                         var r = request
                         r.intents[idx] = .capTotal(minutesPerDay: newVal)
+                        updateComposed(r)
+                    }
+                case .contingencyBuffer(let p):
+                    variableSlider("Reserve", value: p, range: 5...50, step: 5, unit: "%") { newVal in
+                        var r = request
+                        r.intents[idx] = .contingencyBuffer(percent: newVal)
+                        updateComposed(r)
+                    }
+                case .focusProtection(let m):
+                    variableSlider("Focus buffer", value: m, range: 5...60, step: 5, unit: "min") { newVal in
+                        var r = request
+                        r.intents[idx] = .focusProtection(bufferMinutes: newVal)
+                        updateComposed(r)
+                    }
+                case .meetingPrep(let m):
+                    variableSlider("Prep time", value: m, range: 5...30, step: 5, unit: "min") { newVal in
+                        var r = request
+                        r.intents[idx] = .meetingPrep(minutes: newVal)
+                        updateComposed(r)
+                    }
+                case .windDown(let h):
+                    variableSlider("Wind down", value: h, range: 1...4, step: 1, unit: "h") { newVal in
+                        var r = request
+                        r.intents[idx] = .windDown(lastHours: newVal)
+                        updateComposed(r)
+                    }
+                case .minGap(let m):
+                    variableSlider("Min gap", value: m, range: 5...30, step: 5, unit: "min") { newVal in
+                        var r = request
+                        r.intents[idx] = .minGap(minutes: newVal)
+                        updateComposed(r)
+                    }
+                case .warmUp(let m):
+                    variableSlider("Warm-up", value: m, range: 5...30, step: 5, unit: "min") { newVal in
+                        var r = request
+                        r.intents[idx] = .warmUp(minutes: newVal)
+                        updateComposed(r)
+                    }
+                case .coolDown(let m):
+                    variableSlider("Cool-down", value: m, range: 5...30, step: 5, unit: "min") { newVal in
+                        var r = request
+                        r.intents[idx] = .coolDown(minutes: newVal)
+                        updateComposed(r)
+                    }
+                case .travelBuffer(let m):
+                    variableSlider("Travel", value: m, range: 5...60, step: 5, unit: "min") { newVal in
+                        var r = request
+                        r.intents[idx] = .travelBuffer(minutes: newVal)
+                        updateComposed(r)
+                    }
+                case .endOfDayReview(let m):
+                    variableSlider("Review", value: m, range: 10...45, step: 5, unit: "min") { newVal in
+                        var r = request
+                        r.intents[idx] = .endOfDayReview(minutes: newVal)
+                        updateComposed(r)
+                    }
+                case .timeBox(let m):
+                    variableSlider("Time-box", value: m, range: 30...180, step: 15, unit: "min") { newVal in
+                        var r = request
+                        r.intents[idx] = .timeBox(maxMinutes: newVal)
                         updateComposed(r)
                     }
                 default:

@@ -281,6 +281,22 @@ struct IntentGraph: Sendable {
         case .findSlotsForBacklog: return "findSlotsForBacklog"
         case .speed(let s): return "speed.\(s.rawValue)"
         case .scenarios: return "scenarios"
+        // Smart scheduling
+        case .contingencyBuffer: return "contingencyBuffer"
+        case .focusProtection: return "focusProtection"
+        case .meetingPrep: return "meetingPrep"
+        case .windDown: return "windDown"
+        case .taskOrder(let s): return "taskOrder.\(s.rawValue)"
+        case .minGap: return "minGap"
+        case .flexDuration: return "flexDuration"
+        case .likeYesterday: return "likeYesterday"
+        case .halfDay(let m): return "halfDay.\(m.rawValue)"
+        case .warmUp: return "warmUp"
+        case .coolDown: return "coolDown"
+        case .travelBuffer: return "travelBuffer"
+        case .endOfDayReview: return "endOfDayReview"
+        case .matchEnergyCurve: return "matchEnergyCurve"
+        case .timeBox: return "timeBox"
         // Sources
         case .fromCalendar(let n): return "fromCalendar.\(n)"
         case .fromProject(let n): return "fromProject.\(n)"
@@ -334,10 +350,14 @@ struct IntentGraph: Sendable {
             return .weights
         // Energy
         case .lowEnergy, .peakEnergy, .morningPerson, .protectLunch,
-             .breakEvery, .maxMeetings:
+             .breakEvery, .maxMeetings,
+             .contingencyBuffer, .focusProtection, .meetingPrep, .windDown,
+             .warmUp, .coolDown, .travelBuffer, .endOfDayReview,
+             .likeYesterday, .halfDay, .matchEnergyCurve:
             return .energy
         // Rules
-        case .keepFixed, .exclude, .onlyOptimize, .preferPeriod, .stability:
+        case .keepFixed, .exclude, .onlyOptimize, .preferPeriod, .stability,
+             .taskOrder, .minGap, .flexDuration, .timeBox:
             return .rules
         // Condition
         case .when:
@@ -398,6 +418,14 @@ struct IntentGraph: Sendable {
             return [.stability(.conservative), .autoApply]
         case .fromProject:
             return [.groupByProject()]
+        case .focusBlock:
+            return [.focusProtection(bufferMinutes: 15), .warmUp(minutes: 10)]
+        case .meetingPrep:
+            return [.travelBuffer(minutes: 15)]
+        case .halfDay(.morningOnly):
+            return [.morningPerson]
+        case .matchEnergyCurve:
+            return [.peakEnergy(hour: 10)]
         default:
             return []
         }
@@ -470,6 +498,20 @@ struct IntentGraph: Sendable {
         .stability(.normal), .stability(.conservative),
         // Config
         .speed(.quick), .speed(.balanced), .speed(.thorough),
+        // Smart scheduling
+        .contingencyBuffer(percent: 20),
+        .focusProtection(bufferMinutes: 15),
+        .meetingPrep(minutes: 10),
+        .windDown(lastHours: 2),
+        .taskOrder(.hardestFirst), .taskOrder(.shortestFirst), .taskOrder(.urgentFirst),
+        .minGap(minutes: 10),
+        .matchEnergyCurve,
+        .warmUp(minutes: 15), .coolDown(minutes: 10),
+        .travelBuffer(minutes: 15),
+        .endOfDayReview(minutes: 15),
+        .timeBox(maxMinutes: 90),
+        .halfDay(.morningOnly), .halfDay(.afternoonOnly),
+        .likeYesterday,
         // Output
         .autoApply, .saveAsPreset(name: ""),
     ]
