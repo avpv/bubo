@@ -86,19 +86,28 @@ struct CommandPalette: View {
             // so narrowing working hours constrains only new blocks.
             var focusRequest = OptimizationRequest.findFocus(minutes: minutes, period: nil)
             pinToSlot(&focusRequest)
-            var result = [SmartSuggestion(
+            let focusSuggestion = SmartSuggestion(
                 label: "Focus \(minutes) min",
                 request: focusRequest
-            )]
-            if !(optimizerService.backlogService?.pending.isEmpty ?? true) {
-                var backlogRequest = OptimizationRequest.scheduleBacklog
-                pinToSlot(&backlogRequest)
-                result.append(SmartSuggestion(
-                    label: "Fill with tasks",
-                    request: backlogRequest
-                ))
+            )
+
+            guard let backlog = optimizerService.backlogService,
+                  !backlog.pending.isEmpty else {
+                return [focusSuggestion]
             }
-            return result
+
+            var backlogRequest = OptimizationRequest.scheduleBacklog
+            pinToSlot(&backlogRequest)
+            let hasUrgent = !backlog.overdue.isEmpty || !backlog.urgent(withinDays: 2).isEmpty
+            let taskLabel = backlog.overdue.isEmpty
+                ? "Fill with tasks"
+                : "Fix overdue (\(backlog.overdue.count))"
+            let taskSuggestion = SmartSuggestion(label: taskLabel, request: backlogRequest)
+
+            // Overdue/urgent tasks → prioritize filling over focus.
+            return hasUrgent
+                ? [taskSuggestion, focusSuggestion]
+                : [focusSuggestion, taskSuggestion]
         }
 
         // Algorithm-ranked suggestions
@@ -157,12 +166,6 @@ struct CommandPalette: View {
             if let seed = seedPreset {
                 composedRequest = seed
                 showPowerMode = true
-            }
-            // Birman: when intent is unambiguous, act immediately (undo replaces confirmation).
-            // Single suggestion in slot context = the user's intent is clear.
-            if seedSlotMinutes != nil && suggestions.count == 1 {
-                runRequest(suggestions[0].request)
-                return
             }
             isSearchFocused = true
             refreshPreview()

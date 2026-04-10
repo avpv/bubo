@@ -328,6 +328,35 @@ struct MenuBarView: View {
         }
     }
 
+    /// Create a focus block directly in the given slot, bypassing the optimizer.
+    /// Same pattern as handleTaskDrop — direct event creation + undo toast.
+    private func fillSlotWithFocus(start: Date, end: Date) {
+        Haptics.tap()
+        let eventId = "focus-\(UUID().uuidString)"
+        let event = CalendarEvent(
+            id: eventId,
+            title: "Focus Time",
+            startDate: start,
+            endDate: end,
+            location: nil,
+            description: nil,
+            calendarName: nil,
+            eventType: .standard,
+            colorTag: .blue
+        )
+        reminderService.addLocalEvent(event)
+
+        let fmt = DateFormatter()
+        fmt.setLocalizedDateFormatFromTemplate("H:mm")
+        toastState.showSuccess(
+            "Focus \(fmt.string(from: start))–\(fmt.string(from: end))",
+            icon: "sparkles"
+        ) {
+            reminderService.removeLocalEvent(id: eventId)
+        }
+        notifyScheduleChange(created: true)
+    }
+
     /// Handle a backlog task being dropped onto a free slot.
     /// Creates a calendar event at the slot time and marks the task as scheduled.
     private func handleTaskDrop(taskId: String, slotStart: Date, slotEnd: Date) {
@@ -777,13 +806,18 @@ struct MenuBarView: View {
                 FreeSlotRow(
                     start: start,
                     end: end,
-                    onFillTapped: { minutes in
-                        withAnimation(DS.Animation.quick) {
-                            paletteContext = PaletteContext(
-                                seedSlotMinutes: minutes,
-                                seedSlotStart: start,
-                                seedSlotEnd: end
-                            )
+                    onFillTapped: { _ in
+                        // Birman: unambiguous intent → act immediately, undo replaces confirmation.
+                        if optimizerService.backlogService?.pending.isEmpty ?? true {
+                            fillSlotWithFocus(start: start, end: end)
+                        } else {
+                            withAnimation(DS.Animation.quick) {
+                                paletteContext = PaletteContext(
+                                    seedSlotMinutes: Int(end.timeIntervalSince(start) / 60),
+                                    seedSlotStart: start,
+                                    seedSlotEnd: end
+                                )
+                            }
                         }
                     },
                     onTaskDropped: { taskId in
