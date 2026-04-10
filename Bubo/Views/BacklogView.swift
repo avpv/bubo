@@ -20,6 +20,9 @@ struct BacklogView: View {
     /// External trigger: set to `true` to focus the "Add task…" field.
     /// BacklogView resets it to `false` after grabbing focus.
     @Binding var focusRequested: Bool
+    /// When true, the task list expands automatically on appear if tasks exist.
+    /// Used in the empty-calendar state where tasks are the primary content.
+    var autoExpand: Bool = false
 
     @Environment(\.activeSkin) private var skin
     @State private var newTaskTitle = ""
@@ -51,6 +54,11 @@ struct BacklogView: View {
             if requested {
                 isInputFocused = true
                 focusRequested = false
+            }
+        }
+        .onAppear {
+            if autoExpand && !activeTasks.isEmpty {
+                isExpanded = true
             }
         }
     }
@@ -290,6 +298,7 @@ struct BacklogView: View {
         )
         withAnimation(.easeInOut(duration: 0.2)) {
             backlogService.addTask(task)
+            isExpanded = true
         }
         newTaskTitle = ""
         ghostPreview = nil

@@ -468,7 +468,7 @@ struct MenuBarView: View {
     /// Backlog section for embedding in the main timeline.
     /// Manages its own horizontal padding — do NOT wrap in additional padding.
     @ViewBuilder
-    private var inlineBacklog: some View {
+    private func inlineBacklog(autoExpand: Bool = false) -> some View {
         if let backlog = optimizerService.backlogService {
             BacklogView(
                 backlogService: backlog,
@@ -485,7 +485,8 @@ struct MenuBarView: View {
                         backlog.restoreTask(task)
                     }
                 },
-                focusRequested: $focusTaskInput
+                focusRequested: $focusTaskInput,
+                autoExpand: autoExpand
             )
         }
     }
@@ -737,7 +738,8 @@ struct MenuBarView: View {
         ScrollView {
             VStack(spacing: 0) {
                 // Backlog — accessible even when calendar is empty.
-                inlineBacklog
+                // Auto-expand: tasks are the primary content when no events exist.
+                inlineBacklog(autoExpand: true)
                     .id("backlogSection")
 
                 if pendingTaskCount > 0 {
@@ -874,7 +876,7 @@ struct MenuBarView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     // Backlog tasks — always accessible at the top of the timeline.
                     // Birman: don't hide features behind navigation; show where the user already looks.
-                    inlineBacklog
+                    inlineBacklog()
                         .id("backlogSection")
 
                     if pendingTaskCount > 0 {
