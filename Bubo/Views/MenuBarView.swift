@@ -893,7 +893,7 @@ struct MenuBarView: View {
                             .font(.caption2.monospaced())
                     }
                 }
-                .help("Command palette (\u{2318}K)")
+                .help("AI optimizer (\u{2318}K)")
 
                 Menu {
                     Button {

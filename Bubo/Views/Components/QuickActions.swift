@@ -30,52 +30,50 @@ struct QuickActions: View {
 
     var body: some View {
         HStack(spacing: DS.Spacing.sm) {
-            ForEach(rankedActions) { scored in
-                Button {
-                    run(scored.action)
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: scored.action.icon)
-                            .font(.caption2.weight(.semibold))
-                        Text(scored.action.label)
-                            .font(.caption.weight(.medium))
-                            .lineLimit(1)
-                    }
-                    .foregroundStyle(skin.accentColor)
-                    .padding(.horizontal, DS.Spacing.sm)
-                    .padding(.vertical, 4)
-                    .background(
-                        Capsule().fill(skin.accentColor.opacity(0.10))
-                    )
-                    .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .disabled(isRunning)
-                .opacity(isRunning ? 0.5 : 1)
-            }
-
-            // Palette button
+            // Palette button — first, most powerful action
             Button {
                 Haptics.tap()
                 onOpenPalette()
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "sparkles")
+                        .font(.caption2.weight(.semibold))
+                    Text("Optimize")
                         .font(.caption.weight(.medium))
                     Text("⌘K")
                         .font(.caption2.monospaced())
+                        .foregroundStyle(skin.resolvedTextTertiary)
                 }
-                .foregroundStyle(skin.resolvedTextSecondary)
+                .foregroundStyle(skin.accentColor)
                 .padding(.horizontal, DS.Spacing.sm)
                 .padding(.vertical, 4)
                 .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .strokeBorder(skin.resolvedTextTertiary.opacity(0.35), lineWidth: 0.5)
+                    Capsule().fill(skin.accentColor.opacity(0.10))
                 )
-                .contentShape(Rectangle())
+                .contentShape(Capsule())
             }
             .buttonStyle(.plain)
-            .help("⌘K")
+            .help("AI optimizer (\u{2318}K)")
+
+            ForEach(rankedActions) { scored in
+                Button {
+                    run(scored.action)
+                } label: {
+                    Text(scored.action.label)
+                        .font(.caption.weight(.medium))
+                        .lineLimit(1)
+                        .foregroundStyle(skin.accentColor)
+                        .padding(.horizontal, DS.Spacing.sm)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule().fill(skin.accentColor.opacity(0.10))
+                        )
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .disabled(isRunning)
+                .opacity(isRunning ? 0.5 : 1)
+            }
         }
     }
 
