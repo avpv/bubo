@@ -880,21 +880,6 @@ struct MenuBarView: View {
             Spacer()
 
             HStack(spacing: DS.Spacing.md) {
-                // Palette shortcut
-                Button {
-                    Haptics.tap()
-                    withAnimation(DS.Animation.quick) {
-                        paletteContext = PaletteContext()
-                    }
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "sparkles")
-                        Text("\u{2318}K")
-                            .font(.caption2.monospaced())
-                    }
-                }
-                .help("AI optimizer (\u{2318}K)")
-
                 Menu {
                     Button {
                         Haptics.tap()
