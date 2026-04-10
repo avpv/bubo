@@ -81,24 +81,21 @@ struct CommandPalette: View {
         }
 
         if let minutes = seedSlotMinutes {
-            var focusRequest = OptimizationRequest.findFocus(minutes: minutes, period: nil)
-            // Pin the focus block to the clicked slot's time window.
+            // Pin requests to the clicked slot's time window.
             // In findSlotsOnly mode existing events are fixed obstacles,
-            // so narrowing working hours constrains only the new block.
-            if let s = seedSlotStart, let e = seedSlotEnd {
-                let cal = Calendar.current
-                let startHour = cal.component(.hour, from: s)
-                let endHour = min(cal.component(.hour, from: e) + 1, 24)
-                focusRequest.add(.workingHours(start: startHour, end: endHour))
-            }
+            // so narrowing working hours constrains only new blocks.
+            var focusRequest = OptimizationRequest.findFocus(minutes: minutes, period: nil)
+            pinToSlot(&focusRequest)
             var result = [SmartSuggestion(
                 label: "Focus \(minutes) min",
                 request: focusRequest
             )]
             if !(optimizerService.backlogService?.pending.isEmpty ?? true) {
+                var backlogRequest = OptimizationRequest.scheduleBacklog
+                pinToSlot(&backlogRequest)
                 result.append(SmartSuggestion(
                     label: "Fill with tasks",
-                    request: .scheduleBacklog
+                    request: backlogRequest
                 ))
             }
             return result
@@ -697,6 +694,15 @@ struct CommandPalette: View {
                 }
             }
         }
+    }
+
+    /// Narrow working hours to the hour boundaries of the seeded slot.
+    private func pinToSlot(_ request: inout OptimizationRequest) {
+        guard let s = seedSlotStart, let e = seedSlotEnd else { return }
+        let cal = Calendar.current
+        let startHour = cal.component(.hour, from: s)
+        let endHour = min(cal.component(.hour, from: e) + (cal.component(.minute, from: e) > 0 ? 1 : 0), 24)
+        request.add(.workingHours(start: startHour, end: max(endHour, startHour + 1)))
     }
 
     private func refreshPreview() {
