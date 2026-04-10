@@ -25,7 +25,7 @@ struct QuickActions: View {
             reminderService: reminderService,
             intentLearner: optimizerService.intentLearner
         )
-        return ranker.rank(limit: 3)
+        return ranker.rank(limit: 2)
     }
 
     var body: some View {
@@ -39,6 +39,7 @@ struct QuickActions: View {
                             .font(.caption2.weight(.semibold))
                         Text(scored.action.label)
                             .font(.caption.weight(.medium))
+                            .lineLimit(1)
                     }
                     .foregroundStyle(skin.accentColor)
                     .padding(.horizontal, DS.Spacing.sm)
