@@ -114,19 +114,6 @@ struct AssistantTabView: View {
                     }
                 }
 
-                SettingsPlatter("Autopilot") {
-                    Toggle(isOn: Binding(
-                        get: { optimizerService.recipeMonitor?.autopilotEnabled ?? false },
-                        set: { optimizerService.recipeMonitor?.autopilotEnabled = $0 }
-                    )) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Auto-adjust schedule")
-                            Text("When a meeting moves, Bubo reshuffles focus blocks and breaks to keep your day balanced")
-                                .font(.caption)
-                                .foregroundStyle(skin.resolvedTextSecondary)
-                        }
-                    }
-                }
 
                 // ── AI ──
 

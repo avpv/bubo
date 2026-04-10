@@ -434,7 +434,7 @@ struct IntentGraph: Sendable {
     static func suggestions(for intent: ScheduleIntent) -> [ScheduleIntent] {
         switch intent {
         case .focusBlock:
-            return [.prioritizeFocus(), .minimizeContextSwitching()]
+            return [.prioritizeFocus(), .minimizeContextSwitching(), .focusProtection(bufferMinutes: 15), .warmUp(minutes: 10)]
         case .lowEnergy:
             return [.breakEvery(workMinutes: 45, breakMinutes: 15), .protectLunch(), .maxMeetings(perDay: 3)]
         case .morningPerson:
@@ -455,8 +455,6 @@ struct IntentGraph: Sendable {
             return [.stability(.conservative), .autoApply]
         case .fromProject:
             return [.groupByProject()]
-        case .focusBlock:
-            return [.focusProtection(bufferMinutes: 15), .warmUp(minutes: 10)]
         case .meetingPrep:
             return [.travelBuffer(minutes: 15)]
         case .halfDay(.morningOnly):

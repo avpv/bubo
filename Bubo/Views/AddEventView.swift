@@ -997,15 +997,6 @@ struct AddEventView: View {
         Haptics.impact()
         onSave(isEditing)
 
-        // Notify recipe monitor about new/changed event for auto-adjustment
-        if let optimizerService, !isEditing {
-            Task {
-                await optimizerService.recipeMonitor?.onEventChange(
-                    .created(eventId: event.id),
-                    workingHours: optimizerService.workingHours
-                )
-            }
-        }
     }
 }
 

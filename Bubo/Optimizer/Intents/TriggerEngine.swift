@@ -15,8 +15,8 @@ final class TriggerEngine {
     let optimizerService: OptimizerService
     let reminderService: ReminderService
 
-    private var dailyTimers: [String: Timer] = [:]
-    private var weeklyTimers: [String: Timer] = [:]
+    nonisolated(unsafe) private var dailyTimers: [String: Timer] = [:]
+    nonisolated(unsafe) private var weeklyTimers: [String: Timer] = [:]
     private(set) var lastTriggeredAt: Date?
     private(set) var lastTriggeredName: String?
 

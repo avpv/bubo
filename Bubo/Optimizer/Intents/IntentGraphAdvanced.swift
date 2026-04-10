@@ -45,7 +45,7 @@ struct Subgraph: Codable, Hashable, Identifiable, Sendable {
 
     /// Expand this subgraph into a flat list of intents,
     /// recursively expanding nested subgraphs.
-    func expand(registry: SubgraphRegistry, variables: [String: PipelineValue] = [:]) -> [ScheduleIntent] {
+    func expand(subgraphs: [String: Subgraph], variables: [String: PipelineValue] = [:]) -> [ScheduleIntent] {
         var result: [ScheduleIntent] = []
 
         // Apply variable substitutions to our intents
@@ -56,8 +56,8 @@ struct Subgraph: Codable, Hashable, Identifiable, Sendable {
 
         // Expand children recursively
         for childId in children {
-            if let child = registry.subgraph(id: childId) {
-                result.append(contentsOf: child.expand(registry: registry, variables: variables))
+            if let child = subgraphs[childId] {
+                result.append(contentsOf: child.expand(subgraphs: subgraphs, variables: variables))
             }
         }
 
@@ -225,6 +225,7 @@ extension ScheduleIntent {
         case .weights, .energy: return [.preferences]
         case .rules: return [.events, .preferences]
         case .condition: return [.events, .condition]
+        case .social: return [.events, .preferences]
         case .meta: return [.config]
         case .output: return [.schedule]
         }
@@ -240,6 +241,7 @@ extension ScheduleIntent {
         case .weights, .energy: return [.preferences]
         case .rules: return [.events, .preferences]
         case .condition: return [.events]
+        case .social: return [.events, .preferences]
         case .meta: return [.config]
         case .output: return [.schedule]
         }
@@ -429,7 +431,7 @@ extension OptimizationRequest {
         registry: SubgraphRegistry,
         variables: [String: PipelineValue] = [:]
     ) -> OptimizationRequest {
-        let expanded = subgraph.expand(registry: registry, variables: variables)
+        let expanded = subgraph.expand(subgraphs: registry.subgraphs, variables: variables)
         return OptimizationRequest(
             expanded,
             name: subgraph.name,
@@ -460,7 +462,7 @@ extension IntentGraph {
 
     /// Expand subgraph references in the graph.
     /// Any node that references a subgraph is replaced with its contents.
-    mutating func expandSubgraphs(registry: SubgraphRegistry, variables: [String: PipelineValue] = [:]) {
+    mutating func expandSubgraphs(subgraphs: [String: Subgraph], variables: [String: PipelineValue] = [:]) {
         // Collect nodes that reference subgraphs
         let subgraphNodes = nodes.values.filter { node in
             if case .saveAsPreset = node.intent { return true }
@@ -469,11 +471,11 @@ extension IntentGraph {
 
         for node in subgraphNodes {
             if case .saveAsPreset(let name) = node.intent,
-               let sg = registry.subgraphs.values.first(where: { $0.name == name }) {
+               let sg = subgraphs.values.first(where: { $0.name == name }) {
                 // Remove the reference node
-                nodes.removeValue(forKey: node.id)
+                removeNode(node.intent)
                 // Add expanded intents
-                let expanded = sg.expand(registry: registry, variables: variables)
+                let expanded = sg.expand(subgraphs: subgraphs, variables: variables)
                 for intent in expanded {
                     addNode(intent)
                 }

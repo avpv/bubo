@@ -12,6 +12,7 @@ import Foundation
 struct LLMIntentBridge {
 
     let optimizerService: OptimizerService
+    let reminderService: ReminderService
 
     // MARK: - Execute from JSON
 
@@ -27,7 +28,7 @@ struct LLMIntentBridge {
             return .infeasible(reason: "Could not parse intents: \(error.localizedDescription)")
         }
 
-        return await optimizerService.executeRequest(request)
+        return await optimizerService.executeRequest(request, reminderService: reminderService)
     }
 
     /// Parse and validate without executing (for preview).

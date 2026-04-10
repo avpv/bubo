@@ -112,19 +112,6 @@ struct OptimizerTabView: View {
                     }
                 }
 
-                SettingsPlatter("Autopilot") {
-                    Toggle(isOn: Binding(
-                        get: { optimizerService.recipeMonitor?.autopilotEnabled ?? false },
-                        set: { optimizerService.recipeMonitor?.autopilotEnabled = $0 }
-                    )) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Auto-adjust schedule")
-                            Text("Automatically reoptimize when events change")
-                                .font(.caption)
-                                .foregroundStyle(skin.resolvedTextSecondary)
-                        }
-                    }
-                }
             }
             .padding(DS.Spacing.xl)
         }

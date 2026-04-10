@@ -8,7 +8,7 @@ import Foundation
 /// Intents compose naturally: [.focusMorning, .lateStart(11), .prioritizeDeadlines]
 /// Each intent is a micro-transformation on the optimization request.
 /// Named presets are just arrays of intents.
-enum ScheduleIntent: Codable, Hashable, Sendable {
+indirect enum ScheduleIntent: Codable, Hashable, Sendable {
 
     // MARK: - Time Constraints
 
@@ -524,9 +524,6 @@ enum IntentCategory: String, CaseIterable, Sendable {
     case social = "Social"
     case meta = "Config"
     case output = "Output"
-    case rules = "Rules"
-    case tasks = "Tasks"
-    case meta = "Options"
 }
 
 // MARK: - Optimization Request

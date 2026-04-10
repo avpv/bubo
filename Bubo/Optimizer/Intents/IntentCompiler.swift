@@ -31,7 +31,7 @@ struct IntentCompiler {
         var expandedIntents = request.intents
         if let registry = subgraphRegistry {
             var graph = IntentGraph.build(from: expandedIntents)
-            graph.expandSubgraphs(registry: registry, variables: request.variables)
+            graph.expandSubgraphs(subgraphs: registry.subgraphs, variables: request.variables)
             expandedIntents = graph.sortedIntents()
         }
 
@@ -631,7 +631,7 @@ private extension IntentCompiler {
     }
 
     /// Apply transforms to movable events before GA.
-    func applyTransforms(_ transforms: [ResolvedConfig.EventTransform], to events: [OptimizableEvent]) -> [OptimizableEvent] {
+    func applyTransforms(_ transforms: [EventTransform], to events: [OptimizableEvent]) -> [OptimizableEvent] {
         var result = events
 
         for transform in transforms {

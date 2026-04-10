@@ -207,7 +207,7 @@ final class BuboOptimizer {
 
             return reopt.reoptimize(
                 currentSchedule: schedule,
-                trigger: .eventCreated,
+                trigger: .periodicRefresh,
                 context: context,
                 evaluator: evaluator,
                 config: .instant
