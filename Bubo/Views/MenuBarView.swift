@@ -256,6 +256,8 @@ struct MenuBarView: View {
             reminderService.startSync()
             if let backlog = optimizerService.backlogService {
                 optimizerService.setup(reminderService: reminderService, backlogService: backlog)
+            } else {
+                assertionFailure("BacklogService should be set in App.init")
             }
         }
     }

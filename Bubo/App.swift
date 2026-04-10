@@ -7,7 +7,7 @@ struct BuboApp: App {
     @State private var settings: ReminderSettings
     @State private var reminderService: ReminderService
     @State private var networkMonitor = NetworkMonitor()
-    @State private var optimizerService = OptimizerService()
+    @State private var optimizerService: OptimizerService
     @State private var agentService = AgentService()
 
     private let modelContainer: ModelContainer
@@ -49,6 +49,10 @@ struct BuboApp: App {
         let s = ReminderSettings.load()
         _settings = State(wrappedValue: s)
         _reminderService = State(wrappedValue: ReminderService(settings: s, modelContainer: container))
+
+        let optimizer = OptimizerService()
+        optimizer.backlogService = BacklogService(modelContainer: container)
+        _optimizerService = State(wrappedValue: optimizer)
     }
 
     private func drawOwl(in ctx: CGContext, size s: CGFloat, color: CGColor) {
