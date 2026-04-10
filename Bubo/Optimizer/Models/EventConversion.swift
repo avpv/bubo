@@ -65,7 +65,7 @@ extension CalendarEvent {
 
         let effectiveDeadline = deadline ?? self.deadline
         let effectiveEnergy = isTask
-            ? RecipeExecutor.adjustedEnergy(base: inferredEnergy, storyPoints: storyPoints)
+            ? adjustedEnergy(base: inferredEnergy, storyPoints: storyPoints)
             : inferredEnergy
 
         return OptimizableEvent(

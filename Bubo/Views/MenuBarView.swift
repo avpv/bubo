@@ -99,7 +99,7 @@ struct MenuBarView: View {
                             toastState.showSuccess("\u{201C}\(deletedEvent.title)\u{201D} deleted", icon: "trash.fill") {
                                 reminderService.addLocalEvent(deletedEvent)
                             }
-                            notifyRecipeMonitor(.deleted(eventId: event.id))
+                            notifyScheduleChange()
                         },
                         onDeleteSeries: { event in
                             let seriesId = event.seriesId ?? event.id
@@ -109,7 +109,7 @@ struct MenuBarView: View {
                             toastState.showSuccess("All \u{201C}\(event.title)\u{201D} deleted", icon: "trash.fill") {
                                 reminderService.addLocalEvent(seriesEvent)
                             }
-                            notifyRecipeMonitor(.deleted(eventId: seriesId))
+                            notifyScheduleChange()
                         },
                         onDeleteOccurrence: { event in
                             reminderService.excludeOccurrence(occurrenceId: event.id)
@@ -177,7 +177,7 @@ struct MenuBarView: View {
                             }
                             toastState.showSuccess(isEdit ? "Event updated" : "Event created")
                             if isEdit, let eventId = editing?.id {
-                                notifyRecipeMonitor(.moved(eventId: eventId))
+                                notifyScheduleChange()
                             }
                         },
                         settings: settings,
@@ -191,17 +191,9 @@ struct MenuBarView: View {
                     )
 
                 case .quickAddTasks:
-                    QuickAddTasksView(
-                        optimizerService: optimizerService,
-                        reminderService: reminderService,
-                        onBack: { navigation = .list }
-                    )
-                    .transition(
-                        reduceMotion ? .opacity : .asymmetric(
-                            insertion: .move(edge: .trailing).combined(with: .opacity),
-                            removal: .move(edge: .trailing).combined(with: .opacity).combined(with: .scale(scale: 0.98))
-                        )
-                    )
+                    // Replaced by inline BacklogView — navigate back to list
+                    EmptyView()
+                        .onAppear { navigation = .list }
                 }
             }
             .animation(
@@ -217,13 +209,13 @@ struct MenuBarView: View {
                     agentService: agentService,
                     seedEvent: context.seedEvent,
                     seedSlotMinutes: context.seedSlotMinutes,
-                    seedRecipe: context.seedRecipeId.flatMap { RecipeCatalog.allRecipesById[$0] },
+                    seedPreset: context.seedRecipeId.flatMap { id in IntentPresets.all.first { $0.name == id } },
                     onDismiss: {
                         withAnimation(DS.Animation.quick) { paletteContext = nil }
                     },
-                    onApplied: { recipe, undo in
+                    onApplied: { request, undo in
                         toastState.showSuccess(
-                            "\(recipe.name) applied",
+                            "\(request.name ?? "Schedule") applied",
                             icon: "sparkles",
                             onUndo: undo
                         )
@@ -262,7 +254,9 @@ struct MenuBarView: View {
             hasStartedSync = true
             reminderService.updateSettings(settings)
             reminderService.startSync()
-            optimizerService.setupRecipeMonitor(reminderService: reminderService)
+            if let backlog = optimizerService.backlogService {
+                optimizerService.setup(reminderService: reminderService, backlogService: backlog)
+            }
         }
     }
 
@@ -310,22 +304,60 @@ struct MenuBarView: View {
         toastState.showSuccess("\u{201C}\(deletedEvent.title)\u{201D} deleted", icon: "trash.fill") {
             reminderService.addLocalEvent(deletedEvent)
         }
-        notifyRecipeMonitor(.deleted(eventId: event.id))
+        notifyScheduleChange()
     }
 
-    private func notifyRecipeMonitor(_ change: RecipeMonitor.EventChange) {
-        Task {
-            await optimizerService.recipeMonitor?.onEventChange(
-                change,
-                workingHours: optimizerService.workingHours
-            )
-            // Re-evaluate suggestions after every schedule change so the
-            // SmartBanner stays alive and contextually relevant.
-            optimizerService.recipeMonitor?.evaluateSuggestions()
-            if optimizerService.recipeMonitor?.lastReaction != nil {
-                toastState.showInfo("Schedule adjusted", icon: "wand.and.stars")
+    private func notifyScheduleChange(deleted eventId: String? = nil, created: Bool = false) {
+        optimizerService.suggestionEngine?.evaluate()
+        // Fire reactive triggers
+        if let eventId {
+            Task {
+                await optimizerService.triggerEngine?.onEventDeleted(eventId: eventId)
             }
         }
+        if created {
+            Task {
+                await optimizerService.triggerEngine?.onNewEvent(eventId: "")
+            }
+        }
+    }
+
+    /// Handle a backlog task being dropped onto a free slot.
+    /// Creates a calendar event at the slot time and marks the task as scheduled.
+    private func handleTaskDrop(taskId: String, slotStart: Date, slotEnd: Date) {
+        guard let backlog = optimizerService.backlogService,
+              let task = backlog.tasks.first(where: { $0.id == taskId }) else { return }
+
+        let duration = min(
+            TimeInterval(task.durationMinutes * 60),
+            slotEnd.timeIntervalSince(slotStart)
+        )
+        let eventId = "task-\(task.id)"
+        let event = CalendarEvent(
+            id: eventId,
+            title: task.title,
+            startDate: slotStart,
+            endDate: slotStart.addingTimeInterval(duration),
+            location: nil,
+            description: nil,
+            calendarName: nil,
+            eventType: .standard,
+            colorTag: .green
+        )
+        reminderService.addLocalEvent(event)
+        backlog.markScheduled(id: task.id, eventId: eventId, date: slotStart)
+
+        let fmt = DateFormatter()
+        fmt.setLocalizedDateFormatFromTemplate("H:mm")
+        toastState.showSuccess(
+            "\(task.title) → \(fmt.string(from: slotStart))",
+            icon: "calendar.badge.plus"
+        ) {
+            // Undo: remove event and unschedule task
+            reminderService.removeLocalEvent(id: eventId)
+            backlog.unschedule(id: task.id)
+        }
+        notifyScheduleChange()
     }
 
     // MARK: - Main Content
@@ -618,19 +650,16 @@ struct MenuBarView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: DS.Spacing.md) {
                 // Smart banner — at most one contextual suggestion.
-                if let banner = activeBannerRecipe {
+                if let suggestion = activeBannerSuggestion {
                     SmartBanner(
-                        recipe: banner,
-                        reason: SmartBannerReason.text(for: banner),
-                        onTap: {
-                            withAnimation(DS.Animation.quick) {
-                                paletteContext = PaletteContext(seedRecipeId: banner.id)
-                            }
+                        request: suggestion.request,
+                        reason: suggestion.reason,
+                        onRun: {
+                            runQuickAction(suggestion.request, label: suggestion.reason)
                         },
                         onDismiss: {
                             withAnimation(DS.Animation.quick) {
-                                dismissedBannerIds.insert(banner.id)
-                                UserDefaults.standard.set(Array(dismissedBannerIds), forKey: "BuboDismissedBannerIds")
+                                optimizerService.suggestionEngine?.suggestion = nil
                             }
                         }
                     )
@@ -706,14 +735,13 @@ struct MenuBarView: View {
                         }
                     },
                     onProtectBlock: { event in
-                        let recipe = ScheduleRecipe(
-                            id: "protect-block",
-                            name: "Protect Block",
-                            eventRules: [EventRule(match: .id(event.id), action: .markFixed)],
-                            display: .confirmation
+                        let request = OptimizationRequest(
+                            .keepFixed(eventIds: [event.id]),
+                            .horizon(.today), .speed(.quick), .scenarios(count: 1),
+                            name: "Protect Block"
                         )
                         Task {
-                            _ = await optimizerService.executeRecipe(recipe, reminderService: reminderService)
+                            _ = await optimizerService.executeRequest(request, reminderService: reminderService)
                             toastState.showSuccess("Focus block protected", icon: "shield.fill")
                         }
                     },
@@ -724,11 +752,18 @@ struct MenuBarView: View {
                     }
                 )
             case .slot(let start, let end):
-                FreeSlotRow(start: start, end: end) { minutes in
-                    withAnimation(DS.Animation.quick) {
-                        paletteContext = PaletteContext(seedSlotMinutes: minutes)
+                FreeSlotRow(
+                    start: start,
+                    end: end,
+                    onFillTapped: { minutes in
+                        withAnimation(DS.Animation.quick) {
+                            paletteContext = PaletteContext(seedSlotMinutes: minutes)
+                        }
+                    },
+                    onTaskDropped: { taskId in
+                        handleTaskDrop(taskId: taskId, slotStart: start, slotEnd: end)
                     }
-                }
+                )
             }
         }
     }
@@ -771,9 +806,25 @@ struct MenuBarView: View {
 
     /// The first non-dismissed suggested recipe from the monitor, or nil when
     /// nothing is worth suggesting.
-    private var activeBannerRecipe: ScheduleRecipe? {
-        guard let monitor = optimizerService.recipeMonitor else { return nil }
-        return monitor.suggestedRecipes.first { !dismissedBannerIds.contains($0.id) }
+    private var activeBannerSuggestion: SuggestionEngine.Suggestion? {
+        optimizerService.suggestionEngine?.suggestion
+    }
+
+    /// Execute a request immediately — no palette, no configuration.
+    /// One tap → done → undo toast. Birman: "sequential magic."
+    private func runQuickAction(_ request: OptimizationRequest, label: String) {
+        Task {
+            let result = await optimizerService.executeRequest(request, reminderService: reminderService)
+            if case .success = result, !optimizerService.scenarios.isEmpty {
+                optimizerService.applyScenario(at: 0, to: reminderService)
+                toastState.showSuccess(label, icon: "sparkles") {
+                    optimizerService.undoLast(reminderService: reminderService)
+                }
+                notifyScheduleChange()
+            } else if let error = result.errorMessage {
+                toastState.showInfo(error, icon: "exclamationmark.triangle")
+            }
+        }
     }
 
     private var footerActions: some View {
@@ -809,32 +860,21 @@ struct MenuBarView: View {
                 .help("Add a new event (\u{2318}N)")
                 .keyboardShortcut("n", modifiers: .command)
 
-                // Palette hint — also serves as the clickable entry point for
-                // users who don't know the ⌘K shortcut.
-                Button {
-                    Haptics.tap()
-                    withAnimation(DS.Animation.quick) {
-                        paletteContext = PaletteContext()
+                // Quick actions + palette button
+                QuickActions(
+                    optimizerService: optimizerService,
+                    reminderService: reminderService,
+                    onExecuted: { label, undo in
+                        toastState.showSuccess(label, icon: "sparkles", onUndo: undo)
+                        notifyScheduleChange()
+                    },
+                    onOpenPalette: {
+                        Haptics.tap()
+                        withAnimation(DS.Animation.quick) {
+                            paletteContext = PaletteContext()
+                        }
                     }
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "sparkles")
-                            .font(.caption.weight(.medium))
-                        Text("\u{2318}K")
-                            .font(.caption2.monospaced())
-                    }
-                    .foregroundStyle(skin.resolvedTextSecondary)
-                    .padding(.horizontal, DS.Spacing.sm)
-                    .padding(.vertical, 4)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .strokeBorder(skin.resolvedTextTertiary.opacity(0.35), lineWidth: 0.5)
-                    )
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help("Open command palette (\u{2318}K)")
-                .accessibilityLabel("Open command palette")
+                )
             }
 
             Spacer()

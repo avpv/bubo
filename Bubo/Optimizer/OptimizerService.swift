@@ -2,14 +2,14 @@ import Foundation
 
 // MARK: - Optimizer Service
 
-/// Bridges BuboOptimizer with ReminderService and the rest of the app.
-/// All optimization calls are async to avoid blocking the main thread.
+/// Bridges BuboOptimizer with the rest of the app.
+/// All optimization flows go through intent-based OptimizationRequest.
 @MainActor
 @Observable
 final class OptimizerService {
 
     let optimizer = BuboOptimizer()
-    let usageTracker = RecipeUsageTracker()
+    let intentLearner = IntentLearner()
 
     var scenarios: [ScheduleScenario] = []
     private(set) var selectedScenarioIndex: Int? = nil
@@ -17,25 +17,34 @@ final class OptimizerService {
     private(set) var lastOptimizationDate: Date? = nil
     private(set) var error: String? = nil
 
-    /// The last applied recipe snapshot for undo support.
-    private(set) var lastSnapshot: AppliedRecipeSnapshot? = nil
+    /// The last applied snapshot for undo support.
+    private(set) var lastSnapshot: AppliedSnapshot? = nil
 
-    /// IDs of events created in the most recent recipe application.
-    /// Used by EventRowView to highlight freshly created events with a brief glow.
-    /// Auto-cleared after 2 seconds.
+    /// IDs of events created in the most recent application.
+    /// Used by EventRowView to highlight freshly created events.
     private(set) var freshlyCreatedEventIds: Set<String> = []
 
-    /// The recipe that produced the current scenarios.
-    var activeRecipe: ScheduleRecipe? = nil
+    /// The active optimization request (for display and learning).
+    var activeRequestName: String? = nil
+    /// The full active request (for IntentLearner recording).
+    private var activeRequest: OptimizationRequest? = nil
 
-    /// Recipe monitor for auto-triggered reactions and contextual suggestions.
-    private(set) var recipeMonitor: RecipeMonitor? = nil
+    /// Backlog service for persistent task management.
+    var backlogService: BacklogService?
+
+    /// Subgraph registry for saved pipelines.
+    private(set) var subgraphRegistry: SubgraphRegistry?
+
+    /// Suggestion engine for contextual suggestions.
+    private(set) var suggestionEngine: SuggestionEngine?
+
+    /// Trigger engine for scheduled/reactive pipeline execution.
+    private(set) var triggerEngine: TriggerEngine?
 
     // MARK: - Optimizer Settings (persisted)
 
     var workingHoursStart: Int {
         didSet {
-            // Ensure start < end to prevent zero-duration range
             if workingHoursStart >= workingHoursEnd {
                 workingHoursEnd = workingHoursStart + 1
             }
@@ -44,7 +53,6 @@ final class OptimizerService {
     }
     var workingHoursEnd: Int {
         didSet {
-            // Ensure start < end to prevent zero-duration range
             if workingHoursEnd <= workingHoursStart {
                 workingHoursStart = workingHoursEnd - 1
             }
@@ -52,10 +60,7 @@ final class OptimizerService {
         }
     }
 
-    /// Minimum free-slot length shown in the event list. Adapts to schedule density.
     var minSlotMinutes: Int {
-        // Adaptive: if the day is packed (8+ events), show shorter slots (15 min).
-        // Otherwise use the default (30 min).
         FreeSlotFinder.defaultMinSlotMinutes
     }
 
@@ -66,7 +71,6 @@ final class OptimizerService {
         let saved = Self.loadSettings()
         self.workingHoursStart = saved.start
         self.workingHoursEnd = saved.end
-        // Restore optimizer preferences
         if let data = UserDefaults.standard.data(forKey: "BuboOptimizerPreferences"),
            let prefs = try? JSONDecoder().decode(OptimizerPreferences.self, from: data) {
             self.optimizer.preferences = prefs
@@ -77,219 +81,42 @@ final class OptimizerService {
         workingHoursStart...workingHoursEnd
     }
 
-    // MARK: - Optimize Day
+    // MARK: - Execute Request (Primary Entry Point)
 
-    func optimizeDay(
-        reminderService: ReminderService,
-        movableTasks: [OptimizableEvent]
-    ) async {
-        isOptimizing = true
-        defer { isOptimizing = false }
-        error = nil
-
-        let fixedEvents = reminderService.allEvents.filter { !$0.isLocalEvent }
-
-        let result = await optimizer.optimizeToday(
-            fixedEvents: fixedEvents,
-            movableEvents: movableTasks,
-            workingHours: workingHours
-        )
-
-        scenarios = result.scenarios
-        selectedScenarioIndex = scenarios.isEmpty ? nil : 0
-        lastOptimizationDate = Date()
-    }
-
-    // MARK: - Optimize Week
-
-    func optimizeWeek(
-        reminderService: ReminderService,
-        movableTasks: [OptimizableEvent],
-        participantAvailability: [String: [DateInterval]] = [:]
-    ) async {
-        isOptimizing = true
-        defer { isOptimizing = false }
-        error = nil
-
-        let fixedEvents = reminderService.allEvents.filter { !$0.isLocalEvent }
-
-        let result = await optimizer.optimizeWeek(
-            fixedEvents: fixedEvents,
-            movableEvents: movableTasks,
-            workingHours: workingHours,
-            participantAvailability: participantAvailability
-        )
-
-        scenarios = result.scenarios
-        selectedScenarioIndex = scenarios.isEmpty ? nil : 0
-        lastOptimizationDate = Date()
-    }
-
-    // MARK: - Suggest Focus Blocks
-
-    func suggestFocusBlocks(
-        count: Int = 2,
-        durationMinutes: Int = 120,
+    /// Execute an OptimizationRequest (array of composable intents).
+    func executeRequest(
+        _ request: OptimizationRequest,
         reminderService: ReminderService
-    ) async {
+    ) async -> OptimizationResult {
+        guard let backlogSvc = backlogService else {
+            return .infeasible(reason: "Backlog service not initialized")
+        }
+
         isOptimizing = true
         defer { isOptimizing = false }
         error = nil
+        activeRequestName = request.name
+        activeRequest = request
 
-        let fixedEvents = reminderService.allEvents.filter { !$0.isLocalEvent }
-
-        let result = await optimizer.suggestFocusBlocks(
-            count: count,
-            durationMinutes: durationMinutes,
-            fixedEvents: fixedEvents,
-            workingHours: workingHours
+        var compiler = IntentCompiler(
+            optimizer: optimizer,
+            reminderService: reminderService,
+            backlogService: backlogSvc
         )
-
-        scenarios = result.scenarios
-        selectedScenarioIndex = scenarios.isEmpty ? nil : 0
-        lastOptimizationDate = Date()
-    }
-
-    // MARK: - Suggest Pomodoro Slot
-
-    func suggestPomodoroSlot(
-        config: PomodoroConfig = .classic,
-        reminderService: ReminderService
-    ) async {
-        isOptimizing = true
-        defer { isOptimizing = false }
-        error = nil
-
-        let fixedEvents = reminderService.allEvents.filter { !$0.isLocalEvent }
-
-        let result = await optimizer.suggestPomodoroSlot(
-            config: config,
-            fixedEvents: fixedEvents,
-            workingHours: workingHours
-        )
-
-        scenarios = result.scenarios
-        selectedScenarioIndex = scenarios.isEmpty ? nil : 0
-        lastOptimizationDate = Date()
-    }
-
-    // MARK: - Apply Scenario
-
-    func applyScenario(at index: Int, to reminderService: ReminderService, titleOverride: String? = nil, colorOverride: EventColorTag? = nil) {
-        guard index < scenarios.count else { return }
-        let scenario = scenarios[index]
-
-        optimizer.acceptScenario(scenario)
-
-        for (i, gene) in scenario.genes.enumerated() {
-            let title: String
-            if let override = titleOverride, !override.isEmpty {
-                title = scenario.genes.count > 1 ? "\(override) \(i + 1)" : override
-            } else {
-                title = gene.title
-            }
-            let event = CalendarEvent(
-                id: gene.eventId,
-                title: title,
-                startDate: gene.startTime,
-                endDate: gene.endTime,
-                location: nil,
-                description: "Created by Schedule Assistant",
-                calendarName: nil,
-                eventType: gene.isFocusBlock ? .pomodoro : .standard,
-                colorTag: colorOverride ?? (gene.isFocusBlock ? .blue : .green)
-            )
-            reminderService.addLocalEvent(event)
-        }
-
-        selectedScenarioIndex = index
-    }
-
-    func rejectScenario(at index: Int) {
-        guard index < scenarios.count else { return }
-        optimizer.rejectScenario(scenarios[index])
-    }
-
-    // MARK: - Scenario Info
-
-    var selectedScenario: ScheduleScenario? {
-        guard let idx = selectedScenarioIndex, idx < scenarios.count else { return nil }
-        return scenarios[idx]
-    }
-
-    var comparisons: [ScenarioComparison] {
-        optimizer.compareLastScenarios()
-    }
-
-    // MARK: - Persistence
-
-    private struct SavedSettings: Codable {
-        let start: Int
-        let end: Int
-    }
-
-    private func saveSettings() {
-        let saved = SavedSettings(start: workingHoursStart, end: workingHoursEnd)
-        if let data = try? JSONEncoder().encode(saved) {
-            UserDefaults.standard.set(data, forKey: persistenceKey)
-        }
-    }
-
-    /// Persist optimizer preferences (called from OptimizerTabView on changes).
-    func savePreferences() {
-        if let data = try? JSONEncoder().encode(optimizer.preferences) {
-            UserDefaults.standard.set(data, forKey: preferencesKey)
-        }
-    }
-
-    private static func loadSettings() -> (start: Int, end: Int) {
-        guard let data = UserDefaults.standard.data(forKey: "BuboOptimizerServiceSettings"),
-              let saved = try? JSONDecoder().decode(SavedSettings.self, from: data) else {
-            return (start: 9, end: 18)
-        }
-        return (start: saved.start, end: saved.end)
-    }
-
-    func reset() {
-        optimizer.reset()
-        scenarios = []
-        selectedScenarioIndex = nil
-        error = nil
-        activeRecipe = nil
-        lastSnapshot = nil
-    }
-
-    // MARK: - Recipe Execution
-
-    /// Execute a ScheduleRecipe — the universal entry point for all optimization flows.
-    func executeRecipe(
-        _ recipe: ScheduleRecipe,
-        paramValues: [String: Any] = [:],
-        reminderService: ReminderService
-    ) async -> RecipeResult {
-        isOptimizing = true
-        defer { isOptimizing = false }
-        error = nil
-        activeRecipe = recipe
-
-        let executor = RecipeExecutor(optimizer: optimizer, reminderService: reminderService)
-        let result = await executor.execute(recipe, paramValues: paramValues, defaultWorkingHours: workingHours)
+        compiler.subgraphRegistry = subgraphRegistry
+        let result = await compiler.execute(request, defaultWorkingHours: workingHours)
 
         switch result {
         case .success(let optimizerResult):
             scenarios = optimizerResult.scenarios
             selectedScenarioIndex = scenarios.isEmpty ? nil : 0
             lastOptimizationDate = Date()
-            usageTracker.recordExecution(recipeId: recipe.id)
 
         case .partialSuccess(let optimizerResult, let warnings):
             scenarios = optimizerResult.scenarios
             selectedScenarioIndex = scenarios.isEmpty ? nil : 0
             lastOptimizationDate = Date()
             error = warnings.first
-            if !optimizerResult.scenarios.isEmpty {
-                usageTracker.recordExecution(recipeId: recipe.id)
-            }
 
         case .noEventsToOptimize:
             error = "No events to optimize"
@@ -301,15 +128,48 @@ final class OptimizerService {
         return result
     }
 
-    /// Dry-run a recipe: execute it through the GA but don't store results or
-    /// record usage. Returns the genes from the best scenario, or nil on failure.
-    /// Used by the command palette to show a concrete preview ("Focus 14:30–15:30").
-    func executeRecipeDryRun(
-        _ recipe: ScheduleRecipe,
+    /// Instant reflow for drag-to-schedule and live preview.
+    /// Ultra-fast GA (~100ms) with warm start from current schedule.
+    func instantReflow(
+        reminderService: ReminderService,
+        movableEvents: [OptimizableEvent] = []
+    ) async -> [ScheduleGene]? {
+        let fixedEvents = reminderService.allEvents.filter { !$0.isLocalEvent }
+        let localMovable = reminderService.localEvents
+            .filter { $0.isUpcoming && $0.isMovable }
+            .map { $0.toOptimizableEvent() }
+
+        let allMovable = localMovable + movableEvents
+        guard !allMovable.isEmpty else { return nil }
+
+        let cal = Calendar.current
+        let now = Date()
+        let todayEnd = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now))!
+
+        let context = OptimizerContext(
+            fixedEvents: fixedEvents,
+            movableEvents: allMovable,
+            workingHours: workingHours,
+            planningHorizon: DateInterval(start: now, end: todayEnd),
+            preferences: optimizer.preferences
+        )
+
+        return await optimizer.instantReflow(context: context)
+    }
+
+    /// Dry-run for preview — returns genes without storing results.
+    func executeDryRun(
+        _ request: OptimizationRequest,
         reminderService: ReminderService
     ) async -> [ScheduleGene]? {
-        let executor = RecipeExecutor(optimizer: optimizer, reminderService: reminderService)
-        let result = await executor.execute(recipe, defaultWorkingHours: workingHours)
+        guard let backlogSvc = backlogService else { return nil }
+        var compiler = IntentCompiler(
+            optimizer: optimizer,
+            reminderService: reminderService,
+            backlogService: backlogSvc
+        )
+        compiler.subgraphRegistry = subgraphRegistry
+        let result = await compiler.execute(request, defaultWorkingHours: workingHours)
         switch result {
         case .success(let r), .partialSuccess(let r, _):
             return r.scenarios.first?.genes
@@ -318,8 +178,9 @@ final class OptimizerService {
         }
     }
 
-    /// Apply the selected scenario and record feedback for learning.
-    func applyRecipeScenario(
+    // MARK: - Apply Scenario
+
+    func applyScenario(
         at index: Int,
         to reminderService: ReminderService,
         titleOverride: String? = nil,
@@ -327,12 +188,9 @@ final class OptimizerService {
     ) {
         guard index < scenarios.count else { return }
         let scenario = scenarios[index]
-
-        // Record snapshot for undo
-        let previousGenes = optimizer.currentSchedule
         var createdEventIds: [String] = []
+        let previousGenes = optimizer.currentSchedule
 
-        // Apply scenario (same as existing applyScenario)
         optimizer.acceptScenario(scenario)
 
         for (i, gene) in scenario.genes.enumerated() {
@@ -355,23 +213,24 @@ final class OptimizerService {
             )
             reminderService.addLocalEvent(event)
             createdEventIds.append(event.id)
-        }
 
-        // Record acceptance for HN ranking
-        if let recipeId = activeRecipe?.id {
-            usageTracker.recordAcceptance(recipeId: recipeId)
+            // Link backlog tasks to their scheduled events
+            backlogService?.markScheduled(
+                id: gene.eventId,
+                eventId: event.id,
+                date: gene.startTime
+            )
         }
 
         // Save undo snapshot
-        lastSnapshot = AppliedRecipeSnapshot(
-            recipeId: activeRecipe?.id ?? "",
+        lastSnapshot = AppliedSnapshot(
+            requestName: activeRequestName ?? "",
             appliedAt: Date(),
             previousGenes: previousGenes,
             appliedGenes: scenario.genes,
             createdEventIds: createdEventIds
         )
 
-        // Track freshly created events for highlight animation.
         freshlyCreatedEventIds = Set(createdEventIds)
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(2))
@@ -379,13 +238,33 @@ final class OptimizerService {
         }
 
         selectedScenarioIndex = index
+
+        // Record acceptance for intent learning
+        if let request = activeRequest {
+            intentLearner.recordExecution(request, outcome: .accepted)
+        }
     }
 
-    /// Undo the last applied recipe by removing created events.
-    func undoLastRecipe(reminderService: ReminderService) {
+    func rejectScenario(at index: Int) {
+        guard index < scenarios.count else { return }
+        optimizer.rejectScenario(scenarios[index])
+
+        // Record rejection for intent learning
+        if let request = activeRequest {
+            intentLearner.recordExecution(request, outcome: .rejected)
+        }
+    }
+
+    // MARK: - Undo
+
+    func undoLast(reminderService: ReminderService) {
         guard let snapshot = lastSnapshot else { return }
         for eventId in snapshot.createdEventIds {
             reminderService.removeLocalEvent(id: eventId)
+        }
+        // Unschedule backlog tasks that were linked
+        for gene in snapshot.appliedGenes {
+            backlogService?.unschedule(id: gene.eventId)
         }
         optimizer.currentSchedule = snapshot.previousGenes
         lastSnapshot = nil
@@ -393,9 +272,68 @@ final class OptimizerService {
         selectedScenarioIndex = nil
     }
 
-    /// Initialize the recipe monitor (called once when reminderService is available).
-    func setupRecipeMonitor(reminderService: ReminderService) {
-        recipeMonitor = RecipeMonitor(optimizer: optimizer, reminderService: reminderService)
-        recipeMonitor?.evaluateSuggestions()
+    // MARK: - Scenario Info
+
+    var selectedScenario: ScheduleScenario? {
+        guard let idx = selectedScenarioIndex, idx < scenarios.count else { return nil }
+        return scenarios[idx]
+    }
+
+    var comparisons: [ScenarioComparison] {
+        optimizer.compareLastScenarios()
+    }
+
+    // MARK: - Setup
+
+    func setup(reminderService: ReminderService, backlogService: BacklogService) {
+        self.backlogService = backlogService
+        self.subgraphRegistry = SubgraphRegistry()
+        suggestionEngine = SuggestionEngine(
+            reminderService: reminderService,
+            backlogService: backlogService
+        )
+        triggerEngine = TriggerEngine(
+            optimizerService: self,
+            reminderService: reminderService
+        )
+        triggerEngine?.startAll()
+        backlogService.carryOverUnfinished()
+    }
+
+    func reset() {
+        optimizer.reset()
+        scenarios = []
+        selectedScenarioIndex = nil
+        error = nil
+        activeRequestName = nil
+        lastSnapshot = nil
+    }
+
+    // MARK: - Persistence
+
+    private struct SavedSettings: Codable {
+        let start: Int
+        let end: Int
+    }
+
+    private func saveSettings() {
+        let saved = SavedSettings(start: workingHoursStart, end: workingHoursEnd)
+        if let data = try? JSONEncoder().encode(saved) {
+            UserDefaults.standard.set(data, forKey: persistenceKey)
+        }
+    }
+
+    func savePreferences() {
+        if let data = try? JSONEncoder().encode(optimizer.preferences) {
+            UserDefaults.standard.set(data, forKey: preferencesKey)
+        }
+    }
+
+    private static func loadSettings() -> (start: Int, end: Int) {
+        guard let data = UserDefaults.standard.data(forKey: "BuboOptimizerServiceSettings"),
+              let saved = try? JSONDecoder().decode(SavedSettings.self, from: data) else {
+            return (start: 9, end: 18)
+        }
+        return (start: saved.start, end: saved.end)
     }
 }

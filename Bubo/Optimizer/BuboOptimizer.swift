@@ -188,6 +188,35 @@ final class BuboOptimizer {
         return result
     }
 
+    // MARK: - Instant Reflow
+
+    /// Ultra-fast re-optimization for live preview and drag-to-schedule.
+    /// Uses .instant config (~20 generations, ~100ms) with warm start.
+    /// Returns the best genes or nil if no improvement found.
+    func instantReflow(context: OptimizerContext) async -> [ScheduleGene]? {
+        var prefs = context.preferences
+        preferenceLearner.applyToPreferences(&prefs)
+
+        let evaluator = FitnessEvaluator.standard(preferences: prefs)
+        let schedule = currentSchedule
+
+        let result = await Task.detached(priority: .userInitiated) {
+            let reopt = IncrementalReoptimizer()
+            reopt.stabilityWeight = 3.0  // prefer stability for preview
+            reopt.minimumImprovement = 0.01  // accept smaller improvements
+
+            return reopt.reoptimize(
+                currentSchedule: schedule,
+                trigger: .eventCreated,
+                context: context,
+                evaluator: evaluator,
+                config: .instant
+            )
+        }.value
+
+        return result?.scenarios.first?.genes
+    }
+
     // MARK: - User Feedback (#24)
 
     func acceptScenario(_ scenario: ScheduleScenario) {

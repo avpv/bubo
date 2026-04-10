@@ -614,29 +614,15 @@ struct AddEventView: View {
         isFindingBestTime = true
         let eventDuration = isPomodoroMode ? TimeInterval(pomodoroTotalMinutes * 60) : duration * 60
 
-        let recipe = ScheduleRecipe(
-            id: "find-best-time-inline",
-            name: "Find Best Time",
-            events: [
-                EventSpec(
-                    title: title,
-                    minutes: Int(eventDuration / 60),
-                    priority: 0.8,
-                    energy: 0.5,
-                    focus: isPomodoroMode
-                ),
-            ],
-            includeExistingEvents: false,
-            speed: .quick,
-            maxScenarios: 3,
-            diversityThreshold: 0.2
+        let request = OptimizationRequest(
+            .createBlock(title: title, minutes: Int(eventDuration / 60), focus: isPomodoroMode),
+            .findSlotsForBacklog,
+            .horizon(.today), .speed(.quick), .scenarios(count: 3),
+            name: "Find Best Time"
         )
 
         Task {
-            let result = await service.executeRecipe(
-                recipe,
-                reminderService: reminderService
-            )
+            let result = await service.executeRequest(request, reminderService: reminderService)
             isFindingBestTime = false
             if let optimizerResult = result.optimizerResult {
                 bestTimeSlots = optimizerResult.scenarios
@@ -648,32 +634,15 @@ struct AddEventView: View {
         isFindingBestTime = true
         let totalMinutes = pomodoroTotalMinutes
 
-        let recipe = ScheduleRecipe(
-            id: "auto-pomodoro-slot",
-            name: "Pomodoro Slot",
-            events: [
-                EventSpec(
-                    title: title.isEmpty ? "Pomodoro Session" : title,
-                    minutes: totalMinutes,
-                    priority: 0.7,
-                    energy: 0.8,
-                    period: .morning,
-                    focus: true,
-                    pomodoro: .classic
-                ),
-            ],
-            includeExistingEvents: false,
-            weights: [.pomodoroFit: 1.5, .energyCurve: 1.5],
-            speed: .quick,
-            maxScenarios: 3,
-            diversityThreshold: 0.2
+        let request = OptimizationRequest(
+            .pomodoroSession(preset: .classic),
+            .findSlotsForBacklog,
+            .horizon(.today), .speed(.quick), .scenarios(count: 3),
+            name: "Pomodoro Slot"
         )
 
         Task {
-            let result = await service.executeRecipe(
-                recipe,
-                reminderService: reminderService
-            )
+            let result = await service.executeRequest(request, reminderService: reminderService)
             isFindingBestTime = false
             if let optimizerResult = result.optimizerResult {
                 bestTimeSlots = optimizerResult.scenarios

@@ -2,21 +2,17 @@ import SwiftUI
 
 // MARK: - Smart Banner
 //
-// A thin, single-line notice rendered above the event list when the RecipeMonitor
-// surfaces a contextually relevant recipe (e.g. "no focus blocks today → find focus").
-// Tapping the banner opens the CommandPalette seeded with that recipe.
-// Dismissing it silences the banner for the rest of the session.
-//
-// Only one banner is ever visible at a time — we show the first suggested recipe.
-// This is the "passive nudge" surface of the optimizer UI — no UI noise unless
-// there's a concrete reason.
+// One-line contextual suggestion with a Run button.
+// Tapping Run executes immediately (no palette). Undo via toast.
+// Birman: one action, one result, one undo.
 
 struct SmartBanner: View {
     @Environment(\.activeSkin) private var skin
 
-    let recipe: ScheduleRecipe
+    let request: OptimizationRequest
     let reason: String
-    let onTap: () -> Void
+    /// Run the request directly — no palette, no configuration.
+    let onRun: () -> Void
     let onDismiss: () -> Void
 
     var body: some View {
@@ -34,21 +30,20 @@ struct SmartBanner: View {
 
             Spacer(minLength: DS.Spacing.xs)
 
+            // Run button — executes immediately
             Button {
                 Haptics.tap()
-                onTap()
+                onRun()
             } label: {
-                HStack(spacing: 2) {
-                    Text(recipe.name)
-                        .font(.caption.weight(.semibold))
-                    Image(systemName: "arrow.right")
-                        .font(.caption2.weight(.semibold))
-                }
-                .foregroundStyle(skin.accentColor)
-                .contentShape(Rectangle())
+                Text("Run")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, DS.Spacing.sm)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(skin.accentColor))
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Run \(recipe.name)")
+            .accessibilityLabel("Run: \(reason)")
 
             Button {
                 Haptics.tap()
@@ -61,7 +56,7 @@ struct SmartBanner: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Dismiss suggestion")
+            .accessibilityLabel("Dismiss")
         }
         .padding(.horizontal, DS.Spacing.md)
         .padding(.vertical, DS.Spacing.xs)
@@ -76,41 +71,5 @@ struct SmartBanner: View {
         .padding(.horizontal, DS.Spacing.md)
         .padding(.top, DS.Spacing.xs)
         .transition(.move(edge: .top).combined(with: .opacity))
-    }
-}
-
-// MARK: - Suggestion Reason
-//
-// Human-readable reason for a banner, derived from the conditions that triggered
-// it. Used as the banner's left-side copy.
-
-enum SmartBannerReason {
-    static func text(for recipe: ScheduleRecipe) -> String {
-        if recipe.conditions.contains(where: {
-            if case .noFocusBlocks = $0 { return true } else { return false }
-        }) {
-            return "No focus time today"
-        }
-        if recipe.conditions.contains(where: {
-            if case .hasDeadlineWithin = $0 { return true } else { return false }
-        }) {
-            return "Deadline coming up"
-        }
-        if recipe.conditions.contains(where: {
-            if case .meetingHeavy = $0 { return true } else { return false }
-        }) {
-            return "Heavy meeting day"
-        }
-        if recipe.conditions.contains(where: {
-            if case .hasGapLongerThan = $0 { return true } else { return false }
-        }) {
-            return "Free time available"
-        }
-        if recipe.conditions.contains(where: {
-            if case .dayOfWeek = $0 { return true } else { return false }
-        }) {
-            return "Start-of-week planning"
-        }
-        return "Suggestion"
     }
 }
