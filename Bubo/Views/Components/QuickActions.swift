@@ -40,10 +40,12 @@ struct QuickActions: View {
                         .font(.caption2.weight(.semibold))
                     Text("Optimize")
                         .font(.caption.weight(.medium))
+                        .lineLimit(1)
                     Text("⌘K")
                         .font(.caption2.monospaced())
                         .foregroundStyle(skin.resolvedTextTertiary)
                 }
+                .fixedSize()
                 .foregroundStyle(skin.accentColor)
                 .padding(.horizontal, DS.Spacing.sm)
                 .padding(.vertical, 4)
