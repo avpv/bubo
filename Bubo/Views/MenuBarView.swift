@@ -480,7 +480,7 @@ struct MenuBarView: View {
                     }
                 },
                 onDeleteTask: { task in
-                    backlog.removeTask(id: task.id)
+                    _ = backlog.removeTask(id: task.id)
                     toastState.showSuccess("\u{201C}\(task.title)\u{201D} deleted", icon: "trash.fill") {
                         backlog.restoreTask(task)
                     }

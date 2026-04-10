@@ -166,7 +166,7 @@ struct BacklogView: View {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "plus")
                     .font(.caption)
-                    .foregroundStyle(isInputFocused ? skin.accentColor : .tertiary)
+                    .foregroundStyle(isInputFocused ? AnyShapeStyle(skin.accentColor) : AnyShapeStyle(.tertiary))
 
                 TextField("Add task...", text: $newTaskTitle)
                     .textFieldStyle(.plain)
