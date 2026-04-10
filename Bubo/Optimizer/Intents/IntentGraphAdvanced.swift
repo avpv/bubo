@@ -445,17 +445,6 @@ extension OptimizationRequest {
         )
     }
 
-    /// Variables bound to this request.
-    var variables: [String: PipelineValue] {
-        get { _variables ?? [:] }
-        set { _variables = newValue }
-    }
-    // Stored as optional to avoid breaking Codable
-    private var _variables: [String: PipelineValue]? {
-        get { nil }  // Override in subclass or wrapper
-        set { _ = newValue }
-    }
-
     /// Subgraph IDs referenced by this request.
     var subgraphIds: [String] {
         intents.compactMap { intent in

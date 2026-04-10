@@ -9,6 +9,7 @@ import Foundation
 final class OptimizerService {
 
     let optimizer = BuboOptimizer()
+    let intentLearner = IntentLearner()
 
     var scenarios: [ScheduleScenario] = []
     private(set) var selectedScenarioIndex: Int? = nil
@@ -23,8 +24,10 @@ final class OptimizerService {
     /// Used by EventRowView to highlight freshly created events.
     private(set) var freshlyCreatedEventIds: Set<String> = []
 
-    /// The active optimization request name (for display).
+    /// The active optimization request (for display and learning).
     var activeRequestName: String? = nil
+    /// The full active request (for IntentLearner recording).
+    private var activeRequest: OptimizationRequest? = nil
 
     /// Backlog service for persistent task management.
     var backlogService: BacklogService?
@@ -34,6 +37,9 @@ final class OptimizerService {
 
     /// Suggestion engine for contextual suggestions.
     private(set) var suggestionEngine: SuggestionEngine?
+
+    /// Trigger engine for scheduled/reactive pipeline execution.
+    private(set) var triggerEngine: TriggerEngine?
 
     // MARK: - Optimizer Settings (persisted)
 
@@ -90,6 +96,7 @@ final class OptimizerService {
         defer { isOptimizing = false }
         error = nil
         activeRequestName = request.name
+        activeRequest = request
 
         var compiler = IntentCompiler(
             optimizer: optimizer,
@@ -231,11 +238,21 @@ final class OptimizerService {
         }
 
         selectedScenarioIndex = index
+
+        // Record acceptance for intent learning
+        if let request = activeRequest {
+            intentLearner.recordExecution(request, outcome: .accepted)
+        }
     }
 
     func rejectScenario(at index: Int) {
         guard index < scenarios.count else { return }
         optimizer.rejectScenario(scenarios[index])
+
+        // Record rejection for intent learning
+        if let request = activeRequest {
+            intentLearner.recordExecution(request, outcome: .rejected)
+        }
     }
 
     // MARK: - Undo
@@ -275,7 +292,11 @@ final class OptimizerService {
             reminderService: reminderService,
             backlogService: backlogService
         )
-        // Auto carry-over unfinished tasks from previous days
+        triggerEngine = TriggerEngine(
+            optimizerService: self,
+            reminderService: reminderService
+        )
+        triggerEngine?.startAll()
         backlogService.carryOverUnfinished()
     }
 

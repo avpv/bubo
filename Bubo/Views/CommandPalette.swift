@@ -524,6 +524,11 @@ struct CommandPalette: View {
                 .padding(.top, DS.Spacing.xxs)
             }
 
+            // Variable inputs (from subgraph inputs)
+            if !request.variables.isEmpty || hasVariableIntents(request) {
+                variableInputs(request)
+            }
+
             // Live preview
             if let preview = composerPreview {
                 HStack(spacing: DS.Spacing.xs) {
@@ -615,6 +620,111 @@ struct CommandPalette: View {
         }
         .buttonStyle(.plain)
         .help(dimmed ? "Auto-added dependency" : "")
+    }
+
+    // MARK: - Variable Inputs
+
+    private func hasVariableIntents(_ request: OptimizationRequest) -> Bool {
+        request.intents.contains {
+            switch $0 {
+            case .focusBlock, .noEventsBefore, .noEventsAfter, .maxMeetings,
+                 .breakEvery, .splitLong, .capTotal:
+                return true
+            default: return false
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func variableInputs(_ request: OptimizationRequest) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            Text("PARAMETERS")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(skin.resolvedTextTertiary)
+                .tracking(0.5)
+
+            // Extract tunable values from intents
+            ForEach(Array(request.intents.enumerated()), id: \.offset) { idx, intent in
+                switch intent {
+                case .focusBlock(let m, _):
+                    variableSlider("Focus", value: m, range: 30...240, step: 15, unit: "min") { newVal in
+                        var r = request
+                        r.intents[idx] = .focusBlock(minutes: newVal, period: nil)
+                        updateComposed(r)
+                    }
+                case .noEventsBefore(let h):
+                    variableSlider("Start after", value: h, range: 6...14, step: 1, unit: ":00") { newVal in
+                        var r = request
+                        r.intents[idx] = .noEventsBefore(hour: newVal)
+                        updateComposed(r)
+                    }
+                case .noEventsAfter(let h):
+                    variableSlider("End by", value: h, range: 14...22, step: 1, unit: ":00") { newVal in
+                        var r = request
+                        r.intents[idx] = .noEventsAfter(hour: newVal)
+                        updateComposed(r)
+                    }
+                case .maxMeetings(let n):
+                    variableSlider("Max meetings", value: n, range: 0...10, step: 1, unit: "/day") { newVal in
+                        var r = request
+                        r.intents[idx] = .maxMeetings(perDay: newVal)
+                        updateComposed(r)
+                    }
+                case .splitLong(let m):
+                    variableSlider("Split at", value: m, range: 30...180, step: 15, unit: "min") { newVal in
+                        var r = request
+                        r.intents[idx] = .splitLong(maxMinutes: newVal)
+                        updateComposed(r)
+                    }
+                case .capTotal(let m):
+                    variableSlider("Daily cap", value: m, range: 120...480, step: 30, unit: "min") { newVal in
+                        var r = request
+                        r.intents[idx] = .capTotal(minutesPerDay: newVal)
+                        updateComposed(r)
+                    }
+                default:
+                    EmptyView()
+                }
+            }
+        }
+    }
+
+    private func variableSlider(_ label: String, value: Int, range: ClosedRange<Int>, step: Int, unit: String, onChange: @escaping (Int) -> Void) -> some View {
+        HStack(spacing: DS.Spacing.sm) {
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(skin.resolvedTextSecondary)
+                .frame(width: 70, alignment: .leading)
+
+            HStack(spacing: DS.Spacing.xs) {
+                Button {
+                    let newVal = max(range.lowerBound, value - step)
+                    onChange(newVal)
+                } label: {
+                    Image(systemName: "minus")
+                        .font(.caption2.weight(.bold))
+                        .frame(width: 18, height: 18)
+                }
+                .buttonStyle(.plain)
+
+                Text("\(value)\(unit)")
+                    .font(.caption.monospacedDigit().weight(.medium))
+                    .foregroundStyle(skin.resolvedTextPrimary)
+                    .frame(minWidth: 44)
+
+                Button {
+                    let newVal = min(range.upperBound, value + step)
+                    onChange(newVal)
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.caption2.weight(.bold))
+                        .frame(width: 18, height: 18)
+                }
+                .buttonStyle(.plain)
+            }
+
+            Spacer()
+        }
     }
 
     private func conflictIcon(_ severity: IntentConflictDetector.Conflict.Severity) -> String {

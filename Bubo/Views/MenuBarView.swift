@@ -307,8 +307,19 @@ struct MenuBarView: View {
         notifyScheduleChange()
     }
 
-    private func notifyScheduleChange() {
+    private func notifyScheduleChange(deleted eventId: String? = nil, created: Bool = false) {
         optimizerService.suggestionEngine?.evaluate()
+        // Fire reactive triggers
+        if let eventId {
+            Task {
+                await optimizerService.triggerEngine?.onEventDeleted(eventId: eventId)
+            }
+        }
+        if created {
+            Task {
+                await optimizerService.triggerEngine?.onNewEvent(eventId: "")
+            }
+        }
     }
 
     /// Handle a backlog task being dropped onto a free slot.

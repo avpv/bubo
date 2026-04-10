@@ -336,8 +336,10 @@ enum IntentCategory: String, CaseIterable, Sendable {
 /// it's a flat list of composable building blocks.
 struct OptimizationRequest: Codable, Hashable, Sendable, Identifiable {
     var intents: [ScheduleIntent]
-    var name: String?              // nil for ad-hoc requests, set for presets
-    var description: String?       // one-line description for UI
+    var name: String?
+    var description: String?
+    /// Variable bindings for parameterized subgraphs.
+    var variables: [String: PipelineValue] = [:]
 
     var id: String { name ?? UUID().uuidString }
 
