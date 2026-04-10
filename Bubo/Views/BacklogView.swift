@@ -23,7 +23,7 @@ struct BacklogView: View {
 
     @Environment(\.activeSkin) private var skin
     @State private var newTaskTitle = ""
-    @State private var isExpanded = true
+    @State private var isExpanded = false
     @State private var editingTaskId: String? = nil
     @State private var ghostPreview: String? = nil
     @State private var ghostPreviewTask: Task<Void, Never>? = nil
