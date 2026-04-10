@@ -81,7 +81,7 @@ struct CommandPalette: View {
         if let minutes = seedSlotMinutes {
             var result = [SmartSuggestion(
                 label: "Focus \(minutes) min",
-                request: .findFocus(minutes: minutes)
+                request: .findFocus(minutes: minutes, period: nil)
             )]
             if !(optimizerService.backlogService?.pending.isEmpty ?? true) {
                 result.append(SmartSuggestion(
@@ -300,13 +300,11 @@ struct CommandPalette: View {
             powerModeComposer(request)
         }
 
-        // Footer
+        // Footer — Birman: label describes the specific action, not a generic verb.
         HStack(spacing: DS.Spacing.md) {
-            hint("↵", "run")
-            hint("↑↓", "select")
-            if !showPowerMode {
-                hint("⌥", "customize")
-            }
+            hint("↵", selectedIndex < visibleItems.count
+                 ? visibleItems[selectedIndex].label
+                 : "run")
             Spacer()
             hint("esc", "close")
         }
