@@ -17,6 +17,9 @@ struct BacklogView: View {
     var reminderService: ReminderService
     var onScheduleTasks: () -> Void
     var onDeleteTask: ((BacklogTask) -> Void)?
+    /// External trigger: set to `true` to focus the "Add task…" field.
+    /// BacklogView resets it to `false` after grabbing focus.
+    @Binding var focusRequested: Bool
 
     @Environment(\.activeSkin) private var skin
     @State private var newTaskTitle = ""
@@ -43,6 +46,12 @@ struct BacklogView: View {
             }
             addTaskField
             ghostPreviewRow
+        }
+        .onChange(of: focusRequested) { _, requested in
+            if requested {
+                isInputFocused = true
+                focusRequested = false
+            }
         }
     }
 
