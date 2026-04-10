@@ -2,11 +2,11 @@ import Foundation
 
 // MARK: - Suggestion Engine
 
-/// Evaluates the current schedule context and composes
-/// optimization requests dynamically based on what it observes.
+/// Composes smart optimization requests from schedule context.
+/// The user never sees 65 intents — this engine picks the right ones
+/// and composes a request that just works.
 ///
-/// Unlike the old RecipeMonitor which matched static conditions to preset recipes,
-/// this engine analyzes schedule patterns and composes intents on the fly.
+/// Birman: "Пусть потеет машина" — the system does the thinking.
 @MainActor
 @Observable
 final class SuggestionEngine {
@@ -14,8 +14,7 @@ final class SuggestionEngine {
     let reminderService: ReminderService
     let backlogService: BacklogService
 
-    /// Currently suggested optimization request (shown in SmartBanner).
-    /// Settable so the UI can dismiss it.
+    /// The single best suggestion right now (for SmartBanner).
     var suggestion: Suggestion?
 
     private var suggestionTimer: Timer?
@@ -29,7 +28,6 @@ final class SuggestionEngine {
     struct Suggestion: Sendable {
         let request: OptimizationRequest
         let reason: String
-        let priority: Int  // higher = more important
     }
 
     // MARK: - Evaluate
@@ -41,128 +39,51 @@ final class SuggestionEngine {
         let events = reminderService.allEvents
         let todayEnd = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now))!
         let todayEvents = events.filter { $0.startDate >= now && $0.startDate < todayEnd }
-
-        // Collect all candidate suggestions and pick the highest priority
-        var candidates: [Suggestion] = []
-
-        // 1. Overdue backlog tasks
-        let overdue = backlogService.overdue
-        if !overdue.isEmpty {
-            candidates.append(Suggestion(
-                request: OptimizationRequest(
-                    .includeBacklog, .findSlotsForBacklog,
-                    .horizon(.today), .speed(.quick), .scenarios(count: 1),
-                    name: "Schedule \(overdue.count) overdue task\(overdue.count == 1 ? "" : "s")"
-                ),
-                reason: "\(overdue.count) overdue task\(overdue.count == 1 ? "" : "s")",
-                priority: 100
-            ))
-        }
-
-        // 2. Urgent deadlines (within 2 days)
-        let urgent = backlogService.urgent(withinDays: 2)
-        if !urgent.isEmpty {
-            let names = urgent.prefix(2).map(\.title).joined(separator: ", ")
-            candidates.append(Suggestion(
-                request: .deadlineMode,
-                reason: "Due soon: \(names)",
-                priority: 90
-            ))
-        }
-
-        // 3. Many unscheduled tasks
-        let pending = backlogService.pending
-        if pending.count >= 3 {
-            candidates.append(Suggestion(
-                request: .scheduleBacklog,
-                reason: "\(pending.count) tasks waiting",
-                priority: 60
-            ))
-        }
-
-        // 4. Meeting-heavy day (5+ meetings)
         let meetings = todayEvents.filter { !$0.isLocalEvent }
-        if meetings.count >= 5 {
-            candidates.append(Suggestion(
-                request: .batchMeetingsPreset,
-                reason: "\(meetings.count) meetings today",
-                priority: 70
-            ))
+        let pending = backlogService.pending
+        let urgent = backlogService.urgent(withinDays: 2)
+        let overdue = backlogService.overdue
+
+        // Compose a request from ALL signals at once — not picking a preset
+        var intents: [ScheduleIntent] = [.horizon(.today)]
+        var reason = ""
+
+        // Priority cascade: most urgent situation wins
+        if !overdue.isEmpty {
+            intents.append(contentsOf: [.includeBacklog, .findSlotsForBacklog, .speed(.quick), .scenarios(count: 1)])
+            reason = "\(overdue.count) overdue task\(overdue.count == 1 ? "" : "s")"
+        } else if !urgent.isEmpty {
+            intents.append(contentsOf: [.includeBacklog, .prioritizeDeadlines(weight: 3.0), .speed(.balanced), .scenarios(count: 2)])
+            reason = "\(urgent.first!.title) due soon"
+        } else if meetings.count >= 5 && !pending.isEmpty {
+            intents.append(contentsOf: [.batchMeetings(), .includeBacklog, .protectLunch(), .speed(.balanced), .scenarios(count: 2)])
+            reason = "\(meetings.count) meetings + \(pending.count) tasks"
+        } else if meetings.count >= 5 {
+            intents.append(contentsOf: [.batchMeetings(), .protectLunch(), .speed(.quick), .scenarios(count: 1)])
+            reason = "\(meetings.count) meetings — batch them?"
+        } else if pending.count >= 3 {
+            intents.append(contentsOf: [.includeBacklog, .findSlotsForBacklog, .speed(.quick), .scenarios(count: 1)])
+            reason = "\(pending.count) tasks to schedule"
+        } else if hour < 14 && !todayEvents.contains(where: { $0.eventType == .pomodoro }) {
+            intents.append(contentsOf: [.focusBlock(minutes: 120, period: .morning), .findSlotsForBacklog, .speed(.quick), .scenarios(count: 1)])
+            reason = "No focus time today"
+        } else if hour < 10 && todayEvents.count >= 3 {
+            intents.append(contentsOf: [.includeBacklog, .speed(.balanced), .scenarios(count: 2)])
+            reason = "Organize your day"
+        } else {
+            suggestion = nil
+            return
         }
 
-        // 5. No focus time today (before 2pm)
-        let hasFocus = todayEvents.contains { $0.eventType == .pomodoro || ($0.isLocalEvent && $0.duration >= 3600) }
-        if !hasFocus && hour < 14 {
-            candidates.append(Suggestion(
-                request: .findFocus(),
-                reason: "No focus time today",
-                priority: 50
-            ))
-        }
+        // Layer in time-aware intents automatically
+        if hour >= 14 { intents.append(.protectLunch()) }
+        if hour >= 16 { intents.append(.windDown(lastHours: 2)) }
+        if meetings.count >= 3 { intents.append(.meetingPrep(minutes: 5)) }
 
-        // 6. Long gap available (> 2 hours free)
-        let sortedToday = todayEvents.sorted { $0.startDate < $1.startDate }
-        var maxGap: TimeInterval = 0
-        var cursor = now
-        for event in sortedToday {
-            let gap = event.startDate.timeIntervalSince(cursor)
-            maxGap = max(maxGap, gap)
-            cursor = max(cursor, event.endDate)
-        }
-        let remainingGap = todayEnd.timeIntervalSince(cursor)
-        maxGap = max(maxGap, remainingGap)
-
-        if maxGap > 7200 && !pending.isEmpty {  // > 2 hours and tasks exist
-            let gapMinutes = Int(maxGap / 60)
-            candidates.append(Suggestion(
-                request: .scheduleBacklog,
-                reason: "\(gapMinutes) min free — schedule tasks?",
-                priority: 40
-            ))
-        }
-
-        // 7. Morning — organize the day
-        if hour < 10 && todayEvents.count >= 3 {
-            candidates.append(Suggestion(
-                request: .organizeDay,
-                reason: "Start of day — organize?",
-                priority: 30
-            ))
-        }
-
-        // 8. High context switching (3+ consecutive different-project events)
-        if detectHighContextSwitching(todayEvents) {
-            candidates.append(Suggestion(
-                request: OptimizationRequest(
-                    .minimizeContextSwitching(weight: 2.0), .groupByProject(),
-                    .horizon(.today), .stability(.normal), .speed(.balanced), .scenarios(count: 2),
-                    name: "Reduce context switching"
-                ),
-                reason: "Many project switches today",
-                priority: 55
-            ))
-        }
-
-        // Pick the highest priority suggestion
-        suggestion = candidates.max(by: { $0.priority < $1.priority })
-    }
-
-    // MARK: - Pattern Detection
-
-    /// Detect if there are 3+ consecutive events from different projects.
-    private func detectHighContextSwitching(_ events: [CalendarEvent]) -> Bool {
-        let sorted = events.sorted { $0.startDate < $1.startDate }
-        guard sorted.count >= 3 else { return false }
-
-        var switchCount = 0
-        for i in 1..<sorted.count {
-            let prev = sorted[i - 1].context ?? sorted[i - 1].calendarName ?? ""
-            let curr = sorted[i].context ?? sorted[i].calendarName ?? ""
-            if prev != curr && !prev.isEmpty && !curr.isEmpty {
-                switchCount += 1
-            }
-        }
-        return switchCount >= 3
+        suggestion = Suggestion(
+            request: OptimizationRequest(intents, name: reason),
+            reason: reason
+        )
     }
 
     // MARK: - Timer
@@ -170,13 +91,9 @@ final class SuggestionEngine {
     private func startSuggestionTimer() {
         evaluate()
         suggestionTimer = Timer.scheduledTimer(withTimeInterval: 15 * 60, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.evaluate()
-            }
+            Task { @MainActor in self?.evaluate() }
         }
     }
 
-    deinit {
-        suggestionTimer?.invalidate()
-    }
+    deinit { suggestionTimer?.invalidate() }
 }

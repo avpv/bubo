@@ -2,16 +2,14 @@ import SwiftUI
 
 // MARK: - Command Palette
 //
-// Single entry point for all schedule optimization.
-//
 // Design (Birman):
-// - One input field: searches presets AND accepts natural language for AI
-// - Presets are starting points, not final configs — expand to compose intents
-// - Intent chips: add/remove atomic scheduling rules visually
-// - Live preview: see concrete event times before committing
-// - Conflict warnings: contradictions shown immediately
-// - Enter runs, Esc closes, ↑↓ navigate, → expand, Tab all presets
-// - No confirmation dialog — undo via toast
+// - "Пусть потеет машина": user says WHAT, system figures out HOW
+// - 3-5 smart suggestions based on current schedule context
+// - Free text → AI composes intents automatically
+// - Enter runs instantly, Esc closes, undo via toast
+// - No categories, no phases, no "ACTIVE/SUGGESTED/MORE"
+// - Power mode (⌥) reveals intent composer for advanced users
+// - One action, one result, one undo
 
 struct CommandPalette: View {
     @Environment(\.activeSkin) private var skin
@@ -32,12 +30,10 @@ struct CommandPalette: View {
 
     @State private var searchText = ""
     @State private var selectedIndex = 0
-    @State private var expandedId: String? = nil
-    @State private var showAll = false
     @State private var phase: Phase = .picking
-    @State private var aiError: String? = nil
     @State private var dryRunPreview: String? = nil
     @State private var dryRunTask: Task<Void, Never>? = nil
+    @State private var showPowerMode = false
     @State private var composedRequest: OptimizationRequest? = nil
     @State private var conflicts: [IntentConflictDetector.Conflict] = []
     @FocusState private var isSearchFocused: Bool
@@ -55,62 +51,143 @@ struct CommandPalette: View {
         let timeRange: String
     }
 
-    // MARK: - Suggestions
+    // MARK: - Smart Suggestions
 
-    private var suggestions: [OptimizationRequest] {
-        if let engine = optimizerService.suggestionEngine,
-           let suggestion = engine.suggestion {
-            var result = [suggestion.request]
-            for preset in defaultsByTime {
-                if result.count >= 5 { break }
-                if !result.contains(where: { $0.name == preset.name }) {
-                    result.append(preset)
-                }
+    /// 3-5 context-aware suggestions. The system decides, not the user.
+    private var suggestions: [SmartSuggestion] {
+        var result: [SmartSuggestion] = []
+        let now = Date()
+        let cal = Calendar.current
+        let hour = cal.component(.hour, from: now)
+        let events = reminderService.allEvents
+        let todayEnd = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now))!
+        let todayEvents = events.filter { $0.startDate >= now && $0.startDate < todayEnd }
+        let meetings = todayEvents.filter { !$0.isLocalEvent }
+        let pending = optimizerService.backlogService?.pending ?? []
+        let urgent = optimizerService.backlogService?.urgent(withinDays: 2) ?? []
+
+        // Seed context overrides
+        if let event = seedEvent {
+            result.append(SmartSuggestion(
+                label: "Reschedule \u{201C}\(event.title)\u{201D}",
+                request: OptimizationRequest(
+                    .onlyOptimize(eventIds: [event.id]),
+                    .horizon(.today), .speed(.quick), .scenarios(count: 3),
+                    name: "Reschedule"
+                )
+            ))
+            result.append(SmartSuggestion(
+                label: "Find better time",
+                request: OptimizationRequest(
+                    .onlyOptimize(eventIds: [event.id]),
+                    .findSlotsForBacklog,
+                    .horizon(.today), .speed(.quick), .scenarios(count: 1),
+                    name: "Find better time"
+                )
+            ))
+            return result
+        }
+
+        if let minutes = seedSlotMinutes {
+            result.append(SmartSuggestion(
+                label: "Focus \(minutes) min",
+                request: .findFocus(minutes: minutes)
+            ))
+            if !pending.isEmpty {
+                result.append(SmartSuggestion(
+                    label: "Fill with tasks",
+                    request: .scheduleBacklog
+                ))
             }
             return result
         }
-        return Array(defaultsByTime.prefix(5))
+
+        // Context-driven (system decides)
+        if !urgent.isEmpty {
+            let names = urgent.prefix(2).map(\.title).joined(separator: ", ")
+            result.append(SmartSuggestion(
+                label: "Deadline: \(names)",
+                request: .deadlineMode
+            ))
+        }
+
+        if pending.count >= 3 {
+            result.append(SmartSuggestion(
+                label: "Schedule \(pending.count) tasks",
+                request: .scheduleBacklog
+            ))
+        }
+
+        if meetings.count >= 5 {
+            result.append(SmartSuggestion(
+                label: "Batch \(meetings.count) meetings",
+                request: .batchMeetingsPreset
+            ))
+        }
+
+        let hasFocus = todayEvents.contains { $0.eventType == .pomodoro || ($0.isLocalEvent && $0.duration >= 3600) }
+        if !hasFocus && hour < 14 {
+            result.append(SmartSuggestion(
+                label: "Find focus time",
+                request: .findFocus()
+            ))
+        }
+
+        if hour < 10 && (todayEvents.count >= 3 || !pending.isEmpty) {
+            result.append(SmartSuggestion(
+                label: "Organize today",
+                request: .organizeDay
+            ))
+        }
+
+        if hour >= 15 {
+            result.append(SmartSuggestion(
+                label: "Plan tomorrow",
+                request: OptimizationRequest(
+                    .horizon(.tomorrow), .includeBacklog,
+                    .speed(.balanced), .scenarios(count: 2),
+                    name: "Plan tomorrow"
+                )
+            ))
+        }
+
+        // Always offer at least one option
+        if result.isEmpty {
+            result.append(SmartSuggestion(
+                label: "Organize day",
+                request: .organizeDay
+            ))
+        }
+
+        return Array(result.prefix(5))
     }
 
-    private var defaultsByTime: [OptimizationRequest] {
-        let hour = Calendar.current.component(.hour, from: Date())
-        switch hour {
-        case 0..<11:  return [.organizeDay, .findFocus(), .scheduleBacklog]
-        case 11..<15: return [.findFocus(), .scheduleBacklog, .lowEnergyDay]
-        case 15..<19: return [.scheduleBacklog, .organizeDay, .planWeek]
-        default:      return [.planWeek, .organizeDay, .scheduleBacklog]
-        }
+    struct SmartSuggestion: Identifiable {
+        let id = UUID()
+        let label: String
+        let request: OptimizationRequest
     }
 
-    private var filtered: [OptimizationRequest] {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        if query.isEmpty {
-            return seedEvent != nil || seedSlotMinutes != nil
-                ? Array(IntentPresets.all.prefix(8))
-                : suggestions
-        }
+    // MARK: - Search
+
+    private var searchResults: [SmartSuggestion] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !query.isEmpty else { return [] }
+
         return IntentPresets.all
             .filter { $0.matchesSearch(query) }
-            .sorted {
-                let l = ($0.name ?? "").lowercased().contains(query.lowercased())
-                let r = ($1.name ?? "").lowercased().contains(query.lowercased())
-                if l != r { return l }
-                return ($0.name ?? "") < ($1.name ?? "")
-            }
+            .prefix(5)
+            .map { SmartSuggestion(label: $0.name ?? "Optimize", request: $0) }
     }
 
-    /// The active request for the composer — either a modified preset or the selected one.
-    private var activeRequest: OptimizationRequest? {
-        if let composed = composedRequest { return composed }
-        guard let id = expandedId else { return nil }
-        return filtered.first { $0.id == id }
+    private var visibleItems: [SmartSuggestion] {
+        searchText.isEmpty ? suggestions : searchResults
     }
 
     // MARK: - Body
 
     var body: some View {
         ZStack {
-            // Scrim
             Rectangle()
                 .fill(Color.black.opacity(0.25))
                 .contentShape(Rectangle())
@@ -126,9 +203,8 @@ struct CommandPalette: View {
         .onAppear {
             isSearchFocused = true
             if let seed = seedPreset {
-                expandedId = seed.id
                 composedRequest = seed
-                revalidate(seed)
+                showPowerMode = true
             }
             refreshPreview()
         }
@@ -154,37 +230,13 @@ struct CommandPalette: View {
         .shadow(color: .black.opacity(0.25), radius: 18, y: 8)
         .onKeyPress(.upArrow) { move(-1); return .handled }
         .onKeyPress(.downArrow) { move(1); return .handled }
-        .onKeyPress(.rightArrow) {
-            guard searchText.isEmpty, !filtered.isEmpty else { return .ignored }
-            let idx = min(selectedIndex, filtered.count - 1)
-            toggleExpand(filtered[idx])
-            return .handled
-        }
-        .onKeyPress(.tab) {
-            withAnimation(DS.Animation.quick) { showAll.toggle() }
-            return .handled
-        }
         .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
     }
 
     private func move(_ delta: Int) {
-        let count = filtered.count
+        let count = visibleItems.count
         guard count > 0 else { return }
         selectedIndex = max(0, min(count - 1, selectedIndex + delta))
-    }
-
-    private func toggleExpand(_ request: OptimizationRequest) {
-        withAnimation(DS.Animation.quick) {
-            if expandedId == request.id {
-                expandedId = nil
-                composedRequest = nil
-                conflicts = []
-            } else {
-                expandedId = request.id
-                composedRequest = request
-                revalidate(request)
-            }
-        }
     }
 
     // MARK: - Search Field
@@ -205,10 +257,8 @@ struct CommandPalette: View {
                 .onSubmit { handleSubmit() }
                 .onChange(of: searchText) {
                     selectedIndex = 0
-                    expandedId = nil
                     composedRequest = nil
-                    conflicts = []
-                    aiError = nil
+                    showPowerMode = false
                 }
 
             if !searchText.isEmpty && !isBusy {
@@ -222,17 +272,6 @@ struct CommandPalette: View {
                 }
                 .buttonStyle(.plain)
             }
-
-            Text("⌘K")
-                .font(.caption2.monospaced())
-                .foregroundStyle(skin.resolvedTextTertiary)
-                .padding(.horizontal, DS.Spacing.xs)
-                .padding(.vertical, 2)
-                .background(
-                    RoundedRectangle(cornerRadius: 4)
-                        .strokeBorder(skin.resolvedTextTertiary.opacity(0.35), lineWidth: 0.5)
-                )
-                .opacity(isBusy ? 0.3 : 1)
         }
         .padding(.horizontal, DS.Spacing.md)
         .padding(.vertical, DS.Spacing.md)
@@ -261,9 +300,9 @@ struct CommandPalette: View {
     }
 
     private var placeholder: String {
-        if seedEvent != nil { return "Change this event..." }
-        if let m = seedSlotMinutes { return "Fill \(m) min slot..." }
-        return "Find focus, plan day, or ask AI..."
+        if seedEvent != nil { return "What to do with this event?" }
+        if seedSlotMinutes != nil { return "Fill this slot..." }
+        return "What do you need?"
     }
 
     // MARK: - Content
@@ -280,163 +319,124 @@ struct CommandPalette: View {
             }
             .padding(.vertical, DS.Spacing.sm)
         }
-        .frame(maxHeight: 440)
+        .frame(maxHeight: showPowerMode ? 440 : 300)
         .scrollContentBackground(.hidden)
     }
 
-    // MARK: - Picking
+    // MARK: - Picking (Simple Mode)
 
     @ViewBuilder
     private var pickingContent: some View {
-        if showAll && searchText.isEmpty {
-            allPresetsView
-        } else {
-            // Context line
-            if searchText.isEmpty {
-                contextLine
+        // Smart suggestions — the main UI
+        VStack(alignment: .leading, spacing: 2) {
+            ForEach(Array(visibleItems.enumerated()), id: \.element.id) { index, item in
+                suggestionRow(item, index: index)
             }
 
-            // Preset list
-            presetList
-
-            // Saved subgraphs (user pipelines)
-            if let registry = optimizerService.subgraphRegistry,
-               !registry.userSubgraphs.isEmpty && searchText.isEmpty {
-                subgraphSection(registry)
-            }
-
-            // Intent composer (when a preset is expanded)
-            if let request = activeRequest {
-                intentComposer(request)
-            }
-
-            // AI fallback
-            if !searchText.isEmpty && agentService.isConfigured {
-                aiRow
-            }
-
-            // Footer
-            footerHints
-
-            if let aiError {
-                Text(aiError)
-                    .font(.caption)
-                    .foregroundStyle(skin.resolvedWarningColor)
-                    .padding(.horizontal, DS.Spacing.md)
+            if visibleItems.isEmpty && !searchText.isEmpty {
+                // No matches — will go to AI on Enter
+                HStack(spacing: DS.Spacing.sm) {
+                    Image(systemName: "sparkles")
+                        .font(.body)
+                        .foregroundStyle(skin.accentColor)
+                        .frame(width: 18)
+                    Text("Ask AI: \u{201C}\(searchText)\u{201D}")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(skin.resolvedTextPrimary)
+                }
+                .padding(.vertical, DS.Spacing.sm)
+                .padding(.horizontal, DS.Spacing.md)
             }
         }
-    }
+        .padding(.horizontal, DS.Spacing.sm)
 
-    private var contextLine: some View {
-        HStack(spacing: DS.Spacing.xs) {
-            if let seedEvent {
-                Text("Change \u{201C}\(seedEvent.title)\u{201D}")
-            } else if let m = seedSlotMinutes {
-                Text("Free slot · \(m) min")
-            } else {
-                let fmt = DateFormatter()
-                Text("Now \(fmt.setLocalizedDateFormatFromTemplate("H:mm"), fmt.string(from: Date())) · pick or compose")
-            }
+        // Power mode (intent composer) — hidden by default
+        if showPowerMode, let request = composedRequest {
+            SkinSeparator()
+            powerModeComposer(request)
         }
-        .font(.caption2)
-        .foregroundStyle(skin.resolvedTextTertiary)
+
+        // Footer
+        HStack(spacing: DS.Spacing.md) {
+            hint("↵", "run")
+            hint("↑↓", "select")
+            if !showPowerMode {
+                hint("⌥", "customize")
+            }
+            Spacer()
+            hint("esc", "close")
+        }
         .padding(.horizontal, DS.Spacing.md)
+        .padding(.top, DS.Spacing.sm)
         .padding(.bottom, DS.Spacing.xs)
     }
 
-    // MARK: - Preset List
+    // MARK: - Suggestion Row
 
-    private var presetList: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            ForEach(Array(filtered.enumerated()), id: \.element.id) { index, preset in
-                presetRow(preset, index: index)
-            }
-
-            if filtered.isEmpty {
-                VStack(spacing: DS.Spacing.xs) {
-                    Text("No match for \u{201C}\(searchText)\u{201D}")
-                        .font(.caption)
-                        .foregroundStyle(skin.resolvedTextSecondary)
-                    Text("Press ↵ to ask AI")
-                        .font(.caption2)
-                        .foregroundStyle(skin.resolvedTextTertiary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, DS.Spacing.lg)
-            }
-        }
-        .padding(.horizontal, DS.Spacing.sm)
-    }
-
-    private func presetRow(_ preset: OptimizationRequest, index: Int) -> some View {
+    private func suggestionRow(_ item: SmartSuggestion, index: Int) -> some View {
         let isSelected = index == selectedIndex
-        let isExpanded = expandedId == preset.id
-        let isTop = index == 0 && searchText.isEmpty && seedEvent == nil
+        let isTop = index == 0 && searchText.isEmpty
 
-        return HStack(spacing: DS.Spacing.sm) {
-            Button { runRequest(composedRequest ?? preset) } label: {
-                HStack(spacing: DS.Spacing.sm) {
-                    Circle()
-                        .fill(DS.Colors.categoryPalette[preset.categoryColorIndex])
-                        .frame(width: isTop ? 10 : 6, height: isTop ? 10 : 6)
-                        .frame(width: 18)
+        return Button {
+            runRequest(item.request)
+        } label: {
+            HStack(spacing: DS.Spacing.sm) {
+                // Concrete preview for top suggestion
+                VStack(alignment: .leading, spacing: isTop ? 2 : 1) {
+                    Text(item.label)
+                        .font(isTop ? .headline.weight(.semibold) : .subheadline.weight(isSelected ? .semibold : .medium))
+                        .foregroundStyle(skin.resolvedTextPrimary)
+                        .lineLimit(1)
 
-                    VStack(alignment: .leading, spacing: isTop ? 2 : 1) {
-                        Text(preset.name ?? "Optimize")
-                            .font(isTop ? .headline.weight(.semibold) : .subheadline.weight(isSelected ? .semibold : .medium))
-                            .foregroundStyle(skin.resolvedTextPrimary)
+                    if isTop, let preview = dryRunPreview {
+                        Text(preview)
+                            .font(.caption)
+                            .foregroundStyle(skin.accentColor.opacity(0.85))
                             .lineLimit(1)
-
-                        if isTop, let preview = dryRunPreview {
-                            Text(preview)
-                                .font(.caption)
-                                .foregroundStyle(skin.accentColor.opacity(0.85))
-                                .lineLimit(1)
-                        } else {
-                            Text(preset.intents.prefix(3).map(\.label).joined(separator: " · "))
-                                .font(.caption2)
-                                .foregroundStyle(skin.resolvedTextSecondary)
-                                .lineLimit(1)
-                        }
                     }
-
-                    Spacer()
                 }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
 
-            // Expand chevron
-            Button { toggleExpand(preset) } label: {
-                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(skin.resolvedTextTertiary)
-                    .frame(width: 20, height: 20)
-                    .contentShape(Rectangle())
+                Spacer()
+
+                // Power mode toggle (only on selected)
+                if isSelected {
+                    Button {
+                        withAnimation(DS.Animation.quick) {
+                            composedRequest = item.request
+                            showPowerMode.toggle()
+                        }
+                    } label: {
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.caption)
+                            .foregroundStyle(skin.resolvedTextTertiary)
+                            .frame(width: 20, height: 20)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Customize")
+                }
             }
-            .buttonStyle(.plain)
+            .padding(.vertical, isTop ? DS.Spacing.sm : DS.Spacing.xs)
+            .padding(.horizontal, DS.Spacing.sm)
+            .contentShape(Rectangle())
         }
-        .padding(.vertical, isTop ? DS.Spacing.sm : DS.Spacing.xs)
-        .padding(.horizontal, DS.Spacing.sm)
+        .buttonStyle(.plain)
         .background(
             RoundedRectangle(cornerRadius: 8)
                 .fill(isTop
                     ? skin.accentColor.opacity(isSelected ? 0.18 : 0.08)
                     : (isSelected ? skin.accentColor.opacity(0.14) : .clear))
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(isTop ? skin.accentColor.opacity(0.20) : .clear, lineWidth: 0.5)
-        )
         .onHover { if $0 { selectedIndex = index } }
     }
 
-    // MARK: - Intent Composer
+    // MARK: - Power Mode (Progressive Disclosure)
 
     @State private var composerPreview: String? = nil
     @State private var composerPreviewTask: Task<Void, Never>? = nil
 
-    private func intentComposer(_ request: OptimizationRequest) -> some View {
+    /// Advanced composer — only shown when user explicitly opts in.
+    /// This is where the 65 intents live. But the user chose to see them.
+    private func powerModeComposer(_ request: OptimizationRequest) -> some View {
         let graph = IntentGraph.build(from: request.intents)
         let phases = graph.intentsByPhase()
         let suggested = graph.suggestedIntents()
@@ -467,16 +467,10 @@ struct CommandPalette: View {
                 }
             }
 
-            // Suggested intents from graph
+            // Suggested
             if !suggested.isEmpty {
-                Text("SUGGESTED")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(skin.resolvedTextTertiary)
-                    .tracking(0.5)
-                    .padding(.top, DS.Spacing.xxs)
-
                 FlowLayout(spacing: DS.Spacing.xs) {
-                    ForEach(Array(suggested.prefix(8).enumerated()), id: \.offset) { _, intent in
+                    ForEach(Array(suggested.prefix(6).enumerated()), id: \.offset) { _, intent in
                         chip(intent.label, active: false) {
                             var m = request
                             m.add(intent)
@@ -486,50 +480,26 @@ struct CommandPalette: View {
                 }
             }
 
-            // Available (full palette, less prominent)
-            let available = request.availableIntents.filter { !suggested.contains($0) }
-            if !available.isEmpty {
-                Text("MORE")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(skin.resolvedTextTertiary)
-                    .tracking(0.5)
-                    .padding(.top, DS.Spacing.xxs)
-
-                FlowLayout(spacing: DS.Spacing.xs) {
-                    ForEach(Array(available.prefix(10).enumerated()), id: \.offset) { _, intent in
-                        chip(intent.label, active: false) {
-                            var m = request
-                            m.add(intent)
-                            updateComposed(m)
-                        }
-                    }
-                }
+            // Tunable parameters
+            ForEach(Array(request.intents.enumerated()), id: \.offset) { idx, intent in
+                parameterSlider(intent, at: idx, in: request)
             }
 
-            // Conflict warnings
+            // Conflicts
             if !conflicts.isEmpty {
-                VStack(alignment: .leading, spacing: 2) {
-                    ForEach(conflicts) { conflict in
-                        HStack(spacing: DS.Spacing.xs) {
-                            Image(systemName: conflictIcon(conflict.severity))
-                                .font(.caption2)
-                                .foregroundStyle(conflictColor(conflict.severity))
-                            Text(conflict.message)
-                                .font(.caption2)
-                                .foregroundStyle(skin.resolvedTextSecondary)
-                                .lineLimit(2)
-                        }
+                ForEach(conflicts) { conflict in
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: conflict.severity == .error ? "xmark.circle.fill" : "info.circle.fill")
+                            .font(.caption2)
+                            .foregroundStyle(conflict.severity == .error ? .red : skin.resolvedTextTertiary)
+                        Text(conflict.message)
+                            .font(.caption2)
+                            .foregroundStyle(skin.resolvedTextSecondary)
                     }
                 }
-                .padding(.top, DS.Spacing.xxs)
             }
 
-            // Variable inputs (from subgraph inputs)
-            if !request.variables.isEmpty || hasVariableIntents(request) {
-                variableInputs(request)
-            }
-
-            // Live preview
+            // Preview
             if let preview = composerPreview {
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "eye.fill")
@@ -538,54 +508,85 @@ struct CommandPalette: View {
                     Text(preview)
                         .font(.caption2)
                         .foregroundStyle(skin.accentColor.opacity(0.8))
-                        .lineLimit(2)
                 }
-                .padding(.top, DS.Spacing.xxs)
-                .transition(.opacity)
             }
         }
         .padding(DS.Spacing.sm)
-        .background(
-            RoundedRectangle(cornerRadius: 8).fill(skin.accentColor.opacity(0.04))
-        )
-        .padding(.horizontal, DS.Spacing.sm)
-        .transition(.opacity.combined(with: .move(edge: .top)))
         .onAppear { refreshComposerPreview(request) }
+    }
+
+    @ViewBuilder
+    private func parameterSlider(_ intent: ScheduleIntent, at idx: Int, in request: OptimizationRequest) -> some View {
+        switch intent {
+        case .focusBlock(let m, _):
+            stepper("Focus", value: m, range: 30...240, step: 15, unit: "min") { v in
+                var r = request; r.intents[idx] = .focusBlock(minutes: v); updateComposed(r)
+            }
+        case .noEventsBefore(let h):
+            stepper("Start after", value: h, range: 6...14, step: 1, unit: ":00") { v in
+                var r = request; r.intents[idx] = .noEventsBefore(hour: v); updateComposed(r)
+            }
+        case .noEventsAfter(let h):
+            stepper("End by", value: h, range: 14...22, step: 1, unit: ":00") { v in
+                var r = request; r.intents[idx] = .noEventsAfter(hour: v); updateComposed(r)
+            }
+        case .maxMeetings(let n):
+            stepper("Max meetings", value: n, range: 0...10, step: 1, unit: "/day") { v in
+                var r = request; r.intents[idx] = .maxMeetings(perDay: v); updateComposed(r)
+            }
+        default:
+            EmptyView()
+        }
+    }
+
+    private func stepper(_ label: String, value: Int, range: ClosedRange<Int>, step: Int, unit: String, onChange: @escaping (Int) -> Void) -> some View {
+        HStack(spacing: DS.Spacing.sm) {
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(skin.resolvedTextSecondary)
+                .frame(width: 70, alignment: .leading)
+
+            Button { onChange(max(range.lowerBound, value - step)) } label: {
+                Image(systemName: "minus").font(.caption2.weight(.bold)).frame(width: 18, height: 18)
+            }.buttonStyle(.plain)
+
+            Text("\(value)\(unit)")
+                .font(.caption.monospacedDigit().weight(.medium))
+                .frame(minWidth: 44)
+
+            Button { onChange(min(range.upperBound, value + step)) } label: {
+                Image(systemName: "plus").font(.caption2.weight(.bold)).frame(width: 18, height: 18)
+            }.buttonStyle(.plain)
+
+            Spacer()
+        }
     }
 
     private func updateComposed(_ request: OptimizationRequest) {
         composedRequest = request
-        revalidate(request)
-        refreshComposerPreview(request)
-    }
-
-    private func revalidate(_ request: OptimizationRequest) {
         conflicts = IntentConflictDetector.analyze(request.intents)
+        refreshComposerPreview(request)
     }
 
     private func refreshComposerPreview(_ request: OptimizationRequest) {
         composerPreviewTask?.cancel()
         guard request.isCreative || request.findSlotOnly else {
-            composerPreview = request.intents.map(\.label).joined(separator: " + ")
+            composerPreview = request.intents.prefix(3).map(\.label).joined(separator: " + ")
             return
         }
         composerPreviewTask = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(400))
             guard !Task.isCancelled else { return }
-            var working = request
-            working.speed = .quick
-            working.maxScenarios = 1
-            let genes = await optimizerService.executeDryRun(working, reminderService: reminderService)
+            var w = request; w.speed = .quick; w.maxScenarios = 1
+            let genes = await optimizerService.executeDryRun(w, reminderService: reminderService)
             guard !Task.isCancelled else { return }
             if let genes, !genes.isEmpty {
                 let fmt = DateFormatter()
                 fmt.setLocalizedDateFormatFromTemplate("H:mm")
-                composerPreview = genes.prefix(3).map {
+                composerPreview = genes.prefix(2).map {
                     "\($0.title) \(fmt.string(from: $0.startTime))–\(fmt.string(from: $0.endTime))"
                 }.joined(separator: " · ")
-            } else {
-                composerPreview = "No feasible slot"
-            }
+            } else { composerPreview = "No slot found" }
         }
     }
 
@@ -600,384 +601,14 @@ struct CommandPalette: View {
                     Image(systemName: "xmark").font(.system(size: 8, weight: .bold))
                 }
             }
-            .foregroundStyle(
-                dimmed ? skin.resolvedTextTertiary
-                : active ? .white
-                : skin.resolvedTextPrimary
-            )
+            .foregroundStyle(dimmed ? skin.resolvedTextTertiary : active ? .white : skin.resolvedTextPrimary)
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, 4)
             .background(
-                Capsule().fill(
-                    dimmed ? skin.accentColor.opacity(0.05)
-                    : active ? skin.accentColor
-                    : skin.accentColor.opacity(0.10)
-                )
-            )
-            .overlay(
-                dimmed ? Capsule().strokeBorder(skin.resolvedTextTertiary.opacity(0.2), lineWidth: 0.5) : nil
+                Capsule().fill(dimmed ? skin.accentColor.opacity(0.05) : active ? skin.accentColor : skin.accentColor.opacity(0.10))
             )
         }
         .buttonStyle(.plain)
-        .help(dimmed ? "Auto-added dependency" : "")
-    }
-
-    // MARK: - Variable Inputs
-
-    private func hasVariableIntents(_ request: OptimizationRequest) -> Bool {
-        request.intents.contains {
-            switch $0 {
-            case .focusBlock, .noEventsBefore, .noEventsAfter, .maxMeetings,
-                 .breakEvery, .splitLong, .capTotal,
-                 .contingencyBuffer, .focusProtection, .meetingPrep, .windDown,
-                 .minGap, .warmUp, .coolDown, .travelBuffer, .endOfDayReview,
-                 .timeBox:
-                return true
-            default: return false
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func variableInputs(_ request: OptimizationRequest) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            Text("PARAMETERS")
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(skin.resolvedTextTertiary)
-                .tracking(0.5)
-
-            // Extract tunable values from intents
-            ForEach(Array(request.intents.enumerated()), id: \.offset) { idx, intent in
-                switch intent {
-                case .focusBlock(let m, _):
-                    variableSlider("Focus", value: m, range: 30...240, step: 15, unit: "min") { newVal in
-                        var r = request
-                        r.intents[idx] = .focusBlock(minutes: newVal, period: nil)
-                        updateComposed(r)
-                    }
-                case .noEventsBefore(let h):
-                    variableSlider("Start after", value: h, range: 6...14, step: 1, unit: ":00") { newVal in
-                        var r = request
-                        r.intents[idx] = .noEventsBefore(hour: newVal)
-                        updateComposed(r)
-                    }
-                case .noEventsAfter(let h):
-                    variableSlider("End by", value: h, range: 14...22, step: 1, unit: ":00") { newVal in
-                        var r = request
-                        r.intents[idx] = .noEventsAfter(hour: newVal)
-                        updateComposed(r)
-                    }
-                case .maxMeetings(let n):
-                    variableSlider("Max meetings", value: n, range: 0...10, step: 1, unit: "/day") { newVal in
-                        var r = request
-                        r.intents[idx] = .maxMeetings(perDay: newVal)
-                        updateComposed(r)
-                    }
-                case .splitLong(let m):
-                    variableSlider("Split at", value: m, range: 30...180, step: 15, unit: "min") { newVal in
-                        var r = request
-                        r.intents[idx] = .splitLong(maxMinutes: newVal)
-                        updateComposed(r)
-                    }
-                case .capTotal(let m):
-                    variableSlider("Daily cap", value: m, range: 120...480, step: 30, unit: "min") { newVal in
-                        var r = request
-                        r.intents[idx] = .capTotal(minutesPerDay: newVal)
-                        updateComposed(r)
-                    }
-                case .contingencyBuffer(let p):
-                    variableSlider("Reserve", value: p, range: 5...50, step: 5, unit: "%") { newVal in
-                        var r = request
-                        r.intents[idx] = .contingencyBuffer(percent: newVal)
-                        updateComposed(r)
-                    }
-                case .focusProtection(let m):
-                    variableSlider("Focus buffer", value: m, range: 5...60, step: 5, unit: "min") { newVal in
-                        var r = request
-                        r.intents[idx] = .focusProtection(bufferMinutes: newVal)
-                        updateComposed(r)
-                    }
-                case .meetingPrep(let m):
-                    variableSlider("Prep time", value: m, range: 5...30, step: 5, unit: "min") { newVal in
-                        var r = request
-                        r.intents[idx] = .meetingPrep(minutes: newVal)
-                        updateComposed(r)
-                    }
-                case .windDown(let h):
-                    variableSlider("Wind down", value: h, range: 1...4, step: 1, unit: "h") { newVal in
-                        var r = request
-                        r.intents[idx] = .windDown(lastHours: newVal)
-                        updateComposed(r)
-                    }
-                case .minGap(let m):
-                    variableSlider("Min gap", value: m, range: 5...30, step: 5, unit: "min") { newVal in
-                        var r = request
-                        r.intents[idx] = .minGap(minutes: newVal)
-                        updateComposed(r)
-                    }
-                case .warmUp(let m):
-                    variableSlider("Warm-up", value: m, range: 5...30, step: 5, unit: "min") { newVal in
-                        var r = request
-                        r.intents[idx] = .warmUp(minutes: newVal)
-                        updateComposed(r)
-                    }
-                case .coolDown(let m):
-                    variableSlider("Cool-down", value: m, range: 5...30, step: 5, unit: "min") { newVal in
-                        var r = request
-                        r.intents[idx] = .coolDown(minutes: newVal)
-                        updateComposed(r)
-                    }
-                case .travelBuffer(let m):
-                    variableSlider("Travel", value: m, range: 5...60, step: 5, unit: "min") { newVal in
-                        var r = request
-                        r.intents[idx] = .travelBuffer(minutes: newVal)
-                        updateComposed(r)
-                    }
-                case .endOfDayReview(let m):
-                    variableSlider("Review", value: m, range: 10...45, step: 5, unit: "min") { newVal in
-                        var r = request
-                        r.intents[idx] = .endOfDayReview(minutes: newVal)
-                        updateComposed(r)
-                    }
-                case .timeBox(let m):
-                    variableSlider("Time-box", value: m, range: 30...180, step: 15, unit: "min") { newVal in
-                        var r = request
-                        r.intents[idx] = .timeBox(maxMinutes: newVal)
-                        updateComposed(r)
-                    }
-                default:
-                    EmptyView()
-                }
-            }
-        }
-    }
-
-    private func variableSlider(_ label: String, value: Int, range: ClosedRange<Int>, step: Int, unit: String, onChange: @escaping (Int) -> Void) -> some View {
-        HStack(spacing: DS.Spacing.sm) {
-            Text(label)
-                .font(.caption2)
-                .foregroundStyle(skin.resolvedTextSecondary)
-                .frame(width: 70, alignment: .leading)
-
-            HStack(spacing: DS.Spacing.xs) {
-                Button {
-                    let newVal = max(range.lowerBound, value - step)
-                    onChange(newVal)
-                } label: {
-                    Image(systemName: "minus")
-                        .font(.caption2.weight(.bold))
-                        .frame(width: 18, height: 18)
-                }
-                .buttonStyle(.plain)
-
-                Text("\(value)\(unit)")
-                    .font(.caption.monospacedDigit().weight(.medium))
-                    .foregroundStyle(skin.resolvedTextPrimary)
-                    .frame(minWidth: 44)
-
-                Button {
-                    let newVal = min(range.upperBound, value + step)
-                    onChange(newVal)
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.caption2.weight(.bold))
-                        .frame(width: 18, height: 18)
-                }
-                .buttonStyle(.plain)
-            }
-
-            Spacer()
-        }
-    }
-
-    private func conflictIcon(_ severity: IntentConflictDetector.Conflict.Severity) -> String {
-        switch severity {
-        case .error: "xmark.circle.fill"
-        case .warning: "exclamationmark.triangle.fill"
-        case .info: "info.circle.fill"
-        }
-    }
-
-    private func conflictColor(_ severity: IntentConflictDetector.Conflict.Severity) -> Color {
-        switch severity {
-        case .error: .red
-        case .warning: skin.resolvedWarningColor
-        case .info: skin.resolvedTextTertiary
-        }
-    }
-
-    // MARK: - All Presets
-
-    private var allPresetsView: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            ForEach(IntentPresets.allCategories) { category in
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(category.name.uppercased())
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(skin.resolvedTextTertiary)
-                        .tracking(0.5)
-                        .padding(.horizontal, DS.Spacing.sm)
-                        .padding(.top, DS.Spacing.sm)
-
-                    ForEach(category.presets) { preset in
-                        presetRow(preset, index: -1)
-                    }
-                }
-            }
-        }
-        .padding(.horizontal, DS.Spacing.sm)
-    }
-
-    // MARK: - Subgraph Section
-
-    private func subgraphSection(_ registry: SubgraphRegistry) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Divider().padding(.vertical, DS.Spacing.xs)
-
-            Text("SAVED PIPELINES")
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(skin.resolvedTextTertiary)
-                .tracking(0.5)
-                .padding(.horizontal, DS.Spacing.md)
-
-            ForEach(registry.userSubgraphs) { sg in
-                Button {
-                    let request = OptimizationRequest.fromSubgraph(sg, registry: registry)
-                    composedRequest = request
-                    expandedId = request.id
-                    revalidate(request)
-                } label: {
-                    HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "rectangle.3.group")
-                            .font(.caption)
-                            .foregroundStyle(skin.accentColor)
-                            .frame(width: 18)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(sg.name)
-                                .font(.subheadline.weight(.medium))
-                                .foregroundStyle(skin.resolvedTextPrimary)
-                            if let desc = sg.description {
-                                Text(desc)
-                                    .font(.caption2)
-                                    .foregroundStyle(skin.resolvedTextSecondary)
-                                    .lineLimit(1)
-                            }
-                        }
-                        Spacer()
-                        Text("\(sg.intents.count) nodes")
-                            .font(.caption2)
-                            .foregroundStyle(skin.resolvedTextTertiary)
-                    }
-                    .padding(.vertical, DS.Spacing.xs)
-                    .padding(.horizontal, DS.Spacing.sm)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .contextMenu {
-                    Button("Delete", role: .destructive) { registry.remove(id: sg.id) }
-                }
-            }
-
-            // Save current composed request as subgraph
-            if let composed = composedRequest, !composed.intents.isEmpty {
-                Button {
-                    saveAsSubgraph(composed, registry: registry)
-                } label: {
-                    HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "plus.rectangle.on.folder")
-                            .font(.caption)
-                            .foregroundStyle(skin.accentColor)
-                            .frame(width: 18)
-                        Text("Save current as pipeline")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(skin.accentColor)
-                        Spacer()
-                    }
-                    .padding(.vertical, DS.Spacing.xs)
-                    .padding(.horizontal, DS.Spacing.sm)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.horizontal, DS.Spacing.sm)
-    }
-
-    @State private var saveSubgraphName = ""
-
-    private func saveAsSubgraph(_ request: OptimizationRequest, registry: SubgraphRegistry) {
-        let name = request.name ?? "My Pipeline \(registry.userSubgraphs.count + 1)"
-        let sg = Subgraph(
-            name: name,
-            description: request.description,
-            intents: request.intents,
-            isUserCreated: true
-        )
-        registry.register(sg)
-    }
-
-    // MARK: - AI Row
-
-    private var aiRow: some View {
-        VStack(spacing: 0) {
-            Divider().padding(.vertical, DS.Spacing.xs)
-            Button { askAI(searchText) } label: {
-                HStack(spacing: DS.Spacing.sm) {
-                    Image(systemName: "sparkles")
-                        .font(.body)
-                        .foregroundStyle(skin.accentColor)
-                        .frame(width: 18)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("Ask AI \u{201C}\(searchText)\u{201D}")
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(skin.resolvedTextPrimary)
-                            .lineLimit(1)
-                        Text("Generate custom optimization from your prompt")
-                            .font(.caption2)
-                            .foregroundStyle(skin.resolvedTextSecondary)
-                    }
-                    Spacer()
-                }
-                .padding(.vertical, DS.Spacing.xs)
-                .padding(.horizontal, DS.Spacing.sm)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, DS.Spacing.sm)
-    }
-
-    // MARK: - Footer
-
-    private var footerHints: some View {
-        HStack(spacing: DS.Spacing.md) {
-            hint("↵", "run")
-            hint("↑↓", "navigate")
-            hint("→", "compose")
-            hint("tab", "all")
-            Spacer()
-            hint("esc", "close")
-        }
-        .padding(.horizontal, DS.Spacing.md)
-        .padding(.top, DS.Spacing.sm)
-        .padding(.bottom, DS.Spacing.xs)
-    }
-
-    private func hint(_ key: String, _ label: String) -> some View {
-        HStack(spacing: 4) {
-            Text(key)
-                .font(.caption2.monospaced())
-                .foregroundStyle(skin.resolvedTextSecondary)
-                .padding(.horizontal, 4)
-                .padding(.vertical, 1)
-                .background(
-                    RoundedRectangle(cornerRadius: 3)
-                        .strokeBorder(skin.resolvedTextTertiary.opacity(0.35), lineWidth: 0.5)
-                )
-            Text(label)
-                .font(.caption2)
-                .foregroundStyle(skin.resolvedTextTertiary)
-        }
     }
 
     // MARK: - Status Views
@@ -990,7 +621,6 @@ struct CommandPalette: View {
                 .symbolEffect(.pulse, isActive: true)
             Text(label)
                 .font(.subheadline.weight(.medium))
-                .foregroundStyle(skin.resolvedTextPrimary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, DS.Spacing.xxl)
@@ -1001,22 +631,15 @@ struct CommandPalette: View {
             Image(systemName: "checkmark.circle.fill")
                 .font(.title)
                 .foregroundStyle(skin.resolvedSuccessColor)
-
             ForEach(events) { info in
                 HStack(spacing: DS.Spacing.xs) {
-                    Text(info.title)
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(skin.resolvedTextPrimary)
-                        .lineLimit(1)
-                    Text(info.timeRange)
-                        .font(.subheadline.monospacedDigit())
-                        .foregroundStyle(skin.accentColor)
+                    Text(info.title).font(.subheadline.weight(.medium))
+                    Text(info.timeRange).font(.subheadline.monospacedDigit()).foregroundStyle(skin.accentColor)
                 }
             }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, DS.Spacing.xl)
-        .transition(.opacity.combined(with: .scale(scale: 0.95)))
     }
 
     private func failedView(_ message: String) -> some View {
@@ -1026,11 +649,10 @@ struct CommandPalette: View {
                 .foregroundStyle(skin.resolvedWarningColor)
             Text(message)
                 .font(.subheadline.weight(.medium))
-                .foregroundStyle(skin.resolvedTextPrimary)
                 .multilineTextAlignment(.center)
             HStack(spacing: DS.Spacing.sm) {
                 Button("Try again") {
-                    withAnimation(DS.Animation.quick) { phase = .picking; aiError = nil }
+                    withAnimation(DS.Animation.quick) { phase = .picking }
                 }
                 .font(.caption.weight(.medium))
                 .foregroundStyle(skin.accentColor)
@@ -1048,37 +670,31 @@ struct CommandPalette: View {
     // MARK: - Actions
 
     private func handleSubmit() {
-        if filtered.isEmpty && !searchText.isEmpty {
+        if let composed = composedRequest, showPowerMode {
+            runRequest(composed)
+        } else if !visibleItems.isEmpty {
+            runRequest(visibleItems[min(selectedIndex, visibleItems.count - 1)].request)
+        } else if !searchText.isEmpty {
             askAI(searchText)
-        } else if !filtered.isEmpty {
-            let idx = min(selectedIndex, filtered.count - 1)
-            runRequest(composedRequest ?? filtered[idx])
         }
     }
 
     private func runRequest(_ request: OptimizationRequest) {
-        // Block if hard conflicts exist
         if IntentConflictDetector.hasErrors(request.intents) {
-            revalidate(request)
+            conflicts = IntentConflictDetector.analyze(request.intents)
+            showPowerMode = true
+            composedRequest = request
             return
         }
 
         Haptics.tap()
         var working = request
-        if let seedEvent {
-            working = working.withEventContext(seedEvent)
-        }
+        if let seedEvent { working = working.withEventContext(seedEvent) }
 
         phase = .working("Optimizing...")
 
         Task {
             let result = await optimizerService.executeRequest(working, reminderService: reminderService)
-
-            // Record for learning
-            optimizerService.backlogService.flatMap { _ in
-                // IntentLearner recording would go here
-            }
-
             await MainActor.run {
                 switch result {
                 case .success, .partialSuccess:
@@ -1087,30 +703,20 @@ struct CommandPalette: View {
                         return
                     }
                     optimizerService.applyScenario(at: 0, to: reminderService)
-
                     let fmt = DateFormatter()
                     fmt.setLocalizedDateFormatFromTemplate("H:mm")
-                    let infos = optimizerService.scenarios[0].genes.prefix(3).map { gene in
-                        EventInfo(
-                            id: gene.eventId,
-                            title: gene.title,
-                            timeRange: "\(fmt.string(from: gene.startTime))–\(fmt.string(from: gene.endTime))"
-                        )
+                    let infos = optimizerService.scenarios[0].genes.prefix(3).map { g in
+                        EventInfo(id: g.eventId, title: g.title,
+                                  timeRange: "\(fmt.string(from: g.startTime))–\(fmt.string(from: g.endTime))")
                     }
                     phase = .applied(infos)
-
-                    onApplied(request) {
-                        optimizerService.undoLast(reminderService: reminderService)
-                    }
-
+                    onApplied(request) { optimizerService.undoLast(reminderService: reminderService) }
                     Task { @MainActor in
                         try? await Task.sleep(for: .seconds(1))
                         onDismiss()
                     }
-
                 case .noEventsToOptimize:
-                    phase = .failed("Nothing to optimize — add tasks first")
-
+                    phase = .failed("Add tasks first")
                 case .infeasible(let reason, _):
                     phase = .failed(reason)
                 }
@@ -1120,7 +726,7 @@ struct CommandPalette: View {
 
     private func askAI(_ prompt: String) {
         guard agentService.isConfigured else {
-            aiError = "Add API key in Settings → Assistant"
+            phase = .failed("Add API key in Settings → Assistant")
             return
         }
         Haptics.tap()
@@ -1129,8 +735,8 @@ struct CommandPalette: View {
             let result = await agentService.generateRequest(from: prompt)
             await MainActor.run {
                 switch result {
-                case .success(let request): runRequest(request)
-                case .failure(let error): phase = .failed(error.localizedDescription)
+                case .success(let req): runRequest(req)
+                case .failure(let err): phase = .failed(err.localizedDescription)
                 }
             }
         }
@@ -1138,14 +744,13 @@ struct CommandPalette: View {
 
     private func refreshPreview() {
         dryRunTask?.cancel()
-        guard let top = filtered.first, top.isCreative || top.findSlotOnly else { return }
+        guard let top = visibleItems.first else { return }
+        guard top.request.isCreative || top.request.findSlotOnly else { return }
         dryRunTask = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(200))
             guard !Task.isCancelled else { return }
-            var working = top
-            working.speed = .quick
-            working.maxScenarios = 1
-            let genes = await optimizerService.executeDryRun(working, reminderService: reminderService)
+            var w = top.request; w.speed = .quick; w.maxScenarios = 1
+            let genes = await optimizerService.executeDryRun(w, reminderService: reminderService)
             guard !Task.isCancelled else { return }
             if let genes, !genes.isEmpty {
                 let fmt = DateFormatter()
@@ -1157,13 +762,34 @@ struct CommandPalette: View {
         }
     }
 
+    private func hint(_ key: String, _ label: String) -> some View {
+        HStack(spacing: 4) {
+            Text(key)
+                .font(.caption2.monospaced())
+                .foregroundStyle(skin.resolvedTextSecondary)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 1)
+                .background(RoundedRectangle(cornerRadius: 3).strokeBorder(skin.resolvedTextTertiary.opacity(0.35), lineWidth: 0.5))
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(skin.resolvedTextTertiary)
+        }
+    }
+
     // MARK: - Keyboard
 
     @ViewBuilder
     private var shortcuts: some View {
         Group {
-            Button("All") { withAnimation(DS.Animation.quick) { showAll.toggle() } }
-                .keyboardShortcut("a", modifiers: [.command, .shift])
+            Button("Power mode") {
+                withAnimation(DS.Animation.quick) {
+                    if !showPowerMode, let top = visibleItems.first {
+                        composedRequest = top.request
+                    }
+                    showPowerMode.toggle()
+                }
+            }
+            .keyboardShortcut("e", modifiers: .option)
             Button("Close") { onDismiss() }
                 .keyboardShortcut(.cancelAction)
         }
