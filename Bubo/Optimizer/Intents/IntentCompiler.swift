@@ -2,11 +2,13 @@ import Foundation
 
 // MARK: - Intent Compiler
 
-/// Compiles an OptimizationRequest (array of intents) into an OptimizerContext
-/// and runs the GA. Replaces RecipeExecutor with a simpler, composable approach.
+/// Compiles an OptimizationRequest into an OptimizerContext and runs the GA.
 ///
-/// Unlike RecipeExecutor which interprets a monolithic 10-dimensional recipe,
-/// IntentCompiler iterates over atomic intents and applies each one independently.
+/// Uses IntentGraph as the backend:
+/// 1. Build DAG from flat intents (auto-resolves dependencies)
+/// 2. Topologically sort by phase (context → tasks → create → weights → energy → rules → config)
+/// 3. Apply each intent in order to ResolvedConfig
+/// 4. Compile into OptimizerContext → run GA
 @MainActor
 struct IntentCompiler {
 
@@ -20,10 +22,13 @@ struct IntentCompiler {
         _ request: OptimizationRequest,
         defaultWorkingHours: ClosedRange<Int>
     ) async -> OptimizationResult {
-        // Phase 1: Resolve intents into intermediate representation
+        // Phase 1: Build graph, resolve dependencies, sort topologically
+        let graph = IntentGraph.build(from: request.intents)
+        let orderedIntents = graph.sortedIntents()
+
         var config = ResolvedConfig(defaultWorkingHours: defaultWorkingHours)
 
-        for intent in request.intents {
+        for intent in orderedIntents {
             apply(intent, to: &config)
         }
 

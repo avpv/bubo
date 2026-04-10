@@ -24,173 +24,91 @@ enum IntentConflictDetector {
         }
     }
 
-    /// Analyze a set of intents and return all detected conflicts.
+    /// Analyze a set of intents using the graph backend.
+    /// Detects pairwise conflicts from the graph + redundancy from flat analysis.
     static func analyze(_ intents: [ScheduleIntent]) -> [Conflict] {
         var conflicts: [Conflict] = []
 
-        // Index intents by type for efficient lookup
-        var timeConstraints: [(Int, ScheduleIntent)] = []
-        var speedIntents: [(Int, ScheduleIntent)] = []
-        var horizonIntents: [(Int, ScheduleIntent)] = []
-        var stabilityIntents: [(Int, ScheduleIntent)] = []
-        var energyIntents: [(Int, ScheduleIntent)] = []
-        var hasBacklog = false
-        var hasBacklogSlots = false
-        var hasMorningPerson = false
-        var morningPersonIndex = -1
-        var hasLowEnergy = false
-        var lowEnergyIndex = -1
-        var noEventsBefore: (Int, Int)? = nil  // (index, hour)
-        var noEventsAfter: (Int, Int)? = nil
-        var creativeIntents: [(Int, ScheduleIntent)] = []
+        // Build graph to get structural conflicts
+        let graph = IntentGraph.build(from: intents)
 
-        for (i, intent) in intents.enumerated() {
-            switch intent {
-            case .noEventsBefore(let h):
-                timeConstraints.append((i, intent))
-                noEventsBefore = (i, h)
-            case .noEventsAfter(let h):
-                timeConstraints.append((i, intent))
-                noEventsAfter = (i, h)
-            case .speed:
-                speedIntents.append((i, intent))
-            case .horizon:
-                horizonIntents.append((i, intent))
-            case .stability:
-                stabilityIntents.append((i, intent))
-            case .morningPerson:
-                hasMorningPerson = true
-                morningPersonIndex = i
-                energyIntents.append((i, intent))
-            case .lowEnergy:
-                hasLowEnergy = true
-                lowEnergyIndex = i
-                energyIntents.append((i, intent))
-            case .peakEnergy:
-                energyIntents.append((i, intent))
-            case .includeBacklog:
-                hasBacklog = true
-            case .findSlotsForBacklog:
-                hasBacklogSlots = true
-            case .focusBlock, .createBlock, .pomodoroSession:
-                creativeIntents.append((i, intent))
-            default: break
-            }
-        }
-
-        // MARK: - Hard Conflicts
-
-        // noEventsBefore(14) + morningPerson → morning blocked
-        if let (beforeIdx, beforeHour) = noEventsBefore, hasMorningPerson && beforeHour >= 11 {
+        // Graph-detected conflicts (pairwise + transitive)
+        for (nodeA, nodeB, reason) in graph.conflicts {
+            let idxA = intents.firstIndex(of: nodeA.intent)
+            let idxB = intents.firstIndex(of: nodeB.intent)
             conflicts.append(Conflict(
                 severity: .error,
-                message: "Morning blocked until \(beforeHour):00 but morning-heavy schedule requested",
-                involvedIndices: [beforeIdx, morningPersonIndex]
+                message: reason,
+                involvedIndices: [idxA, idxB].compactMap { $0 }
             ))
         }
 
-        // noEventsAfter too early + creative blocks that won't fit
-        if let (afterIdx, afterHour) = noEventsAfter, let (beforeIdx, beforeHour) = noEventsBefore {
-            let window = afterHour - beforeHour
-            if window < 2 {
+        // Redundancy checks (multiple of same category)
+        let byCategory: [String: [(Int, ScheduleIntent)]] = {
+            var result: [String: [(Int, ScheduleIntent)]] = [:]
+            for (i, intent) in intents.enumerated() {
+                switch intent {
+                case .speed: result["speed", default: []].append((i, intent))
+                case .horizon: result["horizon", default: []].append((i, intent))
+                case .stability: result["stability", default: []].append((i, intent))
+                default: break
+                }
+            }
+            return result
+        }()
+
+        for (category, entries) in byCategory where entries.count > 1 {
+            conflicts.append(Conflict(
+                severity: .warning,
+                message: "Multiple \(category) settings — only the last applies",
+                involvedIndices: entries.map(\.0)
+            ))
+        }
+
+        // Creative block size check
+        for (i, intent) in intents.enumerated() {
+            let neededMinutes: Int
+            switch intent {
+            case .focusBlock(let m, _): neededMinutes = m
+            case .createBlock(_, let m, _, _): neededMinutes = m
+            case .pomodoroSession(let p): neededMinutes = p.totalMinutes
+            default: continue
+            }
+
+            var beforeHour = 0
+            var afterHour = 24
+            for other in intents {
+                if case .noEventsBefore(let h) = other { beforeHour = h }
+                if case .noEventsAfter(let h) = other { afterHour = h }
+            }
+            let windowMinutes = (afterHour - beforeHour) * 60
+            if windowMinutes > 0 && neededMinutes > windowMinutes {
                 conflicts.append(Conflict(
                     severity: .error,
-                    message: "Working window is only \(window)h (\(beforeHour):00–\(afterHour):00) — too short",
-                    involvedIndices: [beforeIdx, afterIdx]
+                    message: "\(neededMinutes)m block won't fit in \(windowMinutes)m window",
+                    involvedIndices: [i]
                 ))
             }
         }
 
-        // Creative intents without a time window
-        for (creativeIdx, creative) in creativeIntents {
-            if let (_, afterHour) = noEventsAfter, let (_, beforeHour) = noEventsBefore {
-                let windowMinutes = (afterHour - beforeHour) * 60
-                let neededMinutes: Int
-                switch creative {
-                case .focusBlock(let m, _): neededMinutes = m
-                case .createBlock(_, let m, _, _): neededMinutes = m
-                case .pomodoroSession(let p): neededMinutes = p.totalMinutes
-                default: neededMinutes = 0
-                }
-                if neededMinutes > windowMinutes {
-                    conflicts.append(Conflict(
-                        severity: .error,
-                        message: "\(neededMinutes)m block won't fit in \(windowMinutes)m window",
-                        involvedIndices: [creativeIdx]
-                    ))
-                }
-            }
-        }
-
-        // MARK: - Warnings (Redundancy)
-
-        // Duplicate speed intents
-        if speedIntents.count > 1 {
-            conflicts.append(Conflict(
-                severity: .warning,
-                message: "Multiple speed settings — only the last one applies",
-                involvedIndices: speedIntents.map(\.0)
-            ))
-        }
-
-        // Duplicate horizon intents
-        if horizonIntents.count > 1 {
-            conflicts.append(Conflict(
-                severity: .warning,
-                message: "Multiple time horizons — only the last one applies",
-                involvedIndices: horizonIntents.map(\.0)
-            ))
-        }
-
-        // Duplicate stability intents
-        if stabilityIntents.count > 1 {
-            conflicts.append(Conflict(
-                severity: .warning,
-                message: "Multiple stability settings — only the last one applies",
-                involvedIndices: stabilityIntents.map(\.0)
-            ))
-        }
-
-        // includeBacklog + findSlotsForBacklog (redundant)
-        if hasBacklog && hasBacklogSlots {
+        // Info: auto-resolved dependencies
+        let autoResolved = graph.nodes.values.filter { $0.isAutoResolved }
+        for node in autoResolved {
             conflicts.append(Conflict(
                 severity: .info,
-                message: "findSlotsForBacklog already includes backlog tasks",
+                message: "\(node.intent.label) auto-added as dependency",
                 involvedIndices: []
             ))
         }
 
-        // lowEnergy + prioritizeFocus with high weight → tension
-        if hasLowEnergy {
-            for (i, intent) in intents.enumerated() {
-                if case .prioritizeFocus(let w) = intent, w > 1.5 {
-                    conflicts.append(Conflict(
-                        severity: .warning,
-                        message: "Low energy mode conflicts with aggressive focus prioritization",
-                        involvedIndices: [lowEnergyIndex, i]
-                    ))
-                }
-            }
+        // Info: missing defaults
+        let hasHorizon = intents.contains { if case .horizon = $0 { return true }; return false }
+        let hasSpeed = intents.contains { if case .speed = $0 { return true }; return false }
+        if !hasHorizon {
+            conflicts.append(Conflict(severity: .info, message: "Defaults to today", involvedIndices: []))
         }
-
-        // MARK: - Info
-
-        // Creative intent without horizon → defaults to today
-        if !creativeIntents.isEmpty && horizonIntents.isEmpty {
-            conflicts.append(Conflict(
-                severity: .info,
-                message: "No horizon set — will optimize for today",
-                involvedIndices: []
-            ))
-        }
-
-        // No speed set → defaults to quick
-        if speedIntents.isEmpty {
-            conflicts.append(Conflict(
-                severity: .info,
-                message: "No speed set — using quick mode",
-                involvedIndices: []
-            ))
+        if !hasSpeed {
+            conflicts.append(Conflict(severity: .info, message: "Using quick mode", involvedIndices: []))
         }
 
         return conflicts

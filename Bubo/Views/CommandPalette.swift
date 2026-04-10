@@ -431,34 +431,66 @@ struct CommandPalette: View {
     @State private var composerPreviewTask: Task<Void, Never>? = nil
 
     private func intentComposer(_ request: OptimizationRequest) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            // Active intents
-            Text("ACTIVE")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(skin.resolvedTextTertiary)
-                .tracking(0.5)
+        let graph = IntentGraph.build(from: request.intents)
+        let phases = graph.intentsByPhase()
+        let suggested = graph.suggestedIntents()
 
-            FlowLayout(spacing: DS.Spacing.xs) {
-                ForEach(Array(request.intents.enumerated()), id: \.offset) { index, intent in
-                    chip(intent.label, active: true) {
-                        var m = request
-                        m.removeIntent(at: index)
-                        updateComposed(m)
+        return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            // Active intents grouped by phase
+            ForEach(phases, id: \.phase) { group in
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(group.phase.displayName.uppercased())
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                        .tracking(0.5)
+
+                    FlowLayout(spacing: DS.Spacing.xs) {
+                        ForEach(group.intents) { node in
+                            chip(
+                                node.intent.label,
+                                active: true,
+                                dimmed: node.isAutoResolved
+                            ) {
+                                guard !node.isAutoResolved else { return }
+                                var m = request
+                                m.toggle(node.intent)
+                                updateComposed(m)
+                            }
+                        }
                     }
                 }
             }
 
-            // Available intents
-            let available = request.availableIntents
-            if !available.isEmpty {
-                Text("ADD")
-                    .font(.caption2.weight(.semibold))
+            // Suggested intents from graph
+            if !suggested.isEmpty {
+                Text("SUGGESTED")
+                    .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(skin.resolvedTextTertiary)
                     .tracking(0.5)
                     .padding(.top, DS.Spacing.xxs)
 
                 FlowLayout(spacing: DS.Spacing.xs) {
-                    ForEach(Array(available.prefix(12).enumerated()), id: \.offset) { _, intent in
+                    ForEach(Array(suggested.prefix(8).enumerated()), id: \.offset) { _, intent in
+                        chip(intent.label, active: false) {
+                            var m = request
+                            m.add(intent)
+                            updateComposed(m)
+                        }
+                    }
+                }
+            }
+
+            // Available (full palette, less prominent)
+            let available = request.availableIntents.filter { !suggested.contains($0) }
+            if !available.isEmpty {
+                Text("MORE")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                    .tracking(0.5)
+                    .padding(.top, DS.Spacing.xxs)
+
+                FlowLayout(spacing: DS.Spacing.xs) {
+                    ForEach(Array(available.prefix(10).enumerated()), id: \.offset) { _, intent in
                         chip(intent.label, active: false) {
                             var m = request
                             m.add(intent)
@@ -546,20 +578,37 @@ struct CommandPalette: View {
         }
     }
 
-    private func chip(_ label: String, active: Bool, action: @escaping () -> Void) -> some View {
+    private func chip(_ label: String, active: Bool, dimmed: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 3) {
+                if dimmed {
+                    Image(systemName: "link").font(.system(size: 7, weight: .semibold))
+                }
                 Text(label).font(.caption2.weight(.medium))
-                if active {
+                if active && !dimmed {
                     Image(systemName: "xmark").font(.system(size: 8, weight: .bold))
                 }
             }
-            .foregroundStyle(active ? .white : skin.resolvedTextPrimary)
+            .foregroundStyle(
+                dimmed ? skin.resolvedTextTertiary
+                : active ? .white
+                : skin.resolvedTextPrimary
+            )
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, 4)
-            .background(Capsule().fill(active ? skin.accentColor : skin.accentColor.opacity(0.10)))
+            .background(
+                Capsule().fill(
+                    dimmed ? skin.accentColor.opacity(0.05)
+                    : active ? skin.accentColor
+                    : skin.accentColor.opacity(0.10)
+                )
+            )
+            .overlay(
+                dimmed ? Capsule().strokeBorder(skin.resolvedTextTertiary.opacity(0.2), lineWidth: 0.5) : nil
+            )
         }
         .buttonStyle(.plain)
+        .help(dimmed ? "Auto-added dependency" : "")
     }
 
     private func conflictIcon(_ severity: IntentConflictDetector.Conflict.Severity) -> String {
