@@ -98,14 +98,14 @@ struct CommandPalette: View {
 
             var backlogRequest = OptimizationRequest.scheduleBacklog
             pinToSlot(&backlogRequest)
-            let hasUrgent = !backlog.overdue.isEmpty || !backlog.urgent(withinDays: 2).isEmpty
-            let taskLabel = backlog.overdue.isEmpty
-                ? "Fill with tasks"
-                : "Fix overdue (\(backlog.overdue.count))"
-            let taskSuggestion = SmartSuggestion(label: taskLabel, request: backlogRequest)
+            let taskSuggestion = SmartSuggestion(
+                label: "Fill with tasks (\(backlog.pending.count))",
+                request: backlogRequest
+            )
 
-            // Overdue/urgent tasks → prioritize filling over focus.
-            return hasUrgent
+            // Urgent/overdue context → tasks first; otherwise focus first.
+            let tasksFirst = !backlog.overdue.isEmpty || !backlog.urgent(withinDays: 2).isEmpty
+            return tasksFirst
                 ? [taskSuggestion, focusSuggestion]
                 : [focusSuggestion, taskSuggestion]
         }
