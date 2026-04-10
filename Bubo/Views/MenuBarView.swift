@@ -546,6 +546,26 @@ struct MenuBarView: View {
                 colorFilterBar
             }
 
+            // Quick actions — pinned above the scroll area
+            if reminderService.nonDisintegratingEventCount > 0 {
+                QuickActions(
+                    optimizerService: optimizerService,
+                    reminderService: reminderService,
+                    onExecuted: { label, undo in
+                        toastState.showSuccess(label, icon: "sparkles", onUndo: undo)
+                        notifyScheduleChange()
+                    },
+                    onOpenPalette: {
+                        Haptics.tap()
+                        withAnimation(DS.Animation.quick) {
+                            paletteContext = PaletteContext()
+                        }
+                    }
+                )
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.xs)
+            }
+
             // Events — fill remaining space so header stays pinned
             Group {
                 if reminderService.nonDisintegratingEventCount == 0 {
@@ -780,22 +800,6 @@ struct MenuBarView: View {
                         }
                     )
                 }
-
-                // Quick actions — context-aware shortcuts
-                QuickActions(
-                    optimizerService: optimizerService,
-                    reminderService: reminderService,
-                    onExecuted: { label, undo in
-                        toastState.showSuccess(label, icon: "sparkles", onUndo: undo)
-                        notifyScheduleChange()
-                    },
-                    onOpenPalette: {
-                        Haptics.tap()
-                        withAnimation(DS.Animation.quick) {
-                            paletteContext = PaletteContext()
-                        }
-                    }
-                )
 
                 ForEach(filteredEventsByDay, id: \.date) { dayGroup in
                     dayGroupSection(dayGroup)
