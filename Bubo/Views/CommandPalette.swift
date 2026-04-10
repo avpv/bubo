@@ -299,6 +299,12 @@ struct CommandPalette: View {
             // Preset list
             presetList
 
+            // Saved subgraphs (user pipelines)
+            if let registry = optimizerService.subgraphRegistry,
+               !registry.userSubgraphs.isEmpty && searchText.isEmpty {
+                subgraphSection(registry)
+            }
+
             // Intent composer (when a preset is expanded)
             if let request = activeRequest {
                 intentComposer(request)
@@ -647,6 +653,94 @@ struct CommandPalette: View {
             }
         }
         .padding(.horizontal, DS.Spacing.sm)
+    }
+
+    // MARK: - Subgraph Section
+
+    private func subgraphSection(_ registry: SubgraphRegistry) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Divider().padding(.vertical, DS.Spacing.xs)
+
+            Text("SAVED PIPELINES")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(skin.resolvedTextTertiary)
+                .tracking(0.5)
+                .padding(.horizontal, DS.Spacing.md)
+
+            ForEach(registry.userSubgraphs) { sg in
+                Button {
+                    let request = OptimizationRequest.fromSubgraph(sg, registry: registry)
+                    composedRequest = request
+                    expandedId = request.id
+                    revalidate(request)
+                } label: {
+                    HStack(spacing: DS.Spacing.sm) {
+                        Image(systemName: "rectangle.3.group")
+                            .font(.caption)
+                            .foregroundStyle(skin.accentColor)
+                            .frame(width: 18)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(sg.name)
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(skin.resolvedTextPrimary)
+                            if let desc = sg.description {
+                                Text(desc)
+                                    .font(.caption2)
+                                    .foregroundStyle(skin.resolvedTextSecondary)
+                                    .lineLimit(1)
+                            }
+                        }
+                        Spacer()
+                        Text("\(sg.intents.count) nodes")
+                            .font(.caption2)
+                            .foregroundStyle(skin.resolvedTextTertiary)
+                    }
+                    .padding(.vertical, DS.Spacing.xs)
+                    .padding(.horizontal, DS.Spacing.sm)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .contextMenu {
+                    Button("Delete", role: .destructive) { registry.remove(id: sg.id) }
+                }
+            }
+
+            // Save current composed request as subgraph
+            if let composed = composedRequest, !composed.intents.isEmpty {
+                Button {
+                    saveAsSubgraph(composed, registry: registry)
+                } label: {
+                    HStack(spacing: DS.Spacing.sm) {
+                        Image(systemName: "plus.rectangle.on.folder")
+                            .font(.caption)
+                            .foregroundStyle(skin.accentColor)
+                            .frame(width: 18)
+                        Text("Save current as pipeline")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(skin.accentColor)
+                        Spacer()
+                    }
+                    .padding(.vertical, DS.Spacing.xs)
+                    .padding(.horizontal, DS.Spacing.sm)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, DS.Spacing.sm)
+    }
+
+    @State private var saveSubgraphName = ""
+
+    private func saveAsSubgraph(_ request: OptimizationRequest, registry: SubgraphRegistry) {
+        let name = request.name ?? "My Pipeline \(registry.userSubgraphs.count + 1)"
+        let sg = Subgraph(
+            name: name,
+            description: request.description,
+            intents: request.intents,
+            isUserCreated: true
+        )
+        registry.register(sg)
     }
 
     // MARK: - AI Row

@@ -4,17 +4,22 @@ import Foundation
 
 /// Compiles an OptimizationRequest into an OptimizerContext and runs the GA.
 ///
-/// Uses IntentGraph as the backend:
-/// 1. Build DAG from flat intents (auto-resolves dependencies)
-/// 2. Topologically sort by phase (context → tasks → create → weights → energy → rules → config)
-/// 3. Apply each intent in order to ResolvedConfig
-/// 4. Compile into OptimizerContext → run GA
+/// Full pipeline:
+/// 1. Expand subgraphs and apply variables
+/// 2. Build DAG from expanded intents (auto-resolve deps)
+/// 3. Validate ports (type-check connections)
+/// 4. Topologically sort by phase (trigger → source → ... → output)
+/// 5. Evaluate conditions at runtime
+/// 6. Apply transforms to events
+/// 7. Compile into OptimizerContext → run GA
+/// 8. Process output nodes (autoApply, chain, notify)
 @MainActor
 struct IntentCompiler {
 
     let optimizer: BuboOptimizer
     let reminderService: ReminderService
     let backlogService: BacklogService
+    var subgraphRegistry: SubgraphRegistry?
 
     // MARK: - Execute
 
@@ -22,8 +27,16 @@ struct IntentCompiler {
         _ request: OptimizationRequest,
         defaultWorkingHours: ClosedRange<Int>
     ) async -> OptimizationResult {
+        // Phase 0: Expand subgraphs and apply variables
+        var expandedIntents = request.intents
+        if let registry = subgraphRegistry {
+            var graph = IntentGraph.build(from: expandedIntents)
+            graph.expandSubgraphs(registry: registry, variables: request.variables)
+            expandedIntents = graph.sortedIntents()
+        }
+
         // Phase 1: Build graph, resolve dependencies, sort topologically
-        let graph = IntentGraph.build(from: request.intents)
+        let graph = IntentGraph.build(from: expandedIntents)
         let orderedIntents = graph.sortedIntents()
 
         var config = ResolvedConfig(defaultWorkingHours: defaultWorkingHours)

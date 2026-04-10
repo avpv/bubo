@@ -29,6 +29,9 @@ final class OptimizerService {
     /// Backlog service for persistent task management.
     var backlogService: BacklogService?
 
+    /// Subgraph registry for saved pipelines.
+    private(set) var subgraphRegistry: SubgraphRegistry?
+
     /// Suggestion engine for contextual suggestions.
     private(set) var suggestionEngine: SuggestionEngine?
 
@@ -88,11 +91,12 @@ final class OptimizerService {
         error = nil
         activeRequestName = request.name
 
-        let compiler = IntentCompiler(
+        var compiler = IntentCompiler(
             optimizer: optimizer,
             reminderService: reminderService,
             backlogService: backlogSvc
         )
+        compiler.subgraphRegistry = subgraphRegistry
         let result = await compiler.execute(request, defaultWorkingHours: workingHours)
 
         switch result {
@@ -152,11 +156,12 @@ final class OptimizerService {
         reminderService: ReminderService
     ) async -> [ScheduleGene]? {
         guard let backlogSvc = backlogService else { return nil }
-        let compiler = IntentCompiler(
+        var compiler = IntentCompiler(
             optimizer: optimizer,
             reminderService: reminderService,
             backlogService: backlogSvc
         )
+        compiler.subgraphRegistry = subgraphRegistry
         let result = await compiler.execute(request, defaultWorkingHours: workingHours)
         switch result {
         case .success(let r), .partialSuccess(let r, _):
@@ -265,6 +270,7 @@ final class OptimizerService {
 
     func setup(reminderService: ReminderService, backlogService: BacklogService) {
         self.backlogService = backlogService
+        self.subgraphRegistry = SubgraphRegistry()
         suggestionEngine = SuggestionEngine(
             reminderService: reminderService,
             backlogService: backlogService
