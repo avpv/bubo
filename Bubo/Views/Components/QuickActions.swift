@@ -30,6 +30,31 @@ struct QuickActions: View {
 
     var body: some View {
         HStack(spacing: DS.Spacing.sm) {
+            // Palette button — first, most powerful action
+            Button {
+                Haptics.tap()
+                onOpenPalette()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "sparkles")
+                        .font(.caption2.weight(.semibold))
+                    Text("Optimize")
+                        .font(.caption.weight(.medium))
+                    Text("⌘K")
+                        .font(.caption2.monospaced())
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                }
+                .foregroundStyle(skin.accentColor)
+                .padding(.horizontal, DS.Spacing.sm)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule().fill(skin.accentColor.opacity(0.10))
+                )
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .help("AI optimizer (\u{2318}K)")
+
             ForEach(rankedActions) { scored in
                 Button {
                     run(scored.action)
@@ -53,29 +78,6 @@ struct QuickActions: View {
                 .disabled(isRunning)
                 .opacity(isRunning ? 0.5 : 1)
             }
-
-            // Palette button
-            Button {
-                Haptics.tap()
-                onOpenPalette()
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "sparkles")
-                        .font(.caption.weight(.medium))
-                    Text("⌘K")
-                        .font(.caption2.monospaced())
-                }
-                .foregroundStyle(skin.resolvedTextSecondary)
-                .padding(.horizontal, DS.Spacing.sm)
-                .padding(.vertical, 4)
-                .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .strokeBorder(skin.resolvedTextTertiary.opacity(0.35), lineWidth: 0.5)
-                )
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help("⌘K")
         }
     }
 
