@@ -59,20 +59,16 @@ struct QuickActions: View {
                 Button {
                     run(scored.action)
                 } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: scored.action.icon)
-                            .font(.caption2.weight(.semibold))
-                        Text(scored.action.label)
-                            .font(.caption.weight(.medium))
-                            .lineLimit(1)
-                    }
-                    .foregroundStyle(skin.accentColor)
-                    .padding(.horizontal, DS.Spacing.sm)
-                    .padding(.vertical, 4)
-                    .background(
-                        Capsule().fill(skin.accentColor.opacity(0.10))
-                    )
-                    .contentShape(Capsule())
+                    Text(scored.action.label)
+                        .font(.caption.weight(.medium))
+                        .lineLimit(1)
+                        .foregroundStyle(skin.accentColor)
+                        .padding(.horizontal, DS.Spacing.sm)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule().fill(skin.accentColor.opacity(0.10))
+                        )
+                        .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
                 .disabled(isRunning)
