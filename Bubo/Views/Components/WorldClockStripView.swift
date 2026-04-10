@@ -203,11 +203,12 @@ private struct WorldClockPill: View {
         let cityOffset = tz.secondsFromGMT(for: now)
         let diffHours = Double(cityOffset - localOffset) / 3600.0
         if diffHours == 0 { return "" }
-        let sign = diffHours > 0 ? "+" : ""
-        if diffHours == diffHours.rounded() {
-            return "\(sign)\(Int(diffHours))\u{00A0}h"
+        let sign = diffHours > 0 ? "+" : "\u{2212}"
+        let absDiff = abs(diffHours)
+        if absDiff == absDiff.rounded() {
+            return "\(sign)\(Int(absDiff))\u{00A0}h"
         }
-        return "\(sign)\(String(format: "%.1f", diffHours))\u{00A0}h"
+        return "\(sign)\(String(format: "%.1f", absDiff))\u{00A0}h"
     }
 
     private var isNighttime: Bool {

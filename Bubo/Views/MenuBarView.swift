@@ -501,11 +501,11 @@ struct MenuBarView: View {
             guard let next = todayEvents.first(where: { $0.startDate > now }) else { return "" }
             let mins = Int(next.startDate.timeIntervalSince(now)) / 60
             if mins < 1 { return " \u{00B7} now" }
-            if mins < 60 { return " \u{00B7} in\u{00A0}\(mins)\u{00A0}m" }
+            if mins < 60 { return " \u{00B7} in\u{00A0}\(mins)\u{00A0}min" }
             let h = mins / 60
             let m = mins % 60
             if m == 0 { return " \u{00B7} in\u{00A0}\(h)\u{00A0}h" }
-            return " \u{00B7} in\u{00A0}\(h)\u{00A0}h\u{00A0}\(m)\u{00A0}m"
+            return " \u{00B7} in\u{00A0}\(h)\u{00A0}h\u{00A0}\(m)\u{00A0}min"
         }()
 
         if done == 0 { return "\(total)\u{00A0}events today\(nextSuffix)" }
@@ -530,9 +530,9 @@ struct MenuBarView: View {
 
             if cal.isDateInToday(next.startDate) {
                 if hours > 0 {
-                    return "Next: \(next.title) in\u{00A0}\(hours)h\u{00A0}\(minutes)m"
+                    return "Next: \(next.title) in\u{00A0}\(hours)\u{00A0}h\u{00A0}\(minutes)\u{00A0}min"
                 }
-                return "Next: \(next.title) in\u{00A0}\(minutes)m"
+                return "Next: \(next.title) in\u{00A0}\(minutes)\u{00A0}min"
             } else if cal.isDateInTomorrow(next.startDate) {
                 let fmt = DateFormatter()
                 fmt.dateFormat = "H:mm"
@@ -666,6 +666,22 @@ struct MenuBarView: View {
                         }
                     )
                 }
+
+                // Quick actions — context-aware shortcuts
+                QuickActions(
+                    optimizerService: optimizerService,
+                    reminderService: reminderService,
+                    onExecuted: { label, undo in
+                        toastState.showSuccess(label, icon: "sparkles", onUndo: undo)
+                        notifyScheduleChange()
+                    },
+                    onOpenPalette: {
+                        Haptics.tap()
+                        withAnimation(DS.Animation.quick) {
+                            paletteContext = PaletteContext()
+                        }
+                    }
+                )
 
                 ForEach(filteredEventsByDay, id: \.date) { dayGroup in
                     dayGroupSection(dayGroup)
@@ -831,62 +847,59 @@ struct MenuBarView: View {
 
     private var footerActions: some View {
         HStack {
-            HStack(spacing: DS.Spacing.sm) {
-                Menu {
-                    Button {
-                        Haptics.tap()
-                        navigation = .addEvent()
-                    } label: {
-                        Label("New Event", systemImage: "calendar.badge.plus")
-                    }
-                    Button {
-                        Haptics.tap()
-                        navigation = .addPomodoro
-                    } label: {
-                        Label("New Pomodoro", systemImage: "timer")
-                    }
-                    Button {
-                        Haptics.tap()
-                        navigation = .quickAddTasks
-                    } label: {
-                        Label("Batch Add Tasks", systemImage: "list.bullet.rectangle")
-                    }
-                    .keyboardShortcut("n", modifiers: [.command, .shift])
-                } label: {
-                    Label("Add", systemImage: "plus")
-                } primaryAction: {
+            Menu {
+                Button {
                     Haptics.tap()
                     navigation = .addEvent()
+                } label: {
+                    Label("New Event", systemImage: "calendar.badge.plus")
                 }
-                .buttonStyle(.action(role: .primary, size: .regular))
-                .help("Add a new event (\u{2318}N)")
-                .keyboardShortcut("n", modifiers: .command)
-
-                // Quick actions + palette button
-                QuickActions(
-                    optimizerService: optimizerService,
-                    reminderService: reminderService,
-                    onExecuted: { label, undo in
-                        toastState.showSuccess(label, icon: "sparkles", onUndo: undo)
-                        notifyScheduleChange()
-                    },
-                    onOpenPalette: {
-                        Haptics.tap()
-                        withAnimation(DS.Animation.quick) {
-                            paletteContext = PaletteContext()
-                        }
-                    }
-                )
+                Button {
+                    Haptics.tap()
+                    navigation = .addPomodoro
+                } label: {
+                    Label("New Pomodoro", systemImage: "timer")
+                }
+                Button {
+                    Haptics.tap()
+                    navigation = .quickAddTasks
+                } label: {
+                    Label("Batch Add Tasks", systemImage: "list.bullet.rectangle")
+                }
+                .keyboardShortcut("n", modifiers: [.command, .shift])
+            } label: {
+                Label("Add", systemImage: "plus")
+            } primaryAction: {
+                Haptics.tap()
+                navigation = .addEvent()
             }
+            .buttonStyle(.action(role: .primary, size: .regular))
+            .help("Add a new event (\u{2318}N)")
+            .keyboardShortcut("n", modifiers: .command)
 
             Spacer()
 
             HStack(spacing: DS.Spacing.md) {
+                // Palette shortcut
+                Button {
+                    Haptics.tap()
+                    withAnimation(DS.Animation.quick) {
+                        paletteContext = PaletteContext()
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "sparkles")
+                        Text("\u{2318}K")
+                            .font(.caption2.monospaced())
+                    }
+                }
+                .help("Command palette (\u{2318}K)")
+
                 Menu {
                     Button {
                         Haptics.tap()
                         reminderService.syncNow()
-                        toastState.showInfo("Refreshing…", icon: "arrow.clockwise")
+                        toastState.showInfo("Refreshing\u{2026}", icon: "arrow.clockwise")
                     } label: {
                         Label("Refresh Calendars", systemImage: "arrow.clockwise")
                     }
