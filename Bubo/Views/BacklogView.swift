@@ -166,7 +166,7 @@ struct BacklogView: View {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "plus")
                     .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(isInputFocused ? skin.accentColor : .tertiary)
 
                 TextField("Add task...", text: $newTaskTitle)
                     .textFieldStyle(.plain)
@@ -177,6 +177,12 @@ struct BacklogView: View {
                         computeGhostPreview()
                     }
             }
+            .padding(.horizontal, DS.Spacing.sm)
+            .padding(.vertical, DS.Spacing.xs)
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(skin.accentColor.opacity(isInputFocused ? 0.06 : 0.03))
+            )
 
             // Hint for new users — disappears once they add a task.
             if activeTasks.isEmpty && !isInputFocused {
@@ -188,6 +194,7 @@ struct BacklogView: View {
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.sm)
+        .animation(.easeInOut(duration: 0.15), value: isInputFocused)
     }
 
     // MARK: - Ghost Preview

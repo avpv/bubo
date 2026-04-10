@@ -735,89 +735,96 @@ struct MenuBarView: View {
     }
 
     private var emptyState: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                // Backlog — accessible even when calendar is empty.
-                // Auto-expand: tasks are the primary content when no events exist.
-                inlineBacklog(autoExpand: true)
-                    .id("backlogSection")
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: 0) {
+                    // Backlog — accessible even when calendar is empty.
+                    // Auto-expand: tasks are the primary content when no events exist.
+                    inlineBacklog(autoExpand: true)
+                        .id("backlogSection")
 
-                if pendingTaskCount > 0 {
-                    // Tasks exist — keep the "no events" note compact so
-                    // tasks dominate the screen (they're the actionable content).
-                    HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "calendar")
-                            .font(.caption)
-                            .foregroundStyle(skin.resolvedTextTertiary)
-                        Text(emptyStateSubtitle)
-                            .font(.caption)
-                            .foregroundStyle(skin.resolvedTextTertiary)
-                        Spacer()
-                        Button {
-                            Haptics.tap()
-                            navigation = .addEvent()
-                        } label: {
-                            Text("Add Event")
-                                .font(.caption.weight(.medium))
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(skin.accentColor)
-                    }
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.lg)
-                } else {
-                    // Truly empty — no tasks, no events. Full empty state.
-                    VStack(spacing: DS.EmptyState.spacing * 1.5) {
-                        ZStack {
-                            Circle()
-                                .fill(
-                                    RadialGradient(
-                                        colors: [
-                                            skin.accentColor.opacity(0.25),
-                                            .clear
-                                        ],
-                                        center: .center,
-                                        startRadius: 0,
-                                        endRadius: DS.EmptyState.iconSize * 1.5
-                                    )
-                                )
-                                .frame(width: DS.EmptyState.iconSize * 3, height: DS.EmptyState.iconSize * 3)
-
-                            Image(systemName: "calendar.badge.checkmark")
-                                .font(.system(size: DS.EmptyState.iconSize, weight: .light))
-                                .foregroundStyle(skin.accentColor, skin.resolvedTextSecondary)
-                                .symbolEffect(.pulse, options: .repeating.speed(0.1))
-                        }
-
-                        VStack(spacing: DS.Spacing.xs) {
-                            Text("All clear")
-                                .font(.headline)
-                                .fontWeight(skin.resolvedHeadlineFontWeight)
-                                .foregroundStyle(skin.resolvedTextPrimary)
-                            Text(emptyStateSubtitle)
-                                .font(.subheadline)
-                                .foregroundStyle(skin.resolvedTextSecondary)
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-                        }
-
-                        Button {
-                            Haptics.tap()
-                            navigation = .addEvent()
-                        } label: {
-                            Label("Add Event", systemImage: "plus")
+                    if pendingTaskCount > 0 {
+                        // Tasks exist — keep the "no events" note compact so
+                        // tasks dominate the screen (they're the actionable content).
+                        HStack(spacing: DS.Spacing.sm) {
+                            Image(systemName: "calendar")
                                 .font(.caption)
-                                .fontWeight(.medium)
+                                .foregroundStyle(skin.resolvedTextTertiary)
+                            Text(emptyStateSubtitle)
+                                .font(.caption)
+                                .foregroundStyle(skin.resolvedTextTertiary)
+                            Spacer()
+                            Button {
+                                Haptics.tap()
+                                navigation = .addEvent()
+                            } label: {
+                                Text("Add Event")
+                                    .font(.caption.weight(.medium))
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(skin.accentColor)
                         }
-                        .buttonStyle(.action(role: .primary, size: .compact))
-                        .padding(.top, DS.Spacing.sm)
+                        .padding(.horizontal, DS.Spacing.lg)
+                        .padding(.vertical, DS.Spacing.lg)
+                    } else {
+                        // Truly empty — no tasks, no events. Full empty state.
+                        VStack(spacing: DS.EmptyState.spacing * 1.5) {
+                            ZStack {
+                                Circle()
+                                    .fill(
+                                        RadialGradient(
+                                            colors: [
+                                                skin.accentColor.opacity(0.25),
+                                                .clear
+                                            ],
+                                            center: .center,
+                                            startRadius: 0,
+                                            endRadius: DS.EmptyState.iconSize * 1.5
+                                        )
+                                    )
+                                    .frame(width: DS.EmptyState.iconSize * 3, height: DS.EmptyState.iconSize * 3)
+
+                                Image(systemName: "calendar.badge.checkmark")
+                                    .font(.system(size: DS.EmptyState.iconSize, weight: .light))
+                                    .foregroundStyle(skin.accentColor, skin.resolvedTextSecondary)
+                                    .symbolEffect(.pulse, options: .repeating.speed(0.1))
+                            }
+
+                            VStack(spacing: DS.Spacing.xs) {
+                                Text("All clear")
+                                    .font(.headline)
+                                    .fontWeight(skin.resolvedHeadlineFontWeight)
+                                    .foregroundStyle(skin.resolvedTextPrimary)
+                                Text(emptyStateSubtitle)
+                                    .font(.subheadline)
+                                    .foregroundStyle(skin.resolvedTextSecondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                            }
+
+                            Button {
+                                Haptics.tap()
+                                navigation = .addEvent()
+                            } label: {
+                                Label("Add Event", systemImage: "plus")
+                                    .font(.caption)
+                                    .fontWeight(.medium)
+                            }
+                            .buttonStyle(.action(role: .primary, size: .compact))
+                            .padding(.top, DS.Spacing.sm)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, DS.Spacing.xxl)
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, DS.Spacing.xxl)
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .onChange(of: scrollToBacklogTick) { _, _ in
+                withAnimation(DS.Animation.smoothSpring) {
+                    proxy.scrollTo("backlogSection", anchor: .top)
                 }
             }
         }
-        .scrollContentBackground(.hidden)
         .transition(.opacity.combined(with: .scale(scale: 0.95)))
     }
 
