@@ -154,7 +154,7 @@ struct CommandPalette: View {
     var body: some View {
         ZStack {
             Rectangle()
-                .fill(Color.black.opacity(0.25))
+                .fill(DS.Colors.overlayBackground.opacity(DS.Opacity.strongFill))
                 .contentShape(Rectangle())
                 .onTapGesture { onDismiss() }
 
@@ -184,15 +184,8 @@ struct CommandPalette: View {
             SkinSeparator()
             content
         }
-        .background(
-            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                .fill(.ultraThickMaterial)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                .strokeBorder(skin.accentColor.opacity(0.25), lineWidth: DS.Border.standard)
-        )
-        .shadow(color: .black.opacity(0.25), radius: 18, y: 8)
+        .skinPlatter(skin)
+        .skinPlatterDepth(skin)
         .onKeyPress(.upArrow) { move(-1); return .handled }
         .onKeyPress(.downArrow) { move(1); return .handled }
         .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
@@ -226,10 +219,14 @@ struct CommandPalette: View {
                     showPowerMode = false
                 }
 
-            if !searchText.isEmpty && !isBusy {
+            if !isBusy {
                 Button {
-                    searchText = ""
-                    isSearchFocused = true
+                    if searchText.isEmpty {
+                        onDismiss()
+                    } else {
+                        searchText = ""
+                        isSearchFocused = true
+                    }
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.caption)
@@ -333,7 +330,10 @@ struct CommandPalette: View {
                 hint("⌥", "customize")
             }
             Spacer()
-            hint("esc", "close")
+            Button { onDismiss() } label: {
+                hint("esc", "close")
+            }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, DS.Spacing.md)
         .padding(.top, DS.Spacing.sm)
@@ -460,7 +460,7 @@ struct CommandPalette: View {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: conflict.severity == .error ? "xmark.circle.fill" : "info.circle.fill")
                             .font(.caption2)
-                            .foregroundStyle(conflict.severity == .error ? .red : skin.resolvedTextTertiary)
+                            .foregroundStyle(conflict.severity == .error ? skin.resolvedDestructiveColor : skin.resolvedTextTertiary)
                         Text(conflict.message)
                             .font(.caption2)
                             .foregroundStyle(skin.resolvedTextSecondary)
