@@ -159,6 +159,12 @@ struct CommandPalette: View {
                 composedRequest = seed
                 showPowerMode = true
             }
+            // Birman: when intent is unambiguous, act immediately (undo replaces confirmation).
+            // Single suggestion in slot context = the user's intent is clear.
+            if seedSlotMinutes != nil && suggestions.count == 1 {
+                runRequest(suggestions[0].request)
+                return
+            }
             refreshPreview()
         }
         .onDisappear { dryRunTask?.cancel() }
@@ -316,6 +322,9 @@ struct CommandPalette: View {
                  : "run")
             if visibleItems.count > 1 {
                 hint("↑↓", "select")
+            }
+            if !showPowerMode {
+                hint("⌥", "customize")
             }
             Spacer()
             hint("esc", "close")
