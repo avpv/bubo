@@ -2,23 +2,16 @@ import SwiftUI
 
 // MARK: - Command Palette
 //
-// The single entry point for all schedule-optimization actions.
-// Replaces OptimizerView, IntentPickerView, RecipeConfigSheet and AgentInputView.
+// Single entry point for all schedule optimization.
 //
-// Design principles (Birman):
-//  - One input field, one action, one Undo — no phases, no modals, no Apply button.
-//  - Main input is a text field that searches across all recipes AND acts as the
-//    AI prompt fallback when nothing matches.
-//  - Top suggestion is visually prominent (card) with a schedule-aware preview
-//    showing what will happen to YOUR schedule, not a generic description.
-//  - Enter applies the top suggestion immediately, closes the palette, and shows
-//    an Undo toast — the single feedback source (no redundant inline confirmation).
-//  - ↑/↓ navigate, → expands parameter pills inline, Tab toggles "All recipes".
-//  - Inline event picker replaces dead-end "Pick an event" text — no flow breaks.
-//  - Expanding params pre-fills defaults so the user sees what will happen.
-//
-// The palette is shown as an inline overlay on top of the current popover
-// content so the user never loses sight of the schedule underneath.
+// Design (Birman):
+// - One input field: searches presets AND accepts natural language for AI
+// - Presets are starting points, not final configs — expand to compose intents
+// - Intent chips: add/remove atomic scheduling rules visually
+// - Live preview: see concrete event times before committing
+// - Conflict warnings: contradictions shown immediately
+// - Enter runs, Esc closes, ↑↓ navigate, → expand, Tab all presets
+// - No confirmation dialog — undo via toast
 
 struct CommandPalette: View {
     @Environment(\.activeSkin) private var skin
@@ -28,163 +21,127 @@ struct CommandPalette: View {
     var reminderService: ReminderService
     var agentService: AgentService
 
-    /// Optional event pre-selected by the caller (e.g. event context menu).
-    /// When set, only recipes that apply to this event are shown.
     var seedEvent: CalendarEvent? = nil
-
-    /// Optional free slot pre-selected by the caller (e.g. FreeSlotRow +).
-    /// When set, only creative recipes that fit within the slot are shown.
     var seedSlotMinutes: Int? = nil
-
-    /// Optional recipe to open pre-selected (e.g. from a smart banner tap).
     var seedPreset: OptimizationRequest? = nil
 
-    /// Called when the palette wants to dismiss itself.
     var onDismiss: () -> Void
-    /// Called after a recipe has been applied, so the host can show an Undo toast.
-    var onApplied: (_ recipe: OptimizationRequest, _ undo: @escaping () -> Void) -> Void
+    var onApplied: (_ request: OptimizationRequest, _ undo: @escaping () -> Void) -> Void
 
-    // MARK: State
+    // MARK: - State
 
-    @State private var searchText: String = ""
-    @State private var selectedIndex: Int = 0
-    @State private var expandedRecipeId: String? = nil
-    @State private var localParams: [String: [String: Any]] = [:]
-    @State private var showAllRecipes: Bool = false
+    @State private var searchText = ""
+    @State private var selectedIndex = 0
+    @State private var expandedId: String? = nil
+    @State private var showAll = false
     @State private var phase: Phase = .picking
-    @State private var appliedRecipeName: String = ""
     @State private var aiError: String? = nil
-    /// Async dry-run preview for the top suggestion — shows concrete event times
-    /// computed by actually running the recipe through the GA (fast config).
     @State private var dryRunPreview: String? = nil
     @State private var dryRunTask: Task<Void, Never>? = nil
+    @State private var composedRequest: OptimizationRequest? = nil
+    @State private var conflicts: [IntentConflictDetector.Conflict] = []
     @FocusState private var isSearchFocused: Bool
 
     private enum Phase: Equatable {
         case picking
-        case working(String)    // status label, e.g. "Optimizing…"
-        case applied([AppliedEventInfo])  // brief confirmation with concrete data
-        case failed(String)     // error message + optional retry
+        case working(String)
+        case applied([EventInfo])
+        case failed(String)
     }
 
-    /// Info about a single event created/placed by a recipe, shown in the
-    /// applied confirmation phase so the user sees exactly what changed.
-    struct AppliedEventInfo: Equatable, Identifiable {
+    struct EventInfo: Equatable, Identifiable {
         let id: String
         let title: String
-        let timeRange: String   // e.g. "14:30–15:30"
+        let timeRange: String
     }
 
-    // MARK: - Context
+    // MARK: - Suggestions
 
-    /// Recipes surfaced as contextual suggestions when the search field is empty.
-    /// Order: banner-worthy suggestions → usage-based top recipes → curated defaults.
-    private var contextualSuggestions: [OptimizationRequest] {
-        var result: [OptimizationRequest] = []
-
-        // 1. Suggestion engine recommendations
-        if let suggestion = optimizerService.suggestionEngine?.suggestion {
-            result.append(suggestion.request)
-        }
-
-        // 2. Time-of-day defaults
-        for preset in defaultSuggestionsByTimeOfDay {
-            if !result.contains(where: { $0.name == preset.name }) {
-                result.append(preset)
+    private var suggestions: [OptimizationRequest] {
+        if let engine = optimizerService.suggestionEngine,
+           let suggestion = engine.suggestion {
+            var result = [suggestion.request]
+            for preset in defaultsByTime {
+                if result.count >= 5 { break }
+                if !result.contains(where: { $0.name == preset.name }) {
+                    result.append(preset)
+                }
             }
-            if result.count >= 5 { return result }
+            return result
         }
-
-        return result
+        return Array(defaultsByTime.prefix(5))
     }
 
-    private var defaultSuggestionsByTimeOfDay: [OptimizationRequest] {
+    private var defaultsByTime: [OptimizationRequest] {
         let hour = Calendar.current.component(.hour, from: Date())
         switch hour {
-        case 0..<11:   return [.organizeDay, .findFocus(), .scheduleBacklog]
-        case 11..<15:  return [.findFocus(), .scheduleBacklog, .lowEnergyDay]
-        case 15..<19:  return [.scheduleBacklog, .organizeDay, .planWeek]
-        default:       return [.planWeek, .organizeDay, .scheduleBacklog]
+        case 0..<11:  return [.organizeDay, .findFocus(), .scheduleBacklog]
+        case 11..<15: return [.findFocus(), .scheduleBacklog, .lowEnergyDay]
+        case 15..<19: return [.scheduleBacklog, .organizeDay, .planWeek]
+        default:      return [.planWeek, .organizeDay, .scheduleBacklog]
         }
     }
 
-    /// The flat list that the search field filters.
-    /// Empty search → contextual suggestions. Typed search → matching recipes.
-    /// Seed event/slot → narrowed to applicable recipes.
-    private var filteredRecipes: [OptimizationRequest] {
-        let all: [OptimizationRequest] = {
-            if let seedEvent {
-                return IntentPresets.all
-                    .sorted { ($0.name ?? "") < ($1.name ?? "") }
-            }
-            if let minutes = seedSlotMinutes {
-                return IntentPresets.all
-                    .sorted { ($0.name ?? "") < ($1.name ?? "") }
-            }
-            return IntentPresets.all
-        }()
-
+    private var filtered: [OptimizationRequest] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         if query.isEmpty {
-            if seedEvent == nil && seedSlotMinutes == nil {
-                return contextualSuggestions
-            }
-            return Array(all.prefix(8))
+            return seedEvent != nil || seedSlotMinutes != nil
+                ? Array(IntentPresets.all.prefix(8))
+                : suggestions
         }
-        return all.filter { $0.matchesSearch(query) }
-            .sorted { lhs, rhs in
-                // Name hits first, then description/category hits.
-                let lName = (lhs.name ?? "").lowercased().contains(query.lowercased())
-                let rName = (rhs.name ?? "").lowercased().contains(query.lowercased())
-                if lName != rName { return lName }
-                return lhs.name < rhs.name
+        return IntentPresets.all
+            .filter { $0.matchesSearch(query) }
+            .sorted {
+                let l = ($0.name ?? "").lowercased().contains(query.lowercased())
+                let r = ($1.name ?? "").lowercased().contains(query.lowercased())
+                if l != r { return l }
+                return ($0.name ?? "") < ($1.name ?? "")
             }
+    }
+
+    /// The active request for the composer — either a modified preset or the selected one.
+    private var activeRequest: OptimizationRequest? {
+        if let composed = composedRequest { return composed }
+        guard let id = expandedId else { return nil }
+        return filtered.first { $0.id == id }
     }
 
     // MARK: - Body
 
     var body: some View {
         ZStack {
-            // Scrim — dims the content behind the palette but keeps it visible.
+            // Scrim
             Rectangle()
                 .fill(Color.black.opacity(0.25))
                 .contentShape(Rectangle())
-                .onTapGesture { dismiss() }
-                .transition(.opacity)
-                .accessibilityLabel("Close command palette")
+                .onTapGesture { onDismiss() }
 
-            paletteCard
+            card
                 .padding(.horizontal, DS.Spacing.md)
                 .padding(.top, DS.Spacing.xl)
                 .frame(maxHeight: .infinity, alignment: .top)
 
-            // Invisible keyboard shortcut host — has to live in the hierarchy
-            // so SwiftUI picks up the shortcut modifiers.
-            keyboardShortcuts
+            shortcuts
         }
         .onAppear {
             isSearchFocused = true
             if let seed = seedPreset {
-                expandedRecipeId = seed.id
-                prepopulateDefaults(for: seed)
-                if let idx = filteredRecipes.firstIndex(where: { $0.id == seed.id }) {
-                    selectedIndex = idx
-                }
+                expandedId = seed.id
+                composedRequest = seed
+                revalidate(seed)
             }
-            startDryRunPreview()
+            refreshPreview()
         }
-        .onDisappear {
-            dryRunTask?.cancel()
-        }
+        .onDisappear { dryRunTask?.cancel() }
     }
 
     // MARK: - Card
 
-    private var paletteCard: some View {
+    private var card: some View {
         VStack(spacing: 0) {
             searchField
             SkinSeparator()
-            resultsScroll
+            content
         }
         .background(
             RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
@@ -194,79 +151,65 @@ struct CommandPalette: View {
             RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
                 .strokeBorder(skin.accentColor.opacity(0.25), lineWidth: DS.Border.standard)
         )
-        .shadow(color: Color.black.opacity(0.25), radius: 18, y: 8)
-        .onKeyPress(.upArrow) {
-            moveSelection(by: -1)
-            return .handled
-        }
-        .onKeyPress(.downArrow) {
-            moveSelection(by: 1)
-            return .handled
-        }
+        .shadow(color: .black.opacity(0.25), radius: 18, y: 8)
+        .onKeyPress(.upArrow) { move(-1); return .handled }
+        .onKeyPress(.downArrow) { move(1); return .handled }
         .onKeyPress(.rightArrow) {
-            // → expands/collapses the selected recipe's params.
-            // Only handle when the search field is empty — otherwise let
-            // the TextField use → for normal cursor movement.
-            guard searchText.isEmpty else { return .ignored }
-            let recipes = filteredRecipes
-            guard !recipes.isEmpty else { return .ignored }
-            let idx = min(selectedIndex, recipes.count - 1)
-            let recipe = recipes[idx]
-            withAnimation(DS.Animation.quick) {
-                if expandedRecipeId == recipe.id {
-                    expandedRecipeId = nil
-                } else {
-                    expandedRecipeId = recipe.id
-                }
-            }
+            guard searchText.isEmpty, !filtered.isEmpty else { return .ignored }
+            let idx = min(selectedIndex, filtered.count - 1)
+            toggleExpand(filtered[idx])
             return .handled
         }
         .onKeyPress(.tab) {
-            // Tab toggles "All recipes" flat list.
-            withAnimation(DS.Animation.quick) {
-                showAllRecipes.toggle()
-            }
+            withAnimation(DS.Animation.quick) { showAll.toggle() }
             return .handled
         }
-        .transition(
-            reduceMotion
-                ? .opacity
-                : .asymmetric(
-                    insertion: .move(edge: .top).combined(with: .opacity),
-                    removal: .opacity
-                )
-        )
+        .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
     }
 
-    private func moveSelection(by delta: Int) {
-        let count = filteredRecipes.count
+    private func move(_ delta: Int) {
+        let count = filtered.count
         guard count > 0 else { return }
         selectedIndex = max(0, min(count - 1, selectedIndex + delta))
+    }
+
+    private func toggleExpand(_ request: OptimizationRequest) {
+        withAnimation(DS.Animation.quick) {
+            if expandedId == request.id {
+                expandedId = nil
+                composedRequest = nil
+                conflicts = []
+            } else {
+                expandedId = request.id
+                composedRequest = request
+                revalidate(request)
+            }
+        }
     }
 
     // MARK: - Search Field
 
     private var searchField: some View {
         HStack(spacing: DS.Spacing.sm) {
-            Image(systemName: iconForCurrentPhase)
+            Image(systemName: phaseIcon)
                 .font(.body)
-                .foregroundStyle(iconColorForCurrentPhase)
+                .foregroundStyle(phaseColor)
                 .symbolEffect(.pulse, isActive: isBusy)
                 .frame(width: 18)
-                .accessibilityHidden(true)
 
             TextField(placeholder, text: $searchText)
                 .textFieldStyle(.plain)
                 .font(.headline)
                 .focused($isSearchFocused)
                 .disabled(isBusy)
-                .onSubmit { handlePrimaryAction() }
+                .onSubmit { handleSubmit() }
                 .onChange(of: searchText) {
                     selectedIndex = 0
-                    expandedRecipeId = nil
+                    expandedId = nil
+                    composedRequest = nil
+                    conflicts = []
                     aiError = nil
                 }
-                .accessibilityLabel("Command palette search")
 
             if !searchText.isEmpty && !isBusy {
                 Button {
@@ -278,162 +221,272 @@ struct CommandPalette: View {
                         .foregroundStyle(skin.resolvedTextTertiary)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Clear")
             }
 
-            keyHintBadge
+            Text("⌘K")
+                .font(.caption2.monospaced())
+                .foregroundStyle(skin.resolvedTextTertiary)
+                .padding(.horizontal, DS.Spacing.xs)
+                .padding(.vertical, 2)
+                .background(
+                    RoundedRectangle(cornerRadius: 4)
+                        .strokeBorder(skin.resolvedTextTertiary.opacity(0.35), lineWidth: 0.5)
+                )
+                .opacity(isBusy ? 0.3 : 1)
         }
         .padding(.horizontal, DS.Spacing.md)
         .padding(.vertical, DS.Spacing.md)
     }
 
-    private var iconForCurrentPhase: String {
+    private var phaseIcon: String {
         switch phase {
-        case .picking:       return "sparkles"
-        case .working:       return "hourglass"
-        case .applied:       return "checkmark.circle.fill"
-        case .failed:        return "exclamationmark.triangle.fill"
+        case .picking: "sparkles"
+        case .working: "hourglass"
+        case .applied: "checkmark.circle.fill"
+        case .failed: "exclamationmark.triangle.fill"
         }
     }
 
-    private var iconColorForCurrentPhase: Color {
+    private var phaseColor: Color {
         switch phase {
-        case .picking:       return skin.accentColor
-        case .working:       return skin.accentColor
-        case .applied:       return skin.resolvedSuccessColor
-        case .failed:        return skin.resolvedWarningColor
+        case .picking, .working: skin.accentColor
+        case .applied: skin.resolvedSuccessColor
+        case .failed: skin.resolvedWarningColor
         }
     }
 
     private var isBusy: Bool {
-        switch phase {
-        case .working, .applied: return true
-        default: return false
-        }
+        if case .working = phase { return true }
+        return false
     }
 
     private var placeholder: String {
-        if seedEvent != nil { return "Change this event…" }
-        if let m = seedSlotMinutes { return "Fill \(m) min free slot…" }
-        return "Find focus time, plan a day, ask AI…"
+        if seedEvent != nil { return "Change this event..." }
+        if let m = seedSlotMinutes { return "Fill \(m) min slot..." }
+        return "Find focus, plan day, or ask AI..."
     }
 
-    private var keyHintBadge: some View {
-        HStack(spacing: 2) {
-            Text("⌘K")
-                .font(.caption2.monospaced())
-                .foregroundStyle(skin.resolvedTextTertiary)
-        }
-        .padding(.horizontal, DS.Spacing.xs)
-        .padding(.vertical, 2)
-        .background(
-            RoundedRectangle(cornerRadius: 4)
-                .strokeBorder(skin.resolvedTextTertiary.opacity(0.35), lineWidth: 0.5)
-        )
-        .opacity(isBusy ? 0.3 : 1.0)
-        .accessibilityHidden(true)
-    }
+    // MARK: - Content
 
-    // MARK: - Results
-
-    private var resultsScroll: some View {
+    private var content: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 switch phase {
-                case .picking:
-                    pickingContent
-                case .working(let label):
-                    statusView(icon: "hourglass", text: label, color: skin.accentColor)
-                case .applied(let events):
-                    appliedView(events: events)
-                case .failed(let message):
-                    failedView(message: message)
+                case .picking: pickingContent
+                case .working(let label): statusView(label)
+                case .applied(let events): appliedView(events)
+                case .failed(let message): failedView(message)
                 }
             }
             .padding(.vertical, DS.Spacing.sm)
         }
-        .frame(maxHeight: 420)
+        .frame(maxHeight: 440)
         .scrollContentBackground(.hidden)
     }
 
+    // MARK: - Picking
+
     @ViewBuilder
     private var pickingContent: some View {
-        if showAllRecipes && searchText.isEmpty {
-            allRecipesSection
+        if showAll && searchText.isEmpty {
+            allPresetsView
         } else {
-            contextStrip
-            recipeList
-
-            // Intent composer — add/remove individual intents
-            if let selected = composerRequest {
-                intentComposer(for: selected)
+            // Context line
+            if searchText.isEmpty {
+                contextLine
             }
 
-            footerHints
-        }
+            // Preset list
+            presetList
 
-        if let aiError {
-            Text(aiError)
-                .font(.caption)
-                .foregroundStyle(skin.resolvedWarningColor)
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.top, DS.Spacing.xs)
+            // Intent composer (when a preset is expanded)
+            if let request = activeRequest {
+                intentComposer(request)
+            }
+
+            // AI fallback
+            if !searchText.isEmpty && agentService.isConfigured {
+                aiRow
+            }
+
+            // Footer
+            footerHints
+
+            if let aiError {
+                Text(aiError)
+                    .font(.caption)
+                    .foregroundStyle(skin.resolvedWarningColor)
+                    .padding(.horizontal, DS.Spacing.md)
+            }
         }
     }
 
-    // The request being composed (expanded preset or custom)
-    private var composerRequest: OptimizationRequest? {
-        guard let id = expandedRecipeId else { return nil }
-        return filteredRecipes.first { $0.id == id }
+    private var contextLine: some View {
+        HStack(spacing: DS.Spacing.xs) {
+            if let seedEvent {
+                Text("Change \u{201C}\(seedEvent.title)\u{201D}")
+            } else if let m = seedSlotMinutes {
+                Text("Free slot · \(m) min")
+            } else {
+                let fmt = DateFormatter()
+                Text("Now \(fmt.setLocalizedDateFormatFromTemplate("H:mm"), fmt.string(from: Date())) · pick or compose")
+            }
+        }
+        .font(.caption2)
+        .foregroundStyle(skin.resolvedTextTertiary)
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.bottom, DS.Spacing.xs)
+    }
+
+    // MARK: - Preset List
+
+    private var presetList: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            ForEach(Array(filtered.enumerated()), id: \.element.id) { index, preset in
+                presetRow(preset, index: index)
+            }
+
+            if filtered.isEmpty {
+                VStack(spacing: DS.Spacing.xs) {
+                    Text("No match for \u{201C}\(searchText)\u{201D}")
+                        .font(.caption)
+                        .foregroundStyle(skin.resolvedTextSecondary)
+                    Text("Press ↵ to ask AI")
+                        .font(.caption2)
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, DS.Spacing.lg)
+            }
+        }
+        .padding(.horizontal, DS.Spacing.sm)
+    }
+
+    private func presetRow(_ preset: OptimizationRequest, index: Int) -> some View {
+        let isSelected = index == selectedIndex
+        let isExpanded = expandedId == preset.id
+        let isTop = index == 0 && searchText.isEmpty && seedEvent == nil
+
+        return HStack(spacing: DS.Spacing.sm) {
+            Button { runRequest(composedRequest ?? preset) } label: {
+                HStack(spacing: DS.Spacing.sm) {
+                    Circle()
+                        .fill(DS.Colors.categoryPalette[preset.categoryColorIndex])
+                        .frame(width: isTop ? 10 : 6, height: isTop ? 10 : 6)
+                        .frame(width: 18)
+
+                    VStack(alignment: .leading, spacing: isTop ? 2 : 1) {
+                        Text(preset.name ?? "Optimize")
+                            .font(isTop ? .headline.weight(.semibold) : .subheadline.weight(isSelected ? .semibold : .medium))
+                            .foregroundStyle(skin.resolvedTextPrimary)
+                            .lineLimit(1)
+
+                        if isTop, let preview = dryRunPreview {
+                            Text(preview)
+                                .font(.caption)
+                                .foregroundStyle(skin.accentColor.opacity(0.85))
+                                .lineLimit(1)
+                        } else {
+                            Text(preset.intents.prefix(3).map(\.label).joined(separator: " · "))
+                                .font(.caption2)
+                                .foregroundStyle(skin.resolvedTextSecondary)
+                                .lineLimit(1)
+                        }
+                    }
+
+                    Spacer()
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            // Expand chevron
+            Button { toggleExpand(preset) } label: {
+                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                    .frame(width: 20, height: 20)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.vertical, isTop ? DS.Spacing.sm : DS.Spacing.xs)
+        .padding(.horizontal, DS.Spacing.sm)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isTop
+                    ? skin.accentColor.opacity(isSelected ? 0.18 : 0.08)
+                    : (isSelected ? skin.accentColor.opacity(0.14) : .clear))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(isTop ? skin.accentColor.opacity(0.20) : .clear, lineWidth: 0.5)
+        )
+        .onHover { if $0 { selectedIndex = index } }
     }
 
     // MARK: - Intent Composer
 
-    @ViewBuilder
     @State private var composerPreview: String? = nil
     @State private var composerPreviewTask: Task<Void, Never>? = nil
 
-    private func intentComposer(for request: OptimizationRequest) -> some View {
+    private func intentComposer(_ request: OptimizationRequest) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            // Active intents (removable)
-            Text("Active intents")
+            // Active intents
+            Text("ACTIVE")
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(skin.resolvedTextTertiary)
                 .tracking(0.5)
 
             FlowLayout(spacing: DS.Spacing.xs) {
                 ForEach(Array(request.intents.enumerated()), id: \.offset) { index, intent in
-                    intentChip(intent.label, isActive: true) {
-                        var modified = request
-                        modified.removeIntent(at: index)
-                        replaceExpandedPreset(modified)
-                        refreshComposerPreview(modified)
+                    chip(intent.label, active: true) {
+                        var m = request
+                        m.removeIntent(at: index)
+                        updateComposed(m)
                     }
                 }
             }
 
-            // Available intents (addable)
+            // Available intents
             let available = request.availableIntents
             if !available.isEmpty {
-                Text("Add")
+                Text("ADD")
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(skin.resolvedTextTertiary)
                     .tracking(0.5)
-                    .padding(.top, DS.Spacing.xs)
+                    .padding(.top, DS.Spacing.xxs)
 
                 FlowLayout(spacing: DS.Spacing.xs) {
                     ForEach(Array(available.prefix(12).enumerated()), id: \.offset) { _, intent in
-                        intentChip(intent.label, isActive: false) {
-                            var modified = request
-                            modified.add(intent)
-                            replaceExpandedPreset(modified)
-                            refreshComposerPreview(modified)
+                        chip(intent.label, active: false) {
+                            var m = request
+                            m.add(intent)
+                            updateComposed(m)
                         }
                     }
                 }
             }
 
-            // Live preview — shows what will happen when you run this
+            // Conflict warnings
+            if !conflicts.isEmpty {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(conflicts) { conflict in
+                        HStack(spacing: DS.Spacing.xs) {
+                            Image(systemName: conflictIcon(conflict.severity))
+                                .font(.caption2)
+                                .foregroundStyle(conflictColor(conflict.severity))
+                            Text(conflict.message)
+                                .font(.caption2)
+                                .foregroundStyle(skin.resolvedTextSecondary)
+                                .lineLimit(2)
+                        }
+                    }
+                }
+                .padding(.top, DS.Spacing.xxs)
+            }
+
+            // Live preview
             if let preview = composerPreview {
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "eye.fill")
@@ -444,175 +497,157 @@ struct CommandPalette: View {
                         .foregroundStyle(skin.accentColor.opacity(0.8))
                         .lineLimit(2)
                 }
-                .padding(.top, DS.Spacing.xs)
+                .padding(.top, DS.Spacing.xxs)
                 .transition(.opacity)
             }
         }
-        .padding(.horizontal, DS.Spacing.md)
-        .padding(.vertical, DS.Spacing.sm)
+        .padding(DS.Spacing.sm)
         .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(skin.accentColor.opacity(0.04))
+            RoundedRectangle(cornerRadius: 8).fill(skin.accentColor.opacity(0.04))
         )
         .padding(.horizontal, DS.Spacing.sm)
         .transition(.opacity.combined(with: .move(edge: .top)))
         .onAppear { refreshComposerPreview(request) }
     }
 
-    /// Refresh the live preview asynchronously via a fast dry-run.
+    private func updateComposed(_ request: OptimizationRequest) {
+        composedRequest = request
+        revalidate(request)
+        refreshComposerPreview(request)
+    }
+
+    private func revalidate(_ request: OptimizationRequest) {
+        conflicts = IntentConflictDetector.analyze(request.intents)
+    }
+
     private func refreshComposerPreview(_ request: OptimizationRequest) {
         composerPreviewTask?.cancel()
         guard request.isCreative || request.findSlotOnly else {
-            // Non-creative requests: show a static description
             composerPreview = request.intents.map(\.label).joined(separator: " + ")
             return
         }
-
         composerPreviewTask = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(400))
             guard !Task.isCancelled else { return }
-
             var working = request
             working.speed = .quick
             working.maxScenarios = 1
-
             let genes = await optimizerService.executeDryRun(working, reminderService: reminderService)
             guard !Task.isCancelled else { return }
-
             if let genes, !genes.isEmpty {
                 let fmt = DateFormatter()
                 fmt.setLocalizedDateFormatFromTemplate("H:mm")
-                let descriptions = genes.prefix(3).map { gene in
-                    "\(gene.title) \(fmt.string(from: gene.startTime))–\(fmt.string(from: gene.endTime))"
-                }
-                composerPreview = descriptions.joined(separator: " · ")
+                composerPreview = genes.prefix(3).map {
+                    "\($0.title) \(fmt.string(from: $0.startTime))–\(fmt.string(from: $0.endTime))"
+                }.joined(separator: " · ")
             } else {
-                composerPreview = "No feasible slot found"
+                composerPreview = "No feasible slot"
             }
         }
     }
 
-    private func intentChip(_ label: String, isActive: Bool, action: @escaping () -> Void) -> some View {
+    private func chip(_ label: String, active: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 3) {
-                Text(label)
-                    .font(.caption2.weight(.medium))
-                if isActive {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 8, weight: .bold))
+                Text(label).font(.caption2.weight(.medium))
+                if active {
+                    Image(systemName: "xmark").font(.system(size: 8, weight: .bold))
                 }
             }
-            .foregroundStyle(isActive ? Color.white : skin.resolvedTextPrimary)
+            .foregroundStyle(active ? .white : skin.resolvedTextPrimary)
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, 4)
-            .background(
-                Capsule().fill(isActive ? skin.accentColor : skin.accentColor.opacity(0.10))
-            )
+            .background(Capsule().fill(active ? skin.accentColor : skin.accentColor.opacity(0.10)))
         }
         .buttonStyle(.plain)
     }
 
-    /// Replace the expanded preset in the filtered list with a modified version.
-    private func replaceExpandedPreset(_ modified: OptimizationRequest) {
-        // Store modified version for the next run
-        // Since presets are static, we store modifications as a local override
-        expandedModifiedRequest = modified
-    }
-
-    @State private var expandedModifiedRequest: OptimizationRequest? = nil
-
-    // MARK: - Context Strip
-
-    @ViewBuilder
-    private var contextStrip: some View {
-        if searchText.isEmpty {
-            HStack(spacing: DS.Spacing.xs) {
-                Text(contextSummary)
-                    .font(.caption2)
-                    .foregroundStyle(skin.resolvedTextTertiary)
-                    .lineLimit(1)
-            }
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.bottom, DS.Spacing.xs)
+    private func conflictIcon(_ severity: IntentConflictDetector.Conflict.Severity) -> String {
+        switch severity {
+        case .error: "xmark.circle.fill"
+        case .warning: "exclamationmark.triangle.fill"
+        case .info: "info.circle.fill"
         }
     }
 
-    private var contextSummary: String {
-        let fmt = DateFormatter()
-        fmt.setLocalizedDateFormatFromTemplate("H:mm")
-        let now = fmt.string(from: Date())
-        if let seedEvent {
-            return "Change \u{201C}\(seedEvent.title)\u{201D}"
+    private func conflictColor(_ severity: IntentConflictDetector.Conflict.Severity) -> Color {
+        switch severity {
+        case .error: .red
+        case .warning: skin.resolvedWarningColor
+        case .info: skin.resolvedTextTertiary
         }
-        if let minutes = seedSlotMinutes {
-            return "Free slot · \(minutes) min"
-        }
-        return "Now \(now) · tap a suggestion or type to search"
     }
 
-    // MARK: - Recipe List
+    // MARK: - All Presets
 
-    private var recipeList: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            ForEach(Array(filteredRecipes.enumerated()), id: \.element.id) { index, recipe in
-                RecipeRow(
-                    recipe: recipe,
-                    isSelected: index == selectedIndex,
-                    isExpanded: expandedRecipeId == recipe.id,
-                    isTopSuggestion: index == 0 && searchText.isEmpty && seedEvent == nil && seedSlotMinutes == nil,
-                    previewText: (index == 0 && dryRunPreview != nil)
-                        ? dryRunPreview
-                        : recipe.schedulePreview(
-                            reminderService: reminderService,
-                            workingHours: optimizerService.workingHours
-                        ),
-                    onTap: {
-                        selectedIndex = index
-                        runRecipe(recipe)
-                    },
-                    onExpand: {
-                        withAnimation(DS.Animation.quick) {
-                            if expandedRecipeId == recipe.id {
-                                expandedRecipeId = nil
-                            } else {
-                                expandedRecipeId = recipe.id
-                                prepopulateDefaults(for: recipe)
-                            }
-                        }
+    private var allPresetsView: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            ForEach(IntentPresets.allCategories) { category in
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(category.name.uppercased())
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                        .tracking(0.5)
+                        .padding(.horizontal, DS.Spacing.sm)
+                        .padding(.top, DS.Spacing.sm)
+
+                    ForEach(category.presets) { preset in
+                        presetRow(preset, index: -1)
                     }
-                )
-                .onHover { hovering in
-                    if hovering { selectedIndex = index }
                 }
-                .id("recipe-\(recipe.id)")
             }
-
-            if filteredRecipes.isEmpty {
-                emptyResultsRow
-            }
-
-            askAIRow
         }
         .padding(.horizontal, DS.Spacing.sm)
     }
 
-    // MARK: - Footer Hints
+    // MARK: - AI Row
+
+    private var aiRow: some View {
+        VStack(spacing: 0) {
+            Divider().padding(.vertical, DS.Spacing.xs)
+            Button { askAI(searchText) } label: {
+                HStack(spacing: DS.Spacing.sm) {
+                    Image(systemName: "sparkles")
+                        .font(.body)
+                        .foregroundStyle(skin.accentColor)
+                        .frame(width: 18)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Ask AI \u{201C}\(searchText)\u{201D}")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(skin.resolvedTextPrimary)
+                            .lineLimit(1)
+                        Text("Generate custom optimization from your prompt")
+                            .font(.caption2)
+                            .foregroundStyle(skin.resolvedTextSecondary)
+                    }
+                    Spacer()
+                }
+                .padding(.vertical, DS.Spacing.xs)
+                .padding(.horizontal, DS.Spacing.sm)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, DS.Spacing.sm)
+    }
+
+    // MARK: - Footer
 
     private var footerHints: some View {
         HStack(spacing: DS.Spacing.md) {
-            hintKey("↵", "run")
-            hintKey("↑↓", "navigate")
-            hintKey("→", "tweak")
-            hintKey("tab", "all")
+            hint("↵", "run")
+            hint("↑↓", "navigate")
+            hint("→", "compose")
+            hint("tab", "all")
             Spacer()
-            hintKey("esc", "close")
+            hint("esc", "close")
         }
         .padding(.horizontal, DS.Spacing.md)
         .padding(.top, DS.Spacing.sm)
         .padding(.bottom, DS.Spacing.xs)
     }
 
-    private func hintKey(_ key: String, _ label: String) -> some View {
+    private func hint(_ key: String, _ label: String) -> some View {
         HStack(spacing: 4) {
             Text(key)
                 .font(.caption2.monospaced())
@@ -629,121 +664,23 @@ struct CommandPalette: View {
         }
     }
 
-    // MARK: - All Recipes Flat List
+    // MARK: - Status Views
 
-    private var allRecipesSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            ForEach(IntentPresets.allCategories) { category in
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(category.name.uppercased())
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(skin.resolvedTextTertiary)
-                        .tracking(0.5)
-                        .padding(.horizontal, DS.Spacing.sm)
-                        .padding(.top, DS.Spacing.sm)
-
-                    ForEach(category.presets) { recipe in
-                        RecipeRow(
-                            recipe: recipe,
-                            isSelected: false,
-                            isExpanded: expandedRecipeId == recipe.id,
-                            isTopSuggestion: false,
-                            previewText: nil,
-                            availableEvents: reminderService.localEvents.filter { $0.isUpcoming },
-                            paramValue: { paramId in localParams[recipe.id]?[paramId] },
-                            setParamValue: { paramId, value in
-                                var dict = localParams[recipe.id] ?? [:]
-                                dict[paramId] = value
-                                localParams[recipe.id] = dict
-                            },
-                            onTap: { runRecipe(recipe) },
-                            onExpand: {
-                                withAnimation(DS.Animation.quick) {
-                                    if expandedRecipeId == recipe.id {
-                                        expandedRecipeId = nil
-                                    } else {
-                                        expandedRecipeId = recipe.id
-                                        prepopulateDefaults(for: recipe)
-                                    }
-                                }
-                            }
-                        )
-                    }
-                }
-            }
-        }
-        .padding(.horizontal, DS.Spacing.sm)
-    }
-
-    // MARK: - Empty & AI rows
-
-    private var emptyResultsRow: some View {
-        VStack(spacing: DS.Spacing.xs) {
-            Text("No recipes match \u{201C}\(searchText)\u{201D}")
-                .font(.caption)
-                .foregroundStyle(skin.resolvedTextSecondary)
-            Text("Press ↵ to ask AI instead")
-                .font(.caption2)
-                .foregroundStyle(skin.resolvedTextTertiary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, DS.Spacing.lg)
-    }
-
-    @ViewBuilder
-    private var askAIRow: some View {
-        if !searchText.isEmpty && agentService.isConfigured {
-            Divider()
-                .padding(.vertical, DS.Spacing.xs)
-            Button {
-                askAI(with: searchText)
-            } label: {
-                HStack(spacing: DS.Spacing.sm) {
-                    Image(systemName: "sparkles")
-                        .font(.body)
-                        .foregroundStyle(skin.accentColor)
-                        .frame(width: 18)
-
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("Ask AI \u{201C}\(searchText)\u{201D}")
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(skin.resolvedTextPrimary)
-                            .lineLimit(1)
-                        Text("Generate a custom recipe from your prompt")
-                            .font(.caption2)
-                            .foregroundStyle(skin.resolvedTextSecondary)
-                            .lineLimit(1)
-                    }
-                    Spacer()
-                }
-                .padding(.vertical, DS.Spacing.xs)
-                .padding(.horizontal, DS.Spacing.sm)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
-    // MARK: - Status views
-
-    private func statusView(icon: String, text: String, color: Color) -> some View {
+    private func statusView(_ label: String) -> some View {
         VStack(spacing: DS.Spacing.sm) {
-            Image(systemName: icon)
+            Image(systemName: "hourglass")
                 .font(.largeTitle)
-                .foregroundStyle(color)
-                .symbolEffect(.pulse, isActive: isBusy)
-            Text(text)
+                .foregroundStyle(skin.accentColor)
+                .symbolEffect(.pulse, isActive: true)
+            Text(label)
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(skin.resolvedTextPrimary)
-                .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, DS.Spacing.xxl)
     }
 
-    /// Brief inline confirmation showing exactly what was created/placed.
-    /// Connects action → result in the user's mind (Birman: show the consequence).
-    private func appliedView(events: [AppliedEventInfo]) -> some View {
+    private func appliedView(_ events: [EventInfo]) -> some View {
         VStack(spacing: DS.Spacing.sm) {
             Image(systemName: "checkmark.circle.fill")
                 .font(.title)
@@ -760,140 +697,72 @@ struct CommandPalette: View {
                         .foregroundStyle(skin.accentColor)
                 }
             }
-
-            if events.count < (optimizerService.scenarios.first?.genes.count ?? 0) {
-                Text("+\(optimizerService.scenarios.first!.genes.count - events.count) more")
-                    .font(.caption)
-                    .foregroundStyle(skin.resolvedTextTertiary)
-            }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, DS.Spacing.xl)
         .transition(.opacity.combined(with: .scale(scale: 0.95)))
     }
 
-    private func failedView(message: String) -> some View {
+    private func failedView(_ message: String) -> some View {
         VStack(spacing: DS.Spacing.md) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.largeTitle)
                 .foregroundStyle(skin.resolvedWarningColor)
-
             Text(message)
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(skin.resolvedTextPrimary)
                 .multilineTextAlignment(.center)
-
             HStack(spacing: DS.Spacing.sm) {
-                Button {
-                    withAnimation(DS.Animation.quick) {
-                        phase = .picking
-                        aiError = nil
-                    }
-                } label: {
-                    Text("Try again")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(skin.accentColor)
+                Button("Try again") {
+                    withAnimation(DS.Animation.quick) { phase = .picking; aiError = nil }
                 }
+                .font(.caption.weight(.medium))
+                .foregroundStyle(skin.accentColor)
                 .buttonStyle(.plain)
-
-                Button {
-                    dismiss()
-                } label: {
-                    Text("Close")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(skin.resolvedTextSecondary)
-                }
-                .buttonStyle(.plain)
+                Button("Close") { onDismiss() }
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(skin.resolvedTextSecondary)
+                    .buttonStyle(.plain)
             }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, DS.Spacing.xxl)
     }
 
-    // MARK: - Dry-Run Preview
-
-    /// Asynchronously runs the top suggestion through a fast GA to get concrete
-    /// event placement, then formats "Focus Time 14:30–15:30" as the preview.
-    /// Only runs for the top-1 recipe (the card) to avoid burning CPU.
-    private func startDryRunPreview() {
-        dryRunTask?.cancel()
-        dryRunPreview = nil
-
-        guard let recipe = filteredRecipes.first else { return }
-        // Only creative/findSlotOnly recipes benefit from dry-run — organizing
-        // recipes are too slow and the heuristic preview is good enough.
-        guard recipe.findSlotOnly || recipe.isCreative else { return }
-
-        dryRunTask = Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(200))
-            guard !Task.isCancelled else { return }
-
-            var working = recipe
-            if let seedEvent {
-                working = working.withEventContext(seedEvent)
-            }
-            working.speed = .quick
-            working.maxScenarios = 1
-
-            let result = await optimizerService.executeDryRun(
-                working,
-                reminderService: reminderService
-            )
-            guard !Task.isCancelled else { return }
-
-            if let genes = result {
-                let fmt = DateFormatter()
-                fmt.setLocalizedDateFormatFromTemplate("H:mm")
-                let descriptions = genes.prefix(2).map { gene in
-                    "\(gene.title) \(fmt.string(from: gene.startTime))–\(fmt.string(from: gene.endTime))"
-                }
-                let suffix = genes.count > 2 ? " +\(genes.count - 2)" : ""
-                dryRunPreview = descriptions.joined(separator: " · ") + suffix
-            }
-        }
-    }
-
-    // MARK: - Prepopulate Defaults
-
-    /// No-op: intents don't use param values. Kept for call-site compatibility.
-    private func prepopulateDefaults(for recipe: OptimizationRequest) {
-        // Intent composer handles customization directly.
-        if false {
-            localParams[recipe.id] = defaults
-        }
-    }
-
     // MARK: - Actions
 
-    private func handlePrimaryAction() {
-        if filteredRecipes.isEmpty && !searchText.isEmpty {
-            askAI(with: searchText)
-            return
+    private func handleSubmit() {
+        if filtered.isEmpty && !searchText.isEmpty {
+            askAI(searchText)
+        } else if !filtered.isEmpty {
+            let idx = min(selectedIndex, filtered.count - 1)
+            runRequest(composedRequest ?? filtered[idx])
         }
-        guard !filteredRecipes.isEmpty else { return }
-        let idx = min(selectedIndex, filteredRecipes.count - 1)
-        runRecipe(filteredRecipes[idx])
     }
 
-    private func runRecipe(_ recipe: OptimizationRequest) {
-        Haptics.tap()
-        // Use the composer-modified version if available, otherwise original
-        var working = expandedModifiedRequest?.id == recipe.id
-            ? expandedModifiedRequest!
-            : recipe
+    private func runRequest(_ request: OptimizationRequest) {
+        // Block if hard conflicts exist
+        if IntentConflictDetector.hasErrors(request.intents) {
+            revalidate(request)
+            return
+        }
 
+        Haptics.tap()
+        var working = request
         if let seedEvent {
             working = working.withEventContext(seedEvent)
         }
 
-        phase = .working("Optimizing…")
-        appliedRecipeName = (recipe.name ?? "Optimize")
+        phase = .working("Optimizing...")
 
         Task {
-            let result = await optimizerService.executeRequest(
-                working,
-                reminderService: reminderService
-            )
+            let result = await optimizerService.executeRequest(working, reminderService: reminderService)
+
+            // Record for learning
+            optimizerService.backlogService.flatMap { _ in
+                // IntentLearner recording would go here
+            }
+
             await MainActor.run {
                 switch result {
                 case .success, .partialSuccess:
@@ -901,35 +770,30 @@ struct CommandPalette: View {
                         phase = .failed("No valid schedule found")
                         return
                     }
-                    let scenario = optimizerService.scenarios[0]
                     optimizerService.applyScenario(at: 0, to: reminderService)
 
-                    // Show brief inline confirmation with concrete event details
-                    // so the user's brain connects action → result.
                     let fmt = DateFormatter()
                     fmt.setLocalizedDateFormatFromTemplate("H:mm")
-                    let eventInfos = scenario.genes.prefix(3).map { gene in
-                        AppliedEventInfo(
+                    let infos = optimizerService.scenarios[0].genes.prefix(3).map { gene in
+                        EventInfo(
                             id: gene.eventId,
                             title: gene.title,
                             timeRange: "\(fmt.string(from: gene.startTime))–\(fmt.string(from: gene.endTime))"
                         )
                     }
-                    phase = .applied(eventInfos)
+                    phase = .applied(infos)
 
-                    // Offer undo via the host toast.
-                    onApplied(recipe, {
+                    onApplied(request) {
                         optimizerService.undoLast(reminderService: reminderService)
-                    })
+                    }
 
-                    // Auto-dismiss after 1 second — enough to read but not to wait.
                     Task { @MainActor in
                         try? await Task.sleep(for: .seconds(1))
-                        dismiss()
+                        onDismiss()
                     }
 
                 case .noEventsToOptimize:
-                    phase = .failed("Nothing to optimize — add events first")
+                    phase = .failed("Nothing to optimize — add tasks first")
 
                 case .infeasible(let reason, _):
                     phase = .failed(reason)
@@ -938,179 +802,55 @@ struct CommandPalette: View {
         }
     }
 
-    private func askAI(with prompt: String) {
+    private func askAI(_ prompt: String) {
         guard agentService.isConfigured else {
-            aiError = "Add an API key in Settings → Assistant to use AI"
+            aiError = "Add API key in Settings → Assistant"
             return
         }
         Haptics.tap()
-        phase = .working("Thinking…")
-        appliedRecipeName = "AI recipe"
-
+        phase = .working("Thinking...")
         Task {
             let result = await agentService.generateRequest(from: prompt)
             await MainActor.run {
                 switch result {
-                case .success(let recipe):
-                    runRecipe(recipe)
-                case .failure(let error):
-                    phase = .failed(error.localizedDescription)
+                case .success(let request): runRequest(request)
+                case .failure(let error): phase = .failed(error.localizedDescription)
                 }
             }
         }
     }
 
-    private func dismiss() {
-        onDismiss()
+    private func refreshPreview() {
+        dryRunTask?.cancel()
+        guard let top = filtered.first, top.isCreative || top.findSlotOnly else { return }
+        dryRunTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(200))
+            guard !Task.isCancelled else { return }
+            var working = top
+            working.speed = .quick
+            working.maxScenarios = 1
+            let genes = await optimizerService.executeDryRun(working, reminderService: reminderService)
+            guard !Task.isCancelled else { return }
+            if let genes, !genes.isEmpty {
+                let fmt = DateFormatter()
+                fmt.setLocalizedDateFormatFromTemplate("H:mm")
+                dryRunPreview = genes.prefix(2).map {
+                    "\($0.title) \(fmt.string(from: $0.startTime))–\(fmt.string(from: $0.endTime))"
+                }.joined(separator: " · ")
+            }
+        }
     }
 
     // MARK: - Keyboard
 
-    /// Keyboard shortcuts rendered as invisible buttons so SwiftUI can pick them up.
-    /// Arrow keys and Tab are handled via `.onKeyPress` on the palette card.
-    /// Esc and ⌘⇧A are handled here as fallbacks.
     @ViewBuilder
-    var keyboardShortcuts: some View {
+    private var shortcuts: some View {
         Group {
-            Button("Toggle all recipes") {
-                withAnimation(DS.Animation.quick) {
-                    showAllRecipes.toggle()
-                }
-            }
-            .keyboardShortcut("a", modifiers: [.command, .shift])
-
-            Button("Close") { dismiss() }
+            Button("All") { withAnimation(DS.Animation.quick) { showAll.toggle() } }
+                .keyboardShortcut("a", modifiers: [.command, .shift])
+            Button("Close") { onDismiss() }
                 .keyboardShortcut(.cancelAction)
         }
-        .opacity(0)
-        .frame(width: 0, height: 0)
-        .accessibilityHidden(true)
-    }
-}
-
-// MARK: - Recipe Row
-
-private struct RecipeRow: View {
-    @Environment(\.activeSkin) private var skin
-
-    let recipe: OptimizationRequest
-    let isSelected: Bool
-    let isExpanded: Bool
-    let isTopSuggestion: Bool
-    let previewText: String?
-    let onTap: () -> Void
-    let onExpand: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: DS.Spacing.sm) {
-                // Main click target — runs the recipe.
-                Button(action: onTap) {
-                    HStack(spacing: DS.Spacing.sm) {
-                        Circle()
-                            .fill(DS.Colors.categoryPalette[recipe.categoryColorIndex])
-                            .frame(
-                                width: isTopSuggestion ? 10 : DS.Size.recipeDotSize,
-                                height: isTopSuggestion ? 10 : DS.Size.recipeDotSize
-                            )
-                            .frame(width: 18)
-
-                        VStack(alignment: .leading, spacing: isTopSuggestion ? 2 : 1) {
-                            Text((recipe.name ?? "Optimize"))
-                                .font(isTopSuggestion ? .headline.weight(.semibold) : .subheadline.weight(isSelected ? .semibold : .medium))
-                                .foregroundStyle(skin.resolvedTextPrimary)
-                                .lineLimit(1)
-
-                            // Preview text replaces the generic description
-                            // when schedule-aware info is available (Birman: information > description).
-                            if let preview = previewText {
-                                Text(preview)
-                                    .font(isTopSuggestion ? .caption : .caption2)
-                                    .foregroundStyle(skin.accentColor.opacity(0.85))
-                                    .lineLimit(1)
-                            } else {
-                                Text((recipe.description ?? recipe.intents.map(\.label).joined(separator: " · ")))
-                                    .font(.caption2)
-                                    .foregroundStyle(skin.resolvedTextSecondary)
-                                    .lineLimit(1)
-                            }
-                        }
-
-                        Spacer(minLength: DS.Spacing.sm)
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-
-                // Expand chevron — opens intent composer
-                Button(action: onExpand) {
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(skin.resolvedTextTertiary)
-                        .frame(width: 20, height: 20)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(isExpanded ? "Collapse" : "Customize intents")
-            }
-            .padding(.vertical, isTopSuggestion ? DS.Spacing.sm : DS.Spacing.xs)
-            .padding(.horizontal, DS.Spacing.sm)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(
-                        isTopSuggestion
-                            ? skin.accentColor.opacity(isSelected ? 0.18 : 0.08)
-                            : (isSelected ? skin.accentColor.opacity(0.14) : Color.clear)
-                    )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .strokeBorder(
-                        isTopSuggestion ? skin.accentColor.opacity(0.20) : Color.clear,
-                        lineWidth: 0.5
-                    )
-            )
-
-            // Intent summary when expanded (composer is in the parent view)
-            if isExpanded {
-                HStack(spacing: DS.Spacing.xs) {
-                    ForEach(Array(recipe.intents.prefix(5).enumerated()), id: \.offset) { _, intent in
-                        Text(intent.label)
-                            .font(.caption2)
-                            .foregroundStyle(skin.accentColor.opacity(0.7))
-                            .padding(.horizontal, DS.Spacing.xs)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(skin.accentColor.opacity(0.08)))
-                    }
-                    if recipe.intents.count > 5 {
-                        Text("+\(recipe.intents.count - 5)")
-                            .font(.caption2)
-                            .foregroundStyle(skin.resolvedTextTertiary)
-                    }
-                }
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.bottom, DS.Spacing.xs)
-                .transition(.opacity.combined(with: .move(edge: .top)))
-            }
-        }
-    }
-
-    // Legacy param UI removed — replaced by intent composer in parent view.
-    // RecipeRow now shows intent summary chips instead.
-
-    private func pill(label: String, isActive: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(label)
-                .font(.caption2.weight(.medium))
-                .foregroundStyle(isActive ? Color.white : skin.resolvedTextPrimary)
-                .padding(.horizontal, DS.Spacing.sm)
-                .padding(.vertical, 3)
-                .background(
-                    Capsule()
-                        .fill(isActive ? skin.accentColor : skin.accentColor.opacity(0.10))
-                )
-        }
-        .buttonStyle(.plain)
+        .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
     }
 }

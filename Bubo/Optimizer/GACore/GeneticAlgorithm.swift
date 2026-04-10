@@ -46,6 +46,24 @@ struct GAConfiguration: Sendable {
         immigrationRate: 0.1
     )
 
+    /// Ultra-fast config for live preview and drag-to-schedule reflow.
+    /// ~20 generations, ~100ms on modern hardware.
+    /// Trades optimality for speed — good enough for preview, not final schedule.
+    static let instant = GAConfiguration(
+        populationSize: 20,
+        maxGenerations: 20,
+        mutationRate: 0.25,
+        crossoverRate: 0.7,
+        eliteCount: 1,
+        selectionStrategy: .tournament(size: 2),
+        crossoverStrategy: .singlePoint,
+        convergenceThreshold: 0.01,
+        convergencePatience: 5,
+        adaptiveMutation: false,
+        diversityThreshold: 0.05,
+        immigrationRate: 0.0
+    )
+
     static let thorough = GAConfiguration(
         populationSize: 200,
         maxGenerations: 500,

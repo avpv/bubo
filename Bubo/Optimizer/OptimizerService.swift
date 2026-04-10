@@ -117,6 +117,35 @@ final class OptimizerService {
         return result
     }
 
+    /// Instant reflow for drag-to-schedule and live preview.
+    /// Ultra-fast GA (~100ms) with warm start from current schedule.
+    func instantReflow(
+        reminderService: ReminderService,
+        movableEvents: [OptimizableEvent] = []
+    ) async -> [ScheduleGene]? {
+        let fixedEvents = reminderService.allEvents.filter { !$0.isLocalEvent }
+        let localMovable = reminderService.localEvents
+            .filter { $0.isUpcoming && $0.isMovable }
+            .map { $0.toOptimizableEvent() }
+
+        let allMovable = localMovable + movableEvents
+        guard !allMovable.isEmpty else { return nil }
+
+        let cal = Calendar.current
+        let now = Date()
+        let todayEnd = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now))!
+
+        let context = OptimizerContext(
+            fixedEvents: fixedEvents,
+            movableEvents: allMovable,
+            workingHours: workingHours,
+            planningHorizon: DateInterval(start: now, end: todayEnd),
+            preferences: optimizer.preferences
+        )
+
+        return await optimizer.instantReflow(context: context)
+    }
+
     /// Dry-run for preview — returns genes without storing results.
     func executeDryRun(
         _ request: OptimizationRequest,
