@@ -154,7 +154,6 @@ struct CommandPalette: View {
             shortcuts
         }
         .onAppear {
-            isSearchFocused = true
             if let seed = seedPreset {
                 composedRequest = seed
                 showPowerMode = true
@@ -165,6 +164,7 @@ struct CommandPalette: View {
                 runRequest(suggestions[0].request)
                 return
             }
+            isSearchFocused = true
             refreshPreview()
         }
         .onDisappear { dryRunTask?.cancel() }
