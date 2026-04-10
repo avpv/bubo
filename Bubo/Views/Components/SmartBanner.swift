@@ -2,17 +2,17 @@ import SwiftUI
 
 // MARK: - Smart Banner
 //
-// A thin, single-line notice rendered above the event list when the
-// SuggestionEngine surfaces a contextually relevant optimization request.
-// Tapping the banner opens the CommandPalette seeded with that request.
-// Dismissing it silences the banner for the rest of the session.
+// One-line contextual suggestion with a Run button.
+// Tapping Run executes immediately (no palette). Undo via toast.
+// Birman: one action, one result, one undo.
 
 struct SmartBanner: View {
     @Environment(\.activeSkin) private var skin
 
     let request: OptimizationRequest
     let reason: String
-    let onTap: () -> Void
+    /// Run the request directly — no palette, no configuration.
+    let onRun: () -> Void
     let onDismiss: () -> Void
 
     var body: some View {
@@ -30,21 +30,20 @@ struct SmartBanner: View {
 
             Spacer(minLength: DS.Spacing.xs)
 
+            // Run button — executes immediately
             Button {
                 Haptics.tap()
-                onTap()
+                onRun()
             } label: {
-                HStack(spacing: 2) {
-                    Text(request.name ?? "Optimize")
-                        .font(.caption.weight(.semibold))
-                    Image(systemName: "arrow.right")
-                        .font(.caption2.weight(.semibold))
-                }
-                .foregroundStyle(skin.accentColor)
-                .contentShape(Rectangle())
+                Text("Run")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, DS.Spacing.sm)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(skin.accentColor))
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Run \(request.name ?? "optimization")")
+            .accessibilityLabel("Run: \(reason)")
 
             Button {
                 Haptics.tap()
@@ -57,7 +56,7 @@ struct SmartBanner: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Dismiss suggestion")
+            .accessibilityLabel("Dismiss")
         }
         .padding(.horizontal, DS.Spacing.md)
         .padding(.vertical, DS.Spacing.xs)
