@@ -111,6 +111,90 @@ enum ScheduleIntent: Codable, Hashable, Sendable {
 
     /// How many scenarios to show (1 = auto-apply best).
     case scenarios(count: Int)
+
+    // MARK: - Sources (where data comes from)
+
+    /// Only include events from a specific calendar.
+    case fromCalendar(name: String)
+
+    /// Only include events/tasks from a specific project.
+    case fromProject(name: String)
+
+    /// Restrict to a specific date range.
+    case fromTimeRange(start: Date, end: Date)
+
+    // MARK: - Transforms (modify events before GA)
+
+    /// Split tasks longer than N minutes into parts.
+    case splitLong(maxMinutes: Int)
+
+    /// Add buffer time between all events.
+    case addBuffer(minutes: Int)
+
+    /// Cap total scheduled work time per day.
+    case capTotal(minutesPerDay: Int)
+
+    /// Merge adjacent events from the same project into one block.
+    case mergeAdjacent(context: String)
+
+    // MARK: - Conditions (runtime branching)
+
+    /// Conditional: if condition met, apply `then` intents; otherwise `else`.
+    case when(IntentCondition, then: [ScheduleIntent], otherwise: [ScheduleIntent])
+
+    // MARK: - Output (what to do with result)
+
+    /// Auto-apply best scenario without showing options.
+    case autoApply
+
+    /// Show notification with message after completion.
+    case notify(message: String)
+
+    /// Run another optimization request after this one completes.
+    case chainThen(OptimizationRequest)
+
+    /// Save the current composed intents as a named preset.
+    case saveAsPreset(name: String)
+
+    // MARK: - Triggers (when to run)
+
+    /// Run when an event is deleted.
+    case onEventDeleted
+
+    /// Run when a new event is created.
+    case onNewEvent
+
+    /// Run daily at a specific hour.
+    case daily(hour: Int)
+
+    /// Run weekly on a specific day (1=Sun, 2=Mon, ...).
+    case weekly(day: Int)
+
+    /// Run after Apple Calendar sync completes.
+    case onCalendarSync
+}
+
+// MARK: - Intent Condition
+
+/// Runtime condition for `.when` nodes.
+enum IntentCondition: Codable, Hashable, Sendable {
+    /// Schedule has N or more meetings today.
+    case meetingHeavy(threshold: Int)
+
+    /// Nearest deadline within N days.
+    case deadlineWithin(days: Int)
+
+    /// Current time is after this hour.
+    case afterHour(Int)
+
+    /// Backlog has N or more pending tasks.
+    case pendingTasks(threshold: Int)
+
+    /// Specific day of week (1=Sun, 2=Mon, ...).
+    case dayOfWeek(Int)
+
+    /// Free gap longer than N minutes exists.
+    case hasFreeGap(minutes: Int)
 }
 
 // MARK: - Intent Application
@@ -150,6 +234,28 @@ extension ScheduleIntent {
         case .findSlotsForBacklog: return "Find slots for tasks"
         case .speed(let s): return "Speed: \(s.rawValue)"
         case .scenarios(let n): return n == 1 ? "Auto-apply" : "\(n) scenarios"
+        // Sources
+        case .fromCalendar(let n): return "From: \(n)"
+        case .fromProject(let n): return "Project: \(n)"
+        case .fromTimeRange: return "Custom date range"
+        // Transforms
+        case .splitLong(let m): return "Split tasks > \(m)m"
+        case .addBuffer(let m): return "Buffer \(m)m"
+        case .capTotal(let m): return "Max \(m)m/day"
+        case .mergeAdjacent(let c): return "Merge \(c)"
+        // Conditions
+        case .when(let cond, _, _): return "If \(cond.label)"
+        // Output
+        case .autoApply: return "Auto-apply best"
+        case .notify(let m): return "Notify: \(m)"
+        case .chainThen(let r): return "Then: \(r.name ?? "optimize")"
+        case .saveAsPreset(let n): return "Save as \(n)"
+        // Triggers
+        case .onEventDeleted: return "On event deleted"
+        case .onNewEvent: return "On new event"
+        case .daily(let h): return "Daily at \(h):00"
+        case .weekly(let d): return "Weekly day \(d)"
+        case .onCalendarSync: return "On calendar sync"
         }
     }
 
@@ -172,6 +278,33 @@ extension ScheduleIntent {
             return .tasks
         case .speed, .scenarios:
             return .meta
+        case .fromCalendar, .fromProject, .fromTimeRange:
+            return .source
+        case .splitLong, .addBuffer, .capTotal, .mergeAdjacent:
+            return .transform
+        case .when:
+            return .condition
+        case .autoApply, .notify, .chainThen, .saveAsPreset:
+            return .output
+        case .onEventDeleted, .onNewEvent, .daily, .weekly, .onCalendarSync:
+            return .trigger
+        }
+    }
+}
+
+// MARK: - Intent Condition Labels
+
+extension IntentCondition {
+    var label: String {
+        switch self {
+        case .meetingHeavy(let n): return "\(n)+ meetings"
+        case .deadlineWithin(let d): return "deadline in \(d)d"
+        case .afterHour(let h): return "after \(h):00"
+        case .pendingTasks(let n): return "\(n)+ pending tasks"
+        case .dayOfWeek(let d):
+            let names = ["", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+            return d < names.count ? names[d] : "day \(d)"
+        case .hasFreeGap(let m): return "\(m)m+ free"
         }
     }
 }
@@ -179,10 +312,18 @@ extension ScheduleIntent {
 // MARK: - Intent Category
 
 enum IntentCategory: String, CaseIterable, Sendable {
+    case trigger = "Trigger"
+    case source = "Source"
     case time = "Time"
+    case tasks = "Tasks"
     case create = "Create"
+    case transform = "Transform"
     case weights = "Priorities"
     case energy = "Energy"
+    case rules = "Rules"
+    case condition = "Condition"
+    case meta = "Config"
+    case output = "Output"
     case rules = "Rules"
     case tasks = "Tasks"
     case meta = "Options"
@@ -344,34 +485,9 @@ struct OptimizationRequest: Codable, Hashable, Sendable, Identifiable {
     }
 
     /// Available intents that can be added (not already present).
+    /// Uses IntentGraph.allKnownIntents as the palette.
     var availableIntents: [ScheduleIntent] {
-        let palette: [ScheduleIntent] = [
-            .noEventsBefore(hour: 11),
-            .noEventsAfter(hour: 17),
-            .horizon(.today),
-            .horizon(.tomorrow),
-            .horizon(.week),
-            .focusBlock(minutes: 120, period: .morning),
-            .pomodoroSession(),
-            .prioritizeDeadlines(),
-            .prioritizeFocus(),
-            .minimizeContextSwitching(),
-            .groupByProject(),
-            .batchMeetings(),
-            .lowEnergy,
-            .morningPerson,
-            .protectLunch(),
-            .breakEvery(workMinutes: 60, breakMinutes: 10),
-            .maxMeetings(perDay: 3),
-            .includeBacklog,
-            .findSlotsForBacklog,
-            .stability(.normal),
-            .stability(.conservative),
-            .speed(.quick),
-            .speed(.balanced),
-            .speed(.thorough),
-        ]
-        return palette.filter { candidate in
+        IntentGraph.allKnownIntents.filter { candidate in
             !intents.contains(candidate)
         }
     }

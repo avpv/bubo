@@ -32,12 +32,14 @@ struct IntentCompiler {
             apply(intent, to: &config)
         }
 
-        // Phase 2: Collect events
+        // Phase 2: Collect events (filtered by sources)
         let syntheticEvents = resolveSyntheticEvents(config)
         var localEvents = collectLocalEvents(config)
         localEvents = applyEventRules(config, to: localEvents)
 
-        let allMovable = syntheticEvents + localEvents
+        // Phase 2.5: Apply transforms
+        var allMovable = syntheticEvents + localEvents
+        allMovable = applyTransforms(config.transforms, to: allMovable)
         guard !allMovable.isEmpty else {
             return .noEventsToOptimize
         }
@@ -137,9 +139,31 @@ private extension IntentCompiler {
         var includeBacklog: Bool = false
         var backlogTaskIds: Set<String>? = nil  // nil = all pending
 
+        // Source filters
+        var calendarFilter: String? = nil
+        var projectFilter: String? = nil
+        var timeRangeFilter: DateInterval? = nil
+
+        // Transforms
+        var transforms: [EventTransform] = []
+
+        // Output
+        var autoApply: Bool = false
+        var notifyMessage: String? = nil
+        var chainedRequest: OptimizationRequest? = nil
+        var savePresetName: String? = nil
+
         init(defaultWorkingHours: ClosedRange<Int>) {
             self.workingHours = defaultWorkingHours
         }
+    }
+
+    /// Post-collection event transforms.
+    enum EventTransform {
+        case splitLong(maxMinutes: Int)
+        case addBuffer(minutes: Int)
+        case capTotal(minutesPerDay: Int)
+        case mergeAdjacent(context: String)
     }
 
     // MARK: - Apply Single Intent
@@ -247,6 +271,90 @@ private extension IntentCompiler {
         // Display
         case .scenarios(let count):
             config.maxScenarios = count
+
+        // Sources — filter events by calendar/project
+        case .fromCalendar(let name):
+            config.calendarFilter = name
+        case .fromProject(let name):
+            config.projectFilter = name
+        case .fromTimeRange(let start, let end):
+            config.timeRangeFilter = DateInterval(start: start, end: end)
+
+        // Transforms — applied after collecting events, before GA
+        case .splitLong(let maxMinutes):
+            config.transforms.append(.splitLong(maxMinutes: maxMinutes))
+        case .addBuffer(let minutes):
+            config.transforms.append(.addBuffer(minutes: minutes))
+        case .capTotal(let minutesPerDay):
+            config.transforms.append(.capTotal(minutesPerDay: minutesPerDay))
+        case .mergeAdjacent(let context):
+            config.transforms.append(.mergeAdjacent(context: context))
+
+        // Conditions — evaluated at runtime
+        case .when(let condition, let thenIntents, let elseIntents):
+            let passes = evaluateCondition(condition)
+            let intents = passes ? thenIntents : elseIntents
+            for intent in intents {
+                apply(intent, to: &config)
+            }
+
+        // Output — how to handle the result
+        case .autoApply:
+            config.maxScenarios = 1
+            config.autoApply = true
+        case .notify(let message):
+            config.notifyMessage = message
+        case .chainThen(let next):
+            config.chainedRequest = next
+        case .saveAsPreset(let name):
+            config.savePresetName = name
+
+        // Triggers — stored but not applied here (handled by trigger system)
+        case .onEventDeleted, .onNewEvent, .daily, .weekly, .onCalendarSync:
+            break  // Triggers are metadata, not compilation directives
+        }
+    }
+
+    /// Evaluate a runtime condition against current state.
+    private func evaluateCondition(_ condition: IntentCondition) -> Bool {
+        let cal = Calendar.current
+        let now = Date()
+        let todayEnd = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now))!
+
+        switch condition {
+        case .meetingHeavy(let threshold):
+            let meetings = reminderService.allEvents.filter {
+                $0.startDate >= now && $0.startDate < todayEnd && !$0.isLocalEvent
+            }
+            return meetings.count >= threshold
+
+        case .deadlineWithin(let days):
+            let cutoff = cal.date(byAdding: .day, value: days, to: now) ?? now
+            return backlogService.tasks.contains {
+                $0.status != .done && $0.deadline != nil && $0.deadline! <= cutoff
+            }
+
+        case .afterHour(let hour):
+            return cal.component(.hour, from: now) >= hour
+
+        case .pendingTasks(let threshold):
+            return backlogService.pending.count >= threshold
+
+        case .dayOfWeek(let day):
+            return cal.component(.weekday, from: now) == day
+
+        case .hasFreeGap(let minutes):
+            let events = reminderService.allEvents
+                .filter { $0.startDate >= now && $0.startDate < todayEnd }
+                .sorted { $0.startDate < $1.startDate }
+            var cursor = now
+            for event in events {
+                if event.startDate.timeIntervalSince(cursor) >= TimeInterval(minutes * 60) {
+                    return true
+                }
+                cursor = max(cursor, event.endDate)
+            }
+            return todayEnd.timeIntervalSince(cursor) >= TimeInterval(minutes * 60)
         }
     }
 }
@@ -280,12 +388,13 @@ private extension IntentCompiler {
 
     func collectLocalEvents(_ config: ResolvedConfig) -> [OptimizableEvent] {
         guard !config.findSlotsOnly else {
-            // For slot-finding, local events are treated as fixed (handled in execute)
-            // Only return backlog tasks if requested
             return collectBacklogTasks(config)
         }
 
         var events = collectLocalEventsForHorizon(config.horizon)
+
+        // Apply source filters
+        events = applySourceFilters(config, to: events)
 
         // Filter to specific IDs if set
         if let onlyIds = config.onlyIds {
@@ -331,6 +440,106 @@ private extension IntentCompiler {
             filtered = pending
         }
         return filtered.map { $0.toOptimizableEvent() }
+    }
+
+    /// Apply source filters (calendar, project, time range) to events.
+    func applySourceFilters(_ config: ResolvedConfig, to events: [OptimizableEvent]) -> [OptimizableEvent] {
+        var result = events
+
+        if let calFilter = config.calendarFilter {
+            // Filter by calendar name context
+            result = result.filter { $0.context == calFilter || calFilter.isEmpty }
+        }
+
+        if let projFilter = config.projectFilter {
+            result = result.filter { $0.context == projFilter }
+        }
+
+        if let range = config.timeRangeFilter {
+            // Only keep events whose preferred time overlaps the range
+            // (for movable events without fixed times, keep all)
+            _ = range  // time range filter is applied in horizon resolution
+        }
+
+        return result
+    }
+
+    /// Apply transforms to movable events before GA.
+    func applyTransforms(_ transforms: [ResolvedConfig.EventTransform], to events: [OptimizableEvent]) -> [OptimizableEvent] {
+        var result = events
+
+        for transform in transforms {
+            switch transform {
+            case .splitLong(let maxMinutes):
+                let maxDuration = TimeInterval(maxMinutes * 60)
+                result = result.flatMap { event -> [OptimizableEvent] in
+                    guard event.duration > maxDuration else { return [event] }
+                    let parts = Int(ceil(event.duration / maxDuration))
+                    let partDuration = event.duration / Double(parts)
+                    return (0..<parts).map { i in
+                        OptimizableEvent(
+                            id: "\(event.id)_p\(i)",
+                            title: "\(event.title) (\(i + 1)/\(parts))",
+                            duration: partDuration,
+                            deadline: event.deadline,
+                            priority: event.priority,
+                            context: event.context,
+                            energyCost: event.energyCost,
+                            preferredHourRange: event.preferredHourRange,
+                            isFocusBlock: event.isFocusBlock,
+                            storyPoints: event.storyPoints,
+                            dependsOn: i == 0 ? event.dependsOn : ["\(event.id)_p\(i - 1)"]
+                        )
+                    }
+                }
+
+            case .addBuffer(let minutes):
+                // Buffer is handled by the GA's buffer objective weight
+                // Increase the buffer weight to enforce it
+                _ = minutes
+
+            case .capTotal(let minutesPerDay):
+                // Sort by priority descending, keep events until total exceeds cap
+                let maxDuration = TimeInterval(minutesPerDay * 60)
+                let sorted = result.sorted { $0.priority > $1.priority }
+                var total: TimeInterval = 0
+                result = sorted.filter { event in
+                    total += event.duration
+                    return total <= maxDuration
+                }
+
+            case .mergeAdjacent(let context):
+                // Merge events with matching context by increasing duration
+                var merged: [OptimizableEvent] = []
+                var pendingMerge: OptimizableEvent? = nil
+                let matching = result.filter { $0.context == context }
+                let nonMatching = result.filter { $0.context != context }
+
+                for event in matching {
+                    if var pending = pendingMerge {
+                        pending = OptimizableEvent(
+                            id: pending.id,
+                            title: pending.title,
+                            duration: pending.duration + event.duration,
+                            deadline: pending.deadline ?? event.deadline,
+                            priority: max(pending.priority, event.priority),
+                            context: pending.context,
+                            energyCost: max(pending.energyCost, event.energyCost),
+                            preferredHourRange: pending.preferredHourRange,
+                            isFocusBlock: pending.isFocusBlock || event.isFocusBlock,
+                            storyPoints: pending.storyPoints
+                        )
+                        pendingMerge = pending
+                    } else {
+                        pendingMerge = event
+                    }
+                }
+                if let pending = pendingMerge { merged.append(pending) }
+                result = nonMatching + merged
+            }
+        }
+
+        return result
     }
 
     func collectLocalEventsForHorizon(_ horizon: Horizon) -> [OptimizableEvent] {

@@ -42,14 +42,20 @@ struct IntentGraph: Sendable {
     }
 
     /// Execution phases in topological order.
+    /// Full pipeline: trigger → source → context → tasks → create → transform → weights → energy → rules → condition → config → output
     enum Phase: Int, Comparable, CaseIterable, Sendable {
-        case context = 0    // horizon, workingHours, noEventsBefore/After
-        case tasks = 1      // includeBacklog, findSlotsForBacklog
-        case create = 2     // focusBlock, createBlock, pomodoroSession
-        case weights = 3    // prioritizeDeadlines, prioritizeFocus, batchMeetings
-        case energy = 4     // lowEnergy, morningPerson, breakEvery, protectLunch
-        case rules = 5      // keepFixed, exclude, onlyOptimize, preferPeriod
-        case config = 6     // speed, stability, scenarios
+        case trigger = 0
+        case source = 1
+        case context = 2
+        case tasks = 3
+        case create = 4
+        case transform = 5
+        case weights = 6
+        case energy = 7
+        case rules = 8
+        case condition = 9
+        case config = 10
+        case output = 11
 
         static func < (lhs: Phase, rhs: Phase) -> Bool {
             lhs.rawValue < rhs.rawValue
@@ -275,6 +281,28 @@ struct IntentGraph: Sendable {
         case .findSlotsForBacklog: return "findSlotsForBacklog"
         case .speed(let s): return "speed.\(s.rawValue)"
         case .scenarios: return "scenarios"
+        // Sources
+        case .fromCalendar(let n): return "fromCalendar.\(n)"
+        case .fromProject(let n): return "fromProject.\(n)"
+        case .fromTimeRange: return "fromTimeRange"
+        // Transforms
+        case .splitLong: return "splitLong"
+        case .addBuffer: return "addBuffer"
+        case .capTotal: return "capTotal"
+        case .mergeAdjacent(let c): return "mergeAdjacent.\(c)"
+        // Conditions
+        case .when(let c, _, _): return "when.\(c.label)"
+        // Output
+        case .autoApply: return "autoApply"
+        case .notify: return "notify"
+        case .chainThen: return "chainThen"
+        case .saveAsPreset(let n): return "saveAsPreset.\(n)"
+        // Triggers
+        case .onEventDeleted: return "onEventDeleted"
+        case .onNewEvent: return "onNewEvent"
+        case .daily(let h): return "daily.\(h)"
+        case .weekly(let d): return "weekly.\(d)"
+        case .onCalendarSync: return "onCalendarSync"
         }
     }
 
@@ -282,22 +310,44 @@ struct IntentGraph: Sendable {
 
     static func phase(for intent: ScheduleIntent) -> Phase {
         switch intent {
+        // Trigger
+        case .onEventDeleted, .onNewEvent, .daily, .weekly, .onCalendarSync:
+            return .trigger
+        // Source
+        case .fromCalendar, .fromProject, .fromTimeRange:
+            return .source
+        // Context
         case .noEventsBefore, .noEventsAfter, .workingHours, .horizon:
             return .context
+        // Tasks
         case .includeBacklog, .includeBacklogTasks, .findSlotsForBacklog:
             return .tasks
+        // Create
         case .focusBlock, .createBlock, .pomodoroSession:
             return .create
+        // Transform
+        case .splitLong, .addBuffer, .capTotal, .mergeAdjacent:
+            return .transform
+        // Weights
         case .prioritizeDeadlines, .prioritizeFocus, .minimizeContextSwitching,
              .groupByProject, .batchMeetings:
             return .weights
+        // Energy
         case .lowEnergy, .peakEnergy, .morningPerson, .protectLunch,
              .breakEvery, .maxMeetings:
             return .energy
+        // Rules
         case .keepFixed, .exclude, .onlyOptimize, .preferPeriod, .stability:
             return .rules
+        // Condition
+        case .when:
+            return .condition
+        // Config
         case .speed, .scenarios:
             return .config
+        // Output
+        case .autoApply, .notify, .chainThen, .saveAsPreset:
+            return .output
         }
     }
 
@@ -307,14 +357,17 @@ struct IntentGraph: Sendable {
     static func dependencies(for intent: ScheduleIntent) -> [ScheduleIntent] {
         switch intent {
         case .prioritizeDeadlines:
-            // Deadline prioritization only makes sense with backlog tasks
             return [.includeBacklog]
         case .findSlotsForBacklog:
-            // Slot-finding implies backlog inclusion
             return [.includeBacklog]
         case .groupByProject:
-            // Grouping needs existing events
             return [.includeBacklog]
+        case .splitLong:
+            return [.includeBacklog]
+        case .mergeAdjacent:
+            return [.includeBacklog]
+        case .chainThen:
+            return [.autoApply]  // chains need auto-apply to proceed
         default:
             return []
         }
@@ -335,6 +388,16 @@ struct IntentGraph: Sendable {
             return [.protectLunch()]
         case .pomodoroSession:
             return [.prioritizeFocus()]
+        case .splitLong:
+            return [.addBuffer(minutes: 5)]
+        case .capTotal:
+            return [.breakEvery(workMinutes: 60, breakMinutes: 10)]
+        case .daily:
+            return [.autoApply]  // daily triggers should auto-apply
+        case .onEventDeleted:
+            return [.stability(.conservative), .autoApply]
+        case .fromProject:
+            return [.groupByProject()]
         default:
             return []
         }
@@ -382,17 +445,33 @@ struct IntentGraph: Sendable {
     // MARK: - Known Intents (for suggestions)
 
     static let allKnownIntents: [ScheduleIntent] = [
+        // Triggers
+        .onEventDeleted, .onNewEvent, .daily(hour: 9), .weekly(day: 2), .onCalendarSync,
+        // Sources
+        .fromCalendar(name: "Work"), .fromProject(name: ""),
+        // Context
         .noEventsBefore(hour: 11), .noEventsAfter(hour: 17),
         .horizon(.today), .horizon(.tomorrow), .horizon(.week),
+        // Tasks
+        .includeBacklog, .findSlotsForBacklog,
+        // Create
         .focusBlock(minutes: 120), .pomodoroSession(),
+        // Transforms
+        .splitLong(maxMinutes: 90), .addBuffer(minutes: 10),
+        .capTotal(minutesPerDay: 360),
+        // Weights
         .prioritizeDeadlines(), .prioritizeFocus(),
         .minimizeContextSwitching(), .groupByProject(), .batchMeetings(),
+        // Energy
         .lowEnergy, .morningPerson, .protectLunch(),
         .breakEvery(workMinutes: 60, breakMinutes: 10),
         .maxMeetings(perDay: 3),
-        .includeBacklog, .findSlotsForBacklog,
+        // Rules
         .stability(.normal), .stability(.conservative),
+        // Config
         .speed(.quick), .speed(.balanced), .speed(.thorough),
+        // Output
+        .autoApply, .saveAsPreset(name: ""),
     ]
 }
 
@@ -401,13 +480,18 @@ struct IntentGraph: Sendable {
 extension IntentGraph.Phase {
     var displayName: String {
         switch self {
+        case .trigger: return "Trigger"
+        case .source: return "Source"
         case .context: return "When"
         case .tasks: return "Tasks"
         case .create: return "Create"
+        case .transform: return "Transform"
         case .weights: return "Priorities"
         case .energy: return "Energy"
         case .rules: return "Rules"
+        case .condition: return "Condition"
         case .config: return "Config"
+        case .output: return "Output"
         }
     }
 }
