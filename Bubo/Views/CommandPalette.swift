@@ -226,10 +226,14 @@ struct CommandPalette: View {
                     showPowerMode = false
                 }
 
-            if !searchText.isEmpty && !isBusy {
+            if !isBusy {
                 Button {
-                    searchText = ""
-                    isSearchFocused = true
+                    if searchText.isEmpty {
+                        onDismiss()
+                    } else {
+                        searchText = ""
+                        isSearchFocused = true
+                    }
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.caption)
@@ -333,7 +337,10 @@ struct CommandPalette: View {
                 hint("⌥", "customize")
             }
             Spacer()
-            hint("esc", "close")
+            Button { onDismiss() } label: {
+                hint("esc", "close")
+            }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, DS.Spacing.md)
         .padding(.top, DS.Spacing.sm)
