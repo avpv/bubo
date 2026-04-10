@@ -74,7 +74,7 @@ class ReminderService {
         }
 
         return allEvents.filter { event in
-            event.startDate >= now && event.startDate < cutoff
+            event.endDate > now && event.startDate < cutoff
         }.count
     }
 
