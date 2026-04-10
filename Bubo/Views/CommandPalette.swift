@@ -21,6 +21,8 @@ struct CommandPalette: View {
 
     var seedEvent: CalendarEvent? = nil
     var seedSlotMinutes: Int? = nil
+    var seedSlotStart: Date? = nil
+    var seedSlotEnd: Date? = nil
     var seedPreset: OptimizationRequest? = nil
 
     var onDismiss: () -> Void
@@ -79,17 +81,36 @@ struct CommandPalette: View {
         }
 
         if let minutes = seedSlotMinutes {
-            var result = [SmartSuggestion(
+            // Pin requests to the clicked slot's time window.
+            // In findSlotsOnly mode existing events are fixed obstacles,
+            // so narrowing working hours constrains only new blocks.
+            var focusRequest = OptimizationRequest.findFocus(minutes: minutes, period: nil)
+            pinToSlot(&focusRequest)
+            let focusSuggestion = SmartSuggestion(
                 label: "Focus \(minutes) min",
-                request: .findFocus(minutes: minutes)
-            )]
-            if !(optimizerService.backlogService?.pending.isEmpty ?? true) {
-                result.append(SmartSuggestion(
-                    label: "Fill with tasks",
-                    request: .scheduleBacklog
-                ))
+                request: focusRequest
+            )
+
+            guard let backlog = optimizerService.backlogService,
+                  !backlog.pending.isEmpty else {
+                return [focusSuggestion]
             }
-            return result
+
+            var backlogRequest = OptimizationRequest.scheduleBacklog
+            // Cap total task duration to slot size so the optimizer
+            // schedules a subset that fits instead of failing.
+            backlogRequest.add(.capTotal(minutesPerDay: minutes))
+            pinToSlot(&backlogRequest)
+            let taskSuggestion = SmartSuggestion(
+                label: "Fill with tasks (\(backlog.pending.count))",
+                request: backlogRequest
+            )
+
+            // Urgent/overdue context → tasks first; otherwise focus first.
+            let tasksFirst = !backlog.overdue.isEmpty || !backlog.urgent(withinDays: 2).isEmpty
+            return tasksFirst
+                ? [taskSuggestion, focusSuggestion]
+                : [focusSuggestion, taskSuggestion]
         }
 
         // Algorithm-ranked suggestions
@@ -145,11 +166,11 @@ struct CommandPalette: View {
             shortcuts
         }
         .onAppear {
-            isSearchFocused = true
             if let seed = seedPreset {
                 composedRequest = seed
                 showPowerMode = true
             }
+            isSearchFocused = true
             refreshPreview()
         }
         .onDisappear { dryRunTask?.cancel() }
@@ -300,10 +321,14 @@ struct CommandPalette: View {
             powerModeComposer(request)
         }
 
-        // Footer
+        // Footer — Birman: label describes the specific action, not a generic verb.
         HStack(spacing: DS.Spacing.md) {
-            hint("↵", "run")
-            hint("↑↓", "select")
+            hint("↵", selectedIndex < visibleItems.count
+                 ? visibleItems[selectedIndex].label
+                 : (searchText.isEmpty ? "run" : "Ask AI"))
+            if visibleItems.count > 1 {
+                hint("↑↓", "select")
+            }
             if !showPowerMode {
                 hint("⌥", "customize")
             }
@@ -595,7 +620,7 @@ struct CommandPalette: View {
                 .font(.subheadline.weight(.medium))
                 .multilineTextAlignment(.center)
             HStack(spacing: DS.Spacing.sm) {
-                Button("Try again") {
+                Button("Back") {
                     withAnimation(DS.Animation.quick) { phase = .picking }
                 }
                 .font(.caption.weight(.medium))
@@ -635,7 +660,7 @@ struct CommandPalette: View {
         var working = request
         if let seedEvent { working = working.withEventContext(seedEvent) }
 
-        phase = .working("Optimizing...")
+        phase = .working(working.findSlotOnly ? "Scheduling..." : "Optimizing...")
 
         Task {
             let result = await optimizerService.executeRequest(working, reminderService: reminderService)
@@ -684,6 +709,15 @@ struct CommandPalette: View {
                 }
             }
         }
+    }
+
+    /// Narrow working hours to the hour boundaries of the seeded slot.
+    private func pinToSlot(_ request: inout OptimizationRequest) {
+        guard let s = seedSlotStart, let e = seedSlotEnd else { return }
+        let cal = Calendar.current
+        let startHour = cal.component(.hour, from: s)
+        let endHour = min(cal.component(.hour, from: e) + (cal.component(.minute, from: e) > 0 ? 1 : 0), 24)
+        request.add(.workingHours(start: startHour, end: max(endHour, startHour + 1)))
     }
 
     private func refreshPreview() {

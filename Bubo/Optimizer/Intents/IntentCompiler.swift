@@ -105,11 +105,11 @@ struct IntentCompiler {
         )
 
         if filteredResult.scenarios.isEmpty {
-            return .infeasible(reason: "No feasible schedule found", snapshot: snapshot)
+            return .infeasible(reason: "Could not find a valid placement", snapshot: snapshot)
         }
 
         if let best = filteredResult.scenarios.first, best.fitness < 0.1 {
-            return .infeasible(reason: "Cannot satisfy constraints with current schedule", snapshot: snapshot)
+            return .infeasible(reason: "Not enough room in this time window", snapshot: snapshot)
         }
 
         return .success(filteredResult)
