@@ -17,7 +17,7 @@ final class SuggestionEngine {
     /// The single best suggestion right now (for SmartBanner).
     var suggestion: Suggestion?
 
-    private var suggestionTimer: Timer?
+    nonisolated(unsafe) private var suggestionTimer: Timer?
 
     init(reminderService: ReminderService, backlogService: BacklogService) {
         self.reminderService = reminderService

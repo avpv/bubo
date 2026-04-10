@@ -702,7 +702,6 @@ struct MenuBarView: View {
                 EventRowView(
                     event: event,
                     reminderService: reminderService,
-                    isFreshlyCreated: optimizerService.freshlyCreatedEventIds.contains(event.id),
                     onEdit: { event in resolveEdit(event) },
                     onDelete: { event in handleDelete(event) },
                     onDeleteOccurrence: { event in
@@ -749,7 +748,8 @@ struct MenuBarView: View {
                         withAnimation(DS.Animation.quick) {
                             paletteContext = PaletteContext(seedEvent: event, seedRecipeId: "prep-meeting")
                         }
-                    }
+                    },
+                    isFreshlyCreated: optimizerService.freshlyCreatedEventIds.contains(event.id)
                 )
             case .slot(let start, let end):
                 FreeSlotRow(

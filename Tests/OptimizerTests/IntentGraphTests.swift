@@ -191,7 +191,7 @@ final class IntentGraphTests: XCTestCase {
         let sg = registry.subgraph(id: "morning-routine")
         XCTAssertNotNil(sg)
 
-        let expanded = sg!.expand(registry: registry)
+        let expanded = sg!.expand(subgraphs: registry.subgraphs)
         XCTAssertFalse(expanded.isEmpty)
         // Should contain focusBlock
         let hasFocus = expanded.contains {
@@ -205,7 +205,7 @@ final class IntentGraphTests: XCTestCase {
     func testSubgraphWithVariables() {
         let registry = SubgraphRegistry()
         let sg = registry.subgraph(id: "deep-work-session")!
-        let expanded = sg.expand(registry: registry, variables: ["duration": .int(240)])
+        let expanded = sg.expand(subgraphs: registry.subgraphs, variables: ["duration": .int(240)])
         // focusBlock should use 240 minutes instead of default 180
         let focus = expanded.first {
             if case .focusBlock = $0 { return true }
