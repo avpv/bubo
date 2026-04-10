@@ -154,19 +154,29 @@ struct BacklogView: View {
     // MARK: - Add Task Field
 
     private var addTaskField: some View {
-        HStack(spacing: DS.Spacing.sm) {
-            Image(systemName: "plus")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
+        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: "plus")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
 
-            TextField("Add task...", text: $newTaskTitle)
-                .textFieldStyle(.plain)
-                .font(.callout)
-                .focused($isInputFocused)
-                .onSubmit { addTask() }
-                .onChange(of: newTaskTitle) {
-                    computeGhostPreview()
-                }
+                TextField("Add task...", text: $newTaskTitle)
+                    .textFieldStyle(.plain)
+                    .font(.callout)
+                    .focused($isInputFocused)
+                    .onSubmit { addTask() }
+                    .onChange(of: newTaskTitle) {
+                        computeGhostPreview()
+                    }
+            }
+
+            // Hint for new users — disappears once they add a task.
+            if activeTasks.isEmpty && !isInputFocused {
+                Text("Tasks you add here will be scheduled into free slots")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .transition(.opacity)
+            }
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.sm)

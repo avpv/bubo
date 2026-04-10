@@ -18,6 +18,9 @@ struct MenuBarView: View {
     /// Set from footer / keyboard shortcut, consumed by BacklogView.
     @State private var focusTaskInput = false
 
+    /// Incremented to trigger a scroll-to-backlog inside the active ScrollView.
+    @State private var scrollToBacklogTick = 0
+
     // Command palette — the single entry point for all optimize flows.
     @State private var paletteContext: PaletteContext? = nil
     @State private var dismissedBannerIds: Set<String> = {
@@ -258,6 +261,7 @@ struct MenuBarView: View {
             // Hidden button for ⇧⌘N shortcut — focuses the task input field.
             Button("") {
                 Haptics.tap()
+                scrollToBacklogTick += 1
                 focusTaskInput = true
             }
             .keyboardShortcut("n", modifiers: [.command, .shift])
@@ -305,6 +309,10 @@ struct MenuBarView: View {
     }
 
     // MARK: - Helpers
+
+    private var pendingTaskCount: Int {
+        optimizerService.backlogService?.pending.count ?? 0
+    }
 
     private var isScrolledFromTop: Bool {
         guard let pos = scrollPositionID else { return false }
@@ -756,7 +764,7 @@ struct MenuBarView: View {
                     }
 
                     VStack(spacing: DS.Spacing.xs) {
-                        Text("All clear")
+                        Text(pendingTaskCount > 0 ? "No events" : "All clear")
                             .font(.headline)
                             .fontWeight(skin.resolvedHeadlineFontWeight)
                             .foregroundStyle(skin.resolvedTextPrimary)
@@ -836,44 +844,54 @@ struct MenuBarView: View {
     }
 
     private var eventList: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                // Backlog tasks — always accessible at the top of the timeline.
-                // Birman: don't hide features behind navigation; show where the user already looks.
-                inlineBacklog
-                    .id("backlogSection")
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    // Backlog tasks — always accessible at the top of the timeline.
+                    // Birman: don't hide features behind navigation; show where the user already looks.
+                    inlineBacklog
+                        .id("backlogSection")
 
-                LazyVStack(alignment: .leading, spacing: DS.Spacing.md) {
-                    // Smart banner — at most one contextual suggestion.
-                    if let suggestion = activeBannerSuggestion {
-                        SmartBanner(
-                            request: suggestion.request,
-                            reason: suggestion.reason,
-                            onRun: {
-                                runQuickAction(suggestion.request, label: suggestion.reason)
-                            },
-                            onDismiss: {
-                                withAnimation(DS.Animation.quick) {
-                                    optimizerService.suggestionEngine?.suggestion = nil
+                    SkinSeparator()
+                        .padding(.horizontal, DS.Spacing.md)
+
+                    LazyVStack(alignment: .leading, spacing: DS.Spacing.md) {
+                        // Smart banner — at most one contextual suggestion.
+                        if let suggestion = activeBannerSuggestion {
+                            SmartBanner(
+                                request: suggestion.request,
+                                reason: suggestion.reason,
+                                onRun: {
+                                    runQuickAction(suggestion.request, label: suggestion.reason)
+                                },
+                                onDismiss: {
+                                    withAnimation(DS.Animation.quick) {
+                                        optimizerService.suggestionEngine?.suggestion = nil
+                                    }
                                 }
-                            }
-                        )
-                    }
+                            )
+                        }
 
-                    ForEach(filteredEventsByDay, id: \.date) { dayGroup in
-                        dayGroupSection(dayGroup)
+                        ForEach(filteredEventsByDay, id: \.date) { dayGroup in
+                            dayGroupSection(dayGroup)
+                        }
                     }
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.top, DS.Spacing.md)
+                    .padding(.bottom, DS.Spacing.xl)
+                    .scrollTargetLayout()
                 }
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.top, DS.Spacing.md)
-                .padding(.bottom, DS.Spacing.xl)
-                .scrollTargetLayout()
+                .id("eventListTop")
+                .animation(DS.Animation.smoothSpring, value: reminderService.disintegratingEventIDs)
             }
-            .id("eventListTop")
-            .animation(DS.Animation.smoothSpring, value: reminderService.disintegratingEventIDs)
+            .scrollPosition(id: $scrollPositionID)
+            .scrollContentBackground(.hidden)
+            .onChange(of: scrollToBacklogTick) { _, _ in
+                withAnimation(DS.Animation.smoothSpring) {
+                    proxy.scrollTo("backlogSection", anchor: .top)
+                }
+            }
         }
-        .scrollPosition(id: $scrollPositionID)
-        .scrollContentBackground(.hidden)
     }
 
     // MARK: - Day Group Section (extracted for release-mode type checker)
@@ -1057,6 +1075,7 @@ struct MenuBarView: View {
                 }
                 Button {
                     Haptics.tap()
+                    scrollToBacklogTick += 1
                     focusTaskInput = true
                 } label: {
                     Label("New Task", systemImage: "plus.circle")
@@ -1075,6 +1094,7 @@ struct MenuBarView: View {
             // Birman: don't hide features in menus; show them where the user can see them.
             Button {
                 Haptics.tap()
+                scrollToBacklogTick += 1
                 focusTaskInput = true
             } label: {
                 let count = optimizerService.backlogService?.pending.count ?? 0
