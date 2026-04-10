@@ -17,10 +17,16 @@ struct BacklogView: View {
     var reminderService: ReminderService
     var onScheduleTasks: () -> Void
     var onDeleteTask: ((BacklogTask) -> Void)?
+    /// External trigger: set to `true` to focus the "Add task…" field.
+    /// BacklogView resets it to `false` after grabbing focus.
+    @Binding var focusRequested: Bool
+    /// When true, the task list expands automatically on appear if tasks exist.
+    /// Used in the empty-calendar state where tasks are the primary content.
+    var autoExpand: Bool = false
 
     @Environment(\.activeSkin) private var skin
     @State private var newTaskTitle = ""
-    @State private var isExpanded = true
+    @State private var isExpanded = false
     @State private var editingTaskId: String? = nil
     @State private var ghostPreview: String? = nil
     @State private var ghostPreviewTask: Task<Void, Never>? = nil
@@ -43,6 +49,17 @@ struct BacklogView: View {
             }
             addTaskField
             ghostPreviewRow
+        }
+        .onChange(of: focusRequested) { _, requested in
+            if requested {
+                isInputFocused = true
+                focusRequested = false
+            }
+        }
+        .onAppear {
+            if autoExpand && !activeTasks.isEmpty {
+                isExpanded = true
+            }
         }
     }
 
@@ -145,22 +162,39 @@ struct BacklogView: View {
     // MARK: - Add Task Field
 
     private var addTaskField: some View {
-        HStack(spacing: DS.Spacing.sm) {
-            Image(systemName: "plus")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
+        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: "plus")
+                    .font(.caption)
+                    .foregroundStyle(isInputFocused ? skin.accentColor : .tertiary)
 
-            TextField("Add task...", text: $newTaskTitle)
-                .textFieldStyle(.plain)
-                .font(.callout)
-                .focused($isInputFocused)
-                .onSubmit { addTask() }
-                .onChange(of: newTaskTitle) {
-                    computeGhostPreview()
-                }
+                TextField("Add task...", text: $newTaskTitle)
+                    .textFieldStyle(.plain)
+                    .font(.callout)
+                    .focused($isInputFocused)
+                    .onSubmit { addTask() }
+                    .onChange(of: newTaskTitle) {
+                        computeGhostPreview()
+                    }
+            }
+            .padding(.horizontal, DS.Spacing.sm)
+            .padding(.vertical, DS.Spacing.xs)
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(skin.accentColor.opacity(isInputFocused ? 0.06 : 0.03))
+            )
+
+            // Hint for new users — disappears once they add a task.
+            if activeTasks.isEmpty && !isInputFocused {
+                Text("Tasks you add here will be scheduled into free slots")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .transition(.opacity)
+            }
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.sm)
+        .animation(.easeInOut(duration: 0.15), value: isInputFocused)
     }
 
     // MARK: - Ghost Preview
@@ -271,6 +305,7 @@ struct BacklogView: View {
         )
         withAnimation(.easeInOut(duration: 0.2)) {
             backlogService.addTask(task)
+            isExpanded = true
         }
         newTaskTitle = ""
         ghostPreview = nil
