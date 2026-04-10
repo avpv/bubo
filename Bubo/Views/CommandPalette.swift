@@ -319,7 +319,7 @@ struct CommandPalette: View {
         HStack(spacing: DS.Spacing.md) {
             hint("↵", selectedIndex < visibleItems.count
                  ? visibleItems[selectedIndex].label
-                 : "run")
+                 : (searchText.isEmpty ? "run" : "Ask AI"))
             if visibleItems.count > 1 {
                 hint("↑↓", "select")
             }
@@ -614,7 +614,7 @@ struct CommandPalette: View {
                 .font(.subheadline.weight(.medium))
                 .multilineTextAlignment(.center)
             HStack(spacing: DS.Spacing.sm) {
-                Button("Try again") {
+                Button("Back") {
                     withAnimation(DS.Animation.quick) { phase = .picking }
                 }
                 .font(.caption.weight(.medium))
@@ -654,7 +654,7 @@ struct CommandPalette: View {
         var working = request
         if let seedEvent { working = working.withEventContext(seedEvent) }
 
-        phase = .working("Optimizing...")
+        phase = .working(working.findSlotOnly ? "Scheduling..." : "Optimizing...")
 
         Task {
             let result = await optimizerService.executeRequest(working, reminderService: reminderService)
