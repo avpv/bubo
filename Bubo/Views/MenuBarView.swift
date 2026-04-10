@@ -54,6 +54,8 @@ struct MenuBarView: View {
     struct PaletteContext: Equatable {
         var seedEvent: CalendarEvent? = nil
         var seedSlotMinutes: Int? = nil
+        var seedSlotStart: Date? = nil
+        var seedSlotEnd: Date? = nil
         var seedRecipeId: String? = nil
     }
 
@@ -209,6 +211,8 @@ struct MenuBarView: View {
                     agentService: agentService,
                     seedEvent: context.seedEvent,
                     seedSlotMinutes: context.seedSlotMinutes,
+                    seedSlotStart: context.seedSlotStart,
+                    seedSlotEnd: context.seedSlotEnd,
                     seedPreset: context.seedRecipeId.flatMap { id in IntentPresets.all.first { $0.name == id } },
                     onDismiss: {
                         withAnimation(DS.Animation.quick) { paletteContext = nil }
@@ -775,7 +779,11 @@ struct MenuBarView: View {
                     end: end,
                     onFillTapped: { minutes in
                         withAnimation(DS.Animation.quick) {
-                            paletteContext = PaletteContext(seedSlotMinutes: minutes)
+                            paletteContext = PaletteContext(
+                                seedSlotMinutes: minutes,
+                                seedSlotStart: start,
+                                seedSlotEnd: end
+                            )
                         }
                     },
                     onTaskDropped: { taskId in

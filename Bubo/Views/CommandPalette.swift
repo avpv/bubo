@@ -21,6 +21,8 @@ struct CommandPalette: View {
 
     var seedEvent: CalendarEvent? = nil
     var seedSlotMinutes: Int? = nil
+    var seedSlotStart: Date? = nil
+    var seedSlotEnd: Date? = nil
     var seedPreset: OptimizationRequest? = nil
 
     var onDismiss: () -> Void
@@ -79,9 +81,19 @@ struct CommandPalette: View {
         }
 
         if let minutes = seedSlotMinutes {
+            var focusRequest = OptimizationRequest.findFocus(minutes: minutes, period: nil)
+            // Pin the focus block to the clicked slot's time window.
+            // In findSlotsOnly mode existing events are fixed obstacles,
+            // so narrowing working hours constrains only the new block.
+            if let s = seedSlotStart, let e = seedSlotEnd {
+                let cal = Calendar.current
+                let startHour = cal.component(.hour, from: s)
+                let endHour = min(cal.component(.hour, from: e) + 1, 24)
+                focusRequest.add(.workingHours(start: startHour, end: endHour))
+            }
             var result = [SmartSuggestion(
                 label: "Focus \(minutes) min",
-                request: .findFocus(minutes: minutes, period: nil)
+                request: focusRequest
             )]
             if !(optimizerService.backlogService?.pending.isEmpty ?? true) {
                 result.append(SmartSuggestion(
@@ -305,6 +317,9 @@ struct CommandPalette: View {
             hint("↵", selectedIndex < visibleItems.count
                  ? visibleItems[selectedIndex].label
                  : "run")
+            if visibleItems.count > 1 {
+                hint("↑↓", "select")
+            }
             Spacer()
             hint("esc", "close")
         }
