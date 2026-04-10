@@ -1137,8 +1137,10 @@ struct MenuBarView: View {
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "checklist")
                     if count > 0 {
-                        Text("\(count)")
+                        Text("Tasks: \(count)")
                             .font(.caption2.weight(.semibold).monospacedDigit())
+                    } else {
+                        Text("Tasks")
                     }
                 }
             }
@@ -1167,7 +1169,10 @@ struct MenuBarView: View {
                     }
                     .keyboardShortcut("q", modifiers: .command)
                 } label: {
-                    Image(systemName: "ellipsis.circle")
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "ellipsis.circle")
+                        Text("More")
+                    }
                 }
                 .menuStyle(.borderlessButton)
                 .fixedSize()
