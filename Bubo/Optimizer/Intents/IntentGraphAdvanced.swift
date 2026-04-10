@@ -426,7 +426,7 @@ extension ScheduleIntent {
 extension OptimizationRequest {
 
     /// Create a request from a subgraph, expanding it with variable bindings.
-    static func fromSubgraph(
+    @MainActor static func fromSubgraph(
         _ subgraph: Subgraph,
         registry: SubgraphRegistry,
         variables: [String: PipelineValue] = [:]

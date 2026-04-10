@@ -176,7 +176,7 @@ struct MenuBarView: View {
                                 navigation = .list
                             }
                             toastState.showSuccess(isEdit ? "Event updated" : "Event created")
-                            if isEdit, let eventId = editing?.id {
+                            if isEdit, editing?.id != nil {
                                 notifyScheduleChange()
                             }
                         },
