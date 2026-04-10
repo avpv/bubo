@@ -47,7 +47,7 @@ struct QuickActionRanker {
     }
 
     struct ScoredAction: Identifiable {
-        let id = UUID()
+        var id: String { action.id }
         let action: QuickActionCandidate
         let score: Double
     }

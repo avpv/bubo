@@ -64,6 +64,7 @@ struct QuickActions: View {
                     Text(scored.action.label)
                         .font(.caption.weight(.medium))
                         .lineLimit(1)
+                        .fixedSize()
                         .foregroundStyle(skin.accentColor)
                         .padding(.horizontal, DS.Spacing.sm)
                         .padding(.vertical, 4)
