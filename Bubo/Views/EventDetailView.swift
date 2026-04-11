@@ -59,7 +59,6 @@ struct EventDetailView: View {
                                 .accessibilityLabel("Recurring event")
                         }
                     }
-                    .staggeredEntrance(index: 0)
 
                     VStack(alignment: .leading, spacing: DS.Spacing.md) {
                         // Date & Time group
@@ -74,7 +73,6 @@ struct EventDetailView: View {
                                 .foregroundStyle(skin.resolvedTextSecondary)
                                 .accessibilityLabel("Time: \(event.formattedTimeRange)")
                         }
-                        .staggeredEntrance(index: 1)
 
                         // Live countdown with seconds — tap to open timer screen
                         Button {
@@ -86,7 +84,6 @@ struct EventDetailView: View {
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .staggeredEntrance(index: 2)
 
                         // Meeting link — prominent Join button
                         if let meetingURL = event.meetingLink, let serviceName = event.meetingServiceName {
@@ -110,7 +107,6 @@ struct EventDetailView: View {
                                     .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
                             }
                             .buttonStyle(.plain)
-                            .staggeredEntrance(index: 3)
                         }
 
                         // Location
@@ -118,7 +114,6 @@ struct EventDetailView: View {
                             Label(location, systemImage: "location.fill")
                                 .font(.subheadline)
                                 .foregroundStyle(skin.resolvedTextSecondary)
-                                .staggeredEntrance(index: 3)
                         }
                     }
                     .padding(DS.Spacing.lg)
@@ -143,7 +138,6 @@ struct EventDetailView: View {
                         .padding(DS.Spacing.lg)
                         .skinPlatter(skin)
                         .skinPlatterDepth(skin)
-                        .staggeredEntrance(index: 3)
                     }
 
                     // Calendar name
@@ -151,26 +145,22 @@ struct EventDetailView: View {
                         Label(calName, systemImage: "tray.full")
                             .font(.caption)
                             .foregroundStyle(DS.Colors.calendarLabel)
-                            .staggeredEntrance(index: 4)
                     }
 
                     // Recurrence / Pomodoro info
                     if let rule = event.recurrenceRule {
                         recurrenceSection(rule)
-                            .staggeredEntrance(index: 5)
                     } else if event.eventType == .pomodoro {
                         Label("Pomodoro", systemImage: "timer")
                             .font(.caption)
                             .fontWeight(.medium)
                             .foregroundStyle(skin.resolvedTextTertiary)
-                            .staggeredEntrance(index: 5)
                     }
 
                     // Active Reminders (Default + Custom)
                     let activeReminders = reminderService.activeReminderMinutes(for: event)
                     if !activeReminders.isEmpty {
                         remindersSection(activeReminders)
-                            .staggeredEntrance(index: 6)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

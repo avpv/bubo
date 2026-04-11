@@ -263,7 +263,7 @@ struct CommandPalette: View {
 
     private var placeholder: String {
         if seedEvent != nil { return "What to do with this event?" }
-        if seedSlotMinutes != nil { return "Fill this slot..." }
+        if seedSlotMinutes != nil { return "Fill this slot\u{2026}" }
         return "What do you need?"
     }
 
@@ -660,7 +660,7 @@ struct CommandPalette: View {
         var working = request
         if let seedEvent { working = working.withEventContext(seedEvent) }
 
-        phase = .working(working.findSlotOnly ? "Scheduling..." : "Optimizing...")
+        phase = .working(working.findSlotOnly ? "Scheduling\u{2026}" : "Optimizing\u{2026}")
 
         Task {
             let result = await optimizerService.executeRequest(working, reminderService: reminderService)
@@ -699,7 +699,7 @@ struct CommandPalette: View {
             return
         }
         Haptics.tap()
-        phase = .working("Thinking...")
+        phase = .working("Thinking\u{2026}")
         Task {
             let result = await agentService.generateRequest(from: prompt)
             await MainActor.run {

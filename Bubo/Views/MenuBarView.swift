@@ -768,40 +768,18 @@ struct MenuBarView: View {
                         .padding(.horizontal, DS.Spacing.lg)
                         .padding(.vertical, DS.Spacing.lg)
                     } else {
-                        // Truly empty — no tasks, no events. Full empty state.
-                        VStack(spacing: DS.EmptyState.spacing * 1.5) {
-                            ZStack {
-                                Circle()
-                                    .fill(
-                                        RadialGradient(
-                                            colors: [
-                                                skin.accentColor.opacity(0.25),
-                                                .clear
-                                            ],
-                                            center: .center,
-                                            startRadius: 0,
-                                            endRadius: DS.EmptyState.iconSize * 1.5
-                                        )
-                                    )
-                                    .frame(width: DS.EmptyState.iconSize * 3, height: DS.EmptyState.iconSize * 3)
-
-                                Image(systemName: "calendar.badge.checkmark")
-                                    .font(.system(size: DS.EmptyState.iconSize, weight: .light))
-                                    .foregroundStyle(skin.accentColor, skin.resolvedTextSecondary)
-                                    .symbolEffect(.pulse, options: .repeating.speed(0.1))
-                            }
-
-                            VStack(spacing: DS.Spacing.xs) {
-                                Text("All clear")
-                                    .font(.headline)
-                                    .fontWeight(skin.resolvedHeadlineFontWeight)
-                                    .foregroundStyle(skin.resolvedTextPrimary)
-                                Text(emptyStateSubtitle)
-                                    .font(.subheadline)
-                                    .foregroundStyle(skin.resolvedTextSecondary)
-                                    .lineLimit(1)
-                                    .truncationMode(.tail)
-                            }
+                        // Birman: emptiness is information too — show it quietly.
+                        // No pulsing icon, no radial glow, no ceremony.
+                        VStack(spacing: DS.Spacing.sm) {
+                            Text("All clear")
+                                .font(.headline)
+                                .fontWeight(skin.resolvedHeadlineFontWeight)
+                                .foregroundStyle(skin.resolvedTextPrimary)
+                            Text(emptyStateSubtitle)
+                                .font(.subheadline)
+                                .foregroundStyle(skin.resolvedTextSecondary)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
 
                             Button {
                                 Haptics.tap()
@@ -812,7 +790,7 @@ struct MenuBarView: View {
                                     .fontWeight(.medium)
                             }
                             .buttonStyle(.action(role: .primary, size: .compact))
-                            .padding(.top, DS.Spacing.sm)
+                            .padding(.top, DS.Spacing.md)
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, DS.Spacing.xxl)
@@ -1096,7 +1074,8 @@ struct MenuBarView: View {
     }
 
     private var footerActions: some View {
-        HStack {
+        HStack(spacing: DS.Spacing.md) {
+            // Primary CTA — single, visually dominant.
             Menu {
                 Button {
                     Haptics.tap()
@@ -1127,31 +1106,29 @@ struct MenuBarView: View {
             .help("Add a new event (\u{2318}N)")
             .keyboardShortcut("n", modifiers: .command)
 
-            // Tasks — always-visible entry point into the backlog.
-            // Birman: don't hide features in menus; show them where the user can see them.
-            Button {
-                Haptics.tap()
-                scrollToBacklogTick += 1
-                focusTaskInput = true
-            } label: {
-                let count = optimizerService.backlogService?.pending.count ?? 0
-                HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: "checklist")
-                    if count > 0 {
-                        Text("Tasks: \(count)")
-                            .font(.caption2.weight(.semibold).monospacedDigit())
-                    } else {
-                        Text("Tasks")
-                    }
-                }
-            }
-            .buttonStyle(.borderless)
-            .foregroundStyle(skin.resolvedTextSecondary)
-            .help("Tasks (\u{21E7}\u{2318}N)")
-
             Spacer()
 
-            HStack(spacing: DS.Spacing.md) {
+            // Secondary row — Birman: same vocabulary, same visual weight, same side.
+            HStack(spacing: DS.Spacing.lg) {
+                Button {
+                    Haptics.tap()
+                    scrollToBacklogTick += 1
+                    focusTaskInput = true
+                } label: {
+                    let count = optimizerService.backlogService?.pending.count ?? 0
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "checklist")
+                        if count > 0 {
+                            Text("Tasks\u{00A0}\(count)")
+                                .monospacedDigit()
+                        } else {
+                            Text("Tasks")
+                        }
+                    }
+                }
+                .buttonStyle(.borderless)
+                .help("Tasks (\u{21E7}\u{2318}N)")
+
                 Menu {
                     Button {
                         Haptics.tap()
@@ -1179,12 +1156,11 @@ struct MenuBarView: View {
                 .fixedSize()
                 .help("More")
             }
-            .font(.system(size: activeSkin.toolbarIconSize, weight: .semibold))
-            .buttonStyle(.borderless)
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(skin.resolvedTextSecondary)
             .symbolRenderingMode(.monochrome)
             .tint(activeSkin.resolvedToolbarTint)
         }
-        .font(.system(size: 13, weight: .medium))
         .padding(.horizontal, DS.Spacing.lg)
         .frame(maxWidth: .infinity)
         .frame(height: DS.Size.actionFooterHeight)

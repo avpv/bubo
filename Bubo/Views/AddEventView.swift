@@ -41,7 +41,6 @@ struct AddEventView: View {
 
     @FocusState private var isTitleFocused: Bool
     @FocusState private var isLocationFocused: Bool
-    @FocusState private var isNotesFocused: Bool
 
     private static let presetReminders = [1, 2, 3, 5, 10, 15, 20, 30, 45, 60]
 
@@ -111,119 +110,97 @@ struct AddEventView: View {
             }
 
             ScrollView {
-                VStack(spacing: DS.Spacing.lg) {
-                    
-                    // Title section
-                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                        TextField("Title", text: $title, prompt: Text("Meeting with Anna, Deep work, etc.").foregroundStyle(skin.resolvedTextSecondary))
-                            .textFieldStyle(.plain)
-                            .font(.headline)
-                            .focused($isTitleFocused)
-                            .defaultFocus($isTitleFocused, true)
-                    }
-                    .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, DS.Spacing.sm)
-                    .skinPlatter(skin)
-                    .skinPlatterDepth(skin)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                            .strokeBorder(isTitleFocused ? skinAccent.opacity(DS.Opacity.overlayDark) : Color.clear, lineWidth: DS.Size.focusRingWidth)
-                            .shadow(color: isTitleFocused ? skinAccent.opacity(0.4) : .clear, radius: 4, x: 0, y: 0)
-                    )
-                    .shadow(
-                        color: isTitleFocused ? skinAccent.opacity(DS.Opacity.subtleBorder) : skin.resolvedShadowColor,
-                        radius: isTitleFocused ? skin.shadowRadius + 1 : skin.shadowRadius,
-                        y: skin.shadowY
-                    )
-                    .animation(skin.resolvedMicroAnimation, value: isTitleFocused)
-                    .disabled(isExternal)
-                    .opacity(isExternal ? 0.6 : 1.0)
+                // Birman: related form fields share ONE surface, separated by
+                // thin rules — not a stack of floating carts.
+                VStack(alignment: .leading, spacing: 0) {
+
+                    // Title — focused state is signalled only by the system
+                    // caret, no extra glow shadow.
+                    TextField("Title", text: $title, prompt: Text("Meeting with Anna, Deep work, etc.").foregroundStyle(skin.resolvedTextSecondary))
+                        .textFieldStyle(.plain)
+                        .font(.headline)
+                        .focused($isTitleFocused)
+                        .defaultFocus($isTitleFocused, true)
+                        .padding(DS.Spacing.md)
+                        .disabled(isExternal)
+                        .opacity(isExternal ? 0.6 : 1.0)
+
+                    SkinSeparator()
 
                     // Date & Time
-                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                        Text("Date & Time")
-                            .font(.headline)
-                            .foregroundStyle(skin.resolvedTextPrimary)
-                            .accessibilityAddTraits(.isHeader)
-                        
+                    VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                        sectionLabel("Date & Time")
+
                         Grid(alignment: .leading, horizontalSpacing: DS.Spacing.sm, verticalSpacing: DS.Spacing.md) {
                             GridRow {
                                 Text("Starts")
                                     .foregroundStyle(skin.resolvedTextSecondary)
                                     .gridColumnAlignment(.trailing)
-                                
-                                HStack(spacing: DS.Spacing.xs) {
-                                    DateTimePickerPills(date: $date)
-                                    TimeSlotPicker(selection: $date)
-                                }
+
+                                DateTimePickerPills(date: $date)
                             }
-                            
+
                             if selectedEventType != .pomodoro {
                                 GridRow {
                                     Text("Ends")
                                         .foregroundStyle(skin.resolvedTextSecondary)
                                         .gridColumnAlignment(.trailing)
 
-                                    HStack(spacing: DS.Spacing.xs) {
-                                        DateTimePickerPills(date: endDateBinding, range: date...)
-                                        TimeSlotPicker(selection: endDateBinding)
-                                    }
+                                    DateTimePickerPills(date: endDateBinding, range: date...)
                                 }
                             }
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(DS.Spacing.md)
-                        .skinPlatter(skin)
-                        .skinPlatterDepth(skin)
                     }
+                    .padding(DS.Spacing.md)
                     .disabled(isExternal)
                     .opacity(isExternal ? 0.6 : 1.0)
 
                     // Find Best Time (optimizer suggestion)
                     if !isEditing, !isExternal, isTitleValid, let optimizerService {
+                        SkinSeparator()
                         findBestTimeSection(optimizerService)
+                            .padding(DS.Spacing.md)
                     }
 
                     // Pomodoro controls (only when Pomodoro type selected)
                     if isPomodoroMode {
+                        SkinSeparator()
                         pomodoroSection
+                            .padding(DS.Spacing.md)
                             .disabled(isExternal)
                             .opacity(isExternal ? 0.6 : 1.0)
                     }
 
                     // Calendar
                     if !isEditing {
-                        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                            VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                                Toggle("Add to Calendar", isOn: $addToCalendar)
+                        SkinSeparator()
+                        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                            Toggle("Add to Calendar", isOn: $addToCalendar)
 
-                                if addToCalendar && !availableCalendars.isEmpty {
-                                    Picker("Calendar", selection: $selectedCalendarId) {
-                                        ForEach(availableCalendars) { cal in
-                                            Text(cal.title)
-                                                .tag(cal.id)
-                                        }
+                            if addToCalendar && !availableCalendars.isEmpty {
+                                Picker("Calendar", selection: $selectedCalendarId) {
+                                    ForEach(availableCalendars) { cal in
+                                        Text(cal.title)
+                                            .tag(cal.id)
                                     }
-                                    .pickerStyle(.menu)
-                                    .controlSize(.large)
-                                    .frame(height: DS.Size.controlHeight)
                                 }
-
-                                if !addToCalendar {
-                                    Text("Event will be stored locally in Bubo only")
-                                        .font(.caption)
-                                        .foregroundStyle(skin.resolvedTextSecondary)
-                                }
+                                .pickerStyle(.menu)
+                                .controlSize(.large)
+                                .frame(height: DS.Size.controlHeight)
                             }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(DS.Spacing.md)
-                            .skinPlatter(skin)
-                            .skinPlatterDepth(skin)
+
+                            if !addToCalendar {
+                                Text("Event will be stored locally in Bubo only")
+                                    .font(.caption)
+                                    .foregroundStyle(skin.resolvedTextSecondary)
+                            }
                         }
+                        .padding(DS.Spacing.md)
                     }
 
                     // More options — collapsed by default for new events
                     if !isExternal {
+                        SkinSeparator()
                         Button {
                             withAnimation(skin.resolvedMicroAnimation) {
                                 showMoreOptions.toggle()
@@ -240,15 +217,14 @@ struct AddEventView: View {
                             }
                         }
                         .buttonStyle(.plain)
+                        .padding(DS.Spacing.md)
                     }
 
                     if showMoreOptions || isExternal {
+                        SkinSeparator()
                         // Color
-                        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                            Text("Color")
-                                .font(.headline)
-                                .foregroundStyle(skin.resolvedTextPrimary)
-                                .accessibilityAddTraits(.isHeader)
+                        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                            sectionLabel("Color")
 
                             HStack(spacing: DS.Spacing.xs) {
                                 ForEach(EventColorTag.allCases, id: \.self) { tag in
@@ -262,94 +238,62 @@ struct AddEventView: View {
                                     )
                                 }
                             }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, DS.Spacing.md)
-                            .padding(.vertical, DS.Spacing.sm)
-                            .skinPlatter(skin)
-                            .skinPlatterDepth(skin)
                         }
+                        .padding(DS.Spacing.md)
                         .disabled(isExternal)
                         .opacity(isExternal ? 0.6 : 1.0)
 
+                        SkinSeparator()
+
                         // Context (Project / Category)
-                        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                            Text("Context")
-                                .font(.headline)
-                                .foregroundStyle(skin.resolvedTextPrimary)
-                                .accessibilityAddTraits(.isHeader)
+                        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                            sectionLabel("Context")
 
                             TextField("Project or category", text: $contextTag, prompt: Text("e.g. backend, design, personal").foregroundStyle(skin.resolvedTextSecondary))
                                 .textFieldStyle(.plain)
-                                .padding(.horizontal, DS.Spacing.md)
-                                .padding(.vertical, DS.Spacing.sm)
-                                .skinPlatter(skin)
-                                .skinPlatterDepth(skin)
                         }
+                        .padding(DS.Spacing.md)
                         .disabled(isExternal)
                         .opacity(isExternal ? 0.6 : 1.0)
 
+                        SkinSeparator()
+
                         // Details
-                        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                            Text("Details")
-                                .font(.headline)
-                                .foregroundStyle(skin.resolvedTextPrimary)
-                                .accessibilityAddTraits(.isHeader)
+                        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                            sectionLabel("Details")
 
-                            VStack(spacing: DS.Spacing.md) {
-                                TextField("Location", text: $location, prompt: Text("Zoom link or room 302").foregroundStyle(skin.resolvedTextSecondary))
-                                    .textFieldStyle(.plain)
-                                    .focused($isLocationFocused)
+                            TextField("Location", text: $location, prompt: Text("Zoom link or room 302").foregroundStyle(skin.resolvedTextSecondary))
+                                .textFieldStyle(.plain)
+                                .focused($isLocationFocused)
 
-                                SkinSeparator()
+                            SkinSeparator()
 
-                                HStack(alignment: .top, spacing: DS.Spacing.sm) {
-                                    FormattableTextView(text: $description, prompt: "Add notes, agenda, or attachments", promptStyle: skin.resolvedTextSecondary)
-                                        .frame(minHeight: 60, maxHeight: 160)
+                            HStack(alignment: .top, spacing: DS.Spacing.sm) {
+                                FormattableTextView(text: $description, prompt: "Add notes, agenda, or attachments", promptStyle: skin.resolvedTextSecondary)
+                                    .frame(minHeight: 60, maxHeight: 160)
 
-                                    EmojiPickerButton(text: $description)
-                                        .padding(.top, DS.Spacing.xxs)
-                                }
+                                EmojiPickerButton(text: $description)
+                                    .padding(.top, DS.Spacing.xxs)
                             }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(DS.Spacing.md)
-                            .skinPlatter(skin)
-                            .skinPlatterDepth(skin)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                                    .strokeBorder((isLocationFocused || isNotesFocused) ? skinAccent.opacity(DS.Opacity.overlayDark) : Color.clear, lineWidth: DS.Size.focusRingWidth)
-                                    .shadow(color: (isLocationFocused || isNotesFocused) ? skinAccent.opacity(0.4) : .clear, radius: 4, x: 0, y: 0)
-                            )
-                            .shadow(
-                                color: (isLocationFocused || isNotesFocused) ? skinAccent.opacity(DS.Opacity.subtleBorder) : skin.resolvedShadowColor,
-                                radius: (isLocationFocused || isNotesFocused) ? skin.shadowRadius + 1 : skin.shadowRadius,
-                                y: skin.shadowY
-                            )
-                            .animation(skin.resolvedMicroAnimation, value: isLocationFocused || isNotesFocused)
                         }
+                        .padding(DS.Spacing.md)
                         .disabled(isExternal)
                         .opacity(isExternal ? 0.6 : 1.0)
 
                         // Recurrence (only for standard events)
                         if !isPomodoroMode {
-                        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                            SkinSeparator()
                             RecurrencePickerView(rule: $recurrenceRule, eventDuration: $duration, eventStartDate: date)
-                                .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(DS.Spacing.md)
-                                .skinPlatter(skin)
-                                .skinPlatterDepth(skin)
-                        }
-                        .disabled(isExternal)
-                        .opacity(isExternal ? 0.6 : 1.0)
+                                .disabled(isExternal)
+                                .opacity(isExternal ? 0.6 : 1.0)
                         }
 
                         // Reminders
-                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                        Text("Reminders")
-                            .font(.headline)
-                            .foregroundStyle(skin.resolvedTextPrimary)
-                            .accessibilityAddTraits(.isHeader)
-                        
-                        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                        SkinSeparator()
+                        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                            sectionLabel("Reminders")
+
                             Toggle("Custom reminders", isOn: $useCustomReminders)
 
                             if useCustomReminders {
@@ -372,10 +316,10 @@ struct AddEventView: View {
                                         Text("\(DS.formatMinutes(newReminderValue))")
                                             .frame(minWidth: 60, alignment: .leading)
                                             .monospacedDigit()
-                                        
+
                                         Stepper("Reminder minutes", value: $newReminderValue, in: 1...120)
                                             .labelsHidden()
-                                        
+
                                         Button {
                                             if !reminderMinutes.contains(newReminderValue) {
                                                 reminderMinutes.append(newReminderValue)
@@ -411,15 +355,14 @@ struct AddEventView: View {
                                     .foregroundStyle(skin.resolvedTextSecondary)
                             }
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(DS.Spacing.md)
-                        .skinPlatter(skin)
-                        .skinPlatterDepth(skin)
-                    }
                     } // end showMoreOptions
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .skinPlatter(skin)
+                .skinPlatterDepth(skin)
                 .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.xl)
+                .padding(.vertical, DS.Spacing.lg)
             }
             .scrollContentBackground(.hidden)
             .frame(maxHeight: .infinity)
@@ -513,6 +456,19 @@ struct AddEventView: View {
                 isTitleFocused = true
             }
         }
+    }
+
+    // MARK: - Section Label
+
+    /// Birman: within one surface, section titles are quiet subheads, not
+    /// headlines — they guide the eye without shouting.
+    private func sectionLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(skin.resolvedTextTertiary)
+            .textCase(.uppercase)
+            .tracking(0.4)
+            .accessibilityAddTraits(.isHeader)
     }
 
     // MARK: - Draft Persistence
@@ -657,11 +613,8 @@ struct AddEventView: View {
     // MARK: - Pomodoro Section
 
     private var pomodoroSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            Text("Pomodoro")
-                .font(.headline)
-                .foregroundStyle(skin.resolvedTextPrimary)
-                .accessibilityAddTraits(.isHeader)
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            sectionLabel("Pomodoro")
 
             VStack(alignment: .leading, spacing: DS.Spacing.md) {
                 Grid(alignment: .leading, horizontalSpacing: DS.Spacing.md, verticalSpacing: DS.Spacing.sm) {
@@ -734,9 +687,6 @@ struct AddEventView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(DS.Spacing.md)
-            .skinPlatter(skin)
-            .skinPlatterDepth(skin)
         }
     }
 

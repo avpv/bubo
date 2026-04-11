@@ -11,8 +11,10 @@ enum DS {
         static let xxs: CGFloat = 2
         static let xs: CGFloat = 4
         static let sm: CGFloat = 8
-        static let pillVertical: CGFloat = 6
-        static let pillHorizontal: CGFloat = 10
+        /// Birman: pills/badges inherit the 4-pt rhythm (was 6 → off-grid).
+        static let pillVertical: CGFloat = 4
+        /// Birman: pills/badges inherit the 4-pt rhythm (was 10 → off-grid).
+        static let pillHorizontal: CGFloat = 8
         static let md: CGFloat = 12
         static let lg: CGFloat = 16
         static let xl: CGFloat = 20
@@ -48,11 +50,6 @@ enum DS {
 
     // MARK: Empty State
 
-    enum EmptyState {
-        static let iconSize: CGFloat = 42
-        static let spacing: CGFloat = 12
-    }
-
     // MARK: Typography
 
     enum Typography {
@@ -67,7 +64,7 @@ enum DS {
         static let eventRowMinHeight: CGFloat = 36
         static let headerHeight: CGFloat = 48
         static let actionFooterHeight: CGFloat = 48
-        static let timeColumnWidth: CGFloat = 110
+        static let timeColumnWidth: CGFloat = 84
         static let datePillWidth: CGFloat = 54
         static let timePillWidth: CGFloat = 52
         static let controlHeight: CGFloat = 28
@@ -496,37 +493,17 @@ struct PopoverHeader: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.activeSkin) private var skin
-    @Environment(\.navigateHome) private var navigateHome
 
-    /// HIG: Navigation bar pattern — back button leading, title centered, trailing items trailing.
+    /// HIG: Navigation bar pattern — back button leading, title flexible in the
+    /// middle, trailing items trailing. Uses a plain HStack with layout priorities
+    /// instead of a ZStack so the title cannot collide with trailing indicators
+    /// when both sides grow.
     var body: some View {
         VStack(spacing: 0) {
-            ZStack {
-                // Center: owl icon + title always centered
-                HStack(spacing: DS.Spacing.xs) {
-                    if showBack, let navigateHome {
-                        Button {
-                            Haptics.tap()
-                            navigateHome()
-                        } label: {
-                            OwlIcon(size: DS.Size.headerIcon)
-                                .foregroundStyle(skin.accentColor)
-                        }
-                        .buttonStyle(.borderless)
-                    } else {
-                        OwlIcon(size: DS.Size.headerIcon)
-                            .foregroundStyle(skin.accentColor)
-                    }
-
-                    if let title {
-                        Text(title)
-                            .font(.headline)
-                            .fontWeight(skin.resolvedHeadlineFontWeight)
-                            .fontDesign(skin.resolvedFontDesign)
-                    }
-                }
-
-                HStack(spacing: DS.Spacing.xs) {
+            HStack(spacing: DS.Spacing.sm) {
+                // Leading: back button OR owl icon (mutually exclusive — one symbol
+                // at a time, not two).
+                Group {
                     if showBack {
                         Button {
                             Haptics.tap()
@@ -536,13 +513,36 @@ struct PopoverHeader: View {
                         }
                         .buttonStyle(.borderless)
                         .keyboardShortcut(.escape, modifiers: [])
+                    } else {
+                        OwlIcon(size: DS.Size.headerIcon)
+                            .foregroundStyle(skin.accentColor)
                     }
+                }
+                .layoutPriority(0)
 
-                    Spacer()
+                Spacer(minLength: DS.Spacing.xs)
 
-                    if let trailing {
-                        trailing
-                    }
+                // Title — flexible, truncates if space runs out.
+                if let title {
+                    Text(title)
+                        .font(.headline)
+                        .fontWeight(skin.resolvedHeadlineFontWeight)
+                        .fontDesign(skin.resolvedFontDesign)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .layoutPriority(2)
+                }
+
+                Spacer(minLength: DS.Spacing.xs)
+
+                // Trailing: optional status / action controls.
+                if let trailing {
+                    trailing
+                        .layoutPriority(1)
+                } else if showBack {
+                    // Balance the back button so the title stays centered even
+                    // without any trailing content.
+                    Color.clear.frame(width: DS.Size.iconLarge, height: 1)
                 }
             }
             .padding(.horizontal, DS.Spacing.lg)

@@ -168,7 +168,7 @@ struct BacklogView: View {
                     .font(.caption)
                     .foregroundStyle(isInputFocused ? AnyShapeStyle(skin.accentColor) : AnyShapeStyle(.tertiary))
 
-                TextField("Add task...", text: $newTaskTitle)
+                TextField("Add task\u{2026}", text: $newTaskTitle)
                     .textFieldStyle(.plain)
                     .font(.callout)
                     .focused($isInputFocused)

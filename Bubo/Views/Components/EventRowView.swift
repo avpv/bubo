@@ -24,9 +24,11 @@ struct EventRowView: View {
 
     @State private var isHovered = false
     @State private var isDisintegrating = false
+    /// Birman: "if data disappears, the viewer should know why". A calm fade
+    /// when an event naturally ends is legible; a particle explosion is not.
+    @State private var isFadingOut = false
     @State private var pendingDeleteAction: (() -> Void)?
     @FocusState private var isFocused: Bool
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.activeSkin) private var skin
 
@@ -63,10 +65,12 @@ struct EventRowView: View {
         .frame(minHeight: DS.Size.eventRowMinHeight)
         .padding(.vertical, DS.Spacing.sm)
         .padding(.horizontal, DS.Spacing.sm)
+        // Birman: a row needs ONE surface, ONE hover signal. Not seven.
         .background(
             ZStack(alignment: .leading) {
                 SkinPlatterBackground(skin: skin)
 
+                // In-progress fill — flat, no glowing edge, no gradient magic.
                 if eventProgress(now) > 0 {
                     GeometryReader { geo in
                         let fillWidth = max(geo.size.width * eventProgress(now), DS.Size.cornerRadius * 2)
@@ -74,59 +78,22 @@ struct EventRowView: View {
                         let fillOpacity = contrast == .increased ? DS.Opacity.strongFill : DS.Opacity.mediumFill
 
                         Rectangle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        baseColor.opacity(fillOpacity * 0.5),
-                                        baseColor.opacity(fillOpacity * 1.5)
-                                    ],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
+                            .fill(baseColor.opacity(fillOpacity))
                             .frame(width: fillWidth)
-                            // Glowing leading edge
-                            .overlay(
-                                Rectangle()
-                                    .fill(baseColor.opacity(0.8))
-                                    .frame(width: 2)
-                                    .shadow(color: baseColor, radius: 4, x: 0, y: 0)
-                                    .blendMode(.plusLighter),
-                                alignment: .trailing
-                            )
                     }
                 }
             }
         )
         .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
-        // Hover tint drawn as a rounded overlay to avoid aliasing seams at the
-        // corners that appear when an opaque rectangle is composited under
-        // .clipShape on top of the platter material.
+        // Single hover signal: a subtle tint. No scale, no extra shadow, no gradient stroke.
         .overlay(
             RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
                 .fill(isHovered ? skin.resolvedHoverFill : Color.clear)
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                .strokeBorder(
-                    LinearGradient(
-                        colors: [
-                            .white.opacity(skin.platterBorderOpacity * 1.5),
-                            .white.opacity(skin.platterBorderOpacity * 0.1),
-                            .clear,
-                            .white.opacity(skin.platterBorderOpacity * 0.4)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: DS.Border.thin
-                )
-                .blendMode(contrast == .increased ? .normal : .plusLighter)
-        )
         .shadow(
-            color: isHovered ? skin.resolvedHoverShadowColor : skin.resolvedShadowColor,
-            radius: isHovered ? skin.hoverShadowRadius : skin.shadowRadius,
-            y: isHovered ? skin.hoverShadowY : skin.shadowY
+            color: skin.resolvedShadowColor,
+            radius: skin.shadowRadius,
+            y: skin.shadowY
         )
         // Freshly created highlight — brief glow after recipe application
         .overlay(
@@ -134,8 +101,6 @@ struct EventRowView: View {
                 .fill(skin.accentColor.opacity(isFreshlyCreated ? 0.20 : 0))
                 .animation(.easeInOut(duration: 0.6).repeatCount(3, autoreverses: true), value: isFreshlyCreated)
         )
-        // Hover scale — slightly more pronounced for tactile feel
-        .scaleEffect(isHovered ? 1.02 : 1.0)
         .contentShape(Rectangle())
         .onTapGesture {
             Haptics.tap()
@@ -167,16 +132,27 @@ struct EventRowView: View {
         .accessibilityLabel("\(event.title)\(event.isRecurring ? ", recurring" : ""), \(event.formattedTimeRange)\(event.location.map { ", \($0)" } ?? "")")
         .accessibilityHint("Press Enter to view details. Right-click to set reminder.")
         .accessibilityAddTraits(.isButton)
+        // Calm fade-out when the event naturally ends (no particle explosion).
+        .opacity(isFadingOut ? 0 : 1)
+        .scaleEffect(isFadingOut ? 0.96 : 1.0, anchor: .leading)
+        .animation(DS.Animation.smoothSpring, value: isFadingOut)
         .onChange(of: now) {
-            // Detect event end and trigger disintegration
-            if !event.isUpcoming && !isDisintegrating && !reminderService.disintegratingEventIDs.contains(event.id) {
+            // Detect event end and trigger a calm fade-out.
+            if !event.isUpcoming
+                && !isDisintegrating
+                && !isFadingOut
+                && !reminderService.disintegratingEventIDs.contains(event.id) {
                 reminderService.beginDisintegration(for: event.id)
                 Task { @MainActor in
                     try? await Task.sleep(for: .milliseconds(300))
-                    isDisintegrating = true
+                    isFadingOut = true
+                    try? await Task.sleep(for: .milliseconds(500))
+                    reminderService.completeDisintegration(for: event.id)
                 }
             }
         }
+        // Disintegration is kept only for user-triggered deletes — it signals
+        // an intentional, irreversible dismissal (softened by undo in the toast).
         .disintegrate(when: isDisintegrating) {
             if let action = pendingDeleteAction {
                 action()
