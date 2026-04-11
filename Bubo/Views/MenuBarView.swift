@@ -676,6 +676,21 @@ struct MenuBarView: View {
                 .padding(.horizontal, DS.Spacing.contentMargin)
                 .padding(.top, DS.Spacing.md)
 
+            // Thin separator between the Backlog card above and the
+            // flat Timeline area below. Matches the visual role of
+            // the SkinSeparator above the footer: a quiet one-pixel
+            // rule that signals "this is where one region ends and
+            // the next one begins", without reintroducing a heavy
+            // card container around the Timeline. Inset by
+            // `contentMargin` so it aligns with the Backlog card
+            // edges above and the content axis of the Timeline below.
+            // Vertical `md` top padding preserves the existing
+            // Backlog → Timeline gap; the LazyVStack's own internal
+            // top padding takes care of the gap below the separator.
+            SkinSeparator()
+                .padding(.horizontal, DS.Spacing.contentMargin)
+                .padding(.top, DS.Spacing.md)
+
             // Events — fill remaining space so header stays pinned.
             // Timeline is intentionally NOT wrapped in a platter card:
             // it's the primary content area, and HIG canonical macOS
@@ -706,7 +721,6 @@ struct MenuBarView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .padding(.top, DS.Spacing.md)
             .animation(DS.Animation.smoothSpring, value: reminderService.nonDisintegratingEventCount == 0)
 
             SkinSeparator()
