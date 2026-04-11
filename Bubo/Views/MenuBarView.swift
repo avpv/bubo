@@ -297,8 +297,9 @@ struct MenuBarView: View {
                 return filtered.isEmpty ? nil : (date: dayGroup.date, events: filtered)
             }
         } else {
-            // Skip empty day groups (e.g. "Today" with 0 events when tomorrow has events)
-            base = reminderService.eventsByDay.filter { !$0.events.isEmpty }
+            // Keep empty day groups so users can see their free slots and
+            // drop tasks into days that have no events yet.
+            base = reminderService.eventsByDay
         }
         return base
     }
