@@ -667,7 +667,14 @@ struct MenuBarView: View {
                     .padding(.horizontal, DS.Spacing.contentMargin)
             }
 
-            // Events — fill remaining space so header stays pinned
+            // Events — fill remaining space so header stays pinned.
+            // Level 4 (final): the whole timeline area — empty state,
+            // filter-empty state, and the event list — is wrapped in a
+            // single skinPlatter card so the main screen mirrors the
+            // AddEventView layout language: one surface, quiet section
+            // labels, list rows flush to card edges. Individual event
+            // rows lose their own platter backgrounds so we don't get
+            // cards-inside-a-card muddiness (see EventRowView).
             Group {
                 if reminderService.nonDisintegratingEventCount == 0 {
                     emptyState
@@ -685,7 +692,12 @@ struct MenuBarView: View {
                     eventList
                 }
             }
-            .frame(maxHeight: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .skinPlatter(activeSkin)
+            .skinPlatterDepth(skin)
+            .padding(.horizontal, DS.Spacing.contentMargin)
+            .padding(.top, DS.Spacing.sm)
+            .padding(.bottom, DS.Spacing.md)
             .animation(DS.Animation.smoothSpring, value: reminderService.nonDisintegratingEventCount == 0)
 
             SkinSeparator()
@@ -895,10 +907,14 @@ struct MenuBarView: View {
 
     private var eventList: some View {
         ScrollView {
-            // Level 1: bigger sibling spacing so the gap between day groups
-            // is clearly larger than the gap between rows inside a day —
-            // Gestalt: outer space > inner space. Level 2: explicit
-            // SkinSeparator between day groups reinforces the grouping.
+            // Level 4 (final): LazyVStack lives INSIDE the timeline platter
+            // card (the wrapper lives in `mainContent`'s Group). Horizontal
+            // margins are handled by that outer platter; here we only set
+            // the inner vertical breathing room and the sibling spacing.
+            // Gestalt: outer space (between day groups) > inner space (row
+            // to row inside a day) — handled by the `lg` sibling spacing
+            // plus an edge-to-edge SkinSeparator between groups, exactly
+            // mirroring AddEventView's form sections.
             LazyVStack(alignment: .leading, spacing: DS.Spacing.lg) {
                 // Smart banner — at most one contextual suggestion.
                 if let suggestion = activeBannerSuggestion {
@@ -918,17 +934,13 @@ struct MenuBarView: View {
 
                 ForEach(filteredEventsByDay, id: \.date) { dayGroup in
                     if dayGroup.date != filteredEventsByDay.first?.date {
+                        // Edge-to-edge of the platter, same as AddEventView.
                         SkinSeparator()
-                            .padding(.horizontal, DS.Spacing.sm)
                     }
                     dayGroupSection(dayGroup)
                 }
             }
-            // Level 1: unified outer content margin + more top air so the
-            // first day header doesn't sit on top of the QuickActions chips.
-            .padding(.horizontal, DS.Spacing.contentMargin)
-            .padding(.top, DS.Spacing.lg)
-            .padding(.bottom, DS.Spacing.xl)
+            .padding(.vertical, DS.Spacing.md)
             .scrollTargetLayout()
             .id("eventListTop")
             .animation(DS.Animation.smoothSpring, value: reminderService.disintegratingEventIDs)

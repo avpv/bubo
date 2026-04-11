@@ -46,11 +46,13 @@ struct GhostEventRow: View {
             // Ghost accent bar — dashed outline echoes the style used by
             // free-slot rows but filled with accent so the eye can tell
             // this is *a thing that would exist*, not just an empty gap.
+            // Level 4 (final): no leading offset — matches EventRowView's
+            // urgency bar and FreeSlotRow's dashed guide so all three row
+            // types share one vertical anchor column inside the platter.
             RoundedRectangle(cornerRadius: 1, style: .continuous)
                 .fill(skin.accentColor.opacity(pulse ? 0.6 : 0.35))
                 .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
                 .padding(.trailing, DS.Spacing.md)
-                .padding(.leading, 2)
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: DS.Spacing.xs) {

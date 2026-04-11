@@ -68,7 +68,11 @@ struct SmartBanner: View {
             RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
                 .strokeBorder(skin.accentColor.opacity(0.15), lineWidth: DS.Border.thin)
         )
-        .padding(.horizontal, DS.Spacing.md)
+        // Level 4 (final): the banner now lives inside the timeline platter
+        // card, so it loses its own outer horizontal margin and hangs on the
+        // same vertical axis as everything else on the card. A small leading
+        // indent (`sm`) keeps it from touching the card's rounded corners.
+        .padding(.horizontal, DS.Spacing.sm)
         .padding(.top, DS.Spacing.xs)
         .transition(.move(edge: .top).combined(with: .opacity))
     }
