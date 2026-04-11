@@ -626,7 +626,10 @@ struct MenuBarView: View {
                 colorFilterBar
             }
 
-            // Quick actions — pinned above the scroll area
+            // Quick actions card — chips live in their own platter so
+            // the main content area reads as a stack of grouped cards
+            // (iOS Settings / macOS System Settings pattern), every one
+            // of them at contentMargin from the popover edges.
             if reminderService.nonDisintegratingEventCount > 0 {
                 QuickActions(
                     optimizerService: optimizerService,
@@ -642,11 +645,15 @@ struct MenuBarView: View {
                         }
                     }
                 )
-                // Level 1: unified outer content margin + bigger vertical
-                // breathing room so the chip row isn't crushed against the
-                // header.
-                .padding(.horizontal, DS.Spacing.contentMargin)
                 .padding(.vertical, DS.Spacing.sm)
+                .padding(.horizontal, DS.Spacing.sm)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .skinPlatter(activeSkin)
+                .skinPlatterDepth(skin)
+                // Preference key sits AFTER platter/depth but BEFORE the
+                // outer padding so the command palette anchors to the
+                // card's bottom edge (shadow included) rather than to
+                // the outer gap below it.
                 .background(
                     GeometryReader { geo in
                         Color.clear.preference(
@@ -655,17 +662,19 @@ struct MenuBarView: View {
                         )
                     }
                 )
+                .padding(.horizontal, DS.Spacing.contentMargin)
+                .padding(.top, DS.Spacing.md)
             }
 
-            // Backlog tasks — pinned directly below the optimizer so they stay
-            // visible no matter how far the user scrolls through their timeline.
-            // Auto-expand when the calendar is empty: tasks are the primary content.
+            // Backlog card — always rendered so the "+ Add task…" input
+            // stays as a persistent visual anchor even when the backlog
+            // is empty. Consistent with AddEventView's form platter.
             inlineBacklog(autoExpand: reminderService.nonDisintegratingEventCount == 0)
-
-            if pendingTaskCount > 0 {
-                SkinSeparator()
-                    .padding(.horizontal, DS.Spacing.contentMargin)
-            }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .skinPlatter(activeSkin)
+                .skinPlatterDepth(skin)
+                .padding(.horizontal, DS.Spacing.contentMargin)
+                .padding(.top, DS.Spacing.md)
 
             // Events — fill remaining space so header stays pinned.
             // Level 4 (final): the whole timeline area — empty state,
@@ -696,7 +705,7 @@ struct MenuBarView: View {
             .skinPlatter(activeSkin)
             .skinPlatterDepth(skin)
             .padding(.horizontal, DS.Spacing.contentMargin)
-            .padding(.top, DS.Spacing.sm)
+            .padding(.top, DS.Spacing.md)
             .padding(.bottom, DS.Spacing.md)
             .animation(DS.Animation.smoothSpring, value: reminderService.nonDisintegratingEventCount == 0)
 

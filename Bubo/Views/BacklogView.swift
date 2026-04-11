@@ -143,7 +143,7 @@ struct BacklogView: View {
                 .foregroundStyle(skin.accentColor)
             }
         }
-        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.horizontal, DS.Spacing.sm)
         .padding(.vertical, DS.Spacing.sm)
     }
 
@@ -162,7 +162,7 @@ struct BacklogView: View {
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(skin.resolvedTextTertiary)
                         .tracking(0.3)
-                        .padding(.horizontal, DS.Spacing.lg)
+                        .padding(.horizontal, DS.Spacing.sm)
                         .padding(.top, DS.Spacing.sm)
                         .padding(.bottom, DS.Spacing.xxs)
                 }
@@ -207,7 +207,7 @@ struct BacklogView: View {
                 }
             }
         }
-        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.horizontal, DS.Spacing.sm)
         .animation(.easeInOut(duration: 0.2), value: activeTasks.map(\.id))
     }
 
@@ -405,7 +405,7 @@ struct BacklogView: View {
                     .transition(.opacity)
             }
         }
-        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.horizontal, DS.Spacing.sm)
         .padding(.vertical, DS.Spacing.sm)
         .animation(.easeInOut(duration: 0.15), value: isInputFocused)
     }
@@ -428,7 +428,7 @@ struct BacklogView: View {
                     .foregroundStyle(skin.accentColor.opacity(0.7))
                     .lineLimit(1)
             }
-            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, DS.Spacing.xxs)
             .transition(.opacity.combined(with: .move(edge: .top)))
             .animation(.easeInOut(duration: 0.2), value: preview)
