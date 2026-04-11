@@ -1146,12 +1146,16 @@ struct MenuBarView: View {
     }
 
     private var footerActions: some View {
-        HStack(spacing: DS.Spacing.md) {
-            // Level 3 + 4: secondary controls on the left, primary CTA on
-            // the right — matches native macOS sheet convention and mirrors
-            // AddEventView's footer. The separate "Tasks" button has been
-            // dropped: the inline backlog above already shows the count
-            // and ⇧⌘N still focuses the task input from anywhere.
+        // Level 4 (final, footer polish): match AddEventView's footer
+        // byte-for-byte on the pieces that CAN match without changing
+        // semantics. Default HStack spacing (8), no redundant
+        // `frame(maxWidth: .infinity)` (HStack + Spacer already flexes
+        // to parent width), primary CTA on `.flexible` size so the
+        // button is visually dominant — HIG: primary actions should
+        // be the most prominent control on screen. The More menu stays
+        // `borderlessButton` because it's a utility menu, not a peer
+        // to the primary action.
+        HStack {
             Menu {
                 Button {
                     Haptics.tap()
@@ -1185,8 +1189,10 @@ struct MenuBarView: View {
 
             Spacer()
 
-            // Primary CTA — visually dominant, anchored on the right
-            // edge where native sheets place their confirm action.
+            // Primary CTA — `.flexible` size (default) = minWidth 100,
+            // `lg` internal horizontal padding. Same treatment as
+            // AddEventView's Add Event button, so both screens'
+            // primary actions carry equal visual weight.
             Menu {
                 Button {
                     Haptics.tap()
@@ -1212,12 +1218,11 @@ struct MenuBarView: View {
                 Haptics.tap()
                 navigation = .addEvent()
             }
-            .buttonStyle(.action(role: .primary, size: .regular))
+            .buttonStyle(.action(role: .primary))
             .help("Add a new event (\u{2318}N)")
             .keyboardShortcut("n", modifiers: .command)
         }
         .padding(.horizontal, DS.Spacing.contentMargin)
-        .frame(maxWidth: .infinity)
         .frame(height: DS.Size.actionFooterHeight)
         .skinBarBackground(activeSkin)
     }
