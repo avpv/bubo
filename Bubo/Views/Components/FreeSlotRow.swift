@@ -51,12 +51,30 @@ struct FreeSlotRow: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 0) {
-            // Dashed guide to visually distinguish from event rows
-            Rectangle()
-                .fill(skin.resolvedTextTertiary.opacity(0.35))
-                .frame(width: DS.Size.accentBarWidth, height: 2)
-                .padding(.trailing, DS.Spacing.md)
-                .padding(.leading, 2)
+            // Level 4: a dashed vertical bar the exact same height as an
+            // event's urgency accent bar (4×28) so event rows and free-slot
+            // rows share one anchor column. Dashes — not a solid fill — keep
+            // the semantic distinction: "empty time, not booked".
+            Path { path in
+                path.move(to: CGPoint(x: DS.Size.accentBarWidth / 2, y: 0))
+                path.addLine(to: CGPoint(x: DS.Size.accentBarWidth / 2, y: DS.Size.accentBarHeight))
+            }
+            .stroke(
+                skin.resolvedTextTertiary.opacity(0.45),
+                style: StrokeStyle(
+                    lineWidth: DS.Size.accentBarWidth,
+                    lineCap: .round,
+                    dash: [3, 3]
+                )
+            )
+            .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
+            // Same trailing as EventRowView's urgencyBar — keeps the time
+            // columns of both row types on the same vertical axis. No
+            // leading offset: the row's outer `sm` padding already matches
+            // the event row's outer padding, so both accent bars start at
+            // exactly contentMargin + sm from the popover left edge.
+            .padding(.trailing, DS.Spacing.md)
+            .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text("Free · \(durationLabel)")
@@ -85,16 +103,14 @@ struct FreeSlotRow: View {
         .frame(minHeight: DS.Size.eventRowMinHeight)
         .padding(.vertical, DS.Spacing.xxs)
         .padding(.horizontal, DS.Spacing.sm)
+        // Level 4 (final): flat row inside the timeline platter card —
+        // same visual framework as EventRowView. The idle dashed pill
+        // border is gone: the dashed vertical bar on the left + the
+        // "Free · Xh" caption + the plus icon already signal the
+        // affordance, and the hover fill (rectangle) provides the
+        // "interactive" cue the same way native macOS List rows do.
         .background(
-            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                .fill(backgroundFill)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                .strokeBorder(
-                    skin.resolvedTextTertiary.opacity(isHovered ? 0.25 : 0.12),
-                    style: StrokeStyle(lineWidth: 0.5, dash: [3, 3])
-                )
+            Rectangle().fill(backgroundFill)
         )
         .onHover { hovering in
             withAnimation(skin.resolvedMicroAnimation) {
@@ -111,8 +127,10 @@ struct FreeSlotRow: View {
                 isDropTargeted = targeted
             }
         }
+        // Drop-target state — flat rectangle stroke, matches the card
+        // paradigm. Only visible when a drag is happening, not at rest.
         .overlay(
-            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+            Rectangle()
                 .strokeBorder(
                     activeDropBorderColor,
                     lineWidth: activeDropBorderWidth

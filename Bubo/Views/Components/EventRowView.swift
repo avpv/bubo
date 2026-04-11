@@ -65,12 +65,17 @@ struct EventRowView: View {
         .frame(minHeight: DS.Size.eventRowMinHeight)
         .padding(.vertical, DS.Spacing.sm)
         .padding(.horizontal, DS.Spacing.sm)
-        // Birman: a row needs ONE surface, ONE hover signal. Not seven.
+        // Level 4 (final): the timeline is now wrapped in a single platter
+        // card (see MenuBarView.mainContent). Rows therefore shed their
+        // individual platter backgrounds, drop shadows, AND their rounded
+        // clipShape — the card's own rounded corners are the only curves
+        // on the screen. Inside the card, rows are flat rectangles flush
+        // to the card edges, exactly like form sections in AddEventView.
+        // The progress fill renders directly on the card material; contrast
+        // is unchanged because the fill's opacity already assumes a material
+        // substrate underneath.
         .background(
             ZStack(alignment: .leading) {
-                SkinPlatterBackground(skin: skin)
-
-                // In-progress fill — flat, no glowing edge, no gradient magic.
                 if eventProgress(now) > 0 {
                     GeometryReader { geo in
                         let fillWidth = max(geo.size.width * eventProgress(now), DS.Size.cornerRadius * 2)
@@ -84,20 +89,15 @@ struct EventRowView: View {
                 }
             }
         )
-        .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
-        // Single hover signal: a subtle tint. No scale, no extra shadow, no gradient stroke.
+        // Flat rectangle hover signal — no rounded pill to leak card
+        // material through gaps at the row corners.
         .overlay(
-            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+            Rectangle()
                 .fill(isHovered ? skin.resolvedHoverFill : Color.clear)
         )
-        .shadow(
-            color: skin.resolvedShadowColor,
-            radius: skin.shadowRadius,
-            y: skin.shadowY
-        )
-        // Freshly created highlight — brief glow after recipe application
+        // Freshly created highlight — brief flat glow after recipe application
         .overlay(
-            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+            Rectangle()
                 .fill(skin.accentColor.opacity(isFreshlyCreated ? 0.20 : 0))
                 .animation(.easeInOut(duration: 0.6).repeatCount(3, autoreverses: true), value: isFreshlyCreated)
         )
@@ -115,8 +115,9 @@ struct EventRowView: View {
         .focusable()
         .focused($isFocused)
         .focusEffectDisabled()
+        // Flat rectangular focus ring — matches the flat row paradigm.
         .overlay(
-            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+            Rectangle()
                 .strokeBorder(isFocused ? skin.accentColor.opacity(DS.Opacity.overlayDark) : Color.clear, lineWidth: DS.Size.focusRingWidth)
                 .shadow(color: isFocused ? skin.accentColor.opacity(0.4) : .clear, radius: 4, x: 0, y: 0)
         )

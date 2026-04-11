@@ -460,15 +460,10 @@ struct AddEventView: View {
 
     // MARK: - Section Label
 
-    /// Birman: within one surface, section titles are quiet subheads, not
-    /// headlines — they guide the eye without shouting.
+    /// Delegates to the shared `SectionLabel` view defined in DesignSystem so
+    /// every form surface uses the exact same treatment.
     private func sectionLabel(_ text: String) -> some View {
-        Text(text)
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(skin.resolvedTextTertiary)
-            .textCase(.uppercase)
-            .tracking(0.4)
-            .accessibilityAddTraits(.isHeader)
+        SectionLabel(text: text)
     }
 
     // MARK: - Draft Persistence

@@ -642,8 +642,11 @@ struct MenuBarView: View {
                         }
                     }
                 )
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.xs)
+                // Level 1: unified outer content margin + bigger vertical
+                // breathing room so the chip row isn't crushed against the
+                // header.
+                .padding(.horizontal, DS.Spacing.contentMargin)
+                .padding(.vertical, DS.Spacing.sm)
                 .background(
                     GeometryReader { geo in
                         Color.clear.preference(
@@ -661,10 +664,17 @@ struct MenuBarView: View {
 
             if pendingTaskCount > 0 {
                 SkinSeparator()
-                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.horizontal, DS.Spacing.contentMargin)
             }
 
-            // Events — fill remaining space so header stays pinned
+            // Events — fill remaining space so header stays pinned.
+            // Level 4 (final): the whole timeline area — empty state,
+            // filter-empty state, and the event list — is wrapped in a
+            // single skinPlatter card so the main screen mirrors the
+            // AddEventView layout language: one surface, quiet section
+            // labels, list rows flush to card edges. Individual event
+            // rows lose their own platter backgrounds so we don't get
+            // cards-inside-a-card muddiness (see EventRowView).
             Group {
                 if reminderService.nonDisintegratingEventCount == 0 {
                     emptyState
@@ -682,7 +692,12 @@ struct MenuBarView: View {
                     eventList
                 }
             }
-            .frame(maxHeight: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .skinPlatter(activeSkin)
+            .skinPlatterDepth(skin)
+            .padding(.horizontal, DS.Spacing.contentMargin)
+            .padding(.top, DS.Spacing.sm)
+            .padding(.bottom, DS.Spacing.md)
             .animation(DS.Animation.smoothSpring, value: reminderService.nonDisintegratingEventCount == 0)
 
             SkinSeparator()
@@ -883,14 +898,24 @@ struct MenuBarView: View {
         .padding(.vertical, DS.Spacing.sm)
         .skinPlatter(activeSkin)
         .skinPlatterDepth(skin)
-        .padding(.horizontal, DS.Spacing.md)
+        // Level 1: unified outer content margin — aligns with header,
+        // footer, quick actions and the event list.
+        .padding(.horizontal, DS.Spacing.contentMargin)
         .padding(.vertical, DS.Spacing.xs)
         .animation(skin.resolvedMicroAnimation, value: colorFilter)
     }
 
     private var eventList: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: DS.Spacing.md) {
+            // Level 4 (final): LazyVStack lives INSIDE the timeline platter
+            // card (the wrapper lives in `mainContent`'s Group). Horizontal
+            // margins are handled by that outer platter; here we only set
+            // the inner vertical breathing room and the sibling spacing.
+            // Gestalt: outer space (between day groups) > inner space (row
+            // to row inside a day) — handled by the `lg` sibling spacing
+            // plus an edge-to-edge SkinSeparator between groups, exactly
+            // mirroring AddEventView's form sections.
+            LazyVStack(alignment: .leading, spacing: DS.Spacing.lg) {
                 // Smart banner — at most one contextual suggestion.
                 if let suggestion = activeBannerSuggestion {
                     SmartBanner(
@@ -908,12 +933,14 @@ struct MenuBarView: View {
                 }
 
                 ForEach(filteredEventsByDay, id: \.date) { dayGroup in
+                    if dayGroup.date != filteredEventsByDay.first?.date {
+                        // Edge-to-edge of the platter, same as AddEventView.
+                        SkinSeparator()
+                    }
                     dayGroupSection(dayGroup)
                 }
             }
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.top, DS.Spacing.md)
-            .padding(.bottom, DS.Spacing.xl)
+            .padding(.vertical, DS.Spacing.md)
             .scrollTargetLayout()
             .id("eventListTop")
             .animation(DS.Animation.smoothSpring, value: reminderService.disintegratingEventIDs)
@@ -929,8 +956,14 @@ struct MenuBarView: View {
         let visibleCount = visibleEventCount(for: dayGroup.events)
 
         DaySectionHeader(date: dayGroup.date, count: visibleCount)
+            // `sm` leading keeps the day title hanging 8pt out from the
+            // first event's accent bar — same column as the free-slot
+            // dashed guide. Level 1: top padding is now applied by the
+            // SkinSeparator above instead of this header, so the
+            // outer-between-groups space (LazyVStack spacing `lg` +
+            // separator) stays bigger than the inner space to the first
+            // event of the day.
             .padding(.horizontal, DS.Spacing.sm)
-            .padding(.top, dayGroup.date == reminderService.eventsByDay.first?.date ? 0 : DS.Spacing.sm)
 
         let freeSlots = FreeSlotFinder.slots(
             for: dayGroup.events,
@@ -1113,8 +1146,53 @@ struct MenuBarView: View {
     }
 
     private var footerActions: some View {
-        HStack(spacing: DS.Spacing.md) {
-            // Primary CTA — single, visually dominant.
+        // Level 4 (final, footer polish): match AddEventView's footer
+        // byte-for-byte on the pieces that CAN match without changing
+        // semantics. Default HStack spacing (8), no redundant
+        // `frame(maxWidth: .infinity)` (HStack + Spacer already flexes
+        // to parent width), primary CTA on `.flexible` size so the
+        // button is visually dominant — HIG: primary actions should
+        // be the most prominent control on screen. The More menu stays
+        // `borderlessButton` because it's a utility menu, not a peer
+        // to the primary action.
+        HStack {
+            Menu {
+                Button {
+                    Haptics.tap()
+                    reminderService.syncNow()
+                    toastState.showInfo("Refreshing\u{2026}", icon: "arrow.clockwise")
+                } label: {
+                    Label("Refresh Calendars", systemImage: "arrow.clockwise")
+                }
+                .keyboardShortcut("r", modifiers: .command)
+
+                OpenSettingsButton()
+                    .keyboardShortcut(",", modifiers: .command)
+                Divider()
+                Button("Quit Bubo", role: .destructive) {
+                    NSApplication.shared.terminate(nil)
+                }
+                .keyboardShortcut("q", modifiers: .command)
+            } label: {
+                HStack(spacing: DS.Spacing.xs) {
+                    Image(systemName: "ellipsis.circle")
+                    Text("More")
+                }
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(skin.resolvedTextSecondary)
+            .symbolRenderingMode(.monochrome)
+            .tint(activeSkin.resolvedToolbarTint)
+            .help("More")
+
+            Spacer()
+
+            // Primary CTA — `.flexible` size (default) = minWidth 100,
+            // `lg` internal horizontal padding. Same treatment as
+            // AddEventView's Add Event button, so both screens'
+            // primary actions carry equal visual weight.
             Menu {
                 Button {
                     Haptics.tap()
@@ -1140,66 +1218,11 @@ struct MenuBarView: View {
                 Haptics.tap()
                 navigation = .addEvent()
             }
-            .buttonStyle(.action(role: .primary, size: .regular))
+            .buttonStyle(.action(role: .primary))
             .help("Add a new event (\u{2318}N)")
             .keyboardShortcut("n", modifiers: .command)
-
-            Spacer()
-
-            // Secondary row — Birman: same vocabulary, same visual weight, same side.
-            HStack(spacing: DS.Spacing.lg) {
-                Button {
-                    Haptics.tap()
-                    focusTaskInput = true
-                } label: {
-                    let count = optimizerService.backlogService?.pending.count ?? 0
-                    HStack(spacing: DS.Spacing.xs) {
-                        Image(systemName: "checklist")
-                        if count > 0 {
-                            Text("Tasks\u{00A0}\(count)")
-                                .monospacedDigit()
-                        } else {
-                            Text("Tasks")
-                        }
-                    }
-                }
-                .buttonStyle(.borderless)
-                .help("Tasks (\u{21E7}\u{2318}N)")
-
-                Menu {
-                    Button {
-                        Haptics.tap()
-                        reminderService.syncNow()
-                        toastState.showInfo("Refreshing\u{2026}", icon: "arrow.clockwise")
-                    } label: {
-                        Label("Refresh Calendars", systemImage: "arrow.clockwise")
-                    }
-                    .keyboardShortcut("r", modifiers: .command)
-
-                    OpenSettingsButton()
-                        .keyboardShortcut(",", modifiers: .command)
-                    Divider()
-                    Button("Quit Bubo", role: .destructive) {
-                        NSApplication.shared.terminate(nil)
-                    }
-                    .keyboardShortcut("q", modifiers: .command)
-                } label: {
-                    HStack(spacing: DS.Spacing.xs) {
-                        Image(systemName: "ellipsis.circle")
-                        Text("More")
-                    }
-                }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-                .help("More")
-            }
-            .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(skin.resolvedTextSecondary)
-            .symbolRenderingMode(.monochrome)
-            .tint(activeSkin.resolvedToolbarTint)
         }
-        .padding(.horizontal, DS.Spacing.lg)
-        .frame(maxWidth: .infinity)
+        .padding(.horizontal, DS.Spacing.contentMargin)
         .frame(height: DS.Size.actionFooterHeight)
         .skinBarBackground(activeSkin)
     }
@@ -1260,7 +1283,9 @@ private struct CalendarAccessBanner: View {
             .clipShape(Capsule())
             .shadow(color: skin.resolvedShadowColor, radius: skin.shadowRadius, y: skin.shadowY)
         }
-        .padding(.horizontal, DS.Spacing.md)
+        // Level 1: unified outer content margin so this banner hangs on
+        // the same vertical axis as the rest of the popover chrome.
+        .padding(.horizontal, DS.Spacing.contentMargin)
         .padding(.vertical, DS.Spacing.xs)
         .buttonStyle(.plain)
         .accessibilityLabel("Calendar access not granted. Open settings to grant access.")
