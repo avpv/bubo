@@ -38,10 +38,10 @@ struct AppBackgroundLayer: View {
             // Skin background layer
             SkinBackgroundLayer(skin: skin)
 
-            // Surface tint overlay
+            // Surface tint overlay — derived from the active accent and mood.
             if !skin.isClassic {
-                skin.surfaceTint
-                    .opacity(skin.surfaceTintOpacity)
+                skin.resolvedSurfaceTint
+                    .opacity(skin.resolvedSurfaceTintOpacity)
                     .blendMode(skin.prefersDarkTint ? .plusLighter : .plusDarker)
             }
         }

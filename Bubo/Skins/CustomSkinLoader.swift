@@ -9,205 +9,88 @@ import SwiftUI
 /// Colors are strings: hex (`"#0070FA"`), named (`"accentColor"`),
 /// named with opacity (`"accentColor:0.5"`), or keyword (`"clear"`).
 ///
-/// Example `.json` file:
+/// Keep the required set minimal. A skin author should think about **mood**
+/// (accent, background, light/dark), not about shadow radii or symbol
+/// weights. Everything absent falls back to a sensible default baked into
+/// `SkinDefinition`. The canonical list of allowed fields is
+/// `buboskin.schema.json` — it rejects unknown keys.
+///
+/// Minimal example:
 /// ```json
 /// {
 ///   "id": "my_cool_skin",
 ///   "displayName": "My Cool Skin",
 ///   "author": "@username",
 ///   "accentColor": "#00E600",
-///   "surfaceTint": "#002600",
-///   "surfaceTintOpacity": 0.35,
+///   "prefersDarkTint": true,
 ///   "backgroundGradient": {
 ///     "colors": ["#002E0080", "#001A0D4C", "clear"],
 ///     "style": "linear",
 ///     "startPoint": "topLeading",
 ///     "endPoint": "bottomTrailing"
 ///   },
-///   "previewColors": ["#00B200", "#1A3319"],
-///   "prefersDarkTint": true,
-///   "buttonStyle": "gradient"
+///   "previewColors": ["#00B200", "#1A3319"]
 /// }
 /// ```
 struct CustomSkinJSON: Codable {
+    // MARK: Identity
     let id: String
     let displayName: String
     let author: String
+
+    // MARK: Mood (required)
     let accentColor: JSONColor
-    let surfaceTint: JSONColor
-    let surfaceTintOpacity: Double
+    let prefersDarkTint: Bool
     let backgroundGradient: JSONGradient
     let previewColors: [JSONColor]
-    let prefersDarkTint: Bool
+
+    // MARK: Mood (optional)
     let secondaryAccent: JSONColor?
-    let buttonStyle: String?
 
-    /// Button clip shape. Values: "capsule" (default), "roundedRect", "rectangle".
-    let buttonShape: String?
-
-    /// Explicit foreground color for primary buttons. Overrides auto-contrast logic.
-    let buttonColor: JSONColor?
-
-    /// Optional accent color override for primary button backgrounds only.
-    /// Allows a skin to use a different accent for buttons than the overall theme.
-    let buttonAccentColor: JSONColor?
-
-    /// Optional secondary accent override for the primary button gradient end color.
-    let buttonSecondaryAccent: JSONColor?
-
-    /// Material used as the base for glass-style and secondary buttons.
-    /// Same values as barMaterial. Defaults to "regular".
-    let buttonMaterial: String?
-
-    /// Optional color overlay on button material (glass-style). Falls back to accentColor.
-    let buttonTint: JSONColor?
-
-    /// Opacity of button tint overlay (0–1, typically 0.15–0.35). Defaults to 0.3.
-    let buttonTintOpacity: Double?
-
-    /// Toolbar button tint color (Refresh, Settings, Quit).
-    /// Apple HIG: secondary actions use a subtler color for visual hierarchy.
-    let toolbarTint: JSONColor?
-
-    /// Icon size in points for toolbar buttons. Defaults to 15.
-    let toolbarIconSize: CGFloat?
-
-    /// Material for header/footer bars.
-    /// Valid values: "ultraThin", "thin", "regular", "thick", "ultraThick", "bar".
-    /// Apple HIG: controls translucency level of toolbar areas. Defaults to "thick".
-    let barMaterial: String?
-
-    /// Optional color overlay on top of bar material — creates a tinted-glass effect.
+    // MARK: Surface tints (optional)
     let barTint: JSONColor?
-
-    /// Opacity of the bar tint overlay (0–1, typically 0.05–0.25). Defaults to 0.
     let barTintOpacity: Double?
-
-    /// Material for card/platter surfaces. Same values as barMaterial. Defaults to "regular".
-    let platterMaterial: String?
-
-    /// Optional color overlay on platter surfaces.
     let platterTint: JSONColor?
-
-    /// Opacity of the platter tint overlay (0–1, typically 0.05–0.2). Defaults to 0.
     let platterTintOpacity: Double?
 
-    // MARK: Layout & Depth (HIG 2026)
+    // MARK: Buttons (optional)
+    let buttonStyle: String?
+    let buttonShape: String?
+    let buttonColor: JSONColor?
+    let buttonAccentColor: JSONColor?
+    let buttonSecondaryAccent: JSONColor?
+    let buttonTint: JSONColor?
 
-
-
-    /// Ambient shadow opacity for depth. Defaults to 0.06.
-    let shadowOpacity: Double?
-
-    /// Ambient shadow blur radius. Defaults to 8.
-    let shadowRadius: CGFloat?
-
-    /// Ambient shadow vertical offset. Defaults to 4.
-    let shadowY: CGFloat?
-
-    /// Opacity of intrinsic 1px inner border on platters (glass edge highlight). Defaults to 0.
-    let platterBorderOpacity: Double?
-
-    // MARK: Advanced Interactions & Text (HIG 2026+)
-
-    let textPrimary: JSONColor?
-    let textSecondary: JSONColor?
-    let textTertiary: JSONColor?
-
-    /// Color for destructive actions (delete, remove). Falls back to system red.
-    let destructiveColor: JSONColor?
-
-    /// Color for success states (confirmed, saved). Falls back to system green.
-    let successColor: JSONColor?
-
-    /// Color for warning states (conflicts, alerts). Falls back to system orange.
-    let warningColor: JSONColor?
-
-    /// Animation style: "bouncy", "smooth", "snappy". Defaults to "smooth".
-    let animationStyle: String?
-
-    let hoverShadowOpacity: Double?
-    let hoverShadowRadius: CGFloat?
-    let hoverShadowY: CGFloat?
-    let hoverFillOpacity: Double?
-
-    // MARK: Typography & Symbols (HIG 2026)
-
-    /// Font design: "default", "rounded". Defaults to "rounded".
-    let fontDesign: String?
-
-    /// Font weight for body/buttons: "regular", "medium", "semibold", "bold". Defaults to "semibold".
+    // MARK: Typography (optional)
     let fontWeight: String?
 
-    /// Font weight for headlines. Same values as fontWeight. Defaults to "semibold".
-    let headlineFontWeight: String?
-
-    /// SF Symbol rendering: "monochrome", "hierarchical", "palette", "multicolor". Defaults to "hierarchical".
-    let sfSymbolRendering: String?
-
-    /// SF Symbol weight: "ultraLight"–"black". Defaults to "medium".
-    let sfSymbolWeight: String?
-
-    /// Badge style: "filled", "outlined", "tinted". Defaults to "tinted".
+    // MARK: Appearance (optional)
     let badgeStyle: String?
-
-    /// Separator style: "system", "subtle", "accent", "none". Defaults to "system".
     let separatorStyle: String?
 
-    /// Separator opacity (0–1). Floor at 0.15 when separatorStyle != "none". Defaults to 0.5.
-    let separatorOpacity: Double?
-
     func toSkinDefinition(skinFileURL: URL? = nil, isBuiltIn: Bool = false) -> SkinDefinition {
-        return SkinDefinition(
+        SkinDefinition(
             id: isBuiltIn ? id : "custom_\(id)",
             displayName: displayName,
             author: author,
             accentColor: accentColor.toColor(),
-            surfaceTint: surfaceTint.toColor(),
-            surfaceTintOpacity: surfaceTintOpacity,
+            prefersDarkTint: prefersDarkTint,
             backgroundGradient: backgroundGradient.toSkinGradient(),
             previewColors: previewColors.map { $0.toColor() },
-            prefersDarkTint: prefersDarkTint,
             secondaryAccent: secondaryAccent?.toColor(),
+            barTint: barTint?.toColor(),
+            barTintOpacity: barTintOpacity ?? 0.08,
+            platterTint: platterTint?.toColor(),
+            platterTintOpacity: platterTintOpacity ?? 0.05,
             buttonStyle: resolvedButtonStyle,
             buttonShape: resolvedButtonShape,
             buttonColor: buttonColor?.toColor(),
             buttonAccentColor: buttonAccentColor?.toColor(),
             buttonSecondaryAccent: buttonSecondaryAccent?.toColor(),
-            buttonMaterial: resolvedButtonMaterial,
             buttonTint: buttonTint?.toColor(),
-            buttonTintOpacity: buttonTintOpacity ?? 0.3,
-            toolbarTint: toolbarTint?.toColor(),
-            toolbarIconSize: toolbarIconSize ?? 15,
-            barMaterial: resolvedBarMaterial,
-            barTint: barTint?.toColor(),
-            barTintOpacity: barTintOpacity ?? 0,
-            platterMaterial: resolvedPlatterMaterial,
-            platterTint: platterTint?.toColor(),
-            platterTintOpacity: platterTintOpacity ?? 0,
-            shadowOpacity: shadowOpacity ?? 0.06,
-            shadowRadius: shadowRadius ?? 8,
-            shadowY: shadowY ?? 4,
-            platterBorderOpacity: platterBorderOpacity ?? 0,
-            textPrimary: textPrimary?.toColor(),
-            textSecondary: textSecondary?.toColor(),
-            textTertiary: textTertiary?.toColor(),
-            destructiveColor: destructiveColor?.toColor(),
-            successColor: successColor?.toColor(),
-            warningColor: warningColor?.toColor(),
-            animationStyle: resolvedAnimationStyle,
-            hoverShadowOpacity: hoverShadowOpacity ?? 0.12,
-            hoverShadowRadius: hoverShadowRadius ?? 12,
-            hoverShadowY: hoverShadowY ?? 6,
-            hoverFillOpacity: hoverFillOpacity ?? 0.06,
-            fontDesign: resolvedFontDesign,
             fontWeight: resolvedFontWeight,
-            headlineFontWeight: resolvedHeadlineFontWeight,
-            sfSymbolRendering: resolvedSymbolRendering,
-            sfSymbolWeight: resolvedSymbolWeight,
             badgeStyle: resolvedBadgeStyle,
-            separatorStyle: resolvedSeparatorStyle,
-            separatorOpacity: separatorOpacity ?? 0.5
+            separatorStyle: resolvedSeparatorStyle
         )
     }
 
@@ -231,10 +114,7 @@ struct CustomSkinJSON: Codable {
         }
     }
 
-    private var resolvedAnimationStyle: SkinAnimationStyle {
-        guard let value = animationStyle?.lowercased() else { return .smooth }
-        return SkinAnimationStyle(rawValue: value) ?? .smooth
-    }
+    // MARK: - Defaults
 
     private var resolvedButtonStyle: SkinButtonStyle {
         switch buttonStyle?.lowercased() {
@@ -251,63 +131,11 @@ struct CustomSkinJSON: Codable {
         return SkinButtonShape.allCases.first { $0.rawValue.lowercased() == lower } ?? .capsule
     }
 
-    private var resolvedButtonMaterial: SkinBarMaterial {
-        guard let value = buttonMaterial else { return .regular }
-        if let exact = SkinBarMaterial(rawValue: value) { return exact }
-        let lower = value.lowercased()
-        return SkinBarMaterial.allCases.first { $0.rawValue.lowercased() == lower } ?? .regular
-    }
-
-    private var resolvedPlatterMaterial: SkinBarMaterial {
-        guard let value = platterMaterial else { return .regular }
-        if let exact = SkinBarMaterial(rawValue: value) { return exact }
-        let lower = value.lowercased()
-        return SkinBarMaterial.allCases.first { $0.rawValue.lowercased() == lower } ?? .regular
-    }
-
-    private var resolvedFontDesign: SkinFontDesign {
-        guard let value = fontDesign else { return .rounded }
-        return SkinFontDesign(rawValue: value)
-            ?? SkinFontDesign.allCases.first { $0.rawValue.lowercased() == value.lowercased() }
-            ?? .rounded
-    }
-
     private var resolvedFontWeight: SkinFontWeight {
-        guard let value = fontWeight else { return .semibold }
+        guard let value = fontWeight else { return .regular }
         return SkinFontWeight(rawValue: value)
             ?? SkinFontWeight.allCases.first { $0.rawValue.lowercased() == value.lowercased() }
-            ?? .semibold
-    }
-
-    private var resolvedHeadlineFontWeight: SkinFontWeight {
-        guard let value = headlineFontWeight else { return .semibold }
-        return SkinFontWeight(rawValue: value)
-            ?? SkinFontWeight.allCases.first { $0.rawValue.lowercased() == value.lowercased() }
-            ?? .semibold
-    }
-
-    private var resolvedSymbolRendering: SkinSymbolRendering {
-        guard let value = sfSymbolRendering else { return .hierarchical }
-        return SkinSymbolRendering(rawValue: value)
-            ?? SkinSymbolRendering.allCases.first { $0.rawValue.lowercased() == value.lowercased() }
-            ?? .hierarchical
-    }
-
-    private var resolvedSymbolWeight: SkinSymbolWeight {
-        guard let value = sfSymbolWeight else { return .medium }
-        let resolved = SkinSymbolWeight(rawValue: value)
-            ?? SkinSymbolWeight.allCases.first { $0.rawValue.lowercased() == value.lowercased() }
-            ?? .medium
-        // HIG 2026: warn if symbol weight diverges > 2 steps from font weight
-        let fontIdx = resolvedFontWeight.swiftUIWeight == .regular ? 3
-            : resolvedFontWeight.swiftUIWeight == .medium ? 4
-            : resolvedFontWeight.swiftUIWeight == .semibold ? 5
-            : 6 // bold
-        let delta = abs(resolved.weightIndex - fontIdx)
-        if delta > 2 {
-            print("[Bubo] Warning: Skin '\(displayName)' sfSymbolWeight (\(value)) diverges > 2 steps from fontWeight. HIG recommends matching symbol and text weights.")
-        }
-        return resolved
+            ?? .regular
     }
 
     private var resolvedBadgeStyle: SkinBadgeStyle {
@@ -318,18 +146,10 @@ struct CustomSkinJSON: Codable {
     }
 
     private var resolvedSeparatorStyle: SkinSeparatorStyle {
-        guard let value = separatorStyle else { return .system }
+        guard let value = separatorStyle else { return .subtle }
         return SkinSeparatorStyle(rawValue: value)
             ?? SkinSeparatorStyle.allCases.first { $0.rawValue.lowercased() == value.lowercased() }
-            ?? .system
-    }
-
-    private var resolvedBarMaterial: SkinBarMaterial {
-        guard let value = barMaterial else { return .thick }
-        // Try exact match first, then case-insensitive lookup
-        if let exact = SkinBarMaterial(rawValue: value) { return exact }
-        let lower = value.lowercased()
-        return SkinBarMaterial.allCases.first { $0.rawValue.lowercased() == lower } ?? .thick
+            ?? .subtle
     }
 }
 
@@ -614,17 +434,11 @@ enum BuiltInSkinLoader {
         displayName: "Classic",
         author: "Bubo",
         accentColor: .accentColor,
-        surfaceTint: .clear,
-        surfaceTintOpacity: 0,
+        prefersDarkTint: false,
         backgroundGradient: .clear,
         previewColors: [.gray],
-        prefersDarkTint: false,
         buttonStyle: .solid,
-        fontDesign: .default,
-        fontWeight: .regular,
-        headlineFontWeight: .medium,
-        sfSymbolRendering: .monochrome,
-        sfSymbolWeight: .regular
+        buttonShape: .roundedRect
     )
 
     private static func loadBuiltInSkins() -> [SkinDefinition] {
