@@ -27,21 +27,28 @@ struct QuickActionRanker {
     let reminderService: ReminderService
     let intentLearner: IntentLearner
 
-    private let gravity: Double = 1.8
+    nonisolated static let gravity: Double = 1.8
 
     // MARK: - Rank
 
     /// Returns the top N quick actions ranked by score.
     func rank(limit: Int = 3) -> [ScoredAction] {
+        let inputs = gatherContextInputs()
         let candidates = generateCandidates()
+        let now = Date()
         let scored = candidates.map { candidate in
             ScoredAction(
                 action: candidate,
-                score: score(candidate)
+                score: score(candidate, inputs: inputs, now: now)
             )
         }
         return scored
-            .sorted { $0.score > $1.score }
+            .sorted { lhs, rhs in
+                // Tie-break on id ensures deterministic order across re-ranks,
+                // preventing button-order flicker when scores are equal.
+                if lhs.score != rhs.score { return lhs.score > rhs.score }
+                return lhs.action.id < rhs.action.id
+            }
             .prefix(limit)
             .map { $0 }
     }
@@ -52,27 +59,80 @@ struct QuickActionRanker {
         let score: Double
     }
 
+    // MARK: - Context inputs
+
+    /// Snapshot of all values needed for context scoring. Gathered once per
+    /// `rank()` call so the expensive `reminderService.allEvents` (recurrence
+    /// expansion) is only walked once even though multiple signals depend on it.
+    struct ContextInputs: Sendable {
+        let overdueCount: Int
+        let urgentCount: Int
+        let pendingCount: Int
+        let hour: Int
+        let hasFocusToday: Bool
+        let meetingsTodayCount: Int
+    }
+
+    private func gatherContextInputs() -> ContextInputs {
+        let cal = Calendar.current
+        let now = Date()
+        let hour = cal.component(.hour, from: now)
+        let todayEnd = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now))!
+
+        // Walk allEvents once and bucket what each signal needs.
+        var hasFocus = false
+        var meetings = 0
+        for event in reminderService.allEvents
+        where event.startDate >= now && event.startDate < todayEnd {
+            if event.eventType == .pomodoro { hasFocus = true }
+            if !event.isLocalEvent { meetings += 1 }
+        }
+
+        return ContextInputs(
+            overdueCount: backlogService.overdue.count,
+            urgentCount: backlogService.urgent(withinDays: 2).count,
+            pendingCount: backlogService.pending.count,
+            hour: hour,
+            hasFocusToday: hasFocus,
+            meetingsTodayCount: meetings
+        )
+    }
+
     // MARK: - Scoring
 
-    private func score(_ candidate: QuickActionCandidate) -> Double {
+    private func score(
+        _ candidate: QuickActionCandidate,
+        inputs: ContextInputs,
+        now: Date
+    ) -> Double {
         let points = usagePoints(candidate)
-        let contextBoost = contextScore(candidate)
-        let timePenalty = timeDecay(candidate)
+        let contextBoost = Self.contextScore(for: candidate.signal, inputs: inputs)
+        let hoursSince = now.timeIntervalSince(lastRelevantTime(candidate)) / 3600.0
+        return Self.combinedScore(
+            points: points,
+            contextBoost: contextBoost,
+            hoursSinceRelevant: hoursSince
+        )
+    }
 
-        // HN formula: score = (points * boost) / (T + 2)^gravity
-        // Modified: contextBoost is multiplicative (not additive like HN points)
-        // so contextually irrelevant actions get near-zero even if historically popular
+    /// HN-inspired: (points * boost) / (T + 2)^gravity.
+    /// contextBoost is multiplicative so contextually irrelevant actions
+    /// get near-zero even if historically popular.
+    nonisolated static func combinedScore(
+        points: Double,
+        contextBoost: Double,
+        hoursSinceRelevant: Double,
+        gravity: Double = QuickActionRanker.gravity
+    ) -> Double {
+        let timePenalty = pow(hoursSinceRelevant + 2.0, gravity)
         return (points * contextBoost) / timePenalty
     }
 
-    /// Usage points: how much the user likes this action.
-    /// Based on acceptance rate and frequency from IntentLearner.
     private func usagePoints(_ candidate: QuickActionCandidate) -> Double {
         let key = candidate.id
-        let frequency = Double(intentLearner.intentFrequency[key] ?? 0)
+        let frequency = intentLearner.intentFrequency[key] ?? 0
         let history = intentLearner.history
 
-        // Count accepts and rejects for requests containing this action's key intents
         var accepts = 0
         var rejects = 0
         for execution in history {
@@ -83,85 +143,72 @@ struct QuickActionRanker {
                 switch execution.outcome {
                 case .accepted: accepts += 1
                 case .rejected: rejects += 1
-                case .modified: accepts += 1  // modified = partially accepted
+                case .modified: accepts += 1  // partial accept
                 }
             }
         }
 
-        let total = accepts + rejects
-        let acceptanceRate = total > 0 ? Double(accepts) / Double(total) : 0.5  // default 50%
-
-        // Points = base (1) + frequency bonus + acceptance bonus
-        // New actions start at 1.0, popular accepted ones go higher
-        return 1.0 + (frequency * 0.3) + (acceptanceRate * 2.0)
+        return Self.usagePoints(frequency: frequency, accepts: accepts, rejects: rejects)
     }
 
-    /// Context score: how relevant is this action RIGHT NOW.
-    /// 0 = completely irrelevant, 1 = baseline, 3 = urgently needed.
-    private func contextScore(_ candidate: QuickActionCandidate) -> Double {
-        switch candidate.signal {
+    /// New actions start at 2.0 (1 base + 50% default acceptance × 2);
+    /// each frequency unit adds 0.3, full acceptance adds 2.0.
+    nonisolated static func usagePoints(frequency: Int, accepts: Int, rejects: Int) -> Double {
+        let total = accepts + rejects
+        let acceptanceRate = total > 0 ? Double(accepts) / Double(total) : 0.5
+        return 1.0 + (Double(frequency) * 0.3) + (acceptanceRate * 2.0)
+    }
+
+    /// Maps a context signal to a relevance multiplier (0…3).
+    /// 0 = irrelevant, 1 = baseline, 3 = urgent.
+    nonisolated static func contextScore(
+        for signal: ContextSignal,
+        inputs: ContextInputs
+    ) -> Double {
+        switch signal {
         case .overdueExists:
-            let overdue = backlogService.overdue
-            return overdue.isEmpty ? 0 : min(3.0, 1.0 + Double(overdue.count) * 0.5)
+            return inputs.overdueCount == 0
+                ? 0
+                : min(3.0, 1.0 + Double(inputs.overdueCount) * 0.5)
 
         case .urgentDeadline:
-            let urgent = backlogService.urgent(withinDays: 2)
-            return urgent.isEmpty ? 0 : min(3.0, 1.5 + Double(urgent.count) * 0.3)
+            return inputs.urgentCount == 0
+                ? 0
+                : min(3.0, 1.5 + Double(inputs.urgentCount) * 0.3)
 
         case .pendingTasks:
-            let pending = backlogService.pending
-            return pending.isEmpty ? 0 : min(2.5, 0.5 + Double(pending.count) * 0.2)
+            return inputs.pendingCount == 0
+                ? 0
+                : min(2.5, 0.5 + Double(inputs.pendingCount) * 0.2)
 
         case .noFocusToday:
-            let cal = Calendar.current
-            let now = Date()
-            let hour = cal.component(.hour, from: now)
-            let todayEnd = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now))!
-            let hasFocus = reminderService.allEvents.contains {
-                $0.startDate >= now && $0.startDate < todayEnd && $0.eventType == .pomodoro
-            }
-            if hasFocus { return 0 }
-            // More relevant in morning, less in evening
-            return hour < 10 ? 2.5 : hour < 14 ? 1.8 : hour < 17 ? 0.8 : 0
+            if inputs.hasFocusToday { return 0 }
+            return inputs.hour < 10 ? 2.5
+                : inputs.hour < 14 ? 1.8
+                : inputs.hour < 17 ? 0.8
+                : 0
 
         case .meetingHeavy:
-            let cal = Calendar.current
-            let now = Date()
-            let todayEnd = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now))!
-            let meetings = reminderService.allEvents.filter {
-                $0.startDate >= now && $0.startDate < todayEnd && !$0.isLocalEvent
-            }
-            return meetings.count >= 5 ? min(2.5, 1.0 + Double(meetings.count - 4) * 0.3) : 0
+            return inputs.meetingsTodayCount >= 5
+                ? min(2.5, 1.0 + Double(inputs.meetingsTodayCount - 4) * 0.3)
+                : 0
 
         case .morningOrganize:
-            let hour = Calendar.current.component(.hour, from: Date())
-            return hour < 10 ? 2.0 : hour < 11 ? 1.0 : 0
+            return inputs.hour < 10 ? 2.0 : inputs.hour < 11 ? 1.0 : 0
 
         case .planTomorrow:
-            let hour = Calendar.current.component(.hour, from: Date())
-            return hour >= 16 ? 1.5 : hour >= 14 ? 0.5 : 0
+            return inputs.hour >= 16 ? 1.5 : inputs.hour >= 14 ? 0.5 : 0
 
         case .lowEnergy:
-            let hour = Calendar.current.component(.hour, from: Date())
-            // Post-lunch dip
-            return (13...15).contains(hour) ? 1.5 : 0
+            // Post-lunch dip.
+            return (13...15).contains(inputs.hour) ? 1.5 : 0
 
         case .alwaysAvailable:
-            return 0.3  // low baseline, only shows if nothing better
+            return 0.3
         }
     }
 
-    /// Time decay: actions lose relevance over time since last context match.
-    /// Uses HN gravity formula: (T + 2)^gravity
-    private func timeDecay(_ candidate: QuickActionCandidate) -> Double {
-        // Find last time this action was relevant (executed or context-matched)
-        let lastRelevant = lastRelevantTime(candidate)
-        let hoursSince = Date().timeIntervalSince(lastRelevant) / 3600.0
-        return pow(hoursSince + 2.0, gravity)
-    }
-
     private func lastRelevantTime(_ candidate: QuickActionCandidate) -> Date {
-        // Check IntentLearner history for last execution of matching intents
         let matching = intentLearner.history.filter { execution in
             candidate.request.intents.contains { intent in
                 execution.intents.contains(intent)
@@ -170,7 +217,7 @@ struct QuickActionRanker {
         if let last = matching.last {
             return last.timestamp
         }
-        // Never used → treat as "just now" so it gets a chance
+        // Never used → treat as "just now" so it gets a chance.
         return Date()
     }
 
@@ -236,7 +283,6 @@ struct QuickActionRanker {
             ),
         ]
 
-        // Add overdue-specific action if overdue tasks exist
         let overdue = backlogService.overdue
         if !overdue.isEmpty {
             candidates.insert(QuickActionCandidate(

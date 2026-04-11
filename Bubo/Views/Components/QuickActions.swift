@@ -36,8 +36,16 @@ struct QuickActions: View {
                 onOpenPalette()
             } label: {
                 HStack(spacing: 4) {
-                    Image(systemName: "sparkles")
-                        .font(.caption2.weight(.semibold))
+                    Group {
+                        if isRunning {
+                            ProgressView()
+                                .controlSize(.mini)
+                        } else {
+                            Image(systemName: "sparkles")
+                                .font(.caption2.weight(.semibold))
+                        }
+                    }
+                    .frame(width: 12, height: 12)
                     Text("Optimize")
                         .font(.caption.weight(.medium))
                         .lineLimit(1)
@@ -55,6 +63,8 @@ struct QuickActions: View {
                 .contentShape(Capsule())
             }
             .buttonStyle(.plain)
+            .disabled(isRunning)
+            .opacity(isRunning ? 0.6 : 1)
             .help("AI optimizer (\u{2318}K)")
 
             ForEach(rankedActions) { scored in
