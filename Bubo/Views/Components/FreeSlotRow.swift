@@ -68,8 +68,12 @@ struct FreeSlotRow: View {
                 )
             )
             .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
+            // Same trailing as EventRowView's urgencyBar — keeps the time
+            // columns of both row types on the same vertical axis. No
+            // leading offset: the row's outer `sm` padding already matches
+            // the event row's outer padding, so both accent bars start at
+            // exactly contentMargin + sm from the popover left edge.
             .padding(.trailing, DS.Spacing.md)
-            .padding(.leading, 2)
             .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 1) {
