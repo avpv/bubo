@@ -52,6 +52,14 @@ struct BacklogView: View {
     /// Kept as a constant so tests and the ghost preview agree.
     static let defaultTaskDurationMinutes: Int = 60
 
+    /// When the backlog is expanded, the task list is capped at this
+    /// height and scrolls internally. This prevents a long backlog from
+    /// pushing the Timeline card off the popover — HIG "primary content
+    /// should stay primary", Birman "если всё не влезает, дай скролл, но
+    /// не съедай главное". Roughly 3–4 BacklogTaskRow heights before the
+    /// list starts scrolling.
+    private static let expandedTaskListMaxHeight: CGFloat = 180
+
     private var activeTasks: [BacklogTask] {
         backlogService.tasks.filter { $0.status != .done }
     }
@@ -67,7 +75,21 @@ struct BacklogView: View {
             if !activeTasks.isEmpty || isInputFocused {
                 backlogHeader
                 if isExpanded {
-                    taskList
+                    // Level 1 (main-screen overflow fix): the expanded
+                    // task list lives inside a ScrollView capped at a
+                    // fixed max height, so a long backlog can never push
+                    // the Timeline card off the popover. The header
+                    // above and the addTaskField below stay pinned
+                    // OUTSIDE this ScrollView, so the counter, the
+                    // Schedule button, and the "+ Add task…" input
+                    // remain visible at all times — Birman: "важные
+                    // affordances не прячь". The scroll indicator
+                    // follows native macOS behaviour (on demand, fades
+                    // out after scrolling stops).
+                    ScrollView {
+                        taskList
+                    }
+                    .frame(maxHeight: Self.expandedTaskListMaxHeight)
                 }
             }
             addTaskField
