@@ -17,6 +17,10 @@ struct BacklogView: View {
     var reminderService: ReminderService
     var onScheduleTasks: () -> Void
     var onDeleteTask: ((BacklogTask) -> Void)?
+    /// Fired when the user reorders or cross-context-drops a task. Lets the
+    /// parent surface an undo toast (it owns `ToastState`); nil disables the
+    /// toast but the reorder still happens.
+    var onReorderToast: ((_ message: String, _ undo: @escaping () -> Void) -> Void)? = nil
     /// External trigger: set to `true` to focus the "Add task…" field.
     /// BacklogView resets it to `false` after grabbing focus.
     @Binding var focusRequested: Bool
@@ -25,18 +29,37 @@ struct BacklogView: View {
     var autoExpand: Bool = false
 
     @Environment(\.activeSkin) private var skin
+    /// Shared drag + ghost-preview state, injected by `MenuBarView` via the
+    /// environment. May be nil in previews / settings panes, in which case
+    /// the ghost-block and drag-highlighting features silently degrade to
+    /// inline text and per-row targeting.
+    @Environment(\.backlogCoordinator) private var coordinator
+
     @State private var newTaskTitle = ""
     @State private var isExpanded = false
     @State private var editingTaskId: String? = nil
-    @State private var ghostPreview: String? = nil
+    /// Textual ghost — complements the ghost block on the timeline so
+    /// assistive technologies and compact layouts still get "Today 14:00".
+    @State private var ghostPreviewText: String? = nil
     @State private var ghostPreviewTask: Task<Void, Never>? = nil
     @FocusState private var isInputFocused: Bool
 
-    /// Currently dragged task ID (for drag-to-schedule).
-    @State private var draggingTaskId: String? = nil
+    /// User has already performed at least one drag — used to hide the
+    /// onboarding hint once the affordance has been discovered.
+    @AppStorage("BuboBacklogHasDragged") private var hasDragged: Bool = false
+
+    /// Default duration applied to new tasks (before parsing).
+    /// Kept as a constant so tests and the ghost preview agree.
+    static let defaultTaskDurationMinutes: Int = 60
 
     private var activeTasks: [BacklogTask] {
         backlogService.tasks.filter { $0.status != .done }
+    }
+
+    /// Duration to use for ghost-preview lookup and for the task actually
+    /// created on submit. Reparses on every keystroke.
+    private var parsedDurationMinutes: Int {
+        BacklogTitleParser.parse(newTaskTitle).durationMinutes ?? Self.defaultTaskDurationMinutes
     }
 
     var body: some View {
@@ -56,10 +79,25 @@ struct BacklogView: View {
                 focusRequested = false
             }
         }
+        .onChange(of: isInputFocused) { _, focused in
+            // Hide the ghost block the moment the user tabs away from the
+            // input — otherwise it would linger on the timeline even though
+            // nothing is currently being composed.
+            if !focused {
+                coordinator?.clearGhost()
+                ghostPreviewText = nil
+                ghostPreviewTask?.cancel()
+            }
+        }
         .onAppear {
             if autoExpand && !activeTasks.isEmpty {
                 isExpanded = true
             }
+        }
+        .onDisappear {
+            coordinator?.clearGhost()
+            coordinator?.endDrag()
+            ghostPreviewTask?.cancel()
         }
     }
 
@@ -113,6 +151,10 @@ struct BacklogView: View {
 
     private var taskList: some View {
         VStack(spacing: 0) {
+            if !hasDragged && !activeTasks.isEmpty {
+                dragDiscoveryHint
+            }
+
             let grouped = backlogService.groupedByContext
             ForEach(grouped, id: \.context) { group in
                 if let context = group.context {
@@ -137,13 +179,28 @@ struct BacklogView: View {
                         BacklogTaskRow(
                             task: task,
                             isUrgent: isUrgent(task),
+                            isDragging: coordinator?.draggedTask?.taskId == task.id,
+                            canMoveUp: canMoveUp(task),
+                            canMoveDown: canMoveDown(task),
                             onComplete: {
                                 withAnimation(.easeInOut(duration: 0.3)) {
                                     backlogService.completeTask(id: task.id)
                                 }
                             },
                             onEdit: { editingTaskId = task.id },
-                            onDelete: { onDeleteTask?(task) }
+                            onDelete: { onDeleteTask?(task) },
+                            onDragStart: {
+                                coordinator?.beginDrag(payload(for: task))
+                                if !hasDragged { hasDragged = true }
+                            },
+                            onDragEnd: { coordinator?.endDrag() },
+                            onReorderDrop: { dropped in
+                                handleReorderDrop(dropped: dropped, targetId: task.id)
+                            },
+                            onMoveUp: { moveTask(task, by: -1) },
+                            onMoveDown: { moveTask(task, by: +1) },
+                            onMoveToTop: { moveTaskToEdge(task, toTop: true) },
+                            onMoveToBottom: { moveTaskToEdge(task, toTop: false) }
                         )
                         .transition(.opacity.combined(with: .move(edge: .leading)))
                     }
@@ -152,6 +209,162 @@ struct BacklogView: View {
         }
         .padding(.horizontal, DS.Spacing.lg)
         .animation(.easeInOut(duration: 0.2), value: activeTasks.map(\.id))
+    }
+
+    /// Build a typed drag payload for `task` so drag sources and drop targets
+    /// share the same snapshot. Keeps the service out of the drop hot path.
+    private func payload(for task: BacklogTask) -> BacklogTaskDrag {
+        BacklogTaskDrag(
+            taskId: task.id,
+            title: task.title,
+            durationMinutes: task.durationMinutes,
+            context: task.context
+        )
+    }
+
+    /// One-time onboarding hint: explains the drag gestures and keyboard
+    /// alternatives. Disappears permanently after the first drag.
+    private var dragDiscoveryHint: some View {
+        HStack(alignment: .top, spacing: DS.Spacing.xs) {
+            Image(systemName: "hand.draw")
+                .font(.caption2)
+                .foregroundStyle(skin.accentColor.opacity(0.7))
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Drag a task onto a free slot to schedule it, or onto another task to reorder.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("Right-click a task for keyboard-friendly Move Up / Move Down.")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.horizontal, DS.Spacing.sm)
+        .padding(.vertical, DS.Spacing.xs)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(skin.accentColor.opacity(0.05))
+        )
+        .padding(.top, DS.Spacing.xxs)
+        .padding(.bottom, DS.Spacing.xs)
+        .transition(.opacity)
+    }
+
+    // MARK: - Reorder handling
+
+    /// A task was dropped onto another task — reorder so the dragged one lands
+    /// immediately before the target. If the two tasks live in different
+    /// context groups, the dragged task also adopts the target's context so
+    /// the visual drop matches where the user aimed; otherwise the drag
+    /// would appear to do nothing (grouping would undo the move).
+    private func handleReorderDrop(dropped: BacklogTaskDrag, targetId: String) {
+        guard dropped.taskId != targetId,
+              let originalTask = backlogService.tasks.first(where: { $0.id == dropped.taskId }),
+              backlogService.tasks.contains(where: { $0.id == targetId }),
+              let target = backlogService.tasks.first(where: { $0.id == targetId })
+        else { return }
+
+        // Snapshot for undo — index, context, and the ID of the task that
+        // used to follow this one (so we can restore exact adjacency).
+        let previousIndex = backlogService.indexOfTask(id: originalTask.id)
+        let previousContext = originalTask.context
+        let contextChanged = originalTask.context != target.context
+
+        withAnimation(.easeInOut(duration: 0.2)) {
+            if contextChanged {
+                var updated = originalTask
+                updated.context = target.context
+                backlogService.updateTask(updated)
+            }
+            backlogService.moveTask(id: originalTask.id, before: targetId)
+        }
+        hasDragged = true
+        coordinator?.endDrag()
+
+        // Undo: restore index + context in one step.
+        let taskId = originalTask.id
+        let originalSnapshot = originalTask
+        onReorderToast?(
+            contextChanged
+                ? "Moved \u{201C}\(originalTask.title)\u{201D} to \(target.context ?? "No project")"
+                : "Reordered \u{201C}\(originalTask.title)\u{201D}"
+        ) { [backlogService] in
+            guard var current = backlogService.tasks.first(where: { $0.id == taskId }) else {
+                // Task was deleted during the toast window — best effort restore
+                backlogService.restoreTask(originalSnapshot, at: previousIndex)
+                return
+            }
+            current.context = previousContext
+            backlogService.updateTask(current)
+            if let previousIndex {
+                _ = backlogService.removeTask(id: taskId)
+                backlogService.restoreTask(current, at: previousIndex)
+            }
+        }
+    }
+
+    /// Move a task up or down by one slot (keyboard / context menu action).
+    private func moveTask(_ task: BacklogTask, by delta: Int) {
+        let ordered = activeTasks
+        guard let current = ordered.firstIndex(where: { $0.id == task.id }) else { return }
+        let target = current + delta
+        guard ordered.indices.contains(target) else { return }
+        let targetId = ordered[target].id
+
+        let previousIndex = backlogService.indexOfTask(id: task.id)
+        withAnimation(.easeInOut(duration: 0.2)) {
+            if delta < 0 {
+                backlogService.moveTask(id: task.id, before: targetId)
+            } else {
+                // Move "after" = move before the item *after* the target,
+                // or to the end if the target is already last.
+                if target + 1 < ordered.count {
+                    backlogService.moveTask(id: task.id, before: ordered[target + 1].id)
+                } else {
+                    backlogService.moveTaskToEnd(id: task.id)
+                }
+            }
+        }
+
+        let taskId = task.id
+        onReorderToast?("Reordered \u{201C}\(task.title)\u{201D}") { [backlogService] in
+            guard let previousIndex,
+                  let current = backlogService.tasks.first(where: { $0.id == taskId })
+            else { return }
+            _ = backlogService.removeTask(id: taskId)
+            backlogService.restoreTask(current, at: previousIndex)
+        }
+    }
+
+    private func moveTaskToEdge(_ task: BacklogTask, toTop: Bool) {
+        let previousIndex = backlogService.indexOfTask(id: task.id)
+        withAnimation(.easeInOut(duration: 0.2)) {
+            if toTop {
+                if let firstActive = activeTasks.first, firstActive.id != task.id {
+                    backlogService.moveTask(id: task.id, before: firstActive.id)
+                }
+            } else {
+                backlogService.moveTaskToEnd(id: task.id)
+            }
+        }
+        let taskId = task.id
+        onReorderToast?("Moved \u{201C}\(task.title)\u{201D} to \(toTop ? "top" : "bottom")") { [backlogService] in
+            guard let previousIndex,
+                  let current = backlogService.tasks.first(where: { $0.id == taskId })
+            else { return }
+            _ = backlogService.removeTask(id: taskId)
+            backlogService.restoreTask(current, at: previousIndex)
+        }
+    }
+
+    private func canMoveUp(_ task: BacklogTask) -> Bool {
+        activeTasks.first?.id != task.id && activeTasks.contains(where: { $0.id == task.id })
+    }
+
+    private func canMoveDown(_ task: BacklogTask) -> Bool {
+        activeTasks.last?.id != task.id && activeTasks.contains(where: { $0.id == task.id })
     }
 
     private func isUrgent(_ task: BacklogTask) -> Bool {
@@ -199,11 +412,12 @@ struct BacklogView: View {
 
     // MARK: - Ghost Preview
 
-    /// Shows where a new task would land in the schedule while the user is typing.
-    /// Birman: "sequential magic" — anticipate the result before the action completes.
+    /// Text hint under the input ("Today 14:00–15:00"). Kept in addition to
+    /// the timeline ghost block so VoiceOver users, compact layouts, and the
+    /// `no free slot this week` fallback still have a visible signal.
     @ViewBuilder
     private var ghostPreviewRow: some View {
-        if let preview = ghostPreview, !newTaskTitle.trimmingCharacters(in: .whitespaces).isEmpty {
+        if let preview = ghostPreviewText, !newTaskTitle.trimmingCharacters(in: .whitespaces).isEmpty {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "arrow.right.circle.fill")
                     .font(.caption)
@@ -218,89 +432,69 @@ struct BacklogView: View {
             .padding(.vertical, DS.Spacing.xxs)
             .transition(.opacity.combined(with: .move(edge: .top)))
             .animation(.easeInOut(duration: 0.2), value: preview)
+            .accessibilityHint(Text("The new task would land at \(preview)."))
         }
     }
 
     private func computeGhostPreview() {
         ghostPreviewTask?.cancel()
-        let title = newTaskTitle.trimmingCharacters(in: .whitespaces)
-        guard !title.isEmpty else {
-            ghostPreview = nil
+        let parsed = BacklogTitleParser.parse(newTaskTitle)
+        guard !parsed.cleaned.isEmpty else {
+            ghostPreviewText = nil
+            coordinator?.clearGhost()
             return
         }
 
+        let duration = parsed.durationMinutes ?? Self.defaultTaskDurationMinutes
+        let previewTitle = parsed.cleaned
+
         ghostPreviewTask = Task { @MainActor in
-            // Debounce: wait 300ms after last keystroke
+            // Debounce: wait 300 ms after last keystroke so we don't thrash
+            // the slot finder for every character.
             try? await Task.sleep(for: .milliseconds(300))
             guard !Task.isCancelled else { return }
 
-            // Find the next free slot heuristically (no GA, instant)
-            let slot = findNextFreeSlot(durationMinutes: 60)
+            // Share one shared finder with FreeSlotRow so the row the user
+            // will see and the ghost preview always agree.
+            let slot = FreeSlotFinder.nextSlot(
+                matching: duration,
+                in: reminderService.allEvents,
+                workingHours: optimizerService.workingHours,
+                maxDaysAhead: 7
+            )
             guard !Task.isCancelled else { return }
 
             if let slot {
                 let fmt = DateFormatter()
                 fmt.setLocalizedDateFormatFromTemplate("H:mm")
-                ghostPreview = "\(fmt.string(from: slot.start))–\(fmt.string(from: slot.end))"
+                let range = "\(fmt.string(from: slot.start))–\(fmt.string(from: slot.end))"
+                ghostPreviewText = "\(Self.dayLabel(for: slot.start)) \(range)"
+                coordinator?.setGhost(slot: slot, title: previewTitle)
             } else {
-                ghostPreview = "no free slot today"
+                ghostPreviewText = "no free slot this week"
+                coordinator?.clearGhost()
             }
         }
     }
 
-    /// Fast heuristic: find the next free slot in today's schedule.
-    /// No GA — just gap detection between events.
-    private func findNextFreeSlot(durationMinutes: Int) -> DateInterval? {
-        let cal = Calendar.current
-        let now = Date()
-        let todayEnd = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now))!
-        let workEnd = cal.date(
-            bySettingHour: optimizerService.workingHoursEnd,
-            minute: 0, second: 0, of: now
-        ) ?? todayEnd
-        let effectiveEnd = min(workEnd, todayEnd)
-
-        let events = reminderService.allEvents
-            .filter { $0.startDate >= now && $0.startDate < effectiveEnd }
-            .sorted { $0.startDate < $1.startDate }
-
-        let needed = TimeInterval(durationMinutes * 60)
-        var cursor = now
-
-        // Snap cursor to next half-hour
-        let minute = cal.component(.minute, from: cursor)
-        if minute > 0 && minute <= 30 {
-            cursor = cal.date(bySettingHour: cal.component(.hour, from: cursor),
-                             minute: 30, second: 0, of: cursor) ?? cursor
-        } else if minute > 30 {
-            cursor = cal.date(byAdding: .hour, value: 1, to:
-                cal.date(bySettingHour: cal.component(.hour, from: cursor),
-                         minute: 0, second: 0, of: cursor) ?? cursor) ?? cursor
-        }
-
-        for event in events {
-            let gap = event.startDate.timeIntervalSince(cursor)
-            if gap >= needed {
-                return DateInterval(start: cursor, duration: needed)
-            }
-            cursor = max(cursor, event.endDate)
-        }
-
-        // Check trailing gap
-        if effectiveEnd.timeIntervalSince(cursor) >= needed {
-            return DateInterval(start: cursor, duration: needed)
-        }
-
-        return nil
+    /// Localised label describing how far off `date` is from today.
+    /// Used by the ghost preview — keep it short so it fits on one line.
+    static func dayLabel(for date: Date, calendar cal: Calendar = .current) -> String {
+        if cal.isDateInToday(date) { return "Today" }
+        if cal.isDateInTomorrow(date) { return "Tomorrow" }
+        let fmt = DateFormatter()
+        fmt.setLocalizedDateFormatFromTemplate("EEE")
+        return fmt.string(from: date)
     }
 
     private func addTask() {
-        let title = newTaskTitle.trimmingCharacters(in: .whitespaces)
+        let parsed = BacklogTitleParser.parse(newTaskTitle)
+        let title = parsed.cleaned
         guard !title.isEmpty else { return }
 
         let task = BacklogTask(
             title: title,
-            durationMinutes: 60,
+            durationMinutes: parsed.durationMinutes ?? Self.defaultTaskDurationMinutes,
             priority: .medium
         )
         withAnimation(.easeInOut(duration: 0.2)) {
@@ -308,8 +502,9 @@ struct BacklogView: View {
             isExpanded = true
         }
         newTaskTitle = ""
-        ghostPreview = nil
+        ghostPreviewText = nil
         ghostPreviewTask?.cancel()
+        coordinator?.clearGhost()
     }
 }
 
@@ -318,15 +513,45 @@ struct BacklogView: View {
 struct BacklogTaskRow: View {
     let task: BacklogTask
     let isUrgent: Bool
+    /// True while this specific row is being dragged by the user. Used to dim
+    /// the source row so it's clear what's in flight.
+    var isDragging: Bool = false
+    /// Whether keyboard/context-menu reorder is currently possible. Disables
+    /// the menu entries cleanly on the first and last rows.
+    var canMoveUp: Bool = true
+    var canMoveDown: Bool = true
     var onComplete: () -> Void
     var onEdit: () -> Void
     var onDelete: () -> Void
+    /// Fired when this row enters the drag state so the parent can push the
+    /// typed payload onto the shared coordinator.
+    var onDragStart: () -> Void = {}
+    /// Fired when the drag session ends (regardless of whether a drop landed).
+    var onDragEnd: () -> Void = {}
+    /// Fired when another backlog task is dropped onto this row. The parent
+    /// decides how to integrate the drop (reorder and/or context swap).
+    var onReorderDrop: (BacklogTaskDrag) -> Void = { _ in }
+    var onMoveUp: () -> Void = {}
+    var onMoveDown: () -> Void = {}
+    var onMoveToTop: () -> Void = {}
+    var onMoveToBottom: () -> Void = {}
 
     @State private var isHovered = false
+    @State private var isReorderTargeted = false
     @Environment(\.activeSkin) private var skin
 
     var body: some View {
         HStack(spacing: DS.Spacing.sm) {
+            // Drag handle — visible on hover. Birman: affordance only when
+            // the pointer is already on the row, so the default state stays
+            // quiet but the gesture is never hidden from intent.
+            Image(systemName: "line.3.horizontal")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .frame(width: 10)
+                .opacity(isHovered ? 1 : 0)
+                .accessibilityHidden(true)
+
             // Checkbox — complete on tap
             Button(action: onComplete) {
                 Image(systemName: "circle")
@@ -390,10 +615,34 @@ struct BacklogTaskRow: View {
             }
         }
         .padding(.vertical, DS.Spacing.xs)
+        .padding(.horizontal, DS.Spacing.xs)
         .contentShape(Rectangle())
+        .opacity(isDragging ? 0.4 : 1)
+        .background(
+            // Reorder drop highlight — a thin accent bar at the top edge so
+            // the user sees exactly where the dropped task will land.
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(skin.accentColor.opacity(isReorderTargeted ? 0.10 : 0))
+        )
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(skin.accentColor)
+                .frame(height: isReorderTargeted ? 2 : 0)
+                .animation(.easeInOut(duration: 0.12), value: isReorderTargeted)
+        }
         .onHover { isHovered = $0 }
-        .draggable(task.id) {
-            // Drag preview — lightweight label shown while dragging
+        .draggable(
+            BacklogTaskDrag(
+                taskId: task.id,
+                title: task.title,
+                durationMinutes: task.durationMinutes,
+                context: task.context
+            )
+        ) {
+            // Drag preview — lightweight label shown while dragging.
+            // onAppear/onDisappear on the preview view fire when the drag
+            // session begins / ends, which is how we tell the coordinator
+            // to light up every valid drop target.
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: "calendar.badge.plus")
                     .font(.caption)
@@ -406,13 +655,40 @@ struct BacklogTaskRow: View {
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, DS.Spacing.xs)
             .background(.ultraThinMaterial, in: Capsule())
+            .onAppear { onDragStart() }
+            .onDisappear { onDragEnd() }
+        }
+        .dropDestination(for: BacklogTaskDrag.self) { items, _ in
+            guard let dropped = items.first, dropped.taskId != task.id else { return false }
+            onReorderDrop(dropped)
+            return true
+        } isTargeted: { targeted in
+            withAnimation(.easeInOut(duration: 0.12)) {
+                isReorderTargeted = targeted
+            }
         }
         .contextMenu {
             Button("Complete") { onComplete() }
             Button("Edit") { onEdit() }
             Divider()
+            // Keyboard-friendly reorder. Shortcut bindings aren't attached
+            // here because context menus are ephemeral — the shortcuts
+            // would only work while the menu itself is open, which is the
+            // opposite of useful. VoiceOver users reach the same actions
+            // through the `accessibilityAction` modifiers below.
+            Button("Move Up") { onMoveUp() }
+                .disabled(!canMoveUp)
+            Button("Move Down") { onMoveDown() }
+                .disabled(!canMoveDown)
+            Button("Move to Top") { onMoveToTop() }
+                .disabled(!canMoveUp)
+            Button("Move to Bottom") { onMoveToBottom() }
+                .disabled(!canMoveDown)
+            Divider()
             Button("Delete", role: .destructive) { onDelete() }
         }
+        .accessibilityAction(named: "Move Up") { onMoveUp() }
+        .accessibilityAction(named: "Move Down") { onMoveDown() }
     }
 
     private func deadlineLabel(_ date: Date) -> String {

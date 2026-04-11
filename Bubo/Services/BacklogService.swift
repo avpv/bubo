@@ -45,23 +45,35 @@ final class BacklogService {
     }
 
     /// Tasks grouped by context/project for display.
+    ///
+    /// Order inside each group is the user-controlled storage order — reorderTask
+    /// mutates `tasks`, so dragging a row to a new position takes effect here.
+    /// Urgency is still surfaced via the "N urgent" badge in the header and the
+    /// red "!" marker on rows; we don't force-sort by deadline, because that
+    /// would silently override whatever sequence the user dragged into place.
     var groupedByContext: [(context: String?, tasks: [BacklogTask])] {
         let active = tasks.filter { $0.status != .done }
-        let grouped = Dictionary(grouping: active) { $0.context }
-        return grouped
-            .sorted { ($0.key ?? "zzz") < ($1.key ?? "zzz") }
-            .map { (context: $0.key, tasks: $0.value.sorted { lhs, rhs in
-                // Urgent first (deadline), then priority, then creation date
-                if let ld = lhs.deadline, let rd = rhs.deadline {
-                    return ld < rd
-                }
-                if lhs.deadline != nil { return true }
-                if rhs.deadline != nil { return false }
-                if lhs.priority != rhs.priority {
-                    return lhs.priority.numericValue > rhs.priority.numericValue
-                }
-                return lhs.createdAt < rhs.createdAt
-            }) }
+        var groups: [(context: String?, tasks: [BacklogTask])] = []
+        var indexByContext: [String?: Int] = [:]
+        for task in active {
+            if let existing = indexByContext[task.context] {
+                groups[existing].tasks.append(task)
+            } else {
+                indexByContext[task.context] = groups.count
+                groups.append((context: task.context, tasks: [task]))
+            }
+        }
+        // Stable: keep first-seen order, but push the "no context" bucket last
+        // so tagged groups don't get visually fragmented by untagged tasks.
+        groups.sort { lhs, rhs in
+            switch (lhs.context, rhs.context) {
+            case (nil, nil): return false
+            case (nil, _): return false
+            case (_, nil): return true
+            default: return false
+            }
+        }
+        return groups
     }
 
     /// Urgent tasks — deadline within N days.
@@ -123,9 +135,22 @@ final class BacklogService {
     }
 
     /// Re-insert a previously removed task (for undo).
-    func restoreTask(_ task: BacklogTask) {
-        tasks.append(task)
+    /// When `index` is provided we try to put the task back where it was so
+    /// the user-controlled order survives the delete/undo round-trip; falls
+    /// back to appending if the index is out of range or nil.
+    func restoreTask(_ task: BacklogTask, at index: Int? = nil) {
+        if let index, index >= 0, index <= tasks.count {
+            tasks.insert(task, at: index)
+        } else {
+            tasks.append(task)
+        }
         saveTasks()
+    }
+
+    /// Current global index of a task by ID, or nil if it's not in the list.
+    /// Callers capture this before `removeTask` so undo can restore position.
+    func indexOfTask(id: String) -> Int? {
+        tasks.firstIndex(where: { $0.id == id })
     }
 
     /// Move tasks that were scheduled in the past but not completed back to pending.
@@ -154,6 +179,29 @@ final class BacklogService {
               let toGlobal = tasks.firstIndex(where: { $0.id == targetId }) else { return }
         let task = tasks.remove(at: fromGlobal)
         tasks.insert(task, at: toGlobal)
+        saveTasks()
+    }
+
+    /// Move `moved` so it sits directly before `target` in the storage order.
+    /// No-op if either ID is unknown or the move would leave the order unchanged.
+    func moveTask(id moved: String, before target: String) {
+        guard moved != target,
+              let fromIdx = tasks.firstIndex(where: { $0.id == moved }) else { return }
+        let task = tasks.remove(at: fromIdx)
+        guard let targetIdx = tasks.firstIndex(where: { $0.id == target }) else {
+            // Target disappeared (shouldn't happen); put it back where it was.
+            tasks.insert(task, at: min(fromIdx, tasks.count))
+            return
+        }
+        tasks.insert(task, at: targetIdx)
+        saveTasks()
+    }
+
+    /// Move `moved` to the very end of the active storage order.
+    func moveTaskToEnd(id moved: String) {
+        guard let fromIdx = tasks.firstIndex(where: { $0.id == moved }) else { return }
+        let task = tasks.remove(at: fromIdx)
+        tasks.append(task)
         saveTasks()
     }
 
