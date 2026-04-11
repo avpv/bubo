@@ -29,74 +29,88 @@ struct QuickActions: View {
     }
 
     var body: some View {
-        HStack(spacing: DS.Spacing.sm) {
-            // Palette button — the primary optimizer entry point. Level 3:
-            // solid accent fill + contrasting foreground so it reads as THE
-            // primary action of the row; secondary chips keep a muted tint.
-            Button {
-                Haptics.tap()
-                onOpenPalette()
-            } label: {
-                HStack(spacing: 4) {
-                    Group {
-                        if isRunning {
-                            ProgressView()
-                                .controlSize(.mini)
-                                .tint(primaryForeground)
-                        } else {
-                            Image(systemName: "sparkles")
-                                .font(.caption2.weight(.semibold))
-                        }
-                    }
-                    .frame(width: 12, height: 12)
-                    Text("Optimize")
-                        .font(.caption.weight(.medium))
-                        .lineLimit(1)
-                    Text("⌘K")
-                        .font(.caption2.monospaced())
-                        .foregroundStyle(primaryForeground.opacity(0.7))
-                }
-                .fixedSize()
-                .foregroundStyle(primaryForeground)
-                .padding(.horizontal, DS.Spacing.sm)
-                .padding(.vertical, 4)
-                .background(
-                    Capsule().fill(skin.accentColor)
-                )
-                .overlay(
-                    Capsule().strokeBorder(
-                        Color.white.opacity(0.25),
-                        lineWidth: DS.Border.thin
-                    )
-                )
-                .contentShape(Capsule())
-            }
-            .buttonStyle(.plain)
-            .disabled(isRunning)
-            .opacity(isRunning ? 0.6 : 1)
-            .help("AI optimizer (\u{2318}K)")
-
-            ForEach(rankedActions) { scored in
+        // Horizontal scroll wrapper keeps the HStack's natural width from
+        // forcing the whole cardified main-screen layout wider than the
+        // popover. Without this, fixedSize chips (Optimize + up to 3 ranked
+        // actions, ~360pt total) overflow the 328pt card content area,
+        // which cascades up through `.frame(maxWidth: .infinity)` into
+        // the card wrapper, then into the VStack parent — every main-screen
+        // card ends up wider than the 360pt popover, causing asymmetric
+        // left/right margins and right-edge clipping. The ScrollView
+        // contains the overflow inside its own viewport.
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: DS.Spacing.sm) {
+                // Palette button — the primary optimizer entry point. Level 3:
+                // solid accent fill + contrasting foreground so it reads as THE
+                // primary action of the row; secondary chips keep a muted tint.
                 Button {
-                    run(scored.action)
+                    Haptics.tap()
+                    onOpenPalette()
                 } label: {
-                    Text(scored.action.label)
-                        .font(.caption.weight(.medium))
-                        .lineLimit(1)
-                        .fixedSize()
-                        .foregroundStyle(skin.accentColor)
-                        .padding(.horizontal, DS.Spacing.sm)
-                        .padding(.vertical, 4)
-                        .background(
-                            Capsule().fill(skin.accentColor.opacity(0.10))
+                    HStack(spacing: 4) {
+                        Group {
+                            if isRunning {
+                                ProgressView()
+                                    .controlSize(.mini)
+                                    .tint(primaryForeground)
+                            } else {
+                                Image(systemName: "sparkles")
+                                    .font(.caption2.weight(.semibold))
+                            }
+                        }
+                        .frame(width: 12, height: 12)
+                        Text("Optimize")
+                            .font(.caption.weight(.medium))
+                            .lineLimit(1)
+                        Text("⌘K")
+                            .font(.caption2.monospaced())
+                            .foregroundStyle(primaryForeground.opacity(0.7))
+                    }
+                    .fixedSize()
+                    .foregroundStyle(primaryForeground)
+                    .padding(.horizontal, DS.Spacing.sm)
+                    .padding(.vertical, 4)
+                    .background(
+                        Capsule().fill(skin.accentColor)
+                    )
+                    .overlay(
+                        Capsule().strokeBorder(
+                            Color.white.opacity(0.25),
+                            lineWidth: DS.Border.thin
                         )
-                        .contentShape(Capsule())
+                    )
+                    .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
                 .disabled(isRunning)
-                .opacity(isRunning ? 0.5 : 1)
+                .opacity(isRunning ? 0.6 : 1)
+                .help("AI optimizer (\u{2318}K)")
+
+                ForEach(rankedActions) { scored in
+                    Button {
+                        run(scored.action)
+                    } label: {
+                        Text(scored.action.label)
+                            .font(.caption.weight(.medium))
+                            .lineLimit(1)
+                            .fixedSize()
+                            .foregroundStyle(skin.accentColor)
+                            .padding(.horizontal, DS.Spacing.sm)
+                            .padding(.vertical, 4)
+                            .background(
+                                Capsule().fill(skin.accentColor.opacity(0.10))
+                            )
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isRunning)
+                    .opacity(isRunning ? 0.5 : 1)
+                }
             }
         }
+        // Pin the ScrollView's height to its content so it doesn't
+        // vertically expand inside the card.
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     /// Foreground used on top of the solid accent fill — picks black or
