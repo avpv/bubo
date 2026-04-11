@@ -642,8 +642,11 @@ struct MenuBarView: View {
                         }
                     }
                 )
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.xs)
+                // Level 1: unified outer content margin + bigger vertical
+                // breathing room so the chip row isn't crushed against the
+                // header.
+                .padding(.horizontal, DS.Spacing.contentMargin)
+                .padding(.vertical, DS.Spacing.sm)
                 .background(
                     GeometryReader { geo in
                         Color.clear.preference(
@@ -661,7 +664,7 @@ struct MenuBarView: View {
 
             if pendingTaskCount > 0 {
                 SkinSeparator()
-                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.horizontal, DS.Spacing.contentMargin)
             }
 
             // Events — fill remaining space so header stays pinned
@@ -883,14 +886,20 @@ struct MenuBarView: View {
         .padding(.vertical, DS.Spacing.sm)
         .skinPlatter(activeSkin)
         .skinPlatterDepth(skin)
-        .padding(.horizontal, DS.Spacing.md)
+        // Level 1: unified outer content margin — aligns with header,
+        // footer, quick actions and the event list.
+        .padding(.horizontal, DS.Spacing.contentMargin)
         .padding(.vertical, DS.Spacing.xs)
         .animation(skin.resolvedMicroAnimation, value: colorFilter)
     }
 
     private var eventList: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: DS.Spacing.md) {
+            // Level 1: bigger sibling spacing so the gap between day groups
+            // is clearly larger than the gap between rows inside a day —
+            // Gestalt: outer space > inner space. Level 2: explicit
+            // SkinSeparator between day groups reinforces the grouping.
+            LazyVStack(alignment: .leading, spacing: DS.Spacing.lg) {
                 // Smart banner — at most one contextual suggestion.
                 if let suggestion = activeBannerSuggestion {
                     SmartBanner(
@@ -908,11 +917,17 @@ struct MenuBarView: View {
                 }
 
                 ForEach(filteredEventsByDay, id: \.date) { dayGroup in
+                    if dayGroup.date != filteredEventsByDay.first?.date {
+                        SkinSeparator()
+                            .padding(.horizontal, DS.Spacing.sm)
+                    }
                     dayGroupSection(dayGroup)
                 }
             }
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.top, DS.Spacing.md)
+            // Level 1: unified outer content margin + more top air so the
+            // first day header doesn't sit on top of the QuickActions chips.
+            .padding(.horizontal, DS.Spacing.contentMargin)
+            .padding(.top, DS.Spacing.lg)
             .padding(.bottom, DS.Spacing.xl)
             .scrollTargetLayout()
             .id("eventListTop")
@@ -929,8 +944,14 @@ struct MenuBarView: View {
         let visibleCount = visibleEventCount(for: dayGroup.events)
 
         DaySectionHeader(date: dayGroup.date, count: visibleCount)
+            // `sm` leading keeps the day title hanging 8pt out from the
+            // first event's accent bar — same column as the free-slot
+            // dashed guide. Level 1: top padding is now applied by the
+            // SkinSeparator above instead of this header, so the
+            // outer-between-groups space (LazyVStack spacing `lg` +
+            // separator) stays bigger than the inner space to the first
+            // event of the day.
             .padding(.horizontal, DS.Spacing.sm)
-            .padding(.top, dayGroup.date == reminderService.eventsByDay.first?.date ? 0 : DS.Spacing.sm)
 
         let freeSlots = FreeSlotFinder.slots(
             for: dayGroup.events,
@@ -1114,7 +1135,46 @@ struct MenuBarView: View {
 
     private var footerActions: some View {
         HStack(spacing: DS.Spacing.md) {
-            // Primary CTA — single, visually dominant.
+            // Level 3 + 4: secondary controls on the left, primary CTA on
+            // the right — matches native macOS sheet convention and mirrors
+            // AddEventView's footer. The separate "Tasks" button has been
+            // dropped: the inline backlog above already shows the count
+            // and ⇧⌘N still focuses the task input from anywhere.
+            Menu {
+                Button {
+                    Haptics.tap()
+                    reminderService.syncNow()
+                    toastState.showInfo("Refreshing\u{2026}", icon: "arrow.clockwise")
+                } label: {
+                    Label("Refresh Calendars", systemImage: "arrow.clockwise")
+                }
+                .keyboardShortcut("r", modifiers: .command)
+
+                OpenSettingsButton()
+                    .keyboardShortcut(",", modifiers: .command)
+                Divider()
+                Button("Quit Bubo", role: .destructive) {
+                    NSApplication.shared.terminate(nil)
+                }
+                .keyboardShortcut("q", modifiers: .command)
+            } label: {
+                HStack(spacing: DS.Spacing.xs) {
+                    Image(systemName: "ellipsis.circle")
+                    Text("More")
+                }
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(skin.resolvedTextSecondary)
+            .symbolRenderingMode(.monochrome)
+            .tint(activeSkin.resolvedToolbarTint)
+            .help("More")
+
+            Spacer()
+
+            // Primary CTA — visually dominant, anchored on the right
+            // edge where native sheets place their confirm action.
             Menu {
                 Button {
                     Haptics.tap()
@@ -1143,62 +1203,8 @@ struct MenuBarView: View {
             .buttonStyle(.action(role: .primary, size: .regular))
             .help("Add a new event (\u{2318}N)")
             .keyboardShortcut("n", modifiers: .command)
-
-            Spacer()
-
-            // Secondary row — Birman: same vocabulary, same visual weight, same side.
-            HStack(spacing: DS.Spacing.lg) {
-                Button {
-                    Haptics.tap()
-                    focusTaskInput = true
-                } label: {
-                    let count = optimizerService.backlogService?.pending.count ?? 0
-                    HStack(spacing: DS.Spacing.xs) {
-                        Image(systemName: "checklist")
-                        if count > 0 {
-                            Text("Tasks\u{00A0}\(count)")
-                                .monospacedDigit()
-                        } else {
-                            Text("Tasks")
-                        }
-                    }
-                }
-                .buttonStyle(.borderless)
-                .help("Tasks (\u{21E7}\u{2318}N)")
-
-                Menu {
-                    Button {
-                        Haptics.tap()
-                        reminderService.syncNow()
-                        toastState.showInfo("Refreshing\u{2026}", icon: "arrow.clockwise")
-                    } label: {
-                        Label("Refresh Calendars", systemImage: "arrow.clockwise")
-                    }
-                    .keyboardShortcut("r", modifiers: .command)
-
-                    OpenSettingsButton()
-                        .keyboardShortcut(",", modifiers: .command)
-                    Divider()
-                    Button("Quit Bubo", role: .destructive) {
-                        NSApplication.shared.terminate(nil)
-                    }
-                    .keyboardShortcut("q", modifiers: .command)
-                } label: {
-                    HStack(spacing: DS.Spacing.xs) {
-                        Image(systemName: "ellipsis.circle")
-                        Text("More")
-                    }
-                }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-                .help("More")
-            }
-            .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(skin.resolvedTextSecondary)
-            .symbolRenderingMode(.monochrome)
-            .tint(activeSkin.resolvedToolbarTint)
         }
-        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.horizontal, DS.Spacing.contentMargin)
         .frame(maxWidth: .infinity)
         .frame(height: DS.Size.actionFooterHeight)
         .skinBarBackground(activeSkin)
@@ -1260,7 +1266,9 @@ private struct CalendarAccessBanner: View {
             .clipShape(Capsule())
             .shadow(color: skin.resolvedShadowColor, radius: skin.shadowRadius, y: skin.shadowY)
         }
-        .padding(.horizontal, DS.Spacing.md)
+        // Level 1: unified outer content margin so this banner hangs on
+        // the same vertical axis as the rest of the popover chrome.
+        .padding(.horizontal, DS.Spacing.contentMargin)
         .padding(.vertical, DS.Spacing.xs)
         .buttonStyle(.plain)
         .accessibilityLabel("Calendar access not granted. Open settings to grant access.")

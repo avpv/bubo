@@ -30,7 +30,9 @@ struct QuickActions: View {
 
     var body: some View {
         HStack(spacing: DS.Spacing.sm) {
-            // Palette button — first, most powerful action
+            // Palette button — the primary optimizer entry point. Level 3:
+            // solid accent fill + contrasting foreground so it reads as THE
+            // primary action of the row; secondary chips keep a muted tint.
             Button {
                 Haptics.tap()
                 onOpenPalette()
@@ -40,6 +42,7 @@ struct QuickActions: View {
                         if isRunning {
                             ProgressView()
                                 .controlSize(.mini)
+                                .tint(primaryForeground)
                         } else {
                             Image(systemName: "sparkles")
                                 .font(.caption2.weight(.semibold))
@@ -51,14 +54,20 @@ struct QuickActions: View {
                         .lineLimit(1)
                     Text("⌘K")
                         .font(.caption2.monospaced())
-                        .foregroundStyle(skin.resolvedTextTertiary)
+                        .foregroundStyle(primaryForeground.opacity(0.7))
                 }
                 .fixedSize()
-                .foregroundStyle(skin.accentColor)
+                .foregroundStyle(primaryForeground)
                 .padding(.horizontal, DS.Spacing.sm)
                 .padding(.vertical, 4)
                 .background(
-                    Capsule().fill(skin.accentColor.opacity(0.10))
+                    Capsule().fill(skin.accentColor)
+                )
+                .overlay(
+                    Capsule().strokeBorder(
+                        Color.white.opacity(0.25),
+                        lineWidth: DS.Border.thin
+                    )
                 )
                 .contentShape(Capsule())
             }
@@ -88,6 +97,13 @@ struct QuickActions: View {
                 .opacity(isRunning ? 0.5 : 1)
             }
         }
+    }
+
+    /// Foreground used on top of the solid accent fill — picks black or
+    /// white depending on the accent colour's luminance so contrast never
+    /// breaks on light accents.
+    private var primaryForeground: Color {
+        DS.contrastingForeground(for: skin.accentColor)
     }
 
     private func run(_ action: QuickActionCandidate) {

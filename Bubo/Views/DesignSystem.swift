@@ -20,6 +20,12 @@ enum DS {
         static let xl: CGFloat = 20
         static let xxl: CGFloat = 24
         static let xxxl: CGFloat = 32
+
+        /// Single outer margin used by every top-level surface (header, footer,
+        /// event list, color filter, quick actions, world clock) so all content
+        /// hangs on one vertical axis. HIG: consistent layout margins.
+        /// Birman: модульная сетка — одна колонка, одна линия слева.
+        static let contentMargin: CGFloat = lg
     }
 
     // MARK: Popover Dimensions
@@ -426,6 +432,33 @@ extension View {
             reduceMotion ? .easeOut(duration: 0.01) : animation,
             value: value
         )
+    }
+}
+
+// MARK: - Shared Section Label
+
+/// Uniform section-label treatment used by form surfaces (AddEventView) and
+/// any other view that needs a quiet, in-surface section divider.
+///
+/// Birman: within one surface, section titles are quiet subheads, not
+/// headlines — they guide the eye without shouting.
+///
+/// Day-group headers in the main timeline deliberately use a louder
+/// `.subheadline`-weight style (see `DaySectionHeader`) because they label
+/// distinct objects, not fields within one form. Keeping the two styles
+/// centralised here makes that distinction intentional instead of accidental.
+struct SectionLabel: View {
+    let text: String
+
+    @Environment(\.activeSkin) private var skin
+
+    var body: some View {
+        Text(text)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(skin.resolvedTextTertiary)
+            .textCase(.uppercase)
+            .tracking(0.4)
+            .accessibilityAddTraits(.isHeader)
     }
 }
 

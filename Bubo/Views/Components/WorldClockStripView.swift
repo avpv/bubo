@@ -170,7 +170,10 @@ struct WorldClockStripView: View {
                             WorldClockPill(city: city, now: context.date)
                         }
                     }
-                    .padding(.horizontal, DS.Spacing.md)
+                    // Level 3: unified outer content margin so the time
+                    // chips hang on the same vertical axis as the header
+                    // title, the event list, and the footer actions.
+                    .padding(.horizontal, DS.Spacing.contentMargin)
                     .padding(.vertical, DS.Spacing.xs)
                 }
             }

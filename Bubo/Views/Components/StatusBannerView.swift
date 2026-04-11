@@ -24,7 +24,9 @@ struct StatusBanner: View {
         .adaptiveBadgeFill(color)
         .clipShape(Capsule())
         .shadow(color: skin.resolvedShadowColor, radius: skin.shadowRadius, y: skin.shadowY)
-        .padding(.horizontal, DS.Spacing.md)
+        // Level 1: unified outer content margin so the banner hangs on
+        // the same vertical axis as the rest of the popover chrome.
+        .padding(.horizontal, DS.Spacing.contentMargin)
         .padding(.vertical, DS.Spacing.xs)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Status: \(text)")
