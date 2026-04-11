@@ -21,6 +21,12 @@ struct MenuBarView: View {
     /// Incremented to trigger a scroll-to-backlog inside the active ScrollView.
     @State private var scrollToBacklogTick = 0
 
+    /// Shared state for backlog drag-to-schedule + ghost-preview. Owned here
+    /// because both the drag source (BacklogView) and the drop targets
+    /// (FreeSlotRow instances scattered across the day list) need it, and the
+    /// ghost block on the timeline is rendered by this view.
+    @State private var backlogCoordinator = BacklogInteractionCoordinator()
+
     // Command palette — the single entry point for all optimize flows.
     @State private var paletteContext: PaletteContext? = nil
     @State private var dismissedBannerIds: Set<String> = {
@@ -272,6 +278,7 @@ struct MenuBarView: View {
         .skinTinted(activeSkin)
         .skinTypography(activeSkin)
         .environment(\.activeSkin, activeSkin)
+        .environment(\.backlogCoordinator, backlogCoordinator)
         .environment(\.navigateHome, { navigation = .list })
         .frame(width: DS.Popover.width, height: navigation.isTimer ? DS.Popover.timerHeight : DS.Popover.height)
         .onAppear {
@@ -487,6 +494,9 @@ struct MenuBarView: View {
                         backlog.restoreTask(task, at: originalIndex)
                     }
                 },
+                onReorderToast: { message, undo in
+                    toastState.showSuccess(message, icon: "arrow.up.arrow.down", onUndo: undo)
+                },
                 focusRequested: $focusTaskInput,
                 autoExpand: autoExpand
             )
@@ -495,14 +505,18 @@ struct MenuBarView: View {
 
     /// Handle a backlog task being dropped onto a free slot.
     /// Creates a calendar event at the slot time and marks the task as scheduled.
-    private func handleTaskDrop(taskId: String, slotStart: Date, slotEnd: Date) {
+    private func handleTaskDrop(drag: BacklogTaskDrag, slotStart: Date, slotEnd: Date) {
         guard let backlog = optimizerService.backlogService,
-              let task = backlog.tasks.first(where: { $0.id == taskId }) else { return }
+              let task = backlog.tasks.first(where: { $0.id == drag.taskId }) else { return }
 
         // Flip the discoverability hint off — this is a real drag-to-schedule,
         // so the user has learned the gesture. Same AppStorage key that
         // BacklogView reads via @AppStorage.
         UserDefaults.standard.set(true, forKey: "BuboBacklogHasDragged")
+
+        // End the drag session cleanly so free-slot pulses stop immediately
+        // — even if the drag-preview lifecycle callback hasn't fired yet.
+        backlogCoordinator.endDrag()
 
         let duration = min(
             TimeInterval(task.durationMinutes * 60),
@@ -931,7 +945,9 @@ struct MenuBarView: View {
             workingHours: optimizerService.workingHours
         )
 
-        ForEach(interleave(events: dayGroup.events, freeSlots: freeSlots), id: \.id) { item in
+        let ghost = ghostForDay(dayGroup.date)
+
+        ForEach(interleave(events: dayGroup.events, freeSlots: freeSlots, ghost: ghost), id: \.id) { item in
             switch item {
             case .event(let event):
                 EventRowView(
@@ -1012,37 +1028,47 @@ struct MenuBarView: View {
                             }
                         }
                     },
-                    onTaskDropped: { taskId in
-                        handleTaskDrop(taskId: taskId, slotStart: start, slotEnd: end)
+                    onTaskDropped: { drag in
+                        handleTaskDrop(drag: drag, slotStart: start, slotEnd: end)
                     }
                 )
+            case .ghost(let start, let end, let title):
+                GhostEventRow(start: start, end: end, title: title)
+                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
             }
         }
     }
 
     // MARK: - List Items (events + free slots interleaved)
 
-    /// A row in the day list — either a real event or an empty slot.
+    /// A row in the day list — either a real event, an empty slot, or the
+    /// typed-ghost block that previews where a backlog task would land.
     private enum DayListItem: Identifiable {
         case event(CalendarEvent)
         case slot(Date, Date)
+        case ghost(Date, Date, String)
 
         var id: String {
             switch self {
             case .event(let e): return "event:\(e.id)"
             case .slot(let s, let e): return "slot:\(s.timeIntervalSinceReferenceDate)-\(e.timeIntervalSinceReferenceDate)"
+            case .ghost(let s, let e, _): return "ghost:\(s.timeIntervalSinceReferenceDate)-\(e.timeIntervalSinceReferenceDate)"
             }
         }
     }
 
-    /// Interleaves events and free-slot pairs chronologically so the list reads
-    /// top-to-bottom like a real timeline.
+    /// Interleaves events, free-slot pairs, and the optional ghost preview
+    /// chronologically so the list reads top-to-bottom like a real timeline.
     private func interleave(
         events: [CalendarEvent],
-        freeSlots: [(start: Date, end: Date)]
+        freeSlots: [(start: Date, end: Date)],
+        ghost: (start: Date, end: Date, title: String)? = nil
     ) -> [DayListItem] {
         var result: [DayListItem] = events.map(DayListItem.event)
         result += freeSlots.map { DayListItem.slot($0.start, $0.end) }
+        if let ghost {
+            result.append(.ghost(ghost.start, ghost.end, ghost.title))
+        }
         result.sort { startOf($0) < startOf($1) }
         return result
     }
@@ -1051,7 +1077,21 @@ struct MenuBarView: View {
         switch item {
         case .event(let e): return e.startDate
         case .slot(let s, _): return s
+        case .ghost(let s, _, _): return s
         }
+    }
+
+    /// Ghost payload for the given day, if the coordinator has one and its
+    /// start date falls within this day. Returns nil otherwise so the row
+    /// is only rendered under the day it actually belongs to.
+    private func ghostForDay(_ date: Date) -> (start: Date, end: Date, title: String)? {
+        guard let slot = backlogCoordinator.ghostSlot,
+              let title = backlogCoordinator.ghostTitle,
+              !title.isEmpty,
+              Calendar.current.isDate(slot.start, inSameDayAs: date) else {
+            return nil
+        }
+        return (slot.start, slot.end, title)
     }
 
     // MARK: - Smart Banner
