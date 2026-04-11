@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://bubo.app/buboskin.schema.json",
   "title": "Bubo Skin",
-  "description": "A skin theme file for the Bubo calendar app. Required fields describe the skin's mood; optional fields cover stylistic choices. Layout depth, materials, semantic colors, shadows, animation physics and symbol rendering are fixed globally and must not be customized per skin.",
+  "description": "A skin theme file for the Bubo calendar app. Required fields describe the skin's mood; optional fields cover stylistic choices. Layout depth, materials, semantic colors, shadows, animation physics and symbol rendering are fixed globally and must not be customized per skin. Unknown fields are rejected — the minimal set IS the canonical set.",
   "type": "object",
   "required": [
     "id",
@@ -13,7 +13,7 @@
     "backgroundGradient",
     "previewColors"
   ],
-  "additionalProperties": true,
+  "additionalProperties": false,
   "properties": {
     "id": {
       "type": "string",

@@ -9,10 +9,11 @@ import SwiftUI
 /// Colors are strings: hex (`"#0070FA"`), named (`"accentColor"`),
 /// named with opacity (`"accentColor:0.5"`), or keyword (`"clear"`).
 ///
-/// Birman: keep the required set minimal. A skin author should think about
-/// **mood** (accent, background, light/dark), not about shadow radii or
-/// symbol weights. Everything absent falls back to a sensible default
-/// baked into `SkinDefinition`.
+/// Keep the required set minimal. A skin author should think about **mood**
+/// (accent, background, light/dark), not about shadow radii or symbol
+/// weights. Everything absent falls back to a sensible default baked into
+/// `SkinDefinition`. The canonical list of allowed fields is
+/// `buboskin.schema.json` — it rejects unknown keys.
 ///
 /// Minimal example:
 /// ```json
@@ -31,10 +32,6 @@ import SwiftUI
 ///   "previewColors": ["#00B200", "#1A3319"]
 /// }
 /// ```
-///
-/// Unknown keys are silently ignored — older skin files with fields like
-/// `shadowRadius` or `sfSymbolWeight` will still load, those values will just
-/// be dropped in favour of the baked defaults.
 struct CustomSkinJSON: Codable {
     // MARK: Identity
     let id: String

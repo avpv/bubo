@@ -82,8 +82,10 @@ enum SkinSeparatorStyle: String, Equatable, CaseIterable, Codable {
 /// they can't be configured into an unreadable state.
 ///
 /// All skins — both built-in and custom — are defined as `.json` JSON files.
-/// See `TEMPLATE.json` for the format and `CONTRIBUTING_SKINS.md` for full
-/// instructions. Built-in skins live in `Bubo/Skins/BuiltInSkins/`.
+/// See `TEMPLATE.json` for the shape and `buboskin.schema.json` for the
+/// authoritative validation rules. Built-in skins live in
+/// `Bubo/Skins/BuiltInSkins/`. The design rationale behind this API lives in
+/// `docs/design/PRINCIPLES.md`.
 struct SkinDefinition: Identifiable, Equatable {
 
     // MARK: Identity
