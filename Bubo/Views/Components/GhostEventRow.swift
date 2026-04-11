@@ -84,12 +84,19 @@ struct GhostEventRow: View {
         .frame(minHeight: DS.Size.eventRowMinHeight)
         .padding(.vertical, DS.Spacing.xxs)
         .padding(.horizontal, DS.Spacing.sm)
+        // Level 4 (final): flat row inside the timeline platter card —
+        // same visual framework as EventRowView and FreeSlotRow. The
+        // "ephemeral preview" feel comes from the pulsing fill +
+        // semitransparent text + the explicit "ghost" badge, not from
+        // a rounded pill border. The dashed rectangle border is kept
+        // (now flat) because it's the single strongest signal "this
+        // event doesn't exist yet", and it only shows during drag.
         .background(
-            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+            Rectangle()
                 .fill(skin.accentColor.opacity(pulse ? 0.09 : 0.04))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+            Rectangle()
                 .strokeBorder(
                     skin.accentColor.opacity(pulse ? 0.55 : 0.28),
                     style: StrokeStyle(lineWidth: 1, dash: [4, 3])

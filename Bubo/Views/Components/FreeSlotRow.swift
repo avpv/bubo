@@ -103,16 +103,14 @@ struct FreeSlotRow: View {
         .frame(minHeight: DS.Size.eventRowMinHeight)
         .padding(.vertical, DS.Spacing.xxs)
         .padding(.horizontal, DS.Spacing.sm)
+        // Level 4 (final): flat row inside the timeline platter card —
+        // same visual framework as EventRowView. The idle dashed pill
+        // border is gone: the dashed vertical bar on the left + the
+        // "Free · Xh" caption + the plus icon already signal the
+        // affordance, and the hover fill (rectangle) provides the
+        // "interactive" cue the same way native macOS List rows do.
         .background(
-            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                .fill(backgroundFill)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                .strokeBorder(
-                    skin.resolvedTextTertiary.opacity(isHovered ? 0.25 : 0.12),
-                    style: StrokeStyle(lineWidth: 0.5, dash: [3, 3])
-                )
+            Rectangle().fill(backgroundFill)
         )
         .onHover { hovering in
             withAnimation(skin.resolvedMicroAnimation) {
@@ -129,8 +127,10 @@ struct FreeSlotRow: View {
                 isDropTargeted = targeted
             }
         }
+        // Drop-target state — flat rectangle stroke, matches the card
+        // paradigm. Only visible when a drag is happening, not at rest.
         .overlay(
-            RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+            Rectangle()
                 .strokeBorder(
                     activeDropBorderColor,
                     lineWidth: activeDropBorderWidth
