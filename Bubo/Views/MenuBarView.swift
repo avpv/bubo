@@ -18,9 +18,6 @@ struct MenuBarView: View {
     /// Set from footer / keyboard shortcut, consumed by BacklogView.
     @State private var focusTaskInput = false
 
-    /// Incremented to trigger a scroll-to-backlog inside the active ScrollView.
-    @State private var scrollToBacklogTick = 0
-
     /// Shared state for backlog drag-to-schedule + ghost-preview. Owned here
     /// because both the drag source (BacklogView) and the drop targets
     /// (FreeSlotRow instances scattered across the day list) need it, and the
@@ -267,7 +264,6 @@ struct MenuBarView: View {
             // Hidden button for ⇧⌘N shortcut — focuses the task input field.
             Button("") {
                 Haptics.tap()
-                scrollToBacklogTick += 1
                 focusTaskInput = true
             }
             .keyboardShortcut("n", modifiers: [.command, .shift])
@@ -640,6 +636,16 @@ struct MenuBarView: View {
                 .padding(.vertical, DS.Spacing.xs)
             }
 
+            // Backlog tasks — pinned directly below the optimizer so they stay
+            // visible no matter how far the user scrolls through their timeline.
+            // Auto-expand when the calendar is empty: tasks are the primary content.
+            inlineBacklog(autoExpand: reminderService.nonDisintegratingEventCount == 0)
+
+            if pendingTaskCount > 0 {
+                SkinSeparator()
+                    .padding(.horizontal, DS.Spacing.md)
+            }
+
             // Events — fill remaining space so header stays pinned
             Group {
                 if reminderService.nonDisintegratingEventCount == 0 {
@@ -756,74 +762,62 @@ struct MenuBarView: View {
     }
 
     private var emptyState: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(spacing: 0) {
-                    // Backlog — accessible even when calendar is empty.
-                    // Auto-expand: tasks are the primary content when no events exist.
-                    inlineBacklog(autoExpand: true)
-                        .id("backlogSection")
-
-                    if pendingTaskCount > 0 {
-                        // Tasks exist — keep the "no events" note compact so
-                        // tasks dominate the screen (they're the actionable content).
-                        HStack(spacing: DS.Spacing.sm) {
-                            Image(systemName: "calendar")
-                                .font(.caption)
-                                .foregroundStyle(skin.resolvedTextTertiary)
-                            Text(emptyStateSubtitle)
-                                .font(.caption)
-                                .foregroundStyle(skin.resolvedTextTertiary)
-                            Spacer()
-                            Button {
-                                Haptics.tap()
-                                navigation = .addEvent()
-                            } label: {
-                                Text("Add Event")
-                                    .font(.caption.weight(.medium))
-                            }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(skin.accentColor)
+        ScrollView {
+            VStack(spacing: 0) {
+                if pendingTaskCount > 0 {
+                    // Tasks exist (pinned above) — keep the "no events" note
+                    // compact so tasks dominate the screen.
+                    HStack(spacing: DS.Spacing.sm) {
+                        Image(systemName: "calendar")
+                            .font(.caption)
+                            .foregroundStyle(skin.resolvedTextTertiary)
+                        Text(emptyStateSubtitle)
+                            .font(.caption)
+                            .foregroundStyle(skin.resolvedTextTertiary)
+                        Spacer()
+                        Button {
+                            Haptics.tap()
+                            navigation = .addEvent()
+                        } label: {
+                            Text("Add Event")
+                                .font(.caption.weight(.medium))
                         }
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.vertical, DS.Spacing.lg)
-                    } else {
-                        // Birman: emptiness is information too — show it quietly.
-                        // No pulsing icon, no radial glow, no ceremony.
-                        VStack(spacing: DS.Spacing.sm) {
-                            Text("All clear")
-                                .font(.headline)
-                                .fontWeight(skin.resolvedHeadlineFontWeight)
-                                .foregroundStyle(skin.resolvedTextPrimary)
-                            Text(emptyStateSubtitle)
-                                .font(.subheadline)
-                                .foregroundStyle(skin.resolvedTextSecondary)
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-
-                            Button {
-                                Haptics.tap()
-                                navigation = .addEvent()
-                            } label: {
-                                Label("Add Event", systemImage: "plus")
-                                    .font(.caption)
-                                    .fontWeight(.medium)
-                            }
-                            .buttonStyle(.action(role: .primary, size: .compact))
-                            .padding(.top, DS.Spacing.md)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, DS.Spacing.xxl)
+                        .buttonStyle(.plain)
+                        .foregroundStyle(skin.accentColor)
                     }
-                }
-            }
-            .scrollContentBackground(.hidden)
-            .onChange(of: scrollToBacklogTick) { _, _ in
-                withAnimation(DS.Animation.smoothSpring) {
-                    proxy.scrollTo("backlogSection", anchor: .top)
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.vertical, DS.Spacing.lg)
+                } else {
+                    // Birman: emptiness is information too — show it quietly.
+                    // No pulsing icon, no radial glow, no ceremony.
+                    VStack(spacing: DS.Spacing.sm) {
+                        Text("All clear")
+                            .font(.headline)
+                            .fontWeight(skin.resolvedHeadlineFontWeight)
+                            .foregroundStyle(skin.resolvedTextPrimary)
+                        Text(emptyStateSubtitle)
+                            .font(.subheadline)
+                            .foregroundStyle(skin.resolvedTextSecondary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+
+                        Button {
+                            Haptics.tap()
+                            navigation = .addEvent()
+                        } label: {
+                            Label("Add Event", systemImage: "plus")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                        }
+                        .buttonStyle(.action(role: .primary, size: .compact))
+                        .padding(.top, DS.Spacing.md)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, DS.Spacing.xxl)
                 }
             }
         }
+        .scrollContentBackground(.hidden)
         .transition(.opacity.combined(with: .scale(scale: 0.95)))
     }
 
@@ -877,56 +871,37 @@ struct MenuBarView: View {
     }
 
     private var eventList: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    // Backlog tasks — always accessible at the top of the timeline.
-                    // Birman: don't hide features behind navigation; show where the user already looks.
-                    inlineBacklog()
-                        .id("backlogSection")
-
-                    if pendingTaskCount > 0 {
-                        SkinSeparator()
-                            .padding(.horizontal, DS.Spacing.md)
-                    }
-
-                    LazyVStack(alignment: .leading, spacing: DS.Spacing.md) {
-                        // Smart banner — at most one contextual suggestion.
-                        if let suggestion = activeBannerSuggestion {
-                            SmartBanner(
-                                request: suggestion.request,
-                                reason: suggestion.reason,
-                                onRun: {
-                                    runQuickAction(suggestion.request, label: suggestion.reason)
-                                },
-                                onDismiss: {
-                                    withAnimation(DS.Animation.quick) {
-                                        optimizerService.suggestionEngine?.suggestion = nil
-                                    }
-                                }
-                            )
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: DS.Spacing.md) {
+                // Smart banner — at most one contextual suggestion.
+                if let suggestion = activeBannerSuggestion {
+                    SmartBanner(
+                        request: suggestion.request,
+                        reason: suggestion.reason,
+                        onRun: {
+                            runQuickAction(suggestion.request, label: suggestion.reason)
+                        },
+                        onDismiss: {
+                            withAnimation(DS.Animation.quick) {
+                                optimizerService.suggestionEngine?.suggestion = nil
+                            }
                         }
-
-                        ForEach(filteredEventsByDay, id: \.date) { dayGroup in
-                            dayGroupSection(dayGroup)
-                        }
-                    }
-                    .padding(.horizontal, DS.Spacing.md)
-                    .padding(.top, DS.Spacing.md)
-                    .padding(.bottom, DS.Spacing.xl)
-                    .scrollTargetLayout()
+                    )
                 }
-                .id("eventListTop")
-                .animation(DS.Animation.smoothSpring, value: reminderService.disintegratingEventIDs)
-            }
-            .scrollPosition(id: $scrollPositionID)
-            .scrollContentBackground(.hidden)
-            .onChange(of: scrollToBacklogTick) { _, _ in
-                withAnimation(DS.Animation.smoothSpring) {
-                    proxy.scrollTo("backlogSection", anchor: .top)
+
+                ForEach(filteredEventsByDay, id: \.date) { dayGroup in
+                    dayGroupSection(dayGroup)
                 }
             }
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.top, DS.Spacing.md)
+            .padding(.bottom, DS.Spacing.xl)
+            .scrollTargetLayout()
+            .id("eventListTop")
+            .animation(DS.Animation.smoothSpring, value: reminderService.disintegratingEventIDs)
         }
+        .scrollPosition(id: $scrollPositionID)
+        .scrollContentBackground(.hidden)
     }
 
     // MARK: - Day Group Section (extracted for release-mode type checker)
@@ -1137,7 +1112,6 @@ struct MenuBarView: View {
                 }
                 Button {
                     Haptics.tap()
-                    scrollToBacklogTick += 1
                     focusTaskInput = true
                 } label: {
                     Label("New Task", systemImage: "plus.circle")
@@ -1158,7 +1132,6 @@ struct MenuBarView: View {
             HStack(spacing: DS.Spacing.lg) {
                 Button {
                     Haptics.tap()
-                    scrollToBacklogTick += 1
                     focusTaskInput = true
                 } label: {
                     let count = optimizerService.backlogService?.pending.count ?? 0
