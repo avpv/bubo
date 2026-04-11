@@ -677,13 +677,17 @@ struct MenuBarView: View {
                 .padding(.top, DS.Spacing.md)
 
             // Events — fill remaining space so header stays pinned.
-            // Level 4 (final): the whole timeline area — empty state,
-            // filter-empty state, and the event list — is wrapped in a
-            // single skinPlatter card so the main screen mirrors the
-            // AddEventView layout language: one surface, quiet section
-            // labels, list rows flush to card edges. Individual event
-            // rows lose their own platter backgrounds so we don't get
-            // cards-inside-a-card muddiness (see EventRowView).
+            // Timeline is intentionally NOT wrapped in a platter card:
+            // it's the primary content area, and HIG canonical macOS
+            // patterns (Mail message list, Finder file list, Calendar
+            // event list, Reminders) put primary content directly on
+            // the window surface rather than inside a nested card.
+            // Cards are reserved for the secondary blocks above
+            // (QuickActions, Backlog) which act like grouped-list
+            // sections; Timeline fills the main area directly so it
+            // reads as "the screen" rather than "one of the sections".
+            // Individual event rows stay flat (no per-row platter
+            // background) — also the native macOS List convention.
             Group {
                 if reminderService.nonDisintegratingEventCount == 0 {
                     emptyState
@@ -702,11 +706,7 @@ struct MenuBarView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .skinPlatter(activeSkin)
-            .skinPlatterDepth(skin)
-            .padding(.horizontal, DS.Spacing.contentMargin)
             .padding(.top, DS.Spacing.md)
-            .padding(.bottom, DS.Spacing.md)
             .animation(DS.Animation.smoothSpring, value: reminderService.nonDisintegratingEventCount == 0)
 
             SkinSeparator()
@@ -916,14 +916,14 @@ struct MenuBarView: View {
 
     private var eventList: some View {
         ScrollView {
-            // Level 4 (final): LazyVStack lives INSIDE the timeline platter
-            // card (the wrapper lives in `mainContent`'s Group). Horizontal
-            // margins are handled by that outer platter; here we only set
-            // the inner vertical breathing room and the sibling spacing.
-            // Gestalt: outer space (between day groups) > inner space (row
-            // to row inside a day) — handled by the `lg` sibling spacing
-            // plus an edge-to-edge SkinSeparator between groups, exactly
-            // mirroring AddEventView's form sections.
+            // Timeline is not a platter card (see mainContent), so this
+            // LazyVStack owns its own horizontal margin via
+            // `contentMargin` — putting event rows, day headers, and
+            // smart banners on the same 16pt vertical axis as the
+            // QuickActions card, the Backlog card, the header, and the
+            // footer. Gestalt: outer space (between day groups) > inner
+            // space (row to row inside a day) — handled by the `lg`
+            // sibling spacing plus a SkinSeparator between groups.
             LazyVStack(alignment: .leading, spacing: DS.Spacing.lg) {
                 // Smart banner — at most one contextual suggestion.
                 if let suggestion = activeBannerSuggestion {
@@ -943,12 +943,16 @@ struct MenuBarView: View {
 
                 ForEach(filteredEventsByDay, id: \.date) { dayGroup in
                     if dayGroup.date != filteredEventsByDay.first?.date {
-                        // Edge-to-edge of the platter, same as AddEventView.
+                        // Inset by `sm` so the divider sits between day
+                        // groups without running all the way to the
+                        // popover edges — matches native macOS List
+                        // section dividers inside a scrollable area.
                         SkinSeparator()
                     }
                     dayGroupSection(dayGroup)
                 }
             }
+            .padding(.horizontal, DS.Spacing.contentMargin)
             .padding(.vertical, DS.Spacing.md)
             .scrollTargetLayout()
             .id("eventListTop")
