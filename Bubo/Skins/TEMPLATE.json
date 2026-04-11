@@ -1,11 +1,12 @@
 {
+  "//": "Bubo skin template. Only `id`, `displayName`, `author`, `accentColor`, `prefersDarkTint`, `backgroundGradient` and `previewColors` are required. Everything else is optional and uses sensible defaults.",
+
   "id": "my_skin_name",
   "displayName": "My Skin Name",
   "author": "@your_github",
 
   "accentColor": "#0080FF",
-  "surfaceTint": "#000514",
-  "surfaceTintOpacity": 0.3,
+  "prefersDarkTint": false,
 
   "backgroundGradient": {
     "colors": ["#004C9933", "#1A006619", "clear"],
@@ -15,43 +16,28 @@
   },
 
   "previewColors": ["#0080FF", "#4C0099"],
-  "prefersDarkTint": false,
 
+  "//secondaryAccent": "Optional. Falls back to a dimmed accentColor.",
   "secondaryAccent": "#330080",
-  "buttonStyle": "gradient",
-  "buttonShape": "capsule",
-  "buttonColor": "#FFFFFF",
-  "buttonMaterial": "regular",
-  "buttonTint": "#0066CC",
-  "buttonTintOpacity": 0.3,
 
-  "toolbarTint": "#4C8066",
-  "toolbarIconSize": 15,
-  "barMaterial": "thick",
+  "//barTint": "Optional subtle color wash on the top/bottom bars.",
   "barTint": "#003366",
-  "barTintOpacity": 0.15,
-  "platterMaterial": "regular",
+  "barTintOpacity": 0.1,
+
+  "//platterTint": "Optional subtle color wash on card surfaces.",
   "platterTint": "#001A33",
-  "platterTintOpacity": 0.1,
+  "platterTintOpacity": 0.05,
 
-  "destructiveColor": "#FF3B30",
-  "successColor": "#34C759",
-  "warningColor": "#FF9500",
+  "//buttonStyle": "One of: solid, gradient, glass. Default: gradient.",
+  "buttonStyle": "gradient",
+  "//buttonShape": "One of: capsule, roundedRect, rectangle. Default: capsule.",
+  "buttonShape": "capsule",
 
-  "fontDesign": "rounded",
-  "fontWeight": "semibold",
-  "headlineFontWeight": "bold",
-  "sfSymbolRendering": "hierarchical",
-  "sfSymbolWeight": "medium",
+  "//fontWeight": "Body text weight. One of: regular, medium, semibold, bold. Default: regular. Headline and SF Symbol weights are derived automatically.",
+  "fontWeight": "regular",
+
+  "//badgeStyle": "One of: tinted, filled, outlined. Default: tinted.",
   "badgeStyle": "tinted",
-  "separatorStyle": "system",
-  "separatorOpacity": 0.5,
-  "platterBorderOpacity": 0.15,
-  "shadowOpacity": 0.1,
-  "shadowRadius": 10,
-  "shadowY": 5,
-  "hoverShadowOpacity": 0.18,
-  "hoverShadowRadius": 14,
-  "hoverShadowY": 6,
-  "hoverFillOpacity": 0.08
+  "//separatorStyle": "One of: subtle, system, accent, none. Default: subtle.",
+  "separatorStyle": "subtle"
 }

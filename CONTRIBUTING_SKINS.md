@@ -7,6 +7,13 @@ accent colors, background gradient, and surface tinting. Think of it like
 All skins — both built-in and custom — use the same `.json` skin format.
 One unified approach for everything.
 
+> **Design philosophy.** A skin describes **mood**, not layout. Shadow depth,
+> materials, shapes, symbol rendering, animation physics and semantic colors
+> are fixed across the app so that no skin can break the layout rhythm or
+> reinterpret the meaning of red / green / orange. If you find yourself
+> wishing for `shadowRadius` or `platterMaterial`, the fix is almost always
+> to change the accent and gradient instead.
+
 ## Quick Start
 
 1. **Copy the template**
@@ -15,8 +22,8 @@ One unified approach for everything.
    cp Bubo/Skins/TEMPLATE.json MyNewSkin.json
    ```
 
-2. **Edit the JSON values** — each field is documented below.
-   The key properties:
+2. **Edit the JSON values.** Only seven fields are required; everything else
+   is optional and defaults to a sensible value.
 
    | Property | What it does |
    |----------|-------------|
@@ -24,11 +31,9 @@ One unified approach for everything.
    | `displayName` | Shown in Settings → Skin picker |
    | `author` | Your name or `@github_handle` |
    | `accentColor` | Buttons, highlights, tint, accent bars |
-   | `surfaceTint` | Subtle mood overlay on surfaces (keep it dark/muted) |
-   | `surfaceTintOpacity` | 0 = invisible, 0.2–0.4 = typical |
+   | `prefersDarkTint` | `true` for dark/moody skins (also deepens shadows) |
    | `backgroundGradient` | Ambient glow behind the UI |
    | `previewColors` | 1–2 colors for the thumbnail in the picker |
-   | `prefersDarkTint` | `true` for dark/moody skins |
 
 3. **For built-in skins** — place the `.json` file in
    `Bubo/Skins/BuiltInSkins/` and add the skin's `id` to the `order` array
@@ -39,7 +44,7 @@ One unified approach for everything.
 
 4. **Open a PR** with your new `.json` skin file. That's it!
 
-## JSON Format
+## Minimal example
 
 ```json
 {
@@ -47,20 +52,18 @@ One unified approach for everything.
   "displayName": "My Skin Name",
   "author": "@your_github",
   "accentColor": "#00E600",
-  "surfaceTint": "#002600",
-  "surfaceTintOpacity": 0.35,
+  "prefersDarkTint": true,
   "backgroundGradient": {
     "colors": ["#002E0080", "#001A0D4C", "clear"],
     "style": "linear",
     "startPoint": "topLeading",
     "endPoint": "bottomTrailing"
   },
-  "previewColors": ["#00B200", "#1A3319"],
-  "prefersDarkTint": true,
-  "secondaryAccent": "#00A626",
-  "buttonStyle": "gradient"
+  "previewColors": ["#00B200", "#1A3319"]
 }
 ```
+
+That's a complete, valid skin. All other fields are optional.
 
 ## Colors
 
@@ -112,12 +115,25 @@ Valid point values: `top`, `bottom`, `leading`, `trailing`, `topLeading`,
 | `id` | string | Unique ID (lowercase_snake_case). Permanent. |
 | `displayName` | string | Display name in the skin picker |
 | `author` | string | Author name or `@github_handle` |
-| `accentColor` | color | Primary accent color |
-| `surfaceTint` | color | Mood overlay on surfaces |
-| `surfaceTintOpacity` | 0–1 | Surface tint intensity |
+| `accentColor` | color | Primary accent color (must meet 3:1 contrast vs white) |
+| `prefersDarkTint` | bool | `true` for dark/moody skins |
 | `backgroundGradient` | gradient | Ambient background glow |
 | `previewColors` | color[] | 1–2 colors for picker thumbnail |
-| `prefersDarkTint` | bool | `true` for dark/moody skins |
+
+### Optional — Mood
+
+| Property | Description | Default |
+|----------|-------------|---------|
+| `secondaryAccent` | Used for gradient end-point and derived highlights | `accentColor` at 85% |
+
+### Optional — Surface Tints
+
+| Property | Description | Default |
+|----------|-------------|---------|
+| `barTint` | Color wash on header/footer bars | None |
+| `barTintOpacity` | Opacity of `barTint` | `0.08` |
+| `platterTint` | Color wash on card/platter surfaces | None |
+| `platterTintOpacity` | Opacity of `platterTint` | `0.05` |
 
 ### Optional — Buttons
 
@@ -125,165 +141,96 @@ Valid point values: `top`, `bottom`, `leading`, `trailing`, `topLeading`,
 |----------|--------|---------|
 | `buttonStyle` | `"solid"`, `"gradient"`, `"glass"` | `"gradient"` |
 | `buttonShape` | `"capsule"`, `"roundedRect"`, `"rectangle"` | `"capsule"` |
-| `buttonColor` | color | Auto-derived from accent luminance |
-| `buttonMaterial` | material | `"regular"` |
-| `buttonTint` | color | Falls back to accentColor |
-| `buttonTintOpacity` | 0–1 | `0.3` |
-| `secondaryAccent` | color | Falls back to darkened accentColor |
+| `buttonColor` | color — foreground color of primary buttons | auto-contrast |
+| `buttonAccentColor` | color — accent override for primary button background | `accentColor` |
+| `buttonSecondaryAccent` | color — gradient end-point override | derived |
+| `buttonTint` | color — overlay on glass-style primary buttons | `accentColor` |
 
-### Optional — Bars & Surfaces
-
-| Property | Values | Default |
-|----------|--------|---------|
-| `barMaterial` | `"ultraThin"`, `"thin"`, `"regular"`, `"thick"`, `"ultraThick"`, `"bar"` | `"thick"` |
-| `barTint` | color | None |
-| `barTintOpacity` | 0–1 | `0` |
-| `platterMaterial` | material (same values) | `"regular"` |
-| `platterTint` | color | None |
-| `platterTintOpacity` | 0–1 | `0` |
-| `toolbarTint` | color | Falls back to accentColor at 70% |
-
-### Optional — Semantic Colors
-
-| Property | Type | Default |
-|----------|------|---------|
-| `destructiveColor` | color | System red (`#FF3B30`) |
-| `successColor` | color | System green (`#34C759`) |
-| `warningColor` | color | System orange (`#FF9500`) |
-
-These colors are used for delete/remove actions, success states, and warnings
-respectively. Override them to match your skin's palette — e.g. a warm skin
-might use a coral-red for destructive and amber for warning.
-
-### Optional — Typography & Symbols
+### Optional — Typography
 
 | Property | Values | Default |
 |----------|--------|---------|
-| `fontDesign` | `"default"`, `"rounded"` | `"rounded"` |
-| `fontWeight` | `"regular"`, `"medium"`, `"semibold"`, `"bold"` | `"semibold"` |
-| `headlineFontWeight` | same as fontWeight | `"semibold"` |
-| `sfSymbolRendering` | `"monochrome"`, `"hierarchical"`, `"palette"`, `"multicolor"` | `"hierarchical"` |
-| `sfSymbolWeight` | `"ultraLight"` – `"black"` | `"medium"` |
+| `fontWeight` | `"regular"`, `"medium"`, `"semibold"`, `"bold"` | `"regular"` |
+
+`fontWeight` controls body text and buttons. Headline weight and SF Symbol
+weight are derived from it automatically (HIG: "match symbol weight to
+adjacent text weight").
+
+### Optional — Appearance
+
+| Property | Values | Default |
+|----------|--------|---------|
 | `badgeStyle` | `"tinted"`, `"filled"`, `"outlined"` | `"tinted"` |
-| `separatorStyle` | `"system"`, `"subtle"`, `"accent"`, `"none"` | `"system"` |
-| `separatorOpacity` | 0–1 | `0.5` |
+| `separatorStyle` | `"subtle"`, `"system"`, `"accent"`, `"none"` | `"subtle"` |
+
+## What's **not** configurable
+
+The following are fixed globally and cannot be overridden per skin:
+
+- **Materials** — bars use `.thick`, platters use `.regular`, buttons use
+  `.regular`. Uniform translucency is part of the app's identity.
+- **Shadow depth** — `shadowRadius`, `shadowY`, `hoverShadowRadius`,
+  `hoverShadowY`, `platterBorderOpacity`, `hoverFillOpacity` are all baked
+  into `SkinDefinition`. Shadow *opacity* is derived from `prefersDarkTint`.
+- **Font design** — always SF Rounded. HIG forbids custom typefaces in
+  utility-class windows.
+- **Symbol rendering** — always hierarchical. Recommended by HIG for utility
+  apps.
+- **Animation physics** — one spring profile for the whole product. A product
+  has one motion signature, not a palette.
+- **Semantic colors** — `destructiveColor` = system red, `successColor` =
+  system green, `warningColor` = system orange. These carry meaning; the user
+  must be able to recognise them regardless of which skin is active.
+- **Text colors** — system label colors so Dark Mode and Accessibility
+  settings always work.
+- **Toolbar tint** — derived as `accentColor` at 70%.
+- **Surface tint** — derived from `accentColor` and `prefersDarkTint`.
+
+If your skin genuinely needs something different here, open an issue — adding
+a knob should be a deliberate product decision, not a JSON field.
 
 ## Design Tips
 
 - **Accent color**: Pick one strong, saturated color. This drives the entire
   visual identity. Avoid grey/desaturated accents — interactive elements must
-  be visually distinct from non-interactive text (aim for ≥ 3:1 contrast).
-- **Surface tint**: Use a very dark, desaturated version of your accent. High
-  opacity here overwhelms the UI — keep it subtle (0.2–0.35).
+  be visually distinct from non-interactive text (aim for ≥ 3:1 contrast
+  against white).
 - **Background gradient**: Use 2–3 stops fading to clear. Opacity should be
   0.10–0.25 so the gradient doesn't overpower content.
 - **Preview colors**: The first color should be your accent; the second a
   complementary dark tone.
 - **`buttonStyle: "gradient"`**: Renders a gradient from `accentColor` →
   `secondaryAccent`. Always set `secondaryAccent` when using gradient buttons,
-  otherwise it falls back to a darkened version of `accentColor` (subtle shift).
-- **`secondaryAccent` fallback**: If omitted, defaults to `accentColor` at 85%
-  opacity. For distinct visual hierarchy, always provide an explicit value.
-- **`toolbarTint`**: Intentionally different from `accentColor` to create
-  hierarchy — primary actions (Add) use the accent, toolbar buttons recede.
-  Choose a complementary, lower-saturation color.
-- **Test both light & dark mode** — skins use adaptive blend modes that work in
-  both, but some color combos look better in one mode.
+  otherwise it falls back to a dimmed version of `accentColor` (subtle shift).
+- **Test both light & dark mode** — skins use adaptive blend modes that work
+  in both, but some color combos look better in one mode.
 
-## Apple Human Interface Guidelines (HIG)
+## Apple Human Interface Guidelines
 
-Bubo is a native macOS app, and every skin must respect Apple's platform
-conventions. Keep these HIG principles in mind when designing your skin.
-
-### Color & Contrast
-
-- **3:1 minimum contrast** — interactive elements (buttons, links, toggles) must
-  have at least 3:1 contrast ratio against their background. Accent colors that
-  are too light or too dark to meet this threshold will look broken.
-- **Semantic colors have meaning** — red = destructive, green = success,
-  orange = warning. If you override `destructiveColor` / `successColor` /
-  `warningColor`, keep the same emotional mapping (e.g. don't use green for
-  delete).
-- **Respect system appearance** — skins must work in both Light and Dark Mode.
-  Avoid hard-coded colors that only look right in one mode. Test both.
-
-### Typography
-
-- **Never replace the system font** — Bubo uses SF Pro and SF Rounded
-  exclusively. The `fontDesign` property switches between the two; no custom
-  typefaces are allowed.
-- **Avoid ultraLight / thin weights** — HIG discourages low-weight text in
-  utility-class windows. The lightest allowed `fontWeight` is `"regular"`.
-- **Match symbol weight to text weight** — `sfSymbolWeight` should be close to
-  `fontWeight` so icons and labels feel visually balanced.
-
-### Materials & Vibrancy
-
-- **Use translucency intentionally** — macOS materials (ultraThin → ultraThick)
-  let background content bleed through. Heavier materials are more opaque;
-  lighter materials show more of the desktop. Choose the level that keeps your
-  content readable.
-- **Content surfaces below bars** — `barMaterial` should generally be equal to
-  or heavier than `platterMaterial` so that toolbars visually sit on top of
-  content, not behind it.
-- **Don't fight the system blur** — if you set high `barTintOpacity` or
-  `platterTintOpacity` you'll overpower the system vibrancy effect. Keep tint
-  opacity subtle (≤ 0.3) to let the material do its job.
-
-### SF Symbols
-
-- **Prefer hierarchical rendering** — `"hierarchical"` is the recommended
-  default for utility apps. It provides depth without the visual noise of
-  multicolor icons.
-- **Monochrome for minimal skins** — if your skin is intentionally flat and
-  understated, `"monochrome"` works well.
-- **Palette / multicolor sparingly** — these modes draw more attention; use them
-  only when the skin's visual identity calls for it.
-
-### Layout & Spacing
-
-- **4-point grid** — Bubo's layout uses a 4 pt spacing scale. Skin properties
-  like `cornerRadius` and `shadowRadius` follow this system. Stick to even
-  values for visual consistency.
-- **Corner radius restraint** — HIG prefers continuous (squircle) corners that
-  match system controls. Very large radii (> 16) can feel cartoonish; very
-  small radii (< 4) can feel out of place on macOS.
-
-### Motion & Animation
-
-- **Respect Reduce Motion** — Bubo honors the system accessibility setting
-  automatically, but keep in mind that any visual effect driven by your skin
-  (gradient animation, glow) should remain legible even when animations are
-  disabled.
-
-### Accessibility
-
+- **3:1 minimum contrast** — interactive elements must have at least 3:1
+  contrast ratio against their background. Accents too light or too dark to
+  meet this threshold will look broken. The skin loader emits a warning.
+- **Respect system appearance** — skins must work in both Light and Dark
+  Mode. Avoid hard-coded colors that only look right in one mode.
+- **Don't fight the system blur** — bar and platter materials provide
+  vibrancy. Keep tint opacities subtle (≤ 0.15) so the material can still do
+  its job.
 - **Don't rely on color alone** — if your skin conveys meaning through color
-  (e.g. tinted badges), ensure shape or label also carries the information for
+  (tinted badges), ensure shape or label also carries the information for
   users with color vision deficiency.
-- **Test with Increase Contrast** — macOS Accessibility → Display → Increase
-  Contrast boosts borders and reduces transparency. Make sure your skin still
-  looks intentional in this mode.
 
 For the full guidelines, see
 [Apple Human Interface Guidelines](https://developer.apple.com/design/human-interface-guidelines/).
-
-## Value Constraints
-
-The JSON schema enforces these ranges to prevent broken skins:
-
-| Property | Min | Max | Notes |
-|----------|-----|-----|-------|
-| `cornerRadius` | 2 | 24 | Avoids invisible or cartoonish rounding |
-| `shadowOpacity` | 0 | 0.25 | Prevents overpowering drop shadows |
-| `shadowRadius` | 0 | 20 | Keeps shadows plausible |
-| `separatorOpacity` | 0.05 | 0.5 | Runtime floor at 0.15 when style ≠ `"none"` |
 
 ## JSON Schema Validation
 
 A JSON Schema is available at `Bubo/Skins/buboskin.schema.json`. It validates
 all keys, types, enums, and required fields. VS Code users get automatic
 validation and autocomplete for skin `.json` files (see `.vscode/settings.json`).
+
+The schema is lenient on unknown keys — older skin files with removed fields
+like `shadowRadius` or `sfSymbolWeight` will still pass validation and load
+cleanly. Those values are silently dropped in favour of the baked defaults.
 
 To validate a skin manually:
 
@@ -328,7 +275,7 @@ Bubo/Skins/
 ## Background Images
 
 Users can set a custom background image for any skin directly in Settings.
-Select a skin, then use the "Choose image..." button to pick a photo.
+Select a skin, then use the "Choose image…" button to pick a photo.
 Opacity and blur can be adjusted per skin.
 
 Custom skins are stored in `~/Library/Application Support/Bubo/Skins/`.
