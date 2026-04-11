@@ -31,6 +31,11 @@ struct MenuBarView: View {
         return Set(stored)
     }()
 
+    /// Measured bottom edge (in the root coordinate space) of the QuickActions
+    /// "Optimize" bar. We anchor the command palette overlay just below this
+    /// point so the optimizer trigger stays visible while the palette is open.
+    @State private var optimizerBottomY: CGFloat = 0
+
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Enum-based navigation state machine replaces fragile boolean flags.
@@ -216,7 +221,9 @@ struct MenuBarView: View {
                 value: navigation
             )
 
-            // Command palette — inline overlay on top of everything else.
+            // Command palette — inline overlay anchored just below the
+            // QuickActions "Optimize" bar so the optimizer trigger stays
+            // visible while the palette is open.
             if let context = paletteContext {
                 CommandPalette(
                     optimizerService: optimizerService,
@@ -238,6 +245,7 @@ struct MenuBarView: View {
                         )
                     }
                 )
+                .padding(.top, max(0, optimizerBottomY))
                 .transition(.opacity)
                 .zIndex(10)
             }
@@ -276,6 +284,8 @@ struct MenuBarView: View {
         .environment(\.activeSkin, activeSkin)
         .environment(\.backlogCoordinator, backlogCoordinator)
         .environment(\.navigateHome, { navigation = .list })
+        .coordinateSpace(name: menuBarRootCoordinateSpace)
+        .onPreferenceChange(OptimizerBottomKey.self) { optimizerBottomY = $0 }
         .frame(width: DS.Popover.width, height: navigation.isTimer ? DS.Popover.timerHeight : DS.Popover.height)
         .onAppear {
             guard !hasStartedSync else { return }
@@ -634,6 +644,14 @@ struct MenuBarView: View {
                 )
                 .padding(.horizontal, DS.Spacing.md)
                 .padding(.vertical, DS.Spacing.xs)
+                .background(
+                    GeometryReader { geo in
+                        Color.clear.preference(
+                            key: OptimizerBottomKey.self,
+                            value: geo.frame(in: .named(menuBarRootCoordinateSpace)).maxY
+                        )
+                    }
+                )
             }
 
             // Backlog tasks — pinned directly below the optimizer so they stay
@@ -1253,5 +1271,16 @@ private struct CalendarAccessBanner: View {
         )
     }
 }
+
+/// Propagates the bottom-Y of the QuickActions "Optimize" bar up to
+/// MenuBarView so the command palette overlay can anchor directly beneath it.
+private struct OptimizerBottomKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+private let menuBarRootCoordinateSpace = "MenuBarViewRoot"
 
 // ColorDotButton is now a shared component in Components/ColorDotButton.swift
