@@ -481,9 +481,10 @@ struct MenuBarView: View {
                     }
                 },
                 onDeleteTask: { task in
+                    let originalIndex = backlog.indexOfTask(id: task.id)
                     _ = backlog.removeTask(id: task.id)
                     toastState.showSuccess("\u{201C}\(task.title)\u{201D} deleted", icon: "trash.fill") {
-                        backlog.restoreTask(task)
+                        backlog.restoreTask(task, at: originalIndex)
                     }
                 },
                 focusRequested: $focusTaskInput,
@@ -497,6 +498,11 @@ struct MenuBarView: View {
     private func handleTaskDrop(taskId: String, slotStart: Date, slotEnd: Date) {
         guard let backlog = optimizerService.backlogService,
               let task = backlog.tasks.first(where: { $0.id == taskId }) else { return }
+
+        // Flip the discoverability hint off — this is a real drag-to-schedule,
+        // so the user has learned the gesture. Same AppStorage key that
+        // BacklogView reads via @AppStorage.
+        UserDefaults.standard.set(true, forKey: "BuboBacklogHasDragged")
 
         let duration = min(
             TimeInterval(task.durationMinutes * 60),
