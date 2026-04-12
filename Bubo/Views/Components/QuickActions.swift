@@ -14,6 +14,7 @@ struct QuickActions: View {
     var optimizerService: OptimizerService
     var reminderService: ReminderService
     var onExecuted: (_ label: String, _ undo: @escaping () -> Void) -> Void
+    var onError: (_ message: String) -> Void = { _ in }
     var onOpenPalette: () -> Void
 
     @State private var isRunning = false
@@ -139,8 +140,10 @@ struct QuickActions: View {
                     onExecuted(action.label) {
                         optimizerService.undoLast(reminderService: reminderService)
                     }
-                default:
-                    break
+                case .noEventsToOptimize, .infeasible:
+                    if let msg = result.errorMessage {
+                        onError(msg)
+                    }
                 }
             }
         }

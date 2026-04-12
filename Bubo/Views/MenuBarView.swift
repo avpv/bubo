@@ -638,6 +638,9 @@ struct MenuBarView: View {
                         toastState.showSuccess(label, icon: "sparkles", onUndo: undo)
                         notifyScheduleChange()
                     },
+                    onError: { message in
+                        toastState.showInfo(message, icon: "exclamationmark.triangle")
+                    },
                     onOpenPalette: {
                         Haptics.tap()
                         withAnimation(DS.Animation.quick) {
