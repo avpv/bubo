@@ -4,24 +4,13 @@ import UniformTypeIdentifiers
 
 // MARK: - Typed drag payload
 
-/// UTI used by `BacklogTaskDrag`. Declared in Info.plist under
-/// `UTExportedTypeDeclarations` (conforming to `public.data`) so the
-/// macOS pasteboard system recognises the type during drag-and-drop.
-extension UTType {
-    static let buboBacklogTask = UTType(exportedAs: "com.bubo.backlog.task")
-}
-
 /// Payload dragged out of the backlog.
 ///
-/// Using a dedicated Transferable struct instead of raw `String` has two
-/// concrete benefits:
-///
-/// 1. Drop destinations that accept `BacklogTaskDrag.self` will reject plain
-///    text drops (from the clipboard, browser, etc.), so we never confuse an
-///    arbitrary string with a task ID.
-/// 2. Source and destination use the same type, but reorder drop targets
-///    still get a typed payload they can introspect — we pass the full task
-///    summary so the drop site doesn't need to re-query the service.
+/// The drag handle uses `.onDrag` (NSItemProvider with `public.json`)
+/// to initiate the drag, and drop targets use `.dropDestination(for:)`
+/// with this type's `CodableRepresentation`. Both sides agree on the
+/// `.json` UTType so the pasteboard round-trip works without a custom
+/// UTType declaration.
 struct BacklogTaskDrag: Codable, Transferable, Hashable {
     let taskId: String
     let title: String
@@ -29,7 +18,7 @@ struct BacklogTaskDrag: Codable, Transferable, Hashable {
     let context: String?
 
     static var transferRepresentation: some TransferRepresentation {
-        CodableRepresentation(contentType: .buboBacklogTask)
+        CodableRepresentation(contentType: .json)
     }
 }
 
