@@ -38,6 +38,7 @@ struct CommandPalette: View {
     @State private var showPowerMode = false
     @State private var composedRequest: OptimizationRequest? = nil
     @State private var conflicts: [IntentConflictDetector.Conflict] = []
+    @State private var appliedNotice: String? = nil
     @FocusState private var isSearchFocused: Bool
 
     private enum Phase: Equatable {
@@ -606,6 +607,11 @@ struct CommandPalette: View {
                     Text(info.timeRange).font(.subheadline.monospacedDigit()).foregroundStyle(skin.accentColor)
                 }
             }
+            if let notice = appliedNotice {
+                Text(notice)
+                    .font(.caption)
+                    .foregroundStyle(DS.Colors.textTertiary)
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, DS.Spacing.xl)
@@ -674,9 +680,13 @@ struct CommandPalette: View {
                     optimizerService.applyScenario(at: 0, to: reminderService)
                     let fmt = DateFormatter()
                     fmt.setLocalizedDateFormatFromTemplate("H:mm")
-                    let infos = optimizerService.scenarios[0].genes.prefix(3).map { g in
+                    let scenario = optimizerService.scenarios[0]
+                    let infos = scenario.activeGenes.prefix(3).map { g in
                         EventInfo(id: g.eventId, title: g.title,
                                   timeRange: "\(fmt.string(from: g.startTime))–\(fmt.string(from: g.endTime))")
+                    }
+                    if case .partialSuccess(_, let warnings) = result {
+                        appliedNotice = warnings.first
                     }
                     phase = .applied(infos)
                     onApplied(request) { optimizerService.undoLast(reminderService: reminderService) }

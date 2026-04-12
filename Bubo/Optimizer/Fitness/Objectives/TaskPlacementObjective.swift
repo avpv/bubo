@@ -19,7 +19,7 @@ struct TaskPlacementObjective: FitnessObjective {
         var totalScore = 0.0
         var evaluatedCount = 0
 
-        for gene in chromosome.genes {
+        for gene in chromosome.genes where gene.isIncluded {
             guard let event = context.movableEvents.first(where: { $0.id == gene.eventId }) else {
                 continue
             }
@@ -77,7 +77,7 @@ struct TaskPlacementObjective: FitnessObjective {
                 return true
             }
         }
-        for other in chromosome.genes where other.eventId != gene.eventId {
+        for other in chromosome.genes where other.eventId != gene.eventId && other.isIncluded {
             if other.startTime > gene.startTime && other.startTime < gene.endTime {
                 return true
             }

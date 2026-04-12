@@ -58,7 +58,12 @@ struct IntentCompiler {
         let prefs = buildPreferences(config)
         let workingHours = config.workingHours
         let maxEventMinutes = allMovable.map { $0.duration / 60 }.max() ?? 30
-        let horizon = resolveHorizon(config.horizon, workingHours: workingHours, minRequiredMinutes: maxEventMinutes)
+        let horizon = resolveHorizon(
+            config.horizon,
+            workingHours: workingHours,
+            minRequiredMinutes: maxEventMinutes,
+            overflowToNextDay: config.overflowToTomorrow
+        )
 
         let calendarFixed = reminderService.allEvents.filter { !$0.isLocalEvent }
         let localAsFixed: [CalendarEvent] = config.findSlotsOnly
@@ -67,9 +72,13 @@ struct IntentCompiler {
         let allFixed = calendarFixed + localAsFixed
 
         // Phase 3.5: Add backlog tasks (capped to available time)
+        // The cap is generous (120%) because the GA can drop droppable tasks
+        // that don't fit via the isIncluded gene mechanism.
+        let totalBacklogCount: Int
         if config.includeBacklog {
             var backlogTasks = collectBacklogTasks(config)
             backlogTasks = applyTransforms(config.transforms, to: backlogTasks)
+            totalBacklogCount = backlogTasks.count
             let capped = capBacklogToAvailableTime(
                 backlogTasks,
                 coreEvents: allMovable,
@@ -79,6 +88,8 @@ struct IntentCompiler {
                 maxExtraTasks: config.maxExtraTasks
             )
             allMovable += capped
+        } else {
+            totalBacklogCount = 0
         }
 
         guard !allMovable.isEmpty else {
@@ -103,9 +114,10 @@ struct IntentCompiler {
             optimizer.reoptimizer.stabilityWeight = 5.0
         }
 
-        // Phase 5: Pre-flight check
+        // Phase 5: Pre-flight check (only for non-droppable events)
         let snapshot = buildSnapshot(fixedEvents: allFixed, workingHours: workingHours, horizon: horizon)
-        if let error = preflightCheck(context: context) {
+        let hasDroppable = allMovable.contains { $0.isDroppable }
+        if !hasDroppable, let error = preflightCheck(context: context) {
             return .infeasible(reason: error, snapshot: snapshot)
         }
 
@@ -126,6 +138,20 @@ struct IntentCompiler {
 
         if let best = filteredResult.scenarios.first, best.fitness < 0.1 {
             return .infeasible(reason: "Not enough room in this time window", snapshot: snapshot)
+        }
+
+        // Phase 7: Detect dropped tasks and report partial success
+        if let best = filteredResult.scenarios.first, best.droppedCount > 0 {
+            let planned = best.activeGenes.count
+            let total = planned + best.droppedCount
+            let precapped = totalBacklogCount
+            var warnings: [String] = []
+            if precapped > total {
+                warnings.append("Planned \(planned) of \(precapped) tasks")
+            } else {
+                warnings.append("Planned \(planned) of \(total) tasks")
+            }
+            return .partialSuccess(filteredResult, warnings: warnings)
         }
 
         return .success(filteredResult)
@@ -808,13 +834,18 @@ private extension IntentCompiler {
 
 private extension IntentCompiler {
 
-    func resolveHorizon(_ horizon: Horizon, workingHours: ClosedRange<Int>, minRequiredMinutes: Double) -> DateInterval {
+    func resolveHorizon(_ horizon: Horizon, workingHours: ClosedRange<Int>, minRequiredMinutes: Double, overflowToNextDay: Bool = false) -> DateInterval {
         let cal = Calendar.current
         let now = Date()
 
         switch horizon {
         case .today:
             let todayEnd = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now))!
+            // Extend to tomorrow if explicitly requested or if not enough time left
+            if overflowToNextDay {
+                let tomorrowEnd = cal.date(byAdding: .day, value: 1, to: todayEnd)!
+                return DateInterval(start: now, end: tomorrowEnd)
+            }
             let workEndToday = cal.date(
                 bySettingHour: workingHours.upperBound, minute: 0, second: 0, of: now
             ) ?? todayEnd
@@ -876,8 +907,11 @@ private extension IntentCompiler {
             day = cal.date(byAdding: .day, value: 1, to: day)!
         }
 
-        let requiredMinutes = context.movableEvents.reduce(0.0) { $0 + $1.duration / 60 }
-        let longestEventMinutes = context.movableEvents.map { $0.duration / 60 }.max() ?? 0
+        // Only count non-droppable events as required; droppable tasks will
+        // be excluded by the GA if they don't fit.
+        let requiredEvents = context.movableEvents.filter { !$0.isDroppable }
+        let requiredMinutes = requiredEvents.reduce(0.0) { $0 + $1.duration / 60 }
+        let longestEventMinutes = requiredEvents.map { $0.duration / 60 }.max() ?? 0
 
         if availableMinutes < 1 {
             return "No working time left — try tomorrow"
@@ -938,9 +972,10 @@ private extension IntentCompiler {
         let coreMinutes = coreEvents.reduce(0.0) { $0 + $1.duration / 60 }
         let remainingMinutes = availableMinutes - coreMinutes
 
-        // Leave 15% buffer so the GA has room to satisfy hard constraints
-        // (no-overlap gaps, working-hour boundaries, dependency ordering, etc.)
-        let usableMinutes = remainingMinutes * 0.85
+        // Allow 120% of remaining time — the GA will drop tasks that don't fit
+        // via the isIncluded gene mechanism. Overshoot gives the GA room to
+        // explore different task combinations and find the best subset.
+        let usableMinutes = remainingMinutes * 1.2
 
         guard usableMinutes > 0 else { return [] }
 

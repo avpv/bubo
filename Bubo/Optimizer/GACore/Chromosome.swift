@@ -54,6 +54,9 @@ struct ScheduleChromosome: Chromosome, Sendable {
                 workingHours: context.workingHours,
                 calendar: cal
             )
+            // Droppable genes start with ~70% chance of inclusion
+            // so the GA explores both including and excluding them.
+            let included = event.isDroppable ? Double.random(in: 0...1) < 0.7 : true
             return ScheduleGene(
                 eventId: event.id,
                 title: event.title,
@@ -63,7 +66,9 @@ struct ScheduleChromosome: Chromosome, Sendable {
                 energyCost: event.energyCost,
                 priority: event.priority,
                 isFocusBlock: event.isFocusBlock,
-                storyPoints: event.storyPoints
+                storyPoints: event.storyPoints,
+                isDroppable: event.isDroppable,
+                isIncluded: included
             )
         }
         return ScheduleChromosome(genes: genes, needsEvaluation: true)
@@ -104,6 +109,15 @@ struct ScheduleChromosome: Chromosome, Sendable {
         let horizonStart = context.planningHorizon.start
         for i in genes.indices {
             guard Double.random(in: 0...1) < rate else { continue }
+
+            // Droppable genes: small chance to flip inclusion instead of moving
+            if genes[i].isDroppable && Double.random(in: 0...1) < 0.15 {
+                genes[i].isIncluded.toggle()
+                continue
+            }
+
+            // Skip placement mutation for excluded genes
+            guard genes[i].isIncluded else { continue }
 
             let event = context.movableEvents.first { $0.id == genes[i].eventId }
             let earliest = event?.earliestStart

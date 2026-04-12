@@ -20,7 +20,7 @@ struct MultiPersonObjective: FitnessObjective {
         var evaluatedCount = 0
 
         for event in eventsWithParticipants {
-            guard let gene = chromosome.genes.first(where: { $0.eventId == event.id }) else {
+            guard let gene = chromosome.genes.first(where: { $0.eventId == event.id && $0.isIncluded }) else {
                 continue
             }
             evaluatedCount += 1

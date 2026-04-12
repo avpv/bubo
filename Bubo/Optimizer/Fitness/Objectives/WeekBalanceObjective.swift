@@ -24,7 +24,7 @@ struct WeekBalanceObjective: FitnessObjective {
             minutesByDay[day, default: 0] += event.endDate.timeIntervalSince(event.startDate) / 60
         }
         // Movable events
-        for gene in chromosome.genes {
+        for gene in chromosome.genes where gene.isIncluded {
             let day = cal.startOfDay(for: gene.startTime)
             minutesByDay[day, default: 0] += gene.duration / 60
         }

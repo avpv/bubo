@@ -19,7 +19,7 @@ struct ConflictObjective: FitnessObjective {
         for event in context.fixedEvents {
             allEvents.append((event.id, event.startDate, event.endDate))
         }
-        for gene in chromosome.genes {
+        for gene in chromosome.genes where gene.isIncluded {
             allEvents.append((gene.eventId, gene.startTime, gene.endTime))
         }
 

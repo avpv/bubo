@@ -27,8 +27,8 @@ struct NoOverlapConstraint: ScheduleConstraint {
         for event in context.fixedEvents {
             allEvents.append((event.startDate, event.endDate))
         }
-        // Add movable events from chromosome
-        for gene in chromosome.genes {
+        // Add only included movable events from chromosome
+        for gene in chromosome.genes where gene.isIncluded {
             allEvents.append((gene.startTime, gene.endTime))
         }
 
@@ -59,7 +59,7 @@ struct WorkingHoursConstraint: ScheduleConstraint {
         let cal = context.calendar
         var totalViolation = 0.0
 
-        for gene in chromosome.genes {
+        for gene in chromosome.genes where gene.isIncluded {
             let day = cal.startOfDay(for: gene.startTime)
             guard let workStart = cal.date(bySettingHour: context.workingHours.lowerBound, minute: 0, second: 0, of: day),
                   let workEnd = cal.date(bySettingHour: context.workingHours.upperBound, minute: 0, second: 0, of: day) else {
@@ -88,7 +88,7 @@ struct PlanningHorizonConstraint: ScheduleConstraint {
 
     func penalty(for chromosome: ScheduleChromosome, context: OptimizerContext) -> Double {
         var totalViolation = 0.0
-        for gene in chromosome.genes {
+        for gene in chromosome.genes where gene.isIncluded {
             if gene.startTime < context.planningHorizon.start {
                 totalViolation += context.planningHorizon.start.timeIntervalSince(gene.startTime) / 60
             }
@@ -109,7 +109,7 @@ struct DeadlineConstraint: ScheduleConstraint {
 
     func penalty(for chromosome: ScheduleChromosome, context: OptimizerContext) -> Double {
         var totalViolation = 0.0
-        for gene in chromosome.genes {
+        for gene in chromosome.genes where gene.isIncluded {
             guard let event = context.movableEvents.first(where: { $0.id == gene.eventId }),
                   let deadline = event.deadline else { continue }
             if gene.endTime > deadline {
@@ -129,7 +129,7 @@ struct EarliestStartConstraint: ScheduleConstraint {
 
     func penalty(for chromosome: ScheduleChromosome, context: OptimizerContext) -> Double {
         var totalViolation = 0.0
-        for gene in chromosome.genes {
+        for gene in chromosome.genes where gene.isIncluded {
             guard let event = context.movableEvents.first(where: { $0.id == gene.eventId }),
                   let earliest = event.earliestStart else { continue }
             if gene.startTime < earliest {
@@ -157,7 +157,7 @@ struct MaxMeetingsPerDayConstraint: ScheduleConstraint {
             eventsByDay[day, default: 0] += 1
         }
         // Count movable events per day
-        for gene in chromosome.genes {
+        for gene in chromosome.genes where gene.isIncluded {
             let day = cal.startOfDay(for: gene.startTime)
             eventsByDay[day, default: 0] += 1
         }
@@ -186,7 +186,7 @@ struct LunchWindowConstraint: ScheduleConstraint {
         let lunchEnd = context.preferences.lunchWindowEnd
         var penalty = 0.0
 
-        for gene in chromosome.genes {
+        for gene in chromosome.genes where gene.isIncluded {
             let day = cal.startOfDay(for: gene.startTime)
             guard let lunchStartTime = cal.date(bySettingHour: lunchStart, minute: 0, second: 0, of: day),
                   let lunchEndTime = cal.date(bySettingHour: lunchEnd, minute: 0, second: 0, of: day) else {
@@ -216,13 +216,13 @@ struct TaskDependencyConstraint: ScheduleConstraint {
     func penalty(for chromosome: ScheduleChromosome, context: OptimizerContext) -> Double {
         var totalViolation = 0.0
 
-        for gene in chromosome.genes {
+        for gene in chromosome.genes where gene.isIncluded {
             guard let event = context.movableEvents.first(where: { $0.id == gene.eventId }),
                   !event.dependsOn.isEmpty else { continue }
 
             for depId in event.dependsOn {
                 // Dependency may be in movable genes or in fixed events
-                if let depGene = chromosome.genes.first(where: { $0.eventId == depId }) {
+                if let depGene = chromosome.genes.first(where: { $0.eventId == depId && $0.isIncluded }) {
                     // Movable dependency: this task must start after dependency ends
                     if gene.startTime < depGene.endTime {
                         totalViolation += depGene.endTime.timeIntervalSince(gene.startTime) / 60

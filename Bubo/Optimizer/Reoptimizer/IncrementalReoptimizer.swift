@@ -221,7 +221,7 @@ struct StabilityAwareFitnessEvaluator: Sendable {
 
         // Calculate deviation from reference schedule
         var totalDeviation = 0.0
-        for gene in chromosome.genes {
+        for gene in chromosome.genes where gene.isIncluded {
             if let ref = referenceGenes.first(where: { $0.eventId == gene.eventId }) {
                 let timeDiff = abs(gene.startTime.timeIntervalSince(ref.startTime))
                 totalDeviation += timeDiff / 3600  // in hours

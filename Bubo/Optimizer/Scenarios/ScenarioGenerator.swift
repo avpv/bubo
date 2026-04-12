@@ -79,6 +79,19 @@ struct ScenarioGenerator {
                 continue
             }
 
+            // Inclusion difference: one included, other excluded = fully different
+            if geneA.isIncluded != geneB.isIncluded {
+                totalDifference += 1.0
+                comparedCount += 1
+                continue
+            }
+
+            // Both excluded — no placement to compare
+            if !geneA.isIncluded {
+                comparedCount += 1
+                continue
+            }
+
             // Time difference — normalize by working day length (not full horizon)
             // so that a 2-hour shift is meaningful regardless of planning horizon
             let timeDiff = abs(geneA.startTime.timeIntervalSince(geneB.startTime))
