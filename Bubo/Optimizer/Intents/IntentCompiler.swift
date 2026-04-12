@@ -69,7 +69,7 @@ struct IntentCompiler {
         let localAsFixed: [CalendarEvent] = config.findSlotsOnly
             ? reminderService.allEvents.filter { $0.isLocalEvent }
             : []
-        let allFixed = calendarFixed + localAsFixed
+        var allFixed = calendarFixed + localAsFixed
 
         // Phase 3.5: Add backlog tasks (capped to available time)
         // The cap is generous (120%) because the GA can drop droppable tasks
@@ -79,6 +79,12 @@ struct IntentCompiler {
             var backlogTasks = collectBacklogTasks(config)
             backlogTasks = applyTransforms(config.transforms, to: backlogTasks)
             totalBacklogCount = backlogTasks.count
+
+            // When rescheduling, remove old calendar events for these tasks
+            // from the fixed set so they don't block their own new placement.
+            let rescheduledIds = Set(backlogTasks.map { $0.id })
+            allFixed = allFixed.filter { !rescheduledIds.contains($0.id) }
+
             let capped = capBacklogToAvailableTime(
                 backlogTasks,
                 coreEvents: allMovable,
@@ -637,12 +643,12 @@ private extension IntentCompiler {
 
     func collectBacklogTasks(_ config: ResolvedConfig) -> [OptimizableEvent] {
         guard config.includeBacklog else { return [] }
-        let pending = backlogService.pending
+        let candidates = backlogService.schedulable
         let filtered: [BacklogTask]
         if let ids = config.backlogTaskIds {
-            filtered = pending.filter { ids.contains($0.id) }
+            filtered = candidates.filter { ids.contains($0.id) }
         } else {
-            filtered = pending
+            filtered = candidates
         }
         return filtered.map { $0.toOptimizableEvent() }
     }

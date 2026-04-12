@@ -24,6 +24,11 @@ final class BacklogService {
         tasks.filter { $0.status == .pending }
     }
 
+    /// All tasks available for (re)scheduling — pending and already-scheduled.
+    var schedulable: [BacklogTask] {
+        tasks.filter { $0.status != .done }
+    }
+
     /// Tasks that have been placed in the schedule.
     var scheduled: [BacklogTask] {
         tasks.filter { $0.status == .scheduled }

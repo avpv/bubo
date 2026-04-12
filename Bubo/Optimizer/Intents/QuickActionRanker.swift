@@ -91,7 +91,7 @@ struct QuickActionRanker {
         return ContextInputs(
             overdueCount: backlogService.overdue.count,
             urgentCount: backlogService.urgent(withinDays: 2).count,
-            pendingCount: backlogService.pending.count,
+            pendingCount: backlogService.schedulable.count,
             hour: hour,
             hasFocusToday: hasFocus,
             meetingsTodayCount: meetings
@@ -225,7 +225,7 @@ struct QuickActionRanker {
 
     /// All possible quick actions. Each has a context signal that determines relevance.
     private func generateCandidates() -> [QuickActionCandidate] {
-        let pending = backlogService.pending
+        let schedulable = backlogService.schedulable
 
         var candidates: [QuickActionCandidate] = [
             QuickActionCandidate(
@@ -237,7 +237,7 @@ struct QuickActionRanker {
             ),
             QuickActionCandidate(
                 id: "schedule-tasks",
-                label: "Schedule \(pending.count)",
+                label: "Schedule \(schedulable.count)",
                 icon: "calendar.badge.plus",
                 request: .scheduleBacklog,
                 signal: .pendingTasks
