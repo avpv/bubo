@@ -193,10 +193,10 @@ final class OptimizerService {
 
         optimizer.acceptScenario(scenario)
 
-        for (i, gene) in scenario.genes.enumerated() {
+        for (i, gene) in scenario.activeGenes.enumerated() {
             let title: String
             if let override = titleOverride, !override.isEmpty {
-                title = scenario.genes.count > 1 ? "\(override) \(i + 1)" : override
+                title = scenario.activeGenes.count > 1 ? "\(override) \(i + 1)" : override
             } else {
                 title = gene.title
             }
@@ -227,7 +227,7 @@ final class OptimizerService {
             requestName: activeRequestName ?? "",
             appliedAt: Date(),
             previousGenes: previousGenes,
-            appliedGenes: scenario.genes,
+            appliedGenes: scenario.activeGenes,
             createdEventIds: createdEventIds
         )
 
