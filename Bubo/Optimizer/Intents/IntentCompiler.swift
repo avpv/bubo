@@ -903,7 +903,11 @@ private extension IntentCompiler {
                 for fixed in overlapping {
                     let gapMinutes = fixed.start.timeIntervalSince(cursor) / 60
                     if gapMinutes > 0 { largestGapMinutes = max(largestGapMinutes, gapMinutes) }
-                    freeMinutes -= fixed.end.timeIntervalSince(fixed.start) / 60
+                    // Only subtract the portion not already covered by a previous event
+                    let effectiveFixedStart = max(fixed.start, cursor)
+                    if fixed.end > effectiveFixedStart {
+                        freeMinutes -= fixed.end.timeIntervalSince(effectiveFixedStart) / 60
+                    }
                     cursor = max(cursor, fixed.end)
                 }
                 let trailingGap = effectiveEnd.timeIntervalSince(cursor) / 60

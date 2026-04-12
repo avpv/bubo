@@ -133,7 +133,9 @@ struct ScheduleChromosome: Chromosome, Sendable {
                 )
             case 1:
                 // Move to different day within horizon
-                let daysInHorizon = cal.dateComponents([.day], from: horizonStart, to: context.planningHorizon.end).day ?? 1
+                let mutStartDay = cal.startOfDay(for: horizonStart)
+                let mutLastDay = cal.startOfDay(for: context.planningHorizon.end.addingTimeInterval(-1))
+                let daysInHorizon = max(1, (cal.dateComponents([.day], from: mutStartDay, to: mutLastDay).day ?? 0) + 1)
                 guard daysInHorizon > 0 else { break }
                 let dayOffset = Int.random(in: 0..<daysInHorizon)
                 let newDay = cal.date(byAdding: .day, value: dayOffset, to: horizonStart)!
@@ -161,7 +163,12 @@ struct ScheduleChromosome: Chromosome, Sendable {
         workingHours: ClosedRange<Int>,
         calendar: Calendar
     ) -> Date {
-        let daysInHorizon = max(1, calendar.dateComponents([.day], from: horizon.start, to: horizon.end).day ?? 1)
+        // Count distinct calendar days spanned (not whole 24h periods) so
+        // the GA can reach every day in the horizon, even when the start is
+        // mid-afternoon and the horizon overflows into the next day.
+        let horizonStartDay = calendar.startOfDay(for: horizon.start)
+        let horizonLastDay = calendar.startOfDay(for: horizon.end.addingTimeInterval(-1))
+        let daysInHorizon = max(1, (calendar.dateComponents([.day], from: horizonStartDay, to: horizonLastDay).day ?? 0) + 1)
         let dayOffset = Int.random(in: 0..<daysInHorizon)
         let day = calendar.date(byAdding: .day, value: dayOffset, to: horizon.start)!
 
