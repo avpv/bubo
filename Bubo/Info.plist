@@ -35,5 +35,20 @@
     <string>Bubo needs access to your calendars to show meeting reminders from accounts configured in the Calendar app.</string>
     <key>NSCalendarsFullAccessUsageDescription</key>
     <string>Bubo needs access to your calendars to show meeting reminders from accounts configured in the Calendar app.</string>
+    <key>UTExportedTypeDeclarations</key>
+    <array>
+        <dict>
+            <key>UTTypeIdentifier</key>
+            <string>com.bubo.backlog.task</string>
+            <key>UTTypeDescription</key>
+            <string>Bubo Backlog Task</string>
+            <key>UTTypeConformsTo</key>
+            <array>
+                <string>public.data</string>
+            </array>
+            <key>UTTypeTagSpecification</key>
+            <dict/>
+        </dict>
+    </array>
 </dict>
 </plist>
