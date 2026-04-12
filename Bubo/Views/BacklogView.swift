@@ -58,14 +58,16 @@ struct BacklogView: View {
     /// Kept as a constant so tests and the ghost preview agree.
     static let defaultTaskDurationMinutes: Int = 60
 
-    /// Maximum number of task rows shown in the compact (default)
-    /// backlog state. Tasks beyond this count are hidden behind a
-    /// "N more tasks…" button that the user taps to expand the
-    /// full list.  Using a row-count limit instead of a
-    /// ScrollView / List + maxHeight avoids the fundamental macOS
-    /// SwiftUI issue where scroll containers eat drag gestures
-    /// before `.draggable` / `.dropDestination` can fire.
-    private static let maxVisibleTasks = 4
+    /// Maximum number of task rows visible at once. In the compact
+    /// (default) state the VStack renders only this many rows and
+    /// shows a "N more tasks…" button for the overflow. In the
+    /// expanded state a ScrollView with `maxHeight` sized for this
+    /// many rows keeps the timeline reachable for drag-to-schedule.
+    private static let maxVisibleTasks = 6
+
+    /// Estimated height of a single task row (content + vertical
+    /// padding) used to cap the scroll container in expanded mode.
+    private static let taskRowEstimatedHeight: CGFloat = 40
 
     private var activeTasks: [BacklogTask] {
         backlogService.tasks.filter { $0.status != .done }
@@ -82,23 +84,9 @@ struct BacklogView: View {
             if !activeTasks.isEmpty || isInputFocused {
                 backlogHeader
                 if isExpanded {
-                    // No scroll container at all — plain VStack.
-                    //
-                    // Both ScrollView and List on macOS eat drag
-                    // gestures before `.draggable` / `.dropDestination`
-                    // can fire, which breaks drag-to-reorder inside the
-                    // backlog AND drag-to-schedule onto Timeline free
-                    // slots. The only macOS-safe container for both
-                    // bounded height AND working drag is a plain VStack
-                    // that renders a limited number of task rows, with a
-                    // "N more tasks…" toggle for the overflow.
-                    //
-                    // When `showAllTasks` is false (default), only the
-                    // first `maxVisibleTasks` rows are rendered. The
-                    // VStack stays short, Timeline isn't pushed off. When
-                    // the user explicitly taps "N more tasks…", all rows
-                    // render, the VStack grows, and Timeline may be
-                    // pushed — but that's the user's deliberate choice.
+                    // Compact: plain VStack with maxVisibleTasks rows.
+                    // Expanded: height-capped ScrollView so the timeline
+                    // stays reachable for drag-to-schedule.
                     taskList
                 }
             }
@@ -184,91 +172,44 @@ struct BacklogView: View {
 
     // MARK: - Task List
     //
-    // Plain VStack with a row-count limit. Both ScrollView and List
-    // on macOS eat drag gestures before `.draggable` / `.dropDestination`
-    // can fire, so neither can serve as a bounded-height scroll
-    // container without killing Bubo's drag-to-schedule and
-    // drag-to-reorder interactions. A plain VStack doesn't have its
-    // own gesture recognizer, so drag works unconditionally.
+    // Compact mode (default): plain VStack renders only the first
+    // `maxVisibleTasks` rows plus a "N more tasks…" toggle. No scroll
+    // container → `.onDrag` / `.dropDestination` work unconditionally.
     //
-    // Instead of scrolling, overflow is handled by rendering only the
-    // first `maxVisibleTasks` rows (default 4) and showing a
-    // "N more tasks…" toggle button below them. Tapping that button
-    // reveals all tasks (VStack grows, Timeline may be pushed down —
-    // but that's the user's deliberate choice, signalled by a
-    // symmetric "Show fewer" toggle that restores the compact state).
-    // Collapsing the backlog via the header chevron also resets
+    // Expanded mode: a height-capped ScrollView wraps all rows so the
+    // user can browse long lists without pushing the Timeline off
+    // screen. The cap is sized for exactly `maxVisibleTasks` rows,
+    // keeping free slots reachable for drag-to-schedule.
+    //
+    // Collapsing the backlog via the header chevron resets
     // `showAllTasks` to false.
 
     private var taskList: some View {
         let allTasks = activeTasks
-        let effectiveLimit = showAllTasks ? allTasks.count : Self.maxVisibleTasks
-        let visibleIDs = Set(allTasks.prefix(effectiveLimit).map(\.id))
-        let overflowCount = max(0, allTasks.count - effectiveLimit)
+        let overflowCount = max(0, allTasks.count - Self.maxVisibleTasks)
 
         return VStack(spacing: 0) {
             if !hasDragged && !activeTasks.isEmpty {
                 dragDiscoveryHint
             }
 
-            let grouped = backlogService.groupedByContext
-            ForEach(grouped, id: \.context) { group in
-                let groupHasVisibleTasks = group.tasks.contains { visibleIDs.contains($0.id) }
-
-                if let context = group.context, groupHasVisibleTasks {
-                    Text(context)
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(skin.resolvedTextTertiary)
-                        .tracking(0.3)
-                        .padding(.horizontal, DS.Spacing.sm)
-                        .padding(.top, DS.Spacing.sm)
-                        .padding(.bottom, DS.Spacing.xxs)
+            // When expanded and there are more tasks than the visible
+            // limit, wrap rows in a height-capped ScrollView so the
+            // timeline stays reachable for drag-to-schedule.
+            if showAllTasks && allTasks.count > Self.maxVisibleTasks {
+                ScrollView {
+                    taskRowsContent(visibleIDs: nil)
                 }
-
-                ForEach(group.tasks) { task in
-                    if visibleIDs.contains(task.id) {
-                        if editingTaskId == task.id {
-                            BacklogTaskEditRow(
-                                task: task,
-                                backlogService: backlogService,
-                                onDone: { editingTaskId = nil }
-                            )
-                            .transition(.opacity)
-                        } else {
-                            BacklogTaskRow(
-                                task: task,
-                                isUrgent: isUrgent(task),
-                                isDragging: coordinator?.draggedTask?.taskId == task.id,
-                                canMoveUp: canMoveUp(task),
-                                canMoveDown: canMoveDown(task),
-                                onComplete: {
-                                    withAnimation(.easeInOut(duration: 0.3)) {
-                                        backlogService.completeTask(id: task.id)
-                                    }
-                                },
-                                onEdit: { editingTaskId = task.id },
-                                onDelete: { onDeleteTask?(task) },
-                                onDragStart: {
-                                    coordinator?.beginDrag(payload(for: task))
-                                    if !hasDragged { hasDragged = true }
-                                },
-                                onDragEnd: { coordinator?.endDrag() },
-                                onReorderDrop: { dropped in
-                                    handleReorderDrop(dropped: dropped, targetId: task.id)
-                                },
-                                onMoveUp: { moveTask(task, by: -1) },
-                                onMoveDown: { moveTask(task, by: +1) },
-                                onMoveToTop: { moveTaskToEdge(task, toTop: true) },
-                                onMoveToBottom: { moveTaskToEdge(task, toTop: false) }
-                            )
-                            .transition(.opacity.combined(with: .move(edge: .leading)))
-                        }
-                    }
-                }
+                .scrollIndicators(.automatic)
+                .frame(maxHeight: Self.taskRowEstimatedHeight * CGFloat(Self.maxVisibleTasks))
+            } else {
+                // Compact mode — plain VStack, only first maxVisibleTasks.
+                let visibleIDs = Set(allTasks.prefix(Self.maxVisibleTasks).map(\.id))
+                taskRowsContent(visibleIDs: visibleIDs)
             }
 
             // Overflow toggle — shows when tasks exceed the visible limit
-            if overflowCount > 0 {
+            if overflowCount > 0 && !showAllTasks {
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         showAllTasks = true
@@ -301,6 +242,70 @@ struct BacklogView: View {
         .padding(.horizontal, DS.Spacing.sm)
         .animation(.easeInOut(duration: 0.2), value: activeTasks.map(\.id))
         .animation(.easeInOut(duration: 0.2), value: showAllTasks)
+    }
+
+    /// Renders grouped task rows. When `visibleIDs` is nil all tasks
+    /// are rendered (expanded ScrollView mode); otherwise only tasks
+    /// whose id is in the set appear (compact mode).
+    @ViewBuilder
+    private func taskRowsContent(visibleIDs: Set<String>?) -> some View {
+        let ids = visibleIDs ?? Set(activeTasks.map(\.id))
+        let grouped = backlogService.groupedByContext
+
+        ForEach(grouped, id: \.context) { group in
+            let groupHasVisibleTasks = group.tasks.contains { ids.contains($0.id) }
+
+            if let context = group.context, groupHasVisibleTasks {
+                Text(context)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                    .tracking(0.3)
+                    .padding(.horizontal, DS.Spacing.sm)
+                    .padding(.top, DS.Spacing.sm)
+                    .padding(.bottom, DS.Spacing.xxs)
+            }
+
+            ForEach(group.tasks) { task in
+                if ids.contains(task.id) {
+                    if editingTaskId == task.id {
+                        BacklogTaskEditRow(
+                            task: task,
+                            backlogService: backlogService,
+                            onDone: { editingTaskId = nil }
+                        )
+                        .transition(.opacity)
+                    } else {
+                        BacklogTaskRow(
+                            task: task,
+                            isUrgent: isUrgent(task),
+                            isDragging: coordinator?.draggedTask?.taskId == task.id,
+                            canMoveUp: canMoveUp(task),
+                            canMoveDown: canMoveDown(task),
+                            onComplete: {
+                                withAnimation(.easeInOut(duration: 0.3)) {
+                                    backlogService.completeTask(id: task.id)
+                                }
+                            },
+                            onEdit: { editingTaskId = task.id },
+                            onDelete: { onDeleteTask?(task) },
+                            onDragStart: {
+                                coordinator?.beginDrag(payload(for: task))
+                                if !hasDragged { hasDragged = true }
+                            },
+                            onDragEnd: { coordinator?.endDrag() },
+                            onReorderDrop: { dropped in
+                                handleReorderDrop(dropped: dropped, targetId: task.id)
+                            },
+                            onMoveUp: { moveTask(task, by: -1) },
+                            onMoveDown: { moveTask(task, by: +1) },
+                            onMoveToTop: { moveTaskToEdge(task, toTop: true) },
+                            onMoveToBottom: { moveTaskToEdge(task, toTop: false) }
+                        )
+                        .transition(.opacity.combined(with: .move(edge: .leading)))
+                    }
+                }
+            }
+        }
     }
 
     /// Build a typed drag payload for `task` so drag sources and drop targets
