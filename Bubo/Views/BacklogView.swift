@@ -292,7 +292,7 @@ struct BacklogView: View {
                         .foregroundStyle(skin.resolvedTextTertiary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, DS.Spacing.sm)
-                        .padding(.vertical, DS.Spacing.xs)
+                        .padding(.vertical, DS.Spacing.xxs)
                 }
                 .buttonStyle(.plain)
             }
@@ -754,7 +754,7 @@ struct BacklogTaskRow: View {
                 .transition(.opacity)
             }
         }
-        .padding(.vertical, DS.Spacing.xs)
+        .padding(.vertical, DS.Spacing.xxs)
         .padding(.horizontal, DS.Spacing.xs)
         .contentShape(Rectangle())
         .opacity(isDragging ? 0.4 : 1)
