@@ -53,9 +53,6 @@ struct IntentCompiler {
         // Phase 2.5: Apply transforms
         var allMovable = syntheticEvents + localEvents
         allMovable = applyTransforms(config.transforms, to: allMovable)
-        guard !allMovable.isEmpty else {
-            return .noEventsToOptimize
-        }
 
         // Phase 3: Build optimizer context
         let prefs = buildPreferences(config)
@@ -68,6 +65,25 @@ struct IntentCompiler {
             ? reminderService.allEvents.filter { $0.isLocalEvent }
             : []
         let allFixed = calendarFixed + localAsFixed
+
+        // Phase 3.5: Add backlog tasks (capped to available time)
+        if config.includeBacklog {
+            var backlogTasks = collectBacklogTasks(config)
+            backlogTasks = applyTransforms(config.transforms, to: backlogTasks)
+            let capped = capBacklogToAvailableTime(
+                backlogTasks,
+                coreEvents: allMovable,
+                fixedEvents: allFixed,
+                workingHours: workingHours,
+                horizon: horizon,
+                maxExtraTasks: config.maxExtraTasks
+            )
+            allMovable += capped
+        }
+
+        guard !allMovable.isEmpty else {
+            return .noEventsToOptimize
+        }
 
         let context = OptimizerContext(
             fixedEvents: allFixed,
@@ -554,7 +570,8 @@ private extension IntentCompiler {
 
     func collectLocalEvents(_ config: ResolvedConfig) -> [OptimizableEvent] {
         guard !config.findSlotsOnly else {
-            return collectBacklogTasks(config)
+            // Backlog tasks are collected separately and capped in execute()
+            return []
         }
 
         var events = collectLocalEventsForHorizon(config.horizon)
@@ -588,11 +605,7 @@ private extension IntentCompiler {
             }
         }
 
-        // Add backlog tasks
-        if config.includeBacklog {
-            events += collectBacklogTasks(config)
-        }
-
+        // Backlog tasks are collected separately and capped in execute()
         return events
     }
 
@@ -876,6 +889,80 @@ private extension IntentCompiler {
             return "Longest event (\(Int(longestEventMinutes)) min) doesn't fit in largest gap (\(Int(largestGapMinutes)) min)"
         }
         return nil
+    }
+
+    /// Cap backlog tasks to fit within available time so the GA can find feasible solutions.
+    /// Sorts by priority (highest first) and greedily includes tasks until time budget is reached.
+    func capBacklogToAvailableTime(
+        _ backlogTasks: [OptimizableEvent],
+        coreEvents: [OptimizableEvent],
+        fixedEvents: [CalendarEvent],
+        workingHours: ClosedRange<Int>,
+        horizon: DateInterval,
+        maxExtraTasks: Int?
+    ) -> [OptimizableEvent] {
+        guard !backlogTasks.isEmpty else { return [] }
+
+        let cal = Calendar.current
+        let now = Date()
+        var availableMinutes: Double = 0
+        var day = cal.startOfDay(for: horizon.start)
+
+        while day < horizon.end {
+            guard let workStart = cal.date(bySettingHour: workingHours.lowerBound, minute: 0, second: 0, of: day),
+                  let workEnd = cal.date(bySettingHour: workingHours.upperBound, minute: 0, second: 0, of: day) else {
+                day = cal.date(byAdding: .day, value: 1, to: day)!
+                continue
+            }
+
+            let effectiveStart = max(workStart, max(now, horizon.start))
+            let effectiveEnd = min(workEnd, horizon.end)
+
+            if effectiveEnd > effectiveStart {
+                var freeMinutes = effectiveEnd.timeIntervalSince(effectiveStart) / 60
+                let overlapping = fixedEvents
+                    .compactMap { fixed -> (start: Date, end: Date)? in
+                        let oStart = max(fixed.startDate, effectiveStart)
+                        let oEnd = min(fixed.endDate, effectiveEnd)
+                        return oEnd > oStart ? (oStart, oEnd) : nil
+                    }
+                for fixed in overlapping {
+                    freeMinutes -= fixed.end.timeIntervalSince(fixed.start) / 60
+                }
+                availableMinutes += max(0, freeMinutes)
+            }
+            day = cal.date(byAdding: .day, value: 1, to: day)!
+        }
+
+        // Subtract time needed by core (non-backlog) events
+        let coreMinutes = coreEvents.reduce(0.0) { $0 + $1.duration / 60 }
+        let remainingMinutes = availableMinutes - coreMinutes
+
+        // Leave 15% buffer so the GA has room to satisfy hard constraints
+        // (no-overlap gaps, working-hour boundaries, dependency ordering, etc.)
+        let usableMinutes = remainingMinutes * 0.85
+
+        guard usableMinutes > 0 else { return [] }
+
+        // Sort by priority (highest first) to keep most important tasks
+        let sorted = backlogTasks.sorted { $0.priority > $1.priority }
+
+        // Apply maxExtraTasks limit if set
+        let maxCount = maxExtraTasks ?? sorted.count
+        let limited = Array(sorted.prefix(maxCount))
+
+        // Greedily add tasks until time budget is reached
+        var totalMinutes: Double = 0
+        var result: [OptimizableEvent] = []
+        for task in limited {
+            let taskMinutes = task.duration / 60
+            if totalMinutes + taskMinutes <= usableMinutes {
+                result.append(task)
+                totalMinutes += taskMinutes
+            }
+        }
+
+        return result
     }
 
     func buildSnapshot(fixedEvents: [CalendarEvent], workingHours: ClosedRange<Int>, horizon: DateInterval) -> ScheduleSnapshot {
