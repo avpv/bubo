@@ -633,73 +633,93 @@ struct BacklogTaskRow: View {
 
     var body: some View {
         HStack(spacing: DS.Spacing.sm) {
-            // Drag handle — visible on hover. Birman: affordance only when
-            // the pointer is already on the row, so the default state stays
-            // quiet but the gesture is never hidden from intent.
+            // Drag handle — the ONLY drag source on this row.
+            //
+            // On macOS, .draggable() on a parent view never starts
+            // an NSDrag session when child views (Button, onTapGesture)
+            // intercept mouseDown first. Moving .draggable() onto the
+            // handle isolates it from competing gestures, matching the
+            // standard pattern (Notion, Linear, Todoist).
             Image(systemName: "line.3.horizontal")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
-                .frame(width: 10)
+                .frame(width: 16, height: 28)
+                .contentShape(Rectangle())
                 .opacity(isHovered ? 1 : 0)
                 .accessibilityHidden(true)
-
-            // Checkbox — complete on tap.
-            // onTapGesture instead of Button for the same reason
-            // as the content area: NSButton eats mouseDown and
-            // blocks the parent .draggable() gesture on macOS.
-            Image(systemName: "circle")
-                .font(.callout)
-                .foregroundStyle(isUrgent ? .red : .secondary)
-                .onTapGesture { onComplete() }
-                .accessibilityAddTraits(.isButton)
-                .accessibilityLabel("Complete task")
-
-            // Content — edit on tap.
-            // Using onTapGesture instead of Button so that the
-            // parent .draggable() modifier can start a drag session
-            // from this area. NSButton (used by SwiftUI Button on
-            // macOS) captures mouseDown and prevents the drag
-            // gesture from firing.
-            VStack(alignment: .leading, spacing: 1) {
-                Text(task.title)
-                    .font(.callout)
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-
-                HStack(spacing: DS.Spacing.xs) {
-                    Text("\(task.durationMinutes)m")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-
-                    if task.priority == .high {
-                        Text("!")
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(.red)
-                    }
-
-                    if let sp = task.storyPoints {
-                        Text("\(sp)sp")
+                .draggable(
+                    BacklogTaskDrag(
+                        taskId: task.id,
+                        title: task.title,
+                        durationMinutes: task.durationMinutes,
+                        context: task.context
+                    )
+                ) {
+                    // Drag preview — lightweight label shown while dragging.
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "calendar.badge.plus")
+                            .font(.caption)
+                        Text(task.title)
+                            .font(.caption.weight(.medium))
+                        Text("\(task.durationMinutes)m")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
+                    .padding(.horizontal, DS.Spacing.sm)
+                    .padding(.vertical, DS.Spacing.xs)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .onAppear { onDragStart() }
+                    .onDisappear { onDragEnd() }
+                }
 
-                    if let deadline = task.deadline {
-                        Text(deadlineLabel(deadline))
-                            .font(.caption2)
-                            .foregroundStyle(isUrgent ? .red : .secondary)
-                    }
+            // Checkbox — complete on tap
+            Button(action: onComplete) {
+                Image(systemName: "circle")
+                    .font(.callout)
+                    .foregroundStyle(isUrgent ? .red : .secondary)
+            }
+            .buttonStyle(.plain)
 
-                    if let context = task.context {
-                        Text(context)
+            // Content — edit on tap
+            Button(action: onEdit) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(task.title)
+                        .font(.callout)
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+
+                    HStack(spacing: DS.Spacing.xs) {
+                        Text("\(task.durationMinutes)m")
                             .font(.caption2)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(.secondary)
+
+                        if task.priority == .high {
+                            Text("!")
+                                .font(.caption2.weight(.bold))
+                                .foregroundStyle(.red)
+                        }
+
+                        if let sp = task.storyPoints {
+                            Text("\(sp)sp")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        if let deadline = task.deadline {
+                            Text(deadlineLabel(deadline))
+                                .font(.caption2)
+                                .foregroundStyle(isUrgent ? .red : .secondary)
+                        }
+
+                        if let context = task.context {
+                            Text(context)
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
                     }
                 }
             }
-            .contentShape(Rectangle())
-            .onTapGesture { onEdit() }
-            .accessibilityAddTraits(.isButton)
-            .accessibilityHint("Edit task")
+            .buttonStyle(.plain)
 
             Spacer()
 
@@ -751,33 +771,6 @@ struct BacklogTaskRow: View {
                 .animation(.easeInOut(duration: 0.12), value: isReorderTargeted)
         }
         .onHover { isHovered = $0 }
-        .draggable(
-            BacklogTaskDrag(
-                taskId: task.id,
-                title: task.title,
-                durationMinutes: task.durationMinutes,
-                context: task.context
-            )
-        ) {
-            // Drag preview — lightweight label shown while dragging.
-            // onAppear/onDisappear on the preview view fire when the drag
-            // session begins / ends, which is how we tell the coordinator
-            // to light up every valid drop target.
-            HStack(spacing: DS.Spacing.xs) {
-                Image(systemName: "calendar.badge.plus")
-                    .font(.caption)
-                Text(task.title)
-                    .font(.caption.weight(.medium))
-                Text("\(task.durationMinutes)m")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, DS.Spacing.sm)
-            .padding(.vertical, DS.Spacing.xs)
-            .background(.ultraThinMaterial, in: Capsule())
-            .onAppear { onDragStart() }
-            .onDisappear { onDragEnd() }
-        }
         .dropDestination(for: BacklogTaskDrag.self) { items, _ in
             guard let dropped = items.first, dropped.taskId != task.id else { return false }
             onReorderDrop(dropped)
