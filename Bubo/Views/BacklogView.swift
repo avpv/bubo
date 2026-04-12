@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 // MARK: - Backlog View
 
@@ -635,11 +636,12 @@ struct BacklogTaskRow: View {
         HStack(spacing: DS.Spacing.sm) {
             // Drag handle — the ONLY drag source on this row.
             //
-            // On macOS, .draggable() on a parent view never starts
-            // an NSDrag session when child views (Button, onTapGesture)
-            // intercept mouseDown first. Moving .draggable() onto the
-            // handle isolates it from competing gestures, matching the
-            // standard pattern (Notion, Linear, Todoist).
+            // Uses .onDrag (NSItemProvider API) instead of .draggable
+            // (Transferable API). On macOS, .draggable() fails to start
+            // NSDrag sessions inside popover windows and when competing
+            // with child gestures. .onDrag uses NSItemProvider directly,
+            // bypassing the Transferable encoding path that silently
+            // breaks in these contexts.
             Image(systemName: "line.3.horizontal")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
@@ -647,15 +649,26 @@ struct BacklogTaskRow: View {
                 .contentShape(Rectangle())
                 .opacity(isHovered ? 1 : 0)
                 .accessibilityHidden(true)
-                .draggable(
-                    BacklogTaskDrag(
+                .onDrag {
+                    onDragStart()
+                    let payload = BacklogTaskDrag(
                         taskId: task.id,
                         title: task.title,
                         durationMinutes: task.durationMinutes,
                         context: task.context
                     )
-                ) {
-                    // Drag preview — lightweight label shown while dragging.
+                    let provider = NSItemProvider()
+                    if let data = try? JSONEncoder().encode(payload) {
+                        provider.registerDataRepresentation(
+                            forTypeIdentifier: UTType.json.identifier,
+                            visibility: .ownProcess
+                        ) { completion in
+                            completion(data, nil)
+                            return nil
+                        }
+                    }
+                    return provider
+                } preview: {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "calendar.badge.plus")
                             .font(.caption)
@@ -668,7 +681,6 @@ struct BacklogTaskRow: View {
                     .padding(.horizontal, DS.Spacing.sm)
                     .padding(.vertical, DS.Spacing.xs)
                     .background(.ultraThinMaterial, in: Capsule())
-                    .onAppear { onDragStart() }
                     .onDisappear { onDragEnd() }
                 }
 
