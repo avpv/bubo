@@ -4,9 +4,9 @@ import UniformTypeIdentifiers
 
 // MARK: - Typed drag payload
 
-/// UTI used by `BacklogTaskDrag`. Registered at runtime via
-/// `UTType(exportedAs:)` — no Info.plist entry is required because the type
-/// is only used for intra-app drag-and-drop, never the system pasteboard.
+/// UTI used by `BacklogTaskDrag`. Declared in Info.plist under
+/// `UTExportedTypeDeclarations` (conforming to `public.data`) so the
+/// macOS pasteboard system recognises the type during drag-and-drop.
 extension UTType {
     static let buboBacklogTask = UTType(exportedAs: "com.bubo.backlog.task")
 }

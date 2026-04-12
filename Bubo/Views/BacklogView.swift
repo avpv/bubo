@@ -643,54 +643,63 @@ struct BacklogTaskRow: View {
                 .opacity(isHovered ? 1 : 0)
                 .accessibilityHidden(true)
 
-            // Checkbox — complete on tap
-            Button(action: onComplete) {
-                Image(systemName: "circle")
+            // Checkbox — complete on tap.
+            // onTapGesture instead of Button for the same reason
+            // as the content area: NSButton eats mouseDown and
+            // blocks the parent .draggable() gesture on macOS.
+            Image(systemName: "circle")
+                .font(.callout)
+                .foregroundStyle(isUrgent ? .red : .secondary)
+                .onTapGesture { onComplete() }
+                .accessibilityAddTraits(.isButton)
+                .accessibilityLabel("Complete task")
+
+            // Content — edit on tap.
+            // Using onTapGesture instead of Button so that the
+            // parent .draggable() modifier can start a drag session
+            // from this area. NSButton (used by SwiftUI Button on
+            // macOS) captures mouseDown and prevents the drag
+            // gesture from firing.
+            VStack(alignment: .leading, spacing: 1) {
+                Text(task.title)
                     .font(.callout)
-                    .foregroundStyle(isUrgent ? .red : .secondary)
-            }
-            .buttonStyle(.plain)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
 
-            // Content — edit on tap
-            Button(action: onEdit) {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(task.title)
-                        .font(.callout)
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
+                HStack(spacing: DS.Spacing.xs) {
+                    Text("\(task.durationMinutes)m")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
 
-                    HStack(spacing: DS.Spacing.xs) {
-                        Text("\(task.durationMinutes)m")
+                    if task.priority == .high {
+                        Text("!")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.red)
+                    }
+
+                    if let sp = task.storyPoints {
+                        Text("\(sp)sp")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
+                    }
 
-                        if task.priority == .high {
-                            Text("!")
-                                .font(.caption2.weight(.bold))
-                                .foregroundStyle(.red)
-                        }
+                    if let deadline = task.deadline {
+                        Text(deadlineLabel(deadline))
+                            .font(.caption2)
+                            .foregroundStyle(isUrgent ? .red : .secondary)
+                    }
 
-                        if let sp = task.storyPoints {
-                            Text("\(sp)sp")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        if let deadline = task.deadline {
-                            Text(deadlineLabel(deadline))
-                                .font(.caption2)
-                                .foregroundStyle(isUrgent ? .red : .secondary)
-                        }
-
-                        if let context = task.context {
-                            Text(context)
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                        }
+                    if let context = task.context {
+                        Text(context)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
                     }
                 }
             }
-            .buttonStyle(.plain)
+            .contentShape(Rectangle())
+            .onTapGesture { onEdit() }
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint("Edit task")
 
             Spacer()
 
