@@ -68,6 +68,7 @@ enum DS {
         static let accentBarWidth: CGFloat = 4
         static let accentBarHeight: CGFloat = 28
         static let eventRowMinHeight: CGFloat = 36
+        static let backlogRowHeight: CGFloat = 44
         static let headerHeight: CGFloat = 48
         static let actionFooterHeight: CGFloat = 48
         static let timeColumnWidth: CGFloat = 84
