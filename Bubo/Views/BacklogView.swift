@@ -58,12 +58,13 @@ struct BacklogView: View {
     /// Kept as a constant so tests and the ghost preview agree.
     static let defaultTaskDurationMinutes: Int = 60
 
-    /// Maximum number of task rows visible at once. In the compact
-    /// (default) state the VStack renders only this many rows and
-    /// shows a "N more tasks…" button for the overflow. In the
-    /// expanded state a ScrollView with `maxHeight` sized for this
-    /// many rows keeps the timeline reachable for drag-to-schedule.
-    private static let maxVisibleTasks = 6
+    /// Maximum number of task rows shown in the compact (default)
+    /// state before the "N more tasks…" button.
+    private static let maxVisibleTasks = 4
+
+    /// Maximum number of task rows visible in the expanded state.
+    /// A height-capped ScrollView keeps the timeline reachable.
+    private static let maxExpandedTasks = 6
 
     /// Estimated height of a single task row (content + vertical
     /// padding) used to cap the scroll container in expanded mode.
@@ -201,7 +202,7 @@ struct BacklogView: View {
                     taskRowsContent(visibleIDs: nil)
                 }
                 .scrollIndicators(.automatic)
-                .frame(maxHeight: Self.taskRowEstimatedHeight * CGFloat(Self.maxVisibleTasks))
+                .frame(maxHeight: Self.taskRowEstimatedHeight * CGFloat(Self.maxExpandedTasks))
             } else {
                 // Compact mode — plain VStack, only first maxVisibleTasks.
                 let visibleIDs = Set(allTasks.prefix(Self.maxVisibleTasks).map(\.id))
