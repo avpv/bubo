@@ -60,11 +60,11 @@ struct BacklogView: View {
 
     /// Maximum number of task rows shown in the compact (default)
     /// state before the "N more tasks…" button.
-    private static let maxVisibleTasks = 4
+    private static let maxVisibleTasks = 2
 
     /// Maximum number of task rows visible in the expanded state.
     /// A height-capped ScrollView keeps the timeline reachable.
-    private static let maxExpandedTasks = 6
+    private static let maxExpandedTasks = 4
 
 
     private var activeTasks: [BacklogTask] {
