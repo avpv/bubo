@@ -67,8 +67,9 @@ struct BacklogView: View {
     private static let maxExpandedTasks = 6
 
     /// Estimated height of a single task row (content + vertical
-    /// padding) used to cap the scroll container in expanded mode.
-    private static let taskRowEstimatedHeight: CGFloat = 40
+    /// padding + proportional context-group header space) used to
+    /// cap the scroll container in expanded mode.
+    private static let taskRowEstimatedHeight: CGFloat = 60
 
     private var activeTasks: [BacklogTask] {
         backlogService.tasks.filter { $0.status != .done }
