@@ -108,7 +108,8 @@ extension BacklogTask {
             preferredHourRange: preferredPeriod?.hourRange,
             isFocusBlock: false,
             storyPoints: storyPoints,
-            dependsOn: dependsOn
+            dependsOn: dependsOn,
+            isDroppable: true
         )
     }
 }

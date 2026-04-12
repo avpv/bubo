@@ -18,6 +18,7 @@ struct OptimizableEvent: Identifiable, Codable, Hashable, Sendable {
     let earliestStart: Date?        // don't schedule before this time
     let storyPoints: Int?           // effort estimate (1, 2, 3, 5, 8, 13)
     let dependsOn: [String]         // IDs of tasks that must finish first
+    let isDroppable: Bool           // GA can exclude this event if it doesn't fit
 
     init(
         id: String = UUID().uuidString,
@@ -33,7 +34,8 @@ struct OptimizableEvent: Identifiable, Codable, Hashable, Sendable {
         pomodoroConfig: PomodoroConfig? = nil,
         earliestStart: Date? = nil,
         storyPoints: Int? = nil,
-        dependsOn: [String] = []
+        dependsOn: [String] = [],
+        isDroppable: Bool = false
     ) {
         self.id = id
         self.title = title
@@ -49,6 +51,7 @@ struct OptimizableEvent: Identifiable, Codable, Hashable, Sendable {
         self.earliestStart = earliestStart
         self.storyPoints = storyPoints
         self.dependsOn = dependsOn
+        self.isDroppable = isDroppable
     }
 }
 
@@ -77,6 +80,8 @@ struct ScheduleGene: Codable, Hashable, Sendable {
     let priority: Double
     let isFocusBlock: Bool
     let storyPoints: Int?
+    let isDroppable: Bool           // whether the GA may exclude this gene
+    var isIncluded: Bool            // whether this gene is active in the schedule
 
     var endTime: Date { startTime.addingTimeInterval(duration) }
 
@@ -89,7 +94,9 @@ struct ScheduleGene: Codable, Hashable, Sendable {
         energyCost: Double,
         priority: Double,
         isFocusBlock: Bool,
-        storyPoints: Int? = nil
+        storyPoints: Int? = nil,
+        isDroppable: Bool = false,
+        isIncluded: Bool = true
     ) {
         self.eventId = eventId
         self.title = title
@@ -100,6 +107,8 @@ struct ScheduleGene: Codable, Hashable, Sendable {
         self.priority = priority
         self.isFocusBlock = isFocusBlock
         self.storyPoints = storyPoints
+        self.isDroppable = isDroppable
+        self.isIncluded = isIncluded
     }
 
     /// Create a copy with a new start time (preserves all other fields).
@@ -113,7 +122,9 @@ struct ScheduleGene: Codable, Hashable, Sendable {
             energyCost: energyCost,
             priority: priority,
             isFocusBlock: isFocusBlock,
-            storyPoints: storyPoints
+            storyPoints: storyPoints,
+            isDroppable: isDroppable,
+            isIncluded: isIncluded
         )
     }
 }
@@ -168,6 +179,7 @@ struct OptimizerPreferences: Codable, Sendable {
     var contextSwitchWeight: Double
     var bufferWeight: Double
     var meetingClusteringWeight: Double
+    var taskInclusionWeight: Double
 
     // Energy model
     var peakEnergyHour: Int           // hour of day with peak energy
@@ -205,6 +217,7 @@ struct OptimizerPreferences: Codable, Sendable {
         contextSwitchWeight: Double = 0.7,
         bufferWeight: Double = 0.6,
         meetingClusteringWeight: Double = 0.8,
+        taskInclusionWeight: Double = 4.0,
         peakEnergyHour: Int = 10,
         energyDecayRate: Double = 0.1,
         maxConsecutiveMeetingMinutes: Int = 120,
@@ -231,6 +244,7 @@ struct OptimizerPreferences: Codable, Sendable {
         self.contextSwitchWeight = contextSwitchWeight
         self.bufferWeight = bufferWeight
         self.meetingClusteringWeight = meetingClusteringWeight
+        self.taskInclusionWeight = taskInclusionWeight
         self.peakEnergyHour = peakEnergyHour
         self.energyDecayRate = energyDecayRate
         self.maxConsecutiveMeetingMinutes = maxConsecutiveMeetingMinutes
@@ -268,10 +282,16 @@ struct ScheduleScenario: Identifiable, Sendable {
     /// Populated by `planDayWithSequencing` — nil when sequencing wasn't applied.
     var taskSequenceByDay: [Date: [String]]?
 
+    /// Genes actively placed in the schedule (excludes dropped droppable genes).
+    var activeGenes: [ScheduleGene] { genes.filter { $0.isIncluded } }
+
+    /// Number of droppable tasks that the GA chose not to include.
+    var droppedCount: Int { genes.count { !$0.isIncluded && $0.isDroppable } }
+
     /// Convert genes back to CalendarEvents for display.
-    /// Optimizer-generated events default to movable for re-optimization.
+    /// Only includes active genes; optimizer-generated events default to movable.
     func toCalendarEvents() -> [CalendarEvent] {
-        genes.map { gene in
+        activeGenes.map { gene in
             var event = CalendarEvent(
                 id: gene.eventId,
                 title: gene.title,

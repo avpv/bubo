@@ -20,7 +20,7 @@ struct DeadlineObjective: FitnessObjective {
         var evaluatedCount = 0
 
         for event in eventsWithDeadlines {
-            guard let gene = chromosome.genes.first(where: { $0.eventId == event.id }),
+            guard let gene = chromosome.genes.first(where: { $0.eventId == event.id && $0.isIncluded }),
                   let deadline = event.deadline else { continue }
             evaluatedCount += 1
 
@@ -70,7 +70,7 @@ struct DeadlineObjective: FitnessObjective {
         let day = cal.startOfDay(for: gene.startTime)
 
         let deadlineTasksOnSameDay = chromosome.genes.filter { other in
-            guard other.eventId != gene.eventId else { return false }
+            guard other.isIncluded, other.eventId != gene.eventId else { return false }
             let otherDay = cal.startOfDay(for: other.startTime)
             guard otherDay == day else { return false }
             // Check if this event has a deadline

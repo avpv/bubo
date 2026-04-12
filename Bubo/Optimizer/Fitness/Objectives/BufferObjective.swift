@@ -22,7 +22,7 @@ struct BufferObjective: FitnessObjective {
             let day = cal.startOfDay(for: event.startDate)
             eventsByDay[day, default: []].append((event.startDate, event.endDate, 0.5))
         }
-        for gene in chromosome.genes {
+        for gene in chromosome.genes where gene.isIncluded {
             let day = cal.startOfDay(for: gene.startTime)
             eventsByDay[day, default: []].append((gene.startTime, gene.endTime, gene.energyCost))
         }

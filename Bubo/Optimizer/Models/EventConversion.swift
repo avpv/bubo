@@ -117,9 +117,9 @@ extension ScheduleGene {
 
 extension ScheduleScenario {
 
-    /// Convert a scenario into displayable CalendarEvents.
+    /// Convert a scenario into displayable CalendarEvents (only included genes).
     func toCalendarEvents(using movableEvents: [OptimizableEvent]) -> [CalendarEvent] {
-        genes.compactMap { gene in
+        activeGenes.compactMap { gene in
             let event = movableEvents.first { $0.id == gene.eventId }
             return gene.toCalendarEvent(
                 title: event?.title ?? gene.eventId,

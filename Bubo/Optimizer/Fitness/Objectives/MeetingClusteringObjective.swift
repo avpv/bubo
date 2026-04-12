@@ -37,7 +37,7 @@ struct MeetingClusteringObjective: FitnessObjective {
             let day = cal.startOfDay(for: event.startDate)
             meetingsByDay[day, default: []].append((event.startDate, event.endDate, event.isMovable))
         }
-        for gene in chromosome.genes where !gene.isFocusBlock {
+        for gene in chromosome.genes where !gene.isFocusBlock && gene.isIncluded {
             let day = cal.startOfDay(for: gene.startTime)
             meetingsByDay[day, default: []].append((gene.startTime, gene.endTime, true))
         }

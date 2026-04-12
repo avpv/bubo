@@ -46,6 +46,7 @@ final class FitnessEvaluator: @unchecked Sendable {
                 ContextSwitchObjective(weight: preferences.contextSwitchWeight),
                 BufferObjective(weight: preferences.bufferWeight),
                 MeetingClusteringObjective(weight: preferences.meetingClusteringWeight),
+                TaskInclusionObjective(weight: preferences.taskInclusionWeight),
             ],
             constraintEngine: .standard
         )

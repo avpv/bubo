@@ -20,7 +20,7 @@ struct PomodoroFitObjective: FitnessObjective {
         var evaluatedCount = 0
 
         for pomEvent in pomodoroEvents {
-            guard let gene = chromosome.genes.first(where: { $0.eventId == pomEvent.id }),
+            guard let gene = chromosome.genes.first(where: { $0.eventId == pomEvent.id && $0.isIncluded }),
                   let config = pomEvent.pomodoroConfig else { continue }
             evaluatedCount += 1
 
@@ -87,7 +87,7 @@ struct PomodoroFitObjective: FitnessObjective {
             }
         }
         // Check other movable events
-        for other in chromosome.genes where other.eventId != gene.eventId {
+        for other in chromosome.genes where other.eventId != gene.eventId && other.isIncluded {
             if other.startTime < end && other.endTime > start {
                 count += 1
             }
@@ -108,7 +108,7 @@ struct PomodoroFitObjective: FitnessObjective {
                 return true
             }
         }
-        for gene in chromosome.genes where gene.eventId != excludingEventId {
+        for gene in chromosome.genes where gene.eventId != excludingEventId && gene.isIncluded {
             if abs(gene.startTime.timeIntervalSince(time)) < bufferWindow {
                 return true
             }
