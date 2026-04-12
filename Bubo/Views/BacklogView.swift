@@ -703,14 +703,34 @@ struct BacklogTaskRow: View {
 
             Spacer()
 
-            // Delete on hover
+            // Reorder + delete controls — visible on hover
             if isHovered {
-                Button(action: onDelete) {
-                    Image(systemName: "xmark")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                HStack(spacing: DS.Spacing.xxs) {
+                    Button(action: onMoveUp) {
+                        Image(systemName: "chevron.up")
+                            .font(.caption2)
+                            .foregroundStyle(canMoveUp ? .secondary : .quaternary)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!canMoveUp)
+                    .help("Move up")
+
+                    Button(action: onMoveDown) {
+                        Image(systemName: "chevron.down")
+                            .font(.caption2)
+                            .foregroundStyle(canMoveDown ? .secondary : .quaternary)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!canMoveDown)
+                    .help("Move down")
+
+                    Button(action: onDelete) {
+                        Image(systemName: "xmark")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
                 .transition(.opacity)
             }
         }

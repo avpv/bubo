@@ -705,6 +705,7 @@ struct MenuBarView: View {
                             lineWidth: DS.Border.thin
                         )
                         .blendMode(.plusLighter)
+                        .allowsHitTesting(false)
                 )
                 .padding(.horizontal, DS.Spacing.contentMargin)
                 .padding(.top, DS.Spacing.md)
