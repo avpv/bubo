@@ -66,10 +66,6 @@ struct BacklogView: View {
     /// A height-capped ScrollView keeps the timeline reachable.
     private static let maxExpandedTasks = 6
 
-    /// Estimated height of a single task row (content + vertical
-    /// padding + proportional context-group header space) used to
-    /// cap the scroll container in expanded mode.
-    private static let taskRowEstimatedHeight: CGFloat = 90
 
     private var activeTasks: [BacklogTask] {
         backlogService.tasks.filter { $0.status != .done }
@@ -203,7 +199,7 @@ struct BacklogView: View {
                     taskRowsContent(visibleIDs: nil)
                 }
                 .scrollIndicators(.automatic)
-                .frame(maxHeight: Self.taskRowEstimatedHeight * CGFloat(Self.maxExpandedTasks))
+                .frame(maxHeight: DS.Size.backlogRowHeight * CGFloat(Self.maxExpandedTasks))
             } else {
                 // Compact mode — plain VStack, only first maxVisibleTasks.
                 let visibleIDs = Set(allTasks.prefix(Self.maxVisibleTasks).map(\.id))
@@ -775,6 +771,7 @@ struct BacklogTaskRow: View {
         }
         .padding(.vertical, DS.Spacing.xs)
         .padding(.horizontal, DS.Spacing.xs)
+        .frame(minHeight: DS.Size.backlogRowHeight)
         .contentShape(Rectangle())
         .opacity(isDragging ? 0.4 : 1)
         .background(
