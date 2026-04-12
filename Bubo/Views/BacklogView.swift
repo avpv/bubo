@@ -52,12 +52,14 @@ struct BacklogView: View {
     /// Kept as a constant so tests and the ghost preview agree.
     static let defaultTaskDurationMinutes: Int = 60
 
-    /// When the backlog is expanded, the task list is capped at this
-    /// height and scrolls internally. This prevents a long backlog from
-    /// pushing the Timeline card off the popover — HIG "primary content
-    /// should stay primary", Birman "если всё не влезает, дай скролл, но
-    /// не съедай главное". Roughly 3–4 BacklogTaskRow heights before the
-    /// list starts scrolling.
+    /// When the backlog is expanded, the task List is capped at this
+    /// height so a long backlog can't push the Timeline card off the
+    /// popover. Unlike the earlier ScrollView-based cap (see PR #309,
+    /// which broke drag-and-drop), this height lives on a native
+    /// macOS `List` whose scroll gesture recognizer yields to
+    /// `.draggable` children, so both scroll AND drag work inside it.
+    /// Roughly 3–4 BacklogTaskRow heights before the list starts
+    /// scrolling internally.
     private static let expandedTaskListMaxHeight: CGFloat = 180
 
     private var activeTasks: [BacklogTask] {
@@ -75,21 +77,25 @@ struct BacklogView: View {
             if !activeTasks.isEmpty || isInputFocused {
                 backlogHeader
                 if isExpanded {
-                    // Level 1 (main-screen overflow fix): the expanded
-                    // task list lives inside a ScrollView capped at a
-                    // fixed max height, so a long backlog can never push
-                    // the Timeline card off the popover. The header
-                    // above and the addTaskField below stay pinned
-                    // OUTSIDE this ScrollView, so the counter, the
-                    // Schedule button, and the "+ Add task…" input
-                    // remain visible at all times — Birman: "важные
-                    // affordances не прячь". The scroll indicator
-                    // follows native macOS behaviour (on demand, fades
-                    // out after scrolling stops).
-                    ScrollView {
-                        taskList
-                    }
-                    .frame(maxHeight: Self.expandedTaskListMaxHeight)
+                    // The expanded task list is a native macOS `List`
+                    // (see `taskList` below) capped at a fixed max
+                    // height so it can't push the Timeline card off
+                    // the popover. Native `List` scroll gesture
+                    // recognizers yield to `.draggable` on their
+                    // rows, so both drag-to-reorder inside the
+                    // backlog AND drag-to-schedule onto free-slot
+                    // rows in the Timeline continue to work even
+                    // when the list is actively scrolling — which
+                    // is exactly what a plain `ScrollView + VStack`
+                    // wrapper could NOT deliver (see the #309 → #312
+                    // regression trail).
+                    //
+                    // The header above and the addTaskField below
+                    // stay pinned OUTSIDE the list so the counter,
+                    // the Schedule button, and the "+ Add task…"
+                    // input remain visible at every scroll position.
+                    taskList
+                        .frame(maxHeight: Self.expandedTaskListMaxHeight)
                 }
             }
             addTaskField
@@ -170,11 +176,40 @@ struct BacklogView: View {
     }
 
     // MARK: - Task List
+    //
+    // Native macOS `List` (not a custom `ScrollView + VStack`). Three
+    // reasons for that architectural choice:
+    //
+    //   1. Drag-and-drop. `BacklogTaskRow` uses `.draggable(_:preview:)`
+    //      and `.dropDestination(for:)` to power drag-to-schedule and
+    //      drag-to-reorder. A SwiftUI `ScrollView` on macOS eats the
+    //      drag gesture before `.draggable` can fire (see the #309 →
+    //      #312 regression); `List`'s gesture system yields to
+    //      `.draggable` children, so both scroll AND drag coexist
+    //      natively inside a bounded-height List.
+    //
+    //   2. Height cap. By living inside a `List` with a fixed
+    //      `.frame(maxHeight:)` on the caller (`body`), the task list
+    //      scrolls internally and never pushes the Timeline card off
+    //      the popover.
+    //
+    //   3. Native scroll UX. Two-finger swipe, trackpad pan, mouse
+    //      wheel, and arrow-key navigation all work out of the box —
+    //      no custom gesture plumbing.
+    //
+    // Every row uses the trio `.listRowInsets(EdgeInsets())`,
+    // `.listRowBackground(Color.clear)`, and
+    // `.listRowSeparator(.hidden)` to strip the default List chrome so
+    // `BacklogTaskRow` / `BacklogTaskEditRow` keep full control over
+    // their own styling exactly as they did inside the old `VStack`.
 
     private var taskList: some View {
-        VStack(spacing: 0) {
+        List {
             if !hasDragged && !activeTasks.isEmpty {
                 dragDiscoveryHint
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
             }
 
             let grouped = backlogService.groupedByContext
@@ -187,48 +222,57 @@ struct BacklogView: View {
                         .padding(.horizontal, DS.Spacing.sm)
                         .padding(.top, DS.Spacing.sm)
                         .padding(.bottom, DS.Spacing.xxs)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
                 }
 
                 ForEach(group.tasks) { task in
-                    if editingTaskId == task.id {
-                        BacklogTaskEditRow(
-                            task: task,
-                            backlogService: backlogService,
-                            onDone: { editingTaskId = nil }
-                        )
-                        .transition(.opacity)
-                    } else {
-                        BacklogTaskRow(
-                            task: task,
-                            isUrgent: isUrgent(task),
-                            isDragging: coordinator?.draggedTask?.taskId == task.id,
-                            canMoveUp: canMoveUp(task),
-                            canMoveDown: canMoveDown(task),
-                            onComplete: {
-                                withAnimation(.easeInOut(duration: 0.3)) {
-                                    backlogService.completeTask(id: task.id)
-                                }
-                            },
-                            onEdit: { editingTaskId = task.id },
-                            onDelete: { onDeleteTask?(task) },
-                            onDragStart: {
-                                coordinator?.beginDrag(payload(for: task))
-                                if !hasDragged { hasDragged = true }
-                            },
-                            onDragEnd: { coordinator?.endDrag() },
-                            onReorderDrop: { dropped in
-                                handleReorderDrop(dropped: dropped, targetId: task.id)
-                            },
-                            onMoveUp: { moveTask(task, by: -1) },
-                            onMoveDown: { moveTask(task, by: +1) },
-                            onMoveToTop: { moveTaskToEdge(task, toTop: true) },
-                            onMoveToBottom: { moveTaskToEdge(task, toTop: false) }
-                        )
-                        .transition(.opacity.combined(with: .move(edge: .leading)))
+                    Group {
+                        if editingTaskId == task.id {
+                            BacklogTaskEditRow(
+                                task: task,
+                                backlogService: backlogService,
+                                onDone: { editingTaskId = nil }
+                            )
+                        } else {
+                            BacklogTaskRow(
+                                task: task,
+                                isUrgent: isUrgent(task),
+                                isDragging: coordinator?.draggedTask?.taskId == task.id,
+                                canMoveUp: canMoveUp(task),
+                                canMoveDown: canMoveDown(task),
+                                onComplete: {
+                                    withAnimation(.easeInOut(duration: 0.3)) {
+                                        backlogService.completeTask(id: task.id)
+                                    }
+                                },
+                                onEdit: { editingTaskId = task.id },
+                                onDelete: { onDeleteTask?(task) },
+                                onDragStart: {
+                                    coordinator?.beginDrag(payload(for: task))
+                                    if !hasDragged { hasDragged = true }
+                                },
+                                onDragEnd: { coordinator?.endDrag() },
+                                onReorderDrop: { dropped in
+                                    handleReorderDrop(dropped: dropped, targetId: task.id)
+                                },
+                                onMoveUp: { moveTask(task, by: -1) },
+                                onMoveDown: { moveTask(task, by: +1) },
+                                onMoveToTop: { moveTaskToEdge(task, toTop: true) },
+                                onMoveToBottom: { moveTaskToEdge(task, toTop: false) }
+                            )
+                        }
                     }
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
                 }
             }
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
         .padding(.horizontal, DS.Spacing.sm)
         .animation(.easeInOut(duration: 0.2), value: activeTasks.map(\.id))
     }
