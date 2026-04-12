@@ -193,6 +193,13 @@ final class OptimizerService {
 
         optimizer.acceptScenario(scenario)
 
+        // Remove old calendar events for tasks being rescheduled
+        for gene in scenario.activeGenes {
+            if reminderService.localEvents.contains(where: { $0.id == gene.eventId }) {
+                reminderService.removeLocalEvent(id: gene.eventId)
+            }
+        }
+
         for (i, gene) in scenario.activeGenes.enumerated() {
             let title: String
             if let override = titleOverride, !override.isEmpty {

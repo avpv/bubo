@@ -93,7 +93,7 @@ struct CommandPalette: View {
             )
 
             guard let backlog = optimizerService.backlogService,
-                  !backlog.pending.isEmpty else {
+                  !backlog.schedulable.isEmpty else {
                 return [focusSuggestion]
             }
 
@@ -103,7 +103,7 @@ struct CommandPalette: View {
             backlogRequest.add(.capTotal(minutesPerDay: minutes))
             pinToSlot(&backlogRequest)
             let taskSuggestion = SmartSuggestion(
-                label: "Fill with tasks (\(backlog.pending.count))",
+                label: "Fill with tasks (\(backlog.schedulable.count))",
                 request: backlogRequest
             )
 
