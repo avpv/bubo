@@ -14,6 +14,9 @@ struct BuboApp: App {
     private let modelContainer: ModelContainer
 
     init() {
+        // Pull any existing iCloud data before services load from UserDefaults.
+        CloudSyncService.shared.performInitialSync()
+
         let container: ModelContainer
         do {
             container = try ModelContainer(for:

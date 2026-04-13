@@ -70,6 +70,10 @@ final class OptimizerService {
     private let persistenceKey = "BuboOptimizerServiceSettings"
     private let preferencesKey = "BuboOptimizerPreferences"
 
+    /// Prevents didSet -> save -> push loop when reloading cloud data.
+    private var isReloadingFromCloud = false
+    private var cloudSyncObserver: Any?
+
     init() {
         let saved = Self.loadSettings()
         self.workingHoursStart = saved.start
@@ -77,6 +81,39 @@ final class OptimizerService {
         if let data = UserDefaults.standard.data(forKey: "BuboOptimizerPreferences"),
            let prefs = try? JSONDecoder().decode(OptimizerPreferences.self, from: data) {
             self.optimizer.preferences = prefs
+        }
+        setupCloudSync()
+    }
+
+    private func setupCloudSync() {
+        cloudSyncObserver = NotificationCenter.default.addObserver(
+            forName: CloudSyncService.didReceiveRemoteChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let key = notification.object as? String else { return }
+            Task { @MainActor [weak self] in
+                self?.handleCloudSync(key: key)
+            }
+        }
+    }
+
+    private func handleCloudSync(key: String) {
+        isReloadingFromCloud = true
+        defer { isReloadingFromCloud = false }
+
+        switch key {
+        case persistenceKey:
+            let saved = Self.loadSettings()
+            workingHoursStart = saved.start
+            workingHoursEnd = saved.end
+        case preferencesKey:
+            if let data = UserDefaults.standard.data(forKey: preferencesKey),
+               let prefs = try? JSONDecoder().decode(OptimizerPreferences.self, from: data) {
+                optimizer.preferences = prefs
+            }
+        default:
+            break
         }
     }
 
@@ -346,15 +383,18 @@ final class OptimizerService {
     }
 
     private func saveSettings() {
+        guard !isReloadingFromCloud else { return }
         let saved = SavedSettings(start: workingHoursStart, end: workingHoursEnd)
         if let data = try? JSONEncoder().encode(saved) {
             UserDefaults.standard.set(data, forKey: persistenceKey)
+            CloudSyncService.shared.push(persistenceKey)
         }
     }
 
     func savePreferences() {
         if let data = try? JSONEncoder().encode(optimizer.preferences) {
             UserDefaults.standard.set(data, forKey: preferencesKey)
+            CloudSyncService.shared.push(preferencesKey)
         }
     }
 

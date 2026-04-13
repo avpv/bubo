@@ -74,11 +74,29 @@ final class EnergyCheckInService {
 
     // MARK: - Init
 
+    private var cloudSyncObserver: Any?
+
     init() {
         loadCheckIns()
         loadLastPromptDate()
         loadPromptHours()
         recomputeCurve()
+        setupCloudSync()
+    }
+
+    private func setupCloudSync() {
+        cloudSyncObserver = NotificationCenter.default.addObserver(
+            forName: CloudSyncService.didReceiveRemoteChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let key = notification.object as? String,
+                  key == "BuboEnergyCheckIns" else { return }
+            Task { @MainActor [weak self] in
+                self?.loadCheckIns()
+                self?.recomputeCurve()
+            }
+        }
     }
 
     // MARK: - Configure
@@ -279,6 +297,7 @@ final class EnergyCheckInService {
     private func saveCheckIns() {
         guard let data = try? JSONEncoder().encode(checkIns) else { return }
         UserDefaults.standard.set(data, forKey: checkInKey)
+        CloudSyncService.shared.push(checkInKey)
     }
 
     private func loadLastPromptDate() {

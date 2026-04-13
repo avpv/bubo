@@ -17,9 +17,26 @@ final class BacklogService {
     private(set) var tasks: [BacklogTask] = []
     private let modelContainer: ModelContainer
 
+    private var cloudSyncObserver: Any?
+
     init(modelContainer: ModelContainer) {
         self.modelContainer = modelContainer
         loadTasks()
+        setupCloudSync()
+    }
+
+    private func setupCloudSync() {
+        cloudSyncObserver = NotificationCenter.default.addObserver(
+            forName: CloudSyncService.didReceiveRemoteChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let key = notification.object as? String,
+                  key == "BuboBacklogTasks" else { return }
+            Task { @MainActor [weak self] in
+                self?.loadTasks()
+            }
+        }
     }
 
     // MARK: - Queries
@@ -242,5 +259,6 @@ final class BacklogService {
     private func saveTasks() {
         guard let data = try? JSONEncoder().encode(tasks) else { return }
         UserDefaults.standard.set(data, forKey: persistenceKey)
+        CloudSyncService.shared.push(persistenceKey)
     }
 }
