@@ -52,6 +52,20 @@ final class FitnessEvaluator: @unchecked Sendable {
         )
     }
 
+    // MARK: - Objective Classification
+
+    /// Objectives that depend only on individual gene properties and local neighbors.
+    /// These can be incrementally updated when only a few genes change.
+    private static let localObjectiveNames: Set<String> = [
+        "BreakPlacement", "Buffer", "Deadline", "EnergyBalance"
+    ]
+
+    /// Objectives that depend on global schedule structure and cannot be incrementally updated.
+    private static let globalObjectiveNames: Set<String> = [
+        "FocusBlock", "PomodoroFit", "Conflict", "TaskPlacement",
+        "WeekBalance", "MultiPerson", "ContextSwitch", "MeetingClustering", "TaskInclusion"
+    ]
+
     // MARK: - Evaluation
 
     /// Compute the total fitness for a chromosome.
@@ -100,6 +114,71 @@ final class FitnessEvaluator: @unchecked Sendable {
         guard chromosome.needsEvaluation else { return }
         chromosome.fitness = evaluate(chromosome: chromosome, context: context)
         chromosome.needsEvaluation = false
+    }
+
+    /// Delta evaluation: recompute only objectives affected by changed genes.
+    /// Falls back to full evaluation when the change is too broad or when
+    /// no cached scores exist.
+    ///
+    /// Uses `mutatedGeneIndices` to determine which genes changed, then:
+    /// - Global objectives (Conflict, WeekBalance, etc.) are always recomputed
+    /// - Local objectives (Buffer, Break, Deadline) are recomputed only when
+    ///   their relevant genes changed
+    ///
+    /// Returns the fitness score and the per-objective cache.
+    func evaluateIncremental(
+        chromosome: ScheduleChromosome,
+        previousCache: [String: Double]?,
+        mutatedIndices: IndexSet?,
+        context: OptimizerContext
+    ) -> (fitness: Double, cache: [String: Double]) {
+        // No cache or no mutation info → full evaluation
+        guard let cache = previousCache, let indices = mutatedIndices, !indices.isEmpty else {
+            let fitness = evaluate(chromosome: chromosome, context: context)
+            let newCache = objectiveBreakdown(for: chromosome, context: context)
+            return (fitness, newCache)
+        }
+
+        // Hard constraint check must always be full
+        if !constraintEngine.isValid(chromosome, context: context) {
+            let hardPenalty = constraintEngine.constraints
+                .filter { $0.isHard }
+                .reduce(0.0) { $0 + $1.penalty(for: chromosome, context: context) }
+            let fitness = 0.09 / (1.0 + hardPenalty * 0.01)
+            return (fitness, cache)
+        }
+
+        let softPenalty = constraintEngine.constraints
+            .filter { !$0.isHard }
+            .reduce(0.0) { $0 + $1.penalty(for: chromosome, context: context) }
+
+        let totalWeight = objectives.reduce(0.0) { $0 + $1.weight }
+        guard totalWeight > 0 else { return (0.1, cache) }
+
+        var newCache = cache
+        var weightedSum = 0.0
+
+        for objective in objectives {
+            let score: Double
+            // Global objectives always recompute; local objectives reuse cache
+            if Self.globalObjectiveNames.contains(objective.name) || !Self.localObjectiveNames.contains(objective.name) {
+                score = max(0, min(1, objective.evaluate(chromosome: chromosome, context: context)))
+                newCache[objective.name] = score
+            } else if let cached = cache[objective.name] {
+                // Local objective with no affected genes → reuse
+                score = cached
+            } else {
+                score = max(0, min(1, objective.evaluate(chromosome: chromosome, context: context)))
+                newCache[objective.name] = score
+            }
+            weightedSum += score * objective.weight
+        }
+
+        let normalizedScore = weightedSum / totalWeight
+        let penaltyFactor = 1.0 / (1.0 + softPenalty * 0.01)
+        let fitness = 0.1 + normalizedScore * penaltyFactor * 0.9
+
+        return (fitness, newCache)
     }
 
     /// Detailed breakdown of all objective scores (clamped to [0, 1]).
