@@ -34,6 +34,19 @@ struct IslandConfiguration: Sendable {
     /// and relaxes when islands are still diverging productively.
     var adaptiveMigration: Bool
 
+    /// Fast configs: 2 islands, frequent migration, no diversification.
+    /// Adds modest exploration benefit without significant overhead.
+    static let quick = IslandConfiguration(
+        islandCount: 2,
+        migrationInterval: 10,
+        migrationSize: 2,
+        topology: .ring,
+        emigrantSelection: .best,
+        immigrantReplacement: .worst,
+        diversifyIslands: false,
+        adaptiveMigration: false
+    )
+
     static let `default` = IslandConfiguration(
         islandCount: 4,
         migrationInterval: 20,

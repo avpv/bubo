@@ -29,13 +29,19 @@ final class BuboOptimizer {
     // MARK: - Configuration
 
     var gaConfig: GAConfiguration = .default
+    var islandConfig: IslandConfiguration = .default
     var preferences: OptimizerPreferences = OptimizerPreferences()
 
     // MARK: - Full Optimization (Async)
 
     /// Run a full optimization for the given context.
+    /// Uses island model GA with multiple parallel populations and periodic migration.
     /// The GA runs on a background thread; progress updates are dispatched to main.
-    func optimize(context: OptimizerContext, overrideConfig: GAConfiguration? = nil) async -> OptimizerResult {
+    func optimize(
+        context: OptimizerContext,
+        overrideConfig: GAConfiguration? = nil,
+        overrideIslandConfig: IslandConfiguration? = nil
+    ) async -> OptimizerResult {
         isOptimizing = true
         defer { isOptimizing = false }
 
@@ -55,91 +61,16 @@ final class BuboOptimizer {
 
         let evaluator = FitnessEvaluator.standard(preferences: prefs)
         let config = overrideConfig ?? gaConfig
+        let capturedIslandConfig = overrideIslandConfig ?? islandConfig
         let scenGen = scenarioGenerator
 
-        // Run GA on background thread
-        let (population, convergenceGen, duration) = await Task.detached(priority: .userInitiated) {
-            let startTime = Date()
-
-            let ga = GeneticAlgorithm<ScheduleChromosome>(
-                config: config,
-                context: adjustedContext,
-                evaluate: { chromosome in
-                    evaluator.evaluateAndAssign(&chromosome, context: adjustedContext)
-                }
-            )
-
-            let pop = ga.run()
-            let elapsed = Date().timeIntervalSince(startTime)
-            return (pop, ga.convergenceGeneration, elapsed)
-        }.value
-
-        // Back on main thread — generate scenarios and update state
-        let scenarios = scenGen.generateScenarios(
-            from: population,
-            context: adjustedContext,
-            evaluator: evaluator
-        )
-
-        let populationCount = population.prefix(10).count
-        let metadata = OptimizationMetadata(
-            generations: convergenceGen,
-            totalDuration: duration,
-            bestFitness: population.first?.fitness ?? 0,
-            averageFitness: populationCount > 0
-                ? population.prefix(10).reduce(0) { $0 + $1.fitness } / Double(populationCount)
-                : 0,
-            convergenceGeneration: convergenceGen
-        )
-
-        let result = OptimizerResult(scenarios: scenarios, metadata: metadata)
-        lastResult = result
-
-        if let best = scenarios.first {
-            currentSchedule = best.genes
-        }
-
-        return result
-    }
-
-    // MARK: - Island Model Optimization
-
-    /// Run a full island model optimization for the given context.
-    /// Uses multiple parallel populations with periodic migration for better
-    /// exploration of the solution space. Ideal for weekly planning.
-    ///
-    /// The island model is **opt-in** — call this method explicitly when you want
-    /// multi-population search. The standard `optimize()` always uses single-pop GA.
-    func optimizeWithIslands(
-        context: OptimizerContext,
-        islandConfig: IslandConfiguration = .thorough,
-        baseGAConfig: GAConfiguration = .island
-    ) async -> OptimizerResult {
-        isOptimizing = true
-        defer { isOptimizing = false }
-
-        var prefs = context.preferences
-        preferenceLearner.applyToPreferences(&prefs)
-
-        let adjustedContext = OptimizerContext(
-            fixedEvents: context.fixedEvents,
-            movableEvents: context.movableEvents,
-            workingHours: context.workingHours,
-            planningHorizon: context.planningHorizon,
-            preferences: prefs,
-            participantAvailability: context.participantAvailability,
-            calendar: context.calendar
-        )
-
-        let evaluator = FitnessEvaluator.standard(preferences: prefs)
-        let scenGen = scenarioGenerator
-
+        // Run island model GA on background thread
         let (population, convergenceGen, duration) = await Task.detached(priority: .userInitiated) {
             let startTime = Date()
 
             let islandGA = IslandModelGA<ScheduleChromosome>(
-                islandConfig: islandConfig,
-                baseConfig: baseGAConfig,
+                islandConfig: capturedIslandConfig,
+                baseConfig: config,
                 context: adjustedContext,
                 evaluate: { chromosome in
                     evaluator.evaluateAndAssign(&chromosome, context: adjustedContext)
@@ -151,6 +82,7 @@ final class BuboOptimizer {
             return (pop, islandGA.convergenceGeneration, elapsed)
         }.value
 
+        // Back on main thread — generate scenarios and update state
         let scenarios = scenGen.generateScenarios(
             from: population,
             context: adjustedContext,
@@ -197,7 +129,7 @@ final class BuboOptimizer {
             preferences: preferences
         )
 
-        return await optimize(context: context, overrideConfig: .quick)
+        return await optimize(context: context, overrideConfig: .quick, overrideIslandConfig: .quick)
     }
 
     // MARK: - Weekly Optimize
@@ -582,7 +514,7 @@ final class BuboOptimizer {
             preferences: prefs
         )
 
-        return await optimize(context: context, overrideConfig: .quick)
+        return await optimize(context: context, overrideConfig: .quick, overrideIslandConfig: .quick)
     }
 
     // MARK: - Week Balancing (#9)
