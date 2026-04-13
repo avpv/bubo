@@ -96,6 +96,34 @@ struct PomodoroSequenceChromosome: Chromosome, Sendable {
             }
         }
     }
+
+    // MARK: - Genotypic Distance
+
+    /// Kendall tau distance normalized to [0, 1].
+    /// Counts the fraction of pairwise inversions between two permutations.
+    func distance(to other: PomodoroSequenceChromosome) -> Double {
+        let n = sequence.count
+        guard n > 1 else { return 0 }
+
+        // Build position lookup for `other`
+        var posInOther = [Int: Int]()
+        for (i, val) in other.sequence.enumerated() {
+            posInOther[val] = i
+        }
+
+        var inversions = 0
+        let totalPairs = n * (n - 1) / 2
+
+        for i in 0..<n {
+            for j in (i + 1)..<n {
+                guard let pi = posInOther[sequence[i]],
+                      let pj = posInOther[sequence[j]] else { continue }
+                if pi > pj { inversions += 1 }
+            }
+        }
+
+        return Double(inversions) / Double(max(1, totalPairs))
+    }
 }
 
 // MARK: - Pomodoro Sequence Evaluator

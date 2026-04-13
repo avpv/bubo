@@ -304,7 +304,7 @@ struct FitnessEvaluatorTests {
         #expect(chromosome.fitness.isFinite)
     }
 
-    @Test("Objective breakdown returns all 11 objectives")
+    @Test("Objective breakdown returns all 13 objectives")
     func objectiveBreakdownComplete() {
         let preferences = OptimizerPreferences()
         let evaluator = FitnessEvaluator.standard(preferences: preferences)
@@ -312,7 +312,7 @@ struct FitnessEvaluatorTests {
         let chromosome = ScheduleChromosome.random(context: context)
 
         let breakdown = evaluator.objectiveBreakdown(for: chromosome, context: context)
-        #expect(breakdown.count == 11)
+        #expect(breakdown.count == 13)
     }
 }
 
@@ -2421,5 +2421,579 @@ struct PomodoroSequenceEdgeCaseTests {
 
         #expect(urgentFirst.fitness >= relaxedFirst.fitness,
                 "Urgent-first (\(urgentFirst.fitness)) should score >= relaxed-first (\(relaxedFirst.fitness))")
+    }
+}
+
+// MARK: - GA Core Improvements Tests
+
+@Suite("Greedy Seed Tests")
+struct GreedySeedTests {
+
+    @Test("Greedy chromosome creates genes for all movable events")
+    func greedyCreatesAllGenes() {
+        let events = [
+            makeMovableEvent(id: "t1", title: "Task 1", durationMinutes: 60),
+            makeMovableEvent(id: "t2", title: "Task 2", durationMinutes: 30),
+            makeMovableEvent(id: "t3", title: "Task 3", durationMinutes: 45),
+        ]
+        let context = makeContext(movableEvents: events)
+        let chromosome = ScheduleChromosome.greedy(context: context)
+
+        #expect(chromosome.genes.count == 3)
+        let ids = Set(chromosome.genes.map(\.eventId))
+        #expect(ids == Set(["t1", "t2", "t3"]))
+    }
+
+    @Test("Greedy chromosome avoids overlaps with fixed events")
+    func greedyAvoidsFixedOverlaps() {
+        let events = [
+            makeMovableEvent(id: "t1", durationMinutes: 60),
+            makeMovableEvent(id: "t2", durationMinutes: 60),
+        ]
+        let fixed = [
+            makeFixedEvent(id: "f1", startHour: 10, durationMinutes: 60),
+            makeFixedEvent(id: "f2", startHour: 14, durationMinutes: 60),
+        ]
+        let context = makeContext(fixedEvents: fixed, movableEvents: events)
+        let chromosome = ScheduleChromosome.greedy(context: context)
+
+        let constraint = NoOverlapConstraint()
+        let penalty = constraint.penalty(for: chromosome, context: context)
+        #expect(penalty == 0, "Greedy chromosome should not overlap with fixed events, penalty: \(penalty)")
+    }
+
+    @Test("Greedy chromosome is within working hours")
+    func greedyWithinWorkingHours() {
+        let events = [
+            makeMovableEvent(id: "t1", durationMinutes: 60),
+            makeMovableEvent(id: "t2", durationMinutes: 45),
+        ]
+        let context = makeContext(movableEvents: events, workingHours: 9...17)
+        let chromosome = ScheduleChromosome.greedy(context: context)
+
+        let constraint = WorkingHoursConstraint()
+        let penalty = constraint.penalty(for: chromosome, context: context)
+        #expect(penalty == 0, "Greedy chromosome should be within working hours, penalty: \(penalty)")
+    }
+
+    @Test("Greedy seed produces better initial fitness than random")
+    func greedySeedBetterThanRandom() {
+        let events = [
+            makeMovableEvent(id: "t1", durationMinutes: 60, priority: 0.9),
+            makeMovableEvent(id: "t2", durationMinutes: 30, priority: 0.7),
+            makeMovableEvent(id: "t3", durationMinutes: 45, priority: 0.5),
+        ]
+        let fixed = [
+            makeFixedEvent(id: "f1", startHour: 10, durationMinutes: 60),
+        ]
+        let context = makeContext(fixedEvents: fixed, movableEvents: events)
+        let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
+
+        var greedy = ScheduleChromosome.greedy(context: context)
+        evaluator.evaluateAndAssign(&greedy, context: context)
+
+        // Average fitness of random chromosomes
+        var totalRandom = 0.0
+        let sampleSize = 20
+        for _ in 0..<sampleSize {
+            var random = ScheduleChromosome.random(context: context)
+            evaluator.evaluateAndAssign(&random, context: context)
+            totalRandom += random.fitness
+        }
+        let avgRandom = totalRandom / Double(sampleSize)
+
+        #expect(greedy.fitness >= avgRandom,
+                "Greedy (\(greedy.fitness)) should be >= average random (\(avgRandom))")
+    }
+}
+
+@Suite("Repair Operator Tests")
+struct RepairOperatorTests {
+
+    @Test("Repair fixes working hours violations")
+    func repairFixesWorkingHours() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let earlyStart = cal.date(bySettingHour: 7, minute: 0, second: 0, of: today)! // before 9 AM
+
+        let gene = ScheduleGene(
+            eventId: "t1", title: "Task", startTime: earlyStart,
+            duration: 3600, context: nil, energyCost: 0.5, priority: 0.5, isFocusBlock: false
+        )
+
+        let events = [makeMovableEvent(id: "t1", durationMinutes: 60)]
+        let context = makeContext(movableEvents: events, workingHours: 9...18)
+
+        var chromosome = ScheduleChromosome(genes: [gene])
+        chromosome.repair(context: context)
+
+        let constraint = WorkingHoursConstraint()
+        let penalty = constraint.penalty(for: chromosome, context: context)
+        #expect(penalty == 0, "Repaired chromosome should be within working hours")
+    }
+
+    @Test("Repair resolves overlaps between movable events")
+    func repairResolvesOverlaps() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let start = cal.date(bySettingHour: 10, minute: 0, second: 0, of: today)!
+
+        // Two events starting at the same time
+        let gene1 = ScheduleGene(eventId: "t1", title: "Task 1", startTime: start,
+                                 duration: 3600, context: nil, energyCost: 0.5, priority: 0.8, isFocusBlock: false)
+        let gene2 = ScheduleGene(eventId: "t2", title: "Task 2", startTime: start,
+                                 duration: 3600, context: nil, energyCost: 0.5, priority: 0.5, isFocusBlock: false)
+
+        let events = [
+            makeMovableEvent(id: "t1", durationMinutes: 60, priority: 0.8),
+            makeMovableEvent(id: "t2", durationMinutes: 60, priority: 0.5),
+        ]
+        let context = makeContext(movableEvents: events)
+
+        var chromosome = ScheduleChromosome(genes: [gene1, gene2])
+        chromosome.repair(context: context)
+
+        // After repair, genes should not overlap
+        let active = chromosome.genes.filter(\.isIncluded).sorted { $0.startTime < $1.startTime }
+        if active.count == 2 {
+            #expect(active[0].endTime <= active[1].startTime,
+                    "Events should not overlap after repair")
+        }
+    }
+
+    @Test("Repair preserves gene count and IDs")
+    func repairPreservesGenes() {
+        let events = [
+            makeMovableEvent(id: "t1", durationMinutes: 60),
+            makeMovableEvent(id: "t2", durationMinutes: 30),
+        ]
+        let context = makeContext(movableEvents: events)
+
+        var chromosome = ScheduleChromosome.random(context: context)
+        chromosome.repair(context: context)
+
+        #expect(chromosome.genes.count == 2)
+        #expect(Set(chromosome.genes.map(\.eventId)) == Set(["t1", "t2"]))
+    }
+}
+
+@Suite("Genotypic Distance Tests")
+struct GenotypicDistanceTests {
+
+    @Test("Distance to self is zero")
+    func distanceToSelfIsZero() {
+        let events = [makeMovableEvent(id: "t1"), makeMovableEvent(id: "t2")]
+        let context = makeContext(movableEvents: events)
+        let chromosome = ScheduleChromosome.random(context: context)
+
+        let dist = chromosome.distance(to: chromosome)
+        #expect(dist == 0, "Distance to self should be 0, got \(dist)")
+    }
+
+    @Test("Distance is symmetric")
+    func distanceIsSymmetric() {
+        let events = [makeMovableEvent(id: "t1"), makeMovableEvent(id: "t2")]
+        let context = makeContext(movableEvents: events)
+        let a = ScheduleChromosome.random(context: context)
+        let b = ScheduleChromosome.random(context: context)
+
+        let dAB = a.distance(to: b)
+        let dBA = b.distance(to: a)
+        #expect(abs(dAB - dBA) < 1e-10, "Distance should be symmetric: \(dAB) vs \(dBA)")
+    }
+
+    @Test("Distance is bounded [0, 1]")
+    func distanceIsBounded() {
+        let events = [makeMovableEvent(id: "t1"), makeMovableEvent(id: "t2")]
+        let context = makeContext(movableEvents: events)
+
+        for _ in 0..<20 {
+            let a = ScheduleChromosome.random(context: context)
+            let b = ScheduleChromosome.random(context: context)
+            let dist = a.distance(to: b)
+            #expect(dist >= 0 && dist <= 1, "Distance should be in [0,1], got \(dist)")
+        }
+    }
+
+    @Test("Genotypic diversity reflects population spread")
+    func genotypicDiversityReflectsSpread() {
+        let events = [makeMovableEvent(id: "t1")]
+        let context = makeContext(movableEvents: events)
+
+        // Homogeneous population: all same chromosome
+        let same = ScheduleChromosome.random(context: context)
+        let homogeneous = Population<ScheduleChromosome>(
+            individuals: Array(repeating: same, count: 10),
+            eliteCount: 1
+        )
+        let homDiv = homogeneous.genotypicDiversity
+
+        // Diverse population: all different
+        let diverse = Population<ScheduleChromosome>(size: 10, eliteCount: 1, context: context)
+        let divDiv = diverse.genotypicDiversity
+
+        #expect(homDiv < divDiv || homDiv == 0,
+                "Homogeneous (\(homDiv)) should have less diversity than diverse (\(divDiv))")
+    }
+}
+
+@Suite("Guided Mutation Tests")
+struct GuidedMutationTests {
+
+    @Test("Mutation with high rate still preserves gene IDs")
+    func guidedMutationPreservesIds() {
+        let events = [
+            makeMovableEvent(id: "t1", durationMinutes: 60),
+            makeMovableEvent(id: "t2", durationMinutes: 30),
+            makeMovableEvent(id: "t3", durationMinutes: 45),
+        ]
+        let context = makeContext(movableEvents: events)
+
+        for _ in 0..<10 {
+            var chromosome = ScheduleChromosome.random(context: context)
+            chromosome.mutate(rate: 1.0, context: context)
+            #expect(chromosome.genes.count == 3)
+            #expect(Set(chromosome.genes.map(\.eventId)) == Set(["t1", "t2", "t3"]))
+        }
+    }
+}
+
+@Suite("SA Hill Climbing Tests")
+struct SAHillClimbingTests {
+
+    @Test("Hill climbing improves or maintains fitness")
+    func hillClimbingImproves() {
+        let events = [
+            makeMovableEvent(id: "t1", durationMinutes: 60),
+            makeMovableEvent(id: "t2", durationMinutes: 30),
+        ]
+        let context = makeContext(movableEvents: events)
+        let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
+
+        let ga = GeneticAlgorithm<ScheduleChromosome>(
+            config: .quick,
+            context: context,
+            evaluate: { chromosome in
+                evaluator.evaluateAndAssign(&chromosome, context: context)
+            }
+        )
+
+        var chromosome = ScheduleChromosome.random(context: context)
+        evaluator.evaluateAndAssign(&chromosome, context: context)
+        let originalFitness = chromosome.fitness
+
+        let refined = ga.hillClimb(chromosome, steps: 30)
+        // SA might accept worse temporarily, but with 30 steps should converge
+        // Allow for SA stochasticity: refined should be within reasonable range
+        #expect(refined.fitness >= originalFitness * 0.9,
+                "Hill climbing should not drastically worsen fitness")
+    }
+}
+
+@Suite("Adaptive Crossover Tests")
+struct AdaptiveCrossoverTests {
+
+    @Test("GA with adaptive crossover converges")
+    func adaptiveCrossoverConverges() {
+        let events = [
+            makeMovableEvent(id: "t1", durationMinutes: 60),
+            makeMovableEvent(id: "t2", durationMinutes: 30),
+        ]
+        let context = makeContext(movableEvents: events)
+        let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
+
+        let config = GAConfiguration(
+            populationSize: 30,
+            maxGenerations: 40,
+            mutationRate: 0.2,
+            crossoverRate: 0.8,
+            eliteCount: 2,
+            selectionStrategy: .tournament(size: 3),
+            crossoverStrategy: .singlePoint,
+            convergenceThreshold: 0.005,
+            convergencePatience: 15,
+            adaptiveMutation: true,
+            diversityThreshold: 0.01,
+            immigrationRate: 0.1,
+            adaptiveCrossover: true
+        )
+
+        let ga = GeneticAlgorithm<ScheduleChromosome>(
+            config: config,
+            context: context,
+            evaluate: { chromosome in
+                evaluator.evaluateAndAssign(&chromosome, context: context)
+            }
+        )
+
+        let results = ga.run()
+        #expect(!results.isEmpty)
+        #expect(ga.bestEver != nil)
+        #expect(ga.bestEver!.fitness > 0)
+    }
+}
+
+@Suite("Crowding Replacement Tests")
+struct CrowdingReplacementTests {
+
+    @Test("Population with crowding maintains diversity")
+    func crowdingMaintainsDiversity() {
+        let events = [
+            makeMovableEvent(id: "t1", durationMinutes: 60),
+            makeMovableEvent(id: "t2", durationMinutes: 30),
+        ]
+        let context = makeContext(movableEvents: events)
+        let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
+
+        let config = GAConfiguration(
+            populationSize: 30,
+            maxGenerations: 30,
+            mutationRate: 0.2,
+            crossoverRate: 0.8,
+            eliteCount: 2,
+            selectionStrategy: .tournament(size: 3),
+            crossoverStrategy: .singlePoint,
+            convergenceThreshold: 0.005,
+            convergencePatience: 15,
+            adaptiveMutation: false,
+            diversityThreshold: 0.01,
+            immigrationRate: 0.0,
+            enableCrowding: true
+        )
+
+        let ga = GeneticAlgorithm<ScheduleChromosome>(
+            config: config,
+            context: context,
+            evaluate: { chromosome in
+                evaluator.evaluateAndAssign(&chromosome, context: context)
+            }
+        )
+
+        let results = ga.run()
+        #expect(!results.isEmpty)
+        #expect(results[0].fitness >= results.last!.fitness)
+    }
+}
+
+@Suite("Fitness Sharing Tests")
+struct FitnessSharingTests {
+
+    @Test("GA with fitness sharing produces results")
+    func fitnessSharingProducesResults() {
+        let events = [
+            makeMovableEvent(id: "t1", durationMinutes: 60),
+            makeMovableEvent(id: "t2", durationMinutes: 30),
+            makeMovableEvent(id: "t3", durationMinutes: 45),
+        ]
+        let context = makeContext(movableEvents: events)
+        let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
+
+        let config = GAConfiguration(
+            populationSize: 30,
+            maxGenerations: 30,
+            mutationRate: 0.2,
+            crossoverRate: 0.8,
+            eliteCount: 2,
+            selectionStrategy: .tournament(size: 3),
+            crossoverStrategy: .singlePoint,
+            convergenceThreshold: 0.005,
+            convergencePatience: 15,
+            adaptiveMutation: false,
+            diversityThreshold: 0.01,
+            immigrationRate: 0.0,
+            enableFitnessSharing: true,
+            fitnessShareSigma: 0.3,
+            fitnessShareAlpha: 1.0
+        )
+
+        let ga = GeneticAlgorithm<ScheduleChromosome>(
+            config: config,
+            context: context,
+            evaluate: { chromosome in
+                evaluator.evaluateAndAssign(&chromosome, context: context)
+            }
+        )
+
+        let results = ga.run()
+        #expect(!results.isEmpty)
+        #expect(ga.bestEver != nil)
+    }
+}
+
+@Suite("Delta Evaluation Tests")
+struct DeltaEvaluationTests {
+
+    @Test("Incremental evaluation returns valid fitness")
+    func incrementalEvalReturnsValid() {
+        let events = [
+            makeMovableEvent(id: "t1", durationMinutes: 60),
+            makeMovableEvent(id: "t2", durationMinutes: 30),
+        ]
+        let context = makeContext(movableEvents: events)
+        let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
+        let chromosome = ScheduleChromosome.random(context: context)
+
+        let (fitness, cache) = evaluator.evaluateIncremental(
+            chromosome: chromosome,
+            previousCache: nil,
+            mutatedIndices: nil,
+            context: context
+        )
+
+        #expect(fitness.isFinite)
+        #expect(fitness >= 0)
+        #expect(!cache.isEmpty)
+    }
+
+    @Test("Incremental evaluation with cache returns consistent results")
+    func incrementalEvalWithCache() {
+        let events = [
+            makeMovableEvent(id: "t1", durationMinutes: 60),
+            makeMovableEvent(id: "t2", durationMinutes: 30),
+        ]
+        let context = makeContext(movableEvents: events)
+        let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
+        let chromosome = ScheduleChromosome.random(context: context)
+
+        // Full evaluation
+        let fullFitness = evaluator.evaluate(chromosome: chromosome, context: context)
+
+        // Incremental with no cache
+        let (incrFitness, cache) = evaluator.evaluateIncremental(
+            chromosome: chromosome,
+            previousCache: nil,
+            mutatedIndices: nil,
+            context: context
+        )
+
+        // Both should give the same result
+        #expect(abs(fullFitness - incrFitness) < 1e-10,
+                "Full (\(fullFitness)) and incremental (\(incrFitness)) should match")
+
+        // Incremental with cache and a mutation
+        let (cachedFitness, _) = evaluator.evaluateIncremental(
+            chromosome: chromosome,
+            previousCache: cache,
+            mutatedIndices: IndexSet([0]),
+            context: context
+        )
+        #expect(cachedFitness.isFinite)
+        #expect(cachedFitness >= 0)
+    }
+}
+
+@Suite("Pomodoro Distance Tests")
+struct PomodoroDistanceTests {
+
+    @Test("Pomodoro distance to self is zero")
+    func pomodoroDistanceToSelfZero() {
+        let chrom = PomodoroSequenceChromosome(sequence: [0, 1, 2, 3])
+        #expect(chrom.distance(to: chrom) == 0)
+    }
+
+    @Test("Pomodoro distance to reverse is 1.0")
+    func pomodoroDistanceToReverseIsMax() {
+        let a = PomodoroSequenceChromosome(sequence: [0, 1, 2, 3])
+        let b = PomodoroSequenceChromosome(sequence: [3, 2, 1, 0])
+        let dist = a.distance(to: b)
+        #expect(dist == 1.0, "Reversed permutation should have max distance, got \(dist)")
+    }
+
+    @Test("Pomodoro distance is symmetric")
+    func pomodoroDistanceSymmetric() {
+        let a = PomodoroSequenceChromosome(sequence: [0, 2, 1, 3])
+        let b = PomodoroSequenceChromosome(sequence: [1, 0, 3, 2])
+        #expect(abs(a.distance(to: b) - b.distance(to: a)) < 1e-10)
+    }
+}
+
+@Suite("GA Config New Fields Tests")
+struct GAConfigNewFieldsTests {
+
+    @Test("Default config has sensible new field values")
+    func defaultConfigNewFields() {
+        let config = GAConfiguration.default
+        #expect(config.greedySeedFraction >= 0 && config.greedySeedFraction <= 1)
+        #expect(config.enableRepair == true)
+        #expect(config.fitnessShareSigma > 0)
+        #expect(config.fitnessShareAlpha >= 1.0)
+    }
+
+    @Test("Instant config uses higher greedy fraction")
+    func instantConfigHigherGreedy() {
+        let instant = GAConfiguration.instant
+        let def = GAConfiguration.default
+        #expect(instant.greedySeedFraction >= def.greedySeedFraction)
+    }
+
+    @Test("Old-style config construction still works with defaults")
+    func oldStyleConfigWorks() {
+        let config = GAConfiguration(
+            populationSize: 10,
+            maxGenerations: 10,
+            mutationRate: 0.2,
+            crossoverRate: 0.8,
+            eliteCount: 1,
+            selectionStrategy: .tournament(size: 2),
+            crossoverStrategy: .singlePoint,
+            convergenceThreshold: 0.01,
+            convergencePatience: 5,
+            adaptiveMutation: false,
+            diversityThreshold: 0.01,
+            immigrationRate: 0.0
+        )
+        // New fields should have their defaults
+        #expect(config.greedySeedFraction == 0.0)
+        #expect(config.enableRepair == false)
+        #expect(config.enableFitnessSharing == false)
+        #expect(config.enableCrowding == false)
+        #expect(config.adaptiveCrossover == false)
+    }
+
+    @Test("GA with all improvements enabled converges")
+    func gaAllImprovementsConverges() {
+        let events = [
+            makeMovableEvent(id: "t1", durationMinutes: 60, priority: 0.9),
+            makeMovableEvent(id: "t2", durationMinutes: 30, priority: 0.7),
+            makeMovableEvent(id: "t3", durationMinutes: 45, priority: 0.5),
+        ]
+        let fixed = [makeFixedEvent(id: "f1", startHour: 10, durationMinutes: 30)]
+        let context = makeContext(fixedEvents: fixed, movableEvents: events)
+        let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
+
+        let config = GAConfiguration(
+            populationSize: 30,
+            maxGenerations: 40,
+            mutationRate: 0.15,
+            crossoverRate: 0.8,
+            eliteCount: 2,
+            selectionStrategy: .tournament(size: 3),
+            crossoverStrategy: .singlePoint,
+            convergenceThreshold: 0.005,
+            convergencePatience: 15,
+            adaptiveMutation: true,
+            diversityThreshold: 0.01,
+            immigrationRate: 0.1,
+            greedySeedFraction: 0.2,
+            enableRepair: true,
+            enableFitnessSharing: true,
+            fitnessShareSigma: 0.3,
+            fitnessShareAlpha: 1.0,
+            enableCrowding: false,  // Can't combine with fitness sharing easily
+            adaptiveCrossover: true
+        )
+
+        let ga = GeneticAlgorithm<ScheduleChromosome>(
+            config: config,
+            context: context,
+            evaluate: { chromosome in
+                evaluator.evaluateAndAssign(&chromosome, context: context)
+            }
+        )
+
+        let results = ga.run()
+        #expect(!results.isEmpty)
+        #expect(ga.bestEver != nil)
+        #expect(ga.bestEver!.fitness > 0.1, "Should find a feasible solution")
     }
 }

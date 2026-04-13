@@ -220,13 +220,30 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
 
         // 1. Create islands with (optionally) diversified configurations.
         //    Each island gets its own GeneticAlgorithm instance for evolveOneGeneration.
+        //    Greedy seeds are distributed per-island based on each island's config.
         let islandConfigs = makeIslandConfigs()
         let islands = islandConfigs.map { config -> Island<C> in
-            var pop = Population<C>(
-                size: config.populationSize,
-                eliteCount: config.eliteCount,
-                context: context
-            )
+            let greedyCount = max(0, Int(Double(config.populationSize) * config.greedySeedFraction))
+            let randomCount = config.populationSize - greedyCount
+
+            var individuals: [C] = []
+            for i in 0..<greedyCount {
+                var ind = C.greedy(context: context)
+                if i > 0 { ind.mutate(rate: 0.1 + Double(i) * 0.05, context: context) }
+                individuals.append(ind)
+            }
+            for _ in 0..<randomCount {
+                individuals.append(C.random(context: context))
+            }
+
+            // Repair initial population if enabled
+            if config.enableRepair {
+                for i in individuals.indices {
+                    individuals[i].repair(context: context)
+                }
+            }
+
+            var pop = Population<C>(individuals: individuals, eliteCount: config.eliteCount)
             pop.evaluateAll(using: evaluate)
             let ga = GeneticAlgorithm<C>(
                 config: config,
@@ -594,11 +611,11 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
 
     /// Create per-island GA configurations. When diversification is enabled,
     /// islands get varied parameters to explore different regions of the search space:
-    /// - Island 0: base config (exploitation-focused)
-    /// - Island 1: high mutation (exploration-focused)
-    /// - Island 2: rank selection (less greedy selection pressure)
-    /// - Island 3: uniform crossover (more gene mixing)
-    /// - Islands 4+: deterministic variations
+    /// - Island 0: exploitation — base config with repair and greedy seeds
+    /// - Island 1: exploration — high mutation, crowding replacement
+    /// - Island 2: rank selection — less greedy, fitness sharing for niching
+    /// - Island 3: uniform crossover — more gene mixing, adaptive crossover
+    /// - Islands 4+: deterministic variations with mixed features
     private func makeIslandConfigs() -> [GAConfiguration] {
         guard islandConfig.diversifyIslands else {
             return Array(repeating: baseConfig, count: islandConfig.islandCount)
@@ -610,38 +627,54 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             var config = baseConfig
             switch i {
             case 0:
-                // Island 0: exploitation — base config, lower mutation
-                break
+                // Island 0: exploitation — base config, greedy seeds, repair
+                config.greedySeedFraction = 0.2
+                config.enableRepair = true
+                config.enableCrowding = false
+                config.enableFitnessSharing = false
 
             case 1:
-                // Island 1: exploration — higher mutation, smaller tournament
+                // Island 1: exploration — higher mutation, crowding for diversity
                 config.mutationRate = min(0.4, baseConfig.mutationRate * 2.5)
                 config.selectionStrategy = .tournament(size: 2)
                 config.adaptiveMutation = false
+                config.enableCrowding = true
+                config.enableFitnessSharing = false
+                config.greedySeedFraction = 0.0
 
             case 2:
-                // Island 2: rank selection — less fitness-proportional pressure
+                // Island 2: niching — rank selection + fitness sharing
                 config.selectionStrategy = .rank
                 config.mutationRate = baseConfig.mutationRate * 1.3
+                config.enableFitnessSharing = true
+                config.fitnessShareSigma = 0.25
+                config.enableCrowding = false
+                config.greedySeedFraction = 0.1
 
             case 3:
-                // Island 3: uniform crossover — more gene mixing
+                // Island 3: uniform crossover — more gene mixing, adaptive rates
                 config.crossoverStrategy = .uniform(swapProbability: 0.5)
                 config.crossoverRate = 0.9
+                config.adaptiveCrossover = true
+                config.enableCrowding = false
+                config.enableFitnessSharing = false
+                config.greedySeedFraction = 0.15
 
             default:
                 // Additional islands: deterministic parameter variations based on index.
                 // Each island gets a unique combination so results are reproducible.
-                let variations: [(mutMul: Double, xRate: Double, sel: SelectionStrategy)] = [
-                    (1.8, 0.75, .tournament(size: 3)),
-                    (0.7, 0.90, .stochasticUniversalSampling),
-                    (2.2, 0.80, .tournament(size: 5)),
-                    (1.5, 0.70, .rank),
+                let variations: [(mutMul: Double, xRate: Double, sel: SelectionStrategy, crowding: Bool, sharing: Bool)] = [
+                    (1.8, 0.75, .tournament(size: 3), true, false),
+                    (0.7, 0.90, .stochasticUniversalSampling, false, true),
+                    (2.2, 0.80, .tournament(size: 5), false, false),
+                    (1.5, 0.70, .rank, true, false),
                 ]
                 let v = variations[(i - 4) % variations.count]
                 config.mutationRate = baseConfig.mutationRate * v.mutMul
                 config.crossoverRate = v.xRate
                 config.selectionStrategy = v.sel
+                config.enableCrowding = v.crowding
+                config.enableFitnessSharing = v.sharing
             }
             configs.append(config)
         }

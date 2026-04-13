@@ -62,6 +62,8 @@ struct ScenarioGenerator {
     // MARK: - Diversity Measurement
 
     /// Measure how different two chromosomes are (0 = identical, 1 = completely different).
+    /// Delegates to `ScheduleChromosome.distance(to:)` for a single source of truth on
+    /// genotypic distance. The context-aware variant adds day-difference weighting on top.
     func diversity(
         between a: ScheduleChromosome,
         and b: ScheduleChromosome,
@@ -69,46 +71,28 @@ struct ScenarioGenerator {
     ) -> Double {
         guard !a.genes.isEmpty && !b.genes.isEmpty else { return 1.0 }
 
-        var totalDifference = 0.0
-        var comparedCount = 0
+        // Base genotypic distance (time displacement + inclusion diffs)
+        let baseDistance = a.distance(to: b)
 
-        for geneA in a.genes {
-            guard let geneB = b.genes.first(where: { $0.eventId == geneA.eventId }) else {
-                totalDifference += 1.0
-                comparedCount += 1
+        // Enrich with day-level difference for scenario variety
+        var dayDiffTotal = 0.0
+        var count = 0
+        let cal = context.calendar
+
+        for geneA in a.genes where geneA.isIncluded {
+            guard let geneB = b.genes.first(where: { $0.eventId == geneA.eventId && $0.isIncluded }) else {
                 continue
             }
-
-            // Inclusion difference: one included, other excluded = fully different
-            if geneA.isIncluded != geneB.isIncluded {
-                totalDifference += 1.0
-                comparedCount += 1
-                continue
-            }
-
-            // Both excluded — no placement to compare
-            if !geneA.isIncluded {
-                comparedCount += 1
-                continue
-            }
-
-            // Time difference — normalize by working day length (not full horizon)
-            // so that a 2-hour shift is meaningful regardless of planning horizon
-            let timeDiff = abs(geneA.startTime.timeIntervalSince(geneB.startTime))
-            let workingDaySeconds = Double(context.workingHours.upperBound - context.workingHours.lowerBound) * 3600
-            let normalizedTimeDiff = min(1.0, timeDiff / max(workingDaySeconds, 1))
-
-            // Day difference
-            let cal = context.calendar
             let dayA = cal.startOfDay(for: geneA.startTime)
             let dayB = cal.startOfDay(for: geneB.startTime)
-            let dayDiff: Double = dayA == dayB ? 0 : 0.5
-
-            totalDifference += (normalizedTimeDiff * 0.6 + dayDiff * 0.4)
-            comparedCount += 1
+            if dayA != dayB { dayDiffTotal += 0.5 }
+            count += 1
         }
 
-        return comparedCount > 0 ? totalDifference / Double(comparedCount) : 0
+        let dayFactor = count > 0 ? dayDiffTotal / Double(count) : 0
+
+        // Blend: 70% genotypic distance, 30% day-level difference, clamped to [0, 1]
+        return min(1.0, baseDistance * 0.7 + dayFactor * 0.3)
     }
 
     // MARK: - Scenario Comparison
