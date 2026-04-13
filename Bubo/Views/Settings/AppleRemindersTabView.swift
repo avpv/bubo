@@ -197,7 +197,7 @@ struct AppleRemindersTabView: View {
                         .fontWeight(.medium)
 
                     Stepper(
-                        "\(settings.remindersDefaultDurationMinutes)\u{00A0}min",
+                        DS.formatMinutes(settings.remindersDefaultDurationMinutes),
                         value: $settings.remindersDefaultDurationMinutes,
                         in: 15...240,
                         step: 15
