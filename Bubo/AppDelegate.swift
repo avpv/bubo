@@ -269,6 +269,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let secondsUntilStart = max(event.startDate.timeIntervalSinceNow, 0)
         autoDismissTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(secondsUntilStart))
+            guard !Task.isCancelled else { return }
             self?.dismissAlert()
         }
     }
