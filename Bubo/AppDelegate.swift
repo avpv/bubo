@@ -26,6 +26,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var alertObserver: Any?
     private var alertKeyMonitor: Any?
     private var autoDismissTask: Task<Void, Never>?
+    private var pendingAlerts: [(event: CalendarEvent, minutesBefore: Int)] = []
     private var pinnedTimerWindow: NSPanel?
     private var pinObserver: Any?
     private var unpinObserver: Any?
@@ -39,7 +40,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             guard let event = notification.userInfo?["event"] as? CalendarEvent,
                   let minutes = notification.userInfo?["minutesBefore"] as? Int else { return }
             MainActor.assumeIsolated {
-                self?.showAlert(event: event, minutesBefore: minutes)
+                self?.enqueueAlert(event: event, minutesBefore: minutes)
             }
         }
 
@@ -100,6 +101,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func dismissAlert() {
+        tearDownAlertWindow()
+        showNextPendingAlert()
+    }
+
+    private func enqueueAlert(event: CalendarEvent, minutesBefore: Int) {
+        if alertWindow != nil {
+            pendingAlerts.append((event: event, minutesBefore: minutesBefore))
+        } else {
+            showAlert(event: event, minutesBefore: minutesBefore)
+        }
+    }
+
+    private func tearDownAlertWindow() {
         autoDismissTask?.cancel()
         autoDismissTask = nil
         if let monitor = alertKeyMonitor {
@@ -110,6 +124,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         alertWindow = nil
         window.orderOut(nil)
         window.close()
+    }
+
+    private func showNextPendingAlert() {
+        while let next = pendingAlerts.first {
+            pendingAlerts.removeFirst()
+            // Skip events that have already started — no point showing
+            // an alert that would auto-dismiss immediately.
+            if next.event.startDate > Date() {
+                showAlert(event: next.event, minutesBefore: next.minutesBefore)
+                return
+            }
+        }
     }
 
     // MARK: - Pinned Timer Window
@@ -183,7 +209,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Full-Screen Alert
 
     private func showAlert(event: CalendarEvent, minutesBefore: Int) {
-        dismissAlert()
+        tearDownAlertWindow()
 
         guard let screen = NSScreen.main else { return }
 
@@ -269,6 +295,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let secondsUntilStart = max(event.startDate.timeIntervalSinceNow, 0)
         autoDismissTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(secondsUntilStart))
+            guard !Task.isCancelled else { return }
             self?.dismissAlert()
         }
     }
