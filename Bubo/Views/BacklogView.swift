@@ -49,11 +49,6 @@ struct BacklogView: View {
     /// onboarding hint once the affordance has been discovered.
     @AppStorage("BuboBacklogHasDragged") private var hasDragged: Bool = false
 
-    /// When true, the full task list is shown (no row-count limit).
-    /// Toggled by the "N more tasks…" / "Show fewer" button. Resets
-    /// to false when the backlog is collapsed.
-    @State private var showAllTasks = false
-
     /// Default duration applied to new tasks (before parsing).
     /// Kept as a constant so tests and the ghost preview agree.
     static let defaultTaskDurationMinutes: Int = 60
@@ -81,12 +76,9 @@ struct BacklogView: View {
         VStack(alignment: .leading, spacing: 0) {
             if !activeTasks.isEmpty || isInputFocused {
                 backlogHeader
-                if isExpanded {
-                    // Compact: plain VStack with maxVisibleTasks rows.
-                    // Expanded: height-capped ScrollView so the timeline
-                    // stays reachable for drag-to-schedule.
-                    taskList
-                }
+                // Always show task rows: compact = 2 tasks,
+                // expanded = up to 4 tasks with scroll.
+                taskList
             }
             addTaskField
             ghostPreviewRow
@@ -96,9 +88,6 @@ struct BacklogView: View {
                 isInputFocused = true
                 focusRequested = false
             }
-        }
-        .onChange(of: isExpanded) { _, expanded in
-            if !expanded { showAllTasks = false }
         }
         .onChange(of: isInputFocused) { _, focused in
             // Hide the ghost block the moment the user tabs away from the
@@ -170,17 +159,16 @@ struct BacklogView: View {
 
     // MARK: - Task List
     //
-    // Compact mode (default): plain VStack renders only the first
-    // `maxVisibleTasks` rows plus a "N more tasks…" toggle. No scroll
-    // container → `.onDrag` / `.dropDestination` work unconditionally.
+    // Compact mode (default, isExpanded = false): plain VStack renders
+    // only the first `maxVisibleTasks` (2) rows plus a "N more tasks…"
+    // toggle.  No scroll container → `.onDrag` / `.dropDestination`
+    // work unconditionally.
     //
-    // Expanded mode: a height-capped ScrollView wraps all rows so the
-    // user can browse long lists without pushing the Timeline off
-    // screen. The cap is sized for exactly `maxVisibleTasks` rows,
-    // keeping free slots reachable for drag-to-schedule.
-    //
-    // Collapsing the backlog via the header chevron resets
-    // `showAllTasks` to false.
+    // Expanded mode (isExpanded = true): a height-capped ScrollView
+    // wraps all rows so the user can browse long lists without pushing
+    // the Timeline off screen.  The cap is sized for exactly
+    // `maxExpandedTasks` (4) rows, keeping free slots reachable for
+    // drag-to-schedule.
 
     private var taskList: some View {
         let allTasks = activeTasks
@@ -191,10 +179,8 @@ struct BacklogView: View {
                 dragDiscoveryHint
             }
 
-            // When expanded and there are more tasks than the visible
-            // limit, wrap rows in a height-capped ScrollView so the
-            // timeline stays reachable for drag-to-schedule.
-            if showAllTasks && allTasks.count > Self.maxVisibleTasks {
+            // Expanded mode — height-capped ScrollView for ≤ maxExpandedTasks rows.
+            if isExpanded && allTasks.count > Self.maxVisibleTasks {
                 ScrollView {
                     taskRowsContent(visibleIDs: nil)
                 }
@@ -206,11 +192,11 @@ struct BacklogView: View {
                 taskRowsContent(visibleIDs: visibleIDs)
             }
 
-            // Overflow toggle — shows when tasks exceed the visible limit
-            if overflowCount > 0 && !showAllTasks {
+            // Overflow toggle — "N more tasks…" in compact, "Show fewer" in expanded
+            if overflowCount > 0 && !isExpanded {
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
-                        showAllTasks = true
+                        isExpanded = true
                     }
                 } label: {
                     Text("\(overflowCount) more task\(overflowCount == 1 ? "" : "s")…")
@@ -221,10 +207,10 @@ struct BacklogView: View {
                         .padding(.vertical, DS.Spacing.sm)
                 }
                 .buttonStyle(.plain)
-            } else if showAllTasks && allTasks.count > Self.maxVisibleTasks {
+            } else if isExpanded && allTasks.count > Self.maxVisibleTasks {
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
-                        showAllTasks = false
+                        isExpanded = false
                     }
                 } label: {
                     Text("Show fewer")
@@ -239,7 +225,7 @@ struct BacklogView: View {
         }
         .padding(.horizontal, DS.Spacing.sm)
         .animation(.easeInOut(duration: 0.2), value: activeTasks.map(\.id))
-        .animation(.easeInOut(duration: 0.2), value: showAllTasks)
+        .animation(.easeInOut(duration: 0.2), value: isExpanded)
     }
 
     /// Renders grouped task rows. When `visibleIDs` is nil all tasks
