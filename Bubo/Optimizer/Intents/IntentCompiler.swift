@@ -517,14 +517,8 @@ private extension IntentCompiler {
             config.maxExtraTasks = maxExtra
         case .overflowToTomorrow:
             config.overflowToTomorrow = true
-        case .energyCheckIn(let atHour):
-            // Register this hour as a check-in prompt time.
-            // Multiple .energyCheckIn intents accumulate into promptHours.
-            if let service = energyCheckInService,
-               !service.promptHours.contains(atHour) {
-                service.promptHours.append(atHour)
-                service.promptHours.sort()
-            }
+        case .energyCheckIn:
+            break  // Prompt scheduling handled by EnergyCheckInService
 
         // Temporal scope
         case .todayOnly(let inner):

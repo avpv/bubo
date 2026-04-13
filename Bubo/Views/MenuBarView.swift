@@ -976,20 +976,15 @@ struct MenuBarView: View {
             // space (row to row inside a day) — handled by the `lg`
             // sibling spacing plus a SkinSeparator between groups.
             LazyVStack(alignment: .leading, spacing: DS.Spacing.lg) {
-                // Energy check-in — brief, non-blocking prompt above suggestions.
+                // One banner at a time — energy check-in when pending,
+                // otherwise optimizer suggestion. §2: density, not stacking.
                 if optimizerService.energyCheckInService?.pendingCheckIn == true {
                     EnergyCheckInBanner(
                         onRecord: { level in
-                            let cal = Calendar.current
-                            let todayEnd = cal.date(byAdding: .day, value: 1,
-                                to: cal.startOfDay(for: Date()))!
-                            let meetings = reminderService.allEvents.filter {
-                                !$0.isLocalEvent && $0.startDate >= Date()
-                                    && $0.startDate < todayEnd
-                            }.count
                             withAnimation(DS.Animation.quick) {
                                 optimizerService.energyCheckInService?.record(
-                                    energyLevel: level, meetingCount: meetings
+                                    energyLevel: level,
+                                    from: reminderService
                                 )
                             }
                         },
@@ -999,10 +994,7 @@ struct MenuBarView: View {
                             }
                         }
                     )
-                }
-
-                // Smart banner — contextual suggestion (independent of check-in).
-                if let suggestion = activeBannerSuggestion {
+                } else if let suggestion = activeBannerSuggestion {
                     SmartBanner(
                         request: suggestion.request,
                         reason: suggestion.reason,

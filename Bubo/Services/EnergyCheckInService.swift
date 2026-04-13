@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Energy Check-In Service
 
-/// Collects user energy levels 2-3× daily and builds a personal energy curve.
+/// Collects user energy levels 2–3× daily and builds a personal energy curve.
 /// The curve replaces the static "peak at 10:00" Gaussian in EnergyCurveObjective.
 ///
 /// Over time, predictions improve by factoring in day-of-week and meeting load.
@@ -57,29 +57,51 @@ final class EnergyCheckInService {
     /// Non-nil when the service wants to prompt the user for a check-in.
     var pendingCheckIn: Bool = false
 
-    /// Timestamp of the last prompt shown (to avoid rapid re-prompts).
-    private var lastPromptDate: Date?
+    /// Timestamp of the last prompt shown (persisted to survive app restart).
+    private var lastPromptDate: Date? {
+        didSet { persistLastPromptDate() }
+    }
 
     /// Hours at which check-ins are prompted (spread across the workday).
-    /// Configurable via the `.energyCheckIn(atHour:)` intent.
-    var promptHours: [Int] = [10, 14, 17]
+    /// Persisted so that intent-configured hours survive across sessions.
+    private(set) var promptHours: [Int] = [10, 14, 17] {
+        didSet { persistPromptHours() }
+    }
 
-    private let persistenceKey = "BuboEnergyCheckIns"
-    private let curveKey = "BuboPersonalEnergyCurve"
+    private let checkInKey = "BuboEnergyCheckIns"
+    private let lastPromptKey = "BuboEnergyLastPrompt"
+    private let promptHoursKey = "BuboEnergyPromptHours"
 
     // MARK: - Init
 
     init() {
         loadCheckIns()
+        loadLastPromptDate()
+        loadPromptHours()
         recomputeCurve()
+    }
+
+    // MARK: - Configure
+
+    /// Set prompt hours from intent configuration.
+    /// Called once during setup, not per-optimization-run.
+    func setPromptHours(_ hours: [Int]) {
+        promptHours = hours.sorted()
     }
 
     // MARK: - Recording
 
     /// Record a user-reported energy level (1–5).
-    func record(energyLevel: Int, meetingCount: Int) {
+    /// Meeting count is derived from the reminder service automatically —
+    /// the view should not count meetings itself.
+    func record(energyLevel: Int, from reminderService: ReminderService) {
         let now = Date()
         let cal = Calendar.current
+        let todayEnd = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now))!
+        let meetingCount = reminderService.allEvents.filter {
+            !$0.isLocalEvent && $0.startDate >= now && $0.startDate < todayEnd
+        }.count
+
         let checkIn = CheckIn(
             timestamp: now,
             energyLevel: min(5, max(1, energyLevel)),
@@ -102,7 +124,7 @@ final class EnergyCheckInService {
 
     // MARK: - Prompt Logic
 
-    /// Called periodically (e.g. by SuggestionEngine timer).
+    /// Called periodically (by SuggestionEngine's 15-min timer).
     /// Sets `pendingCheckIn = true` when it's time for a reading.
     func evaluatePrompt() {
         let cal = Calendar.current
@@ -138,7 +160,6 @@ final class EnergyCheckInService {
     func recomputeCurve() {
         guard !checkIns.isEmpty else {
             personalCurve = nil
-            saveCurve()
             return
         }
 
@@ -172,7 +193,6 @@ final class EnergyCheckInService {
         }
 
         personalCurve = EnergyCurve(hourlyEnergy: hourly)
-        saveCurve()
     }
 
     // MARK: - Prediction
@@ -186,9 +206,7 @@ final class EnergyCheckInService {
         let now = Date()
 
         // Filter to relevant check-ins for this hour (±1 hour window)
-        let relevant = checkIns.filter { ci in
-            abs(ci.hour - hour) <= 1
-        }
+        let relevant = checkIns.filter { abs($0.hour - hour) <= 1 }
         guard !relevant.isEmpty else {
             return personalCurve?.hourlyEnergy[hour]
         }
@@ -250,7 +268,7 @@ final class EnergyCheckInService {
     // MARK: - Persistence
 
     private func loadCheckIns() {
-        guard let data = UserDefaults.standard.data(forKey: persistenceKey),
+        guard let data = UserDefaults.standard.data(forKey: checkInKey),
               let decoded = try? JSONDecoder().decode([CheckIn].self, from: data) else { return }
 
         // Keep last 90 days of data
@@ -260,15 +278,30 @@ final class EnergyCheckInService {
 
     private func saveCheckIns() {
         guard let data = try? JSONEncoder().encode(checkIns) else { return }
-        UserDefaults.standard.set(data, forKey: persistenceKey)
+        UserDefaults.standard.set(data, forKey: checkInKey)
     }
 
-    private func saveCurve() {
-        guard let curve = personalCurve,
-              let data = try? JSONEncoder().encode(curve) else {
-            UserDefaults.standard.removeObject(forKey: curveKey)
-            return
+    private func loadLastPromptDate() {
+        let ti = UserDefaults.standard.double(forKey: lastPromptKey)
+        lastPromptDate = ti > 0 ? Date(timeIntervalSinceReferenceDate: ti) : nil
+    }
+
+    private func persistLastPromptDate() {
+        if let date = lastPromptDate {
+            UserDefaults.standard.set(date.timeIntervalSinceReferenceDate, forKey: lastPromptKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: lastPromptKey)
         }
-        UserDefaults.standard.set(data, forKey: curveKey)
+    }
+
+    private func loadPromptHours() {
+        let arr = UserDefaults.standard.array(forKey: promptHoursKey) as? [Int]
+        if let arr, !arr.isEmpty {
+            promptHours = arr.sorted()
+        }
+    }
+
+    private func persistPromptHours() {
+        UserDefaults.standard.set(promptHours, forKey: promptHoursKey)
     }
 }

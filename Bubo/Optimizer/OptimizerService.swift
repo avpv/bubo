@@ -305,6 +305,22 @@ final class OptimizerService {
             backlogService: backlogService
         )
         suggestionEngine?.energyCheckInService = energyCheckInService
+
+        // Scan saved pipelines for .energyCheckIn intents to configure prompt hours.
+        if let registry = subgraphRegistry, let service = energyCheckInService {
+            var hours: Set<Int> = []
+            for sg in registry.subgraphs.values {
+                for intent in sg.intents {
+                    if case .energyCheckIn(let h) = intent {
+                        hours.insert(h)
+                    }
+                }
+            }
+            if !hours.isEmpty {
+                service.setPromptHours(Array(hours))
+            }
+        }
+
         triggerEngine = TriggerEngine(
             optimizerService: self,
             reminderService: reminderService
