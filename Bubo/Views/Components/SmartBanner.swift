@@ -39,7 +39,7 @@ struct SmartBanner: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, DS.Spacing.sm)
-                    .padding(.vertical, 3)
+                    .padding(.vertical, DS.Spacing.pillVertical)
                     .background(Capsule().fill(skin.accentColor))
             }
             .buttonStyle(.plain)
