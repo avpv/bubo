@@ -52,6 +52,7 @@ struct BuboApp: App {
 
         let optimizer = OptimizerService()
         optimizer.backlogService = BacklogService(modelContainer: container)
+        optimizer.energyCheckInService = EnergyCheckInService()
         _optimizerService = State(wrappedValue: optimizer)
     }
 

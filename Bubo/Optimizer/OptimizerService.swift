@@ -41,6 +41,9 @@ final class OptimizerService {
     /// Trigger engine for scheduled/reactive pipeline execution.
     private(set) var triggerEngine: TriggerEngine?
 
+    /// Energy check-in service for adaptive energy curve.
+    var energyCheckInService: EnergyCheckInService?
+
     // MARK: - Optimizer Settings (persisted)
 
     var workingHoursStart: Int {
@@ -104,6 +107,7 @@ final class OptimizerService {
             backlogService: backlogSvc
         )
         compiler.subgraphRegistry = subgraphRegistry
+        compiler.energyCheckInService = energyCheckInService
         let result = await compiler.execute(request, defaultWorkingHours: workingHours)
 
         switch result {
@@ -169,6 +173,7 @@ final class OptimizerService {
             backlogService: backlogSvc
         )
         compiler.subgraphRegistry = subgraphRegistry
+        compiler.energyCheckInService = energyCheckInService
         let result = await compiler.execute(request, defaultWorkingHours: workingHours)
         switch result {
         case .success(let r), .partialSuccess(let r, _):
@@ -299,6 +304,23 @@ final class OptimizerService {
             reminderService: reminderService,
             backlogService: backlogService
         )
+        suggestionEngine?.energyCheckInService = energyCheckInService
+
+        // Scan saved pipelines for .energyCheckIn intents to configure prompt hours.
+        if let registry = subgraphRegistry, let service = energyCheckInService {
+            var hours: Set<Int> = []
+            for sg in registry.subgraphs.values {
+                for intent in sg.intents {
+                    if case .energyCheckIn(let h) = intent {
+                        hours.insert(h)
+                    }
+                }
+            }
+            if !hours.isEmpty {
+                service.setPromptHours(Array(hours))
+            }
+        }
+
         triggerEngine = TriggerEngine(
             optimizerService: self,
             reminderService: reminderService

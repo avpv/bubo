@@ -976,8 +976,25 @@ struct MenuBarView: View {
             // space (row to row inside a day) — handled by the `lg`
             // sibling spacing plus a SkinSeparator between groups.
             LazyVStack(alignment: .leading, spacing: DS.Spacing.lg) {
-                // Smart banner — at most one contextual suggestion.
-                if let suggestion = activeBannerSuggestion {
+                // One banner at a time — energy check-in when pending,
+                // otherwise optimizer suggestion. §2: density, not stacking.
+                if optimizerService.energyCheckInService?.pendingCheckIn == true {
+                    EnergyCheckInBanner(
+                        onRecord: { level in
+                            withAnimation(DS.Animation.quick) {
+                                optimizerService.energyCheckInService?.record(
+                                    energyLevel: level,
+                                    from: reminderService
+                                )
+                            }
+                        },
+                        onDismiss: {
+                            withAnimation(DS.Animation.quick) {
+                                optimizerService.energyCheckInService?.dismissCheckIn()
+                            }
+                        }
+                    )
+                } else if let suggestion = activeBannerSuggestion {
                     SmartBanner(
                         request: suggestion.request,
                         reason: suggestion.reason,

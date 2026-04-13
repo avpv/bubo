@@ -14,6 +14,9 @@ final class SuggestionEngine {
     let reminderService: ReminderService
     let backlogService: BacklogService
 
+    /// Energy check-in service — prompts the user 2-3× daily.
+    var energyCheckInService: EnergyCheckInService?
+
     /// The single best suggestion right now (for SmartBanner).
     var suggestion: Suggestion?
 
@@ -91,7 +94,10 @@ final class SuggestionEngine {
     private func startSuggestionTimer() {
         evaluate()
         suggestionTimer = Timer.scheduledTimer(withTimeInterval: 15 * 60, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.evaluate() }
+            Task { @MainActor in
+                self?.energyCheckInService?.evaluatePrompt()
+                self?.evaluate()
+            }
         }
     }
 
