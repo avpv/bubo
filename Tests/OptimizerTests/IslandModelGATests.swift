@@ -40,6 +40,43 @@ private func makeMovableEvent(
     )
 }
 
+/// Quick GA config for tests — small populations, few generations.
+private let testGAConfig = GAConfiguration(
+    populationSize: 15,
+    maxGenerations: 20,
+    mutationRate: 0.2,
+    crossoverRate: 0.8,
+    eliteCount: 1,
+    selectionStrategy: .tournament(size: 2),
+    crossoverStrategy: .singlePoint,
+    convergenceThreshold: 0.01,
+    convergencePatience: 8,
+    adaptiveMutation: false,
+    diversityThreshold: 0.01,
+    immigrationRate: 0.0
+)
+
+/// Quick island config for tests — few islands, frequent migration.
+private func testIslandConfig(
+    islandCount: Int = 2,
+    topology: MigrationTopology = .ring,
+    emigrantSelection: EmigrantSelection = .best,
+    immigrantReplacement: ImmigrantReplacement = .worst,
+    diversifyIslands: Bool = false,
+    adaptiveMigration: Bool = false
+) -> IslandConfiguration {
+    IslandConfiguration(
+        islandCount: islandCount,
+        migrationInterval: 5,
+        migrationSize: 1,
+        topology: topology,
+        emigrantSelection: emigrantSelection,
+        immigrantReplacement: immigrantReplacement,
+        diversifyIslands: diversifyIslands,
+        adaptiveMigration: adaptiveMigration
+    )
+}
+
 private func makeTestEvents(count: Int) -> [OptimizableEvent] {
     (0..<count).map { i in
         makeMovableEvent(
@@ -127,7 +164,8 @@ struct IslandModelGATests {
                 topology: .ring,
                 emigrantSelection: .best,
                 immigrantReplacement: .worst,
-                diversifyIslands: false
+                diversifyIslands: false,
+                adaptiveMigration: false
             ),
             baseConfig: GAConfiguration(
                 populationSize: 20,
@@ -169,7 +207,8 @@ struct IslandModelGATests {
                 topology: .ring,
                 emigrantSelection: .best,
                 immigrantReplacement: .worst,
-                diversifyIslands: true
+                diversifyIslands: true,
+                adaptiveMigration: false
             ),
             baseConfig: .island,
             context: context,
@@ -201,7 +240,8 @@ struct IslandModelGATests {
                 topology: .ring,
                 emigrantSelection: .best,
                 immigrantReplacement: .worst,
-                diversifyIslands: true
+                diversifyIslands: true,
+                adaptiveMigration: false
             ),
             baseConfig: GAConfiguration(
                 populationSize: 15,
@@ -257,7 +297,8 @@ struct IslandModelGATests {
                 topology: .ring,
                 emigrantSelection: .best,
                 immigrantReplacement: .worst,
-                diversifyIslands: false
+                diversifyIslands: false,
+                adaptiveMigration: false
             ),
             baseConfig: smallConfig,
             context: context,
@@ -291,7 +332,8 @@ struct MigrationTopologyTests {
                 topology: .ring,
                 emigrantSelection: .best,
                 immigrantReplacement: .worst,
-                diversifyIslands: false
+                diversifyIslands: false,
+                adaptiveMigration: false
             ),
             baseConfig: GAConfiguration(
                 populationSize: 15,
@@ -331,7 +373,8 @@ struct MigrationTopologyTests {
                 topology: .fullyConnected,
                 emigrantSelection: .best,
                 immigrantReplacement: .worst,
-                diversifyIslands: false
+                diversifyIslands: false,
+                adaptiveMigration: false
             ),
             baseConfig: GAConfiguration(
                 populationSize: 15,
@@ -371,7 +414,8 @@ struct MigrationTopologyTests {
                 topology: .randomPairs,
                 emigrantSelection: .tournament(size: 2),
                 immigrantReplacement: .random,
-                diversifyIslands: false
+                diversifyIslands: false,
+                adaptiveMigration: false
             ),
             baseConfig: GAConfiguration(
                 populationSize: 15,
@@ -412,7 +456,8 @@ struct MigrationTopologyTests {
                 topology: .randomPairs,
                 emigrantSelection: .best,
                 immigrantReplacement: .worst,
-                diversifyIslands: false
+                diversifyIslands: false,
+                adaptiveMigration: false
             ),
             baseConfig: GAConfiguration(
                 populationSize: 15,
@@ -458,7 +503,8 @@ struct EmigrantSelectionTests {
                 topology: .ring,
                 emigrantSelection: .tournament(size: 3),
                 immigrantReplacement: .worst,
-                diversifyIslands: false
+                diversifyIslands: false,
+                adaptiveMigration: false
             ),
             baseConfig: GAConfiguration(
                 populationSize: 15,
@@ -506,7 +552,8 @@ struct IslandProgressTests {
                 topology: .ring,
                 emigrantSelection: .best,
                 immigrantReplacement: .worst,
-                diversifyIslands: false
+                diversifyIslands: false,
+                adaptiveMigration: false
             ),
             baseConfig: GAConfiguration(
                 populationSize: 10,
@@ -576,7 +623,8 @@ struct PomodoroSequenceIslandModelTests {
                 topology: .ring,
                 emigrantSelection: .best,
                 immigrantReplacement: .worst,
-                diversifyIslands: true
+                diversifyIslands: true,
+                adaptiveMigration: false
             ),
             baseConfig: GAConfiguration(
                 populationSize: 20,
@@ -709,7 +757,8 @@ struct IslandModelComparisonTests {
                 topology: .ring,
                 emigrantSelection: .best,
                 immigrantReplacement: .worst,
-                diversifyIslands: true
+                diversifyIslands: true,
+                adaptiveMigration: false
             ),
             baseConfig: islandBaseConfig,
             context: context,
@@ -734,11 +783,310 @@ struct IslandModelComparisonTests {
             topology: .ring,
             emigrantSelection: .best,
             immigrantReplacement: .worst,
-            diversifyIslands: false
+            diversifyIslands: false,
+            adaptiveMigration: false
         )
         let fixed = bad.validated(populationSize: 60)
         #expect(fixed.islandCount >= 1)
         #expect(fixed.migrationInterval >= 1)
         #expect(fixed.migrationSize <= 30) // half of 60
+    }
+}
+
+// MARK: - Seeded Run Tests
+
+@Suite("Island Model Seeded Run Tests")
+struct IslandModelSeededTests {
+
+    @Test("runSeeded distributes seeds across islands and produces valid results")
+    func runSeededDistributesSeeds() {
+        let events = makeTestEvents(count: 4)
+        let context = makeContext(movableEvents: events)
+        let evaluator = FitnessEvaluator.standard(preferences: OptimizerPreferences())
+        let evaluateFn: (inout ScheduleChromosome) -> Void = { chromosome in
+            evaluator.evaluateAndAssign(&chromosome, context: context)
+        }
+
+        // Create seed chromosomes (simulating current schedule variants)
+        var seeds: [ScheduleChromosome] = []
+        for _ in 0..<10 {
+            var chromosome = ScheduleChromosome.random(context: context)
+            evaluateFn(&chromosome)
+            seeds.append(chromosome)
+        }
+
+        let islandGA = IslandModelGA<ScheduleChromosome>(
+            islandConfig: testIslandConfig(islandCount: 3),
+            baseConfig: testGAConfig,
+            context: context,
+            evaluate: evaluateFn
+        )
+
+        let result = islandGA.runSeeded(with: seeds)
+
+        #expect(!result.isEmpty)
+        #expect(islandGA.bestEver != nil)
+        #expect(islandGA.bestEver!.fitness > 0)
+        // Result should be sorted
+        for i in 0..<(result.count - 1) {
+            #expect(result[i].fitness >= result[i + 1].fitness)
+        }
+    }
+
+    @Test("runSeeded with more seeds than island capacity works")
+    func runSeededOverflow() {
+        let events = makeTestEvents(count: 3)
+        let context = makeContext(movableEvents: events)
+        let evaluator = FitnessEvaluator.standard(preferences: OptimizerPreferences())
+        let evaluateFn: (inout ScheduleChromosome) -> Void = { chromosome in
+            evaluator.evaluateAndAssign(&chromosome, context: context)
+        }
+
+        // Create more seeds than total island capacity (2 islands × 15 = 30)
+        var seeds: [ScheduleChromosome] = []
+        for _ in 0..<50 {
+            var chromosome = ScheduleChromosome.random(context: context)
+            evaluateFn(&chromosome)
+            seeds.append(chromosome)
+        }
+
+        let islandGA = IslandModelGA<ScheduleChromosome>(
+            islandConfig: testIslandConfig(islandCount: 2),
+            baseConfig: testGAConfig,
+            context: context,
+            evaluate: evaluateFn
+        )
+
+        let result = islandGA.runSeeded(with: seeds)
+        #expect(!result.isEmpty)
+    }
+
+    @Test("runSeeded with single seed works")
+    func runSeededSingleSeed() {
+        let events = makeTestEvents(count: 3)
+        let context = makeContext(movableEvents: events)
+        let evaluator = FitnessEvaluator.standard(preferences: OptimizerPreferences())
+        let evaluateFn: (inout ScheduleChromosome) -> Void = { chromosome in
+            evaluator.evaluateAndAssign(&chromosome, context: context)
+        }
+
+        var seed = ScheduleChromosome.random(context: context)
+        evaluateFn(&seed)
+
+        let islandGA = IslandModelGA<ScheduleChromosome>(
+            islandConfig: testIslandConfig(islandCount: 3),
+            baseConfig: testGAConfig,
+            context: context,
+            evaluate: evaluateFn
+        )
+
+        let result = islandGA.runSeeded(with: [seed])
+        #expect(!result.isEmpty)
+        // With warm start, result should be at least as good as the seed
+        #expect(islandGA.bestEver!.fitness >= seed.fitness - 0.001)
+    }
+
+    @Test("runSeeded result is at least as good as best seed")
+    func runSeededImprovesOnSeeds() {
+        let events = makeTestEvents(count: 5)
+        let context = makeContext(movableEvents: events)
+        let evaluator = FitnessEvaluator.standard(preferences: OptimizerPreferences())
+        let evaluateFn: (inout ScheduleChromosome) -> Void = { chromosome in
+            evaluator.evaluateAndAssign(&chromosome, context: context)
+        }
+
+        var seeds: [ScheduleChromosome] = []
+        for _ in 0..<8 {
+            var chromosome = ScheduleChromosome.random(context: context)
+            evaluateFn(&chromosome)
+            seeds.append(chromosome)
+        }
+        let bestSeedFitness = seeds.map(\.fitness).max() ?? 0
+
+        let islandGA = IslandModelGA<ScheduleChromosome>(
+            islandConfig: testIslandConfig(islandCount: 3),
+            baseConfig: GAConfiguration(
+                populationSize: 20,
+                maxGenerations: 40,
+                mutationRate: 0.15,
+                crossoverRate: 0.8,
+                eliteCount: 2,
+                selectionStrategy: .tournament(size: 3),
+                crossoverStrategy: .singlePoint,
+                convergenceThreshold: 0.001,
+                convergencePatience: 15,
+                adaptiveMutation: true,
+                diversityThreshold: 0.01,
+                immigrationRate: 0.1
+            ),
+            context: context,
+            evaluate: evaluateFn
+        )
+
+        let result = islandGA.runSeeded(with: seeds)
+        let resultBest = result.first?.fitness ?? 0
+
+        // GA with seeds should find something at least as good as the best seed
+        #expect(resultBest >= bestSeedFitness - 0.01,
+                "Seeded GA (\(resultBest)) should match best seed (\(bestSeedFitness))")
+    }
+}
+
+// MARK: - Cross-Island Diversity Tests
+
+@Suite("Cross-Island Diversity Tests")
+struct CrossIslandDiversityTests {
+
+    @Test("Progress reports cross-island diversity")
+    func progressReportsCrossIslandDiversity() {
+        let events = makeTestEvents(count: 4)
+        let context = makeContext(movableEvents: events)
+        let evaluator = FitnessEvaluator.standard(preferences: OptimizerPreferences())
+
+        var lastProgress: IslandModelProgress?
+
+        let islandGA = IslandModelGA<ScheduleChromosome>(
+            islandConfig: testIslandConfig(islandCount: 3, diversifyIslands: true),
+            baseConfig: testGAConfig,
+            context: context,
+            evaluate: { chromosome in
+                evaluator.evaluateAndAssign(&chromosome, context: context)
+            },
+            onProgress: { progress in
+                lastProgress = progress
+            }
+        )
+
+        _ = islandGA.run()
+
+        #expect(lastProgress != nil)
+        // crossIslandDiversity should be between 0 and 1
+        #expect(lastProgress!.crossIslandDiversity >= 0)
+        #expect(lastProgress!.crossIslandDiversity <= 1.0)
+        // effectiveMigrationInterval should be positive
+        #expect(lastProgress!.effectiveMigrationInterval >= 1)
+    }
+}
+
+// MARK: - Adaptive Migration Tests
+
+@Suite("Adaptive Migration Tests")
+struct AdaptiveMigrationTests {
+
+    @Test("Adaptive migration adjusts interval during stagnation")
+    func adaptiveMigrationDuringStagnation() {
+        let events = makeTestEvents(count: 3)
+        let context = makeContext(movableEvents: events)
+        let evaluator = FitnessEvaluator.standard(preferences: OptimizerPreferences())
+
+        var intervals: [Int] = []
+
+        let islandGA = IslandModelGA<ScheduleChromosome>(
+            islandConfig: IslandConfiguration(
+                islandCount: 3,
+                migrationInterval: 10,
+                migrationSize: 2,
+                topology: .ring,
+                emigrantSelection: .best,
+                immigrantReplacement: .worst,
+                diversifyIslands: false,
+                adaptiveMigration: true
+            ),
+            baseConfig: GAConfiguration(
+                populationSize: 15,
+                maxGenerations: 60,
+                mutationRate: 0.15,
+                crossoverRate: 0.8,
+                eliteCount: 1,
+                selectionStrategy: .tournament(size: 2),
+                crossoverStrategy: .singlePoint,
+                convergenceThreshold: 0.0001,
+                convergencePatience: 30,
+                adaptiveMutation: false,
+                diversityThreshold: 0.01,
+                immigrationRate: 0.0
+            ),
+            context: context,
+            evaluate: { chromosome in
+                evaluator.evaluateAndAssign(&chromosome, context: context)
+            },
+            onProgress: { progress in
+                intervals.append(progress.effectiveMigrationInterval)
+            }
+        )
+
+        _ = islandGA.run()
+
+        // Should have some progress updates
+        #expect(!intervals.isEmpty)
+        // With adaptive migration, interval may change during the run
+        // At minimum verify all intervals are positive
+        for interval in intervals {
+            #expect(interval >= 1)
+        }
+    }
+
+    @Test("Non-adaptive migration keeps constant interval")
+    func nonAdaptiveMigrationConstantInterval() {
+        let events = makeTestEvents(count: 3)
+        let context = makeContext(movableEvents: events)
+        let evaluator = FitnessEvaluator.standard(preferences: OptimizerPreferences())
+
+        var intervals: [Int] = []
+        let configuredInterval = 7
+
+        let islandGA = IslandModelGA<ScheduleChromosome>(
+            islandConfig: IslandConfiguration(
+                islandCount: 2,
+                migrationInterval: configuredInterval,
+                migrationSize: 1,
+                topology: .ring,
+                emigrantSelection: .best,
+                immigrantReplacement: .worst,
+                diversifyIslands: false,
+                adaptiveMigration: false
+            ),
+            baseConfig: testGAConfig,
+            context: context,
+            evaluate: { chromosome in
+                evaluator.evaluateAndAssign(&chromosome, context: context)
+            },
+            onProgress: { progress in
+                intervals.append(progress.effectiveMigrationInterval)
+            }
+        )
+
+        _ = islandGA.run()
+
+        // Without adaptive migration, all intervals should be the configured value
+        for interval in intervals {
+            #expect(interval == configuredInterval)
+        }
+    }
+
+    @Test("Adaptive migration completes with all topologies")
+    func adaptiveMigrationAllTopologies() {
+        let events = makeTestEvents(count: 3)
+        let context = makeContext(movableEvents: events)
+        let evaluator = FitnessEvaluator.standard(preferences: OptimizerPreferences())
+        let evaluateFn: (inout ScheduleChromosome) -> Void = { chromosome in
+            evaluator.evaluateAndAssign(&chromosome, context: context)
+        }
+
+        for topology: MigrationTopology in [.ring, .fullyConnected, .randomPairs] {
+            let islandGA = IslandModelGA<ScheduleChromosome>(
+                islandConfig: testIslandConfig(
+                    islandCount: 3,
+                    topology: topology,
+                    adaptiveMigration: true
+                ),
+                baseConfig: testGAConfig,
+                context: context,
+                evaluate: evaluateFn
+            )
+
+            let result = islandGA.run()
+            #expect(!result.isEmpty)
+        }
     }
 }

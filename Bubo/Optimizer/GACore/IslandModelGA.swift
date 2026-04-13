@@ -29,6 +29,11 @@ struct IslandConfiguration: Sendable {
     /// strategies to explore different regions of the search space.
     var diversifyIslands: Bool
 
+    /// Whether to adapt migration frequency/size based on global stagnation and
+    /// cross-island diversity. When true, migration intensifies when progress stalls
+    /// and relaxes when islands are still diverging productively.
+    var adaptiveMigration: Bool
+
     static let `default` = IslandConfiguration(
         islandCount: 4,
         migrationInterval: 20,
@@ -36,7 +41,8 @@ struct IslandConfiguration: Sendable {
         topology: .ring,
         emigrantSelection: .best,
         immigrantReplacement: .worst,
-        diversifyIslands: true
+        diversifyIslands: true,
+        adaptiveMigration: true
     )
 
     /// Larger island count for deep weekly planning.
@@ -47,7 +53,8 @@ struct IslandConfiguration: Sendable {
         topology: .ring,
         emigrantSelection: .best,
         immigrantReplacement: .worst,
-        diversifyIslands: true
+        diversifyIslands: true,
+        adaptiveMigration: true
     )
 
     /// Validate configuration, clamping values to safe ranges.
@@ -100,6 +107,23 @@ enum ImmigrantReplacement: Sendable {
     case random
 }
 
+// MARK: - Cross-Island Diversity
+
+/// Measures how different the best solutions across islands are.
+/// Used by adaptive migration to decide when to intensify or relax migration.
+struct CrossIslandDiversity {
+    /// Fraction of island best individuals that are genetically unique (by Equatable).
+    /// 0 = all islands converged to same solution, 1 = all islands have different bests.
+    let uniqueBestFraction: Double
+
+    /// Range of best fitness values across islands (max - min).
+    /// 0 = all islands found equal-quality solutions.
+    let fitnessRange: Double
+
+    /// Standard deviation of best fitness values across islands.
+    let fitnessStdDev: Double
+}
+
 // MARK: - Island Progress
 
 /// Progress information aggregated across all islands.
@@ -109,6 +133,10 @@ struct IslandModelProgress: Sendable {
     let islandBestFitnesses: [Double]
     let islandDiversities: [Double]
     let migrationsPerformed: Int
+    /// Cross-island diversity: how different island bests are from each other.
+    let crossIslandDiversity: Double
+    /// Current effective migration interval (may differ from config when adaptive).
+    let effectiveMigrationInterval: Int
 }
 
 // MARK: - Island (Internal)
@@ -195,13 +223,70 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             return Island(population: pop, ga: ga)
         }
 
+        return evolveIslands(islands)
+    }
+
+    // MARK: - Run Seeded
+
+    /// Run the island model GA seeded with existing individuals (for warm-start re-optimization).
+    /// Seeds are distributed across islands round-robin so every island gets warm-start
+    /// material. Remaining slots per island are filled with random individuals.
+    func runSeeded(with seed: [C]) -> [C] {
+        precondition(islandConfig.islandCount >= 1, "IslandModelGA requires at least 1 island")
+        precondition(islandConfig.migrationInterval >= 1, "migrationInterval must be >= 1")
+        precondition(baseConfig.populationSize >= baseConfig.eliteCount + 2,
+                     "populationSize must be larger than eliteCount + 1")
+
+        let islandConfigs = makeIslandConfigs()
+        let islandCount = islandConfigs.count
+
+        // Distribute seeds across islands round-robin
+        var seedBuckets: [[C]] = Array(repeating: [], count: islandCount)
+        for (i, individual) in seed.enumerated() {
+            seedBuckets[i % islandCount].append(individual)
+        }
+
+        let islands = islandConfigs.enumerated().map { (idx, config) -> Island<C> in
+            var individuals = seedBuckets[idx]
+
+            // Evaluate seeds that haven't been evaluated
+            for i in individuals.indices {
+                evaluate(&individuals[i])
+            }
+
+            // Fill remaining slots with random individuals
+            while individuals.count < config.populationSize {
+                var individual = C.random(context: context)
+                evaluate(&individual)
+                individuals.append(individual)
+            }
+
+            let pop = Population<C>(individuals: individuals, eliteCount: config.eliteCount)
+            let ga = GeneticAlgorithm<C>(
+                config: config,
+                context: context,
+                evaluate: evaluate
+            )
+            return Island(population: pop, ga: ga)
+        }
+
+        return evolveIslands(islands)
+    }
+
+    // MARK: - Core Evolution Loop
+
+    /// Shared evolution loop for both `run()` and `runSeeded(with:)`.
+    private func evolveIslands(_ islands: [Island<C>]) -> [C] {
         bestEver = islands.compactMap(\.bestEver).max(by: { $0.fitness < $1.fitness })
 
-        // 2. Evolve with periodic migration
         let totalGenerations = baseConfig.maxGenerations
         var globalStaleGenerations = 0
         var lastGlobalBestFitness = bestEver?.fitness ?? 0
         var totalMigrations = 0
+
+        // Adaptive migration state
+        var effectiveInterval = islandConfig.migrationInterval
+        var effectiveSize = islandConfig.migrationSize
 
         for generation in 0..<totalGenerations {
             // Evolve each island for one generation in parallel.
@@ -225,9 +310,31 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
                 }
             }
 
-            // Periodic migration
-            if generation > 0 && generation % islandConfig.migrationInterval == 0 {
-                migrate(islands: islands)
+            // Cross-island diversity (used by adaptive migration and progress)
+            let crossDiversity = measureCrossIslandDiversity(islands)
+
+            // Adaptive migration: adjust interval and size based on stagnation/diversity
+            if islandConfig.adaptiveMigration {
+                let halfPatience = baseConfig.convergencePatience / 2
+                if globalStaleGenerations > halfPatience {
+                    // Stagnating: migrate more frequently with more individuals
+                    effectiveInterval = max(3, islandConfig.migrationInterval / 2)
+                    effectiveSize = min(islandConfig.migrationSize * 2,
+                                       baseConfig.populationSize / 3)
+                } else if crossDiversity.uniqueBestFraction > 0.8 && crossDiversity.fitnessStdDev > baseConfig.convergenceThreshold * 10 {
+                    // High diversity + spread: let islands explore, migrate less
+                    effectiveInterval = islandConfig.migrationInterval * 2
+                    effectiveSize = max(1, islandConfig.migrationSize / 2)
+                } else {
+                    // Normal: use configured values
+                    effectiveInterval = islandConfig.migrationInterval
+                    effectiveSize = islandConfig.migrationSize
+                }
+            }
+
+            // Periodic migration with effective parameters
+            if generation > 0 && generation % effectiveInterval == 0 {
+                migrate(islands: islands, migrationSize: effectiveSize)
                 totalMigrations += 1
             }
 
@@ -246,7 +353,9 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
                 globalBestFitness: bestEver?.fitness ?? 0,
                 islandBestFitnesses: islands.map { $0.bestEver?.fitness ?? 0 },
                 islandDiversities: islands.map { $0.population.fitnessDiversity },
-                migrationsPerformed: totalMigrations
+                migrationsPerformed: totalMigrations,
+                crossIslandDiversity: crossDiversity.uniqueBestFraction,
+                effectiveMigrationInterval: effectiveInterval
             ))
 
             // Global convergence detection
@@ -271,13 +380,13 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             }
         }
 
-        // 3. Collect top individuals from all islands
+        // Collect top individuals from all islands
         var combined: [C] = []
         for island in islands {
             combined.append(contentsOf: island.population.sortedByFitness.prefix(island.ga.config.eliteCount * 2))
         }
 
-        // 4. Hill climb on top individuals (reuse GA's hill climbing)
+        // Hill climb on top individuals (reuse GA's hill climbing)
         combined.sort { $0.fitness > $1.fitness }
         let refineCount = min(baseConfig.eliteCount * 2, combined.count)
         let refiner = islands[0].ga
@@ -293,12 +402,50 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         return combined.sorted { $0.fitness > $1.fitness }
     }
 
+    // MARK: - Cross-Island Diversity
+
+    /// Measure how different the best solutions across islands are.
+    /// Uses Equatable conformance to count unique bests and fitness spread.
+    private func measureCrossIslandDiversity(_ islands: [Island<C>]) -> CrossIslandDiversity {
+        let bests = islands.compactMap(\.bestEver)
+        guard bests.count > 1 else {
+            return CrossIslandDiversity(uniqueBestFraction: 1.0, fitnessRange: 0, fitnessStdDev: 0)
+        }
+
+        // Count unique bests using Equatable
+        var uniqueCount = 0
+        var seen: [C] = []
+        for best in bests {
+            if !seen.contains(where: { $0 == best }) {
+                seen.append(best)
+                uniqueCount += 1
+            }
+        }
+        let uniqueFraction = Double(uniqueCount) / Double(bests.count)
+
+        // Fitness range and std dev across island bests
+        let fitnesses = bests.map(\.fitness)
+        let minFit = fitnesses.min() ?? 0
+        let maxFit = fitnesses.max() ?? 0
+        let range = maxFit - minFit
+
+        let avg = fitnesses.reduce(0, +) / Double(fitnesses.count)
+        let variance = fitnesses.reduce(0.0) { $0 + pow($1 - avg, 2) } / Double(fitnesses.count - 1)
+        let stdDev = sqrt(variance)
+
+        return CrossIslandDiversity(
+            uniqueBestFraction: uniqueFraction,
+            fitnessRange: range,
+            fitnessStdDev: stdDev
+        )
+    }
+
     // MARK: - Migration
 
     /// Transfer individuals between islands according to the configured topology.
     /// Emigrants are copied (not removed) from the source, mirroring standard
     /// island model GA semantics.
-    private func migrate(islands: [Island<C>]) {
+    private func migrate(islands: [Island<C>], migrationSize: Int) {
         let n = islands.count
         guard n > 1 else { return }
 
@@ -306,9 +453,10 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
 
         // Snapshot emigrants before any replacement to avoid one migration
         // polluting the source for subsequent pairs in the same round.
+        let effectiveSize = min(migrationSize, baseConfig.populationSize / 2)
         let emigrantsBySource: [Int: [C]] = Dictionary(
             uniqueKeysWithValues: Set(migrationPairs.map(\.source)).map { sourceIdx in
-                (sourceIdx, selectEmigrants(from: islands[sourceIdx]))
+                (sourceIdx, selectEmigrants(from: islands[sourceIdx], count: effectiveSize))
             }
         )
 
@@ -358,16 +506,16 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
     }
 
     /// Select individuals to emigrate from a source island.
-    private func selectEmigrants(from island: Island<C>) -> [C] {
-        let count = min(islandConfig.migrationSize, island.population.size)
+    private func selectEmigrants(from island: Island<C>, count: Int) -> [C] {
+        let effectiveCount = min(count, island.population.size)
 
         switch islandConfig.emigrantSelection {
         case .best:
-            return Array(island.population.sortedByFitness.prefix(count))
+            return Array(island.population.sortedByFitness.prefix(effectiveCount))
 
         case .tournament(let tournamentSize):
             var emigrants: [C] = []
-            for _ in 0..<count {
+            for _ in 0..<effectiveCount {
                 let candidate = Selection.select(
                     from: island.population,
                     strategy: .tournament(size: tournamentSize)
@@ -420,7 +568,7 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
     /// - Island 1: high mutation (exploration-focused)
     /// - Island 2: rank selection (less greedy selection pressure)
     /// - Island 3: uniform crossover (more gene mixing)
-    /// - Islands 4+: random variations
+    /// - Islands 4+: deterministic variations
     private func makeIslandConfigs() -> [GAConfiguration] {
         guard islandConfig.diversifyIslands else {
             return Array(repeating: baseConfig, count: islandConfig.islandCount)
