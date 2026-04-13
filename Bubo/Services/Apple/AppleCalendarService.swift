@@ -11,6 +11,9 @@ class AppleCalendarService {
     /// Shared event store — creating multiple instances is expensive and discouraged by Apple.
     static let shared = AppleCalendarService()
 
+    /// Exposed for AppleRemindersService — single store for the entire app.
+    static var sharedStore: EKEventStore { shared.store }
+
     private var store = EKEventStore()
 
     /// Posted when the underlying EKEventStore detects changes (events added/modified/deleted

@@ -9,6 +9,11 @@ import SwiftData
 @Observable
 final class BacklogService {
 
+    /// Posted when a task is marked done. `object` is the task ID (String).
+    static let taskCompleted = Notification.Name("BuboBacklogTaskCompleted")
+    /// Posted when a task is removed. `object` is the task ID (String).
+    static let taskRemoved = Notification.Name("BuboBacklogTaskRemoved")
+
     private(set) var tasks: [BacklogTask] = []
     private let modelContainer: ModelContainer
 
@@ -113,10 +118,22 @@ final class BacklogService {
         guard let index = tasks.firstIndex(where: { $0.id == id }) else { return nil }
         let removed = tasks.remove(at: index)
         saveTasks()
+        NotificationCenter.default.post(name: Self.taskRemoved, object: id)
         return removed
     }
 
     func completeTask(id: String) {
+        guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
+        tasks[index].status = .done
+        tasks[index].completedAt = Date()
+        saveTasks()
+        NotificationCenter.default.post(name: Self.taskCompleted, object: id)
+    }
+
+    /// Marks a task done without posting `taskCompleted`. Used by
+    /// RemindersSyncService when the completion originated externally
+    /// (from Reminders.app) so we don't write it back in a loop.
+    func silentlyComplete(id: String) {
         guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
         tasks[index].status = .done
         tasks[index].completedAt = Date()

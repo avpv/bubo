@@ -13,7 +13,8 @@ struct SettingsView: View {
         case general = "General"
         case appearance = "Appearance"
         case calendars = "Calendars"
-        case reminders = "Reminders"
+        case appleReminders = "Reminders"
+        case notifications = "Notifications"
         case worldClock = "World Clock"
         case assistant = "Assistant"
 
@@ -24,7 +25,8 @@ struct SettingsView: View {
             case .general: "gear"
             case .appearance: "paintbrush"
             case .calendars: "calendar"
-            case .reminders: "bell"
+            case .appleReminders: "checklist"
+            case .notifications: "bell"
             case .worldClock: "globe"
             case .assistant: "wand.and.sparkles"
             }
@@ -51,7 +53,9 @@ struct SettingsView: View {
                     AppearanceTabView()
                 case .calendars:
                     CalendarsTabView()
-                case .reminders:
+                case .appleReminders:
+                    AppleRemindersTabView()
+                case .notifications:
                     RemindersTabView()
                 case .worldClock:
                     WorldClockTabView()

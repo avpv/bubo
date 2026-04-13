@@ -74,6 +74,15 @@ class ReminderSettings: Codable {
     var badgeCountMode: BadgeCountMode { didSet { scheduleSave() } }
     var badgeTimeWindowHours: Int { didSet { scheduleSave() } }
 
+    // Apple Reminders integration
+    var isRemindersSyncEnabled: Bool { didSet { scheduleSave() } }
+    /// Which Reminders lists to import (empty = all).
+    var selectedRemindersListIds: [String] { didSet { scheduleSave() } }
+    /// When true, completing a task in Bubo also marks it done in Apple Reminders.
+    var remindersCompletionSync: Bool { didSet { scheduleSave() } }
+    /// Default duration in minutes for imported reminders (Apple Reminders has no duration concept).
+    var remindersDefaultDurationMinutes: Int { didSet { scheduleSave() } }
+
     // World Clock
     var isWorldClockEnabled: Bool { didSet { scheduleSave() } }
     var worldClockCityIDs: [String] { didSet { scheduleSave() } }
@@ -87,6 +96,7 @@ class ReminderSettings: Codable {
         case selectedWallpaperID
         case customBackgroundPhotoPath, customBackgroundPhotoOpacity, customBackgroundPhotoBlur
         case showBadgeCount, badgeCountMode, badgeTimeWindowHours
+        case isRemindersSyncEnabled, selectedRemindersListIds, remindersCompletionSync, remindersDefaultDurationMinutes
         case isWorldClockEnabled, worldClockCityIDs
     }
 
@@ -110,6 +120,10 @@ class ReminderSettings: Codable {
         self.showBadgeCount = true
         self.badgeCountMode = .wholeDay
         self.badgeTimeWindowHours = 8
+        self.isRemindersSyncEnabled = false
+        self.selectedRemindersListIds = []
+        self.remindersCompletionSync = true
+        self.remindersDefaultDurationMinutes = 60
         self.isWorldClockEnabled = false
         self.worldClockCityIDs = []
     }
@@ -132,6 +146,10 @@ class ReminderSettings: Codable {
         showBadgeCount = try container.decodeIfPresent(Bool.self, forKey: .showBadgeCount) ?? true
         badgeCountMode = try container.decodeIfPresent(BadgeCountMode.self, forKey: .badgeCountMode) ?? .wholeDay
         badgeTimeWindowHours = try container.decodeIfPresent(Int.self, forKey: .badgeTimeWindowHours) ?? 8
+        isRemindersSyncEnabled = try container.decodeIfPresent(Bool.self, forKey: .isRemindersSyncEnabled) ?? false
+        selectedRemindersListIds = try container.decodeIfPresent([String].self, forKey: .selectedRemindersListIds) ?? []
+        remindersCompletionSync = try container.decodeIfPresent(Bool.self, forKey: .remindersCompletionSync) ?? true
+        remindersDefaultDurationMinutes = try container.decodeIfPresent(Int.self, forKey: .remindersDefaultDurationMinutes) ?? 60
         isWorldClockEnabled = try container.decodeIfPresent(Bool.self, forKey: .isWorldClockEnabled) ?? false
         let rawCityIDs = try container.decodeIfPresent([String].self, forKey: .worldClockCityIDs) ?? []
         // Migrate old timezoneID-only format to new city_timezoneID format
@@ -158,6 +176,10 @@ class ReminderSettings: Codable {
         try container.encode(showBadgeCount, forKey: .showBadgeCount)
         try container.encode(badgeCountMode, forKey: .badgeCountMode)
         try container.encode(badgeTimeWindowHours, forKey: .badgeTimeWindowHours)
+        try container.encode(isRemindersSyncEnabled, forKey: .isRemindersSyncEnabled)
+        try container.encode(selectedRemindersListIds, forKey: .selectedRemindersListIds)
+        try container.encode(remindersCompletionSync, forKey: .remindersCompletionSync)
+        try container.encode(remindersDefaultDurationMinutes, forKey: .remindersDefaultDurationMinutes)
         try container.encode(isWorldClockEnabled, forKey: .isWorldClockEnabled)
         try container.encode(worldClockCityIDs, forKey: .worldClockCityIDs)
     }

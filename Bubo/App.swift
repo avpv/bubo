@@ -9,6 +9,7 @@ struct BuboApp: App {
     @State private var networkMonitor = NetworkMonitor()
     @State private var optimizerService: OptimizerService
     @State private var agentService = AgentService()
+    @State private var remindersSyncService: RemindersSyncService
 
     private let modelContainer: ModelContainer
 
@@ -51,9 +52,13 @@ struct BuboApp: App {
         _reminderService = State(wrappedValue: ReminderService(settings: s, modelContainer: container))
 
         let optimizer = OptimizerService()
-        optimizer.backlogService = BacklogService(modelContainer: container)
+        let backlog = BacklogService(modelContainer: container)
+        optimizer.backlogService = backlog
         optimizer.energyCheckInService = EnergyCheckInService()
         _optimizerService = State(wrappedValue: optimizer)
+
+        let syncService = RemindersSyncService(settings: s, backlogService: backlog)
+        _remindersSyncService = State(wrappedValue: syncService)
     }
 
     private func drawOwl(in ctx: CGContext, size s: CGFloat, color: CGColor) {
@@ -254,7 +259,8 @@ struct BuboApp: App {
                 reminderService: reminderService,
                 networkMonitor: networkMonitor,
                 optimizerService: optimizerService,
-                agentService: agentService
+                agentService: agentService,
+                remindersSyncService: remindersSyncService
             )
         } label: {
             Image(nsImage: menuBarIconWithBadge(count: badgeCount))
@@ -267,6 +273,7 @@ struct BuboApp: App {
                 .environment(reminderService)
                 .environment(optimizerService)
                 .environment(agentService)
+                .environment(remindersSyncService)
         }
         .windowToolbarStyle(.unified(showsTitle: true))
     }
