@@ -49,6 +49,16 @@ struct IslandConfiguration: Sendable {
         immigrantReplacement: .worst,
         diversifyIslands: true
     )
+
+    /// Validate configuration, clamping values to safe ranges.
+    /// Call this before passing to `IslandModelGA`.
+    func validated(populationSize: Int) -> IslandConfiguration {
+        var copy = self
+        copy.islandCount = max(1, islandCount)
+        copy.migrationInterval = max(1, migrationInterval)
+        copy.migrationSize = max(1, min(migrationSize, populationSize / 2))
+        return copy
+    }
 }
 
 // MARK: - Migration Topology
@@ -162,6 +172,11 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
 
     /// Run the island model GA and return the combined final population (sorted by fitness).
     func run() -> [C] {
+        precondition(islandConfig.islandCount >= 1, "IslandModelGA requires at least 1 island")
+        precondition(islandConfig.migrationInterval >= 1, "migrationInterval must be >= 1")
+        precondition(baseConfig.populationSize >= baseConfig.eliteCount + 2,
+                     "populationSize must be larger than eliteCount + 1")
+
         // 1. Create islands with (optionally) diversified configurations.
         //    Each island gets its own GeneticAlgorithm instance for evolveOneGeneration.
         let islandConfigs = makeIslandConfigs()
@@ -437,16 +452,18 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
                 config.crossoverRate = 0.9
 
             default:
-                // Additional islands: random parameter variations
-                config.mutationRate = baseConfig.mutationRate * Double.random(in: 0.5...3.0)
-                config.crossoverRate = Double.random(in: 0.6...0.95)
-                let strategies: [SelectionStrategy] = [
-                    .tournament(size: 3),
-                    .tournament(size: 5),
-                    .rank,
-                    .stochasticUniversalSampling
+                // Additional islands: deterministic parameter variations based on index.
+                // Each island gets a unique combination so results are reproducible.
+                let variations: [(mutMul: Double, xRate: Double, sel: SelectionStrategy)] = [
+                    (1.8, 0.75, .tournament(size: 3)),
+                    (0.7, 0.90, .stochasticUniversalSampling),
+                    (2.2, 0.80, .tournament(size: 5)),
+                    (1.5, 0.70, .rank),
                 ]
-                config.selectionStrategy = strategies.randomElement()!
+                let v = variations[(i - 4) % variations.count]
+                config.mutationRate = baseConfig.mutationRate * v.mutMul
+                config.crossoverRate = v.xRate
+                config.selectionStrategy = v.sel
             }
             configs.append(config)
         }

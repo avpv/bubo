@@ -235,6 +235,9 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
     /// When `parallelEvaluation` is true, offspring fitness is evaluated using
     /// `DispatchQueue.concurrentPerform`. Set to false when the caller already
     /// runs multiple islands in parallel to avoid GCD thread pool oversubscription.
+    ///
+    /// - Important: Internal API for `IslandModelGA`. Do not call directly from
+    ///   application code — use `run()` or `runSeeded(with:)` instead.
     func evolveOneGeneration(
         _ population: inout Population<C>,
         config: GAConfiguration,
@@ -312,6 +315,9 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
 
     /// Apply small perturbations to a chromosome and keep improvements.
     /// This refines a good GA solution by exploring its immediate neighborhood.
+    ///
+    /// - Important: Internal API for `IslandModelGA`. Do not call directly from
+    ///   application code.
     func hillClimb(_ chromosome: C, steps: Int) -> C {
         var current = chromosome
         for _ in 0..<steps {
