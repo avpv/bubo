@@ -182,7 +182,7 @@ struct AITabView: View {
                     .foregroundStyle(skin.resolvedTextSecondary)
             }
 
-            Text("Switch to \"Own API key\" mode for unlimited usage.")
+            Text("Switch to \u{201C}Own API key\u{201D} mode for unlimited usage.")
                 .font(.caption2)
                 .foregroundStyle(skin.resolvedTextTertiary)
         }

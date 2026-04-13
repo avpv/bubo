@@ -751,13 +751,13 @@ struct CommandPalette: View {
     }
 
     private func hint(_ key: String, _ label: String) -> some View {
-        HStack(spacing: 4) {
+        HStack(spacing: DS.Spacing.xs) {
             Text(key)
                 .font(.caption2.monospaced())
                 .foregroundStyle(skin.resolvedTextSecondary)
-                .padding(.horizontal, 4)
-                .padding(.vertical, 1)
-                .background(RoundedRectangle(cornerRadius: 3).strokeBorder(skin.resolvedTextTertiary.opacity(0.35), lineWidth: 0.5))
+                .padding(.horizontal, DS.Spacing.xs)
+                .padding(.vertical, DS.Spacing.xxs)
+                .background(RoundedRectangle(cornerRadius: DS.Spacing.xs).strokeBorder(skin.resolvedTextTertiary.opacity(0.35), lineWidth: 0.5))
             Text(label)
                 .font(.caption2)
                 .foregroundStyle(skin.resolvedTextTertiary)
