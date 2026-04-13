@@ -20,6 +20,7 @@ struct IntentCompiler {
     let reminderService: ReminderService
     let backlogService: BacklogService
     var subgraphRegistry: SubgraphRegistry?
+    var energyCheckInService: EnergyCheckInService?
 
     // MARK: - Execute
 
@@ -516,8 +517,12 @@ private extension IntentCompiler {
             config.maxExtraTasks = maxExtra
         case .overflowToTomorrow:
             config.overflowToTomorrow = true
-        case .energyCheckIn:
-            break  // Handled by SuggestionEngine at the specified hour
+        case .energyCheckIn(let atHour):
+            // Schedule check-in prompt at the given hour.
+            // The actual prompting is handled by EnergyCheckInService via
+            // SuggestionEngine; here we ensure the energy curve preference
+            // reflects the personal data if available.
+            config.peakEnergyHour = config.peakEnergyHour ?? atHour
 
         // Temporal scope
         case .todayOnly(let inner):
@@ -835,6 +840,22 @@ private extension IntentCompiler {
         if let v = config.minBreakMinutes { prefs.minBreakMinutes = v }
         if let v = config.lunchStart { prefs.lunchWindowStart = v }
         if let v = config.lunchEnd { prefs.lunchWindowEnd = v }
+
+        // Inject personal energy curve from check-in data when available.
+        if let service = energyCheckInService, service.hasEnoughData {
+            let cal = Calendar.current
+            let now = Date()
+            let dow = cal.component(.weekday, from: now)
+            let todayEnd = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now))!
+            let meetingCount = reminderService.allEvents.filter {
+                $0.startDate >= now && $0.startDate < todayEnd && !$0.isLocalEvent
+            }.count
+            prefs.personalEnergyCurve = service.predictedCurve(
+                dayOfWeek: dow,
+                meetingCount: meetingCount,
+                defaultPeakHour: prefs.peakEnergyHour
+            )
+        }
 
         return prefs
     }

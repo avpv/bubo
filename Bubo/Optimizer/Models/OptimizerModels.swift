@@ -184,6 +184,9 @@ struct OptimizerPreferences: Codable, Sendable {
     // Energy model
     var peakEnergyHour: Int           // hour of day with peak energy
     var energyDecayRate: Double       // how fast energy drops
+    /// Personal energy curve from check-in data (24 values, 0…1 per hour).
+    /// nil = use static Gaussian centred on peakEnergyHour.
+    var personalEnergyCurve: [Double]?
 
     // Break rules
     var maxConsecutiveMeetingMinutes: Int
@@ -220,6 +223,7 @@ struct OptimizerPreferences: Codable, Sendable {
         taskInclusionWeight: Double = 4.0,
         peakEnergyHour: Int = 10,
         energyDecayRate: Double = 0.1,
+        personalEnergyCurve: [Double]? = nil,
         maxConsecutiveMeetingMinutes: Int = 120,
         minBreakMinutes: Int = 10,
         lunchWindowStart: Int = 12,
@@ -247,6 +251,7 @@ struct OptimizerPreferences: Codable, Sendable {
         self.taskInclusionWeight = taskInclusionWeight
         self.peakEnergyHour = peakEnergyHour
         self.energyDecayRate = energyDecayRate
+        self.personalEnergyCurve = personalEnergyCurve
         self.maxConsecutiveMeetingMinutes = maxConsecutiveMeetingMinutes
         self.minBreakMinutes = minBreakMinutes
         self.lunchWindowStart = lunchWindowStart

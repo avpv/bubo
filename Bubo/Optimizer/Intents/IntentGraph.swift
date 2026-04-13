@@ -572,6 +572,7 @@ struct IntentGraph: Sendable {
         // Adaptive
         .stretchGoals(maxExtra: 2),
         .overflowToTomorrow,
+        .energyCheckIn(atHour: 14),
         .skipWeekends,
         // Output
         .autoApply, .saveAsPreset(name: ""),

@@ -60,9 +60,18 @@ struct EnergyCurveObjective: FitnessObjective {
                     + Double(cal.component(.minute, from: event.start)) / 60.0
                 let durationHours = event.end.timeIntervalSince(event.start) / 3600
 
-                // Energy at this time of day (smooth bell curve around peak)
-                let hourDistance = abs(hour - Double(peakHour))
-                let timeEnergy = exp(-hourDistance * hourDistance * 0.02)
+                // Energy at this time of day — use personal curve when available,
+                // otherwise fall back to static Gaussian around peakHour.
+                let timeEnergy: Double
+                if let curve = context.preferences.personalEnergyCurve, curve.count == 24 {
+                    let h0 = min(23, Int(hour))
+                    let h1 = min(23, h0 + 1)
+                    let frac = hour - Double(h0)
+                    timeEnergy = curve[h0] * (1.0 - frac) + curve[h1] * frac
+                } else {
+                    let hourDistance = abs(hour - Double(peakHour))
+                    timeEnergy = exp(-hourDistance * hourDistance * 0.02)
+                }
 
                 // High-cost tasks at high-energy times = good alignment
                 let alignment = event.energyCost * timeEnergy
