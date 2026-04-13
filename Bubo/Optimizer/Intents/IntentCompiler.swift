@@ -58,10 +58,14 @@ struct IntentCompiler {
         let prefs = buildPreferences(config)
         let workingHours = config.workingHours
         let maxEventMinutes = allMovable.map { $0.duration / 60 }.max() ?? 30
+        // Use the larger of (longest event) and (total non-droppable time) so the
+        // horizon overflows to the next day when required tasks can't all fit today.
+        let totalRequiredMinutes = allMovable.filter { !$0.isDroppable }.reduce(0.0) { $0 + $1.duration / 60 }
+        let minRequiredMinutes = max(maxEventMinutes, totalRequiredMinutes)
         let horizon = resolveHorizon(
             config.horizon,
             workingHours: workingHours,
-            minRequiredMinutes: maxEventMinutes,
+            minRequiredMinutes: minRequiredMinutes,
             overflowToNextDay: config.overflowToTomorrow
         )
 
