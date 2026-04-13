@@ -181,14 +181,13 @@ struct BacklogView: View {
 
             // Expanded mode — height-capped ScrollView for ≤ maxExpandedTasks rows.
             if isExpanded && allTasks.count > Self.maxVisibleTasks {
-                let visibleRowCount = min(allTasks.count, Self.maxExpandedTasks)
                 ScrollView {
                     VStack(spacing: 0) {
                         taskRowsContent(visibleIDs: nil)
                     }
                 }
                 .scrollIndicators(.automatic)
-                .frame(height: DS.Size.backlogRowHeight * CGFloat(visibleRowCount))
+                .frame(maxHeight: DS.Size.backlogRowHeight * CGFloat(Self.maxExpandedTasks))
             } else {
                 // Compact mode — plain VStack, only first maxVisibleTasks.
                 let visibleIDs = Set(allTasks.prefix(Self.maxVisibleTasks).map(\.id))
