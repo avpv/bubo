@@ -28,28 +28,28 @@ struct EnergyCheckInBanner: View {
 
             Spacer(minLength: DS.Spacing.xs)
 
-            // 1–5 scale. All buttons share one style — they're equivalent
-            // options in a picker, not status indicators (§7: semantic colours
-            // are not ornaments — orange/green must mean warning/success,
-            // not "low"/"high").
-            ForEach(1...5, id: \.self) { level in
-                Button {
-                    Haptics.tap()
-                    onRecord(level)
-                } label: {
-                    Text("\(level)")
-                        .font(.caption.weight(.semibold).monospacedDigit())
-                        .foregroundStyle(skin.accentColor)
-                        .frame(width: 20, height: 20)
-                        .background(
-                            Circle()
-                                .fill(skin.accentColor.opacity(DS.Opacity.lightFill))
-                        )
+            // 1–5 scale grouped tight (xs spacing) so it reads as one unit
+            // and fits the 360 pt popover. Outer HStack uses sm between groups.
+            HStack(spacing: DS.Spacing.xs) {
+                ForEach(1...5, id: \.self) { level in
+                    Button {
+                        Haptics.tap()
+                        onRecord(level)
+                    } label: {
+                        Text("\(level)")
+                            .font(.caption.weight(.semibold).monospacedDigit())
+                            .foregroundStyle(skin.accentColor)
+                            .frame(width: 20, height: 20)
+                            .background(
+                                Circle()
+                                    .fill(skin.accentColor.opacity(DS.Opacity.lightFill))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .frame(width: DS.Size.controlHeight, height: DS.Size.controlHeight)
+                    .contentShape(Rectangle())
+                    .accessibilityLabel("Energy level \(level) of 5")
                 }
-                .buttonStyle(.plain)
-                .frame(width: DS.Size.controlHeight, height: DS.Size.controlHeight)
-                .contentShape(Rectangle())
-                .accessibilityLabel("Energy level \(level) of 5")
             }
 
             Button {
