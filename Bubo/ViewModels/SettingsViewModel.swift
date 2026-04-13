@@ -28,6 +28,20 @@ class SettingsViewModel {
         }
     }
 
+    // MARK: - Apple Reminders
+    var remindersAuthStatus = AppleRemindersService.authorizationStatus
+    var isRequestingRemindersAccess = false
+    var availableRemindersLists: [AppleRemindersService.RemindersList] = []
+    var remindersListsByAccount: [(account: String, lists: [AppleRemindersService.RemindersList])] = []
+
+    var remindersAccessGranted: Bool {
+        if #available(macOS 14.0, *) {
+            remindersAuthStatus == .fullAccess
+        } else {
+            remindersAuthStatus == .authorized
+        }
+    }
+
     // MARK: - Actions
 
     func requestAppleCalendarAccess() {
@@ -48,5 +62,25 @@ class SettingsViewModel {
     func loadAppleCalendars() {
         availableAppleCalendars = AppleCalendarService.shared.listCalendars()
         appleCalendarsByAccount = AppleCalendarService.shared.listCalendarsByAccount()
+    }
+
+    func requestRemindersAccess() {
+        guard !isRequestingRemindersAccess else { return }
+        isRequestingRemindersAccess = true
+
+        Task {
+            let granted = await AppleRemindersService.shared.requestAccess()
+
+            remindersAuthStatus = AppleRemindersService.authorizationStatus
+            isRequestingRemindersAccess = false
+            if granted {
+                loadRemindersLists()
+            }
+        }
+    }
+
+    func loadRemindersLists() {
+        availableRemindersLists = AppleRemindersService.shared.listRemindersLists()
+        remindersListsByAccount = AppleRemindersService.shared.listsByAccount()
     }
 }

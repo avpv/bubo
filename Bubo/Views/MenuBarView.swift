@@ -7,6 +7,7 @@ struct MenuBarView: View {
     var networkMonitor: NetworkMonitor
     var optimizerService: OptimizerService
     var agentService: AgentService
+    var remindersSyncService: RemindersSyncService
 
     @State private var navigation: Navigation = .list
     @State private var hasStartedSync = false
@@ -292,6 +293,8 @@ struct MenuBarView: View {
             hasStartedSync = true
             reminderService.updateSettings(settings)
             reminderService.startSync()
+            remindersSyncService.syncNow()
+            remindersSyncService.startSyncTimer()
             if let backlog = optimizerService.backlogService {
                 optimizerService.setup(reminderService: reminderService, backlogService: backlog)
             } else {
