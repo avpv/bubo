@@ -163,14 +163,14 @@ struct AppleRemindersTabView: View {
     @ViewBuilder
     private var syncBehaviorSection: some View {
         @Bindable var settings = settings
-        SettingsPlatter("Sync Behavior") {
+        SettingsPlatter("Completion") {
             Toggle(isOn: $settings.remindersCompletionSync) {
-                Text("Two-way completion")
+                Text("Also mark done in Reminders")
                     .fontWeight(.medium)
             }
             .toggleStyle(.switch)
 
-            Text("When enabled, completing a task in Bubo also marks it as done in Apple Reminders.")
+            Text("Completing a task marks the original reminder as done too.")
                 .font(.caption)
                 .foregroundStyle(skin.resolvedTextSecondary)
                 .padding(.top, DS.Spacing.xs)
