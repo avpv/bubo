@@ -438,19 +438,20 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
                 child2.repair(context: context)
             }
 
-            offspring.append(child1)
-            offspring.append(child2)
-
-            // Track pairs for crowding replacement
-            if config.enableCrowding {
-                parentPairs.append((parent1, parent2))
-                offspringPairs.append((child1, child2))
+            // When we'd overshoot by 1, only keep child1
+            let remaining = targetCount - offspring.count
+            if remaining >= 2 {
+                offspring.append(child1)
+                offspring.append(child2)
+                if config.enableCrowding {
+                    parentPairs.append((parent1, parent2))
+                    offspringPairs.append((child1, child2))
+                }
+            } else {
+                // Only 1 slot left — append child1 only, skip pair tracking
+                // (crowding requires matched pairs, so this child uses generational replacement)
+                offspring.append(child1)
             }
-        }
-
-        // Trim excess offspring (loop appends 2 at a time, may overshoot by 1)
-        if offspring.count > targetCount {
-            offspring.removeLast(offspring.count - targetCount)
         }
 
         // Fitness evaluation: parallel when running standalone,
@@ -473,15 +474,11 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
 
         // Replacement strategy
         if config.enableCrowding && !parentPairs.isEmpty {
-            // Deterministic crowding: each child competes with its closest parent
-            // Re-pair offspring since we may have trimmed
-            let validPairCount = min(parentPairs.count, offspringPairs.count)
-            let trimmedParentPairs = Array(parentPairs.prefix(validPairCount))
-            let trimmedOffspringPairs = Array(offspringPairs.prefix(validPairCount))
-
+            // Deterministic crowding: each child competes with its closest parent.
+            // parentPairs and offspringPairs are always aligned (no trimming needed).
             population.replaceByCrowding(
-                parents: trimmedParentPairs,
-                offspring: trimmedOffspringPairs,
+                parents: parentPairs,
+                offspring: offspringPairs,
                 distanceFn: { $0.distance(to: $1) }
             )
         } else {

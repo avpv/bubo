@@ -184,12 +184,25 @@ struct ScheduleChromosome: Chromosome, Sendable {
         }
 
         // Restore original event order (genes indexed by movableEvents order)
-        let geneMap = Dictionary(uniqueKeysWithValues: genes.map { ($0.eventId, $0) })
-        let orderedGenes = context.movableEvents.map { event in
-            geneMap[event.id]!
+        let geneMap = Dictionary(genes.map { ($0.eventId, $0) }, uniquingKeysWith: { first, _ in first })
+        let orderedGenes = context.movableEvents.compactMap { event in
+            geneMap[event.id]
         }
 
-        return ScheduleChromosome(genes: orderedGenes, needsEvaluation: true)
+        // Fallback: if compactMap dropped any (shouldn't happen), fill with random
+        var result = orderedGenes
+        let missing = context.movableEvents.filter { ev in !result.contains(where: { $0.eventId == ev.id }) }
+        for event in missing {
+            let start = randomStartTime(for: event, in: context.planningHorizon, workingHours: context.workingHours, calendar: cal)
+            result.append(ScheduleGene(
+                eventId: event.id, title: event.title, startTime: start,
+                duration: event.duration, context: event.context, energyCost: event.energyCost,
+                priority: event.priority, isFocusBlock: event.isFocusBlock,
+                storyPoints: event.storyPoints, isDroppable: event.isDroppable, isIncluded: !event.isDroppable
+            ))
+        }
+
+        return ScheduleChromosome(genes: result, needsEvaluation: true)
     }
 
     /// Find the first gap in the schedule that fits the event duration.
@@ -248,9 +261,10 @@ struct ScheduleChromosome: Chromosome, Sendable {
                     return candidate
                 }
 
-                // Jump to end of the overlapping event
+                // Jump past the overlapping event (minimum 1-minute advance to prevent infinite loop)
                 if let blocker = occupied.first(where: { candidate < $0.end && candidateEnd > $0.start }) {
-                    candidate = blocker.end
+                    let nextCandidate = blocker.end
+                    candidate = nextCandidate > candidate ? nextCandidate : candidate.addingTimeInterval(900)
                 } else {
                     candidate = candidate.addingTimeInterval(900) // 15 min
                 }
@@ -408,7 +422,9 @@ struct ScheduleChromosome: Chromosome, Sendable {
         let finalGapStart = max(prevEnd, floor)
         if horizon.end.timeIntervalSince(finalGapStart) >= duration {
             let clamped = clampToWorkingHours(finalGapStart, duration: duration, workingHours: workingHours, calendar: calendar, floor: floor)
-            candidates.append((clamped, abs(clamped.timeIntervalSince(near))))
+            if clamped.addingTimeInterval(duration) <= horizon.end {
+                candidates.append((clamped, abs(clamped.timeIntervalSince(near))))
+            }
         }
 
         // Return the closest candidate to original position

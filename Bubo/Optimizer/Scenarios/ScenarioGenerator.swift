@@ -91,8 +91,8 @@ struct ScenarioGenerator {
 
         let dayFactor = count > 0 ? dayDiffTotal / Double(count) : 0
 
-        // Blend: 70% genotypic distance, 30% day-level difference
-        return baseDistance * 0.7 + dayFactor * 0.3
+        // Blend: 70% genotypic distance, 30% day-level difference, clamped to [0, 1]
+        return min(1.0, baseDistance * 0.7 + dayFactor * 0.3)
     }
 
     // MARK: - Scenario Comparison
