@@ -103,19 +103,17 @@ struct IslandModelProgress: Sendable {
 
 // MARK: - Island (Internal)
 
-/// A single island holding a population and its per-island evolution state.
+/// A single island holding a population, its GA engine, and per-island evolution state.
+/// Reference type so that `concurrentPerform` can safely mutate separate instances.
 private final class Island<C: Chromosome> {
     var population: Population<C>
-    let config: GAConfiguration
+    let ga: GeneticAlgorithm<C>
     var bestEver: C?
-    var staleGenerations: Int = 0
-    var lastBestFitness: Double = 0
 
-    init(population: Population<C>, config: GAConfiguration) {
+    init(population: Population<C>, ga: GeneticAlgorithm<C>) {
         self.population = population
-        self.config = config
+        self.ga = ga
         self.bestEver = population.best
-        self.lastBestFitness = bestEver?.fitness ?? 0
     }
 }
 
@@ -129,8 +127,13 @@ private final class Island<C: Chromosome> {
 /// Periodic migration shares good genetic material between islands while maintaining
 /// population diversity — the key advantage over a single large population.
 ///
+/// Evolution logic is delegated to `GeneticAlgorithm.evolveOneGeneration` so there
+/// is a single source of truth for selection, crossover, mutation, and evaluation.
+/// Islands evolve in parallel using `concurrentPerform` at island level; per-island
+/// fitness evaluation is sequential to avoid GCD thread pool oversubscription.
+///
 /// Thread safety: like `GeneticAlgorithm`, instances are created fresh within a
-/// `Task.detached` block. Islands evolve in parallel using GCD `concurrentPerform`.
+/// `Task.detached` block.
 final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
     let islandConfig: IslandConfiguration
     let baseConfig: GAConfiguration
@@ -159,7 +162,8 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
 
     /// Run the island model GA and return the combined final population (sorted by fitness).
     func run() -> [C] {
-        // 1. Create islands with (optionally) diversified configurations
+        // 1. Create islands with (optionally) diversified configurations.
+        //    Each island gets its own GeneticAlgorithm instance for evolveOneGeneration.
         let islandConfigs = makeIslandConfigs()
         let islands = islandConfigs.map { config -> Island<C> in
             var pop = Population<C>(
@@ -168,7 +172,12 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
                 context: context
             )
             pop.evaluateAll(using: evaluate)
-            return Island(population: pop, config: config)
+            let ga = GeneticAlgorithm<C>(
+                config: config,
+                context: context,
+                evaluate: evaluate
+            )
+            return Island(population: pop, ga: ga)
         }
 
         bestEver = islands.compactMap(\.bestEver).max(by: { $0.fitness < $1.fitness })
@@ -182,13 +191,23 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         for generation in 0..<totalGenerations {
             // Evolve each island for one generation in parallel.
             // Each Island is a reference type, so concurrent access to separate
-            // instances via index is safe.
+            // instances is safe. parallelEvaluation=false avoids nested concurrentPerform.
             DispatchQueue.concurrentPerform(iterations: islands.count) { i in
-                self.evolveOneGeneration(
-                    island: islands[i],
+                let island = islands[i]
+                island.ga.evolveOneGeneration(
+                    &island.population,
+                    config: island.ga.config,
                     generation: generation,
-                    maxGenerations: totalGenerations
+                    maxGenerations: totalGenerations,
+                    parallelEvaluation: false
                 )
+
+                // Track per-island best
+                if let currentBest = island.population.best {
+                    if island.bestEver == nil || currentBest.fitness > island.bestEver!.fitness {
+                        island.bestEver = currentBest
+                    }
+                }
             }
 
             // Periodic migration
@@ -240,14 +259,15 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         // 3. Collect top individuals from all islands
         var combined: [C] = []
         for island in islands {
-            combined.append(contentsOf: island.population.sortedByFitness.prefix(island.config.eliteCount * 2))
+            combined.append(contentsOf: island.population.sortedByFitness.prefix(island.ga.config.eliteCount * 2))
         }
 
-        // 4. Hill climb on top individuals
-        let refineCount = min(baseConfig.eliteCount * 2, combined.count)
+        // 4. Hill climb on top individuals (reuse GA's hill climbing)
         combined.sort { $0.fitness > $1.fitness }
+        let refineCount = min(baseConfig.eliteCount * 2, combined.count)
+        let refiner = islands[0].ga
         for i in 0..<refineCount {
-            combined[i] = hillClimb(combined[i], steps: 20)
+            combined[i] = refiner.hillClimb(combined[i], steps: 20)
         }
 
         // Update bestEver after hill climbing
@@ -258,102 +278,29 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         return combined.sorted { $0.fitness > $1.fitness }
     }
 
-    // MARK: - Per-Island Single Generation
-
-    /// Evolve a single island for one generation. This contains the core GA logic:
-    /// diversity-driven immigration, selection, crossover, adaptive mutation,
-    /// parallel fitness evaluation, and elitist replacement.
-    private func evolveOneGeneration(
-        island: Island<C>,
-        generation: Int,
-        maxGenerations: Int
-    ) {
-        let config = island.config
-        let diversity = island.population.fitnessDiversity
-        let diversityIsLow = diversity < config.diversityThreshold
-
-        // Immigration: inject random individuals when diversity collapses
-        if diversityIsLow && config.immigrationRate > 0 {
-            let immigrantCount = max(1, Int(Double(config.populationSize) * config.immigrationRate))
-            island.population.injectImmigrants(count: immigrantCount, context: context, evaluate: evaluate)
-        }
-
-        // Selection + Crossover + Mutation
-        var offspring: [C] = []
-        let targetCount = config.populationSize - config.eliteCount
-
-        while offspring.count < targetCount {
-            let (parent1, parent2) = Selection.selectPair(
-                from: island.population,
-                strategy: config.selectionStrategy
-            )
-
-            var child1: C
-            var child2: C
-
-            if Double.random(in: 0...1) < config.crossoverRate {
-                (child1, child2) = parent1.crossover(with: parent2, strategy: config.crossoverStrategy, context: context)
-            } else {
-                child1 = parent1
-                child2 = parent2
-            }
-
-            // Adaptive mutation: boost when diversity is low, decay over generations
-            let rate: Double
-            if config.adaptiveMutation {
-                let generationDecay = max(0.1, 1.0 - Double(generation) / Double(maxGenerations))
-                let diversityBoost = diversityIsLow ? 2.5 : 1.0
-                rate = min(1.0, config.mutationRate * generationDecay * diversityBoost)
-            } else {
-                rate = config.mutationRate
-            }
-
-            child1.mutate(rate: rate, context: context)
-            child2.mutate(rate: rate, context: context)
-
-            offspring.append(child1)
-            offspring.append(child2)
-        }
-
-        // Trim excess offspring (loop appends 2 at a time, may overshoot by 1)
-        if offspring.count > targetCount {
-            offspring.removeLast(offspring.count - targetCount)
-        }
-
-        // Parallel fitness evaluation
-        if offspring.count > 1 {
-            DispatchQueue.concurrentPerform(iterations: offspring.count) { i in
-                self.evaluate(&offspring[i])
-            }
-        } else {
-            for i in offspring.indices {
-                evaluate(&offspring[i])
-            }
-        }
-
-        // Elitist replacement
-        island.population.replaceGeneration(with: offspring)
-
-        // Track per-island best
-        if let currentBest = island.population.best {
-            if island.bestEver == nil || currentBest.fitness > island.bestEver!.fitness {
-                island.bestEver = currentBest
-            }
-        }
-    }
-
     // MARK: - Migration
 
     /// Transfer individuals between islands according to the configured topology.
+    /// Emigrants are copied (not removed) from the source, mirroring standard
+    /// island model GA semantics.
     private func migrate(islands: [Island<C>]) {
         let n = islands.count
         guard n > 1 else { return }
 
         let migrationPairs = makeMigrationPairs(islandCount: n)
 
+        // Snapshot emigrants before any replacement to avoid one migration
+        // polluting the source for subsequent pairs in the same round.
+        let emigrantsBySource: [Int: [C]] = Dictionary(
+            uniqueKeysWithValues: Set(migrationPairs.map(\.source)).map { sourceIdx in
+                (sourceIdx, selectEmigrants(from: islands[sourceIdx]))
+            }
+        )
+
         for (source, destination) in migrationPairs {
-            let emigrants = selectEmigrants(from: islands[source])
-            insertImmigrants(emigrants, into: islands[destination])
+            if let emigrants = emigrantsBySource[source] {
+                insertImmigrants(emigrants, into: islands[destination])
+            }
         }
     }
 
@@ -365,23 +312,31 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             return (0..<n).map { ($0, ($0 + 1) % n) }
 
         case .fullyConnected:
-            // Every island sends to every other island
-            var pairs: [(Int, Int)] = []
-            for i in 0..<n {
-                for j in 0..<n where i != j {
-                    pairs.append((i, j))
-                }
+            // Each island sends to one randomly chosen neighbor per migration event.
+            // This avoids elite flooding: N migrants per island instead of N*(N-1).
+            return (0..<n).map { i in
+                var j = Int.random(in: 0..<(n - 1))
+                if j >= i { j += 1 } // exclude self
+                return (i, j)
             }
-            return pairs
 
         case .randomPairs:
-            // Shuffle islands into random pairs
+            // Shuffle all islands into random pairs; every island participates exactly once.
             var indices = Array(0..<n)
             indices.shuffle()
             var pairs: [(Int, Int)] = []
-            for i in stride(from: 0, to: n - 1, by: 2) {
+            var i = 0
+            while i + 1 < n {
                 pairs.append((indices[i], indices[i + 1]))
                 pairs.append((indices[i + 1], indices[i]))
+                i += 2
+            }
+            // If odd number of islands, the last one exchanges with a random partner.
+            if n.isMultiple(of: 2) == false {
+                let last = indices[n - 1]
+                let partner = indices[Int.random(in: 0..<(n - 1))]
+                pairs.append((last, partner))
+                pairs.append((partner, last))
             }
             return pairs
         }
@@ -497,21 +452,5 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         }
 
         return configs
-    }
-
-    // MARK: - Hill Climbing
-
-    /// Apply small perturbations to a chromosome and keep improvements.
-    private func hillClimb(_ chromosome: C, steps: Int) -> C {
-        var current = chromosome
-        for _ in 0..<steps {
-            var neighbor = current
-            neighbor.mutate(rate: 0.3, context: context)
-            evaluate(&neighbor)
-            if neighbor.fitness > current.fitness {
-                current = neighbor
-            }
-        }
-        return current
     }
 }
