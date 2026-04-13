@@ -220,13 +220,30 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
 
         // 1. Create islands with (optionally) diversified configurations.
         //    Each island gets its own GeneticAlgorithm instance for evolveOneGeneration.
+        //    Greedy seeds are distributed per-island based on each island's config.
         let islandConfigs = makeIslandConfigs()
         let islands = islandConfigs.map { config -> Island<C> in
-            var pop = Population<C>(
-                size: config.populationSize,
-                eliteCount: config.eliteCount,
-                context: context
-            )
+            let greedyCount = max(0, Int(Double(config.populationSize) * config.greedySeedFraction))
+            let randomCount = config.populationSize - greedyCount
+
+            var individuals: [C] = []
+            for i in 0..<greedyCount {
+                var ind = C.greedy(context: context)
+                if i > 0 { ind.mutate(rate: 0.1 + Double(i) * 0.05, context: context) }
+                individuals.append(ind)
+            }
+            for _ in 0..<randomCount {
+                individuals.append(C.random(context: context))
+            }
+
+            // Repair initial population if enabled
+            if config.enableRepair {
+                for i in individuals.indices {
+                    individuals[i].repair(context: context)
+                }
+            }
+
+            var pop = Population<C>(individuals: individuals, eliteCount: config.eliteCount)
             pop.evaluateAll(using: evaluate)
             let ga = GeneticAlgorithm<C>(
                 config: config,

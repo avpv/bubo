@@ -62,7 +62,15 @@ struct ScheduleChromosome: Chromosome, Sendable {
     /// Set to true on creation, crossover, and mutation; cleared after evaluation.
     var needsEvaluation: Bool = true
 
-    /// Equality ignores needsEvaluation — two chromosomes with the same genes and fitness are equal.
+    /// Cached per-objective scores for incremental evaluation.
+    /// Populated after full evaluation; reused when only a subset of genes change.
+    var objectiveCache: [String: Double]?
+
+    /// Indices of genes that were modified since last evaluation.
+    /// Used by delta evaluation to skip recomputing unaffected local objectives.
+    var mutatedGeneIndices: IndexSet?
+
+    /// Equality ignores needsEvaluation and caches — two chromosomes with the same genes and fitness are equal.
     static func == (lhs: ScheduleChromosome, rhs: ScheduleChromosome) -> Bool {
         lhs.genes == rhs.genes && lhs.fitness == rhs.fitness
     }
@@ -283,10 +291,13 @@ struct ScheduleChromosome: Chromosome, Sendable {
 
     mutating func mutate(rate: Double, context: OptimizerContext) {
         needsEvaluation = true
+        var changed = IndexSet()
         let cal = context.calendar
         let horizonStart = context.planningHorizon.start
         for i in genes.indices {
             guard Double.random(in: 0...1) < rate else { continue }
+
+            changed.insert(i)
 
             // Droppable genes: small chance to flip inclusion instead of moving
             if genes[i].isDroppable && Double.random(in: 0...1) < 0.15 {
@@ -347,6 +358,7 @@ struct ScheduleChromosome: Chromosome, Sendable {
                 break
             }
         }
+        mutatedGeneIndices = changed.isEmpty ? nil : changed
     }
 
     // MARK: - Guided Mutation Helpers

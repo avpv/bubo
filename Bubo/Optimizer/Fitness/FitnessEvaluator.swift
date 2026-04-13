@@ -110,9 +110,19 @@ final class FitnessEvaluator: @unchecked Sendable {
 
     /// Evaluate and assign fitness to a chromosome (mutating).
     /// Skips evaluation if the chromosome hasn't changed since last evaluation.
+    /// Uses incremental evaluation when a cached objective breakdown is available.
     func evaluateAndAssign(_ chromosome: inout ScheduleChromosome, context: OptimizerContext) {
         guard chromosome.needsEvaluation else { return }
-        chromosome.fitness = evaluate(chromosome: chromosome, context: context)
+
+        let (fitness, cache) = evaluateIncremental(
+            chromosome: chromosome,
+            previousCache: chromosome.objectiveCache,
+            mutatedIndices: chromosome.mutatedGeneIndices,
+            context: context
+        )
+        chromosome.fitness = fitness
+        chromosome.objectiveCache = cache
+        chromosome.mutatedGeneIndices = nil
         chromosome.needsEvaluation = false
     }
 

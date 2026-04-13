@@ -376,7 +376,11 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         parallelEvaluation: Bool = true
     ) {
         let fitnessDiversity = population.fitnessDiversity
-        let diversityIsLow = fitnessDiversity < config.diversityThreshold
+        // Use genotypic diversity for a more accurate diversity signal.
+        // Fitness diversity can be misleading when different schedules have similar scores.
+        // Fall back to fitness diversity when genotypic is expensive (large populations).
+        let genotypicDiv = population.size <= 100 ? population.genotypicDiversity : fitnessDiversity
+        let diversityIsLow = genotypicDiv < config.diversityThreshold
 
         // Immigration: inject random individuals when diversity collapses
         if diversityIsLow && config.immigrationRate > 0 {
