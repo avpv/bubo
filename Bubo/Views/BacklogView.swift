@@ -812,9 +812,9 @@ struct BacklogTaskRow: View {
     private func deadlineLabel(_ date: Date) -> String {
         let cal = Calendar.current
         let now = Date()
-        if cal.isDateInToday(date) { return "today" }
-        if cal.isDateInTomorrow(date) { return "tomorrow" }
-        if date < now { return "overdue" }
+        if cal.isDateInToday(date) { return "Today" }
+        if cal.isDateInTomorrow(date) { return "Tomorrow" }
+        if date < now { return "Overdue" }
         let days = cal.dateComponents([.day], from: now, to: date).day ?? 0
         return "\(days)d"
     }
@@ -978,7 +978,7 @@ struct BacklogTaskEditRow: View {
                 .font(.caption2.weight(.medium))
                 .foregroundStyle(isActive ? Color.white : .primary)
                 .padding(.horizontal, DS.Spacing.sm)
-                .padding(.vertical, 3)
+                .padding(.vertical, DS.Spacing.pillVertical)
                 .background(
                     Capsule().fill(isActive ? skin.accentColor : skin.accentColor.opacity(0.10))
                 )
