@@ -287,6 +287,7 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         // Adaptive migration state
         var effectiveInterval = islandConfig.migrationInterval
         var effectiveSize = islandConfig.migrationSize
+        var lastCrossDiversity: CrossIslandDiversity?
 
         for generation in 0..<totalGenerations {
             // Evolve each island for one generation in parallel.
@@ -310,8 +311,24 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
                 }
             }
 
-            // Cross-island diversity (used by adaptive migration and progress)
-            let crossDiversity = measureCrossIslandDiversity(islands)
+            // Cross-island diversity: only compute near migration boundaries
+            // to avoid O(islands²) Equatable comparison every generation.
+            let isMigrationGeneration = generation > 0 && generation % effectiveInterval == 0
+            let isPreMigration = generation > 0 && (generation + 1) % effectiveInterval == 0
+            let crossDiversity: CrossIslandDiversity
+            if isMigrationGeneration || isPreMigration || generation == 0 {
+                crossDiversity = measureCrossIslandDiversity(islands)
+            } else {
+                // Cheap fallback: just fitness spread, no Equatable scan
+                let fitnesses = islands.compactMap { $0.bestEver?.fitness }
+                let range = (fitnesses.max() ?? 0) - (fitnesses.min() ?? 0)
+                crossDiversity = CrossIslandDiversity(
+                    uniqueBestFraction: lastCrossDiversity?.uniqueBestFraction ?? 1.0,
+                    fitnessRange: range,
+                    fitnessStdDev: lastCrossDiversity?.fitnessStdDev ?? 0
+                )
+            }
+            lastCrossDiversity = crossDiversity
 
             // Adaptive migration: adjust interval and size based on stagnation/diversity
             if islandConfig.adaptiveMigration {
@@ -333,7 +350,7 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             }
 
             // Periodic migration with effective parameters
-            if generation > 0 && generation % effectiveInterval == 0 {
+            if isMigrationGeneration {
                 migrate(islands: islands, migrationSize: effectiveSize)
                 totalMigrations += 1
             }
