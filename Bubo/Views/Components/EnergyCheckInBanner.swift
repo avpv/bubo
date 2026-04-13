@@ -2,12 +2,9 @@ import SwiftUI
 
 // MARK: - Energy Check-In Banner
 //
+// One-tap energy rating (1–5) that feeds the personal energy curve.
+// Replaces the SmartBanner slot when a check-in is due.
 // Birman: one action, one result. Tap a level — done.
-// §2 Density: numbers + semantic colour communicate the scale;
-//     no endpoint labels needed. Hit targets ≥ 28 pt (HIG floor).
-// §6 Motion: transition degrades gracefully with Reduce Motion.
-// §7 Colour: orange (warning) → neutral → green (success) from system.
-// §8 Typography: SF Symbols always .hierarchical.
 
 struct EnergyCheckInBanner: View {
     @Environment(\.activeSkin) private var skin
@@ -31,7 +28,10 @@ struct EnergyCheckInBanner: View {
 
             Spacer(minLength: DS.Spacing.xs)
 
-            // 1–5 scale: visual circle 20 pt, tappable frame 28 pt (HIG §2).
+            // 1–5 scale. All buttons share one style — they're equivalent
+            // options in a picker, not status indicators (§7: semantic colours
+            // are not ornaments — orange/green must mean warning/success,
+            // not "low"/"high").
             ForEach(1...5, id: \.self) { level in
                 Button {
                     Haptics.tap()
@@ -39,11 +39,11 @@ struct EnergyCheckInBanner: View {
                 } label: {
                     Text("\(level)")
                         .font(.caption.weight(.semibold).monospacedDigit())
-                        .foregroundStyle(colorForLevel(level))
+                        .foregroundStyle(skin.accentColor)
                         .frame(width: 20, height: 20)
                         .background(
                             Circle()
-                                .fill(colorForLevel(level).opacity(DS.Opacity.lightFill))
+                                .fill(skin.accentColor.opacity(DS.Opacity.lightFill))
                         )
                 }
                 .buttonStyle(.plain)
@@ -80,15 +80,5 @@ struct EnergyCheckInBanner: View {
         .padding(.horizontal, DS.Spacing.sm)
         .padding(.top, DS.Spacing.xs)
         .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
-    }
-
-    /// Semantic colour: 1–2 warning, 3 accent (neutral), 4–5 success.
-    /// §7: system colours for semantic meaning; accent for neutral state.
-    private func colorForLevel(_ level: Int) -> Color {
-        switch level {
-        case 1, 2: return DS.Colors.warning
-        case 4, 5: return DS.Colors.success
-        default:   return skin.accentColor
-        }
     }
 }

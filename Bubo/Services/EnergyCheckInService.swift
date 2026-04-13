@@ -157,7 +157,7 @@ final class EnergyCheckInService {
     /// Recompute the personal energy curve from all historical check-ins.
     /// Uses a weighted average: recent readings and same-day-of-week readings
     /// get higher weight.
-    func recomputeCurve() {
+    private func recomputeCurve() {
         guard !checkIns.isEmpty else {
             personalCurve = nil
             return
