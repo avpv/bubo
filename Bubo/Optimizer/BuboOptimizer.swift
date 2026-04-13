@@ -29,13 +29,19 @@ final class BuboOptimizer {
     // MARK: - Configuration
 
     var gaConfig: GAConfiguration = .default
+    var islandConfig: IslandConfiguration = .default
     var preferences: OptimizerPreferences = OptimizerPreferences()
 
     // MARK: - Full Optimization (Async)
 
     /// Run a full optimization for the given context.
+    /// Uses island model GA with multiple parallel populations and periodic migration.
     /// The GA runs on a background thread; progress updates are dispatched to main.
-    func optimize(context: OptimizerContext, overrideConfig: GAConfiguration? = nil) async -> OptimizerResult {
+    func optimize(
+        context: OptimizerContext,
+        overrideConfig: GAConfiguration? = nil,
+        overrideIslandConfig: IslandConfiguration? = nil
+    ) async -> OptimizerResult {
         isOptimizing = true
         defer { isOptimizing = false }
 
@@ -55,23 +61,25 @@ final class BuboOptimizer {
 
         let evaluator = FitnessEvaluator.standard(preferences: prefs)
         let config = overrideConfig ?? gaConfig
+        let capturedIslandConfig = overrideIslandConfig ?? islandConfig
         let scenGen = scenarioGenerator
 
-        // Run GA on background thread
+        // Run island model GA on background thread
         let (population, convergenceGen, duration) = await Task.detached(priority: .userInitiated) {
             let startTime = Date()
 
-            let ga = GeneticAlgorithm<ScheduleChromosome>(
-                config: config,
+            let islandGA = IslandModelGA<ScheduleChromosome>(
+                islandConfig: capturedIslandConfig,
+                baseConfig: config,
                 context: adjustedContext,
                 evaluate: { chromosome in
                     evaluator.evaluateAndAssign(&chromosome, context: adjustedContext)
                 }
             )
 
-            let pop = ga.run()
+            let pop = islandGA.run()
             let elapsed = Date().timeIntervalSince(startTime)
-            return (pop, ga.convergenceGeneration, elapsed)
+            return (pop, islandGA.convergenceGeneration, elapsed)
         }.value
 
         // Back on main thread — generate scenarios and update state
@@ -121,7 +129,7 @@ final class BuboOptimizer {
             preferences: preferences
         )
 
-        return await optimize(context: context, overrideConfig: .quick)
+        return await optimize(context: context, overrideConfig: .quick, overrideIslandConfig: .quick)
     }
 
     // MARK: - Weekly Optimize
@@ -506,7 +514,7 @@ final class BuboOptimizer {
             preferences: prefs
         )
 
-        return await optimize(context: context, overrideConfig: .quick)
+        return await optimize(context: context, overrideConfig: .quick, overrideIslandConfig: .quick)
     }
 
     // MARK: - Week Balancing (#9)

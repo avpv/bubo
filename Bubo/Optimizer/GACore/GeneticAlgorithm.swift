@@ -78,6 +78,25 @@ struct GAConfiguration: Sendable {
         diversityThreshold: 0.005,
         immigrationRate: 0.15
     )
+
+    /// Per-island config for island model GA. Smaller populations per island
+    /// since total individuals = populationSize * islandCount.
+    /// Uses 2-point crossover and moderate mutation as a base;
+    /// IslandModelGA diversifies parameters across islands.
+    static let island = GAConfiguration(
+        populationSize: 60,
+        maxGenerations: 400,
+        mutationRate: 0.12,
+        crossoverRate: 0.85,
+        eliteCount: 3,
+        selectionStrategy: .tournament(size: 4),
+        crossoverStrategy: .twoPoint,
+        convergenceThreshold: 0.0005,
+        convergencePatience: 40,
+        adaptiveMutation: true,
+        diversityThreshold: 0.008,
+        immigrationRate: 0.1
+    )
 }
 
 // MARK: - GA Progress
@@ -151,70 +170,13 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         var lastBestFitness = bestEver?.fitness ?? 0
 
         for generation in 0..<config.maxGenerations {
-            let diversity = population.fitnessDiversity
-            let diversityIsLow = diversity < config.diversityThreshold
-
-            // Immigration: inject random individuals when diversity collapses
-            if diversityIsLow && config.immigrationRate > 0 {
-                let immigrantCount = max(1, Int(Double(config.populationSize) * config.immigrationRate))
-                population.injectImmigrants(count: immigrantCount, context: context, evaluate: evaluate)
-            }
-
-            var offspring: [C] = []
-            let targetCount = config.populationSize - config.eliteCount
-
-            while offspring.count < targetCount {
-                let (parent1, parent2) = Selection.selectPair(
-                    from: population,
-                    strategy: config.selectionStrategy
-                )
-
-                var child1: C
-                var child2: C
-
-                if Double.random(in: 0...1) < config.crossoverRate {
-                    (child1, child2) = parent1.crossover(with: parent2, strategy: config.crossoverStrategy, context: context)
-                } else {
-                    child1 = parent1
-                    child2 = parent2
-                }
-
-                // Diversity-driven adaptive mutation: boost when population converges,
-                // decay with generation progress, but never below 10% of base rate
-                let rate: Double
-                if config.adaptiveMutation {
-                    let generationDecay = max(0.1, 1.0 - Double(generation) / Double(config.maxGenerations))
-                    let diversityBoost = diversityIsLow ? 2.5 : 1.0
-                    rate = min(1.0, config.mutationRate * generationDecay * diversityBoost)
-                } else {
-                    rate = config.mutationRate
-                }
-
-                child1.mutate(rate: rate, context: context)
-                child2.mutate(rate: rate, context: context)
-
-                offspring.append(child1)
-                offspring.append(child2)
-            }
-
-            // Trim excess offspring (loop appends 2 at a time, may overshoot by 1)
-            if offspring.count > targetCount {
-                offspring.removeLast(offspring.count - targetCount)
-            }
-
-            // Parallel fitness evaluation: offspring are independent, so evaluate concurrently.
-            // Uses GCD concurrentPerform which automatically scales to available cores.
-            if offspring.count > 1 {
-                DispatchQueue.concurrentPerform(iterations: offspring.count) { i in
-                    self.evaluate(&offspring[i])
-                }
-            } else {
-                for i in offspring.indices {
-                    evaluate(&offspring[i])
-                }
-            }
-
-            population.replaceGeneration(with: offspring)
+            evolveOneGeneration(
+                &population,
+                config: config,
+                generation: generation,
+                maxGenerations: config.maxGenerations,
+                parallelEvaluation: true
+            )
 
             if let currentBest = population.best {
                 if bestEver == nil || currentBest.fitness > bestEver!.fitness {
@@ -222,6 +184,7 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
                 }
             }
 
+            let diversity = population.fitnessDiversity
             onProgress?(GAProgress(
                 generation: generation,
                 bestFitness: bestEver?.fitness ?? 0,
@@ -264,11 +227,98 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         return sorted.sorted { $0.fitness > $1.fitness }
     }
 
+    // MARK: - Single Generation (shared with IslandModelGA)
+
+    /// Evolve a population for one generation: immigration, selection, crossover,
+    /// adaptive mutation, fitness evaluation, and elitist replacement.
+    ///
+    /// When `parallelEvaluation` is true, offspring fitness is evaluated using
+    /// `DispatchQueue.concurrentPerform`. Set to false when the caller already
+    /// runs multiple islands in parallel to avoid GCD thread pool oversubscription.
+    ///
+    /// - Important: Internal API for `IslandModelGA`. Do not call directly from
+    ///   application code — use `run()` or `runSeeded(with:)` instead.
+    func evolveOneGeneration(
+        _ population: inout Population<C>,
+        config: GAConfiguration,
+        generation: Int,
+        maxGenerations: Int,
+        parallelEvaluation: Bool = true
+    ) {
+        let diversity = population.fitnessDiversity
+        let diversityIsLow = diversity < config.diversityThreshold
+
+        // Immigration: inject random individuals when diversity collapses
+        if diversityIsLow && config.immigrationRate > 0 {
+            let immigrantCount = max(1, Int(Double(config.populationSize) * config.immigrationRate))
+            population.injectImmigrants(count: immigrantCount, context: context, evaluate: evaluate)
+        }
+
+        var offspring: [C] = []
+        let targetCount = config.populationSize - config.eliteCount
+
+        while offspring.count < targetCount {
+            let (parent1, parent2) = Selection.selectPair(
+                from: population,
+                strategy: config.selectionStrategy
+            )
+
+            var child1: C
+            var child2: C
+
+            if Double.random(in: 0...1) < config.crossoverRate {
+                (child1, child2) = parent1.crossover(with: parent2, strategy: config.crossoverStrategy, context: context)
+            } else {
+                child1 = parent1
+                child2 = parent2
+            }
+
+            // Diversity-driven adaptive mutation: boost when population converges,
+            // decay with generation progress, but never below 10% of base rate
+            let rate: Double
+            if config.adaptiveMutation {
+                let generationDecay = max(0.1, 1.0 - Double(generation) / Double(maxGenerations))
+                let diversityBoost = diversityIsLow ? 2.5 : 1.0
+                rate = min(1.0, config.mutationRate * generationDecay * diversityBoost)
+            } else {
+                rate = config.mutationRate
+            }
+
+            child1.mutate(rate: rate, context: context)
+            child2.mutate(rate: rate, context: context)
+
+            offspring.append(child1)
+            offspring.append(child2)
+        }
+
+        // Trim excess offspring (loop appends 2 at a time, may overshoot by 1)
+        if offspring.count > targetCount {
+            offspring.removeLast(offspring.count - targetCount)
+        }
+
+        // Fitness evaluation: parallel when running standalone,
+        // sequential when called from IslandModelGA (which parallelizes at island level).
+        if parallelEvaluation && offspring.count > 1 {
+            DispatchQueue.concurrentPerform(iterations: offspring.count) { i in
+                self.evaluate(&offspring[i])
+            }
+        } else {
+            for i in offspring.indices {
+                evaluate(&offspring[i])
+            }
+        }
+
+        population.replaceGeneration(with: offspring)
+    }
+
     // MARK: - Local Search (Hill Climbing)
 
     /// Apply small perturbations to a chromosome and keep improvements.
     /// This refines a good GA solution by exploring its immediate neighborhood.
-    private func hillClimb(_ chromosome: C, steps: Int) -> C {
+    ///
+    /// - Important: Internal API for `IslandModelGA`. Do not call directly from
+    ///   application code.
+    func hillClimb(_ chromosome: C, steps: Int) -> C {
         var current = chromosome
         for _ in 0..<steps {
             var neighbor = current
