@@ -301,6 +301,11 @@ struct MenuBarView: View {
                 assertionFailure("BacklogService should be set in App.init")
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: RemindersSyncService.didImportTasks)) { notification in
+            guard let count = notification.object as? Int, count > 0 else { return }
+            let noun = count == 1 ? "task" : "tasks"
+            toastState.showInfo("Imported \(count)\u{00A0}\(noun) from Reminders", icon: "checklist")
+        }
     }
 
     // MARK: - Filtered Events

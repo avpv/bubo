@@ -9,6 +9,9 @@ import Foundation
 @Observable
 final class RemindersSyncService {
 
+    /// Posted after a sync that imported new tasks. `object` is the count (Int).
+    static let didImportTasks = Notification.Name("BuboRemindersDidImportTasks")
+
     private(set) var isSyncing = false
     private(set) var lastSyncDate: Date?
     private(set) var syncError: String?
@@ -124,8 +127,10 @@ final class RemindersSyncService {
             let existingIds = Set(backlogService.tasks.map(\.id))
             var added = 0
 
+            let defaultDuration = settings.remindersDefaultDurationMinutes
+
             for reminder in reminders {
-                let task = AppleRemindersService.shared.toBacklogTask(reminder)
+                let task = AppleRemindersService.shared.toBacklogTask(reminder, defaultDuration: defaultDuration)
                 // Skip tasks that already exist or were explicitly dismissed.
                 if !existingIds.contains(task.id) && !dismissedReminderIds.contains(task.id) {
                     backlogService.addTask(task)
@@ -145,9 +150,21 @@ final class RemindersSyncService {
                 }
             }
 
+            // Prune dismissed IDs — remove entries for reminders that no
+            // longer appear as incomplete (completed or deleted in Reminders).
+            // This prevents the set from growing unboundedly.
+            let stale = dismissedReminderIds.subtracting(activeReminderIds)
+            if !stale.isEmpty {
+                dismissedReminderIds.subtract(stale)
+            }
+
             importedCount = added
             lastSyncDate = Date()
             isSyncing = false
+
+            if added > 0 {
+                NotificationCenter.default.post(name: Self.didImportTasks, object: added)
+            }
         }
     }
 

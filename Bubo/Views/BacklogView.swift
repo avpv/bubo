@@ -714,6 +714,13 @@ struct BacklogTaskRow: View {
                                 .foregroundStyle(isUrgent ? .red : .secondary)
                         }
 
+                        if task.id.hasPrefix("reminder_") {
+                            Image(systemName: "checklist")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                                .help("Imported from Reminders")
+                        }
+
                         if let context = task.context {
                             Text(context)
                                 .font(.caption2)

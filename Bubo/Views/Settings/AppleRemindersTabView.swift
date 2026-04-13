@@ -3,6 +3,7 @@ import SwiftUI
 struct AppleRemindersTabView: View {
     @Environment(ReminderSettings.self) var settings
     @Environment(SettingsViewModel.self) var viewModel
+    @Environment(RemindersSyncService.self) var syncService
     @Environment(\.activeSkin) private var skin
 
     var body: some View {
@@ -14,7 +15,7 @@ struct AppleRemindersTabView: View {
 
                 if settings.isRemindersSyncEnabled && viewModel.remindersAccessGranted {
                     listSelectionSection
-                    syncBehaviorSection
+                    importOptionsSection
                 }
             }
             .padding(DS.Spacing.xl)
@@ -84,10 +85,36 @@ struct AppleRemindersTabView: View {
                     }
                 }
 
-                Text("Incomplete reminders from selected lists are imported into the Bubo backlog for scheduling.")
+                Text("Incomplete reminders from selected lists are imported into the backlog for scheduling.")
                     .font(.caption)
                     .foregroundStyle(skin.resolvedTextSecondary)
                     .padding(.top, DS.Spacing.xs)
+
+                if viewModel.remindersAccessGranted {
+                    SkinSeparator().padding(.vertical, DS.Spacing.xs)
+
+                    HStack {
+                        if syncService.isSyncing {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("Syncing…")
+                                .font(.caption)
+                                .foregroundStyle(skin.resolvedTextSecondary)
+                        } else if let date = syncService.lastSyncDate {
+                            Text("Last sync: \(date, style: .relative) ago")
+                                .font(.caption)
+                                .foregroundStyle(skin.resolvedTextSecondary)
+                        }
+
+                        Spacer()
+
+                        Button("Sync Now") {
+                            syncService.syncNow()
+                        }
+                        .controlSize(.small)
+                        .disabled(syncService.isSyncing)
+                    }
+                }
             }
         }
     }
@@ -158,12 +185,34 @@ struct AppleRemindersTabView: View {
         }
     }
 
-    // MARK: - Sync Behavior
+    // MARK: - Import Options
 
     @ViewBuilder
-    private var syncBehaviorSection: some View {
+    private var importOptionsSection: some View {
         @Bindable var settings = settings
-        SettingsPlatter("Completion") {
+        SettingsPlatter("Import Options") {
+            Grid(alignment: .leading, horizontalSpacing: DS.Spacing.sm) {
+                GridRow {
+                    Text("Default duration")
+                        .fontWeight(.medium)
+
+                    Stepper(
+                        "\(settings.remindersDefaultDurationMinutes)\u{00A0}min",
+                        value: $settings.remindersDefaultDurationMinutes,
+                        in: 15...240,
+                        step: 15
+                    )
+                    .monospacedDigit()
+                }
+            }
+
+            Text("Apple Reminders has no duration\u{00A0}\u{2014} this value is used for scheduling.")
+                .font(.caption)
+                .foregroundStyle(skin.resolvedTextSecondary)
+                .padding(.top, DS.Spacing.xs)
+
+            SkinSeparator().padding(.vertical, DS.Spacing.xs)
+
             Toggle(isOn: $settings.remindersCompletionSync) {
                 Text("Also mark done in Reminders")
                     .fontWeight(.medium)
