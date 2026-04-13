@@ -18,6 +18,9 @@ struct WorldClockCity: Identifiable, Codable, Hashable {
 
     /// All available cities grouped for the picker.
     static let allCities: [WorldClockCity] = [
+        // UTC
+        WorldClockCity(timezoneID: "UTC", city: "UTC", country: "Coordinated Universal Time"),
+
         // Americas
         WorldClockCity(timezoneID: "America/New_York", city: "New York", country: "U.S.A."),
         WorldClockCity(timezoneID: "America/Chicago", city: "Chicago", country: "U.S.A."),
