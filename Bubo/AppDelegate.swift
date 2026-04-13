@@ -25,6 +25,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var alertWindow: NSWindow?
     private var alertObserver: Any?
     private var alertKeyMonitor: Any?
+    private var alertGlobalKeyMonitor: Any?
     private var autoDismissTask: Task<Void, Never>?
     private var pendingAlerts: [(event: CalendarEvent, minutesBefore: Int)] = []
     private var pinnedTimerWindow: NSPanel?
@@ -119,6 +120,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if let monitor = alertKeyMonitor {
             NSEvent.removeMonitor(monitor)
             alertKeyMonitor = nil
+        }
+        if let monitor = alertGlobalKeyMonitor {
+            NSEvent.removeMonitor(monitor)
+            alertGlobalKeyMonitor = nil
         }
         guard let window = alertWindow else { return }
         alertWindow = nil
@@ -260,17 +265,33 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.makeKeyAndOrderFront(nil)
         window.makeFirstResponder(hostingView)
 
-        NSApplication.shared.activate()
+        // Force activation so the alert window receives keyboard focus,
+        // even when a full-screen app (Zoom, Teams) is in the foreground.
+        NSApp.activate()
         alertWindow = window
 
-        // Install a local keyDown monitor as a reliable fallback for Esc/Return.
+        // Retry activation after a short delay – macOS may not immediately
+        // grant focus when switching away from a full-screen Space.
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(0.3))
+            guard let self, let w = self.alertWindow else { return }
+            NSApp.activate()
+            w.makeKeyAndOrderFront(nil)
+            if let hv = w.contentView {
+                w.makeFirstResponder(hv)
+            }
+        }
+
+        // Install a local keyDown monitor for Esc/Return.
         // SwiftUI's .onKeyPress / .keyboardShortcut inside an NSHostingView hosted
         // by a borderless screenSaver-level window does not consistently receive
         // key events, so we handle them at the AppKit level here.
         let meetingURL = event.meetingLink
-        alertKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self, weak window] nsEvent in
-            // Only intercept events targeted at our alert window.
-            guard let alertWin = window, nsEvent.window === alertWin else { return nsEvent }
+        alertKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] nsEvent in
+            // Only intercept when our alert is showing (no strict window
+            // identity check – the window ref inside nsEvent can be nil
+            // for borderless/screenSaver-level windows).
+            guard self?.alertWindow != nil else { return nsEvent }
             switch nsEvent.keyCode {
             case 53: // Escape
                 MainActor.assumeIsolated {
@@ -287,6 +308,30 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 return nil
             default:
                 return nsEvent
+            }
+        }
+
+        // Global monitor as fallback – catches key events even when the app
+        // is not the active application (e.g. a full-screen meeting holds focus).
+        // Note: requires Accessibility permission (System Settings → Privacy
+        // & Security → Accessibility). Without it the monitor silently won't
+        // be created and only the local monitor + activation retry remain.
+        alertGlobalKeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] nsEvent in
+            guard self?.alertWindow != nil else { return }
+            switch nsEvent.keyCode {
+            case 53: // Escape
+                MainActor.assumeIsolated {
+                    self?.dismissAlert()
+                }
+            case 36, 76: // Return, Enter (numpad)
+                if let url = meetingURL {
+                    NSWorkspace.shared.open(url)
+                }
+                MainActor.assumeIsolated {
+                    self?.dismissAlert()
+                }
+            default:
+                break
             }
         }
 
