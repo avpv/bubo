@@ -976,14 +976,16 @@ struct MenuBarView: View {
             // space (row to row inside a day) — handled by the `lg`
             // sibling spacing plus a SkinSeparator between groups.
             LazyVStack(alignment: .leading, spacing: DS.Spacing.lg) {
-                // Energy check-in banner — takes priority over suggestions.
+                // Energy check-in — brief, non-blocking prompt above suggestions.
                 if optimizerService.energyCheckInService?.pendingCheckIn == true {
                     EnergyCheckInBanner(
                         onRecord: { level in
+                            let cal = Calendar.current
+                            let todayEnd = cal.date(byAdding: .day, value: 1,
+                                to: cal.startOfDay(for: Date()))!
                             let meetings = reminderService.allEvents.filter {
                                 !$0.isLocalEvent && $0.startDate >= Date()
-                                    && $0.startDate < Calendar.current.date(byAdding: .day, value: 1,
-                                        to: Calendar.current.startOfDay(for: Date()))!
+                                    && $0.startDate < todayEnd
                             }.count
                             withAnimation(DS.Animation.quick) {
                                 optimizerService.energyCheckInService?.record(
@@ -998,8 +1000,9 @@ struct MenuBarView: View {
                         }
                     )
                 }
-                // Smart banner — at most one contextual suggestion.
-                else if let suggestion = activeBannerSuggestion {
+
+                // Smart banner — contextual suggestion (independent of check-in).
+                if let suggestion = activeBannerSuggestion {
                     SmartBanner(
                         request: suggestion.request,
                         reason: suggestion.reason,

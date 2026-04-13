@@ -61,7 +61,8 @@ final class EnergyCheckInService {
     private var lastPromptDate: Date?
 
     /// Hours at which check-ins are prompted (spread across the workday).
-    private let promptHours: [Int] = [10, 14, 17]
+    /// Configurable via the `.energyCheckIn(atHour:)` intent.
+    var promptHours: [Int] = [10, 14, 17]
 
     private let persistenceKey = "BuboEnergyCheckIns"
     private let curveKey = "BuboPersonalEnergyCurve"

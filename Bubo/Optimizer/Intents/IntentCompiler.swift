@@ -518,11 +518,13 @@ private extension IntentCompiler {
         case .overflowToTomorrow:
             config.overflowToTomorrow = true
         case .energyCheckIn(let atHour):
-            // Schedule check-in prompt at the given hour.
-            // The actual prompting is handled by EnergyCheckInService via
-            // SuggestionEngine; here we ensure the energy curve preference
-            // reflects the personal data if available.
-            config.peakEnergyHour = config.peakEnergyHour ?? atHour
+            // Register this hour as a check-in prompt time.
+            // Multiple .energyCheckIn intents accumulate into promptHours.
+            if let service = energyCheckInService,
+               !service.promptHours.contains(atHour) {
+                service.promptHours.append(atHour)
+                service.promptHours.sort()
+            }
 
         // Temporal scope
         case .todayOnly(let inner):

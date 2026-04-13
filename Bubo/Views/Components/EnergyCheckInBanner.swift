@@ -1,49 +1,61 @@
 import SwiftUI
 
 // MARK: - Energy Check-In Banner
+//
+// Birman: one action, one result. Tap a level — done.
+// The 1–5 scale is self-explanatory with endpoint labels ("low"/"high")
+// and a semantic color gradient (warning → neutral → success).
+// Sits alongside SmartBanner, not blocking it.
 
-/// Compact inline banner that asks the user to report their current energy level (1–5).
-/// Appears 2-3 times per workday in place of the SmartBanner when a check-in is due.
-///
-/// Design: follows the same visual language as SmartBanner — light accent background,
-/// icon + label + action + dismiss, single-line height.
 struct EnergyCheckInBanner: View {
     @Environment(\.activeSkin) private var skin
 
     let onRecord: (Int) -> Void
     let onDismiss: () -> Void
 
+    private static let levels = 1...5
+
     var body: some View {
         HStack(spacing: DS.Spacing.sm) {
-            Text("\u{1F50B}")
+            Image(systemName: "bolt.fill")
                 .font(.caption)
+                .foregroundStyle(skin.accentColor)
+                .symbolRenderingMode(.hierarchical)
                 .accessibilityHidden(true)
 
-            Text("How's your energy?")
+            Text("Energy?")
                 .font(.caption)
                 .foregroundStyle(skin.resolvedTextPrimary)
                 .lineLimit(1)
 
             Spacer(minLength: DS.Spacing.xs)
 
-            // 1–5 energy level buttons
-            ForEach(1...5, id: \.self) { level in
+            // Endpoint label — semantic anchor for the scale
+            Text("low")
+                .font(.caption2)
+                .foregroundStyle(skin.resolvedTextTertiary)
+
+            ForEach(Self.levels, id: \.self) { level in
                 Button {
                     Haptics.tap()
                     onRecord(level)
                 } label: {
                     Text("\(level)")
                         .font(.caption.weight(.semibold).monospacedDigit())
-                        .foregroundStyle(level <= 2 ? Color.orange : level >= 4 ? Color.green : skin.resolvedTextPrimary)
+                        .foregroundStyle(colorForLevel(level))
                         .frame(width: 22, height: 22)
                         .background(
                             Circle()
-                                .fill(skin.accentColor.opacity(level == 3 ? 0.08 : 0.15))
+                                .fill(colorForLevel(level).opacity(DS.Opacity.lightFill))
                         )
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Energy level \(level)")
+                .accessibilityLabel("Energy level \(level) of 5")
             }
+
+            Text("high")
+                .font(.caption2)
+                .foregroundStyle(skin.resolvedTextTertiary)
 
             Button {
                 Haptics.tap()
@@ -62,14 +74,24 @@ struct EnergyCheckInBanner: View {
         .padding(.vertical, DS.Spacing.xs)
         .background(
             RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                .fill(skin.accentColor.opacity(0.08))
+                .fill(skin.accentColor.opacity(DS.Opacity.lightFill))
         )
         .overlay(
             RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                .strokeBorder(skin.accentColor.opacity(0.15), lineWidth: DS.Border.thin)
+                .strokeBorder(skin.accentColor.opacity(DS.Opacity.subtleBorder), lineWidth: DS.Border.thin)
         )
         .padding(.horizontal, DS.Spacing.sm)
         .padding(.top, DS.Spacing.xs)
         .transition(.move(edge: .top).combined(with: .opacity))
+    }
+
+    /// Semantic color gradient: 1–2 = warning (orange), 3 = neutral, 4–5 = success (green).
+    /// Birman §7: red/green/orange always system colors.
+    private func colorForLevel(_ level: Int) -> Color {
+        switch level {
+        case 1, 2: return DS.Colors.warning
+        case 4, 5: return DS.Colors.success
+        default:   return skin.resolvedTextPrimary
+        }
     }
 }
