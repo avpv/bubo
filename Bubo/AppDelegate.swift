@@ -241,16 +241,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Force activation so the alert window receives keyboard focus,
         // even when a full-screen app (Zoom, Teams) is in the foreground.
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.activate()
         alertWindow = window
 
         // Retry activation after a short delay – macOS may not immediately
         // grant focus when switching away from a full-screen Space.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak window, weak hostingView] in
-            guard let w = window else { return }
-            NSApp.activate(ignoringOtherApps: true)
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(0.3))
+            guard let self, let w = self.alertWindow else { return }
+            NSApp.activate()
             w.makeKeyAndOrderFront(nil)
-            if let hv = hostingView {
+            if let hv = w.contentView {
                 w.makeFirstResponder(hv)
             }
         }
@@ -286,18 +287,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Global monitor as fallback – catches key events even when the app
         // is not the active application (e.g. a full-screen meeting holds focus).
+        // Note: requires Accessibility permission (System Settings → Privacy
+        // & Security → Accessibility). Without it the monitor silently won't
+        // be created and only the local monitor + activation retry remain.
         alertGlobalKeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] nsEvent in
             guard self?.alertWindow != nil else { return }
             switch nsEvent.keyCode {
             case 53: // Escape
-                DispatchQueue.main.async {
+                MainActor.assumeIsolated {
                     self?.dismissAlert()
                 }
             case 36, 76: // Return, Enter (numpad)
                 if let url = meetingURL {
                     NSWorkspace.shared.open(url)
                 }
-                DispatchQueue.main.async {
+                MainActor.assumeIsolated {
                     self?.dismissAlert()
                 }
             default:
