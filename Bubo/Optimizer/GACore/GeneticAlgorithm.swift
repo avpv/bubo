@@ -78,6 +78,25 @@ struct GAConfiguration: Sendable {
         diversityThreshold: 0.005,
         immigrationRate: 0.15
     )
+
+    /// Per-island config for island model GA. Smaller populations per island
+    /// since total individuals = populationSize * islandCount.
+    /// Uses 2-point crossover and moderate mutation as a base;
+    /// IslandModelGA diversifies parameters across islands.
+    static let island = GAConfiguration(
+        populationSize: 60,
+        maxGenerations: 400,
+        mutationRate: 0.12,
+        crossoverRate: 0.85,
+        eliteCount: 3,
+        selectionStrategy: .tournament(size: 4),
+        crossoverStrategy: .twoPoint,
+        convergenceThreshold: 0.0005,
+        convergencePatience: 40,
+        adaptiveMutation: true,
+        diversityThreshold: 0.008,
+        immigrationRate: 0.1
+    )
 }
 
 // MARK: - GA Progress
