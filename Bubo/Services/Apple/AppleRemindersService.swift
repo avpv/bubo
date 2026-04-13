@@ -3,17 +3,18 @@ import Foundation
 
 /// Provides read/write access to the user's Apple Reminders via EventKit.
 ///
-/// Shares the EKEventStore with AppleCalendarService when possible, but
-/// manages its own authorization flow for the `.reminder` entity type.
-/// Designed for one-way import (Reminders → Backlog) with optional
-/// two-way completion sync (Bubo marks a task done → Reminders marks it done).
+/// Reuses AppleCalendarService's shared EKEventStore — Apple discourages
+/// creating multiple instances ("creating multiple instances is expensive").
+/// Manages its own authorization flow for the `.reminder` entity type.
 @MainActor
 @Observable
 final class AppleRemindersService {
 
     static let shared = AppleRemindersService()
 
-    private var store = EKEventStore()
+    /// Shared store owned by AppleCalendarService — single EKEventStore
+    /// for the entire app, as Apple recommends.
+    private var store: EKEventStore { AppleCalendarService.sharedStore }
 
     /// Posted when the EKEventStore detects external changes to reminders
     /// (e.g. user edits in Reminders.app or iCloud sync).
@@ -24,7 +25,7 @@ final class AppleRemindersService {
     private init() {
         storeChangedObserver = NotificationCenter.default.addObserver(
             forName: .EKEventStoreChanged,
-            object: store,
+            object: nil,
             queue: .main
         ) { _ in
             NotificationCenter.default.post(name: Self.remindersDataChanged, object: nil)
@@ -135,11 +136,17 @@ final class AppleRemindersService {
 
     /// Converts an EKReminder into a BacklogTask suitable for the Bubo backlog.
     func toBacklogTask(_ reminder: EKReminder, defaultDuration: Int = 60) -> BacklogTask {
+        // Apple Reminders priority mapping:
+        //   0 = none → medium (neutral default)
+        //   1...4 = high (UI shows !!!)
+        //   5 = medium (UI shows !!)
+        //   6...9 = low (UI shows !)
         let priority: TaskPriority
         switch reminder.priority {
         case 1...4: priority = .high
         case 5: priority = .medium
-        default: priority = .low // 6-9 or 0 (none)
+        case 6...9: priority = .low
+        default: priority = .medium // 0 (none) = neutral
         }
 
         let deadline: Date?
@@ -184,14 +191,4 @@ final class AppleRemindersService {
         return String(backlogTaskId.dropFirst("reminder_".count))
     }
 
-    // MARK: - Cache Management
-
-    func resetCache() {
-        store.reset()
-    }
-
-    func refreshSources() {
-        store.reset()
-        store.refreshSourcesIfNecessary()
-    }
 }

@@ -16,13 +16,23 @@ final class RemindersSyncService {
 
     private var settings: ReminderSettings
     private var backlogService: BacklogService
+
+    /// IDs of reminder-sourced tasks the user explicitly removed from the
+    /// backlog. Prevents re-import on the next sync cycle.
+    private var dismissedReminderIds: Set<String> {
+        didSet { saveDismissedIds() }
+    }
+    private static let dismissedKey = "BuboDismissedReminderIds"
     private nonisolated(unsafe) var syncTimer: Timer?
     private nonisolated(unsafe) var remindersChangedObserver: Any?
     private nonisolated(unsafe) var taskCompletedObserver: Any?
+    private nonisolated(unsafe) var taskRemovedObserver: Any?
+    private var activeSyncTask: Task<Void, Never>?
 
     init(settings: ReminderSettings, backlogService: BacklogService) {
         self.settings = settings
         self.backlogService = backlogService
+        self.dismissedReminderIds = Self.loadDismissedIds()
 
         // Listen for external changes in Reminders.app / iCloud sync
         remindersChangedObserver = NotificationCenter.default.addObserver(
@@ -46,14 +56,24 @@ final class RemindersSyncService {
                 self?.handleTaskCompleted(taskId: taskId)
             }
         }
+
+        // Listen for backlog task removals → remember dismissed IDs
+        taskRemovedObserver = NotificationCenter.default.addObserver(
+            forName: BacklogService.taskRemoved,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let taskId = notification.object as? String,
+                  taskId.hasPrefix("reminder_") else { return }
+            Task { @MainActor in
+                self?.dismissedReminderIds.insert(taskId)
+            }
+        }
     }
 
     deinit {
         syncTimer?.invalidate()
-        if let observer = remindersChangedObserver {
-            NotificationCenter.default.removeObserver(observer)
-        }
-        if let observer = taskCompletedObserver {
+        for observer in [remindersChangedObserver, taskCompletedObserver, taskRemovedObserver].compactMap({ $0 }) {
             NotificationCenter.default.removeObserver(observer)
         }
     }
@@ -89,33 +109,39 @@ final class RemindersSyncService {
             return
         }
 
+        // Prevent concurrent syncs — cancel any in-flight fetch.
+        activeSyncTask?.cancel()
+
         isSyncing = true
         syncError = nil
 
-        Task {
+        activeSyncTask = Task {
             let reminders = await AppleRemindersService.shared.fetchIncompleteReminders(
                 fromListIds: settings.selectedRemindersListIds
             )
+            guard !Task.isCancelled else { return }
 
             let existingIds = Set(backlogService.tasks.map(\.id))
             var added = 0
 
             for reminder in reminders {
                 let task = AppleRemindersService.shared.toBacklogTask(reminder)
-                if !existingIds.contains(task.id) {
+                // Skip tasks that already exist or were explicitly dismissed.
+                if !existingIds.contains(task.id) && !dismissedReminderIds.contains(task.id) {
                     backlogService.addTask(task)
                     added += 1
                 }
             }
 
-            // Remove backlog tasks whose source reminder was completed externally
+            // Mark backlog tasks as done when their source reminder was
+            // completed or deleted externally. Skip the BacklogService
+            // notification to avoid a feedback loop (we don't need to
+            // write back to Reminders — the change came from there).
             let activeReminderIds = Set(reminders.map { "reminder_\($0.calendarItemIdentifier)" })
             let reminderTasks = backlogService.tasks.filter { $0.id.hasPrefix("reminder_") && $0.status != .done }
             for task in reminderTasks {
-                if !activeReminderIds.contains(task.id) {
-                    // The reminder no longer appears as incomplete — it was
-                    // completed or deleted in Reminders.app. Mark it done.
-                    backlogService.completeTask(id: task.id)
+                if !activeReminderIds.contains(task.id) && !dismissedReminderIds.contains(task.id) {
+                    backlogService.silentlyComplete(id: task.id)
                 }
             }
 
@@ -127,9 +153,9 @@ final class RemindersSyncService {
 
     // MARK: - Two-Way Completion
 
-    /// Call this when a Bubo task is completed. If it originated from Apple
-    /// Reminders and two-way sync is enabled, marks it done there too.
-    func handleTaskCompleted(taskId: String) {
+    /// Called when the user completes a task in Bubo. If it originated from
+    /// Apple Reminders and two-way sync is enabled, marks it done there too.
+    private func handleTaskCompleted(taskId: String) {
         guard settings.remindersCompletionSync,
               let calendarItemId = AppleRemindersService.remindersId(from: taskId) else {
             return
@@ -140,5 +166,17 @@ final class RemindersSyncService {
         } catch {
             print("Failed to complete reminder in Apple Reminders: \(error)")
         }
+    }
+
+    // MARK: - Dismissed IDs Persistence
+
+    private func saveDismissedIds() {
+        let array = Array(dismissedReminderIds)
+        UserDefaults.standard.set(array, forKey: Self.dismissedKey)
+    }
+
+    private static func loadDismissedIds() -> Set<String> {
+        let array = UserDefaults.standard.stringArray(forKey: dismissedKey) ?? []
+        return Set(array)
     }
 }
