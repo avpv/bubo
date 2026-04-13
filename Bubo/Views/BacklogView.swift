@@ -61,9 +61,38 @@ struct BacklogView: View {
     /// A height-capped ScrollView keeps the timeline reachable.
     private static let maxExpandedTasks = 4
 
+    /// Estimated height of a context group header inside the task list
+    /// (caption2 text + top/bottom padding).
+    private static let contextHeaderEstimatedHeight: CGFloat =
+        DS.Spacing.sm + 14 + DS.Spacing.xxs // 24pt
 
     private var activeTasks: [BacklogTask] {
         backlogService.tasks.filter { $0.status != .done }
+    }
+
+    /// Height cap for the expanded ScrollView. Sums the first
+    /// `maxExpandedTasks` row heights plus any context group headers
+    /// that appear among them, so the visible area always fits 4 task rows.
+    private var expandedScrollMaxHeight: CGFloat {
+        let grouped = backlogService.groupedByContext
+        // Row height estimate: backlogRowHeight is the frame minHeight (44pt)
+        // but the two-line content + vertical padding can push the actual
+        // height a few points higher depending on platform font metrics.
+        let rowHeight = DS.Size.backlogRowHeight + DS.Spacing.xs // 48pt
+        var totalHeight: CGFloat = 0
+        var tasksSeen = 0
+        for group in grouped {
+            if tasksSeen >= Self.maxExpandedTasks { break }
+            let active = group.tasks.filter { $0.status != .done }
+            guard !active.isEmpty else { continue }
+            if group.context != nil {
+                totalHeight += Self.contextHeaderEstimatedHeight
+            }
+            let count = min(active.count, Self.maxExpandedTasks - tasksSeen)
+            totalHeight += rowHeight * CGFloat(count)
+            tasksSeen += count
+        }
+        return totalHeight
     }
 
     /// Duration to use for ghost-preview lookup and for the task actually
@@ -166,9 +195,9 @@ struct BacklogView: View {
     //
     // Expanded mode (isExpanded = true): a height-capped ScrollView
     // wraps all rows so the user can browse long lists without pushing
-    // the Timeline off screen.  The cap is sized for exactly
-    // `maxExpandedTasks` (4) rows, keeping free slots reachable for
-    // drag-to-schedule.
+    // the Timeline off screen.  The cap is sized for `maxExpandedTasks`
+    // (4) rows plus any context group headers, keeping free slots
+    // reachable for drag-to-schedule.
 
     private var taskList: some View {
         let allTasks = activeTasks
@@ -187,7 +216,7 @@ struct BacklogView: View {
                     }
                 }
                 .scrollIndicators(.automatic)
-                .frame(maxHeight: DS.Size.backlogRowHeight * CGFloat(Self.maxExpandedTasks))
+                .frame(maxHeight: expandedScrollMaxHeight)
             } else {
                 // Compact mode — plain VStack, only first maxVisibleTasks.
                 let visibleIDs = Set(allTasks.prefix(Self.maxVisibleTasks).map(\.id))
