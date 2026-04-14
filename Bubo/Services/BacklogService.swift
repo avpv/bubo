@@ -210,20 +210,37 @@ final class BacklogService {
         saveTasks()
     }
 
-    // MARK: - Persistence (UserDefaults for simplicity; could migrate to SwiftData)
-
-    private let persistenceKey = "BuboBacklogTasks"
+    // MARK: - Persistence (SwiftData — single shared ModelContainer)
+    //
+    // Pattern inherited from `EventCache`: each load/save creates a fresh
+    // `ModelContext(modelContainer)` rather than using `container.mainContext`.
+    // This avoids the main-actor SwiftData threading hazards that broke
+    // v1.10.30–v1.10.41. The store is local-only (no CloudKit), so the
+    // initial `loadTasks()` in `init` returns quickly — a few SQLite reads,
+    // no network, no authentication.
+    //
+    // `saveTasks()` performs a full delete-and-reinsert on every mutation.
+    // That is O(n) in the number of tasks, but n is small (backlogs of
+    // hundreds, not millions), the writes are off-main (fresh context), and
+    // the simplicity avoids the whole class of `#Predicate` / `findPersisted`
+    // pitfalls that also contributed to the v1.10.30 regression.
 
     private func loadTasks() {
-        guard let data = UserDefaults.standard.data(forKey: persistenceKey),
-              let decoded = try? JSONDecoder().decode([BacklogTask].self, from: data) else {
-            return
-        }
-        tasks = decoded
+        let context = ModelContext(modelContainer)
+        let descriptor = FetchDescriptor<PersistedBacklogTask>(
+            sortBy: [SortDescriptor(\.sortOrder)]
+        )
+        guard let persisted = try? context.fetch(descriptor) else { return }
+        tasks = persisted.map { $0.toBacklogTask() }
     }
 
     private func saveTasks() {
-        guard let data = try? JSONEncoder().encode(tasks) else { return }
-        UserDefaults.standard.set(data, forKey: persistenceKey)
+        let context = ModelContext(modelContainer)
+        // Wipe existing rows — `tasks` is the source of truth in memory.
+        try? context.delete(model: PersistedBacklogTask.self)
+        for (index, task) in tasks.enumerated() {
+            context.insert(PersistedBacklogTask(from: task, sortOrder: index))
+        }
+        try? context.save()
     }
 }
