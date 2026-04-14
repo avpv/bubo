@@ -109,8 +109,10 @@ jobs:
           PLIST
           sed -i '' "s/PLACEHOLDER_VERSION/${VERSION}/g" "$APP/Info.plist"
 
-          # Ad-hoc sign the app so it runs locally, and provide the correct entitlements
-          codesign --force --deep --entitlements "Bubo/Bubo.entitlements" --sign - "Bubo.app"
+          # Ad-hoc sign the app so it runs locally.
+          # Use the ad-hoc entitlements (without iCloud entries that require
+          # a provisioned Developer ID and would prevent launch).
+          codesign --force --deep --entitlements "Bubo/Bubo.adhoc.entitlements" --sign - "Bubo.app"
 
       - name: Create DMG
         run: |
