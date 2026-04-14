@@ -8,29 +8,42 @@ private class MenuBarIconCache {
 }
 private let sharedIconCache = MenuBarIconCache()
 
-struct AppDependencies {
-    let settings: ReminderSettings
-    let reminderService: ReminderService
-    let optimizerService: OptimizerService
-    let agentService: AgentService
-    let remindersSyncService: RemindersSyncService
-}
-
 @main
 struct BuboApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @State private var settings: ReminderSettings
+    @State private var reminderService: ReminderService
     @State private var networkMonitor = NetworkMonitor()
-    @State private var dependencies: AppDependencies?
+    @State private var optimizerService: OptimizerService
+    @State private var agentService = AgentService()
+    @State private var remindersSyncService: RemindersSyncService
 
-    @MainActor
-    private func loadDependencies() async {
-        // Run heavy container creation off main thread
-        let (localContainer, backlogContainer) = await Task.detached(priority: .userInitiated) {
-            // Pull any existing iCloud data before services load from UserDefaults.
-            CloudSyncService.shared.performInitialSync()
+    private let modelContainer: ModelContainer
 
-            // Local-only container for calendar events (not synced to iCloud).
-            let container: ModelContainer
+    init() {
+        // Pull any existing iCloud data before services load from UserDefaults.
+        CloudSyncService.shared.performInitialSync()
+
+        // Local-only container for calendar events (not synced to iCloud).
+        let container: ModelContainer
+        do {
+            container = try ModelContainer(for:
+                PersistedLocalEvent.self,
+                PersistedCachedEvent.self,
+                PersistedExcludedOccurrence.self,
+                PersistedReminderOverride.self
+            )
+        } catch {
+            // Schema migration failed — delete the corrupted store and retry
+            // so the app can launch instead of crashing on every open.
+            let storeURL = URL.applicationSupportDirectory
+                .appending(path: "default.store")
+            try? FileManager.default.removeItem(at: storeURL)
+            for suffix in ["-wal", "-shm"] {
+                let sidecar = storeURL.deletingPathExtension()
+                    .appendingPathExtension(storeURL.pathExtension + suffix)
+                try? FileManager.default.removeItem(at: sidecar)
+            }
             do {
                 container = try ModelContainer(for:
                     PersistedLocalEvent.self,
@@ -39,43 +52,54 @@ struct BuboApp: App {
                     PersistedReminderOverride.self
                 )
             } catch {
-                let storeURL = URL.applicationSupportDirectory.appending(path: "default.store")
-                try? FileManager.default.removeItem(at: storeURL)
-                for suffix in ["-wal", "-shm"] {
-                    let sidecar = storeURL.deletingPathExtension().appendingPathExtension(storeURL.pathExtension + suffix)
-                    try? FileManager.default.removeItem(at: sidecar)
-                }
-                do {
-                    container = try ModelContainer(for:
-                        PersistedLocalEvent.self,
-                        PersistedCachedEvent.self,
-                        PersistedExcludedOccurrence.self,
-                        PersistedReminderOverride.self
-                    )
-                } catch {
-                    fatalError("Failed to create ModelContainer after reset: \(error)")
-                }
+                fatalError("Failed to create ModelContainer after reset: \(error)")
             }
+        }
+        self.modelContainer = container
 
-            // CloudKit-synced container for backlog tasks.
-            let bContainer: ModelContainer
+        // Backlog container — try CloudKit first, fall back to local if
+        // entitlements are missing (e.g. ad-hoc signed builds).
+        let backlogContainer: ModelContainer
+        do {
+            let cloudConfig = ModelConfiguration(
+                "BacklogCloud",
+                schema: Schema([PersistedBacklogTask.self]),
+                cloudKitDatabase: .automatic
+            )
+            backlogContainer = try ModelContainer(
+                for: PersistedBacklogTask.self,
+                configurations: cloudConfig
+            )
+        } catch {
             do {
-                let cloudConfig = ModelConfiguration(
-                    "BacklogCloud",
-                    schema: Schema([PersistedBacklogTask.self]),
-                    cloudKitDatabase: .automatic
+                let localConfig = ModelConfiguration(
+                    "BacklogLocal",
+                    schema: Schema([PersistedBacklogTask.self])
                 )
-                bContainer = try ModelContainer(
+                backlogContainer = try ModelContainer(
                     for: PersistedBacklogTask.self,
-                    configurations: cloudConfig
+                    configurations: localConfig
                 )
             } catch {
+                // Last-resort: try wiping any stale backlog stores and retry
+                // local creation. Prevents `fatalError` from killing the app
+                // when a previous release left an incompatible schema on disk.
+                let appSupport = URL.applicationSupportDirectory
+                for name in ["BacklogCloud.store", "BacklogLocal.store"] {
+                    let url = appSupport.appending(path: name)
+                    try? FileManager.default.removeItem(at: url)
+                    for suffix in ["-wal", "-shm"] {
+                        let sidecar = url.deletingPathExtension()
+                            .appendingPathExtension(url.pathExtension + suffix)
+                        try? FileManager.default.removeItem(at: sidecar)
+                    }
+                }
                 do {
                     let localConfig = ModelConfiguration(
                         "BacklogLocal",
                         schema: Schema([PersistedBacklogTask.self])
                     )
-                    bContainer = try ModelContainer(
+                    backlogContainer = try ModelContainer(
                         for: PersistedBacklogTask.self,
                         configurations: localConfig
                     )
@@ -83,27 +107,20 @@ struct BuboApp: App {
                     fatalError("Failed to create backlog ModelContainer: \(error)")
                 }
             }
-            return (container, bContainer)
-        }.value
+        }
 
         let s = ReminderSettings.load()
-        let rService = ReminderService(settings: s, modelContainer: localContainer)
+        _settings = State(wrappedValue: s)
+        _reminderService = State(wrappedValue: ReminderService(settings: s, modelContainer: container))
 
         let optimizer = OptimizerService()
         let backlog = BacklogService(modelContainer: backlogContainer)
         optimizer.backlogService = backlog
         optimizer.energyCheckInService = EnergyCheckInService()
+        _optimizerService = State(wrappedValue: optimizer)
 
         let syncService = RemindersSyncService(settings: s, backlogService: backlog)
-        let agent = AgentService()
-
-        self.dependencies = AppDependencies(
-            settings: s,
-            reminderService: rService,
-            optimizerService: optimizer,
-            agentService: agent,
-            remindersSyncService: syncService
-        )
+        _remindersSyncService = State(wrappedValue: syncService)
     }
 
     private func drawOwl(in ctx: CGContext, size s: CGFloat, color: CGColor) {
@@ -155,12 +172,12 @@ struct BuboApp: App {
         ctx.fillPath()
     }
 
-    private func useSkinIcon(settings: ReminderSettings) -> Bool {
+    private var useSkinIcon: Bool {
         let skinID = settings.selectedSkinID
         return skinID != "system" && skinID != "classic"
     }
 
-    private func resolvedIconColor(settings: ReminderSettings, isDark: Bool) -> CGColor {
+    private func resolvedIconColor(isDark: Bool) -> CGColor {
         let base = NSColor(settings.selectedSkin.accentColor)
             .usingColorSpace(.sRGB) ?? NSColor(settings.selectedSkin.accentColor)
 
@@ -187,24 +204,24 @@ struct BuboApp: App {
         return base.cgColor
     }
 
-    private func menuBarIcon(settings: ReminderSettings) -> NSImage {
+    private var menuBarIcon: NSImage {
         let currentSkinID = settings.selectedSkinID
         if sharedIconCache.count == 0, sharedIconCache.skinID == currentSkinID, let img = sharedIconCache.image {
             return img
         }
 
         let size = NSSize(width: 18, height: 18)
-        let useCustom = useSkinIcon(settings: settings)
+        let useCustom = useSkinIcon
         let image = NSImage(size: size, flipped: false) { rect in
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
             let isDark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
             let color: CGColor = useCustom
-                ? self.resolvedIconColor(settings: settings, isDark: isDark)
+                ? self.resolvedIconColor(isDark: isDark)
                 : (isDark ? NSColor.white.cgColor : NSColor.black.cgColor)
             self.drawOwl(in: ctx, size: rect.width, color: color)
             return true
         }
-        image.isTemplate = !useSkinIcon(settings: settings)
+        image.isTemplate = !useSkinIcon
 
         sharedIconCache.count = 0
         sharedIconCache.skinID = currentSkinID
@@ -213,8 +230,12 @@ struct BuboApp: App {
         return image
     }
 
-    private func menuBarIconWithBadge(count: Int, settings: ReminderSettings) -> NSImage {
-        guard count > 0 else { return menuBarIcon(settings: settings) }
+    private var badgeCount: Int {
+        reminderService.badgeCount
+    }
+
+    private func menuBarIconWithBadge(count: Int) -> NSImage {
+        guard count > 0 else { return menuBarIcon }
 
         let currentSkinID = settings.selectedSkinID
         if sharedIconCache.count == count, sharedIconCache.skinID == currentSkinID, let img = sharedIconCache.image {
@@ -245,8 +266,8 @@ struct BuboApp: App {
 
             // Determine icon color with contrast safety
             let isDark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-            let iconColor: CGColor = self.useSkinIcon(settings: settings)
-                ? self.resolvedIconColor(settings: settings, isDark: isDark)
+            let iconColor: CGColor = self.useSkinIcon
+                ? self.resolvedIconColor(isDark: isDark)
                 : (isDark ? NSColor.white.cgColor : NSColor.black.cgColor)
 
             // Draw owl icon shifted up to make room for badge overflow at the bottom
@@ -306,58 +327,26 @@ struct BuboApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            if let deps = dependencies {
-                MenuBarView(
-                    settings: deps.settings,
-                    reminderService: deps.reminderService,
-                    networkMonitor: networkMonitor,
-                    optimizerService: deps.optimizerService,
-                    agentService: deps.agentService,
-                    remindersSyncService: deps.remindersSyncService
-                )
-            } else {
-                VStack(spacing: 8) {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text("Loading Bubo...")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                .padding(.vertical, 24)
-                .padding(.horizontal, 32)
-                .task {
-                    guard dependencies == nil else { return }
-                    await loadDependencies()
-                }
-            }
+            MenuBarView(
+                settings: settings,
+                reminderService: reminderService,
+                networkMonitor: networkMonitor,
+                optimizerService: optimizerService,
+                agentService: agentService,
+                remindersSyncService: remindersSyncService
+            )
         } label: {
-            if let deps = dependencies {
-                Image(nsImage: menuBarIconWithBadge(count: deps.reminderService.badgeCount, settings: deps.settings))
-            } else {
-                Image(systemName: "hourglass")
-            }
+            Image(nsImage: menuBarIconWithBadge(count: badgeCount))
         }
         .menuBarExtraStyle(.window)
 
         Settings {
-            if let deps = dependencies {
-                SettingsView()
-                    .environment(deps.settings)
-                    .environment(deps.reminderService)
-                    .environment(deps.optimizerService)
-                    .environment(deps.agentService)
-                    .environment(deps.remindersSyncService)
-            } else {
-                VStack {
-                    ProgressView().padding()
-                    Text("Loading Bubo Environments...")
-                }
-                .frame(width: 400, height: 300)
-                .task {
-                    guard dependencies == nil else { return }
-                    await loadDependencies()
-                }
-            }
+            SettingsView()
+                .environment(settings)
+                .environment(reminderService)
+                .environment(optimizerService)
+                .environment(agentService)
+                .environment(remindersSyncService)
         }
         .windowToolbarStyle(.unified(showsTitle: true))
     }
