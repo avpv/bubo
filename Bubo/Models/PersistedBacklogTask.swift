@@ -24,12 +24,15 @@ final class PersistedBacklogTask {
     var modifiedAt: Date?
     var scheduledDate: Date?
     var scheduledEventId: String?
-    /// User-controlled ordering (lower = earlier in list).
-    var sortOrder: Int = 0
+
+    /// User-controlled ordering.  Uses `Double` with gaps (fractional
+    /// indexing) so that a reorder only touches ONE record — minimises
+    /// CloudKit conflicts when two devices reorder simultaneously.
+    var sortOrder: Double = 0
 
     init() {}
 
-    init(from task: BacklogTask, sortOrder: Int) {
+    init(from task: BacklogTask, sortOrder: Double) {
         self.taskId = task.id
         self.title = task.title
         self.durationMinutes = task.durationMinutes

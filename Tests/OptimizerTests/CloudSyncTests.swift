@@ -184,7 +184,7 @@ final class PersistedBacklogTaskTests: XCTestCase {
         task.scheduledDate = now
         task.scheduledEventId = "event-1"
 
-        let persisted = PersistedBacklogTask(from: task, sortOrder: 7)
+        let persisted = PersistedBacklogTask(from: task, sortOrder: 7.5)
         let back = persisted.toBacklogTask()
 
         XCTAssertEqual(back.id, "t1")
@@ -197,7 +197,7 @@ final class PersistedBacklogTaskTests: XCTestCase {
         XCTAssertEqual(back.preferredPeriod, .morning)
         XCTAssertEqual(back.status, .scheduled)
         XCTAssertEqual(back.scheduledEventId, "event-1")
-        XCTAssertEqual(persisted.sortOrder, 7)
+        XCTAssertEqual(persisted.sortOrder, 7.5, accuracy: 0.001)
     }
 
     func testDefaultValues() {
@@ -232,5 +232,14 @@ final class PersistedBacklogTaskTests: XCTestCase {
         XCTAssertEqual(back.priority, .high)
         XCTAssertEqual(back.status, .done)
         XCTAssertNotNil(back.completedAt)
+    }
+
+    func testFractionalSortOrder() {
+        let task = BacklogTask(id: "t1", title: "A")
+        let persisted = PersistedBacklogTask(from: task, sortOrder: 1.5)
+        XCTAssertEqual(persisted.sortOrder, 1.5, accuracy: 0.001)
+
+        persisted.sortOrder = 1.25
+        XCTAssertEqual(persisted.sortOrder, 1.25, accuracy: 0.001)
     }
 }
