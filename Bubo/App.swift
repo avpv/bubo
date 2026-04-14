@@ -57,20 +57,33 @@ struct BuboApp: App {
         }
         self.modelContainer = container
 
-        // Backlog container — try CloudKit first, fall back to local if
-        // entitlements are missing (e.g. ad-hoc signed builds).
+        // Backlog container — local only. The CloudKit-backed config
+        // (`cloudKitDatabase: .automatic`) has caused SwiftData to hang on
+        // ad-hoc signed builds where iCloud entitlements are absent, leaving
+        // the menu bar popover unresponsive after launch.
         let backlogContainer: ModelContainer
         do {
-            let cloudConfig = ModelConfiguration(
-                "BacklogCloud",
-                schema: Schema([PersistedBacklogTask.self]),
-                cloudKitDatabase: .automatic
+            let localConfig = ModelConfiguration(
+                "BacklogLocal",
+                schema: Schema([PersistedBacklogTask.self])
             )
             backlogContainer = try ModelContainer(
                 for: PersistedBacklogTask.self,
-                configurations: cloudConfig
+                configurations: localConfig
             )
         } catch {
+            // Wipe any stale backlog stores left by previous releases and
+            // retry. Prevents `fatalError` from killing the app on upgrade.
+            let appSupport = URL.applicationSupportDirectory
+            for name in ["BacklogCloud.store", "BacklogLocal.store"] {
+                let url = appSupport.appending(path: name)
+                try? FileManager.default.removeItem(at: url)
+                for suffix in ["-wal", "-shm"] {
+                    let sidecar = url.deletingPathExtension()
+                        .appendingPathExtension(url.pathExtension + suffix)
+                    try? FileManager.default.removeItem(at: sidecar)
+                }
+            }
             do {
                 let localConfig = ModelConfiguration(
                     "BacklogLocal",
@@ -81,31 +94,7 @@ struct BuboApp: App {
                     configurations: localConfig
                 )
             } catch {
-                // Last-resort: try wiping any stale backlog stores and retry
-                // local creation. Prevents `fatalError` from killing the app
-                // when a previous release left an incompatible schema on disk.
-                let appSupport = URL.applicationSupportDirectory
-                for name in ["BacklogCloud.store", "BacklogLocal.store"] {
-                    let url = appSupport.appending(path: name)
-                    try? FileManager.default.removeItem(at: url)
-                    for suffix in ["-wal", "-shm"] {
-                        let sidecar = url.deletingPathExtension()
-                            .appendingPathExtension(url.pathExtension + suffix)
-                        try? FileManager.default.removeItem(at: sidecar)
-                    }
-                }
-                do {
-                    let localConfig = ModelConfiguration(
-                        "BacklogLocal",
-                        schema: Schema([PersistedBacklogTask.self])
-                    )
-                    backlogContainer = try ModelContainer(
-                        for: PersistedBacklogTask.self,
-                        configurations: localConfig
-                    )
-                } catch {
-                    fatalError("Failed to create backlog ModelContainer: \(error)")
-                }
+                fatalError("Failed to create backlog ModelContainer: \(error)")
             }
         }
 
