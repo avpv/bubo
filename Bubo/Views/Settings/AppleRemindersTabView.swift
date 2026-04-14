@@ -4,6 +4,7 @@ struct AppleRemindersTabView: View {
     @Environment(ReminderSettings.self) var settings
     @Environment(SettingsViewModel.self) var viewModel
     @Environment(RemindersSyncService.self) var syncService
+    @Environment(ReminderService.self) var reminderService
     @Environment(\.activeSkin) private var skin
 
     var body: some View {
@@ -24,6 +25,31 @@ struct AppleRemindersTabView: View {
             if viewModel.remindersAccessGranted && viewModel.availableRemindersLists.isEmpty {
                 viewModel.loadRemindersLists()
             }
+        }
+        // Auto-sync when access is granted for the first time — otherwise the
+        // user taps Allow in the permission dialog and nothing visibly
+        // happens until they manually click "Sync Now" or reopen the popover.
+        .onChange(of: viewModel.remindersAuthStatus) { _, newStatus in
+            guard newStatus == .fullAccess else { return }
+            if viewModel.availableRemindersLists.isEmpty {
+                viewModel.loadRemindersLists()
+            }
+            // Granting Reminders access changes TCC state for the shared
+            // EKEventStore. Rebuild it so subsequent calendar + reminders
+            // fetches see the new permission.  Without this, the existing
+            // store keeps returning cached state and calendar events also
+            // stop updating until the user relaunches the app.
+            AppleCalendarService.shared.rebuildStore()
+            reminderService.syncNow()
+            if settings.isRemindersSyncEnabled {
+                syncService.syncNow()
+            }
+        }
+        // Auto-sync when the feature is toggled on while access is already
+        // granted — matches how calendar sync reacts to its own enable toggle.
+        .onChange(of: settings.isRemindersSyncEnabled) { _, enabled in
+            guard enabled, viewModel.remindersAccessGranted else { return }
+            syncService.syncNow()
         }
     }
 
