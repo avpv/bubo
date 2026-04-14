@@ -96,7 +96,7 @@ struct Population<C: Chromosome> {
             if !next.contains(where: { $0 == elite }) {
                 // Elite was replaced — put it back by replacing worst non-elite
                 if let worstIdx = next.enumerated()
-                    .filter({ !currentElites.contains(where: { e in e == $0.element }) })
+                    .filter({ item in !currentElites.contains(where: { e in e == item.element }) })
                     .min(by: { $0.element.fitness < $1.element.fitness })?.offset {
                     next[worstIdx] = elite
                 }

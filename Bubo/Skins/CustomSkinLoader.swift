@@ -293,9 +293,9 @@ struct JSONGradient: Codable {
 /// Manages loading, importing, and removing custom `.json` files.
 ///
 /// Skins are stored in `~/Library/Application Support/Bubo/Skins/`.
-@Observable
 private let skinLogger = Logger(subsystem: "com.avpv.Bubo", category: "SkinLoader")
 
+@Observable
 class CustomSkinLoader {
     static let shared = CustomSkinLoader()
 
