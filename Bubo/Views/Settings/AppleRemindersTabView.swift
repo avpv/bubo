@@ -236,6 +236,49 @@ struct AppleRemindersTabView: View {
                 .font(.caption)
                 .foregroundStyle(skin.resolvedTextSecondary)
                 .padding(.top, DS.Spacing.xs)
+
+            SkinSeparator().padding(.vertical, DS.Spacing.xs)
+
+            Toggle(isOn: $settings.remindersCompletionSync) {
+                Text("Also mark done in Reminders")
+                    .fontWeight(.medium)
+            }
+            .toggleStyle(.switch)
+
+            Text("When you complete an imported task in Bubo, the original reminder is marked done too.")
+                .font(.caption)
+                .foregroundStyle(skin.resolvedTextSecondary)
+                .padding(.top, DS.Spacing.xs)
+        }
+
+        if syncService.dismissedCount > 0 {
+            dismissedRemindersSection
+        }
+    }
+
+    // MARK: - Dismissed Reminders
+
+    @ViewBuilder
+    private var dismissedRemindersSection: some View {
+        SettingsPlatter("Dismissed Reminders") {
+            HStack(alignment: .top, spacing: DS.Spacing.md) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                    Text("\(syncService.dismissedCount) reminder\(syncService.dismissedCount == 1 ? "" : "s") won\u{2019}t be re-imported")
+                        .fontWeight(.medium)
+                    Text("Reminders you deleted from the backlog are skipped on future syncs. Clear this list to import them again.")
+                        .font(.caption)
+                        .foregroundStyle(skin.resolvedTextSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer()
+
+                Button("Clear") {
+                    syncService.clearDismissedReminderIds()
+                    syncService.syncNow()
+                }
+                .controlSize(.small)
+            }
         }
     }
 }
