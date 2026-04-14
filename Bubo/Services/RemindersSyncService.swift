@@ -1,8 +1,7 @@
 import Foundation
 import os
 
-/// Imports tasks from Apple Reminders into the Bubo backlog and optionally
-/// writes task completions back to Apple Reminders.
+/// Bridges Apple Reminders and the Bubo backlog.
 ///
 /// Design mirrors `ReminderService` for calendar events:
 ///   - Always instantiated in `App.init`; never does EventKit work on init.
@@ -11,14 +10,21 @@ import os
 ///   - Triggered explicitly from `MenuBarView.onAppear` via `startSync()`,
 ///     the same pattern as `reminderService.startSync()`.
 ///
-/// Two optional behaviours beyond plain import:
-///   - **Dismissal tracking**: when the user removes a reminder-backed task
-///     from the Bubo backlog, its ID is remembered so future syncs don't
-///     re-import it. The set is pruned when the source reminder is
+/// Behaviours:
+///   - **Import** (Reminders → Bubo): incomplete reminders from the
+///     selected lists are added to the backlog, deduped by task ID.
+///   - **External completion mirroring** (Reminders → Bubo): when a
+///     reminder-backed task exists in Bubo but its source reminder is no
+///     longer incomplete (user finished or deleted it in Reminders.app or
+///     on another device), the Bubo task is silently marked done.
+///   - **Dismissal tracking**: when the user removes a reminder-backed
+///     task from the Bubo backlog, its ID is remembered so future syncs
+///     don't re-import it. The set is pruned when the source reminder is
 ///     completed / deleted in Apple Reminders.
-///   - **Completion writeback**: when the user completes a reminder-backed
-///     task in Bubo, the source Apple Reminder is marked done. Off by
-///     default — the user opts in via a Settings toggle.
+///   - **Completion writeback** (Bubo → Reminders): when the user
+///     completes a reminder-backed task in Bubo, the source Apple
+///     Reminder is marked done. Off by default — the user opts in via a
+///     Settings toggle.
 private let logger = Logger(subsystem: "com.avpv.Bubo", category: "RemindersSyncService")
 
 @MainActor
@@ -167,6 +173,7 @@ final class RemindersSyncService {
 
             let existingIds = Set(backlogService.tasks.map(\.id))
             let defaultDuration = settings.remindersDefaultDurationMinutes
+            let activeReminderIds = Set(reminders.map { "reminder_\($0.calendarItemIdentifier)" })
             var added = 0
 
             for reminder in reminders {
@@ -182,11 +189,25 @@ final class RemindersSyncService {
                 added += 1
             }
 
+            // Mirror external completions (and deletions) back into the
+            // backlog. Any reminder-backed task still pending/scheduled in
+            // Bubo whose source reminder is no longer in the incomplete
+            // fetch must have been finished or removed elsewhere — flip it
+            // to done so it stops cluttering the backlog.
+            //
+            // `silentlyComplete` bypasses the `taskCompleted` notification
+            // so we don't round-trip the write back to Apple Reminders.
+            let reminderBackedActive = backlogService.tasks.filter { task in
+                task.id.hasPrefix("reminder_") && task.status != .done
+            }
+            for task in reminderBackedActive where !activeReminderIds.contains(task.id) {
+                backlogService.silentlyComplete(id: task.id)
+            }
+
             // Prune dismissed IDs whose source reminder is no longer incomplete
             // (the user completed or deleted it in Reminders.app). Keeps the
             // set bounded and lets the task re-import if the reminder is
             // re-opened in Reminders later.
-            let activeReminderIds = Set(reminders.map { "reminder_\($0.calendarItemIdentifier)" })
             let stale = dismissedReminderIds.subtracting(activeReminderIds)
             if !stale.isEmpty {
                 dismissedReminderIds.subtract(stale)
