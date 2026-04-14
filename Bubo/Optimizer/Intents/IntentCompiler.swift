@@ -694,9 +694,20 @@ private extension IntentCompiler {
                 }
 
             case .addBuffer(let minutes):
-                // Buffer is handled by the GA's buffer objective weight
-                // Increase the buffer weight to enforce it
-                _ = minutes
+                let bufferDuration = TimeInterval(minutes * 60)
+                result = result.map { event in
+                    OptimizableEvent(
+                        id: event.id, title: event.title,
+                        duration: event.duration + bufferDuration,
+                        deadline: event.deadline, priority: event.priority,
+                        context: event.context, energyCost: event.energyCost,
+                        preferredHourRange: event.preferredHourRange,
+                        isFocusBlock: event.isFocusBlock,
+                        storyPoints: event.storyPoints,
+                        dependsOn: event.dependsOn,
+                        isDroppable: event.isDroppable
+                    )
+                }
 
             case .capTotal(let minutesPerDay):
                 // Sort by priority descending, keep events until total exceeds cap

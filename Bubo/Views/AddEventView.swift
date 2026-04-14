@@ -583,7 +583,6 @@ struct AddEventView: View {
 
     private func autoSuggestPomodoroSlot(_ service: OptimizerService) {
         isFindingBestTime = true
-        _ = pomodoroTotalMinutes
 
         let request = OptimizationRequest(
             .pomodoroSession(preset: .classic),

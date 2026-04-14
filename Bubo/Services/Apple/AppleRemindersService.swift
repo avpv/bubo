@@ -1,5 +1,8 @@
 import EventKit
 import Foundation
+import os
+
+private let logger = Logger(subsystem: "com.avpv.Bubo", category: "AppleReminders")
 
 /// Provides read/write access to the user's Apple Reminders via EventKit.
 ///
@@ -52,7 +55,7 @@ final class AppleRemindersService {
         do {
             return try await store.requestFullAccessToReminders()
         } catch {
-            print("Failed to request full Reminders access: \(error)")
+            logger.error("Failed to request full Reminders access: \(error)")
             return false
         }
     }
