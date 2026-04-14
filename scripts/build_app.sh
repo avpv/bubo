@@ -79,8 +79,10 @@ cat > "$APP/Info.plist" <<'PLIST'
 </plist>
 PLIST
 
-# Ad-hoc sign so the app runs locally without xattr workaround
-codesign --force --deep --entitlements "$PROJECT_DIR/Bubo/Bubo.entitlements" --sign - "$PROJECT_DIR/Bubo.app"
+# Ad-hoc sign so the app runs locally without xattr workaround.
+# Use the ad-hoc entitlements (without iCloud entries that require
+# a provisioned Developer ID and would prevent launch).
+codesign --force --deep --entitlements "$PROJECT_DIR/Bubo/Bubo.adhoc.entitlements" --sign - "$PROJECT_DIR/Bubo.app"
 
 echo ""
 echo "Built: $PROJECT_DIR/Bubo.app"
