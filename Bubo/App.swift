@@ -22,6 +22,7 @@ struct BuboApp: App {
     @State private var networkMonitor = NetworkMonitor()
     @State private var dependencies: AppDependencies?
 
+    @MainActor
     private func loadDependencies() async {
         // Run heavy container creation off main thread
         let (localContainer, backlogContainer) = await Task.detached(priority: .userInitiated) {
