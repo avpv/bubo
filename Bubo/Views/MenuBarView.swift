@@ -306,6 +306,15 @@ struct MenuBarView: View {
             let noun = count == 1 ? "task" : "tasks"
             toastState.showInfo("Imported \(count)\u{00A0}\(noun) from Reminders", icon: "checklist")
         }
+        .onReceive(NotificationCenter.default.publisher(for: BacklogService.taskCompleted)) { notification in
+            // Fires only for user-initiated completions in Bubo (the external-
+            // mirror path uses `silentlyComplete`, which bypasses this).
+            guard let taskId = notification.object as? String else { return }
+            let title = optimizerService.backlogService?
+                .tasks.first(where: { $0.id == taskId })?.title
+            let message = title.map { "\u{201C}\($0)\u{201D} marked done" } ?? "Marked done"
+            toastState.showSuccess(message, icon: "checkmark.circle.fill")
+        }
     }
 
     // MARK: - Filtered Events

@@ -171,21 +171,34 @@ final class RemindersSyncService {
             )
             guard !Task.isCancelled else { return }
 
-            let existingIds = Set(backlogService.tasks.map(\.id))
+            let existingById = Dictionary(
+                uniqueKeysWithValues: backlogService.tasks.map { ($0.id, $0) }
+            )
             let defaultDuration = settings.remindersDefaultDurationMinutes
             let activeReminderIds = Set(reminders.map { "reminder_\($0.calendarItemIdentifier)" })
             var added = 0
 
             for reminder in reminders {
-                let task = AppleRemindersService.shared.toBacklogTask(
+                let remote = AppleRemindersService.shared.toBacklogTask(
                     reminder,
                     defaultDuration: defaultDuration
                 )
-                // Skip tasks that were already imported, or that the user
-                // explicitly removed from the backlog on a previous sync.
-                if existingIds.contains(task.id) { continue }
-                if dismissedReminderIds.contains(task.id) { continue }
-                backlogService.addTask(task)
+
+                if let existing = existingById[remote.id] {
+                    // Task is already in the backlog — check whether fields
+                    // that Apple Reminders owns have changed externally and
+                    // push the update through. Bubo-owned fields (duration,
+                    // scheduling, story points, preferred period, status) are
+                    // preserved — the user set those locally.
+                    if let merged = merging(remote: remote, into: existing) {
+                        backlogService.updateTask(merged)
+                    }
+                    continue
+                }
+
+                // New reminder — import unless the user dismissed it earlier.
+                if dismissedReminderIds.contains(remote.id) { continue }
+                backlogService.addTask(remote)
                 added += 1
             }
 
@@ -221,6 +234,31 @@ final class RemindersSyncService {
                 NotificationCenter.default.post(name: Self.didImportTasks, object: added)
             }
         }
+    }
+
+    // MARK: - External Edit Merging
+
+    /// Applies Apple Reminders-owned fields from `remote` onto `existing`,
+    /// preserving Bubo-owned fields (duration, scheduling, story points,
+    /// preferred period, dependencies, status).  Returns `nil` when nothing
+    /// actually changed — callers use that to skip an unnecessary save.
+    private func merging(remote: BacklogTask, into existing: BacklogTask) -> BacklogTask? {
+        let titleChanged = existing.title != remote.title
+        let priorityChanged = existing.priority != remote.priority
+        let deadlineChanged = existing.deadline != remote.deadline
+        let contextChanged = existing.context != remote.context
+
+        guard titleChanged || priorityChanged || deadlineChanged || contextChanged else {
+            return nil
+        }
+
+        var merged = existing
+        merged.title = remote.title
+        merged.priority = remote.priority
+        merged.deadline = remote.deadline
+        merged.context = remote.context
+        merged.modifiedAt = Date()
+        return merged
     }
 
     // MARK: - Dismissal Tracking
