@@ -19,7 +19,9 @@ final class BacklogService {
 
     /// Posted when a task is marked done. `object` is the task ID (String).
     static let taskCompleted = Notification.Name("BuboBacklogTaskCompleted")
-    /// Posted when a task is removed. `object` is the task ID (String).
+    /// Posted when a task is removed. `object` is the removed `BacklogTask`
+    /// — the full snapshot is needed so observers can inspect fields like
+    /// `reminderCalendarItemId` for downstream cleanup.
     static let taskRemoved = Notification.Name("BuboBacklogTaskRemoved")
     /// Posted when a task is added. `object` is the task ID (String).
     static let taskAdded = Notification.Name("BuboBacklogTaskAdded")
@@ -170,7 +172,10 @@ final class BacklogService {
         modelContext.delete(persisted)
         guard saveContext() else { return nil }
         tasks.removeAll { $0.id == id }
-        NotificationCenter.default.post(name: Self.taskRemoved, object: id)
+        // Post the full snapshot so observers can access fields like
+        // `reminderCalendarItemId` that are needed to clean up external
+        // state (e.g. delete the linked Apple Reminder).
+        NotificationCenter.default.post(name: Self.taskRemoved, object: removed)
         return removed
     }
 
@@ -200,6 +205,32 @@ final class BacklogService {
             tasks[i].status = .done
             tasks[i].completedAt = now
             tasks[i].modifiedAt = now
+        }
+    }
+
+    /// Updates only the Apple Reminders mapping for a task without posting
+    /// a `taskUpdated` notification. Used by `RemindersSyncService` after
+    /// exporting a task to Apple Reminders — avoids a feedback loop where
+    /// saving the mapping would trigger another sync.
+    func silentlyUpdateReminderMapping(taskId: String, reminderCalendarItemId: String?) {
+        guard let persisted = findPersisted(taskId: taskId) else { return }
+        persisted.reminderCalendarItemId = reminderCalendarItemId
+        guard saveContext() else { return }
+        if let i = tasks.firstIndex(where: { $0.id == taskId }) {
+            tasks[i].reminderCalendarItemId = reminderCalendarItemId
+        }
+    }
+
+    /// Updates a task from a remote source (e.g. Apple Reminders) without
+    /// posting `taskUpdated` — prevents re-syncing to the source of the change.
+    func silentlyUpdate(_ task: BacklogTask) {
+        guard let persisted = findPersisted(taskId: task.id) else { return }
+        var task = task
+        task.modifiedAt = Date()
+        persisted.update(from: task)
+        guard saveContext() else { return }
+        if let i = tasks.firstIndex(where: { $0.id == task.id }) {
+            tasks[i] = task
         }
     }
 

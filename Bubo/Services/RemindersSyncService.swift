@@ -5,11 +5,18 @@ import os
 ///
 /// **Import** (Reminders → Bubo): Periodically fetches incomplete reminders
 /// from selected lists and imports them as BacklogTasks. Updates existing
-/// imported tasks when their source reminder changes.
+/// imported tasks when their source reminder was edited. Uses `modifiedAt`
+/// / `lastModifiedDate` timestamps for conflict resolution.
 ///
 /// **Export** (Bubo → Reminders): When enabled, pushes Bubo-native tasks to
 /// a designated Reminders list so they appear on all iCloud-connected devices
-/// (iPhone, iPad, etc.). Handles real-time push on task creation/update.
+/// (iPhone, iPad, etc.). Handles real-time push on task creation/update and
+/// (optionally) deletion.
+///
+/// **Feedback loop protection**: A write to EventKit triggers an async
+/// `EKEventStoreChanged` notification ~100ms later. We use a timestamp
+/// (`suppressRemoteChangesUntil`) rather than a boolean flag so that
+/// late-arriving notifications from our own writes don't kick off a re-sync.
 private let logger = Logger(subsystem: "com.avpv.Bubo", category: "RemindersSyncService")
 
 @MainActor
@@ -44,10 +51,11 @@ final class RemindersSyncService {
     private nonisolated(unsafe) var taskUpdatedObserver: Any?
     private var activeSyncTask: Task<Void, Never>?
 
-    /// Guard against feedback loops: set while we're pushing changes to
-    /// Reminders so that the EKEventStore change notification doesn't
-    /// trigger a re-sync immediately.
-    private var isExporting = false
+    /// Until this timestamp, ignore `remindersDataChanged` notifications —
+    /// they're almost certainly echoes of our own writes. Set 2 seconds into
+    /// the future whenever we call a write method on EventKit.
+    private var suppressRemoteChangesUntil: Date = .distantPast
+    private static let selfWriteSuppressionInterval: TimeInterval = 2.0
 
     init(settings: ReminderSettings, backlogService: BacklogService) {
         self.settings = settings
@@ -61,8 +69,10 @@ final class RemindersSyncService {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor in
-                guard self?.isExporting != true else { return }
-                self?.syncNow()
+                guard let self else { return }
+                // Drop notifications caused by our own writes.
+                if Date() < self.suppressRemoteChangesUntil { return }
+                self.syncNow()
             }
         }
 
@@ -78,16 +88,15 @@ final class RemindersSyncService {
             }
         }
 
-        // Listen for backlog task removals → remember dismissed IDs
+        // Listen for backlog task removals → dismissed IDs + optional deletion
         taskRemovedObserver = NotificationCenter.default.addObserver(
             forName: BacklogService.taskRemoved,
             object: nil,
             queue: .main
         ) { [weak self] notification in
-            guard let taskId = notification.object as? String,
-                  taskId.hasPrefix("reminder_") else { return }
+            guard let removed = notification.object as? BacklogTask else { return }
             Task { @MainActor in
-                self?.dismissedReminderIds.insert(taskId)
+                self?.handleTaskRemoved(removed)
             }
         }
 
@@ -125,6 +134,14 @@ final class RemindersSyncService {
         for observer in observers {
             NotificationCenter.default.removeObserver(observer)
         }
+    }
+
+    // MARK: - Self-Write Suppression
+
+    /// Call this immediately before writing to EventKit so the resulting
+    /// `EKEventStoreChanged` notification doesn't trigger a re-sync.
+    private func markSelfWrite() {
+        suppressRemoteChangesUntil = Date().addingTimeInterval(Self.selfWriteSuppressionInterval)
     }
 
     // MARK: - Sync Timer
@@ -177,23 +194,29 @@ final class RemindersSyncService {
             let defaultDuration = settings.remindersDefaultDurationMinutes
 
             for reminder in reminders {
-                let task = AppleRemindersService.shared.toBacklogTask(reminder, defaultDuration: defaultDuration)
+                let freshTask = AppleRemindersService.shared.toBacklogTask(
+                    reminder, defaultDuration: defaultDuration
+                )
 
-                if existingIds.contains(task.id) {
-                    // Task already exists — update fields if the reminder changed
-                    updateImportedTaskIfNeeded(task)
-                } else if !dismissedReminderIds.contains(task.id) {
-                    // New task — import it
-                    backlogService.addTask(task)
+                if existingIds.contains(freshTask.id) {
+                    // Task already exists — apply conflict resolution.
+                    applyRemoteChangesIfNewer(
+                        freshTask: freshTask,
+                        reminderModified: reminder.lastModifiedDate
+                    )
+                } else if !dismissedReminderIds.contains(freshTask.id) {
+                    backlogService.addTask(freshTask)
                     added += 1
                 }
             }
 
             // Mark backlog tasks as done when their source reminder was
-            // completed or deleted externally. Skip the BacklogService
-            // notification to avoid a feedback loop.
+            // completed or deleted externally. `silentlyComplete` doesn't
+            // post `taskCompleted`, so no feedback loop.
             let activeReminderIds = Set(reminders.map { "reminder_\($0.calendarItemIdentifier)" })
-            let reminderTasks = backlogService.tasks.filter { $0.id.hasPrefix("reminder_") && $0.status != .done }
+            let reminderTasks = backlogService.tasks.filter {
+                $0.id.hasPrefix("reminder_") && $0.status != .done
+            }
             for task in reminderTasks {
                 if !activeReminderIds.contains(task.id) && !dismissedReminderIds.contains(task.id) {
                     backlogService.silentlyComplete(id: task.id)
@@ -227,85 +250,95 @@ final class RemindersSyncService {
         }
     }
 
-    // MARK: - Import: Update Existing Tasks
+    // MARK: - Import: Conflict Resolution
 
-    /// Updates an already-imported task's fields if the source reminder changed
-    /// (e.g. title or due date edited on iPhone).
-    private func updateImportedTaskIfNeeded(_ freshTask: BacklogTask) {
+    /// Updates an already-imported task's fields only if the source reminder
+    /// was modified more recently than our local copy. Uses `silentlyUpdate`
+    /// so the resulting write doesn't bounce back to Reminders.
+    private func applyRemoteChangesIfNewer(freshTask: BacklogTask, reminderModified: Date?) {
         guard let index = backlogService.tasks.firstIndex(where: { $0.id == freshTask.id }) else { return }
         let existing = backlogService.tasks[index]
 
-        // Only update if something meaningful changed
-        guard existing.title != freshTask.title
-                || existing.priority != freshTask.priority
-                || existing.deadline != freshTask.deadline
-                || existing.context != freshTask.context else {
+        // Compare only the fields that can round-trip through Apple Reminders.
+        let fieldsChanged = existing.title != freshTask.title
+            || existing.priority != freshTask.priority
+            || existing.deadline != freshTask.deadline
+            || existing.context != freshTask.context
+        guard fieldsChanged else { return }
+
+        // Conflict resolution: only overwrite local state if the remote
+        // reminder is strictly newer. If we have no timestamps, fall through
+        // and accept the remote version (first-sync case).
+        if let localMod = existing.modifiedAt, let remoteMod = reminderModified,
+           localMod > remoteMod {
+            // Local changes are newer — push them back to Reminders instead.
+            if let calendarItemId = AppleRemindersService.remindersId(from: existing.id) {
+                markSelfWrite()
+                do {
+                    try AppleRemindersService.shared.updateReminder(
+                        calendarItemId: calendarItemId, from: existing
+                    )
+                } catch {
+                    logger.error("Failed to push local changes to reminder: \(error)")
+                }
+            }
             return
         }
 
+        // Remote is newer (or ties) — adopt remote values.
         var updated = existing
         updated.title = freshTask.title
         updated.priority = freshTask.priority
         updated.deadline = freshTask.deadline
         updated.context = freshTask.context
-        backlogService.updateTask(updated)
+        backlogService.silentlyUpdate(updated)
     }
 
     // MARK: - Export: Push Bubo Tasks → Apple Reminders
 
     /// Iterates all non-reminder Bubo tasks and creates reminders for any
-    /// that don't yet have a `reminderCalendarItemId`.
-    /// Returns the number of newly exported tasks.
+    /// that don't yet have a `reminderCalendarItemId`. Also pushes updates
+    /// for already-linked tasks whose fields drifted. Uses `updateReminder`'s
+    /// built-in change detection to skip no-op writes.
     private func exportBuboTasksToReminders() -> Int {
         let listId = settings.remindersExportListId
-        var count = 0
-
-        isExporting = true
-        defer { isExporting = false }
+        var createdCount = 0
 
         for task in backlogService.tasks {
             // Skip tasks that came from Reminders (already exist there)
             guard !task.id.hasPrefix("reminder_") else { continue }
-            // Skip tasks that already have a linked reminder
-            guard task.reminderCalendarItemId == nil else {
-                // Update existing reminder if task was modified
-                updateExportedReminderIfNeeded(task)
-                continue
-            }
-            // Skip completed tasks — no need to export done tasks
-            guard task.status != .done else { continue }
 
-            do {
-                let calendarItemId = try AppleRemindersService.shared.createReminder(
-                    from: task, inListId: listId
-                )
-                // Store the mapping back on the task
-                var updated = task
-                updated.reminderCalendarItemId = calendarItemId
-                backlogService.updateTask(updated)
-                count += 1
-            } catch {
-                logger.error("Failed to export task '\(task.title)' to Reminders: \(error)")
+            if task.reminderCalendarItemId == nil {
+                // Not yet exported — create a new reminder. Skip completed
+                // tasks (no reason to export done work).
+                guard task.status != .done else { continue }
+
+                markSelfWrite()
+                do {
+                    let calendarItemId = try AppleRemindersService.shared.createReminder(
+                        from: task, inListId: listId
+                    )
+                    backlogService.silentlyUpdateReminderMapping(
+                        taskId: task.id, reminderCalendarItemId: calendarItemId
+                    )
+                    createdCount += 1
+                } catch {
+                    logger.error("Failed to export task '\(task.title)' to Reminders: \(error)")
+                }
+            } else if let calendarItemId = task.reminderCalendarItemId {
+                // Already linked — push any changes (no-op if identical).
+                markSelfWrite()
+                do {
+                    try AppleRemindersService.shared.updateReminder(
+                        calendarItemId: calendarItemId, from: task
+                    )
+                } catch {
+                    logger.error("Failed to update exported reminder for '\(task.title)': \(error)")
+                }
             }
         }
 
-        return count
-    }
-
-    /// Updates the exported reminder to match current Bubo task state.
-    private func updateExportedReminderIfNeeded(_ task: BacklogTask) {
-        guard let calendarItemId = task.reminderCalendarItemId else { return }
-
-        isExporting = true
-        defer { isExporting = false }
-
-        do {
-            try AppleRemindersService.shared.updateReminder(
-                calendarItemId: calendarItemId, from: task
-            )
-        } catch {
-            logger.error("Failed to update exported reminder for '\(task.title)': \(error)")
-        }
+        return createdCount
     }
 
     // MARK: - Real-Time Export: Task Added
@@ -321,16 +354,15 @@ final class RemindersSyncService {
         guard let task = backlogService.tasks.first(where: { $0.id == taskId }),
               task.reminderCalendarItemId == nil else { return }
 
-        isExporting = true
-        defer { isExporting = false }
-
+        markSelfWrite()
         do {
             let calendarItemId = try AppleRemindersService.shared.createReminder(
                 from: task, inListId: settings.remindersExportListId
             )
-            var updated = task
-            updated.reminderCalendarItemId = calendarItemId
-            backlogService.updateTask(updated)
+            // Silent update — does NOT post taskUpdated, so no re-sync.
+            backlogService.silentlyUpdateReminderMapping(
+                taskId: task.id, reminderCalendarItemId: calendarItemId
+            )
             logger.info("Exported new task '\(task.title)' to Reminders")
         } catch {
             logger.error("Failed to export new task '\(task.title)' to Reminders: \(error)")
@@ -340,39 +372,74 @@ final class RemindersSyncService {
     // MARK: - Real-Time Export: Task Updated
 
     /// Called when a task is updated in Bubo. Pushes changes to the
-    /// linked reminder if one exists.
+    /// linked reminder if one exists. Skips no-op updates.
     private func handleTaskUpdated(taskId: String) {
         guard settings.isRemindersSyncEnabled,
-              settings.remindersExportEnabled,
               AppleRemindersService.hasAccess else { return }
 
         guard let task = backlogService.tasks.first(where: { $0.id == taskId }) else { return }
 
-        // For imported reminder tasks, update the source reminder
+        let targetId: String?
         if let remindersId = AppleRemindersService.remindersId(from: taskId) {
-            isExporting = true
-            defer { isExporting = false }
-            do {
-                try AppleRemindersService.shared.updateReminder(
-                    calendarItemId: remindersId, from: task
-                )
-            } catch {
-                logger.error("Failed to update source reminder for '\(task.title)': \(error)")
+            // Imported reminder — always keep the source in sync.
+            targetId = remindersId
+        } else if settings.remindersExportEnabled, let itemId = task.reminderCalendarItemId {
+            // Exported Bubo-native task — only if export is enabled.
+            targetId = itemId
+        } else {
+            targetId = nil
+        }
+
+        guard let calendarItemId = targetId else { return }
+
+        markSelfWrite()
+        do {
+            let didWrite = try AppleRemindersService.shared.updateReminder(
+                calendarItemId: calendarItemId, from: task
+            )
+            if didWrite {
+                logger.debug("Pushed update for '\(task.title)' to Reminders")
+            }
+        } catch {
+            logger.error("Failed to update reminder for '\(task.title)': \(error)")
+        }
+    }
+
+    // MARK: - Real-Time Delete: Task Removed
+
+    /// Called when a task is removed in Bubo. For imported reminder tasks we
+    /// remember the dismissal so we don't re-import on next sync. For tasks
+    /// with a linked reminder we optionally delete the reminder too (opt-in
+    /// via `remindersDeletionSync`).
+    private func handleTaskRemoved(_ removed: BacklogTask) {
+        // Imported reminder tasks: always track dismissal to prevent re-import.
+        if removed.id.hasPrefix("reminder_") {
+            dismissedReminderIds.insert(removed.id)
+
+            // If the user has opted into deletion sync, also delete the
+            // source reminder on iOS/iCloud.
+            if settings.remindersDeletionSync,
+               let calendarItemId = AppleRemindersService.remindersId(from: removed.id) {
+                deleteReminderSilently(calendarItemId: calendarItemId)
             }
             return
         }
 
-        // For Bubo-native tasks with a linked reminder, update it
-        if let calendarItemId = task.reminderCalendarItemId {
-            isExporting = true
-            defer { isExporting = false }
-            do {
-                try AppleRemindersService.shared.updateReminder(
-                    calendarItemId: calendarItemId, from: task
-                )
-            } catch {
-                logger.error("Failed to update exported reminder for '\(task.title)': \(error)")
-            }
+        // Bubo-native task with a linked exported reminder: optionally delete.
+        if settings.remindersDeletionSync,
+           let calendarItemId = removed.reminderCalendarItemId {
+            deleteReminderSilently(calendarItemId: calendarItemId)
+        }
+    }
+
+    /// Deletes a reminder and logs errors. Uses self-write suppression so
+    /// the resulting EKEventStoreChanged notification doesn't trigger a sync.
+    private func deleteReminderSilently(calendarItemId: String) {
+        markSelfWrite()
+        do {
+            try AppleRemindersService.shared.deleteReminder(calendarItemId: calendarItemId)
+        } catch {
+            logger.error("Failed to delete reminder \(calendarItemId): \(error)")
         }
     }
 
@@ -384,27 +451,23 @@ final class RemindersSyncService {
     private func handleTaskCompleted(taskId: String) {
         guard settings.remindersCompletionSync else { return }
 
-        isExporting = true
-        defer { isExporting = false }
-
-        // Imported reminder task
-        if let calendarItemId = AppleRemindersService.remindersId(from: taskId) {
-            do {
-                try AppleRemindersService.shared.completeReminder(calendarItemId: calendarItemId)
-            } catch {
-                logger.error("Failed to complete reminder in Apple Reminders: \(error)")
-            }
-            return
+        let calendarItemId: String?
+        if let remindersId = AppleRemindersService.remindersId(from: taskId) {
+            calendarItemId = remindersId
+        } else if let task = backlogService.tasks.first(where: { $0.id == taskId }),
+                  let itemId = task.reminderCalendarItemId {
+            calendarItemId = itemId
+        } else {
+            calendarItemId = nil
         }
 
-        // Bubo-native task with exported reminder
-        if let task = backlogService.tasks.first(where: { $0.id == taskId }),
-           let calendarItemId = task.reminderCalendarItemId {
-            do {
-                try AppleRemindersService.shared.completeReminder(calendarItemId: calendarItemId)
-            } catch {
-                logger.error("Failed to complete exported reminder: \(error)")
-            }
+        guard let id = calendarItemId else { return }
+
+        markSelfWrite()
+        do {
+            try AppleRemindersService.shared.completeReminder(calendarItemId: id)
+        } catch {
+            logger.error("Failed to complete reminder in Apple Reminders: \(error)")
         }
     }
 

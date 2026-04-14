@@ -126,18 +126,7 @@ final class AppleRemindersService {
 
     /// Converts an EKReminder into a BacklogTask suitable for the Bubo backlog.
     func toBacklogTask(_ reminder: EKReminder, defaultDuration: Int = 60) -> BacklogTask {
-        // Apple Reminders priority mapping:
-        //   0 = none → medium (neutral default)
-        //   1...4 = high (UI shows !!!)
-        //   5 = medium (UI shows !!)
-        //   6...9 = low (UI shows !)
-        let priority: TaskPriority
-        switch reminder.priority {
-        case 1...4: priority = .high
-        case 5: priority = .medium
-        case 6...9: priority = .low
-        default: priority = .medium // 0 (none) = neutral
-        }
+        let priority = Self.buboPriority(fromAppleReminders: reminder.priority)
 
         let deadline: Date?
         if let dueDateComponents = reminder.dueDateComponents {
@@ -188,15 +177,10 @@ final class AppleRemindersService {
     func createReminder(from task: BacklogTask, inListId listId: String?) throws -> String {
         let reminder = EKReminder(eventStore: store)
         reminder.title = task.title
-
-        // Map Bubo priority → Apple Reminders priority
-        reminder.priority = appleRemindersPriority(from: task.priority)
+        reminder.priority = Self.appleRemindersPriority(from: task.priority)
 
         if let deadline = task.deadline {
-            reminder.dueDateComponents = Calendar.current.dateComponents(
-                [.year, .month, .day, .hour, .minute],
-                from: deadline
-            )
+            reminder.dueDateComponents = Self.dueDateComponents(from: deadline)
         }
 
         // Assign to the specified list, or default list
@@ -217,7 +201,11 @@ final class AppleRemindersService {
     }
 
     /// Updates an existing Apple Reminder with current BacklogTask values.
-    func updateReminder(calendarItemId: String, from task: BacklogTask) throws {
+    /// Returns `true` if any fields were changed, `false` if the reminder
+    /// already matched the task (no write was performed — saves an EventKit
+    /// round-trip and avoids a superfluous store-changed notification).
+    @discardableResult
+    func updateReminder(calendarItemId: String, from task: BacklogTask) throws -> Bool {
         guard let reminder = store.calendarItem(withIdentifier: calendarItemId) as? EKReminder else {
             throw NSError(
                 domain: "AppleRemindersService",
@@ -226,29 +214,36 @@ final class AppleRemindersService {
             )
         }
 
-        reminder.title = task.title
-        reminder.priority = appleRemindersPriority(from: task.priority)
+        let newPriority = Self.appleRemindersPriority(from: task.priority)
+        let newDueComponents: DateComponents? = task.deadline.map(Self.dueDateComponents(from:))
+        let shouldBeDone = task.status == .done
 
-        if let deadline = task.deadline {
-            reminder.dueDateComponents = Calendar.current.dateComponents(
-                [.year, .month, .day, .hour, .minute],
-                from: deadline
-            )
-        } else {
-            reminder.dueDateComponents = nil
+        // Field-by-field diff — skip the save if nothing actually changed.
+        var didChange = false
+        if reminder.title != task.title { reminder.title = task.title; didChange = true }
+        if reminder.priority != newPriority { reminder.priority = newPriority; didChange = true }
+        if reminder.dueDateComponents != newDueComponents {
+            reminder.dueDateComponents = newDueComponents
+            didChange = true
+        }
+        if reminder.isCompleted != shouldBeDone {
+            reminder.isCompleted = shouldBeDone
+            reminder.completionDate = shouldBeDone ? (task.completedAt ?? Date()) : nil
+            didChange = true
         }
 
-        let wasDone = reminder.isCompleted
-        let isDone = task.status == .done
-        if isDone && !wasDone {
-            reminder.isCompleted = true
-            reminder.completionDate = task.completedAt ?? Date()
-        } else if !isDone && wasDone {
-            reminder.isCompleted = false
-            reminder.completionDate = nil
-        }
-
+        guard didChange else { return false }
         try store.save(reminder, commit: true)
+        return true
+    }
+
+    /// Deletes a reminder from Apple Reminders. Silently succeeds if the
+    /// reminder no longer exists (e.g. already deleted on another device).
+    func deleteReminder(calendarItemId: String) throws {
+        guard let reminder = store.calendarItem(withIdentifier: calendarItemId) as? EKReminder else {
+            return
+        }
+        try store.remove(reminder, commit: true)
     }
 
     /// Fetches a single reminder by its calendarItemIdentifier.
@@ -256,15 +251,53 @@ final class AppleRemindersService {
         store.calendarItem(withIdentifier: calendarItemId) as? EKReminder
     }
 
-    // MARK: - Priority Mapping
+    /// Returns the `lastModifiedDate` of a reminder, for conflict resolution.
+    func lastModified(calendarItemId: String) -> Date? {
+        fetchReminder(calendarItemId: calendarItemId)?.lastModifiedDate
+    }
+
+    // MARK: - Priority Mapping (static — pure functions, testable)
 
     /// Maps Bubo TaskPriority to Apple Reminders integer priority.
     ///   high → 1 (!!!)   medium → 5 (!!)   low → 9 (!)
-    private func appleRemindersPriority(from priority: TaskPriority) -> Int {
+    static func appleRemindersPriority(from priority: TaskPriority) -> Int {
         switch priority {
         case .high: return 1
         case .medium: return 5
         case .low: return 9
         }
+    }
+
+    /// Inverse mapping: Apple Reminders integer priority → Bubo TaskPriority.
+    ///   0 (none) → medium (neutral default)
+    ///   1...4    → high (UI shows !!!)
+    ///   5        → medium (UI shows !!)
+    ///   6...9    → low (UI shows !)
+    static func buboPriority(fromAppleReminders raw: Int) -> TaskPriority {
+        switch raw {
+        case 1...4: return .high
+        case 5: return .medium
+        case 6...9: return .low
+        default: return .medium // 0 = none
+        }
+    }
+
+    // MARK: - Due Date Components (preserve date-only vs datetime granularity)
+
+    /// Returns DateComponents suitable for `EKReminder.dueDateComponents`.
+    /// If the deadline is exactly midnight local time, returns date-only
+    /// components (year/month/day). This preserves the distinction Apple
+    /// Reminders makes between "due today" vs "due today at 3:00 PM".
+    static func dueDateComponents(from date: Date) -> DateComponents {
+        let cal = Calendar.current
+        let comps = cal.dateComponents([.hour, .minute, .second], from: date)
+        let hasMeaningfulTime = (comps.hour ?? 0) != 0
+            || (comps.minute ?? 0) != 0
+            || (comps.second ?? 0) != 0
+
+        if hasMeaningfulTime {
+            return cal.dateComponents([.year, .month, .day, .hour, .minute], from: date)
+        }
+        return cal.dateComponents([.year, .month, .day], from: date)
     }
 }

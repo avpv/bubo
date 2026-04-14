@@ -277,9 +277,23 @@ struct AppleRemindersTabView: View {
 
                 SkinSeparator().padding(.vertical, DS.Spacing.xs)
 
+                Toggle(isOn: $settings.remindersDeletionSync) {
+                    Text("Also delete from Reminders")
+                        .fontWeight(.medium)
+                }
+                .toggleStyle(.switch)
+
+                Text("Removing a task in Bubo also deletes the linked reminder across all your iCloud devices.")
+                    .font(.caption)
+                    .foregroundStyle(skin.resolvedTextSecondary)
+                    .padding(.top, DS.Spacing.xs)
+
+                SkinSeparator().padding(.vertical, DS.Spacing.xs)
+
                 HStack {
                     if syncService.exportedCount > 0, let date = syncService.lastSyncDate {
-                        Text("Last export: \(syncService.exportedCount) tasks \u{2022} \(date, style: .relative) ago")
+                        let noun = syncService.exportedCount == 1 ? "task" : "tasks"
+                        Text("Last export: \(syncService.exportedCount) \(noun) \u{2022} \(date, style: .relative) ago")
                             .font(.caption)
                             .foregroundStyle(skin.resolvedTextSecondary)
                     }
