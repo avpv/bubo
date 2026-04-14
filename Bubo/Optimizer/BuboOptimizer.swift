@@ -451,18 +451,6 @@ final class BuboOptimizer {
 
         // Collect results
         var sequencesByScenario: [Int: [Date: [String]]] = [:]
-        for (scenarioIndex, _, _) in trivialSequences {
-            sequencesByScenario[scenarioIndex, default: [:]] = [:]
-        }
-        for (_, day, _) in trivialSequences {
-            // Find the right scenario for this trivial entry
-            for (sIdx, d, ids) in trivialSequences where d == day {
-                sequencesByScenario[sIdx, default: [:]][d] = ids
-                _ = ids // silence warning
-            }
-        }
-        // Re-insert trivial sequences properly
-        sequencesByScenario = [:]
         for (scenarioIndex, day, eventIds) in trivialSequences {
             sequencesByScenario[scenarioIndex, default: [:]][day] = eventIds
         }

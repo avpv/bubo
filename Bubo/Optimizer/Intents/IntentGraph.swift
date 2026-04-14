@@ -170,9 +170,8 @@ struct IntentGraph: Sendable {
 
         for i in 0..<nodeList.count {
             for j in (i+1)..<nodeList.count {
-                if let reason = Self.conflictReason(nodeList[i].intent, nodeList[j].intent) {
+                if Self.conflictReason(nodeList[i].intent, nodeList[j].intent) != nil {
                     addEdge(from: nodeList[i].intent, to: nodeList[j].intent, kind: .conflicts)
-                    _ = reason  // stored in edge, used by conflict detector
                 }
             }
         }

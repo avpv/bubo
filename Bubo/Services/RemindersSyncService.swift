@@ -1,10 +1,13 @@
 import Foundation
+import os
 
 /// Bridges Apple Reminders with the Bubo backlog.
 ///
 /// Periodically fetches incomplete reminders from selected lists and
 /// imports them as BacklogTasks. Handles deduplication (won't re-import
 /// tasks that already exist) and optional two-way completion sync.
+private let logger = Logger(subsystem: "com.avpv.Bubo", category: "RemindersSyncService")
+
 @MainActor
 @Observable
 final class RemindersSyncService {
@@ -181,7 +184,7 @@ final class RemindersSyncService {
         do {
             try AppleRemindersService.shared.completeReminder(calendarItemId: calendarItemId)
         } catch {
-            print("Failed to complete reminder in Apple Reminders: \(error)")
+            logger.error("Failed to complete reminder in Apple Reminders: \(error)")
         }
     }
 

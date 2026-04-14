@@ -156,7 +156,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         dismissPinnedTimer()
 
         let settings = ReminderSettings.load()
-        let _ = settings.selectedSkin
         let timerView = TimerScreenView(
             event: event,
             onBack: { [weak self] in

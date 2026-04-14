@@ -189,6 +189,8 @@ private extension IntentCompiler {
         var peakEnergyHour: Int? = nil
         var maxMeetingsPerDay: Int? = nil
         var minBreakMinutes: Int? = nil
+        var maxConsecutiveWorkMinutes: Int? = nil
+        var meetingClusteringWeight: Double? = nil
         var lunchStart: Int? = nil
         var lunchEnd: Int? = nil
 
@@ -218,7 +220,6 @@ private extension IntentCompiler {
         // Source filters
         var calendarFilter: String? = nil
         var projectFilter: String? = nil
-        var timeRangeFilter: DateInterval? = nil
 
         // Transforms
         var transforms: [EventTransform] = []
@@ -288,10 +289,7 @@ private extension IntentCompiler {
         case .groupByProject(let w):
             config.weights[.contextSwitch] = w  // context grouping reduces switching
         case .batchMeetings(let w):
-            config.weights[.focusBlock] = (config.weights[.focusBlock] ?? 1.0)
-            // Meeting clustering is expressed through meeting clustering weight
-            // which the existing optimizer already supports
-            _ = w  // TODO: Add explicit meetingClustering weight key
+            config.meetingClusteringWeight = w
 
         // Energy & balance
         case .lowEnergy:
@@ -307,12 +305,7 @@ private extension IntentCompiler {
             config.lunchEnd = end
         case .breakEvery(let workMinutes, let breakMinutes):
             config.minBreakMinutes = breakMinutes
-            // Encode max consecutive work as meeting minutes limit
-            let prefs = optimizer.preferences
-            if workMinutes < prefs.maxConsecutiveMeetingMinutes {
-                // Will be applied in buildPreferences
-            }
-            _ = workMinutes  // captured in minBreakMinutes context
+            config.maxConsecutiveWorkMinutes = workMinutes
         case .maxMeetings(let perDay):
             config.maxMeetingsPerDay = perDay
 
@@ -354,7 +347,10 @@ private extension IntentCompiler {
         case .fromProject(let name):
             config.projectFilter = name
         case .fromTimeRange(let start, let end):
-            config.timeRangeFilter = DateInterval(start: start, end: end)
+            let cal = Calendar.current
+            let startHour = cal.component(.hour, from: start)
+            let endHour = cal.component(.hour, from: end)
+            config.workingHours = max(startHour, config.workingHours.lowerBound)...min(endHour, config.workingHours.upperBound)
 
         // Transforms — applied after collecting events, before GA
         case .splitLong(let maxMinutes):
@@ -399,12 +395,8 @@ private extension IntentCompiler {
         case .meetingPrep(let minutes):
             config.transforms.append(.addBuffer(minutes: minutes))
 
-        case .windDown(let lastHours):
-            let endHour = config.workingHours.upperBound
-            let windDownStart = endHour - lastHours
-            // Lower energy for wind-down period — achieved by boosting energy curve weight
+        case .windDown(_):
             config.weights[.energyCurve] = max(config.weights[.energyCurve] ?? 1.0, 1.8)
-            _ = windDownStart
 
         case .taskOrder(let strategy):
             config.taskOrderStrategy = strategy
@@ -478,13 +470,11 @@ private extension IntentCompiler {
             break
 
         // Health
-        case .microBreak(let everyMinutes, let durationMinutes):
+        case .microBreak(_, let durationMinutes):
             config.minBreakMinutes = max(config.minBreakMinutes ?? 0, durationMinutes)
             config.weights[.breakPlacement] = max(config.weights[.breakPlacement] ?? 1.0, 2.0)
-            _ = everyMinutes  // encoded in break weight
-        case .walkBreak(let afterMinutes, let durationMinutes):
+        case .walkBreak(_, let durationMinutes):
             config.minBreakMinutes = max(config.minBreakMinutes ?? 0, durationMinutes)
-            _ = afterMinutes
         case .pinAt(let title, let hour, let minutes):
             let cal = Calendar.current
             let now = Date()
@@ -671,12 +661,6 @@ private extension IntentCompiler {
             result = result.filter { $0.context == projFilter }
         }
 
-        if let range = config.timeRangeFilter {
-            // Only keep events whose preferred time overlaps the range
-            // (for movable events without fixed times, keep all)
-            _ = range  // time range filter is applied in horizon resolution
-        }
-
         return result
     }
 
@@ -710,9 +694,20 @@ private extension IntentCompiler {
                 }
 
             case .addBuffer(let minutes):
-                // Buffer is handled by the GA's buffer objective weight
-                // Increase the buffer weight to enforce it
-                _ = minutes
+                let bufferDuration = TimeInterval(minutes * 60)
+                result = result.map { event in
+                    OptimizableEvent(
+                        id: event.id, title: event.title,
+                        duration: event.duration + bufferDuration,
+                        deadline: event.deadline, priority: event.priority,
+                        context: event.context, energyCost: event.energyCost,
+                        preferredHourRange: event.preferredHourRange,
+                        isFocusBlock: event.isFocusBlock,
+                        storyPoints: event.storyPoints,
+                        dependsOn: event.dependsOn,
+                        isDroppable: event.isDroppable
+                    )
+                }
 
             case .capTotal(let minutesPerDay):
                 // Sort by priority descending, keep events until total exceeds cap
@@ -834,6 +829,8 @@ private extension IntentCompiler {
         if let v = config.peakEnergyHour { prefs.peakEnergyHour = v }
         if let v = config.maxMeetingsPerDay { prefs.maxMeetingsPerDay = v }
         if let v = config.minBreakMinutes { prefs.minBreakMinutes = v }
+        if let v = config.maxConsecutiveWorkMinutes { prefs.maxConsecutiveMeetingMinutes = v }
+        if let v = config.meetingClusteringWeight { prefs.meetingClusteringWeight = v }
         if let v = config.lunchStart { prefs.lunchWindowStart = v }
         if let v = config.lunchEnd { prefs.lunchWindowEnd = v }
 

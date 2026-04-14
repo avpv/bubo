@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import os
 
 // MARK: - Skin JSON Format
 
@@ -110,7 +111,7 @@ struct CustomSkinJSON: Codable {
         let ratio = (whiteLum + 0.05) / (lum + 0.05)
 
         if ratio < 3.0 {
-            print("[Bubo] Warning: Skin '\(displayName)' accentColor contrast ratio is \(String(format: "%.2f", ratio)):1 (minimum 3:1 per Apple HIG). Consider darkening the accent color.")
+            skinLogger.warning("Skin '\(displayName)' accentColor contrast ratio is \(String(format: "%.2f", ratio)):1 (minimum 3:1 per Apple HIG). Consider darkening the accent color.")
         }
     }
 
@@ -293,6 +294,8 @@ struct JSONGradient: Codable {
 ///
 /// Skins are stored in `~/Library/Application Support/Bubo/Skins/`.
 @Observable
+private let skinLogger = Logger(subsystem: "com.avpv.Bubo", category: "SkinLoader")
+
 class CustomSkinLoader {
     static let shared = CustomSkinLoader()
 
@@ -414,7 +417,7 @@ enum BuiltInSkinLoader {
     static let skins: [SkinDefinition] = {
         let loaded = loadBuiltInSkins()
         if loaded.isEmpty {
-            print("[Bubo] Warning: No built-in skins loaded from JSON. Using hardcoded Classic fallback.")
+            skinLogger.warning("No built-in skins loaded from JSON. Using hardcoded Classic fallback.")
             return [fallbackClassic]
         }
         return loaded
@@ -444,18 +447,18 @@ enum BuiltInSkinLoader {
     private static func loadBuiltInSkins() -> [SkinDefinition] {
         let urls = findBuiltInSkinURLs()
         if urls.isEmpty {
-            print("[Bubo] Warning: No built-in skin files found.")
+            skinLogger.warning("No built-in skin files found.")
             return []
         }
 
         var loaded: [SkinDefinition] = []
         for url in urls {
             guard let data = try? Data(contentsOf: url) else {
-                print("[Bubo] Warning: Cannot read built-in skin file \(url.lastPathComponent)")
+                skinLogger.warning("Cannot read built-in skin file \(url.lastPathComponent)")
                 continue
             }
             guard let json = try? JSONDecoder().decode(CustomSkinJSON.self, from: data) else {
-                print("[Bubo] Warning: Invalid JSON in built-in skin \(url.lastPathComponent)")
+                skinLogger.warning("Invalid JSON in built-in skin \(url.lastPathComponent)")
                 continue
             }
             loaded.append(json.toSkinDefinition(skinFileURL: url, isBuiltIn: true))

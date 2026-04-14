@@ -1,5 +1,8 @@
 import Foundation
 import SwiftData
+import os
+
+private let logger = Logger(subsystem: "com.avpv.Bubo", category: "EventCache")
 
 /// Offline cache for calendar events, backed by SwiftData.
 actor EventCache {
@@ -16,7 +19,7 @@ actor EventCache {
         do {
             try context.delete(model: PersistedCachedEvent.self)
         } catch {
-            print("EventCache: failed to clear old cache: \(error)")
+            logger.error("Failed to clear old cache: \(error)")
             return false
         }
 
@@ -29,7 +32,7 @@ actor EventCache {
             try context.save()
             return true
         } catch {
-            print("EventCache: failed to save cache: \(error)")
+            logger.error("Failed to save cache: \(error)")
             return false
         }
     }
@@ -43,7 +46,7 @@ actor EventCache {
         do {
             return try context.fetch(descriptor).map { $0.toCalendarEvent() }
         } catch {
-            print("EventCache: failed to load: \(error)")
+            logger.error("Failed to load: \(error)")
             return []
         }
     }
@@ -64,7 +67,7 @@ actor EventCache {
             try context.delete(model: PersistedCachedEvent.self)
             try context.save()
         } catch {
-            print("EventCache: failed to clear: \(error)")
+            logger.error("Failed to clear: \(error)")
         }
     }
 }

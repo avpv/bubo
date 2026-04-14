@@ -2,6 +2,9 @@ import Foundation
 import UserNotifications
 import AppKit
 import SwiftData
+import os
+
+private let logger = Logger(subsystem: "com.avpv.Bubo", category: "ReminderService")
 
 @MainActor
 @Observable
@@ -418,7 +421,7 @@ class ReminderService {
             }
             syncNow()
         } catch {
-            print("Failed to create Apple Calendar event: \(error)")
+            logger.error("Failed to create Apple Calendar event: \(error)")
         }
     }
 
@@ -483,7 +486,7 @@ class ReminderService {
 
             try context.save()
         } catch {
-            print("ReminderService: failed to save local events: \(error)")
+            logger.error("Failed to save local events: \(error)")
         }
     }
 
@@ -496,7 +499,7 @@ class ReminderService {
                 .filter { $0.isUpcoming || $0.recurrenceRule != nil }
             loadExcludedOccurrences()
         } catch {
-            print("ReminderService: failed to load local events: \(error)")
+            logger.error("Failed to load local events: \(error)")
         }
     }
 
@@ -509,7 +512,7 @@ class ReminderService {
             }
             try context.save()
         } catch {
-            print("ReminderService: failed to save excluded occurrences: \(error)")
+            logger.error("Failed to save excluded occurrences: \(error)")
         }
     }
 
@@ -519,7 +522,7 @@ class ReminderService {
             let persisted = try context.fetch(FetchDescriptor<PersistedExcludedOccurrence>())
             excludedOccurrences = Set(persisted.map { $0.occurrenceId })
         } catch {
-            print("ReminderService: failed to load excluded occurrences: \(error)")
+            logger.error("Failed to load excluded occurrences: \(error)")
         }
     }
 
@@ -548,7 +551,7 @@ class ReminderService {
             }
             try context.save()
         } catch {
-            print("ReminderService: failed to save reminder overrides: \(error)")
+            logger.error("Failed to save reminder overrides: \(error)")
         }
     }
 
@@ -560,7 +563,7 @@ class ReminderService {
                 uniqueKeysWithValues: persisted.map { ($0.eventId, $0.minutes) }
             )
         } catch {
-            print("ReminderService: failed to load reminder overrides: \(error)")
+            logger.error("Failed to load reminder overrides: \(error)")
         }
     }
 
@@ -587,7 +590,7 @@ class ReminderService {
             do {
                 try AppleCalendarService.shared.shiftEventTime(id: event.id, byMinutes: minutes)
             } catch {
-                print("Failed to shift Apple Calendar event time: \(error)")
+                logger.error("Failed to shift Apple Calendar event time: \(error)")
             }
         }
     }

@@ -1,5 +1,8 @@
 import EventKit
 import Foundation
+import os
+
+private let logger = Logger(subsystem: "com.avpv.Bubo", category: "AppleCalendar")
 
 /// Provides access to calendars configured in the native macOS Calendar.app
 /// via EventKit. This includes iCloud, Exchange, Google, CalDAV, and any other
@@ -45,29 +48,16 @@ class AppleCalendarService {
     }
 
     static var hasAccess: Bool {
-        let status = authorizationStatus
-        if #available(macOS 14.0, *) {
-            return status == .fullAccess
-        } else {
-            return status == .authorized
-        }
+        authorizationStatus == .fullAccess
     }
 
     /// Request access to the user's calendars. Returns true if access was granted.
     func requestAccess() async -> Bool {
-        if #available(macOS 14.0, *) {
-            do {
-                return try await store.requestFullAccessToEvents()
-            } catch {
-                print("Failed to request full access: \(error)")
-                return false
-            }
-        } else {
-            return await withCheckedContinuation { continuation in
-                store.requestAccess(to: .event) { granted, _ in
-                    continuation.resume(returning: granted)
-                }
-            }
+        do {
+            return try await store.requestFullAccessToEvents()
+        } catch {
+            logger.error("Failed to request full access: \(error)")
+            return false
         }
     }
 
