@@ -66,21 +66,27 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        // Workaround for SwiftUI Settings window leaving the app in the Dock
+        // Workaround for SwiftUI Settings window leaving the app in the Dock.
+        //
+        // Important constraints:
+        // 1. Never call NSApp.hide(nil) — it corrupts MenuBarExtra state,
+        //    preventing the popover from reopening and causing the status-bar
+        //    icon to disappear on click.
+        // 2. Only respond to real, user-visible Settings windows — ignore
+        //    internal SwiftUI scaffold windows that may briefly exist during
+        //    scene initialization (they can match the "Settings" identifier
+        //    but were never shown on screen).
         NotificationCenter.default.addObserver(
             forName: NSWindow.willCloseNotification,
             object: nil,
             queue: .main
         ) { notification in
-            if let window = notification.object as? NSWindow {
-                if window.title.contains("Settings") || window.identifier?.rawValue.contains("Settings") == true {
-                    DispatchQueue.main.async {
-                        NSApp.setActivationPolicy(.accessory)
-                        if NSApp.isActive {
-                            NSApp.hide(nil)
-                        }
-                    }
-                }
+            guard let window = notification.object as? NSWindow,
+                  window.isVisible,
+                  window.title.contains("Settings") || window.identifier?.rawValue.contains("Settings") == true
+            else { return }
+            DispatchQueue.main.async {
+                NSApp.setActivationPolicy(.accessory)
             }
         }
     }

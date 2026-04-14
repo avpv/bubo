@@ -52,6 +52,8 @@ struct BuboApp: App {
         self.modelContainer = container
 
         // CloudKit-synced container for backlog tasks.
+        // Falls back to a local-only container when CloudKit is unavailable
+        // (e.g. ad-hoc signed builds without iCloud entitlements).
         let backlogContainer: ModelContainer
         do {
             let cloudConfig = ModelConfiguration(
@@ -64,7 +66,18 @@ struct BuboApp: App {
                 configurations: cloudConfig
             )
         } catch {
-            fatalError("Failed to create CloudKit ModelContainer: \(error)")
+            do {
+                let localConfig = ModelConfiguration(
+                    "BacklogLocal",
+                    schema: Schema([PersistedBacklogTask.self])
+                )
+                backlogContainer = try ModelContainer(
+                    for: PersistedBacklogTask.self,
+                    configurations: localConfig
+                )
+            } catch {
+                fatalError("Failed to create backlog ModelContainer: \(error)")
+            }
         }
 
         let s = ReminderSettings.load()
