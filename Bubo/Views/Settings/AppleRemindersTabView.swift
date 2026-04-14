@@ -16,6 +16,7 @@ struct AppleRemindersTabView: View {
                 if settings.isRemindersSyncEnabled && viewModel.remindersAccessGranted {
                     listSelectionSection
                     importOptionsSection
+                    exportSection
                 }
             }
             .padding(DS.Spacing.xl)
@@ -223,6 +224,68 @@ struct AppleRemindersTabView: View {
                 .font(.caption)
                 .foregroundStyle(skin.resolvedTextSecondary)
                 .padding(.top, DS.Spacing.xs)
+        }
+    }
+
+    // MARK: - Export (Bubo → iOS Reminders)
+
+    @ViewBuilder
+    private var exportSection: some View {
+        @Bindable var settings = settings
+        let allLists = viewModel.availableRemindersLists
+
+        SettingsPlatter("Sync to iOS") {
+            Toggle(isOn: $settings.remindersExportEnabled) {
+                Text("Push tasks to Apple Reminders")
+                    .fontWeight(.medium)
+            }
+            .toggleStyle(.switch)
+
+            Text("Tasks created in Bubo will appear in Apple Reminders and sync to your iPhone, iPad, and other devices via iCloud.")
+                .font(.caption)
+                .foregroundStyle(skin.resolvedTextSecondary)
+                .padding(.top, DS.Spacing.xs)
+
+            if settings.remindersExportEnabled {
+                SkinSeparator().padding(.vertical, DS.Spacing.xs)
+
+                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                    Text("Target list")
+                        .fontWeight(.medium)
+
+                    Picker("Target list", selection: Binding(
+                        get: { settings.remindersExportListId ?? "" },
+                        set: { settings.remindersExportListId = $0.isEmpty ? nil : $0 }
+                    )) {
+                        Text("Default list").tag("")
+                        ForEach(allLists) { list in
+                            HStack(spacing: DS.Spacing.sm) {
+                                Circle()
+                                    .fill(list.color.map { Color(cgColor: $0) } ?? skin.resolvedTextTertiary)
+                                    .frame(width: DS.Size.iconSmall, height: DS.Size.iconSmall)
+                                Text(list.title)
+                            }
+                            .tag(list.id)
+                        }
+                    }
+                    .labelsHidden()
+
+                    Text("New tasks from Bubo are created in this Reminders list.")
+                        .font(.caption)
+                        .foregroundStyle(skin.resolvedTextSecondary)
+                }
+
+                SkinSeparator().padding(.vertical, DS.Spacing.xs)
+
+                HStack {
+                    if syncService.exportedCount > 0, let date = syncService.lastSyncDate {
+                        Text("Last export: \(syncService.exportedCount) tasks \u{2022} \(date, style: .relative) ago")
+                            .font(.caption)
+                            .foregroundStyle(skin.resolvedTextSecondary)
+                    }
+                    Spacer()
+                }
+            }
         }
     }
 }

@@ -21,6 +21,10 @@ final class BacklogService {
     static let taskCompleted = Notification.Name("BuboBacklogTaskCompleted")
     /// Posted when a task is removed. `object` is the task ID (String).
     static let taskRemoved = Notification.Name("BuboBacklogTaskRemoved")
+    /// Posted when a task is added. `object` is the task ID (String).
+    static let taskAdded = Notification.Name("BuboBacklogTaskAdded")
+    /// Posted when a task is updated. `object` is the task ID (String).
+    static let taskUpdated = Notification.Name("BuboBacklogTaskUpdated")
 
     private(set) var tasks: [BacklogTask] = []
 
@@ -129,6 +133,7 @@ final class BacklogService {
         modelContext.insert(persisted)
         guard saveContext() else { return }
         tasks.append(task)
+        NotificationCenter.default.post(name: Self.taskAdded, object: task.id)
     }
 
     func addTasks(_ newTasks: [BacklogTask]) {
@@ -156,6 +161,7 @@ final class BacklogService {
         if let i = tasks.firstIndex(where: { $0.id == task.id }) {
             tasks[i] = task
         }
+        NotificationCenter.default.post(name: Self.taskUpdated, object: task.id)
     }
 
     func removeTask(id: String) -> BacklogTask? {

@@ -181,4 +181,90 @@ final class AppleRemindersService {
         return String(backlogTaskId.dropFirst("reminder_".count))
     }
 
+    // MARK: - Create Reminder (Export Bubo → Apple Reminders)
+
+    /// Creates a new Apple Reminder from a BacklogTask.
+    /// Returns the `calendarItemIdentifier` of the created reminder.
+    func createReminder(from task: BacklogTask, inListId listId: String?) throws -> String {
+        let reminder = EKReminder(eventStore: store)
+        reminder.title = task.title
+
+        // Map Bubo priority → Apple Reminders priority
+        reminder.priority = appleRemindersPriority(from: task.priority)
+
+        if let deadline = task.deadline {
+            reminder.dueDateComponents = Calendar.current.dateComponents(
+                [.year, .month, .day, .hour, .minute],
+                from: deadline
+            )
+        }
+
+        // Assign to the specified list, or default list
+        if let listId,
+           let calendar = store.calendars(for: .reminder).first(where: { $0.calendarIdentifier == listId }) {
+            reminder.calendar = calendar
+        } else {
+            reminder.calendar = store.defaultCalendarForNewReminders()
+        }
+
+        if task.status == .done {
+            reminder.isCompleted = true
+            reminder.completionDate = task.completedAt ?? Date()
+        }
+
+        try store.save(reminder, commit: true)
+        return reminder.calendarItemIdentifier
+    }
+
+    /// Updates an existing Apple Reminder with current BacklogTask values.
+    func updateReminder(calendarItemId: String, from task: BacklogTask) throws {
+        guard let reminder = store.calendarItem(withIdentifier: calendarItemId) as? EKReminder else {
+            throw NSError(
+                domain: "AppleRemindersService",
+                code: 404,
+                userInfo: [NSLocalizedDescriptionKey: "Reminder not found for update."]
+            )
+        }
+
+        reminder.title = task.title
+        reminder.priority = appleRemindersPriority(from: task.priority)
+
+        if let deadline = task.deadline {
+            reminder.dueDateComponents = Calendar.current.dateComponents(
+                [.year, .month, .day, .hour, .minute],
+                from: deadline
+            )
+        } else {
+            reminder.dueDateComponents = nil
+        }
+
+        let wasDone = reminder.isCompleted
+        let isDone = task.status == .done
+        if isDone && !wasDone {
+            reminder.isCompleted = true
+            reminder.completionDate = task.completedAt ?? Date()
+        } else if !isDone && wasDone {
+            reminder.isCompleted = false
+            reminder.completionDate = nil
+        }
+
+        try store.save(reminder, commit: true)
+    }
+
+    /// Fetches a single reminder by its calendarItemIdentifier.
+    func fetchReminder(calendarItemId: String) -> EKReminder? {
+        store.calendarItem(withIdentifier: calendarItemId) as? EKReminder
+    }
+
+    // MARK: - Priority Mapping
+
+    /// Maps Bubo TaskPriority to Apple Reminders integer priority.
+    ///   high → 1 (!!!)   medium → 5 (!!)   low → 9 (!)
+    private func appleRemindersPriority(from priority: TaskPriority) -> Int {
+        switch priority {
+        case .high: return 1
+        case .medium: return 5
+        case .low: return 9
+        }
+    }
 }

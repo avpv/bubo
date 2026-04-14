@@ -82,6 +82,11 @@ class ReminderSettings: Codable {
     var remindersCompletionSync: Bool { didSet { scheduleSave() } }
     /// Default duration in minutes for imported reminders (Apple Reminders has no duration concept).
     var remindersDefaultDurationMinutes: Int { didSet { scheduleSave() } }
+    /// When true, new backlog tasks created in Bubo are exported to Apple Reminders
+    /// so they appear on all iCloud-connected devices (iPhone, iPad, etc.).
+    var remindersExportEnabled: Bool { didSet { scheduleSave() } }
+    /// The Reminders list to create exported tasks in. nil = default list.
+    var remindersExportListId: String? { didSet { scheduleSave() } }
 
     // World Clock
     var isWorldClockEnabled: Bool { didSet { scheduleSave() } }
@@ -101,6 +106,7 @@ class ReminderSettings: Codable {
         case customBackgroundPhotoPath, customBackgroundPhotoOpacity, customBackgroundPhotoBlur
         case showBadgeCount, badgeCountMode, badgeTimeWindowHours
         case isRemindersSyncEnabled, selectedRemindersListIds, remindersCompletionSync, remindersDefaultDurationMinutes
+        case remindersExportEnabled, remindersExportListId
         case isWorldClockEnabled, worldClockCityIDs
     }
 
@@ -128,6 +134,8 @@ class ReminderSettings: Codable {
         self.selectedRemindersListIds = []
         self.remindersCompletionSync = true
         self.remindersDefaultDurationMinutes = 60
+        self.remindersExportEnabled = false
+        self.remindersExportListId = nil
         self.isWorldClockEnabled = false
         self.worldClockCityIDs = []
     }
@@ -154,6 +162,8 @@ class ReminderSettings: Codable {
         selectedRemindersListIds = try container.decodeIfPresent([String].self, forKey: .selectedRemindersListIds) ?? []
         remindersCompletionSync = try container.decodeIfPresent(Bool.self, forKey: .remindersCompletionSync) ?? true
         remindersDefaultDurationMinutes = try container.decodeIfPresent(Int.self, forKey: .remindersDefaultDurationMinutes) ?? 60
+        remindersExportEnabled = try container.decodeIfPresent(Bool.self, forKey: .remindersExportEnabled) ?? false
+        remindersExportListId = try container.decodeIfPresent(String.self, forKey: .remindersExportListId)
         isWorldClockEnabled = try container.decodeIfPresent(Bool.self, forKey: .isWorldClockEnabled) ?? false
         worldClockCityIDs = try container.decodeIfPresent([String].self, forKey: .worldClockCityIDs) ?? []
     }
@@ -179,6 +189,8 @@ class ReminderSettings: Codable {
         try container.encode(selectedRemindersListIds, forKey: .selectedRemindersListIds)
         try container.encode(remindersCompletionSync, forKey: .remindersCompletionSync)
         try container.encode(remindersDefaultDurationMinutes, forKey: .remindersDefaultDurationMinutes)
+        try container.encode(remindersExportEnabled, forKey: .remindersExportEnabled)
+        try container.encodeIfPresent(remindersExportListId, forKey: .remindersExportListId)
         try container.encode(isWorldClockEnabled, forKey: .isWorldClockEnabled)
         try container.encode(worldClockCityIDs, forKey: .worldClockCityIDs)
     }
@@ -254,6 +266,8 @@ class ReminderSettings: Codable {
         selectedRemindersListIds = fresh.selectedRemindersListIds
         remindersCompletionSync = fresh.remindersCompletionSync
         remindersDefaultDurationMinutes = fresh.remindersDefaultDurationMinutes
+        remindersExportEnabled = fresh.remindersExportEnabled
+        remindersExportListId = fresh.remindersExportListId
         isWorldClockEnabled = fresh.isWorldClockEnabled
         worldClockCityIDs = fresh.worldClockCityIDs
 
