@@ -1,6 +1,13 @@
 import SwiftUI
 import SwiftData
 
+private class MenuBarIconCache {
+    var count: Int = -1
+    var skinID: String = ""
+    var image: NSImage?
+}
+private let sharedIconCache = MenuBarIconCache()
+
 @main
 struct BuboApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -179,6 +186,11 @@ struct BuboApp: App {
     }
 
     private var menuBarIcon: NSImage {
+        let currentSkinID = settings.selectedSkinID
+        if sharedIconCache.count == 0, sharedIconCache.skinID == currentSkinID, let img = sharedIconCache.image {
+            return img
+        }
+
         let size = NSSize(width: 18, height: 18)
         let useCustom = useSkinIcon
         let image = NSImage(size: size, flipped: false) { rect in
@@ -194,6 +206,11 @@ struct BuboApp: App {
         // to vibrancy, Desktop Tinting, and all appearance states.
         // Only use non-template when a skin explicitly tints the icon.
         image.isTemplate = !useSkinIcon
+
+        sharedIconCache.count = 0
+        sharedIconCache.skinID = currentSkinID
+        sharedIconCache.image = image
+
         return image
     }
 
@@ -203,6 +220,11 @@ struct BuboApp: App {
 
     private func menuBarIconWithBadge(count: Int) -> NSImage {
         guard count > 0 else { return menuBarIcon }
+
+        let currentSkinID = settings.selectedSkinID
+        if sharedIconCache.count == count, sharedIconCache.skinID == currentSkinID, let img = sharedIconCache.image {
+            return img
+        }
 
         let iconSize: CGFloat = 18
         let badgeText = (count > 99 ? "99+" : "\(count)") as NSString
@@ -282,6 +304,11 @@ struct BuboApp: App {
             return true
         }
         image.isTemplate = false
+
+        sharedIconCache.count = count
+        sharedIconCache.skinID = currentSkinID
+        sharedIconCache.image = image
+
         return image
     }
 
