@@ -26,7 +26,8 @@ struct BuboApp: App {
                 PersistedLocalEvent.self,
                 PersistedCachedEvent.self,
                 PersistedExcludedOccurrence.self,
-                PersistedReminderOverride.self
+                PersistedReminderOverride.self,
+                PersistedBacklogTask.self
             )
         } catch {
             // Schema migration failed — delete the corrupted store and retry
