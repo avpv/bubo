@@ -258,10 +258,9 @@ final class BacklogService {
         let today = Calendar.current.startOfDay(for: Date())
         let now = Date()
 
-        let scheduled = BacklogStatus.scheduled.rawValue
         var descriptor = FetchDescriptor<PersistedBacklogTask>(
             predicate: #Predicate<PersistedBacklogTask> { task in
-                task.statusRaw == scheduled
+                task.statusRaw == "scheduled"
             }
         )
         descriptor.fetchLimit = 500
@@ -319,9 +318,8 @@ final class BacklogService {
 
     /// O(1) lookup via predicate + fetchLimit.
     private func findPersisted(taskId: String) -> PersistedBacklogTask? {
-        let id = taskId
         var descriptor = FetchDescriptor<PersistedBacklogTask>(
-            predicate: #Predicate<PersistedBacklogTask> { $0.taskId == id }
+            predicate: #Predicate<PersistedBacklogTask> { $0.taskId == taskId }
         )
         descriptor.fetchLimit = 1
         return try? modelContext.fetch(descriptor).first
