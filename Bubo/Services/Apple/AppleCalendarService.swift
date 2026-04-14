@@ -45,29 +45,16 @@ class AppleCalendarService {
     }
 
     static var hasAccess: Bool {
-        let status = authorizationStatus
-        if #available(macOS 14.0, *) {
-            return status == .fullAccess
-        } else {
-            return status == .authorized
-        }
+        authorizationStatus == .fullAccess
     }
 
     /// Request access to the user's calendars. Returns true if access was granted.
     func requestAccess() async -> Bool {
-        if #available(macOS 14.0, *) {
-            do {
-                return try await store.requestFullAccessToEvents()
-            } catch {
-                print("Failed to request full access: \(error)")
-                return false
-            }
-        } else {
-            return await withCheckedContinuation { continuation in
-                store.requestAccess(to: .event) { granted, _ in
-                    continuation.resume(returning: granted)
-                }
-            }
+        do {
+            return try await store.requestFullAccessToEvents()
+        } catch {
+            print("Failed to request full access: \(error)")
+            return false
         }
     }
 

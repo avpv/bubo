@@ -21,11 +21,7 @@ class SettingsViewModel {
     var appleCalendarsByAccount: [(account: String, calendars: [AppleCalendarService.CalendarInfo])] = []
 
     var appleCalendarAccessGranted: Bool {
-        if #available(macOS 14.0, *) {
-            calendarAuthStatus == .fullAccess
-        } else {
-            calendarAuthStatus == .authorized
-        }
+        calendarAuthStatus == .fullAccess
     }
 
     // MARK: - Apple Reminders
@@ -35,11 +31,7 @@ class SettingsViewModel {
     var remindersListsByAccount: [(account: String, lists: [AppleRemindersService.RemindersList])] = []
 
     var remindersAccessGranted: Bool {
-        if #available(macOS 14.0, *) {
-            remindersAuthStatus == .fullAccess
-        } else {
-            remindersAuthStatus == .authorized
-        }
+        remindersAuthStatus == .fullAccess
     }
 
     // MARK: - Actions

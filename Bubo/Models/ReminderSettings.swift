@@ -155,12 +155,7 @@ class ReminderSettings: Codable {
         remindersCompletionSync = try container.decodeIfPresent(Bool.self, forKey: .remindersCompletionSync) ?? true
         remindersDefaultDurationMinutes = try container.decodeIfPresent(Int.self, forKey: .remindersDefaultDurationMinutes) ?? 60
         isWorldClockEnabled = try container.decodeIfPresent(Bool.self, forKey: .isWorldClockEnabled) ?? false
-        let rawCityIDs = try container.decodeIfPresent([String].self, forKey: .worldClockCityIDs) ?? []
-        // Migrate old timezoneID-only format to new city_timezoneID format
-        worldClockCityIDs = rawCityIDs.map { id in
-            if WorldClockCity.city(forID: id) != nil { return id }
-            return WorldClockCity.allCities.first { $0.timezoneID == id }?.id ?? id
-        }
+        worldClockCityIDs = try container.decodeIfPresent([String].self, forKey: .worldClockCityIDs) ?? []
     }
 
     func encode(to encoder: Encoder) throws {
