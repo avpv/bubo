@@ -22,9 +22,25 @@ final class PreferenceLearner {
     private let persistenceKey = "BuboOptimizerLearnedWeights"
     private let feedbackKey = "BuboOptimizerFeedbackHistory"
 
+    private var cloudSyncObserver: Any?
+
     init() {
         self.learnedWeights = Self.defaultWeights
         load()
+        setupCloudSync()
+    }
+
+    private func setupCloudSync() {
+        cloudSyncObserver = NotificationCenter.default.addObserver(
+            forName: CloudSyncService.didReceiveRemoteChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let key = notification.object as? String,
+                  key == "BuboOptimizerLearnedWeights" || key == "BuboOptimizerFeedbackHistory"
+            else { return }
+            self?.load()
+        }
     }
 
     // MARK: - Default Weights
@@ -276,11 +292,13 @@ final class PreferenceLearner {
         // Save learned weights
         if let data = try? JSONEncoder().encode(learnedWeights) {
             UserDefaults.standard.set(data, forKey: persistenceKey)
+            CloudSyncService.shared.push(persistenceKey)
         }
         // Save recent feedback (keep last 100)
         let recent = Array(feedbackHistory.suffix(100))
         if let data = try? JSONEncoder().encode(recent) {
             UserDefaults.standard.set(data, forKey: feedbackKey)
+            CloudSyncService.shared.push(feedbackKey)
         }
     }
 

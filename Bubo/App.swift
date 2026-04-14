@@ -14,6 +14,10 @@ struct BuboApp: App {
     private let modelContainer: ModelContainer
 
     init() {
+        // Pull any existing iCloud data before services load from UserDefaults.
+        CloudSyncService.shared.performInitialSync()
+
+        // Local-only container for calendar events (not synced to iCloud).
         let container: ModelContainer
         do {
             container = try ModelContainer(for:
@@ -47,12 +51,28 @@ struct BuboApp: App {
         }
         self.modelContainer = container
 
+        // CloudKit-synced container for backlog tasks.
+        let backlogContainer: ModelContainer
+        do {
+            let cloudConfig = ModelConfiguration(
+                "BacklogCloud",
+                schema: Schema([PersistedBacklogTask.self]),
+                cloudKitDatabase: .automatic
+            )
+            backlogContainer = try ModelContainer(
+                for: PersistedBacklogTask.self,
+                configurations: cloudConfig
+            )
+        } catch {
+            fatalError("Failed to create CloudKit ModelContainer: \(error)")
+        }
+
         let s = ReminderSettings.load()
         _settings = State(wrappedValue: s)
         _reminderService = State(wrappedValue: ReminderService(settings: s, modelContainer: container))
 
         let optimizer = OptimizerService()
-        let backlog = BacklogService(modelContainer: container)
+        let backlog = BacklogService(modelContainer: backlogContainer)
         optimizer.backlogService = backlog
         optimizer.energyCheckInService = EnergyCheckInService()
         _optimizerService = State(wrappedValue: optimizer)

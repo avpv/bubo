@@ -25,8 +25,26 @@ final class IntentLearner {
     private(set) var temporalPatterns: [TemporalPattern] = []
 
     private let persistenceKey = "BuboIntentLearnerHistory"
+    private var cloudSyncObserver: Any?
 
-    init() { load() }
+    init() {
+        load()
+        setupCloudSync()
+    }
+
+    private func setupCloudSync() {
+        cloudSyncObserver = NotificationCenter.default.addObserver(
+            forName: CloudSyncService.didReceiveRemoteChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let key = notification.object as? String,
+                  key.hasPrefix("BuboIntentLearnerHistory") else { return }
+            Task { @MainActor [weak self] in
+                self?.load()
+            }
+        }
+    }
 
     // MARK: - Record
 
@@ -323,12 +341,15 @@ final class IntentLearner {
     private func save() {
         if let data = try? JSONEncoder().encode(history) {
             UserDefaults.standard.set(data, forKey: persistenceKey)
+            CloudSyncService.shared.push(persistenceKey)
         }
         if let data = try? JSONEncoder().encode(temporalPatterns) {
             UserDefaults.standard.set(data, forKey: persistenceKey + ".patterns")
+            CloudSyncService.shared.push(persistenceKey + ".patterns")
         }
         if let data = try? JSONEncoder().encode(intentFrequency) {
             UserDefaults.standard.set(data, forKey: persistenceKey + ".frequency")
+            CloudSyncService.shared.push(persistenceKey + ".frequency")
         }
     }
 

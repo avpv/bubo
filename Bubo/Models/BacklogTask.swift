@@ -19,6 +19,11 @@ struct BacklogTask: Identifiable, Codable, Hashable, Sendable {
     var completedAt: Date?
     var createdAt: Date
 
+    /// Last mutation timestamp — used by iCloud sync to resolve conflicts
+    /// when the same task was edited on two devices.  Optional for backward
+    /// compatibility with data serialized before this field existed.
+    var modifiedAt: Date?
+
     /// When the task was last scheduled by the optimizer.
     /// Used to determine carry-over: if scheduledDate < today, task is overdue.
     var scheduledDate: Date?

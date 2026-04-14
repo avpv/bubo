@@ -90,6 +90,10 @@ class ReminderSettings: Codable {
     // Task-based debounced save — replaces Combine pipeline
     private var saveTask: Task<Void, Never>?
 
+    /// Prevents didSet -> save -> push loop when reloading cloud data.
+    private var isReloadingFromCloud = false
+    private var cloudSyncObserver: Any?
+
     enum CodingKeys: String, CodingKey {
         case intervals, syncIntervalMinutes, showFullScreenAlert, showSystemNotification
         case selectedCalendarIds, isCalendarSyncEnabled, selectedSkinID
@@ -185,6 +189,7 @@ class ReminderSettings: Codable {
     }
 
     private func scheduleSave() {
+        guard !isReloadingFromCloud else { return }
         saveTask?.cancel()
         saveTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(300))
@@ -194,17 +199,69 @@ class ReminderSettings: Codable {
         }
     }
 
+    private static let persistenceKey = "ReminderSettings"
+
     func save() {
         if let data = try? JSONEncoder().encode(self) {
-            UserDefaults.standard.set(data, forKey: "ReminderSettings")
+            UserDefaults.standard.set(data, forKey: Self.persistenceKey)
+            CloudSyncService.shared.push(Self.persistenceKey)
         }
     }
 
     static func load() -> ReminderSettings {
-        guard let data = UserDefaults.standard.data(forKey: "ReminderSettings"),
+        guard let data = UserDefaults.standard.data(forKey: persistenceKey),
               let settings = try? JSONDecoder().decode(ReminderSettings.self, from: data) else {
-            return ReminderSettings()
+            let settings = ReminderSettings()
+            settings.setupCloudSync()
+            return settings
         }
+        settings.setupCloudSync()
         return settings
+    }
+
+    // MARK: - Cloud Sync
+
+    private func setupCloudSync() {
+        cloudSyncObserver = NotificationCenter.default.addObserver(
+            forName: CloudSyncService.didReceiveRemoteChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let key = notification.object as? String,
+                  key == ReminderSettings.persistenceKey else { return }
+            self?.reloadFromCloud()
+        }
+    }
+
+    private func reloadFromCloud() {
+        guard let data = UserDefaults.standard.data(forKey: Self.persistenceKey),
+              let fresh = try? JSONDecoder().decode(ReminderSettings.self, from: data)
+        else { return }
+
+        isReloadingFromCloud = true
+        defer { isReloadingFromCloud = false }
+
+        intervals = fresh.intervals
+        syncIntervalMinutes = fresh.syncIntervalMinutes
+        showFullScreenAlert = fresh.showFullScreenAlert
+        showSystemNotification = fresh.showSystemNotification
+        selectedCalendarIds = fresh.selectedCalendarIds
+        isCalendarSyncEnabled = fresh.isCalendarSyncEnabled
+        selectedSkinID = fresh.selectedSkinID
+        selectedWallpaperID = fresh.selectedWallpaperID
+        customBackgroundPhotoPath = fresh.customBackgroundPhotoPath
+        customBackgroundPhotoOpacity = fresh.customBackgroundPhotoOpacity
+        customBackgroundPhotoBlur = fresh.customBackgroundPhotoBlur
+        showBadgeCount = fresh.showBadgeCount
+        badgeCountMode = fresh.badgeCountMode
+        badgeTimeWindowHours = fresh.badgeTimeWindowHours
+        isRemindersSyncEnabled = fresh.isRemindersSyncEnabled
+        selectedRemindersListIds = fresh.selectedRemindersListIds
+        remindersCompletionSync = fresh.remindersCompletionSync
+        remindersDefaultDurationMinutes = fresh.remindersDefaultDurationMinutes
+        isWorldClockEnabled = fresh.isWorldClockEnabled
+        worldClockCityIDs = fresh.worldClockCityIDs
+
+        NotificationCenter.default.post(name: Self.settingsDidChange, object: nil)
     }
 }

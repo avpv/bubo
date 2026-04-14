@@ -176,6 +176,7 @@ final class SubgraphRegistry {
         let user = subgraphs.values.filter(\.isUserCreated)
         if let data = try? JSONEncoder().encode(Array(user)) {
             UserDefaults.standard.set(data, forKey: persistenceKey)
+            CloudSyncService.shared.push(persistenceKey)
         }
     }
 

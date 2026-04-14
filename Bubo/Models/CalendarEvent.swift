@@ -45,6 +45,7 @@ enum EventColorTag: String, Codable, Hashable, CaseIterable, Sendable {
             let map = Dictionary(uniqueKeysWithValues: newValue.map { ($0.key.rawValue, $0.value) })
             if let data = try? JSONEncoder().encode(map) {
                 UserDefaults.standard.set(data, forKey: "BuboColorContextLabels")
+                CloudSyncService.shared.push("BuboColorContextLabels")
             }
         }
     }

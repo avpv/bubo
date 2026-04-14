@@ -190,6 +190,7 @@ final class RemindersSyncService {
     private func saveDismissedIds() {
         let array = Array(dismissedReminderIds)
         UserDefaults.standard.set(array, forKey: Self.dismissedKey)
+        CloudSyncService.shared.push(Self.dismissedKey)
     }
 
     private static func loadDismissedIds() -> Set<String> {
