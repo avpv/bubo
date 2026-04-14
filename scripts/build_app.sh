@@ -75,6 +75,10 @@ cat > "$APP/Info.plist" <<'PLIST'
   <string>Bubo needs access to your calendars to show meeting reminders from accounts configured in the Calendar app.</string>
   <key>NSCalendarsFullAccessUsageDescription</key>
   <string>Bubo needs access to your calendars to show meeting reminders from accounts configured in the Calendar app.</string>
+  <key>NSRemindersUsageDescription</key>
+  <string>Bubo can import tasks from your Reminders lists into the backlog for scheduling.</string>
+  <key>NSRemindersFullAccessUsageDescription</key>
+  <string>Bubo can import tasks from your Reminders lists into the backlog for scheduling.</string>
 </dict>
 </plist>
 PLIST
