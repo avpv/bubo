@@ -76,6 +76,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         //    internal SwiftUI scaffold windows that may briefly exist during
         //    scene initialization (they can match the "Settings" identifier
         //    but were never shown on screen).
+        // 3. Only reset to .accessory when the policy was actually changed
+        //    to .regular (by opening Settings). Calling setActivationPolicy
+        //    while already .accessory disrupts MenuBarExtra's internal state
+        //    and causes the status-bar icon to disappear on click.
         NotificationCenter.default.addObserver(
             forName: NSWindow.willCloseNotification,
             object: nil,
@@ -86,6 +90,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                   window.title.contains("Settings") || window.identifier?.rawValue.contains("Settings") == true
             else { return }
             DispatchQueue.main.async {
+                guard NSApp.activationPolicy() == .regular else { return }
                 NSApp.setActivationPolicy(.accessory)
             }
         }
