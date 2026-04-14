@@ -306,6 +306,11 @@ struct MenuBarView: View {
             let noun = count == 1 ? "task" : "tasks"
             toastState.showInfo("Imported \(count)\u{00A0}\(noun) from Reminders", icon: "checklist")
         }
+        .onReceive(NotificationCenter.default.publisher(for: RemindersSyncService.didExportTasks)) { notification in
+            guard let count = notification.object as? Int, count > 0 else { return }
+            let noun = count == 1 ? "task" : "tasks"
+            toastState.showInfo("Synced \(count)\u{00A0}\(noun) to Reminders", icon: "icloud.and.arrow.up")
+        }
     }
 
     // MARK: - Filtered Events

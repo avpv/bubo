@@ -24,6 +24,7 @@ final class PersistedBacklogTask {
     var modifiedAt: Date?
     var scheduledDate: Date?
     var scheduledEventId: String?
+    var reminderCalendarItemId: String?
 
     /// User-controlled ordering.  Uses `Double` with gaps (fractional
     /// indexing) so that a reorder only touches ONE record — minimises
@@ -48,6 +49,7 @@ final class PersistedBacklogTask {
         self.modifiedAt = task.modifiedAt
         self.scheduledDate = task.scheduledDate
         self.scheduledEventId = task.scheduledEventId
+        self.reminderCalendarItemId = task.reminderCalendarItemId
         self.sortOrder = sortOrder
     }
 
@@ -75,6 +77,7 @@ final class PersistedBacklogTask {
         task.modifiedAt = modifiedAt
         task.scheduledDate = scheduledDate
         task.scheduledEventId = scheduledEventId
+        task.reminderCalendarItemId = reminderCalendarItemId
         return task
     }
 
@@ -92,5 +95,6 @@ final class PersistedBacklogTask {
         modifiedAt = task.modifiedAt
         scheduledDate = task.scheduledDate
         scheduledEventId = task.scheduledEventId
+        reminderCalendarItemId = task.reminderCalendarItemId
     }
 }

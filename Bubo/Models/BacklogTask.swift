@@ -32,6 +32,11 @@ struct BacklogTask: Identifiable, Codable, Hashable, Sendable {
     /// nil = unscheduled (sitting in backlog).
     var scheduledEventId: String?
 
+    /// The Apple Reminders `calendarItemIdentifier` for tasks exported from Bubo.
+    /// For tasks imported from Reminders, the ID is derived from the `reminder_` prefix.
+    /// For Bubo-native tasks pushed to Reminders, this stores the created reminder's ID.
+    var reminderCalendarItemId: String?
+
     init(
         id: String = UUID().uuidString,
         title: String,
