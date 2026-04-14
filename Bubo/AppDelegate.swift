@@ -73,7 +73,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             queue: .main
         ) { notification in
             if let window = notification.object as? NSWindow {
-                if window.title.contains("Settings") || window.title.contains("Bubo") || window.identifier?.rawValue.contains("Settings") == true {
+                if window.title.contains("Settings") || window.identifier?.rawValue.contains("Settings") == true {
                     DispatchQueue.main.async {
                         NSApp.setActivationPolicy(.accessory)
                         if NSApp.isActive {
