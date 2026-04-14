@@ -16,15 +16,10 @@ struct BuboApp: App {
     @State private var networkMonitor = NetworkMonitor()
     @State private var optimizerService: OptimizerService
     @State private var agentService = AgentService()
-    @State private var remindersSyncService: RemindersSyncService
 
     private let modelContainer: ModelContainer
 
     init() {
-        // Pull any existing iCloud data before services load from UserDefaults.
-        CloudSyncService.shared.performInitialSync()
-
-        // Local-only container for calendar events (not synced to iCloud).
         let container: ModelContainer
         do {
             container = try ModelContainer(for:
@@ -39,6 +34,7 @@ struct BuboApp: App {
             let storeURL = URL.applicationSupportDirectory
                 .appending(path: "default.store")
             try? FileManager.default.removeItem(at: storeURL)
+            // Also remove WAL/SHM sidecar files
             for suffix in ["-wal", "-shm"] {
                 let sidecar = storeURL.deletingPathExtension()
                     .appendingPathExtension(storeURL.pathExtension + suffix)
@@ -57,59 +53,14 @@ struct BuboApp: App {
         }
         self.modelContainer = container
 
-        // Backlog container — local only. The CloudKit-backed config
-        // (`cloudKitDatabase: .automatic`) has caused SwiftData to hang on
-        // ad-hoc signed builds where iCloud entitlements are absent, leaving
-        // the menu bar popover unresponsive after launch.
-        let backlogContainer: ModelContainer
-        do {
-            let localConfig = ModelConfiguration(
-                "BacklogLocal",
-                schema: Schema([PersistedBacklogTask.self])
-            )
-            backlogContainer = try ModelContainer(
-                for: PersistedBacklogTask.self,
-                configurations: localConfig
-            )
-        } catch {
-            // Wipe any stale backlog stores left by previous releases and
-            // retry. Prevents `fatalError` from killing the app on upgrade.
-            let appSupport = URL.applicationSupportDirectory
-            for name in ["BacklogCloud.store", "BacklogLocal.store"] {
-                let url = appSupport.appending(path: name)
-                try? FileManager.default.removeItem(at: url)
-                for suffix in ["-wal", "-shm"] {
-                    let sidecar = url.deletingPathExtension()
-                        .appendingPathExtension(url.pathExtension + suffix)
-                    try? FileManager.default.removeItem(at: sidecar)
-                }
-            }
-            do {
-                let localConfig = ModelConfiguration(
-                    "BacklogLocal",
-                    schema: Schema([PersistedBacklogTask.self])
-                )
-                backlogContainer = try ModelContainer(
-                    for: PersistedBacklogTask.self,
-                    configurations: localConfig
-                )
-            } catch {
-                fatalError("Failed to create backlog ModelContainer: \(error)")
-            }
-        }
-
         let s = ReminderSettings.load()
         _settings = State(wrappedValue: s)
         _reminderService = State(wrappedValue: ReminderService(settings: s, modelContainer: container))
 
         let optimizer = OptimizerService()
-        let backlog = BacklogService(modelContainer: backlogContainer)
-        optimizer.backlogService = backlog
+        optimizer.backlogService = BacklogService(modelContainer: container)
         optimizer.energyCheckInService = EnergyCheckInService()
         _optimizerService = State(wrappedValue: optimizer)
-
-        let syncService = RemindersSyncService(settings: s, backlogService: backlog)
-        _remindersSyncService = State(wrappedValue: syncService)
     }
 
     private func drawOwl(in ctx: CGContext, size s: CGFloat, color: CGColor) {
@@ -178,13 +129,11 @@ struct BuboApp: App {
         let lum = 0.2126 * r + 0.7152 * g + 0.0722 * bl
 
         if isDark {
-            // Dark menu bar → icon needs to be bright enough (lum > 0.25)
             if lum < 0.25 {
                 let adjusted = NSColor(hue: h, saturation: s * 0.8, brightness: max(b, 0.65), alpha: a)
                 return adjusted.cgColor
             }
         } else {
-            // Light menu bar → icon needs to be dark enough (lum < 0.7)
             if lum > 0.7 {
                 let adjusted = NSColor(hue: h, saturation: max(s, 0.5), brightness: min(b, 0.55), alpha: a)
                 return adjusted.cgColor
@@ -243,7 +192,6 @@ struct BuboApp: App {
         let badgeDiameter: CGFloat = 12
         let badgeWidth = max(badgeDiameter, textSize.width + 6)
 
-        // Badge at bottom-right, overlapping the icon
         let overlapX: CGFloat = badgeWidth * 0.3
         let overlapY: CGFloat = badgeDiameter * 0.35
         let totalWidth = iconSize + badgeWidth - overlapX
@@ -253,19 +201,16 @@ struct BuboApp: App {
         let image = NSImage(size: NSSize(width: totalWidth, height: totalHeight), flipped: false) { rect in
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
 
-            // Determine icon color with contrast safety
             let isDark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
             let iconColor: CGColor = self.useSkinIcon
                 ? self.resolvedIconColor(isDark: isDark)
                 : (isDark ? NSColor.white.cgColor : NSColor.black.cgColor)
 
-            // Draw owl icon shifted up to make room for badge overflow at the bottom
             ctx.saveGState()
             ctx.translateBy(x: 0, y: bottomOverflow + 2)
             self.drawOwl(in: ctx, size: iconSize, color: iconColor)
             ctx.restoreGState()
 
-            // Cut out a circular area from the owl where the badge will sit
             let badgeX = iconSize - overlapX
             let badgeY: CGFloat = bottomOverflow - overlapY + 1
             let badgeRect = NSRect(x: badgeX, y: badgeY, width: badgeWidth, height: badgeDiameter)
@@ -277,10 +222,8 @@ struct BuboApp: App {
             cutoutPath.fill()
             ctx.restoreGState()
 
-            // Badge color: always system red per Apple HIG
             let badgeColor = NSColor.systemRed
 
-            // Badge shadow for depth
             ctx.saveGState()
             ctx.setShadow(offset: CGSize(width: 0, height: -0.5), blur: 1.5, color: NSColor.black.withAlphaComponent(0.25).cgColor)
             let badgePath = NSBezierPath(roundedRect: badgeRect, xRadius: badgeDiameter / 2, yRadius: badgeDiameter / 2)
@@ -288,17 +231,14 @@ struct BuboApp: App {
             badgePath.fill()
             ctx.restoreGState()
 
-            // Badge fill on top (crisp, no shadow)
             badgeColor.setFill()
             badgePath.fill()
 
-            // Subtle inner highlight at top of badge
             let highlightRect = NSRect(x: badgeX + 1.5, y: badgeY + badgeDiameter * 0.5, width: badgeWidth - 3, height: badgeDiameter * 0.4)
             let highlightPath = NSBezierPath(roundedRect: highlightRect, xRadius: 3, yRadius: 3)
             NSColor.white.withAlphaComponent(0.15).setFill()
             highlightPath.fill()
 
-            // Draw count text centered in badge
             let textX = badgeX + (badgeWidth - textSize.width) / 2
             let textY = badgeY + (badgeDiameter - textSize.height) / 2
             badgeText.draw(at: NSPoint(x: textX, y: textY), withAttributes: attrs)
@@ -321,8 +261,7 @@ struct BuboApp: App {
                 reminderService: reminderService,
                 networkMonitor: networkMonitor,
                 optimizerService: optimizerService,
-                agentService: agentService,
-                remindersSyncService: remindersSyncService
+                agentService: agentService
             )
         } label: {
             Image(nsImage: menuBarIconWithBadge(count: badgeCount))
@@ -335,7 +274,6 @@ struct BuboApp: App {
                 .environment(reminderService)
                 .environment(optimizerService)
                 .environment(agentService)
-                .environment(remindersSyncService)
         }
         .windowToolbarStyle(.unified(showsTitle: true))
     }

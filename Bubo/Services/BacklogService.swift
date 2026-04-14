@@ -3,87 +3,43 @@ import SwiftData
 
 // MARK: - Backlog Service
 
-/// Manages persistent task backlog via SwiftData.  When the ModelContainer
-/// is configured with CloudKit, tasks sync across devices automatically.
-///
-/// Performance notes:
-/// - Local mutations update the in-memory `tasks` array directly — no
-///   full re-fetch after every write.
-/// - Full re-fetch happens only on remote CloudKit changes.
-/// - `findPersisted` uses a predicate with fetchLimit=1 — O(1) lookup.
-/// - Reorder uses fractional indexing (Double sortOrder) so only ONE
-///   record is written per move — minimises CloudKit sync conflicts.
+/// Manages persistent task backlog. Tasks live here until completed —
+/// never consumed by optimization, automatically carried over across days.
 @MainActor
 @Observable
 final class BacklogService {
 
-    /// Posted when a task is marked done. `object` is the task ID (String).
-    static let taskCompleted = Notification.Name("BuboBacklogTaskCompleted")
-    /// Posted when a task is removed. `object` is the removed `BacklogTask`
-    /// — the full snapshot is needed so observers can inspect fields like
-    /// `reminderCalendarItemId` for downstream cleanup.
-    static let taskRemoved = Notification.Name("BuboBacklogTaskRemoved")
-    /// Posted when a task is added. `object` is the task ID (String).
-    static let taskAdded = Notification.Name("BuboBacklogTaskAdded")
-    /// Posted when a task is updated. `object` is the task ID (String).
-    static let taskUpdated = Notification.Name("BuboBacklogTaskUpdated")
-
     private(set) var tasks: [BacklogTask] = []
-
-    /// Last error from a failed SwiftData save.  Observable so UI can
-    /// display a non-intrusive warning.  Cleared on next successful save.
-    private(set) var lastError: String?
-
-    /// Set when a CloudKit remote change is applied.  UI can show a
-    /// subtle "synced just now" indicator.
-    private(set) var lastRemoteUpdate: Date?
-
-    private let modelContext: ModelContext
-    private var remoteChangeObserver: Any?
-
-    /// Minimum gap between adjacent sortOrder values before a renumber
-    /// pass is triggered.  1e-6 gives ~50 halvings before exhaustion.
-    private static let minSortGap: Double = 1e-6
+    private let modelContainer: ModelContainer
 
     init(modelContainer: ModelContainer) {
-        self.modelContext = modelContainer.mainContext
-        fetchTasks()
-        observeRemoteChanges()
-    }
-
-    // MARK: - Remote Change Detection (CloudKit)
-
-    private func observeRemoteChanges() {
-        remoteChangeObserver = NotificationCenter.default.addObserver(
-            forName: Notification.Name("NSPersistentStoreRemoteChangeNotification"),
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.fetchTasks()
-                self?.lastRemoteUpdate = Date()
-            }
-        }
+        self.modelContainer = modelContainer
+        loadTasks()
     }
 
     // MARK: - Queries
 
+    /// Tasks that need scheduling (not done, not yet placed).
     var pending: [BacklogTask] {
         tasks.filter { $0.status == .pending }
     }
 
+    /// All tasks available for (re)scheduling — pending and already-scheduled.
     var schedulable: [BacklogTask] {
         tasks.filter { $0.status != .done }
     }
 
+    /// Tasks that have been placed in the schedule.
     var scheduled: [BacklogTask] {
         tasks.filter { $0.status == .scheduled }
     }
 
+    /// Completed tasks.
     var done: [BacklogTask] {
         tasks.filter { $0.status == .done }
     }
 
+    /// Overdue tasks — were scheduled for a past date but not completed.
     var overdue: [BacklogTask] {
         let today = Calendar.current.startOfDay(for: Date())
         return tasks.filter { task in
@@ -93,6 +49,13 @@ final class BacklogService {
         }
     }
 
+    /// Tasks grouped by context/project for display.
+    ///
+    /// Order inside each group is the user-controlled storage order — reorderTask
+    /// mutates `tasks`, so dragging a row to a new position takes effect here.
+    /// Urgency is still surfaced via the "N urgent" badge in the header and the
+    /// red "!" marker on rows; we don't force-sort by deadline, because that
+    /// would silently override whatever sequence the user dragged into place.
     var groupedByContext: [(context: String?, tasks: [BacklogTask])] {
         let active = tasks.filter { $0.status != .done }
         var groups: [(context: String?, tasks: [BacklogTask])] = []
@@ -105,6 +68,8 @@ final class BacklogService {
                 groups.append((context: task.context, tasks: [task]))
             }
         }
+        // Stable: keep first-seen order, but push the "no context" bucket last
+        // so tagged groups don't get visually fragmented by untagged tasks.
         groups.sort { lhs, rhs in
             switch (lhs.context, rhs.context) {
             case (nil, nil): return false
@@ -116,6 +81,7 @@ final class BacklogService {
         return groups
     }
 
+    /// Urgent tasks — deadline within N days.
     func urgent(withinDays days: Int = 2) -> [BacklogTask] {
         let cutoff = Calendar.current.date(byAdding: .day, value: days, to: Date()) ?? Date()
         return tasks.filter { task in
@@ -128,197 +94,86 @@ final class BacklogService {
     // MARK: - Mutations
 
     func addTask(_ task: BacklogTask) {
-        var task = task
-        task.modifiedAt = Date()
-        let order = nextSortOrder()
-        let persisted = PersistedBacklogTask(from: task, sortOrder: order)
-        modelContext.insert(persisted)
-        guard saveContext() else { return }
         tasks.append(task)
-        NotificationCenter.default.post(name: Self.taskAdded, object: task.id)
+        saveTasks()
     }
 
     func addTasks(_ newTasks: [BacklogTask]) {
-        let now = Date()
-        var order = nextSortOrder()
-        for var task in newTasks {
-            task.modifiedAt = now
-            let persisted = PersistedBacklogTask(from: task, sortOrder: order)
-            modelContext.insert(persisted)
-            order += 1.0
-        }
-        guard saveContext() else { return }
-        let stamped = newTasks.map { t -> BacklogTask in
-            var t = t; t.modifiedAt = now; return t
-        }
-        tasks.append(contentsOf: stamped)
+        tasks.append(contentsOf: newTasks)
+        saveTasks()
     }
 
     func updateTask(_ task: BacklogTask) {
-        guard let persisted = findPersisted(taskId: task.id) else { return }
-        var task = task
-        task.modifiedAt = Date()
-        persisted.update(from: task)
-        guard saveContext() else { return }
-        if let i = tasks.firstIndex(where: { $0.id == task.id }) {
-            tasks[i] = task
-        }
-        NotificationCenter.default.post(name: Self.taskUpdated, object: task.id)
+        guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return }
+        tasks[index] = task
+        saveTasks()
     }
 
     func removeTask(id: String) -> BacklogTask? {
-        guard let persisted = findPersisted(taskId: id) else { return nil }
-        let removed = persisted.toBacklogTask()
-        modelContext.delete(persisted)
-        guard saveContext() else { return nil }
-        tasks.removeAll { $0.id == id }
-        // Post the full snapshot so observers can access fields like
-        // `reminderCalendarItemId` that are needed to clean up external
-        // state (e.g. delete the linked Apple Reminder).
-        NotificationCenter.default.post(name: Self.taskRemoved, object: removed)
+        guard let index = tasks.firstIndex(where: { $0.id == id }) else { return nil }
+        let removed = tasks.remove(at: index)
+        saveTasks()
         return removed
     }
 
     func completeTask(id: String) {
-        guard let persisted = findPersisted(taskId: id) else { return }
-        let now = Date()
-        persisted.statusRaw = BacklogStatus.done.rawValue
-        persisted.completedAt = now
-        persisted.modifiedAt = now
-        guard saveContext() else { return }
-        if let i = tasks.firstIndex(where: { $0.id == id }) {
-            tasks[i].status = .done
-            tasks[i].completedAt = now
-            tasks[i].modifiedAt = now
-        }
-        NotificationCenter.default.post(name: Self.taskCompleted, object: id)
-    }
-
-    func silentlyComplete(id: String) {
-        guard let persisted = findPersisted(taskId: id) else { return }
-        let now = Date()
-        persisted.statusRaw = BacklogStatus.done.rawValue
-        persisted.completedAt = now
-        persisted.modifiedAt = now
-        guard saveContext() else { return }
-        if let i = tasks.firstIndex(where: { $0.id == id }) {
-            tasks[i].status = .done
-            tasks[i].completedAt = now
-            tasks[i].modifiedAt = now
-        }
-    }
-
-    /// Updates only the Apple Reminders mapping for a task without posting
-    /// a `taskUpdated` notification. Used by `RemindersSyncService` after
-    /// exporting a task to Apple Reminders — avoids a feedback loop where
-    /// saving the mapping would trigger another sync.
-    func silentlyUpdateReminderMapping(taskId: String, reminderCalendarItemId: String?) {
-        guard let persisted = findPersisted(taskId: taskId) else { return }
-        persisted.reminderCalendarItemId = reminderCalendarItemId
-        guard saveContext() else { return }
-        if let i = tasks.firstIndex(where: { $0.id == taskId }) {
-            tasks[i].reminderCalendarItemId = reminderCalendarItemId
-        }
-    }
-
-    /// Updates a task from a remote source (e.g. Apple Reminders) without
-    /// posting `taskUpdated` — prevents re-syncing to the source of the change.
-    func silentlyUpdate(_ task: BacklogTask) {
-        guard let persisted = findPersisted(taskId: task.id) else { return }
-        var task = task
-        task.modifiedAt = Date()
-        persisted.update(from: task)
-        guard saveContext() else { return }
-        if let i = tasks.firstIndex(where: { $0.id == task.id }) {
-            tasks[i] = task
-        }
+        guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
+        tasks[index].status = .done
+        tasks[index].completedAt = Date()
+        saveTasks()
     }
 
     func markScheduled(id: String, eventId: String, date: Date) {
-        guard let persisted = findPersisted(taskId: id) else { return }
-        let now = Date()
-        persisted.statusRaw = BacklogStatus.scheduled.rawValue
-        persisted.scheduledEventId = eventId
-        persisted.scheduledDate = date
-        persisted.modifiedAt = now
-        guard saveContext() else { return }
-        if let i = tasks.firstIndex(where: { $0.id == id }) {
-            tasks[i].status = .scheduled
-            tasks[i].scheduledEventId = eventId
-            tasks[i].scheduledDate = date
-            tasks[i].modifiedAt = now
-        }
+        guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
+        tasks[index].status = .scheduled
+        tasks[index].scheduledEventId = eventId
+        tasks[index].scheduledDate = date
+        saveTasks()
     }
 
     func unschedule(id: String) {
-        guard let persisted = findPersisted(taskId: id) else { return }
-        let now = Date()
-        persisted.statusRaw = BacklogStatus.pending.rawValue
-        persisted.scheduledEventId = nil
-        persisted.scheduledDate = nil
-        persisted.modifiedAt = now
-        guard saveContext() else { return }
-        if let i = tasks.firstIndex(where: { $0.id == id }) {
-            tasks[i].status = .pending
-            tasks[i].scheduledEventId = nil
-            tasks[i].scheduledDate = nil
-            tasks[i].modifiedAt = now
-        }
+        guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
+        tasks[index].status = .pending
+        tasks[index].scheduledEventId = nil
+        tasks[index].scheduledDate = nil
+        saveTasks()
     }
 
+    /// Re-insert a previously removed task (for undo).
+    /// When `index` is provided we try to put the task back where it was so
+    /// the user-controlled order survives the delete/undo round-trip; falls
+    /// back to appending if the index is out of range or nil.
     func restoreTask(_ task: BacklogTask, at index: Int? = nil) {
-        var task = task
-        task.modifiedAt = Date()
-
-        let order: Double
-        if let index, index >= 0, index < tasks.count {
-            order = sortOrderBefore(index: index)
-        } else {
-            order = nextSortOrder()
-        }
-        let persisted = PersistedBacklogTask(from: task, sortOrder: order)
-        modelContext.insert(persisted)
-        guard saveContext() else { return }
-
         if let index, index >= 0, index <= tasks.count {
             tasks.insert(task, at: index)
         } else {
             tasks.append(task)
         }
+        saveTasks()
     }
 
+    /// Current global index of a task by ID, or nil if it's not in the list.
+    /// Callers capture this before `removeTask` so undo can restore position.
     func indexOfTask(id: String) -> Int? {
         tasks.firstIndex(where: { $0.id == id })
     }
 
+    /// Move tasks that were scheduled in the past but not completed back to pending.
     func carryOverUnfinished() {
         let today = Calendar.current.startOfDay(for: Date())
-        let now = Date()
-
-        var descriptor = FetchDescriptor<PersistedBacklogTask>(
-            predicate: #Predicate<PersistedBacklogTask> { task in
-                task.statusRaw == "scheduled"
-            }
-        )
-        descriptor.fetchLimit = 500
-        guard let results = try? modelContext.fetch(descriptor) else { return }
-
         var changed = false
-        for persisted in results {
-            guard let date = persisted.scheduledDate, date < today else { continue }
-            persisted.statusRaw = BacklogStatus.pending.rawValue
-            persisted.scheduledEventId = nil
-            persisted.scheduledDate = nil
-            persisted.modifiedAt = now
-            changed = true
+        for i in tasks.indices {
+            if tasks[i].status == .scheduled,
+               let scheduled = tasks[i].scheduledDate,
+               scheduled < today {
+                tasks[i].status = .pending
+                tasks[i].scheduledEventId = nil
+                tasks[i].scheduledDate = nil
+                changed = true
+            }
         }
-        if changed {
-            guard saveContext() else { return }
-            fetchTasks()
-        }
+        if changed { saveTasks() }
     }
-
-    // MARK: - Reorder (fractional indexing — only 1 record touched)
 
     func reorderTask(from: Int, to: Int) {
         let active = tasks.filter { $0.status != .done }
@@ -329,139 +184,46 @@ final class BacklogService {
               let toGlobal = tasks.firstIndex(where: { $0.id == targetId }) else { return }
         let task = tasks.remove(at: fromGlobal)
         tasks.insert(task, at: toGlobal)
-        persistMovedTask(id: movedId)
+        saveTasks()
     }
 
+    /// Move `moved` so it sits directly before `target` in the storage order.
+    /// No-op if either ID is unknown or the move would leave the order unchanged.
     func moveTask(id moved: String, before target: String) {
         guard moved != target,
               let fromIdx = tasks.firstIndex(where: { $0.id == moved }) else { return }
         let task = tasks.remove(at: fromIdx)
         guard let targetIdx = tasks.firstIndex(where: { $0.id == target }) else {
+            // Target disappeared (shouldn't happen); put it back where it was.
             tasks.insert(task, at: min(fromIdx, tasks.count))
             return
         }
         tasks.insert(task, at: targetIdx)
-        persistMovedTask(id: moved)
+        saveTasks()
     }
 
+    /// Move `moved` to the very end of the active storage order.
     func moveTaskToEnd(id moved: String) {
         guard let fromIdx = tasks.firstIndex(where: { $0.id == moved }) else { return }
         let task = tasks.remove(at: fromIdx)
         tasks.append(task)
-        persistMovedTask(id: moved)
+        saveTasks()
     }
 
-    // MARK: - SwiftData Persistence
+    // MARK: - Persistence (UserDefaults for simplicity; could migrate to SwiftData)
 
-    /// O(1) lookup via predicate + fetchLimit.
-    private func findPersisted(taskId: String) -> PersistedBacklogTask? {
-        var descriptor = FetchDescriptor<PersistedBacklogTask>(
-            predicate: #Predicate<PersistedBacklogTask> { $0.taskId == taskId }
-        )
-        descriptor.fetchLimit = 1
-        return try? modelContext.fetch(descriptor).first
-    }
+    private let persistenceKey = "BuboBacklogTasks"
 
-    /// Full fetch — called once at init and on remote CloudKit changes.
-    private func fetchTasks() {
-        let descriptor = FetchDescriptor<PersistedBacklogTask>(
-            sortBy: [SortDescriptor(\.sortOrder)]
-        )
-        guard let persisted = try? modelContext.fetch(descriptor) else { return }
-        tasks = persisted.map { $0.toBacklogTask() }
-    }
-
-    /// Save with error tracking.  Returns `true` on success.
-    @discardableResult
-    private func saveContext() -> Bool {
-        do {
-            try modelContext.save()
-            lastError = nil
-            return true
-        } catch {
-            lastError = error.localizedDescription
-            return false
+    private func loadTasks() {
+        guard let data = UserDefaults.standard.data(forKey: persistenceKey),
+              let decoded = try? JSONDecoder().decode([BacklogTask].self, from: data) else {
+            return
         }
+        tasks = decoded
     }
 
-    // MARK: - Fractional Sort Order
-
-    /// sortOrder for a new task appended at the end.
-    private func nextSortOrder() -> Double {
-        let descriptor = FetchDescriptor<PersistedBacklogTask>(
-            sortBy: [SortDescriptor(\.sortOrder, order: .reverse)]
-        )
-        var d = descriptor
-        d.fetchLimit = 1
-        let last = try? modelContext.fetch(d).first
-        return (last?.sortOrder ?? 0) + 1.0
-    }
-
-    /// sortOrder that places a task just before `index` in the current
-    /// `tasks` array.  Uses fractional midpoint.
-    private func sortOrderBefore(index: Int) -> Double {
-        guard index < tasks.count else { return nextSortOrder() }
-
-        let afterId = tasks[index].id
-        let afterOrder = findPersisted(taskId: afterId)?.sortOrder ?? Double(index)
-
-        if index == 0 {
-            return afterOrder - 1.0
-        }
-
-        let beforeId = tasks[index - 1].id
-        let beforeOrder = findPersisted(taskId: beforeId)?.sortOrder ?? (afterOrder - 1.0)
-
-        let mid = (beforeOrder + afterOrder) / 2.0
-        if afterOrder - beforeOrder < Self.minSortGap {
-            renumberAll()
-            return sortOrderBefore(index: index)   // retry with fresh gaps
-        }
-        return mid
-    }
-
-    /// After an in-memory reorder, persist only the moved task's sortOrder.
-    /// Computes a fractional midpoint between its new neighbours.
-    private func persistMovedTask(id: String) {
-        guard let idx = tasks.firstIndex(where: { $0.id == id }),
-              let persisted = findPersisted(taskId: id) else { return }
-
-        let newOrder: Double
-        if tasks.count == 1 {
-            newOrder = 0
-        } else if idx == 0 {
-            let nextOrder = findPersisted(taskId: tasks[1].id)?.sortOrder ?? 1.0
-            newOrder = nextOrder - 1.0
-        } else if idx == tasks.count - 1 {
-            let prevOrder = findPersisted(taskId: tasks[idx - 1].id)?.sortOrder ?? Double(idx - 1)
-            newOrder = prevOrder + 1.0
-        } else {
-            let prevOrder = findPersisted(taskId: tasks[idx - 1].id)?.sortOrder ?? Double(idx - 1)
-            let nextOrder = findPersisted(taskId: tasks[idx + 1].id)?.sortOrder ?? Double(idx + 1)
-            if nextOrder - prevOrder < Self.minSortGap {
-                renumberAll()
-                return
-            }
-            newOrder = (prevOrder + nextOrder) / 2.0
-        }
-
-        persisted.sortOrder = newOrder
-        saveContext()
-    }
-
-    /// Emergency renumber — assigns sequential values with 1.0 gaps.
-    /// O(n) but only triggered when fractional gaps are exhausted (~50+
-    /// consecutive reorders between the same two tasks).
-    private func renumberAll() {
-        let descriptor = FetchDescriptor<PersistedBacklogTask>()
-        guard let all = try? modelContext.fetch(descriptor) else { return }
-        let byId = Dictionary(
-            all.map { ($0.taskId, $0) },
-            uniquingKeysWith: { _, b in b }
-        )
-        for (i, task) in tasks.enumerated() {
-            byId[task.id]?.sortOrder = Double(i)
-        }
-        saveContext()
+    private func saveTasks() {
+        guard let data = try? JSONEncoder().encode(tasks) else { return }
+        UserDefaults.standard.set(data, forKey: persistenceKey)
     }
 }

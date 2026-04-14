@@ -7,7 +7,6 @@ struct MenuBarView: View {
     var networkMonitor: NetworkMonitor
     var optimizerService: OptimizerService
     var agentService: AgentService
-    var remindersSyncService: RemindersSyncService
 
     @State private var navigation: Navigation = .list
     @State private var hasStartedSync = false
@@ -293,23 +292,11 @@ struct MenuBarView: View {
             hasStartedSync = true
             reminderService.updateSettings(settings)
             reminderService.startSync()
-            remindersSyncService.syncNow()
-            remindersSyncService.startSyncTimer()
             if let backlog = optimizerService.backlogService {
                 optimizerService.setup(reminderService: reminderService, backlogService: backlog)
             } else {
                 assertionFailure("BacklogService should be set in App.init")
             }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: RemindersSyncService.didImportTasks)) { notification in
-            guard let count = notification.object as? Int, count > 0 else { return }
-            let noun = count == 1 ? "task" : "tasks"
-            toastState.showInfo("Imported \(count)\u{00A0}\(noun) from Reminders", icon: "checklist")
-        }
-        .onReceive(NotificationCenter.default.publisher(for: RemindersSyncService.didExportTasks)) { notification in
-            guard let count = notification.object as? Int, count > 0 else { return }
-            let noun = count == 1 ? "task" : "tasks"
-            toastState.showInfo("Synced \(count)\u{00A0}\(noun) to Reminders", icon: "icloud.and.arrow.up")
         }
     }
 
