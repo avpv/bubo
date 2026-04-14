@@ -36,7 +36,7 @@ final class AppleRemindersService {
     }
 
     deinit {
-        if let observer = storeChangedObserver {
+        if let observer = MainActor.assumeIsolated({ storeChangedObserver }) {
             NotificationCenter.default.removeObserver(observer)
         }
     }
