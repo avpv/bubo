@@ -1,257 +1,6 @@
 import XCTest
 @testable import Bubo
 
-// MARK: - Task Conflict Resolution Tests
-
-final class TaskConflictResolutionTests: XCTestCase {
-
-    private let now = Date()
-    private lazy var yesterday: Date = now.addingTimeInterval(-86400)
-    private lazy var twoDaysAgo: Date = now.addingTimeInterval(-2 * 86400)
-
-    private func task(
-        id: String = "t1",
-        status: BacklogStatus = .pending,
-        createdAt: Date? = nil,
-        modifiedAt: Date? = nil,
-        completedAt: Date? = nil,
-        scheduledDate: Date? = nil,
-        title: String = "Task"
-    ) -> BacklogTask {
-        var t = BacklogTask(
-            id: id,
-            title: title,
-            createdAt: createdAt ?? twoDaysAgo
-        )
-        t.status = status
-        t.modifiedAt = modifiedAt
-        t.completedAt = completedAt
-        t.scheduledDate = scheduledDate
-        return t
-    }
-
-    // MARK: - Done always wins
-
-    func testDoneBeatsScheduled() {
-        let local = task(status: .done, completedAt: yesterday)
-        let remote = task(status: .scheduled, scheduledDate: now)
-        let winner = CloudSyncService.resolveTaskConflict(local: local, remote: remote)
-        XCTAssertEqual(winner.status, .done)
-    }
-
-    func testDoneBeatsPending() {
-        let local = task(status: .pending, modifiedAt: now)
-        let remote = task(status: .done, completedAt: yesterday)
-        let winner = CloudSyncService.resolveTaskConflict(local: local, remote: remote)
-        XCTAssertEqual(winner.status, .done)
-    }
-
-    func testBothDoneTakesLaterTimestamp() {
-        let local = task(status: .done, completedAt: yesterday, modifiedAt: yesterday)
-        let remote = task(status: .done, completedAt: now, modifiedAt: now)
-        let winner = CloudSyncService.resolveTaskConflict(local: local, remote: remote)
-        XCTAssertEqual(winner.completedAt, now)
-    }
-
-    // MARK: - Scheduled beats pending
-
-    func testScheduledBeatsPending() {
-        let local = task(status: .scheduled, scheduledDate: now)
-        let remote = task(status: .pending, modifiedAt: now)
-        let winner = CloudSyncService.resolveTaskConflict(local: local, remote: remote)
-        XCTAssertEqual(winner.status, .scheduled)
-    }
-
-    func testScheduledBeatsPendingReverse() {
-        let local = task(status: .pending)
-        let remote = task(status: .scheduled, scheduledDate: yesterday)
-        let winner = CloudSyncService.resolveTaskConflict(local: local, remote: remote)
-        XCTAssertEqual(winner.status, .scheduled)
-    }
-
-    // MARK: - modifiedAt decides same-status conflicts
-
-    func testSameStatusUsesModifiedAt() {
-        let local = task(status: .pending, modifiedAt: yesterday, title: "Old title")
-        let remote = task(status: .pending, modifiedAt: now, title: "New title")
-        let winner = CloudSyncService.resolveTaskConflict(local: local, remote: remote)
-        XCTAssertEqual(winner.title, "New title")
-    }
-
-    func testSameStatusLocalWinsWhenNewer() {
-        let local = task(status: .pending, modifiedAt: now, title: "Local")
-        let remote = task(status: .pending, modifiedAt: yesterday, title: "Remote")
-        let winner = CloudSyncService.resolveTaskConflict(local: local, remote: remote)
-        XCTAssertEqual(winner.title, "Local")
-    }
-
-    // MARK: - Fallback timestamps when modifiedAt is nil
-
-    func testFallsBackToCreatedAtWhenNoModifiedAt() {
-        let local = task(status: .pending, createdAt: yesterday)
-        let remote = task(status: .pending, createdAt: now)
-        let winner = CloudSyncService.resolveTaskConflict(local: local, remote: remote)
-        XCTAssertEqual(winner.createdAt, now)
-    }
-
-    func testFallsBackToScheduledDate() {
-        let local = task(status: .scheduled, scheduledDate: yesterday)
-        let remote = task(status: .scheduled, scheduledDate: now)
-        let winner = CloudSyncService.resolveTaskConflict(local: local, remote: remote)
-        XCTAssertEqual(winner.scheduledDate, now)
-    }
-
-    func testMixedTimestampFallback() {
-        // Local has modifiedAt, remote only has createdAt
-        let local = task(status: .pending, createdAt: twoDaysAgo, modifiedAt: now)
-        let remote = task(status: .pending, createdAt: yesterday)
-        let winner = CloudSyncService.resolveTaskConflict(local: local, remote: remote)
-        XCTAssertEqual(winner.modifiedAt, now, "modifiedAt should win over createdAt")
-    }
-}
-
-// MARK: - Backlog Merge Tests
-
-final class BacklogMergeTests: XCTestCase {
-
-    private let now = Date()
-    private lazy var yesterday: Date = now.addingTimeInterval(-86400)
-
-    private func task(
-        id: String,
-        title: String = "Task",
-        status: BacklogStatus = .pending,
-        createdAt: Date? = nil,
-        modifiedAt: Date? = nil
-    ) -> BacklogTask {
-        var t = BacklogTask(id: id, title: title, createdAt: createdAt ?? now)
-        t.status = status
-        t.modifiedAt = modifiedAt
-        return t
-    }
-
-    // MARK: - Union semantics
-
-    func testLocalOnlyTasksKept() {
-        let local = [task(id: "a"), task(id: "b")]
-        let remote: [BacklogTask] = []
-        let merged = CloudSyncService.mergeBacklogTasks(
-            local: local, remote: remote, tombstones: []
-        )
-        XCTAssertEqual(merged.map(\.id), ["a", "b"])
-    }
-
-    func testRemoteOnlyTasksAppended() {
-        let local: [BacklogTask] = []
-        let remote = [task(id: "x"), task(id: "y")]
-        let merged = CloudSyncService.mergeBacklogTasks(
-            local: local, remote: remote, tombstones: []
-        )
-        XCTAssertEqual(merged.map(\.id), ["x", "y"])
-    }
-
-    func testUnionMerge() {
-        let local = [task(id: "a"), task(id: "b")]
-        let remote = [task(id: "b"), task(id: "c")]
-        let merged = CloudSyncService.mergeBacklogTasks(
-            local: local, remote: remote, tombstones: []
-        )
-        XCTAssertEqual(merged.map(\.id), ["a", "b", "c"])
-    }
-
-    func testLocalOrderingPreserved() {
-        let local = [task(id: "c"), task(id: "a"), task(id: "b")]
-        let remote = [task(id: "a"), task(id: "d")]
-        let merged = CloudSyncService.mergeBacklogTasks(
-            local: local, remote: remote, tombstones: []
-        )
-        // c, a, b from local order; d appended from remote
-        XCTAssertEqual(merged.map(\.id), ["c", "a", "b", "d"])
-    }
-
-    // MARK: - Conflict resolution in merge
-
-    func testConflictResolutionDuringMerge() {
-        let local = [task(id: "t1", title: "Old", modifiedAt: yesterday)]
-        let remote = [task(id: "t1", title: "New", modifiedAt: now)]
-        let merged = CloudSyncService.mergeBacklogTasks(
-            local: local, remote: remote, tombstones: []
-        )
-        XCTAssertEqual(merged.count, 1)
-        XCTAssertEqual(merged[0].title, "New")
-    }
-
-    // MARK: - Tombstones
-
-    func testTombstoneExcludesLocalTask() {
-        let local = [task(id: "a"), task(id: "b")]
-        let remote: [BacklogTask] = []
-        let merged = CloudSyncService.mergeBacklogTasks(
-            local: local, remote: remote, tombstones: ["a"]
-        )
-        XCTAssertEqual(merged.map(\.id), ["b"])
-    }
-
-    func testTombstoneExcludesRemoteTask() {
-        let local: [BacklogTask] = []
-        let remote = [task(id: "x"), task(id: "y")]
-        let merged = CloudSyncService.mergeBacklogTasks(
-            local: local, remote: remote, tombstones: ["y"]
-        )
-        XCTAssertEqual(merged.map(\.id), ["x"])
-    }
-
-    func testTombstoneExcludesBothSides() {
-        let local = [task(id: "a"), task(id: "b")]
-        let remote = [task(id: "b"), task(id: "c")]
-        let merged = CloudSyncService.mergeBacklogTasks(
-            local: local, remote: remote, tombstones: ["b"]
-        )
-        XCTAssertEqual(merged.map(\.id), ["a", "c"])
-    }
-
-    func testEmptyTombstonesNoEffect() {
-        let local = [task(id: "a")]
-        let remote = [task(id: "b")]
-        let merged = CloudSyncService.mergeBacklogTasks(
-            local: local, remote: remote, tombstones: []
-        )
-        XCTAssertEqual(merged.map(\.id), ["a", "b"])
-    }
-
-    // MARK: - Edge cases
-
-    func testBothEmpty() {
-        let merged = CloudSyncService.mergeBacklogTasks(
-            local: [], remote: [], tombstones: []
-        )
-        XCTAssertTrue(merged.isEmpty)
-    }
-
-    func testDuplicateIDsInRemote() {
-        // Remote has the same ID twice (shouldn't happen but be safe)
-        let local = [task(id: "a")]
-        let remote = [
-            task(id: "b", title: "First"),
-            task(id: "b", title: "Second"),
-        ]
-        let merged = CloudSyncService.mergeBacklogTasks(
-            local: local, remote: remote, tombstones: []
-        )
-        XCTAssertEqual(merged.count, 2)
-        XCTAssertEqual(merged.map(\.id), ["a", "b"])
-    }
-
-    func testAllTombstoned() {
-        let local = [task(id: "a"), task(id: "b")]
-        let remote = [task(id: "a"), task(id: "b")]
-        let merged = CloudSyncService.mergeBacklogTasks(
-            local: local, remote: remote, tombstones: ["a", "b"]
-        )
-        XCTAssertTrue(merged.isEmpty)
-    }
-}
-
 // MARK: - Energy Check-In Merge Tests
 
 final class EnergyCheckInMergeTests: XCTestCase {
@@ -276,7 +25,7 @@ final class EnergyCheckInMergeTests: XCTestCase {
         let merged = CloudSyncService.mergeEnergyCheckIns(
             local: local, remote: remote
         )
-        XCTAssertEqual(merged.count, 4, "All unique check-ins should be kept")
+        XCTAssertEqual(merged.count, 4)
     }
 
     func testDeduplicationByTimestamp() {
@@ -284,7 +33,7 @@ final class EnergyCheckInMergeTests: XCTestCase {
         let merged = CloudSyncService.mergeEnergyCheckIns(
             local: [ci], remote: [ci]
         )
-        XCTAssertEqual(merged.count, 1, "Duplicate should be removed")
+        XCTAssertEqual(merged.count, 1)
     }
 
     func testChronologicalOrder() {
@@ -294,15 +43,12 @@ final class EnergyCheckInMergeTests: XCTestCase {
             local: [recent], remote: [old]
         )
         XCTAssertEqual(merged.count, 2)
-        XCTAssert(
-            merged[0].timestamp < merged[1].timestamp,
-            "Should be sorted chronologically"
-        )
+        XCTAssert(merged[0].timestamp < merged[1].timestamp)
     }
 
     func testRetention90Days() {
         let old = EnergyCheckInService.CheckIn(
-            timestamp: Date().addingTimeInterval(-100 * 86400), // 100 days ago
+            timestamp: Date().addingTimeInterval(-100 * 86400),
             energyLevel: 3,
             dayOfWeek: 2,
             hour: 10,
@@ -312,7 +58,7 @@ final class EnergyCheckInMergeTests: XCTestCase {
         let merged = CloudSyncService.mergeEnergyCheckIns(
             local: [old], remote: [recent]
         )
-        XCTAssertEqual(merged.count, 1, "Entries older than 90 days pruned")
+        XCTAssertEqual(merged.count, 1)
         XCTAssertEqual(merged[0].energyLevel, recent.energyLevel)
     }
 
@@ -362,6 +108,33 @@ final class StringArrayMergeTests: XCTestCase {
     }
 }
 
+// MARK: - Schema & Config Tests
+
+final class CloudSyncConfigTests: XCTestCase {
+
+    func testSchemaVersionIsPositive() {
+        XCTAssertGreaterThan(CloudSyncService.schemaVersion, 0)
+    }
+
+    func testSyncedKeysNonEmpty() {
+        XCTAssertFalse(CloudSyncService.syncedKeys.isEmpty)
+    }
+
+    func testExpectedKeysPresent() {
+        let keys = CloudSyncService.syncedKeys
+        XCTAssertTrue(keys.contains("ReminderSettings"))
+        XCTAssertTrue(keys.contains("BuboOptimizerLearnedWeights"))
+        XCTAssertTrue(keys.contains("BuboEnergyCheckIns"))
+    }
+
+    func testBacklogTasksNotInKVStore() {
+        // Tasks are synced via SwiftData + CloudKit, NOT the KV store.
+        XCTAssertFalse(
+            CloudSyncService.syncedKeys.contains("BuboBacklogTasks")
+        )
+    }
+}
+
 // MARK: - BacklogTask modifiedAt Codable Tests
 
 final class BacklogTaskModifiedAtTests: XCTestCase {
@@ -378,7 +151,6 @@ final class BacklogTaskModifiedAtTests: XCTestCase {
     }
 
     func testModifiedAtNilWhenMissing() throws {
-        // Simulate old data without modifiedAt
         var task = BacklogTask(id: "t1", title: "Test")
         task.modifiedAt = nil
 
@@ -387,53 +159,78 @@ final class BacklogTaskModifiedAtTests: XCTestCase {
 
         XCTAssertNil(decoded.modifiedAt)
     }
-
-    func testOldDataWithoutModifiedAtField() throws {
-        // JSON from a version before modifiedAt existed
-        let json = """
-        {
-            "id": "t1",
-            "title": "Legacy task",
-            "durationMinutes": 60,
-            "priority": "medium",
-            "dependsOn": [],
-            "status": "pending",
-            "createdAt": 0
-        }
-        """
-        let data = json.data(using: .utf8)!
-        let decoded = try JSONDecoder().decode(BacklogTask.self, from: data)
-
-        XCTAssertEqual(decoded.id, "t1")
-        XCTAssertEqual(decoded.title, "Legacy task")
-        XCTAssertNil(decoded.modifiedAt)
-    }
 }
 
-// MARK: - Schema Version Tests
+// MARK: - PersistedBacklogTask Conversion Tests
 
-final class SchemaVersionTests: XCTestCase {
+final class PersistedBacklogTaskTests: XCTestCase {
 
-    func testSchemaVersionIsPositive() {
-        XCTAssertGreaterThan(CloudSyncService.schemaVersion, 0)
-    }
-
-    func testSyncedKeysNonEmpty() {
-        XCTAssertFalse(CloudSyncService.syncedKeys.isEmpty)
-    }
-
-    func testExpectedKeysPresent() {
-        let keys = CloudSyncService.syncedKeys
-        XCTAssertTrue(keys.contains("ReminderSettings"))
-        XCTAssertTrue(keys.contains("BuboBacklogTasks"))
-        XCTAssertTrue(keys.contains("BuboOptimizerLearnedWeights"))
-        XCTAssertTrue(keys.contains("BuboEnergyCheckIns"))
-    }
-
-    func testTombstoneKeyNotInSyncedKeys() {
-        // Tombstones are managed separately from regular synced keys.
-        XCTAssertFalse(
-            CloudSyncService.syncedKeys.contains(CloudSyncService.tombstoneKey)
+    func testRoundTripConversion() {
+        let now = Date()
+        var task = BacklogTask(
+            id: "t1",
+            title: "Write report",
+            durationMinutes: 90,
+            priority: .high,
+            deadline: now.addingTimeInterval(86400),
+            storyPoints: 5,
+            context: "Work",
+            dependsOn: ["dep-1", "dep-2"],
+            preferredPeriod: .morning,
+            createdAt: now
         )
+        task.status = .scheduled
+        task.modifiedAt = now
+        task.scheduledDate = now
+        task.scheduledEventId = "event-1"
+
+        let persisted = PersistedBacklogTask(from: task, sortOrder: 7)
+        let back = persisted.toBacklogTask()
+
+        XCTAssertEqual(back.id, "t1")
+        XCTAssertEqual(back.title, "Write report")
+        XCTAssertEqual(back.durationMinutes, 90)
+        XCTAssertEqual(back.priority, .high)
+        XCTAssertEqual(back.storyPoints, 5)
+        XCTAssertEqual(back.context, "Work")
+        XCTAssertEqual(back.dependsOn, ["dep-1", "dep-2"])
+        XCTAssertEqual(back.preferredPeriod, .morning)
+        XCTAssertEqual(back.status, .scheduled)
+        XCTAssertEqual(back.scheduledEventId, "event-1")
+        XCTAssertEqual(persisted.sortOrder, 7)
+    }
+
+    func testDefaultValues() {
+        let task = BacklogTask(id: "t2", title: "Simple")
+        let persisted = PersistedBacklogTask(from: task, sortOrder: 0)
+        let back = persisted.toBacklogTask()
+
+        XCTAssertEqual(back.id, "t2")
+        XCTAssertEqual(back.durationMinutes, 60)
+        XCTAssertEqual(back.priority, .medium)
+        XCTAssertEqual(back.status, .pending)
+        XCTAssertNil(back.deadline)
+        XCTAssertNil(back.storyPoints)
+        XCTAssertNil(back.context)
+        XCTAssertTrue(back.dependsOn.isEmpty)
+        XCTAssertNil(back.preferredPeriod)
+    }
+
+    func testUpdateFromTask() {
+        let original = BacklogTask(id: "t1", title: "Old", priority: .low)
+        let persisted = PersistedBacklogTask(from: original, sortOrder: 0)
+
+        var updated = BacklogTask(id: "t1", title: "New", priority: .high)
+        updated.status = .done
+        updated.completedAt = Date()
+        updated.modifiedAt = Date()
+
+        persisted.update(from: updated)
+        let back = persisted.toBacklogTask()
+
+        XCTAssertEqual(back.title, "New")
+        XCTAssertEqual(back.priority, .high)
+        XCTAssertEqual(back.status, .done)
+        XCTAssertNotNil(back.completedAt)
     }
 }
