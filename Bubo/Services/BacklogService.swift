@@ -116,17 +116,25 @@ final class BacklogService {
     // MARK: - Mutations
 
     func addTask(_ task: BacklogTask) {
+        var task = task
+        task.modifiedAt = Date()
         tasks.append(task)
         saveTasks()
     }
 
     func addTasks(_ newTasks: [BacklogTask]) {
-        tasks.append(contentsOf: newTasks)
+        let now = Date()
+        let stamped = newTasks.map { t -> BacklogTask in
+            var t = t; t.modifiedAt = now; return t
+        }
+        tasks.append(contentsOf: stamped)
         saveTasks()
     }
 
     func updateTask(_ task: BacklogTask) {
         guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return }
+        var task = task
+        task.modifiedAt = Date()
         tasks[index] = task
         saveTasks()
     }
@@ -135,14 +143,17 @@ final class BacklogService {
         guard let index = tasks.firstIndex(where: { $0.id == id }) else { return nil }
         let removed = tasks.remove(at: index)
         saveTasks()
+        CloudSyncService.shared.recordTombstone(taskId: id)
         NotificationCenter.default.post(name: Self.taskRemoved, object: id)
         return removed
     }
 
     func completeTask(id: String) {
         guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
+        let now = Date()
         tasks[index].status = .done
-        tasks[index].completedAt = Date()
+        tasks[index].completedAt = now
+        tasks[index].modifiedAt = now
         saveTasks()
         NotificationCenter.default.post(name: Self.taskCompleted, object: id)
     }
@@ -152,8 +163,10 @@ final class BacklogService {
     /// (from Reminders.app) so we don't write it back in a loop.
     func silentlyComplete(id: String) {
         guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
+        let now = Date()
         tasks[index].status = .done
-        tasks[index].completedAt = Date()
+        tasks[index].completedAt = now
+        tasks[index].modifiedAt = now
         saveTasks()
     }
 
@@ -162,6 +175,7 @@ final class BacklogService {
         tasks[index].status = .scheduled
         tasks[index].scheduledEventId = eventId
         tasks[index].scheduledDate = date
+        tasks[index].modifiedAt = Date()
         saveTasks()
     }
 
@@ -170,6 +184,7 @@ final class BacklogService {
         tasks[index].status = .pending
         tasks[index].scheduledEventId = nil
         tasks[index].scheduledDate = nil
+        tasks[index].modifiedAt = Date()
         saveTasks()
     }
 
@@ -178,6 +193,8 @@ final class BacklogService {
     /// the user-controlled order survives the delete/undo round-trip; falls
     /// back to appending if the index is out of range or nil.
     func restoreTask(_ task: BacklogTask, at index: Int? = nil) {
+        var task = task
+        task.modifiedAt = Date()
         if let index, index >= 0, index <= tasks.count {
             tasks.insert(task, at: index)
         } else {
@@ -195,6 +212,7 @@ final class BacklogService {
     /// Move tasks that were scheduled in the past but not completed back to pending.
     func carryOverUnfinished() {
         let today = Calendar.current.startOfDay(for: Date())
+        let now = Date()
         var changed = false
         for i in tasks.indices {
             if tasks[i].status == .scheduled,
@@ -203,6 +221,7 @@ final class BacklogService {
                 tasks[i].status = .pending
                 tasks[i].scheduledEventId = nil
                 tasks[i].scheduledDate = nil
+                tasks[i].modifiedAt = now
                 changed = true
             }
         }
