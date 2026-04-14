@@ -131,6 +131,19 @@ final class BacklogService {
         NotificationCenter.default.post(name: Self.taskCompleted, object: id)
     }
 
+    /// Mark a task done without posting `taskCompleted`.
+    ///
+    /// Used by `RemindersSyncService` when it learns that a reminder was
+    /// completed externally (in Reminders.app or on another device). Posting
+    /// `taskCompleted` from that code path would round-trip the write back
+    /// to Apple Reminders, which is pointless — the reminder is already done.
+    func silentlyComplete(id: String) {
+        guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
+        tasks[index].status = .done
+        tasks[index].completedAt = Date()
+        saveTasks()
+    }
+
     func markScheduled(id: String, eventId: String, date: Date) {
         guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
         tasks[index].status = .scheduled
