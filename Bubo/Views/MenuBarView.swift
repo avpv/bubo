@@ -47,8 +47,6 @@ struct MenuBarView: View {
         case timer(CalendarEvent)
         case quickAddTasks
 
-        static var addPomodoro: Navigation { .addEvent(initialType: .pomodoro) }
-
         var isTimer: Bool {
             if case .timer = self { return true }
             return false
@@ -161,7 +159,10 @@ struct MenuBarView: View {
                         },
                         onScheduleNext: { _ in
                             navigation = .list
-                            paletteContext = PaletteContext(seedRecipeId: "pomodoro")
+                            // Stable preset name (was hard-coded "pomodoro"
+                            // which never matched the actual preset name
+                            // "Pomodoro session" → palette opened empty).
+                            paletteContext = PaletteContext(seedRecipeId: IntentPresets.Name.pomodoroSession)
                         }
                     )
                     .transition(
@@ -384,6 +385,50 @@ struct MenuBarView: View {
         }
     }
 
+    // MARK: - Convert to Pomodoro
+    //
+    // Direct mutation with smart defaults — no form. The user clicks
+    // "Convert to Pomodoro" in the row's context menu and the event is
+    // immediately converted to a Pomodoro session sized for its current
+    // duration (see `PomodoroDefaults.suggested(for:)`). An undo toast
+    // restores the original event in one click.
+    //
+    // HIG/Birman: don't open a form for a transformation the machine can
+    // do correctly on its own. The user only needs to confirm or undo.
+    private func convertEventToPomodoro(_ event: CalendarEvent) {
+        let originalSnapshot = event
+        let durationMinutes = max(0, Int(event.endDate.timeIntervalSince(event.startDate) / 60))
+        let defaults = PomodoroDefaults.suggested(for: durationMinutes)
+
+        var converted = event
+        converted.eventType = .pomodoro
+        // Pomodoro events store the *first segment* in start/end; the
+        // recurrence rule expands the rest. Mirrors `buildPomodoroRule`
+        // / Pomodoro save logic in AddEventView.
+        converted.endDate = event.startDate.addingTimeInterval(TimeInterval(defaults.work * 60))
+        converted.recurrenceRule = RecurrenceRule(
+            frequency: .minutely,
+            interval: defaults.cycleMinutes,
+            end: .afterCount(defaults.rounds),
+            pomodoroMode: true,
+            pomodoroLongBreak: defaults.longBreak
+        )
+
+        Haptics.impact()
+        reminderService.updateLocalEvent(converted)
+
+        // Toast message reads as one human sentence: "Pomodoro: 4 × 25 min".
+        // The undo restores the original event verbatim — eventType,
+        // endDate, recurrenceRule — by re-applying the snapshot.
+        toastState.showSuccess(
+            "Pomodoro: \(defaults.rounds) \u{00D7} \(defaults.work)\u{00A0}min",
+            icon: "timer",
+            onUndo: { [reminderService] in
+                reminderService.updateLocalEvent(originalSnapshot)
+            }
+        )
+    }
+
     /// Create a focus block directly in the given slot, bypassing the optimizer.
     /// Same pattern as handleTaskDrop — direct event creation + undo toast.
     private func fillSlotWithFocus(start: Date, end: Date) {
@@ -517,8 +562,12 @@ struct MenuBarView: View {
                         backlog.restoreTask(task, at: originalIndex)
                     }
                 },
-                onReorderToast: { message, undo in
-                    toastState.showSuccess(message, icon: "arrow.up.arrow.down", onUndo: undo)
+                onUndoableAction: { message, undo in
+                    // Unified undo pipe for reorder / complete / context
+                    // moves. Icon stays neutral ("arrow.uturn.backward") so
+                    // the same toast reads as "you can undo this" across
+                    // different action kinds.
+                    toastState.showSuccess(message, icon: "arrow.uturn.backward", onUndo: undo)
                 },
                 focusRequested: $focusTaskInput,
                 autoExpand: autoExpand
@@ -1124,6 +1173,9 @@ struct MenuBarView: View {
                             paletteContext = PaletteContext(seedEvent: event, seedRecipeId: "prep-meeting")
                         }
                     },
+                    onConvertToPomodoro: { event in
+                        convertEventToPomodoro(event)
+                    },
                     isFreshlyCreated: optimizerService.freshlyCreatedEventIds.contains(event.id)
                 )
             case .slot(let start, let end):
@@ -1291,24 +1343,25 @@ struct MenuBarView: View {
             // `lg` internal horizontal padding. Same treatment as
             // AddEventView's Add Event button, so both screens'
             // primary actions carry equal visual weight.
+            // Birman: Pomodoro — это режим выполнения фокус-блока, а не
+            // отдельный тип объекта. Раньше "New Pomodoro" жил здесь, в
+            // одной строке с "New Event" и "New Task", как будто это
+            // равноправный объект. Теперь Pomodoro включается toggle'ом
+            // внутри формы события — один правильный вход.
             Menu {
                 Button {
                     Haptics.tap()
                     navigation = .addEvent()
                 } label: {
-                    Label("New Event", systemImage: "calendar.badge.plus")
-                }
-                Button {
-                    Haptics.tap()
-                    navigation = .addPomodoro
-                } label: {
-                    Label("New Pomodoro", systemImage: "timer")
+                    // HIG: surface keyboard shortcut hints in menu items so
+                    // users can graduate from clicking to typing.
+                    Label("New Event   \u{2318}N", systemImage: "calendar.badge.plus")
                 }
                 Button {
                     Haptics.tap()
                     focusTaskInput = true
                 } label: {
-                    Label("New Task", systemImage: "plus.circle")
+                    Label("New Task   \u{21E7}\u{2318}N", systemImage: "plus.circle")
                 }
             } label: {
                 Label("Add", systemImage: "plus")

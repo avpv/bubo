@@ -60,7 +60,7 @@ struct FreeSlotRow: View {
                 path.addLine(to: CGPoint(x: DS.Size.accentBarWidth / 2, y: DS.Size.accentBarHeight))
             }
             .stroke(
-                skin.resolvedTextTertiary.opacity(0.45),
+                skin.resolvedTextTertiary.opacity(DS.Opacity.half),
                 style: StrokeStyle(
                     lineWidth: DS.Size.accentBarWidth,
                     lineCap: .round,
@@ -93,7 +93,7 @@ struct FreeSlotRow: View {
             } label: {
                 Image(systemName: "plus.circle.fill")
                     .font(.body)
-                    .foregroundStyle(skin.accentColor.opacity(isHovered ? 1.0 : 0.55))
+                    .foregroundStyle(skin.accentColor.opacity(isHovered ? 1.0 : DS.Opacity.overlayLight))
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -143,9 +143,9 @@ struct FreeSlotRow: View {
 
     /// Background fill: hover > drop-targeted > drag-awaiting > clear.
     private var backgroundFill: Color {
-        if isDropTargeted { return skin.accentColor.opacity(0.14) }
-        if isHovered { return skin.accentColor.opacity(0.06) }
-        if isAwaitingDrop { return skin.accentColor.opacity(0.04) }
+        if isDropTargeted { return skin.accentColor.opacity(DS.Opacity.mediumFill) }
+        if isHovered { return skin.accentColor.opacity(DS.Opacity.lightFill) }
+        if isAwaitingDrop { return skin.accentColor.opacity(DS.Opacity.subtleFill) }
         return .clear
     }
 
@@ -153,13 +153,13 @@ struct FreeSlotRow: View {
     /// drop elsewhere on the screen), and invisible (idle).
     private var activeDropBorderColor: Color {
         if isDropTargeted { return skin.accentColor }
-        if isAwaitingDrop { return skin.accentColor.opacity(0.35) }
+        if isAwaitingDrop { return skin.accentColor.opacity(DS.Opacity.softAccent) }
         return .clear
     }
 
     private var activeDropBorderWidth: CGFloat {
-        if isDropTargeted { return 2 }
-        if isAwaitingDrop { return 1 }
+        if isDropTargeted { return DS.Border.selection }
+        if isAwaitingDrop { return DS.Border.standard }
         return 0
     }
 }

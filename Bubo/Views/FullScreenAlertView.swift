@@ -70,7 +70,7 @@ struct FullScreenAlertView: View {
                     .font(.system(.title, design: skin.resolvedFontDesign, weight: skin.resolvedHeadlineFontWeight))
                     .foregroundStyle(DS.Colors.onOverlay)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, DS.Spacing.xxxl + DS.Spacing.sm)
+                    .padding(.horizontal, DS.Alert.titlePadding)
 
                 HStack(spacing: DS.Spacing.xl) {
                     Label(event.formattedTimeRange, systemImage: "clock.fill")
@@ -100,7 +100,7 @@ struct FullScreenAlertView: View {
                                 Label("Join \(serviceName)", systemImage: "video.fill")
                                     .font(.system(.title2, design: skin.resolvedFontDesign, weight: skin.resolvedHeadlineFontWeight))
                                     .foregroundStyle(DS.contrastingForeground(for: skinAccent))
-                                    .padding(.horizontal, DS.Spacing.xxxl + DS.Spacing.sm)
+                                    .padding(.horizontal, DS.Alert.joinButtonPadding)
                                     .padding(.vertical, DS.Spacing.lg)
                                     .background(
                                         Capsule()
@@ -134,7 +134,7 @@ struct FullScreenAlertView: View {
                             Text("Dismiss")
                                 .font(.system(.title2, design: skin.resolvedFontDesign, weight: skin.resolvedHeadlineFontWeight))
                                 .foregroundStyle(dismissHovered ? skinAccent : DS.Colors.overlayBackground)
-                                .padding(.horizontal, DS.Spacing.xxxl + DS.Spacing.xxl + DS.Spacing.xs)
+                                .padding(.horizontal, DS.Alert.dismissButtonPadding)
                                 .padding(.vertical, DS.Spacing.lg)
                                 .background(
                                     Capsule()
@@ -194,7 +194,7 @@ struct FullScreenAlertView: View {
                     .foregroundStyle(DS.Colors.onOverlay.opacity(DS.Opacity.tertiaryText))
                     .accessibilityHidden(true)
 
-                Spacer().frame(height: DS.Spacing.xxxl + DS.Spacing.xxl + DS.Spacing.xs)
+                Spacer().frame(height: DS.Alert.footerSpacer)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

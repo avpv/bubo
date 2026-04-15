@@ -6,6 +6,7 @@ import SwiftUI
 /// Ensures consistent sizing, hover effects, and accessibility across all color dot interactions.
 struct ColorDotButton: View {
     @Environment(\.activeSkin) private var skin
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let tag: EventColorTag
     let isActive: Bool
     var isDimmed: Bool = false
@@ -72,7 +73,7 @@ struct ColorDotButton: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering in
-            withAnimation(skin.resolvedMicroAnimation) {
+            withAnimation(DS.Animation.motionAware(skin.resolvedMicroAnimation, reduceMotion: reduceMotion)) {
                 isHovered = hovering
             }
             if hovering { Haptics.tap() }
@@ -90,9 +91,9 @@ struct ColorDotButton: View {
                 .shadow(color: isFocused ? skin.accentColor.opacity(0.4) : .clear, radius: 4, x: 0, y: 0)
                 .padding(DS.Spacing.xs / 2)
         )
-        .animation(skin.resolvedMicroAnimation, value: isHovered)
-        .animation(skin.resolvedMicroAnimation, value: isFocused)
-        .animation(skin.resolvedMicroAnimation, value: isActive)
+        .motionAwareAnimation(skin.resolvedMicroAnimation, value: isHovered, reduceMotion: reduceMotion)
+        .motionAwareAnimation(skin.resolvedMicroAnimation, value: isFocused, reduceMotion: reduceMotion)
+        .motionAwareAnimation(skin.resolvedMicroAnimation, value: isActive, reduceMotion: reduceMotion)
         // HIG: Don't use color as the only differentiator — show name on hover
         .help(tag.rawValue)
         .accessibilityLabel(tag.rawValue)

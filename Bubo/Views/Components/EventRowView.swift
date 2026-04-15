@@ -17,6 +17,11 @@ struct EventRowView: View {
     var onSplitTask: ((CalendarEvent) -> Void)? = nil
     var onProtectBlock: ((CalendarEvent) -> Void)? = nil
     var onAddPrep: ((CalendarEvent) -> Void)? = nil
+    /// Convert a standard event into a Pomodoro session (work + break
+    /// intervals). Routed through the edit form so the user can tune
+    /// work/break/rounds before committing — Birman: explicit control on a
+    /// non-trivial transformation, not a silent mutation.
+    var onConvertToPomodoro: ((CalendarEvent) -> Void)? = nil
 
     /// When true, the row plays a brief highlight glow to draw attention
     /// to newly created/changed events after recipe application.
@@ -205,6 +210,23 @@ struct EventRowView: View {
                         onProtectBlock(event)
                     } label: {
                         Label("Protect This Block", systemImage: "shield")
+                    }
+                }
+
+                // Convert a standard local event into Pomodoro. Hidden when:
+                // - the event is already a Pomodoro session,
+                // - it's a task (different conversion path),
+                // - it's backed by an external calendar (we don't mutate
+                //   other calendars' events),
+                // - or it's shorter than one full Pomodoro work segment
+                //   (`PomodoroDefaults.minimumConvertibleMinutes`).
+                if event.eventType == .standard, !event.isTask,
+                   event.endDate.timeIntervalSince(event.startDate) >= TimeInterval(PomodoroDefaults.minimumConvertibleMinutes * 60),
+                   let onConvertToPomodoro {
+                    Button {
+                        onConvertToPomodoro(event)
+                    } label: {
+                        Label("Convert to Pomodoro", systemImage: "timer")
                     }
                 }
 

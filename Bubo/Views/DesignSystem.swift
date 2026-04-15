@@ -20,12 +20,33 @@ enum DS {
         static let xl: CGFloat = 20
         static let xxl: CGFloat = 24
         static let xxxl: CGFloat = 32
+        /// 4-pt grid extension for hero-scale elements (fullscreen alert
+        /// buttons, footer spacers on the alert screen).
+        static let xxxxl: CGFloat = 40
 
         /// Single outer margin used by every top-level surface (header, footer,
         /// event list, color filter, quick actions, world clock) so all content
         /// hangs on one vertical axis. HIG: consistent layout margins.
         /// Birman: модульная сетка — одна колонка, одна линия слева.
         static let contentMargin: CGFloat = lg
+    }
+
+    // MARK: Hero / Fullscreen Alert
+
+    /// Dedicated spacing tokens for the fullscreen meeting alert.
+    /// Kept as an intentional sub-scale (named constants rather than an
+    /// ad-hoc sum of `xxxl + sm`) so the layout reads as design intent,
+    /// not arithmetic. Birman: "magical constants" → named intent.
+    enum Alert {
+        /// Horizontal padding for Join-style action buttons.
+        static let joinButtonPadding: CGFloat = 40
+        /// Horizontal padding for the Dismiss pill — wider so the text
+        /// breathes against the hero typography around it.
+        static let dismissButtonPadding: CGFloat = 60
+        /// Bottom spacer under the action stack on the alert screen.
+        static let footerSpacer: CGFloat = 60
+        /// Horizontal padding for the hero event title.
+        static let titlePadding: CGFloat = 40
     }
 
     // MARK: Popover Dimensions
@@ -81,6 +102,12 @@ enum DS {
         static let iconLarge: CGFloat = 16
         static let headerIcon: CGFloat = 20
         static let cornerRadius: CGFloat = 12
+        /// Inline highlight / subtle-fill surface radius used for hints,
+        /// drop targets, inline edit forms and search rows that live
+        /// *inside* a larger `cornerRadius`-shaped card. Unifies the
+        /// previously hard-coded 6/8 values scattered across the codebase.
+        /// Birman: one rhythm of radii — 12 (cards) / 8 (inline) / 20 (pills).
+        static let subtleCornerRadius: CGFloat = 8
         static let badgeCornerRadius: CGFloat = 20
         static let syncIndicatorSize: CGFloat = 14
         static let todayDotSize: CGFloat = 6
@@ -149,6 +176,11 @@ enum DS {
         static let faintBorder: Double = 0.1
         static let subtleBorder: Double = 0.15
         static let glassBorder: Double = 0.2
+
+        /// Soft accent — louder than `subtleBorder`, quieter than `half`.
+        /// Used for drag-awaiting states and hover-dimmed accents where
+        /// we want presence without full saturation.
+        static let softAccent: Double = 0.35
     }
 
     // MARK: Shadows
@@ -436,18 +468,32 @@ extension View {
     }
 }
 
+// MARK: - Shared Section-Header Typography
+
+extension Text {
+    /// Single typographic voice for quiet, in-surface section headers
+    /// (form section labels, day-group headers in the timeline, any
+    /// subhead that guides the eye without shouting).
+    ///
+    /// Birman: one scale — `SectionLabel` and `DaySectionHeader` are the
+    /// same typographic object, not two look-alikes. Centralising the
+    /// style here guarantees they never drift apart.
+    func sectionHeaderStyle() -> some View {
+        self
+            .font(.caption.weight(.semibold))
+            .textCase(.uppercase)
+            .tracking(0.4)
+    }
+}
+
 // MARK: - Shared Section Label
 
 /// Uniform section-label treatment used by form surfaces (AddEventView) and
 /// any other view that needs a quiet, in-surface section divider.
 ///
 /// Birman: within one surface, section titles are quiet subheads, not
-/// headlines — they guide the eye without shouting.
-///
-/// Day-group headers in the main timeline deliberately use a louder
-/// `.subheadline`-weight style (see `DaySectionHeader`) because they label
-/// distinct objects, not fields within one form. Keeping the two styles
-/// centralised here makes that distinction intentional instead of accidental.
+/// headlines — they guide the eye without shouting. Same typographic voice
+/// as `DaySectionHeader` via `sectionHeaderStyle()`.
 struct SectionLabel: View {
     let text: String
 
@@ -455,10 +501,8 @@ struct SectionLabel: View {
 
     var body: some View {
         Text(text)
-            .font(.caption.weight(.semibold))
+            .sectionHeaderStyle()
             .foregroundStyle(skin.resolvedTextTertiary)
-            .textCase(.uppercase)
-            .tracking(0.4)
             .accessibilityAddTraits(.isHeader)
     }
 }

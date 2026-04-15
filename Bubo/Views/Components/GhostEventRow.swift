@@ -49,7 +49,7 @@ struct GhostEventRow: View {
             // Level 4 (final): no leading offset — matches EventRowView's
             // urgency bar and FreeSlotRow's dashed guide so all three row
             // types share one vertical anchor column inside the platter.
-            RoundedRectangle(cornerRadius: 1, style: .continuous)
+            RoundedRectangle(cornerRadius: DS.Size.previewMicroRadius, style: .continuous)
                 .fill(skin.accentColor.opacity(pulse ? 0.6 : 0.35))
                 .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
                 .padding(.trailing, DS.Spacing.md)
