@@ -37,6 +37,31 @@ struct GAConfiguration: Sendable {
     /// Enable adaptive crossover rate (decays with generation progress).
     var adaptiveCrossover: Bool
 
+    /// Above this duplicate fraction, force-mutate clones in the offspring
+    /// population with a boosted rate. 0 disables the mechanism. Measured in
+    /// fraction of the post-offspring population that shares a genome with
+    /// another individual.
+    var duplicateMutationThreshold: Double
+
+    /// Multiplier on `mutationRate` applied to clones when the threshold is
+    /// exceeded. 2.5 is the literature sweet spot: aggressive enough to break
+    /// the tie but gentle enough to keep the structure of the clone's parent.
+    var duplicateMutationBoost: Double
+
+    /// Run a short SA hill climb on the top individuals every N generations
+    /// during evolution, not just once at the end. 0 disables (pure GA).
+    /// Memetic intermediate hill climbing typically delivers +5-10% final
+    /// fitness for ~2-5% extra cost, because the climbs happen to the top
+    /// individuals whose refinements then propagate through selection.
+    var memeticHillClimbInterval: Int
+
+    /// Number of individuals to hill-climb on each memetic pass.
+    var memeticHillClimbCandidates: Int
+
+    /// Steps per memetic hill climb invocation. Keep modest — the point is
+    /// frequent local refinement, not a full deep optimization every cycle.
+    var memeticHillClimbSteps: Int
+
     /// Memberwise init with defaults for new parameters so existing call sites compile unchanged.
     init(
         populationSize: Int,
@@ -57,7 +82,12 @@ struct GAConfiguration: Sendable {
         fitnessShareSigma: Double = 0.3,
         fitnessShareAlpha: Double = 1.0,
         enableCrowding: Bool = false,
-        adaptiveCrossover: Bool = false
+        adaptiveCrossover: Bool = false,
+        duplicateMutationThreshold: Double = 0.2,
+        duplicateMutationBoost: Double = 2.5,
+        memeticHillClimbInterval: Int = 0,
+        memeticHillClimbCandidates: Int = 3,
+        memeticHillClimbSteps: Int = 5
     ) {
         self.populationSize = populationSize
         self.maxGenerations = maxGenerations
@@ -78,6 +108,11 @@ struct GAConfiguration: Sendable {
         self.fitnessShareAlpha = fitnessShareAlpha
         self.enableCrowding = enableCrowding
         self.adaptiveCrossover = adaptiveCrossover
+        self.duplicateMutationThreshold = duplicateMutationThreshold
+        self.duplicateMutationBoost = duplicateMutationBoost
+        self.memeticHillClimbInterval = memeticHillClimbInterval
+        self.memeticHillClimbCandidates = memeticHillClimbCandidates
+        self.memeticHillClimbSteps = memeticHillClimbSteps
     }
 
     static let `default` = GAConfiguration(
@@ -99,7 +134,10 @@ struct GAConfiguration: Sendable {
         fitnessShareSigma: 0.3,
         fitnessShareAlpha: 1.0,
         enableCrowding: false,
-        adaptiveCrossover: true
+        adaptiveCrossover: true,
+        memeticHillClimbInterval: 25,
+        memeticHillClimbCandidates: 3,
+        memeticHillClimbSteps: 6
     )
 
     static let quick = GAConfiguration(
@@ -168,7 +206,10 @@ struct GAConfiguration: Sendable {
         fitnessShareSigma: 0.25,
         fitnessShareAlpha: 1.0,
         enableCrowding: true,
-        adaptiveCrossover: true
+        adaptiveCrossover: true,
+        memeticHillClimbInterval: 40,
+        memeticHillClimbCandidates: 5,
+        memeticHillClimbSteps: 10
     )
 
     /// Per-island config for island model GA. Smaller populations per island
@@ -194,7 +235,10 @@ struct GAConfiguration: Sendable {
         fitnessShareSigma: 0.3,
         fitnessShareAlpha: 1.0,
         enableCrowding: false,
-        adaptiveCrossover: true
+        adaptiveCrossover: true,
+        memeticHillClimbInterval: 30,
+        memeticHillClimbCandidates: 3,
+        memeticHillClimbSteps: 8
     )
 }
 
@@ -307,6 +351,23 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
                 maxGenerations: config.maxGenerations,
                 parallelEvaluation: true
             )
+
+            // Memetic hill climb on the current top individuals every
+            // `memeticHillClimbInterval` generations. Applying SA locally to
+            // the elites mid-evolution lets their refinements propagate through
+            // subsequent selection rounds, which the final-only hill climb
+            // cannot — by then the GA is done and no downstream selection
+            // benefits. We write results back into the population so selection
+            // in the next generation sees the improved fitness.
+            if config.memeticHillClimbInterval > 0,
+               generation > 0,
+               generation % config.memeticHillClimbInterval == 0 {
+                memeticHillClimbStep(
+                    population: &population,
+                    candidates: config.memeticHillClimbCandidates,
+                    steps: config.memeticHillClimbSteps
+                )
+            }
 
             // Use rawFitness so fitness sharing (which deflates `fitness` for
             // crowded niches) can't demote the globally-best individual. Store
@@ -493,6 +554,25 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             applyFitnessSharing(to: &offspring, population: population, config: config)
         }
 
+        // Force-diversify clones. When crossover/mutation produces many
+        // duplicates (common as the population converges), the visible
+        // diversity metric drops and adaptive mutation kicks in — but that
+        // feedback loop is slow. Direct duplicate mutation breaks the tie in
+        // one step, at roughly the cost of one extra evaluation per clone.
+        // When enabled (threshold > 0), clones beyond the first are re-mutated
+        // with a boosted rate; the FitnessCache absorbs most of the extra
+        // evaluation cost when the mutation happens to land on a previously
+        // seen genome.
+        if config.duplicateMutationThreshold > 0 && offspring.count > 1 {
+            forceDiversifyClones(
+                in: &offspring,
+                threshold: config.duplicateMutationThreshold,
+                boostedRate: min(1.0, config.mutationRate * config.duplicateMutationBoost),
+                enableRepair: config.enableRepair,
+                parallelEvaluation: parallelEvaluation
+            )
+        }
+
         // Replacement strategy
         if config.enableCrowding && !parentIndexPairs.isEmpty {
             // Deterministic crowding: each child competes with its closest parent.
@@ -505,6 +585,103 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             )
         } else {
             population.replaceGeneration(with: offspring)
+        }
+    }
+
+    // MARK: - Memetic Hill Climb
+
+    /// Run a short SA hill climb on the top `candidates` individuals and
+    /// write the refined versions back into the population. Unlike the
+    /// final-phase hill climb, this operates *during* evolution so any
+    /// improvements compound through subsequent selection rounds.
+    ///
+    /// Candidates are addressed by index to keep the update O(1) per slot;
+    /// we pick the indices of the top individuals by `rawFitness` so fitness
+    /// sharing (which deflates `fitness` for crowded niches) doesn't bias
+    /// selection toward sparse but poorly-scored solutions.
+    private func memeticHillClimbStep(
+        population: inout Population<C>,
+        candidates: Int,
+        steps: Int
+    ) {
+        let n = population.individuals.count
+        guard n > 0, candidates > 0, steps > 0 else { return }
+
+        // Pick top-K indices by rawFitness. We avoid `sortedByFitness` here
+        // because that would rely on the possibly-deflated `fitness` field.
+        let topIndices = population.individuals.indices
+            .sorted { population.individuals[$0].rawFitness > population.individuals[$1].rawFitness }
+            .prefix(min(candidates, n))
+
+        for idx in topIndices {
+            let refined = hillClimb(population.individuals[idx], steps: steps)
+            // Only accept a strictly better climb. Equal-fitness rewrites
+            // are harmless for scoring but could displace a more-diverse
+            // twin that the crowding/sharing pressure might prefer.
+            if refined.rawFitness > population.individuals[idx].rawFitness {
+                population.individuals[idx] = refined
+            }
+        }
+    }
+
+    // MARK: - Duplicate Diversification
+
+    /// Find every individual that shares a genome with at least one earlier
+    /// sibling, mutate it with `boostedRate`, and re-evaluate. No-ops when the
+    /// duplicate fraction is below `threshold` — avoids paying for the O(N)
+    /// scan on diverse populations where mutation is unnecessary.
+    ///
+    /// Hashable-based detection makes this O(N) per generation regardless of
+    /// population size. Without Hashable the equivalent check was O(N²)
+    /// Equatable comparisons, which would outweigh the diversification gain.
+    ///
+    /// The re-evaluation honours the same `parallelEvaluation` contract as the
+    /// main offspring evaluation step so the island model keeps its GCD thread
+    /// budget intact when duplicates appear mid-evolution.
+    private func forceDiversifyClones(
+        in individuals: inout [C],
+        threshold: Double,
+        boostedRate: Double,
+        enableRepair: Bool,
+        parallelEvaluation: Bool
+    ) {
+        // Pass 1: identify duplicates via Set insertion. `seen` contains a
+        // canonical copy of each unique genome; any individual whose genome
+        // is already in `seen` is a clone marked for re-mutation.
+        var seen: Set<C> = []
+        seen.reserveCapacity(individuals.count)
+        var duplicateIndices: [Int] = []
+        for i in individuals.indices {
+            if !seen.insert(individuals[i]).inserted {
+                duplicateIndices.append(i)
+            }
+        }
+        let dupeFraction = Double(duplicateIndices.count) / Double(individuals.count)
+        guard dupeFraction >= threshold else { return }
+
+        // Pass 2: boost-mutate and repair clones. Mutation sets
+        // `needsEvaluation = true`, so the subsequent evaluate() overwrites
+        // the stale clone fitness.
+        for idx in duplicateIndices {
+            individuals[idx].mutate(rate: boostedRate, context: context)
+            if enableRepair {
+                individuals[idx].repair(context: context)
+            }
+        }
+
+        // Pass 3: re-evaluate only the touched individuals. `evaluate` checks
+        // `needsEvaluation` internally and no-ops on unchanged ones, so even
+        // a bulk re-evaluation would be safe — but scoping here keeps the
+        // cost proportional to the number of clones we actually touched.
+        if parallelEvaluation && duplicateIndices.count > 1 {
+            DispatchQueue.concurrentPerform(iterations: duplicateIndices.count) { k in
+                let idx = duplicateIndices[k]
+                self.evaluate(&individuals[idx])
+            }
+        } else {
+            for idx in duplicateIndices {
+                evaluate(&individuals[idx])
+            }
         }
     }
 

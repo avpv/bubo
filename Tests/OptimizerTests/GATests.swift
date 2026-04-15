@@ -3305,6 +3305,84 @@ struct GARandomTests {
         #expect(Set(arr) == Set(0..<100), "Shuffle must preserve multiset of elements")
     }
 
+    @Test("FitnessCache returns stored score for identical fingerprint")
+    func fitnessCacheHitsOnDuplicates() {
+        let events = [makeMovableEvent(id: "t1", durationMinutes: 30)]
+        let context = makeContext(movableEvents: events)
+        let cache = FitnessCache()
+        let evaluator = FitnessEvaluator(
+            objectives: FitnessEvaluator.standard(preferences: context.preferences).objectives,
+            cache: cache
+        )
+
+        var c1 = ScheduleChromosome.random(context: context)
+        evaluator.evaluateAndAssign(&c1, context: context)
+
+        // Duplicate with same genes and cleared flags should hit the cache
+        var c2 = c1
+        c2.needsEvaluation = true
+        c2.fitness = 0
+        c2.rawFitness = 0
+        c2.objectiveCache = nil
+        evaluator.evaluateAndAssign(&c2, context: context)
+
+        let stats = cache.stats
+        #expect(stats.hits >= 1, "Second evaluation of same genes should hit cache (hits=\(stats.hits))")
+        #expect(c1.fitness == c2.fitness, "Cache hit must return identical fitness")
+    }
+
+    @Test("FitnessCache evicts oldest when maxSize exceeded")
+    func fitnessCacheEvictsWhenFull() {
+        let cache = FitnessCache(maxSize: 4)
+        let fakeEntry = FitnessCache.Entry(fitness: 0.5, objectiveCache: [:])
+
+        // Insert 10 unique fingerprints — cache must not grow beyond maxSize
+        let ts = Date(timeIntervalSinceReferenceDate: 0)
+        for i in 0..<10 {
+            let key = ChromosomeFingerprint([
+                ScheduleGene(
+                    eventId: "e\(i)", title: "t", startTime: ts,
+                    duration: 3600, context: nil, energyCost: 0.5,
+                    priority: 0.5, isFocusBlock: false
+                )
+            ])
+            cache.store(key, entry: fakeEntry)
+        }
+        #expect(cache.stats.size <= 4, "Cache must honour maxSize")
+    }
+
+    @Test("Duplicate detection breaks up a cloned population")
+    func duplicateDetectionMutatesClones() {
+        let events = [
+            makeMovableEvent(id: "a", durationMinutes: 30),
+            makeMovableEvent(id: "b", durationMinutes: 30)
+        ]
+        let context = makeContext(movableEvents: events)
+
+        // Build a config with heavy duplicate diversification so the test
+        // deterministically triggers the mutation path.
+        var cfg = GAConfiguration.quick
+        cfg.duplicateMutationThreshold = 0.1
+        cfg.duplicateMutationBoost = 3.0
+        cfg.maxGenerations = 5
+
+        // Seed every individual with the same chromosome, then run one short
+        // evolution. If duplicate detection works, the final population must
+        // contain at least two distinct genomes (by gene equality).
+        let seed = ScheduleChromosome.random(context: context)
+        let seeds = Array(repeating: seed, count: cfg.populationSize)
+        let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
+        let ga = GeneticAlgorithm<ScheduleChromosome>(
+            config: cfg,
+            context: context,
+            evaluate: { c in evaluator.evaluateAndAssign(&c, context: context) }
+        )
+        let final = ga.runSeeded(with: seeds)
+        let uniqueGeneSets = Set(final.map { ChromosomeFingerprint($0.genes) })
+        #expect(uniqueGeneSets.count >= 2,
+                "A fully-cloned seed must produce at least one distinct genome after evolution (got \(uniqueGeneSets.count))")
+    }
+
     @Test("GA run with seeded context is reproducible")
     func seededGARunIsReproducible() {
         let events = (0..<6).map { makeMovableEvent(id: "t\($0)", durationMinutes: 30) }

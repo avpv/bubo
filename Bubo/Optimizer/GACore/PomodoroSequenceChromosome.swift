@@ -20,6 +20,11 @@ struct PomodoroSequenceChromosome: Chromosome, Sendable {
         lhs.sequence == rhs.sequence && lhs.fitness == rhs.fitness
     }
 
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(sequence)
+        hasher.combine(Int64((fitness * 10_000).rounded()))
+    }
+
     // MARK: - Random Initialization
 
     static func random(context: OptimizerContext) -> PomodoroSequenceChromosome {

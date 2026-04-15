@@ -3,7 +3,12 @@ import Foundation
 // MARK: - Chromosome Protocol
 
 /// A generic chromosome for the genetic algorithm.
-protocol Chromosome: Equatable {
+///
+/// Hashable conformance is required so the GA can detect duplicate individuals
+/// in O(N) via a Set lookup rather than O(N²) via pairwise Equatable. Every
+/// concrete chromosome in this codebase already has Hashable-ready fields
+/// (genes, sequence, …) so implementing `hash(into:)` is a one-liner.
+protocol Chromosome: Hashable {
     var fitness: Double { get set }
 
     /// Raw fitness before any diversity adjustments (fitness sharing, niching).
@@ -80,6 +85,15 @@ struct ScheduleChromosome: Chromosome, Sendable {
     /// Equality ignores needsEvaluation and caches — two chromosomes with the same genes and fitness are equal.
     static func == (lhs: ScheduleChromosome, rhs: ScheduleChromosome) -> Bool {
         lhs.genes == rhs.genes && lhs.fitness == rhs.fitness
+    }
+
+    /// Hash the same fields used by `==`. Keeping this in sync with equality is
+    /// a Hashable invariant; `fitness` is quantized to 4 decimal places so
+    /// float noise between otherwise-identical chromosomes doesn't produce
+    /// accidental hash divergence that would defeat duplicate detection.
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(genes)
+        hasher.combine(Int64((fitness * 10_000).rounded()))
     }
 
     // MARK: - Random Initialization

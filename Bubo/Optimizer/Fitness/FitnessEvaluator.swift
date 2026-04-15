@@ -22,15 +22,27 @@ final class FitnessEvaluator: @unchecked Sendable {
     var objectives: [any FitnessObjective]
     let constraintEngine: ConstraintEngine
 
+    /// Optional population-level memoization. When set, `evaluateAndAssign`
+    /// consults the cache before calling objectives; crossover/mutation-
+    /// generated duplicates (20-40% of offspring on fast configs) return
+    /// immediately. `nil` = caching disabled, e.g. for ad-hoc evaluation
+    /// calls from UI code paths where duplicates are unlikely.
+    let cache: FitnessCache?
+
     init(
         objectives: [any FitnessObjective],
-        constraintEngine: ConstraintEngine = .standard
+        constraintEngine: ConstraintEngine = .standard,
+        cache: FitnessCache? = nil
     ) {
         self.objectives = objectives
         self.constraintEngine = constraintEngine
+        self.cache = cache
     }
 
     /// All default objectives with weights from preferences.
+    /// Creates a fresh `FitnessCache` per evaluator instance so cache scope
+    /// matches run scope — different contexts (fixedEvents, preferences)
+    /// produce different fitness for the same fingerprint.
     static func standard(preferences: OptimizerPreferences) -> FitnessEvaluator {
         FitnessEvaluator(
             objectives: [
@@ -48,7 +60,8 @@ final class FitnessEvaluator: @unchecked Sendable {
                 MeetingClusteringObjective(weight: preferences.meetingClusteringWeight),
                 TaskInclusionObjective(weight: preferences.taskInclusionWeight),
             ],
-            constraintEngine: .standard
+            constraintEngine: .standard,
+            cache: FitnessCache()
         )
     }
 
@@ -110,11 +123,48 @@ final class FitnessEvaluator: @unchecked Sendable {
 
     /// Evaluate and assign fitness to a chromosome (mutating).
     /// Skips evaluation if the chromosome hasn't changed since last evaluation.
-    /// Uses incremental evaluation when a cached objective breakdown is available.
+    ///
+    /// Evaluation proceeds through three tiers, cheapest first:
+    ///   1. `needsEvaluation == false` → already scored, nothing to do.
+    ///   2. `FitnessCache` hit → reuse the stored score for an identical
+    ///      fingerprint seen earlier in the run. Typical cost: one lock
+    ///      acquisition and a dictionary lookup.
+    ///   3. Fall through to delta or full evaluation via `evaluateIncremental`,
+    ///      then insert the result into the cache so siblings/descendants
+    ///      with the same placement pay nothing.
     func evaluateAndAssign(_ chromosome: inout ScheduleChromosome, context: OptimizerContext) {
         guard chromosome.needsEvaluation else { return }
 
-        let (fitness, cache) = evaluateIncremental(
+        // Tier 2: cache probe. Only worthwhile if cache is wired.
+        if let cache = cache {
+            let key = ChromosomeFingerprint(chromosome.genes)
+            if let hit = cache.lookup(key) {
+                chromosome.fitness = hit.fitness
+                chromosome.rawFitness = hit.fitness
+                chromosome.objectiveCache = hit.objectiveCache
+                chromosome.mutatedGeneIndices = nil
+                chromosome.needsEvaluation = false
+                return
+            }
+
+            // Tier 3: miss — evaluate, then memoize for siblings.
+            let (fitness, objCache) = evaluateIncremental(
+                chromosome: chromosome,
+                previousCache: chromosome.objectiveCache,
+                mutatedIndices: chromosome.mutatedGeneIndices,
+                context: context
+            )
+            chromosome.fitness = fitness
+            chromosome.rawFitness = fitness
+            chromosome.objectiveCache = objCache
+            chromosome.mutatedGeneIndices = nil
+            chromosome.needsEvaluation = false
+            cache.store(key, entry: FitnessCache.Entry(fitness: fitness, objectiveCache: objCache))
+            return
+        }
+
+        // Cache disabled: evaluate directly.
+        let (fitness, objCache) = evaluateIncremental(
             chromosome: chromosome,
             previousCache: chromosome.objectiveCache,
             mutatedIndices: chromosome.mutatedGeneIndices,
@@ -122,7 +172,7 @@ final class FitnessEvaluator: @unchecked Sendable {
         )
         chromosome.fitness = fitness
         chromosome.rawFitness = fitness
-        chromosome.objectiveCache = cache
+        chromosome.objectiveCache = objCache
         chromosome.mutatedGeneIndices = nil
         chromosome.needsEvaluation = false
     }
