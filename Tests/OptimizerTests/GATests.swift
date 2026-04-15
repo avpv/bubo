@@ -2845,6 +2845,55 @@ struct DeltaEvaluationTests {
         #expect(!cache.isEmpty)
     }
 
+    @Test("Repair respects dependsOn ordering")
+    func repairEnforcesDependencies() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let tomorrow = cal.date(byAdding: .day, value: 1, to: today)!
+
+        // Two tasks: B depends on A. Force A late and B early — repair must
+        // push B past A's end time.
+        let eventA = OptimizableEvent(
+            id: "A",
+            title: "A",
+            duration: 3600,
+            priority: 0.7
+        )
+        let eventB = OptimizableEvent(
+            id: "B",
+            title: "B",
+            duration: 3600,
+            priority: 0.5,
+            dependsOn: ["A"]
+        )
+        let context = OptimizerContext(
+            movableEvents: [eventA, eventB],
+            planningHorizon: DateInterval(start: today, end: tomorrow),
+            rng: GARandom(seed: 1)
+        )
+
+        let aStart = cal.date(bySettingHour: 14, minute: 0, second: 0, of: today)!
+        let bStart = cal.date(bySettingHour: 10, minute: 0, second: 0, of: today)!
+        let geneA = ScheduleGene(
+            eventId: "A", title: "A", startTime: aStart,
+            duration: 3600, context: nil, energyCost: 0.5, priority: 0.7,
+            isFocusBlock: false
+        )
+        let geneB = ScheduleGene(
+            eventId: "B", title: "B", startTime: bStart,
+            duration: 3600, context: nil, energyCost: 0.5, priority: 0.5,
+            isFocusBlock: false
+        )
+        var chromosome = ScheduleChromosome(genes: [geneA, geneB])
+        chromosome.repair(context: context)
+
+        let repairedA = chromosome.genes.first { $0.eventId == "A" }!
+        let repairedB = chromosome.genes.first { $0.eventId == "B" }!
+
+        #expect(repairedB.startTime >= repairedA.endTime,
+                "B (\(repairedB.startTime)) must start at or after A ends (\(repairedA.endTime))")
+    }
+
     @Test("Delta evaluation after mutation matches full evaluation")
     func deltaEvalMatchesFull() {
         // Build a multi-day context so the day-partitioned path has work to do.

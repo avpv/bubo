@@ -478,6 +478,8 @@ struct ScheduleChromosome: Chromosome, Sendable {
     /// Fix hard constraint violations in-place:
     /// 1. Clamp all genes to working hours
     /// 2. Resolve overlaps by shifting conflicting genes to the nearest free slot
+    /// 3. Enforce `dependsOn` ordering: a gene may only start after every one
+    ///    of its (included) prerequisites has finished.
     mutating func repair(context: OptimizerContext) {
         let cal = context.calendar
         let horizonStart = context.planningHorizon.start
@@ -493,11 +495,14 @@ struct ScheduleChromosome: Chromosome, Sendable {
             )
         }
 
-        // Pass 2: Resolve overlaps greedily (higher-priority genes keep their slots)
-        // Sort by priority descending, then by start time
-        let sortedIndices = genes.indices
-            .filter { genes[$0].isIncluded }
-            .sorted { genes[$0].priority > genes[$1].priority }
+        // Pass 2: Resolve overlaps. We visit genes in topological order
+        // (prerequisites before dependents) so a dependent's overlap check
+        // observes already-placed prerequisites; ties broken by priority
+        // descending so high-priority tasks still keep their slots when no
+        // dependency edge dictates order. Cycles degrade gracefully: nodes
+        // left in the work list after Kahn's algorithm finishes get appended
+        // in priority order, preserving the pre-topological behaviour.
+        let sortedIndices = topoOrderedIndices(context: context)
 
         var occupied: [(start: Date, end: Date)] = context.fixedEvents.map {
             ($0.startDate, $0.endDate)
@@ -506,17 +511,32 @@ struct ScheduleChromosome: Chromosome, Sendable {
 
         for idx in sortedIndices {
             let gene = genes[idx]
+            let event = context.movableEvents.first { $0.id == gene.eventId }
+            let earliest = event?.earliestStart
+            var floor = [horizonStart, earliest].compactMap { $0 }.max() ?? horizonStart
+
+            // Dependency floor: this gene may not start before any of its
+            // included prerequisites has finished. Because we iterate in
+            // topological order, every prerequisite has already been placed
+            // in its final slot for this repair pass.
+            if let event, !event.dependsOn.isEmpty {
+                for depId in event.dependsOn {
+                    if let depGene = genes.first(where: { $0.eventId == depId && $0.isIncluded }) {
+                        floor = max(floor, depGene.endTime)
+                    }
+                }
+            }
+
+            // If the current slot is either before the dependency floor or
+            // overlaps an occupied interval, relocate to the nearest valid gap.
+            let beforeFloor = gene.startTime < floor
             let hasOverlap = occupied.contains { occ in
                 gene.startTime < occ.end && gene.endTime > occ.start
             }
 
-            if hasOverlap {
-                let event = context.movableEvents.first { $0.id == gene.eventId }
-                let earliest = event?.earliestStart
-                let floor = [horizonStart, earliest].compactMap { $0 }.max() ?? horizonStart
-
+            if beforeFloor || hasOverlap {
                 if let freeStart = findNearestFreeSlot(
-                    near: gene.startTime,
+                    near: max(gene.startTime, floor),
                     duration: gene.duration,
                     occupied: occupied,
                     workingHours: context.workingHours,
@@ -525,6 +545,16 @@ struct ScheduleChromosome: Chromosome, Sendable {
                     floor: floor
                 ) {
                     genes[idx] = gene.withStartTime(freeStart)
+                } else if beforeFloor {
+                    // No gap fits but dependency floor was violated — at least
+                    // honour the floor; this may still overlap, which leaves
+                    // the ConstraintEngine to penalise rather than failing
+                    // the whole repair silently.
+                    genes[idx] = gene.withStartTime(
+                        clampToWorkingHours(floor, duration: gene.duration,
+                                            workingHours: context.workingHours,
+                                            calendar: cal, floor: floor)
+                    )
                 }
             }
 
@@ -533,6 +563,81 @@ struct ScheduleChromosome: Chromosome, Sendable {
         }
 
         needsEvaluation = true
+    }
+
+    /// Kahn's algorithm on the `dependsOn` graph among included genes, with
+    /// ties broken by priority descending. Returns every included gene's
+    /// index exactly once: prerequisites first, then dependents. Dependencies
+    /// on excluded/absent genes are ignored (they can't influence timing).
+    /// Cycles leave some indices unvisited; those are appended at the end in
+    /// priority order so repair behaviour on malformed graphs matches the
+    /// pre-topological version.
+    private func topoOrderedIndices(context: OptimizerContext) -> [Int] {
+        let includedIndices = genes.indices.filter { genes[$0].isIncluded }
+        guard !includedIndices.isEmpty else { return [] }
+
+        // Map eventId → gene index for O(1) lookup during edge construction.
+        var indexByEventId: [String: Int] = [:]
+        indexByEventId.reserveCapacity(includedIndices.count)
+        for i in includedIndices { indexByEventId[genes[i].eventId] = i }
+
+        // Pre-compute inDegrees and adjacency (dependency → dependent edges).
+        var inDegree: [Int: Int] = [:]
+        var adjacency: [Int: [Int]] = [:]
+        for i in includedIndices { inDegree[i] = 0 }
+
+        let eventById: [String: OptimizableEvent] = Dictionary(
+            uniqueKeysWithValues: context.movableEvents.map { ($0.id, $0) }
+        )
+
+        for i in includedIndices {
+            guard let event = eventById[genes[i].eventId] else { continue }
+            for depId in event.dependsOn {
+                // Only count dependencies on included genes present in this
+                // chromosome. Excluded or missing prerequisites don't impose
+                // a scheduling order.
+                if let depIdx = indexByEventId[depId] {
+                    adjacency[depIdx, default: []].append(i)
+                    inDegree[i, default: 0] += 1
+                }
+            }
+        }
+
+        // Kahn's algorithm with a priority-ordered ready queue. A plain queue
+        // would be topologically valid but arbitrary on ties; using priority
+        // preserves the "important gene first" behaviour of the previous
+        // overlap-resolution pass.
+        var ready = includedIndices
+            .filter { (inDegree[$0] ?? 0) == 0 }
+            .sorted { genes[$0].priority > genes[$1].priority }
+        var result: [Int] = []
+        result.reserveCapacity(includedIndices.count)
+
+        while !ready.isEmpty {
+            // Always pop the highest-priority ready node. Linear scan is fine
+            // here because `ready` stays small relative to population sizes.
+            let head = ready.removeFirst()
+            result.append(head)
+            for dependent in adjacency[head] ?? [] {
+                let next = (inDegree[dependent] ?? 0) - 1
+                inDegree[dependent] = next
+                if next == 0 {
+                    // Insert keeping ready sorted by priority descending.
+                    let insertAt = ready.firstIndex { genes[$0].priority < genes[dependent].priority } ?? ready.count
+                    ready.insert(dependent, at: insertAt)
+                }
+            }
+        }
+
+        // Any indices still with inDegree > 0 are part of a cycle. Append them
+        // in priority order so repair still has something to iterate over —
+        // cycles are a data-integrity bug but shouldn't crash the optimizer.
+        let visited = Set(result)
+        let leftovers = includedIndices
+            .filter { !visited.contains($0) }
+            .sorted { genes[$0].priority > genes[$1].priority }
+        result.append(contentsOf: leftovers)
+        return result
     }
 
     // MARK: - Genotypic Distance
