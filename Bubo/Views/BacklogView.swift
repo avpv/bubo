@@ -339,16 +339,34 @@ struct BacklogView: View {
     /// Renders grouped task rows. When `visibleIDs` is nil all tasks
     /// are rendered; otherwise only tasks whose id is in the set appear.
     ///
-    /// Context-group headers are intentionally hidden: a single typographic
-    /// voice for the list reduces visual competition with task titles.
-    /// Grouping still drives ordering via `groupedByContext`, and each row
-    /// already surfaces its context in the subtitle.
+    /// Context-group headers restore the visible grouping: когда задача
+    /// принадлежит проекту / напоминаниям, заголовок группы поясняет «чьё
+    /// это», а сами строки больше не повторяют ярлык у себя в метаданных.
+    /// Birman: один голос на информацию — либо заголовок, либо в строке,
+    /// но не оба сразу.
     @ViewBuilder
     private func taskRowsContent(visibleIDs: Set<String>?) -> some View {
         let ids = visibleIDs ?? Set(activeTasks.map(\.id))
         let grouped = backlogService.groupedByContext
 
         ForEach(grouped, id: \.context) { group in
+            let groupHasVisibleTasks = group.tasks.contains { ids.contains($0.id) }
+
+            if let context = group.context, groupHasVisibleTasks {
+                // Тихий subhead, выровнен по левому краю в одну линию с
+                // названиями задач. `frame(maxWidth: .infinity, alignment:
+                // .leading)` нужен, потому что родительский VStack —
+                // center-aligned, и без него заголовок вставал по центру.
+                Text(context)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                    .textCase(.uppercase)
+                    .tracking(0.3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, DS.Spacing.sm)
+                    .padding(.vertical, DS.Spacing.xs)
+            }
+
             ForEach(group.tasks) { task in
                 if ids.contains(task.id) {
                     if editingTaskId == task.id {
@@ -890,6 +908,8 @@ struct BacklogTaskRow: View {
     ///
     /// Birman: один типографический голос для метаданных; срочный дедлайн
     /// получает красный акцент как единственная семантическая подсветка.
+    /// `context` не включён — его уже несёт заголовок группы сверху, двойное
+    /// упоминание было бы шумом.
     private var metaText: Text {
         let dot = Text("\u{00A0}·\u{00A0}").foregroundStyle(skin.resolvedTextTertiary)
 
@@ -906,10 +926,6 @@ struct BacklogTaskRow: View {
                 : skin.resolvedTextSecondary
             out = out + dot + Text(deadlineLabel(deadline))
                 .foregroundStyle(color)
-        }
-        if let context = task.context {
-            out = out + dot + Text(context)
-                .foregroundStyle(skin.resolvedTextTertiary)
         }
         return out
     }
