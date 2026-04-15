@@ -2865,6 +2865,60 @@ struct DeltaEvaluationTests {
                 "Bandit should converge on rewarded arm: guided=\(guidedPulls) out of 200")
     }
 
+    @Test("ParetoRanker non-dominated sort classifies extremes correctly")
+    func paretoNonDominatedSortExtremes() {
+        // 3 objectives, 4 individuals. (1,0,0), (0,1,0), (0,0,1) all Pareto-
+        // optimal (nothing dominates them). (0.5, 0.5, 0.5) is on the second
+        // front — dominated by each extreme? No: (1,0,0) does NOT dominate
+        // (0.5,0.5,0.5) because obj2 is worse. So (0.5,0.5,0.5) is actually
+        // on front 0 too. Use a clearly dominated point instead.
+        let vectors: [[Double]] = [
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [0.1, 0.1, 0.1],  // Dominated by all three extremes
+        ]
+        let fronts = ParetoRanker.nonDominatedSort(vectors)
+        #expect(fronts.count == 2, "Expected 2 fronts, got \(fronts.count)")
+        #expect(Set(fronts[0]) == [0, 1, 2])
+        #expect(fronts[1] == [3])
+    }
+
+    @Test("ParetoRanker rewrites fitness so front 0 outranks front 1")
+    func paretoRankerOrdersByFront() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let tomorrow = cal.date(byAdding: .day, value: 1, to: today)!
+        let events = [makeMovableEvent(id: "t1", durationMinutes: 30)]
+        let context = OptimizerContext(
+            movableEvents: events,
+            planningHorizon: DateInterval(start: today, end: tomorrow),
+            rng: GARandom(seed: 5)
+        )
+        let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
+
+        // Construct two chromosomes: one strong across all objectives, one
+        // weak. After ranking, the strong one must have strictly higher
+        // fitness even if weighted-sum previously happened to tie them.
+        var strong = ScheduleChromosome.random(context: context)
+        var weak = ScheduleChromosome.random(context: context)
+        evaluator.evaluateAndAssign(&strong, context: context)
+        evaluator.evaluateAndAssign(&weak, context: context)
+        strong.objectiveCache = evaluator.objectiveBreakdown(for: strong, context: context)
+            .mapValues { _ in 0.9 }
+        weak.objectiveCache = evaluator.objectiveBreakdown(for: weak, context: context)
+            .mapValues { _ in 0.3 }
+
+        var pop: [ScheduleChromosome] = [weak, strong]
+        ParetoRanker.rankByParetoFronts(&pop, evaluator: evaluator, context: context)
+        // `strong` dominates `weak` on every objective, so strong lands on
+        // front 0 and must rank higher than weak after re-scoring.
+        let strongIdx = pop.firstIndex(where: { $0.genes == strong.genes })!
+        let weakIdx = pop.firstIndex(where: { $0.genes == weak.genes })!
+        #expect(pop[strongIdx].fitness > pop[weakIdx].fitness,
+                "Strong (front 0) must outrank weak (front 1): \(pop[strongIdx].fitness) vs \(pop[weakIdx].fitness)")
+    }
+
     @Test("SIMD distance matches scalar distance on aligned chromosomes")
     func simdDistanceMatchesScalar() {
         let events = (0..<13).map { makeMovableEvent(id: "e\($0)", durationMinutes: 30) }
