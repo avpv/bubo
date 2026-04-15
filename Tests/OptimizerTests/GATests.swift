@@ -2845,6 +2845,41 @@ struct DeltaEvaluationTests {
         #expect(!cache.isEmpty)
     }
 
+    @Test("Delta evaluation after mutation matches full evaluation")
+    func deltaEvalMatchesFull() {
+        // Build a multi-day context so the day-partitioned path has work to do.
+        let events = (0..<8).map { makeMovableEvent(id: "t\($0)", durationMinutes: 30) }
+        let cal = Calendar.current
+        let start = cal.startOfDay(for: Date())
+        let end = cal.date(byAdding: .day, value: 3, to: start)!
+        let context = OptimizerContext(
+            movableEvents: events,
+            planningHorizon: DateInterval(start: start, end: end),
+            rng: GARandom(seed: 777)
+        )
+        let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
+
+        var chromosome = ScheduleChromosome.random(context: context)
+        evaluator.evaluateAndAssign(&chromosome, context: context)
+        let baselineFitness = chromosome.fitness
+
+        // Mutate a single gene to trigger the per-day delta path
+        chromosome.mutate(rate: 1.0 / Double(chromosome.genes.count), context: context)
+        evaluator.evaluateAndAssign(&chromosome, context: context)
+        let deltaFitness = chromosome.fitness
+
+        // Baseline: a fresh chromosome with identical genes, full-evaluated
+        // from scratch (no delta state). Must match the delta result.
+        var fresh = ScheduleChromosome(genes: chromosome.genes, needsEvaluation: true)
+        evaluator.evaluateAndAssign(&fresh, context: context)
+        let freshFitness = fresh.fitness
+
+        #expect(abs(deltaFitness - freshFitness) < 1e-9,
+                "Delta-eval result (\(deltaFitness)) must match full-eval from scratch (\(freshFitness))")
+        // Sanity: baseline was actually evaluated (not stuck at 0)
+        #expect(baselineFitness > 0)
+    }
+
     @Test("Incremental evaluation with cache returns consistent results")
     func incrementalEvalWithCache() {
         let events = [

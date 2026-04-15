@@ -78,6 +78,19 @@ struct ScheduleChromosome: Chromosome, Sendable {
     /// Populated after full evaluation; reused when only a subset of genes change.
     var objectiveCache: [String: Double]?
 
+    /// Per-day breakdown for `DayPartitionedObjective` instances. Keys are
+    /// objective names; values are `[dayStart: dayScore]`. When delta evaluation
+    /// runs, only days that contain mutated genes (or used to, before the
+    /// mutation) are rescored — unaffected days are read from this cache.
+    var perDayObjectiveCache: [String: [Date: Double]]?
+
+    /// For each gene position, the day it sat on the last time this chromosome
+    /// was fully evaluated. Used to spot "a gene moved from day X to day Y"
+    /// and mark both X and Y as dirty, so per-day delta evaluation doesn't
+    /// leave stale scores on abandoned days. `nil` means "no prior evaluation"
+    /// and forces a full pass.
+    var geneDaysSnapshot: [Date]?
+
     /// Indices of genes that were modified since last evaluation.
     /// Used by delta evaluation to skip recomputing unaffected local objectives.
     var mutatedGeneIndices: IndexSet?
