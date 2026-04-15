@@ -30,6 +30,10 @@ final class PersistedBacklogTask {
     var scheduledDate: Date?
     var scheduledEventId: String?
     var reminderCalendarItemId: String?
+    /// Recurrence flags added in v1.11. Default false / nil keeps legacy rows
+    /// working unchanged — an older record simply decodes to a non-recurring task.
+    var isRecurring: Bool = false
+    var recurrenceTag: String?
 
     /// Plain integer position.  `BacklogService` rewrites all rows on every
     /// save, so there's no need for fractional indexing or conflict
@@ -55,6 +59,8 @@ final class PersistedBacklogTask {
         self.scheduledDate = task.scheduledDate
         self.scheduledEventId = task.scheduledEventId
         self.reminderCalendarItemId = task.reminderCalendarItemId
+        self.isRecurring = task.isRecurring
+        self.recurrenceTag = task.recurrenceTag
         self.sortOrder = sortOrder
     }
 
@@ -73,6 +79,8 @@ final class PersistedBacklogTask {
             context: context,
             dependsOn: deps,
             preferredPeriod: preferredPeriodRaw.flatMap { Period(rawValue: $0) },
+            isRecurring: isRecurring,
+            recurrenceTag: recurrenceTag,
             createdAt: createdAt
         )
         task.status = BacklogStatus(rawValue: statusRaw) ?? .pending

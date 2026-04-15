@@ -48,8 +48,10 @@ final class BacklogService {
     }
 
     /// All tasks available for (re)scheduling — pending and already-scheduled.
+    /// Frozen and done tasks are both excluded: `.frozen` is the user's
+    /// explicit "set aside, don't plan around this" signal.
     var schedulable: [BacklogTask] {
-        tasks.filter { $0.status != .done }
+        tasks.filter { $0.status != .done && $0.status != .frozen }
     }
 
     /// Tasks that have been placed in the schedule.
@@ -60,6 +62,12 @@ final class BacklogService {
     /// Completed tasks.
     var done: [BacklogTask] {
         tasks.filter { $0.status == .done }
+    }
+
+    /// Frozen — user-archived tasks. Not consumed by optimization, not
+    /// displayed in the active list; surfaced only through the frozen tombstone.
+    var frozen: [BacklogTask] {
+        tasks.filter { $0.status == .frozen }
     }
 
     /// Tasks pending for more than 14 days
@@ -88,7 +96,7 @@ final class BacklogService {
     /// red "!" marker on rows; we don't force-sort by deadline, because that
     /// would silently override whatever sequence the user dragged into place.
     var groupedByContext: [(context: String?, tasks: [BacklogTask])] {
-        let active = tasks.filter { $0.status != .done }
+        let active = tasks.filter { $0.status != .done && $0.status != .frozen }
         var groups: [(context: String?, tasks: [BacklogTask])] = []
         var indexByContext: [String?: Int] = [:]
         for task in active {
@@ -117,6 +125,7 @@ final class BacklogService {
         let cutoff = Calendar.current.date(byAdding: .day, value: days, to: Date()) ?? Date()
         return tasks.filter { task in
             task.status != .done
+                && task.status != .frozen
                 && task.deadline != nil
                 && task.deadline! <= cutoff
         }
@@ -168,10 +177,61 @@ final class BacklogService {
 
     func completeTask(id: String) {
         guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
-        tasks[index].status = .done
-        tasks[index].completedAt = Date()
+
+        if tasks[index].isRecurring {
+            // Recurring tasks reset instead of moving to `.done`: the row
+            // survives the completion gesture, ready for the next occurrence.
+            // `createdAt` is refreshed so "stale" logic treats this as new,
+            // and any prior schedule linkage is dropped so the task re-enters
+            // planning cleanly next time.
+            tasks[index].status = .pending
+            tasks[index].completedAt = Date()
+            tasks[index].createdAt = Date()
+            tasks[index].scheduledEventId = nil
+            tasks[index].scheduledDate = nil
+        } else {
+            tasks[index].status = .done
+            tasks[index].completedAt = Date()
+        }
+
         saveTasks()
         NotificationCenter.default.post(name: Self.taskCompleted, object: id)
+    }
+
+    /// Set aside a task without deleting it. The task leaves the active list
+    /// and stops participating in optimization, but stays in storage under
+    /// `frozen`. Complements delete (destructive) — Birman: «данные драгоценны».
+    func freezeTask(id: String) {
+        guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
+        tasks[index].status = .frozen
+        // Drop schedule linkage so the calendar slot is freed.
+        tasks[index].scheduledEventId = nil
+        tasks[index].scheduledDate = nil
+        saveTasks()
+        NotificationCenter.default.post(name: Self.taskUpdated, object: id)
+        NotificationCenter.default.post(name: Self.taskScheduleChanged, object: id)
+    }
+
+    /// Restore a frozen task to the backlog so it can be scheduled again.
+    func unfreezeTask(id: String) {
+        guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
+        guard tasks[index].status == .frozen else { return }
+        tasks[index].status = .pending
+        saveTasks()
+        NotificationCenter.default.post(name: Self.taskUpdated, object: id)
+    }
+
+    /// Bulk restore — powers the "Unfreeze all" button on the frozen tombstone.
+    func unfreezeAll() {
+        var changed = false
+        for i in tasks.indices where tasks[i].status == .frozen {
+            tasks[i].status = .pending
+            changed = true
+        }
+        if changed {
+            saveTasks()
+            NotificationCenter.default.post(name: Self.taskUpdated, object: nil)
+        }
     }
 
     /// Mark a task done without posting `taskCompleted`.

@@ -19,6 +19,13 @@ struct BacklogTask: Identifiable, Codable, Hashable, Sendable {
     var completedAt: Date?
     var createdAt: Date
 
+    /// Task repeats on completion: instead of moving to `.done`, it resets to
+    /// `.pending` with a fresh `createdAt`. The `recurrenceTag` is a free-form
+    /// label shown in the UI ("weekly review", "daily standup") — we don't
+    /// yet schedule the next occurrence automatically, just keep the row alive.
+    var isRecurring: Bool = false
+    var recurrenceTag: String? = nil
+
     /// Last mutation timestamp — used by iCloud sync to resolve conflicts
     /// when the same task was edited on two devices.  Optional for backward
     /// compatibility with data serialized before this field existed.
@@ -47,6 +54,8 @@ struct BacklogTask: Identifiable, Codable, Hashable, Sendable {
         context: String? = nil,
         dependsOn: [String] = [],
         preferredPeriod: Period? = nil,
+        isRecurring: Bool = false,
+        recurrenceTag: String? = nil,
         createdAt: Date = Date()
     ) {
         self.id = id
@@ -58,6 +67,8 @@ struct BacklogTask: Identifiable, Codable, Hashable, Sendable {
         self.context = context
         self.dependsOn = dependsOn
         self.preferredPeriod = preferredPeriod
+        self.isRecurring = isRecurring
+        self.recurrenceTag = recurrenceTag
         self.createdAt = createdAt
     }
 }
@@ -95,6 +106,11 @@ enum BacklogStatus: String, Codable, Hashable, Sendable, CaseIterable {
     case scheduled
     /// Task is completed.
     case done
+    /// Task is set aside — not deleted, but not participating in optimization
+    /// or the active list. Visible under a dedicated frozen tombstone with an
+    /// "Unfreeze all" action. Complements `.done` as the non-destructive way
+    /// to silence a task the user isn't ready to drop entirely.
+    case frozen
 }
 
 // MARK: - Conversion to OptimizableEvent

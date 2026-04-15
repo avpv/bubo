@@ -106,6 +106,26 @@ struct BacklogView: View {
     /// Whether the "N completed today" tombstone is expanded. Collapsed by
     /// default so finished work doesn't crowd the active list.
     @State private var showCompletedToday: Bool = false
+    /// Whether the frozen tombstone is expanded. Same pattern as
+    /// `showCompletedToday`: summary row always visible, the list stays
+    /// collapsed until the user asks.
+    @State private var showFrozen: Bool = false
+    /// Sprint mode: collapses grouping, dims metadata, shows only the top
+    /// `Self.sprintModeMaxTasks` rows in a bigger type size. One thing on
+    /// screen at a time — Birman's «режим кассы».
+    @State private var isSprintMode: Bool = false
+    /// Smart Sort: arranges active tasks by (deadline urgency + priority)
+    /// instead of user drag order. Survives per session only — the stored
+    /// order remains the user's canonical sequence.
+    @State private var useSmartSort: Bool = false
+
+    /// Cached "where would this land?" answer per task ID. Populated lazily
+    /// on first hover — the lookup runs the same `FreeSlotFinder.nextSlot`
+    /// that drives the ghost preview for new tasks, so the two signals agree.
+    @State private var rowSlotPreviews: [String: String] = [:]
+    /// In-flight debounced lookups keyed by task ID so we can cancel a pending
+    /// compute if the cursor leaves the row before the result arrives.
+    @State private var rowSlotPreviewTasks: [String: Task<Void, Never>] = [:]
 
     /// User has already performed at least one drag — used to hide the
     /// onboarding hint once the affordance has been discovered.
@@ -129,8 +149,48 @@ struct BacklogView: View {
     /// of a two-line stack.
     static let compactRowHeight: CGFloat = 40
 
+    /// Hard cap on rows visible in sprint mode. Small on purpose: the whole
+    /// point of the mode is to see exactly what's next without a scroll.
+    static let sprintModeMaxTasks = 5
+
     private var activeTasks: [BacklogTask] {
-        backlogService.tasks.filter { $0.status != .done }
+        // Frozen tasks live in their own tombstone below — excluding them
+        // here keeps the active list's count, sort and rendering honest.
+        backlogService.tasks.filter { $0.status != .done && $0.status != .frozen }
+    }
+
+    /// Deadline-urgency + priority score. Higher = more urgent.
+    /// Today / overdue dominates, tomorrow is a strong second, week-out is
+    /// a nudge; without a deadline, only priority contributes. Weighted so
+    /// "high priority, no deadline" still outranks "low priority, week out".
+    private func smartScore(for task: BacklogTask) -> Double {
+        var score = task.priority.numericValue * 100
+        if let deadline = task.deadline {
+            let cal = Calendar.current
+            if deadline < Date() || cal.isDateInToday(deadline) {
+                score += 1000
+            } else if cal.isDateInTomorrow(deadline) {
+                score += 500
+            } else {
+                let days = max(1, cal.dateComponents([.day], from: Date(), to: deadline).day ?? 7)
+                score += max(0, 300 - Double(days) * 20)
+            }
+        }
+        return score
+    }
+
+    /// Active tasks as a flat list ordered by `smartScore`. Stable for equal
+    /// scores: falls back to the user's storage order, so the sorted list
+    /// never "shuffles" two tasks the user tied deliberately.
+    private var smartSortedActiveTasks: [BacklogTask] {
+        let indexed = activeTasks.enumerated().map { ($0.offset, $0.element) }
+        let sorted = indexed.sorted { lhs, rhs in
+            let lScore = smartScore(for: lhs.1)
+            let rScore = smartScore(for: rhs.1)
+            if lScore == rScore { return lhs.0 < rhs.0 }
+            return lScore > rScore
+        }
+        return sorted.map { $0.1 }
     }
 
     /// Tasks completed since local midnight. Powers the «N completed today»
@@ -156,16 +216,26 @@ struct BacklogView: View {
         // spacing since the VStack uses spacing=0.
         let rowHeight = Self.compactRowHeight
         let activeCount = activeTasks.count
-        guard activeCount > 0 else { return 0 }
+        // Allow room for each tombstone header (chevron + count row) so
+        // "N completed today" and "N frozen" stay reachable even when the
+        // active list is empty — previously the 0-tasks case collapsed the
+        // ScrollView to height 0 and hid both tombstones below it.
+        let tombstoneHeaderHeight: CGFloat = 28
+        let hasCompleted = !completedToday.isEmpty
+        let hasFrozen = !backlogService.frozen.isEmpty
+        let tombstoneMin: CGFloat = (hasCompleted ? tombstoneHeaderHeight : 0)
+            + (hasFrozen ? tombstoneHeaderHeight : 0)
+
+        guard activeCount > 0 || tombstoneMin > 0 else { return 0 }
 
         switch expansion {
         case .collapsed:
             return 0
         case .compact:
             let visible = min(activeCount, Self.maxExpandedTasks)
-            return rowHeight * CGFloat(visible)
+            return rowHeight * CGFloat(visible) + tombstoneMin
         case .expanded:
-            let content = rowHeight * CGFloat(activeCount)
+            let content = rowHeight * CGFloat(activeCount) + tombstoneMin
             return min(content, Self.fullyExpandedMaxHeight)
         }
     }
@@ -186,7 +256,15 @@ struct BacklogView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if !activeTasks.isEmpty || isInputFocused {
+            // Header + list stay visible as long as *any* bucket has tasks
+            // (active, completed-today, or frozen). Otherwise the user's
+            // last completion would make the tombstone unreachable — it
+            // would render inside a hidden subtree, and "undo by clicking
+            // the checkmark" would be gone.
+            if !activeTasks.isEmpty
+                || isInputFocused
+                || !completedToday.isEmpty
+                || !backlogService.frozen.isEmpty {
                 backlogHeader
                 // Task rows only appear when expanded (up to 4 visible
                 // with scroll); collapsed = header only.
@@ -200,6 +278,16 @@ struct BacklogView: View {
                 isInputFocused = true
                 focusRequested = false
             }
+        }
+        // Any backlog edit (duration, context) or event change invalidates
+        // the hover-preview cache — otherwise a row that was edited 10s ago
+        // could keep showing a slot computed against a stale duration. The
+        // count + sum is a cheap fingerprint: changes whenever any task
+        // grows or shrinks, reschedules, or is added/removed.
+        .onChange(of: taskHoverCacheFingerprint) { _, _ in
+            rowSlotPreviews.removeAll()
+            for (_, task) in rowSlotPreviewTasks { task.cancel() }
+            rowSlotPreviewTasks.removeAll()
         }
         .onChange(of: isInputFocused) { _, focused in
             // Hide the ghost block the moment the user tabs away from the
@@ -220,6 +308,7 @@ struct BacklogView: View {
             coordinator?.clearGhost()
             coordinator?.endDrag()
             ghostPreviewTask?.cancel()
+            cancelAllRowSlotPreviews()
         }
     }
 
@@ -266,11 +355,94 @@ struct BacklogView: View {
             Spacer()
 
             if !activeTasks.isEmpty {
+                // Tiny capacity ring: at a glance, does today's remaining
+                // work time cover the pending backlog? Green = yes, orange
+                // = tight, red = overflow. One channel, no numeric display.
+                BacklogCapacityRing(
+                    pendingMinutes: pendingWorkloadMinutes,
+                    remainingWorkdayMinutes: remainingWorkdayMinutes
+                )
+                .help(capacityRingTooltip)
+
+                // Smart Sort: re-orders the active list by
+                // deadline-urgency + priority. The stored order is untouched
+                // — the toggle is a viewing lens, not a destructive sort.
+                Button {
+                    withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+                        useSmartSort.toggle()
+                        if useSmartSort, expansion == .collapsed {
+                            expansion = .compact
+                        }
+                    }
+                } label: {
+                    Image(systemName: useSmartSort ? "wand.and.stars" : "arrow.up.arrow.down")
+                        .font(.caption)
+                        .foregroundStyle(useSmartSort ? skin.accentColor : skin.resolvedTextSecondary)
+                        .contentTransition(.symbolEffect(.replace))
+                }
+                .buttonStyle(.plain)
+                .help(useSmartSort ? "Show in user order" : "Smart sort: order by deadline and priority")
+                .accessibilityLabel(useSmartSort ? "Disable smart sort" : "Enable smart sort")
+
+                // Sprint mode: one glyph, symmetric states (bolt on/off).
+                // Hidden while the backlog is empty — the mode would have
+                // nothing to display.
+                Button {
+                    withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+                        isSprintMode.toggle()
+                        // Entering sprint mode makes the list meaningless
+                        // if it's still collapsed — auto-open to compact.
+                        if isSprintMode, expansion == .collapsed {
+                            expansion = .compact
+                        }
+                    }
+                } label: {
+                    Image(systemName: isSprintMode ? "bolt.fill" : "bolt")
+                        .font(.caption)
+                        .foregroundStyle(isSprintMode ? skin.accentColor : skin.resolvedTextSecondary)
+                        .contentTransition(.symbolEffect(.replace))
+                }
+                .buttonStyle(.plain)
+                .help(isSprintMode ? "Exit sprint mode" : "Sprint mode: focus on the top \(Self.sprintModeMaxTasks) tasks")
+                .accessibilityLabel(isSprintMode ? "Exit sprint mode" : "Enter sprint mode")
+
                 scheduleButton
             }
         }
         .padding(.horizontal, DS.Spacing.sm)
         .padding(.vertical, DS.Spacing.sm)
+    }
+
+    // MARK: - Capacity ring helpers
+
+    /// Total scheduled minutes across all non-done, non-frozen tasks —
+    /// the workload the user would need to fit into today's remaining hours.
+    private var pendingWorkloadMinutes: Int {
+        activeTasks.reduce(0) { $0 + $1.durationMinutes }
+    }
+
+    /// Remaining minutes between "now" and the end of the working day.
+    /// Clamped to zero past the workday so the ring stays at 100% after hours
+    /// instead of going negative. Uses `OptimizerService.workingHours` — the
+    /// same source of truth as the free-slot finder.
+    private var remainingWorkdayMinutes: Int {
+        let cal = Calendar.current
+        let now = Date()
+        let endHour = optimizerService.workingHours.upperBound
+        guard let endOfWorkday = cal.date(
+            bySettingHour: endHour,
+            minute: 0,
+            second: 0,
+            of: now
+        ) else { return 0 }
+        let seconds = max(0, endOfWorkday.timeIntervalSince(now))
+        return Int(seconds / 60)
+    }
+
+    private var capacityRingTooltip: String {
+        let workload = pendingWorkloadMinutes
+        let remaining = remainingWorkdayMinutes
+        return "Backlog: \(DS.formatMinutes(workload)); remaining today: \(DS.formatMinutes(remaining))"
     }
 
     /// HIG: главное действие должно читаться как кнопка. Tint + hover-капсула
@@ -325,6 +497,7 @@ struct BacklogView: View {
                     VStack(spacing: 0) {
                         taskRowsContent(visibleIDs: nil)
                         completedTombstone
+                        frozenTombstone
                     }
                 }
                 .scrollIndicators(.automatic)
@@ -345,52 +518,89 @@ struct BacklogView: View {
     /// already surfaces its context in the subtitle.
     @ViewBuilder
     private func taskRowsContent(visibleIDs: Set<String>?) -> some View {
-        let ids = visibleIDs ?? Set(activeTasks.map(\.id))
-        let grouped = backlogService.groupedByContext
+        // Three rendering strategies:
+        // 1. Smart Sort on — flat list ordered by `smartScore`, grouping
+        //    dropped so the queue reads as a single priority list.
+        // 2. Sprint mode on — same flat list, capped at `sprintModeMaxTasks`
+        //    (combined with Smart Sort if both are enabled).
+        // 3. Default — user's drag order honoured via `groupedByContext`.
+        //
+        // When a `visibleIDs` set is passed, only those tasks render — used
+        // by animations that reveal one row at a time.
+        let baseOrder: [BacklogTask] = useSmartSort ? smartSortedActiveTasks : activeTasks
+        let capped: [BacklogTask] = isSprintMode ? Array(baseOrder.prefix(Self.sprintModeMaxTasks)) : baseOrder
+        let ids: Set<String> = visibleIDs ?? Set(capped.map(\.id))
 
-        ForEach(grouped, id: \.context) { group in
-            ForEach(group.tasks) { task in
+        // When Smart Sort OR Sprint Mode is on, skip grouping entirely — one
+        // flat list reads truer for both modes. Otherwise fall through to
+        // `groupedByContext`, which preserves context clustering.
+        if useSmartSort || isSprintMode {
+            ForEach(capped) { task in
                 if ids.contains(task.id) {
-                    if editingTaskId == task.id {
-                        BacklogTaskEditRow(
-                            task: task,
-                            backlogService: backlogService,
-                            onDone: { editingTaskId = nil }
-                        )
-                        .transition(.opacity)
-                    } else {
-                        BacklogTaskRow(
-                            task: task,
-                            isUrgent: isUrgent(task),
-                            isDragging: coordinator?.draggedTask?.taskId == task.id,
-                            canMoveUp: canMoveUp(task),
-                            canMoveDown: canMoveDown(task),
-                            onComplete: { completeTaskWithUndo(task) },
-                            onEdit: { editingTaskId = task.id },
-                            onDelete: { onDeleteTask?(task) },
-                            onDragStart: {
-                                coordinator?.beginDrag(payload(for: task))
-                                if !hasDragged { hasDragged = true }
-                            },
-                            onDragEnd: { coordinator?.endDrag() },
-                            onReorderDrop: { dropped in
-                                handleReorderDrop(dropped: dropped, targetId: task.id)
-                            },
-                            onMoveUp: { moveTask(task, by: -1) },
-                            onMoveDown: { moveTask(task, by: +1) },
-                            onMoveToTop: { moveTaskToEdge(task, toTop: true) },
-                            onMoveToBottom: { moveTaskToEdge(task, toTop: false) },
-                            isFocused: focusedTaskId == task.id,
-                            onFocusPrev: { focusRow(offsetFrom: task.id, by: -1) },
-                            onFocusNext: { focusRow(offsetFrom: task.id, by: +1) }
-                        )
-                        .focusable()
-                        .focused($focusedTaskId, equals: task.id)
-                        .focusEffectDisabled()
-                        .transition(.opacity.combined(with: .move(edge: .leading)))
+                    taskRowBody(task)
+                }
+            }
+        } else {
+            let grouped = backlogService.groupedByContext
+            ForEach(grouped, id: \.context) { group in
+                ForEach(group.tasks) { task in
+                    if ids.contains(task.id) {
+                        taskRowBody(task)
                     }
                 }
             }
+        }
+    }
+
+    /// Either the inline edit form (when this row is being edited) or the
+    /// read-only `BacklogTaskRow`. Extracted so the grouped and flat
+    /// rendering paths in `taskRowsContent` don't duplicate 40 lines of
+    /// parameter plumbing.
+    @ViewBuilder
+    private func taskRowBody(_ task: BacklogTask) -> some View {
+        if editingTaskId == task.id {
+            BacklogTaskEditRow(
+                task: task,
+                backlogService: backlogService,
+                onDone: { editingTaskId = nil }
+            )
+            .transition(.opacity)
+        } else {
+            BacklogTaskRow(
+                task: task,
+                isUrgent: isUrgent(task),
+                isDragging: coordinator?.draggedTask?.taskId == task.id,
+                canMoveUp: canMoveUp(task),
+                canMoveDown: canMoveDown(task),
+                isSprintMode: isSprintMode,
+                onComplete: { completeTaskWithUndo(task) },
+                onEdit: { editingTaskId = task.id },
+                onDelete: { onDeleteTask?(task) },
+                onFreeze: { freezeTaskWithUndo(task) },
+                onDragStart: {
+                    coordinator?.beginDrag(payload(for: task))
+                    if !hasDragged { hasDragged = true }
+                },
+                onDragEnd: { coordinator?.endDrag() },
+                onReorderDrop: { dropped in
+                    handleReorderDrop(dropped: dropped, targetId: task.id)
+                },
+                onMoveUp: { moveTask(task, by: -1) },
+                onMoveDown: { moveTask(task, by: +1) },
+                onMoveToTop: { moveTaskToEdge(task, toTop: true) },
+                onMoveToBottom: { moveTaskToEdge(task, toTop: false) },
+                isFocused: focusedTaskId == task.id,
+                onFocusPrev: { focusRow(offsetFrom: task.id, by: -1) },
+                onFocusNext: { focusRow(offsetFrom: task.id, by: +1) },
+                slotPreview: rowSlotPreviews[task.id],
+                onHoverChanged: { hovering in
+                    handleRowHover(task: task, hovering: hovering)
+                }
+            )
+            .focusable()
+            .focused($focusedTaskId, equals: task.id)
+            .focusEffectDisabled()
+            .transition(.opacity.combined(with: .move(edge: .leading)))
         }
     }
 
@@ -468,6 +678,111 @@ struct BacklogView: View {
                 .font(.callout)
                 .foregroundStyle(skin.resolvedTextTertiary)
                 .strikethrough()
+                .lineLimit(1)
+
+            Spacer()
+        }
+        .padding(.vertical, DS.Spacing.xxs)
+        .padding(.horizontal, DS.Spacing.xs)
+        .frame(minHeight: Self.compactRowHeight)
+    }
+
+    // MARK: - Frozen tombstone
+
+    /// «N frozen» summary + on-demand list of frozen tasks. Follows the same
+    /// "квартирант, а не жилец" pattern as `completedTombstone`: hidden when
+    /// empty, collapsed by default, one tap expands.
+    ///
+    /// The header carries an "Unfreeze all" shortcut — frozen tasks are often
+    /// batch-thawed when priorities shift, and clicking ✕ on each pill would
+    /// be friction the non-destructive freeze is trying to avoid.
+    @ViewBuilder
+    private var frozenTombstone: some View {
+        let frozen = backlogService.frozen
+        if !frozen.isEmpty {
+            VStack(spacing: 0) {
+                HStack(spacing: DS.Spacing.xs) {
+                    Button {
+                        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+                            showFrozen.toggle()
+                        }
+                    } label: {
+                        HStack(spacing: DS.Spacing.xs) {
+                            Image(systemName: showFrozen ? "chevron.down" : "chevron.right")
+                                .font(.caption2)
+                                .contentTransition(.symbolEffect(.replace))
+                            Image(systemName: "snowflake")
+                                .font(.caption2)
+                            Text("\(frozen.count) frozen")
+                                .font(.caption2.monospacedDigit())
+                                .contentTransition(.numericText())
+                            Spacer()
+                        }
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(frozen.count) frozen tasks")
+
+                    Button("Unfreeze all") {
+                        // Snapshot IDs so undo knows which ones to re-freeze.
+                        let restoredIds = frozen.map(\.id)
+                        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+                            backlogService.unfreezeAll()
+                        }
+                        onUndoableAction?("Unfroze \(restoredIds.count) task\(restoredIds.count == 1 ? "" : "s")") { [backlogService] in
+                            for id in restoredIds { backlogService.freezeTask(id: id) }
+                        }
+                    }
+                    .font(.caption2)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(skin.accentColor)
+                }
+                .padding(.horizontal, DS.Spacing.xs)
+                .padding(.vertical, DS.Spacing.xs)
+
+                if showFrozen {
+                    ForEach(frozen) { task in
+                        frozenRow(task)
+                            .transition(.opacity)
+                    }
+                }
+            }
+            .motionAwareAnimation(DS.Animation.standard, value: showFrozen, reduceMotion: reduceMotion)
+            .motionAwareAnimation(DS.Animation.quick, value: frozen.map(\.id), reduceMotion: reduceMotion)
+        }
+    }
+
+    /// One frozen-task row. Snowflake checkbox; tapping it unfreezes.
+    @ViewBuilder
+    private func frozenRow(_ task: BacklogTask) -> some View {
+        HStack(spacing: DS.Spacing.sm) {
+            Color.clear
+                .frame(width: DS.Size.iconLarge, height: DS.Size.accentBarHeight)
+
+            Button {
+                let snapshot = task
+                withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+                    backlogService.unfreezeTask(id: task.id)
+                }
+                onUndoableAction?("Unfroze \u{201C}\(task.title)\u{201D}") { [backlogService] in
+                    backlogService.updateTask(snapshot)
+                    backlogService.freezeTask(id: snapshot.id)
+                }
+            } label: {
+                Image(systemName: "snowflake")
+                    .font(.callout)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Unfreeze task")
+            .accessibilityLabel("Unfreeze \u{201C}\(task.title)\u{201D}")
+
+            Text(task.title)
+                .font(.callout)
+                .foregroundStyle(skin.resolvedTextTertiary)
                 .lineLimit(1)
 
             Spacer()
@@ -682,6 +997,91 @@ struct BacklogView: View {
         }
     }
 
+    // MARK: - Hover slot preview
+
+    /// Debounce constant for per-row slot lookups. Matches the 300 ms used
+    /// by the ghost preview under the "Add task" field so the two signals
+    /// feel like the same feature.
+    private static let slotPreviewHoverDebounceMs: Int = 250
+
+    /// Cheap fingerprint covering the fields that affect "where would this
+    /// land?" answers — any change invalidates all cached previews. Includes
+    /// total duration, task count, and calendar event count so edits,
+    /// additions, deletions and calendar mutations all trip the refresh.
+    private var taskHoverCacheFingerprint: Int {
+        var hasher = Hasher()
+        hasher.combine(activeTasks.count)
+        hasher.combine(activeTasks.reduce(0) { $0 + $1.durationMinutes })
+        hasher.combine(reminderService.allEvents.count)
+        return hasher.finalize()
+    }
+
+    /// Kick off (or cancel) the slot lookup for a row the cursor entered or
+    /// left. Results land in `rowSlotPreviews` so SwiftUI re-renders the
+    /// inline "→ Today 15:00" hint. A cached answer short-circuits the
+    /// compute — calendar state rarely shifts enough during a single hover
+    /// session to make a re-lookup worth the cost.
+    private func handleRowHover(task: BacklogTask, hovering: Bool) {
+        let taskId = task.id
+
+        // Cursor left the row — cancel any pending lookup but keep the cache
+        // so a quick return flashes the preview without spinning again.
+        guard hovering else {
+            rowSlotPreviewTasks[taskId]?.cancel()
+            rowSlotPreviewTasks[taskId] = nil
+            return
+        }
+
+        // Already cached → nothing to do; the row reads `rowSlotPreviews`
+        // directly via `slotPreview`.
+        if rowSlotPreviews[taskId] != nil { return }
+        if rowSlotPreviewTasks[taskId] != nil { return }
+
+        let duration = task.durationMinutes
+        rowSlotPreviewTasks[taskId] = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(Self.slotPreviewHoverDebounceMs))
+            guard !Task.isCancelled else { return }
+
+            let slot = FreeSlotFinder.nextSlot(
+                matching: duration,
+                in: reminderService.allEvents,
+                workingHours: optimizerService.workingHours,
+                maxDaysAhead: 7
+            )
+            guard !Task.isCancelled else { return }
+
+            if let slot {
+                let fmt = DateFormatter()
+                fmt.setLocalizedDateFormatFromTemplate("H:mm")
+                let range = "\(fmt.string(from: slot.start))–\(fmt.string(from: slot.end))"
+                rowSlotPreviews[taskId] = "\(Self.dayLabel(for: slot.start)) \(range)"
+            } else {
+                rowSlotPreviews[taskId] = "no free slot this week"
+            }
+            rowSlotPreviewTasks[taskId] = nil
+        }
+    }
+
+    /// Cancel every in-flight hover lookup. Called from `.onDisappear` so
+    /// Task closures don't outlive the view.
+    private func cancelAllRowSlotPreviews() {
+        for (_, task) in rowSlotPreviewTasks { task.cancel() }
+        rowSlotPreviewTasks.removeAll()
+    }
+
+    /// Freeze a task and surface an undo toast. Mirrors
+    /// `completeTaskWithUndo` — snapshot first so the undo restores any
+    /// prior scheduled state, not just `.pending`.
+    private func freezeTaskWithUndo(_ task: BacklogTask) {
+        let snapshot = task
+        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+            backlogService.freezeTask(id: task.id)
+        }
+        onUndoableAction?("Froze \u{201C}\(task.title)\u{201D}") { [backlogService] in
+            backlogService.updateTask(snapshot)
+        }
+    }
+
     // MARK: - Add Task Field
 
     private var addTaskField: some View {
@@ -844,6 +1244,53 @@ struct BacklogView: View {
     }
 }
 
+// MARK: - Capacity Ring
+
+/// Small ring that compares today's remaining working minutes against the
+/// total duration still in the backlog. One visual channel — colour —
+/// carries the answer: green = fits, orange = tight (≤ 120%),
+/// red = overflow. Empty backlog = full green ring (nothing at risk).
+///
+/// Birman: одно кольцо даёт больше, чем таблица цифр.
+struct BacklogCapacityRing: View {
+    let pendingMinutes: Int
+    let remainingWorkdayMinutes: Int
+
+    @Environment(\.activeSkin) private var skin
+
+    /// Ratio of workload to available time. Guards against division-by-zero
+    /// when the workday is over (remaining = 0): in that case, any workload
+    /// is overflow; an empty backlog still reads as "fine" (returns 0).
+    private var fraction: Double {
+        guard pendingMinutes > 0 else { return 0 }
+        guard remainingWorkdayMinutes > 0 else { return 1.5 } // overflow sentinel
+        return Double(pendingMinutes) / Double(remainingWorkdayMinutes)
+    }
+
+    private var color: Color {
+        switch fraction {
+        case ..<0.8: return .green
+        case ..<1.0: return skin.accentColor
+        case ..<1.2: return .orange
+        default:     return skin.resolvedDestructiveColor
+        }
+    }
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(skin.resolvedTextTertiary.opacity(0.25), lineWidth: 2)
+            Circle()
+                .trim(from: 0, to: min(max(fraction, 0.05), 1.0))
+                .stroke(color, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+        }
+        .frame(width: 14, height: 14)
+        .accessibilityLabel("Backlog capacity")
+        .accessibilityValue("\(Int(fraction * 100)) percent of remaining workday")
+    }
+}
+
 // MARK: - Backlog Task Row
 
 struct BacklogTaskRow: View {
@@ -856,9 +1303,15 @@ struct BacklogTaskRow: View {
     /// the menu entries cleanly on the first and last rows.
     var canMoveUp: Bool = true
     var canMoveDown: Bool = true
+    /// Sprint mode tints the row for calmer reading: metadata/controls
+    /// disappear, the title takes a larger font. See `BacklogView.isSprintMode`.
+    var isSprintMode: Bool = false
     var onComplete: () -> Void
     var onEdit: () -> Void
     var onDelete: () -> Void
+    /// Fired when the user picks "Freeze" from the context menu. Optional so
+    /// preview call-sites that don't care about freezing can omit it.
+    var onFreeze: () -> Void = {}
     /// Fired when this row enters the drag state so the parent can push the
     /// typed payload onto the shared coordinator.
     var onDragStart: () -> Void = {}
@@ -878,6 +1331,14 @@ struct BacklogTaskRow: View {
     /// constraints of wrapping the backlog in a real List.
     var onFocusPrev: () -> Void = {}
     var onFocusNext: () -> Void = {}
+    /// Pre-computed "when this would land" preview, shown inline on hover.
+    /// The parent computes it the first time the cursor enters this row and
+    /// caches the result. nil = not computed yet / no slot found.
+    var slotPreview: String? = nil
+    /// Side-channel hover notification — the parent uses it to trigger the
+    /// slot-preview lookup. Mirrors the internal `isHovered` state but lets
+    /// the owning view debounce the work without polluting row state.
+    var onHoverChanged: (Bool) -> Void = { _ in }
 
     @State private var isHovered = false
     @State private var isReorderTargeted = false
@@ -890,28 +1351,66 @@ struct BacklogTaskRow: View {
     ///
     /// Birman: один типографический голос для метаданных; срочный дедлайн
     /// получает красный акцент как единственная семантическая подсветка.
+    /// Single primary metric for the collapsed row.
+    ///
+    /// Birman: "one piece of information, not a salad." The deadline wins
+    /// whenever it's set — it's the most actionable answer to "should I do
+    /// this now?" — and gets the urgency colour (red today/overdue,
+    /// standard secondary otherwise). Without a deadline, duration fills
+    /// in; it's always useful for "does this fit in my next slot?"
+    ///
+    /// Story points, context, and other detail move to the hover-reveal
+    /// below (`secondaryMetaText`) and to the edit card. The title already
+    /// carries deadline urgency via the colour beacon, so this line doesn't
+    /// need to repeat "today / tomorrow" colour-wise — its role is to give
+    /// the *label* the beacon can't (e.g. "in 3 days").
     private var metaText: Text {
-        let dot = Text("\u{00A0}·\u{00A0}").foregroundStyle(skin.resolvedTextTertiary)
-
-        var out = Text(DS.formatMinutes(task.durationMinutes))
-            .foregroundStyle(skin.resolvedTextSecondary)
-
-        if let sp = task.storyPoints {
-            out = out + dot + Text("\(sp)\u{00A0}sp")
-                .foregroundStyle(skin.resolvedTextSecondary)
-        }
         if let deadline = task.deadline {
             let color: Color = isUrgent
                 ? skin.resolvedDestructiveColor
                 : skin.resolvedTextSecondary
-            out = out + dot + Text(deadlineLabel(deadline))
+            return Text(deadlineLabel(deadline))
                 .foregroundStyle(color)
         }
-        if let context = task.context {
-            out = out + dot + Text(context)
-                .foregroundStyle(skin.resolvedTextTertiary)
+        return Text(DS.formatMinutes(task.durationMinutes))
+            .foregroundStyle(skin.resolvedTextSecondary)
+    }
+
+    /// Everything that was pushed off the primary line — duration (when
+    /// deadline is primary), story points, project context. Revealed only
+    /// on hover so the collapsed row stays one clean statement. The hover
+    /// slot preview sits on the opposite end of the row, so the two never
+    /// fight for space.
+    private var secondaryMetaText: Text? {
+        let dot = Text("\u{00A0}·\u{00A0}").foregroundStyle(skin.resolvedTextTertiary)
+        var parts: [Text] = []
+
+        // Duration is redundant when the primary line is already showing it.
+        if task.deadline != nil {
+            parts.append(
+                Text(DS.formatMinutes(task.durationMinutes))
+                    .foregroundStyle(skin.resolvedTextTertiary)
+            )
         }
-        return out
+
+        if let sp = task.storyPoints {
+            parts.append(
+                Text("\(sp)\u{00A0}sp")
+                    .foregroundStyle(skin.resolvedTextTertiary)
+            )
+        }
+
+        if let context = task.context {
+            parts.append(
+                Text(context)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+            )
+        }
+
+        guard !parts.isEmpty else { return nil }
+        return parts.dropFirst().reduce(parts[0]) { acc, next in
+            acc + dot + next
+        }
     }
 
     /// Full VoiceOver label for the content button — assembles title,
@@ -930,15 +1429,21 @@ struct BacklogTaskRow: View {
 
     var body: some View {
         HStack(spacing: DS.Spacing.sm) {
-            dragHandle
+            // Drag handle and trailing controls vanish in sprint mode so the
+            // row reads as a quiet single column — «один режим, одна цель».
+            if !isSprintMode {
+                dragHandle
+            }
             checkbox
             content
             Spacer(minLength: DS.Spacing.xs)
-            controls
+            if !isSprintMode {
+                controls
+            }
         }
         .padding(.vertical, DS.Spacing.xxs)
         .padding(.horizontal, DS.Spacing.xs)
-        .frame(minHeight: BacklogView.compactRowHeight)
+        .frame(minHeight: isSprintMode ? BacklogView.compactRowHeight + 8 : BacklogView.compactRowHeight)
         .contentShape(Rectangle())
         .opacity(isDragging ? DS.Opacity.tertiaryText : 1)
         .background(rowBackground)
@@ -948,6 +1453,7 @@ struct BacklogTaskRow: View {
             withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
                 isHovered = hovering
             }
+            onHoverChanged(hovering)
         }
         .dropDestination(for: BacklogTaskDrag.self) { items, _ in
             guard let dropped = items.first, dropped.taskId != task.id else { return false }
@@ -971,6 +1477,10 @@ struct BacklogTaskRow: View {
             Button("Move to Bottom") { onMoveToBottom() }
                 .disabled(!canMoveDown)
             Divider()
+            // Freeze — non-destructive "set aside". Offered before Delete so
+            // the destructive action isn't the default path for tasks the
+            // user just doesn't want to plan right now.
+            Button("Freeze") { onFreeze() }
             Button("Delete", role: .destructive) { onDelete() }
         }
         .accessibilityAction(named: "Move Up") { onMoveUp() }
@@ -1090,14 +1600,36 @@ struct BacklogTaskRow: View {
     ///
     /// Birman: точка приоритета — пометка на полях, после заголовка, чтобы
     /// первое касание взгляда получал смысл, а не маркер.
+    /// Deadline colour beacons: the title itself tinted red for today, orange
+    /// for tomorrow. A reader scanning the list catches "due now" without
+    /// parsing any icon — colour carries the meaning.
     private var content: some View {
         Button(action: onEdit) {
             HStack(spacing: DS.Spacing.xs) {
                 Text(task.title)
-                    .font(.callout)
-                    .foregroundStyle(skin.resolvedTextPrimary)
+                    .font(isSprintMode ? .headline.weight(.medium) : .callout)
+                    .foregroundStyle(titleColor)
                     .lineLimit(1)
                     .layoutPriority(1)
+
+                // Recurring marker — single glyph after the title, quiet
+                // tertiary colour so the title keeps its visual weight.
+                if task.isRecurring {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.caption2)
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                        .accessibilityLabel("Recurring")
+                }
+
+                // Dependency marker — mirrors the edit form's "depends on"
+                // section. A small arrow hints at the relationship without
+                // naming the blockers inline (titles could be long).
+                if !task.dependsOn.isEmpty {
+                    Image(systemName: "arrow.right")
+                        .font(.caption2)
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                        .accessibilityLabel("Depends on \(task.dependsOn.count) task\(task.dependsOn.count == 1 ? "" : "s")")
+                }
 
                 if task.priority == .high {
                     Circle()
@@ -1106,15 +1638,62 @@ struct BacklogTaskRow: View {
                         .accessibilityLabel("High priority")
                 }
 
-                metaText
-                    .font(.caption2)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                // One primary metric at rest (deadline if set, else duration).
+                // Birman: «одна метрика, а не панель». In sprint mode we drop
+                // even that — only the title matters, nothing else is on
+                // screen to fight with.
+                if !isSprintMode {
+                    metaText
+                        .font(.caption2)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+
+                // On hover, surface the richer metadata that was suppressed
+                // at rest — duration (when deadline was primary), story
+                // points, project context. `secondaryMetaText` already
+                // returns nil when there's nothing to add, so the pill
+                // simply doesn't appear for bare tasks.
+                if isHovered, !isSprintMode, let secondary = secondaryMetaText {
+                    secondary
+                        .font(.caption2)
+                        .lineLimit(1)
+                        .transition(.opacity)
+                }
+
+                // Hover-only slot preview. Mirrors the ghost preview that
+                // appears under the "Add task" field for new tasks — here it
+                // answers "where would THIS existing task land if I scheduled
+                // now?" without requiring a drag. Hidden during drag so the
+                // row doesn't double-up with the ghost block on the timeline.
+                if isHovered, !isDragging, let slotPreview, !isSprintMode {
+                    Text("→ \(slotPreview)")
+                        .font(.caption2)
+                        .foregroundStyle(skin.accentColor.opacity(DS.Opacity.accentMuted))
+                        .lineLimit(1)
+                        .transition(.opacity)
+                        .accessibilityLabel("Would land at \(slotPreview)")
+                }
             }
         }
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityRowLabel)
         .accessibilityHint("Double-tap to edit")
+    }
+
+    /// Title colour — red when the deadline is today or overdue, orange for
+    /// tomorrow, primary text otherwise. One channel of information, no icon
+    /// required. Low-priority tasks with no deadline read as normal text.
+    private var titleColor: Color {
+        guard let deadline = task.deadline else { return skin.resolvedTextPrimary }
+        let cal = Calendar.current
+        if deadline < Date() || cal.isDateInToday(deadline) {
+            return skin.resolvedDestructiveColor
+        }
+        if cal.isDateInTomorrow(deadline) {
+            return .orange
+        }
+        return skin.resolvedTextPrimary
     }
 
     /// Reorder + delete controls, visible only on hover (Apple Reminders /
@@ -1224,6 +1803,11 @@ struct BacklogTaskEditRow: View {
     @State private var hasDeadline: Bool
     @State private var context: String
     @State private var storyPoints: Int?
+    @State private var isRecurring: Bool
+    @State private var dependsOn: [String]
+    /// Currently-selected task in the "Add dependency" picker — resets to nil
+    /// after each successful add so the picker returns to its placeholder.
+    @State private var newDependencyId: String? = nil
     @Environment(\.activeSkin) private var skin
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var isTitleFocused: Bool
@@ -1239,6 +1823,8 @@ struct BacklogTaskEditRow: View {
         _hasDeadline = State(initialValue: task.deadline != nil)
         _context = State(initialValue: task.context ?? "")
         _storyPoints = State(initialValue: task.storyPoints)
+        _isRecurring = State(initialValue: task.isRecurring)
+        _dependsOn = State(initialValue: task.dependsOn)
     }
 
     private static let durationOptions = [15, 30, 45, 60, 90, 120, 180, 240]
@@ -1343,6 +1929,23 @@ struct BacklogTaskEditRow: View {
                     .onSubmit { commit() }
             }
 
+            // Recurring toggle. Flipped on, completion will reset the task
+            // to pending instead of marking it done — useful for weekly
+            // reviews, daily standups, etc. No cadence picker yet: the tag
+            // field below lets the user label the rhythm for themselves.
+            HStack {
+                Toggle("Repeats", isOn: $isRecurring)
+                    .font(.caption2)
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
+                    .onChange(of: isRecurring) { _, _ in autosave() }
+            }
+
+            // Dependencies. Each entry is another task whose completion
+            // should block this one. The picker offers all active tasks
+            // except self and already-linked ones; ✕ clears a link.
+            dependencySection
+
             // Footer hint — replaces the old Save/Cancel row. The intent
             // is clear: changes are already saved; user only needs a way
             // to leave edit mode.
@@ -1393,7 +1996,90 @@ struct BacklogTaskEditRow: View {
         updated.deadline = hasDeadline ? (deadline ?? Date()) : nil
         updated.context = context.isEmpty ? nil : context
         updated.storyPoints = storyPoints
+        updated.isRecurring = isRecurring
+        updated.dependsOn = dependsOn
         backlogService.updateTask(updated)
+    }
+
+    /// Pick-or-remove UI for task dependencies. Linked tasks render as small
+    /// pills with an ✕ button; a trailing picker adds a new link.
+    /// Other active tasks from the backlog populate the picker. Frozen/done
+    /// tasks are excluded because depending on them means "never unblocks".
+    @ViewBuilder
+    private var dependencySection: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+            Text("Depends on")
+                .font(.caption2)
+                .foregroundStyle(skin.resolvedTextSecondary)
+
+            // Existing dependency pills.
+            if !dependsOn.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: DS.Spacing.xs) {
+                        ForEach(dependsOn, id: \.self) { depId in
+                            dependencyPill(depId: depId)
+                        }
+                    }
+                }
+            }
+
+            // Picker for adding a new dependency. Hidden when there are no
+            // candidates so we don't show a dead dropdown.
+            let candidates = backlogService.tasks.filter { other in
+                other.id != task.id
+                    && other.status != .done
+                    && other.status != .frozen
+                    && !dependsOn.contains(other.id)
+            }
+            if !candidates.isEmpty {
+                Picker("Add dependency", selection: Binding(
+                    get: { newDependencyId },
+                    set: { selected in
+                        if let selected, !dependsOn.contains(selected) {
+                            dependsOn.append(selected)
+                            autosave()
+                        }
+                        // Reset selection so the picker returns to the
+                        // placeholder row and can be used again.
+                        newDependencyId = nil
+                    }
+                )) {
+                    Text("Add dependency\u{2026}").tag(String?.none)
+                    ForEach(candidates, id: \.id) { candidate in
+                        Text(candidate.title).tag(String?.some(candidate.id))
+                    }
+                }
+                .pickerStyle(.menu)
+                .font(.caption2)
+                .controlSize(.small)
+                .labelsHidden()
+            }
+        }
+    }
+
+    private func dependencyPill(depId: String) -> some View {
+        let title = backlogService.tasks.first(where: { $0.id == depId })?.title ?? "Unknown"
+        return HStack(spacing: DS.Spacing.xxs) {
+            Text(title)
+                .font(.caption2)
+                .lineLimit(1)
+                .foregroundStyle(skin.resolvedTextPrimary)
+            Button {
+                dependsOn.removeAll { $0 == depId }
+                autosave()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.caption2)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Remove dependency on \u{201C}\(title)\u{201D}")
+        }
+        .padding(.horizontal, DS.Spacing.sm)
+        .padding(.vertical, DS.Spacing.xxs)
+        .background(
+            Capsule().fill(skin.accentColor.opacity(DS.Opacity.subtleFill))
+        )
     }
 
     /// Final save + collapse the edit card back to the read-only row.
