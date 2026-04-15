@@ -62,6 +62,28 @@ struct GAConfiguration: Sendable {
     /// frequent local refinement, not a full deep optimization every cycle.
     var memeticHillClimbSteps: Int
 
+    /// CHC-style restart: when the stagnation patience is exhausted,
+    /// instead of giving up, keep the top-K individuals and regenerate the
+    /// rest with high-rate mutation. 0 disables and the old "stop on
+    /// stagnation" behaviour is preserved. Values > 0 grant the evolution
+    /// this many restarts before actually stopping; each restart resets the
+    /// stagnation counter and lets the GA attack the landscape from a fresh
+    /// direction, which is often enough to escape basins immigration can't.
+    var chcMaxRestarts: Int
+
+    /// Fraction of the population kept verbatim at each CHC restart. The
+    /// rest are regenerated from those elites via high-rate mutation (0.35
+    /// per gene is standard CHC). Typically 0.1-0.2 — large enough to
+    /// preserve discovered structure, small enough to leave room for
+    /// meaningful renewal.
+    var chcRestartEliteFraction: Double
+
+    /// Per-gene mutation rate used when regenerating the non-elite portion
+    /// on a CHC restart. CHC's defining trick is this being much higher
+    /// than the normal rate so the regenerated portion really does probe a
+    /// different neighbourhood.
+    var chcRestartMutationRate: Double
+
     /// Memberwise init with defaults for new parameters so existing call sites compile unchanged.
     init(
         populationSize: Int,
@@ -87,7 +109,10 @@ struct GAConfiguration: Sendable {
         duplicateMutationBoost: Double = 2.5,
         memeticHillClimbInterval: Int = 0,
         memeticHillClimbCandidates: Int = 3,
-        memeticHillClimbSteps: Int = 5
+        memeticHillClimbSteps: Int = 5,
+        chcMaxRestarts: Int = 0,
+        chcRestartEliteFraction: Double = 0.15,
+        chcRestartMutationRate: Double = 0.35
     ) {
         self.populationSize = populationSize
         self.maxGenerations = maxGenerations
@@ -113,6 +138,9 @@ struct GAConfiguration: Sendable {
         self.memeticHillClimbInterval = memeticHillClimbInterval
         self.memeticHillClimbCandidates = memeticHillClimbCandidates
         self.memeticHillClimbSteps = memeticHillClimbSteps
+        self.chcMaxRestarts = chcMaxRestarts
+        self.chcRestartEliteFraction = chcRestartEliteFraction
+        self.chcRestartMutationRate = chcRestartMutationRate
     }
 
     static let `default` = GAConfiguration(
@@ -137,7 +165,10 @@ struct GAConfiguration: Sendable {
         adaptiveCrossover: true,
         memeticHillClimbInterval: 25,
         memeticHillClimbCandidates: 3,
-        memeticHillClimbSteps: 6
+        memeticHillClimbSteps: 6,
+        chcMaxRestarts: 1,
+        chcRestartEliteFraction: 0.15,
+        chcRestartMutationRate: 0.35
     )
 
     static let quick = GAConfiguration(
@@ -209,7 +240,10 @@ struct GAConfiguration: Sendable {
         adaptiveCrossover: true,
         memeticHillClimbInterval: 40,
         memeticHillClimbCandidates: 5,
-        memeticHillClimbSteps: 10
+        memeticHillClimbSteps: 10,
+        chcMaxRestarts: 2,
+        chcRestartEliteFraction: 0.15,
+        chcRestartMutationRate: 0.35
     )
 
     /// Per-island config for island model GA. Smaller populations per island
@@ -342,6 +376,7 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
 
         var staleGenerations = 0
         var lastBestFitness = bestEver?.rawFitness ?? 0
+        var restartsPerformed = 0
 
         for generation in 0..<config.maxGenerations {
             evolveOneGeneration(
@@ -405,6 +440,24 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             lastBestFitness = currentFitness
 
             if staleGenerations >= config.convergencePatience {
+                // CHC restart: before giving up, try regenerating the
+                // non-elite portion from the surviving elites via high-rate
+                // mutation. This often escapes deep basins where plain
+                // immigration can't — the elites' discovered structure is
+                // preserved but the majority of the population is re-seeded
+                // in a meaningfully different neighbourhood.
+                if restartsPerformed < config.chcMaxRestarts {
+                    chcRestart(
+                        population: &population,
+                        config: config
+                    )
+                    restartsPerformed += 1
+                    staleGenerations = 0
+                    // Don't reset convergenceGeneration; the reported value
+                    // should still reflect when the bestEver was last
+                    // improved, not when we decided to relaunch.
+                    continue
+                }
                 convergenceGeneration = generation - config.convergencePatience
                 break
             }
@@ -609,6 +662,57 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         } else {
             population.replaceGeneration(with: offspring)
         }
+    }
+
+    // MARK: - CHC Restart
+
+    /// Keep the top-K elites, regenerate the rest from those elites via
+    /// high-rate mutation. "K" = `chcRestartEliteFraction * populationSize`,
+    /// clamped to at least `eliteCount` so elitism guarantees survive the
+    /// restart. Regenerated individuals are parented on a randomly-chosen
+    /// elite each, repaired, and re-evaluated before the GA continues.
+    ///
+    /// This is CHC Eshelman-style: the "cataclysmic mutation" phase the
+    /// algorithm is known for. We don't implement the full HUX/restart
+    /// machinery — we're only using the restart idea to replace a hard
+    /// stop — but the core hypothesis (preserve structure, perturb the
+    /// rest heavily) is the same.
+    private func chcRestart(
+        population: inout Population<C>,
+        config: GAConfiguration
+    ) {
+        let n = population.individuals.count
+        guard n > 0 else { return }
+
+        // Elite count: from config, bumped to ensure structure survives
+        // and the fraction isn't so small we effectively random-restart.
+        let fractionBasedElites = Int(Double(n) * config.chcRestartEliteFraction)
+        let elitesToKeep = max(config.eliteCount, max(1, fractionBasedElites))
+
+        // Take elites by rawFitness — consistent with bestEver tracking and
+        // immune to fitness sharing that may have deflated `fitness`.
+        let sorted = population.individuals.sorted { $0.rawFitness > $1.rawFitness }
+        let elites = Array(sorted.prefix(elitesToKeep))
+
+        var regenerated: [C] = elites
+        regenerated.reserveCapacity(n)
+
+        // Repopulate by cloning a random elite and hammering it with the
+        // CHC-level mutation rate. Repair brings it back into feasibility
+        // (working hours, overlap, dependencies). Evaluate closes the loop
+        // so the next generation's selection sees true fitness.
+        while regenerated.count < n {
+            let template = elites[context.rng.int(in: 0..<elites.count)]
+            var offspring = template
+            offspring.mutate(rate: config.chcRestartMutationRate, context: context)
+            if config.enableRepair {
+                offspring.repair(context: context)
+            }
+            evaluate(&offspring)
+            regenerated.append(offspring)
+        }
+
+        population.individuals = regenerated
     }
 
     // MARK: - Memetic Hill Climb
