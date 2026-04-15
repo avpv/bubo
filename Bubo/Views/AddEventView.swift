@@ -9,6 +9,7 @@ struct AddEventView: View {
     var onSave: (_ isEdit: Bool) -> Void
 
     @Environment(\.activeSkin) private var skin
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var skinAccent: Color {
         skin.isClassic ? DS.Colors.accent : skin.accentColor
@@ -74,6 +75,14 @@ struct AddEventView: View {
     /// Whether the Pomodoro mode is controlling the event duration.
     private var isPomodoroMode: Bool {
         selectedEventType == .pomodoro
+    }
+
+    /// Whether the event is long enough to fit at least one full Pomodoro
+    /// work segment. Below this the toggle is hidden — Birman: don't offer
+    /// users choices that don't make sense.
+    private var isPomodorizable: Bool {
+        Int(duration) >= PomodoroDefaults.minimumConvertibleMinutes
+            || isPomodoroMode  // keep visible if already on, so user can disable
     }
 
     private var pomodoroCycleMinutes: Int {
@@ -164,25 +173,24 @@ struct AddEventView: View {
                             .padding(DS.Spacing.md)
                     }
 
-                    // Birman/HIG: Pomodoro — режим, а не тип. Toggle живёт в
-                    // самой форме, рядом с длительностью; при включении
-                    // раскрывается секция параметров (work/break/rounds).
-                    // Локальные события только: внешние календари (iCloud,
-                    // Google) хранят чужие данные, мы их не помодоризируем.
-                    if !isExternal {
+                    // Birman/HIG: Pomodoro — режим, а не тип. Toggle и его
+                    // параметры — одна visual group без разделителя между:
+                    // разделители живут МЕЖДУ секциями, не ВНУТРИ. Toggle
+                    // прячется на коротких событиях (< одного work-сегмента)
+                    // — для встречи в 5 минут предложение «Run as Pomodoro»
+                    // — это шум.
+                    if !isExternal, isPomodorizable {
                         SkinSeparator()
-                        pomodoroToggleRow
-                            .padding(DS.Spacing.md)
-                    }
-
-                    // Pomodoro controls — раскрываются под toggle'ом.
-                    if isPomodoroMode {
-                        SkinSeparator()
-                        pomodoroSection
-                            .padding(DS.Spacing.md)
-                            .disabled(isExternal)
-                            .opacity(isExternal ? 0.6 : 1.0)
-                            .transition(.opacity.combined(with: .move(edge: .top)))
+                        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                            pomodoroToggleRow
+                            if isPomodoroMode {
+                                pomodoroSection
+                                    .disabled(isExternal)
+                                    .opacity(isExternal ? 0.6 : 1.0)
+                                    .transition(.opacity.combined(with: .move(edge: .top)))
+                            }
+                        }
+                        .padding(DS.Spacing.md)
                     }
 
                     // Calendar
@@ -438,15 +446,7 @@ struct AddEventView: View {
                     reminderMinutes = custom
                 }
                 recurrenceRule = event.recurrenceRule
-                // "Convert to Pomodoro" routes through edit mode with
-                // `initialEventType: .pomodoro` to override the editing
-                // event's own type. Without this branch the Pomodoro toggle
-                // would silently snap back to .standard on the first render.
-                if initialEventType == .pomodoro, event.eventType == .standard {
-                    selectedEventType = .pomodoro
-                } else {
-                    selectedEventType = event.eventType
-                }
+                selectedEventType = event.eventType
                 selectedColorTag = event.colorTag
                 contextTag = event.context ?? ""
                 // Load Pomodoro parameters when editing a Pomodoro event
@@ -636,7 +636,7 @@ struct AddEventView: View {
         Binding(
             get: { selectedEventType == .pomodoro },
             set: { newValue in
-                withAnimation(DS.Animation.standard) {
+                withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
                     selectedEventType = newValue ? .pomodoro : .standard
                 }
             }
@@ -670,81 +670,82 @@ struct AddEventView: View {
     // MARK: - Pomodoro Section
 
     private var pomodoroSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            sectionLabel("Pomodoro")
+        // Birman: no sectionLabel("Pomodoro") here — the toggle row above
+        // already says "Run as Pomodoro" with a timer icon. Three labels
+        // for the same concept on one screen is two too many. The outer
+        // VStack that used to host that label is also gone — its only
+        // remaining child is the parameter stack below.
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            Grid(alignment: .leading, horizontalSpacing: DS.Spacing.md, verticalSpacing: DS.Spacing.sm) {
+                GridRow {
+                    Label("Work: \(pomodoroWork)\u{00A0}min", systemImage: "brain.head.profile")
+                        .foregroundStyle(skin.resolvedTextPrimary)
+                        .gridColumnAlignment(.leading)
+                    Stepper("Work duration", value: $pomodoroWork, in: 1...90)
+                        .labelsHidden()
+                }
 
-            VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                Grid(alignment: .leading, horizontalSpacing: DS.Spacing.md, verticalSpacing: DS.Spacing.sm) {
+                GridRow {
+                    Label("Rounds: \(pomodoroRounds)", systemImage: "arrow.trianglehead.2.counterclockwise")
+                        .foregroundStyle(skin.resolvedTextPrimary)
+                    Stepper("Number of rounds", value: $pomodoroRounds, in: 1...12)
+                        .labelsHidden()
+                }
+
+                if pomodoroRounds > 1 {
                     GridRow {
-                        Label("Work: \(pomodoroWork)\u{00A0}min", systemImage: "brain.head.profile")
+                        Label("Break: \(pomodoroBreak)\u{00A0}min", systemImage: "cup.and.saucer")
                             .foregroundStyle(skin.resolvedTextPrimary)
-                            .gridColumnAlignment(.leading)
-                        Stepper("Work duration", value: $pomodoroWork, in: 1...90)
+                        Stepper("Break duration", value: $pomodoroBreak, in: 1...30)
                             .labelsHidden()
                     }
 
                     GridRow {
-                        Label("Rounds: \(pomodoroRounds)", systemImage: "arrow.trianglehead.2.counterclockwise")
-                            .foregroundStyle(skin.resolvedTextPrimary)
-                        Stepper("Number of rounds", value: $pomodoroRounds, in: 1...12)
-                            .labelsHidden()
-                    }
-
-                    if pomodoroRounds > 1 {
-                        GridRow {
-                            Label("Break: \(pomodoroBreak)\u{00A0}min", systemImage: "cup.and.saucer")
+                        Toggle(isOn: $pomodoroLongBreakEnabled) {
+                            Label("Long break", systemImage: "moon.zzz")
                                 .foregroundStyle(skin.resolvedTextPrimary)
-                            Stepper("Break duration", value: $pomodoroBreak, in: 1...30)
+                        }
+                        Color.clear
+                    }
+
+                    if pomodoroLongBreakEnabled {
+                        GridRow {
+                            Label("Duration: \(pomodoroLongBreak)\u{00A0}min", systemImage: "moon.zzz")
+                                .foregroundStyle(skin.resolvedTextPrimary)
+                                .padding(.leading, DS.Spacing.lg)
+                            Stepper("Long break duration", value: $pomodoroLongBreak, in: 5...60, step: 5)
                                 .labelsHidden()
                         }
-
-                        GridRow {
-                            Toggle(isOn: $pomodoroLongBreakEnabled) {
-                                Label("Long break", systemImage: "moon.zzz")
-                                    .foregroundStyle(skin.resolvedTextPrimary)
-                            }
-                            Color.clear
-                        }
-
-                        if pomodoroLongBreakEnabled {
-                            GridRow {
-                                Label("Duration: \(pomodoroLongBreak)\u{00A0}min", systemImage: "moon.zzz")
-                                    .foregroundStyle(skin.resolvedTextPrimary)
-                                    .padding(.leading, DS.Spacing.lg)
-                                Stepper("Long break duration", value: $pomodoroLongBreak, in: 5...60, step: 5)
-                                    .labelsHidden()
-                            }
-                        }
                     }
                 }
-
-                // Visual timeline
-                pomodoroTimeline
-                    .padding(.vertical, DS.Spacing.md)
-                    .animation(skin.resolvedMicroAnimation, value: pomodoroWork)
-                    .animation(skin.resolvedMicroAnimation, value: pomodoroBreak)
-                    .animation(skin.resolvedMicroAnimation, value: pomodoroRounds)
-                    .animation(skin.resolvedMicroAnimation, value: pomodoroLongBreakEnabled)
-                    .animation(skin.resolvedMicroAnimation, value: pomodoroLongBreak)
-
-                HStack {
-                    Label(
-                        "Total: \(DS.formatMinutes(pomodoroTotalMinutes))",
-                        systemImage: "clock"
-                    )
-                    .font(.caption)
-                    .foregroundStyle(skin.resolvedTextSecondary)
-
-                    Spacer()
-
-                    Link("Learn about Pomodoro combinations", destination: URL(string: "https://github.com/avpv/bubo/blob/HEAD/docs/Pomodoro.md")!)
-                        .font(.caption)
-                        .foregroundStyle(skin.accentColor)
-                        .accessibilityHint("Opens in your web browser")
-                }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+
+            // Visual timeline
+            pomodoroTimeline
+                .padding(.vertical, DS.Spacing.md)
+                .animation(skin.resolvedMicroAnimation, value: pomodoroWork)
+                .animation(skin.resolvedMicroAnimation, value: pomodoroBreak)
+                .animation(skin.resolvedMicroAnimation, value: pomodoroRounds)
+                .animation(skin.resolvedMicroAnimation, value: pomodoroLongBreakEnabled)
+                .animation(skin.resolvedMicroAnimation, value: pomodoroLongBreak)
+
+            HStack {
+                Label(
+                    "Total: \(DS.formatMinutes(pomodoroTotalMinutes))",
+                    systemImage: "clock"
+                )
+                .font(.caption)
+                .foregroundStyle(skin.resolvedTextSecondary)
+
+                Spacer()
+
+                Link("Learn about Pomodoro combinations", destination: URL(string: "https://github.com/avpv/bubo/blob/HEAD/docs/Pomodoro.md")!)
+                    .font(.caption)
+                    .foregroundStyle(skin.accentColor)
+                    .accessibilityHint("Opens in your web browser")
+            }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Pomodoro Timeline Preview

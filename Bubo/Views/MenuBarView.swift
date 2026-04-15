@@ -385,6 +385,50 @@ struct MenuBarView: View {
         }
     }
 
+    // MARK: - Convert to Pomodoro
+    //
+    // Direct mutation with smart defaults — no form. The user clicks
+    // "Convert to Pomodoro" in the row's context menu and the event is
+    // immediately converted to a Pomodoro session sized for its current
+    // duration (see `PomodoroDefaults.suggested(for:)`). An undo toast
+    // restores the original event in one click.
+    //
+    // HIG/Birman: don't open a form for a transformation the machine can
+    // do correctly on its own. The user only needs to confirm or undo.
+    private func convertEventToPomodoro(_ event: CalendarEvent) {
+        let originalSnapshot = event
+        let durationMinutes = max(0, Int(event.endDate.timeIntervalSince(event.startDate) / 60))
+        let defaults = PomodoroDefaults.suggested(for: durationMinutes)
+
+        var converted = event
+        converted.eventType = .pomodoro
+        // Pomodoro events store the *first segment* in start/end; the
+        // recurrence rule expands the rest. Mirrors `buildPomodoroRule`
+        // / Pomodoro save logic in AddEventView.
+        converted.endDate = event.startDate.addingTimeInterval(TimeInterval(defaults.work * 60))
+        converted.recurrenceRule = RecurrenceRule(
+            frequency: .minutely,
+            interval: defaults.cycleMinutes,
+            end: .afterCount(defaults.rounds),
+            pomodoroMode: true,
+            pomodoroLongBreak: defaults.longBreak
+        )
+
+        Haptics.impact()
+        reminderService.updateLocalEvent(converted)
+
+        // Toast message reads as one human sentence: "Pomodoro: 4 × 25 min".
+        // The undo restores the original event verbatim — eventType,
+        // endDate, recurrenceRule — by re-applying the snapshot.
+        toastState.showSuccess(
+            "Pomodoro: \(defaults.rounds) \u{00D7} \(defaults.work)\u{00A0}min",
+            icon: "timer",
+            onUndo: { [reminderService] in
+                reminderService.updateLocalEvent(originalSnapshot)
+            }
+        )
+    }
+
     /// Create a focus block directly in the given slot, bypassing the optimizer.
     /// Same pattern as handleTaskDrop — direct event creation + undo toast.
     private func fillSlotWithFocus(start: Date, end: Date) {
@@ -1130,11 +1174,7 @@ struct MenuBarView: View {
                         }
                     },
                     onConvertToPomodoro: { event in
-                        // Route through edit form so the user reviews work/
-                        // break/rounds defaults instead of a silent mutation.
-                        // `initialType: .pomodoro` is honoured by AddEventView
-                        // even when `editingEvent` is set (see init logic).
-                        navigation = .addEvent(editing: event, initialType: .pomodoro)
+                        convertEventToPomodoro(event)
                     },
                     isFreshlyCreated: optimizerService.freshlyCreatedEventIds.contains(event.id)
                 )
@@ -1313,13 +1353,15 @@ struct MenuBarView: View {
                     Haptics.tap()
                     navigation = .addEvent()
                 } label: {
-                    Label("New Event", systemImage: "calendar.badge.plus")
+                    // HIG: surface keyboard shortcut hints in menu items so
+                    // users can graduate from clicking to typing.
+                    Label("New Event   \u{2318}N", systemImage: "calendar.badge.plus")
                 }
                 Button {
                     Haptics.tap()
                     focusTaskInput = true
                 } label: {
-                    Label("New Task", systemImage: "plus.circle")
+                    Label("New Task   \u{21E7}\u{2318}N", systemImage: "plus.circle")
                 }
             } label: {
                 Label("Add", systemImage: "plus")

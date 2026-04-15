@@ -223,6 +223,38 @@ struct QuickActionRanker {
 
     // MARK: - Candidates
 
+    /// Pick the focus-tile variant the user is most likely to want.
+    ///
+    /// We compare per-intent usage frequency for the two focus modes
+    /// ("focus" = ad-hoc focus block, "pomodoro" = structured session)
+    /// and surface the one with the higher count. Ties — and brand-new
+    /// users with no history — default to plain Focus, the more general
+    /// of the two. Once the user has run a few Pomodoro sessions, the
+    /// tile flips automatically.
+    ///
+    /// Birman: пусть машина запоминает, что любит пользователь, а не
+    /// заставляет его каждый раз выбирать из двух почти одинаковых.
+    private func focusVariantCandidate() -> QuickActionCandidate {
+        let focusFreq = intentLearner.intentFrequency["focus"] ?? 0
+        let pomodoroFreq = intentLearner.intentFrequency["pomodoro"] ?? 0
+        if pomodoroFreq > focusFreq {
+            return QuickActionCandidate(
+                id: "pomodoro",
+                label: "Pomodoro",
+                icon: "timer",
+                request: .pomodoroBlock(),
+                signal: .noFocusToday
+            )
+        }
+        return QuickActionCandidate(
+            id: "focus",
+            label: "Focus",
+            icon: "scope",
+            request: .findFocus(),
+            signal: .noFocusToday
+        )
+    }
+
     /// All possible quick actions. Each has a context signal that determines relevance.
     private func generateCandidates() -> [QuickActionCandidate] {
         let schedulable = backlogService.schedulable
@@ -242,25 +274,12 @@ struct QuickActionRanker {
                 request: .scheduleBacklog,
                 signal: .pendingTasks
             ),
-            QuickActionCandidate(
-                id: "focus",
-                label: "Focus",
-                icon: "scope",
-                request: .findFocus(),
-                signal: .noFocusToday
-            ),
-            // Pomodoro is a structured form of focus — same `noFocusToday`
-            // signal, distinct candidate so the user sees both options and
-            // the IntentLearner can learn which they prefer over time.
-            // Without this, Pomodoro was only reachable via free-text search
-            // in the palette (discoverability bug raised in UX review).
-            QuickActionCandidate(
-                id: "pomodoro",
-                label: "Pomodoro",
-                icon: "timer",
-                request: .pomodoroBlock(),
-                signal: .noFocusToday
-            ),
+            // ONE focus tile — Pomodoro or plain Focus — chosen by the
+            // user's history. Birman: don't show two options for the same
+            // user need; pick the one the user actually uses. New users
+            // (no history) see "Focus" as the safer default; once they
+            // start running Pomodoro sessions, the tile flips to Pomodoro.
+            focusVariantCandidate(),
             QuickActionCandidate(
                 id: "organize",
                 label: "Organize",

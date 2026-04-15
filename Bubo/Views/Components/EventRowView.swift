@@ -213,11 +213,15 @@ struct EventRowView: View {
                     }
                 }
 
-                // Convert a standard local event into Pomodoro. Hidden when
-                // the event is already a Pomodoro session or when it's
-                // backed by an external calendar (we don't mutate other
-                // calendars' events).
+                // Convert a standard local event into Pomodoro. Hidden when:
+                // - the event is already a Pomodoro session,
+                // - it's a task (different conversion path),
+                // - it's backed by an external calendar (we don't mutate
+                //   other calendars' events),
+                // - or it's shorter than one full Pomodoro work segment
+                //   (`PomodoroDefaults.minimumConvertibleMinutes`).
                 if event.eventType == .standard, !event.isTask,
+                   event.endDate.timeIntervalSince(event.startDate) >= TimeInterval(PomodoroDefaults.minimumConvertibleMinutes * 60),
                    let onConvertToPomodoro {
                     Button {
                         onConvertToPomodoro(event)
