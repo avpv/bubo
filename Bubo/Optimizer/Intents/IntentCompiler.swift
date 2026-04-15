@@ -565,7 +565,10 @@ private extension IntentCompiler {
         case .deadlineWithin(let days):
             let cutoff = cal.date(byAdding: .day, value: days, to: now) ?? now
             return backlogService.tasks.contains {
-                $0.status != .done && $0.deadline != nil && $0.deadline! <= cutoff
+                $0.status != .done
+                    && $0.status != .frozen
+                    && $0.deadline != nil
+                    && $0.deadline! <= cutoff
             }
 
         case .afterHour(let hour):

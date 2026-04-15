@@ -323,6 +323,10 @@ final class RemindersSyncService {
             let activeCalendarItemIds = Set(reminders.map(\.calendarItemIdentifier))
             let linkedActive = backlogService.tasks.filter { task in
                 guard task.status != .done else { return false }
+                // Frozen tasks are the user's "set aside" state — don't let an
+                // external delete silently complete them. They already skip
+                // active sync via this filter.
+                guard task.status != .frozen else { return false }
                 return task.id.hasPrefix("reminder_") || task.reminderCalendarItemId != nil
             }
             for task in linkedActive {
