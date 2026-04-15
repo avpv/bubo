@@ -1,6 +1,52 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+// MARK: - Task List Expansion
+
+/// Three-state disclosure for the Tasks card.
+///
+/// - `.collapsed`: только хедер, список полностью скрыт.
+/// - `.compact`: максимум 4 строки видны, остальные — внутренним скроллом.
+///   Сохраняет место под таймлайн ниже карточки.
+/// - `.expanded`: полностью раскрыт до `fullyExpandedMaxHeight`, пользователь
+///   осознанно жертвует видимостью таймлайна ради полного списка.
+///
+/// Birman: один триггер (шеврон) переключает состояния — без дублирующих
+/// кнопок «Show more» / «Show fewer».
+enum TaskListExpansion: Equatable, Hashable {
+    case collapsed
+    case compact
+    case expanded
+
+    /// Next state in the round-trip cycle.
+    var next: TaskListExpansion {
+        switch self {
+        case .collapsed: return .compact
+        case .compact:   return .expanded
+        case .expanded:  return .collapsed
+        }
+    }
+
+    /// SF Symbol for the disclosure chevron.
+    /// One arrow = стандартное раскрытие; двойная стрелка = «раскрыто
+    /// полностью».
+    var iconName: String {
+        switch self {
+        case .collapsed: return "chevron.right"
+        case .compact:   return "chevron.down"
+        case .expanded:  return "chevron.down.2"
+        }
+    }
+
+    var accessibilityHint: String {
+        switch self {
+        case .collapsed: return "Show tasks"
+        case .compact:   return "Show all tasks"
+        case .expanded:  return "Hide tasks"
+        }
+    }
+}
+
 // MARK: - Backlog View
 
 /// Inline backlog panel for the main screen.
@@ -41,8 +87,14 @@ struct BacklogView: View {
     @Environment(\.backlogCoordinator) private var coordinator
 
     @State private var newTaskTitle = ""
-    @State private var isExpanded = false
+    /// Three-state disclosure for the task list.
+    /// Birman: «информация важнее украшений» — шеврон сам несёт три смысла
+    /// (collapsed / compact / expanded), без дублирующей кнопки «Show more».
+    @State private var expansion: TaskListExpansion = .collapsed
     @State private var editingTaskId: String? = nil
+    /// Hover state for the Schedule pill — HIG: primary actions should read as
+    /// buttons, so a subtle capsule фон появляется на наведении.
+    @State private var isScheduleHovering: Bool = false
     /// Textual ghost — complements the ghost block on the timeline so
     /// assistive technologies and compact layouts still get "Today 14:00".
     @State private var ghostPreviewText: String? = nil
@@ -57,42 +109,44 @@ struct BacklogView: View {
     /// Kept as a constant so tests and the ghost preview agree.
     static let defaultTaskDurationMinutes: Int = 60
 
-    /// Maximum number of task rows visible in the expanded state.
+    /// Maximum number of task rows visible in the compact expansion state.
     /// A height-capped ScrollView keeps the timeline reachable.
     private static let maxExpandedTasks = 4
 
-    /// Estimated height of a context group header inside the task list
-    /// (caption2 text + top/bottom padding).
-    private static let contextHeaderEstimatedHeight: CGFloat =
-        DS.Spacing.sm + 14 + DS.Spacing.xxs // 24pt
+    /// Hard ceiling for the fully-expanded state so the timeline below always
+    /// retains a usable strip. Generous enough for ~10–11 rows; anything
+    /// longer falls back to internal scrolling.
+    private static let fullyExpandedMaxHeight: CGFloat = 520
 
     private var activeTasks: [BacklogTask] {
         backlogService.tasks.filter { $0.status != .done }
     }
 
-    /// Height cap for the expanded ScrollView. Sums the first
-    /// `maxExpandedTasks` row heights plus any context group headers
-    /// that appear among them, so the visible area always fits 4 task rows.
-    private var expandedScrollMaxHeight: CGFloat {
-        let grouped = backlogService.groupedByContext
+    /// Height cap for the task list ScrollView.
+    ///
+    /// - `.compact`: sums the first `maxExpandedTasks` row heights so the
+    ///   visible area always fits 4 task rows, keeping the timeline reachable.
+    /// - `.expanded`: `min(contentHeight, fullyExpandedMaxHeight)` — shows
+    ///   every task up to a generous cap, longer lists scroll internally.
+    /// - `.collapsed`: zero (list hidden entirely).
+    private var scrollMaxHeight: CGFloat {
         // Row height estimate: backlogRowHeight is the frame minHeight (44pt)
         // but the two-line content + vertical padding can push the actual
         // height a few points higher depending on platform font metrics.
         let rowHeight = DS.Size.backlogRowHeight + DS.Spacing.xs // 48pt
-        var totalHeight: CGFloat = 0
-        var tasksSeen = 0
-        for group in grouped {
-            if tasksSeen >= Self.maxExpandedTasks { break }
-            let active = group.tasks.filter { $0.status != .done }
-            guard !active.isEmpty else { continue }
-            if group.context != nil {
-                totalHeight += Self.contextHeaderEstimatedHeight
-            }
-            let count = min(active.count, Self.maxExpandedTasks - tasksSeen)
-            totalHeight += rowHeight * CGFloat(count)
-            tasksSeen += count
+        let activeCount = activeTasks.count
+        guard activeCount > 0 else { return 0 }
+
+        switch expansion {
+        case .collapsed:
+            return 0
+        case .compact:
+            let visible = min(activeCount, Self.maxExpandedTasks)
+            return rowHeight * CGFloat(visible)
+        case .expanded:
+            let content = rowHeight * CGFloat(activeCount)
+            return min(content, Self.fullyExpandedMaxHeight)
         }
-        return totalHeight
     }
 
     /// Duration to use for ghost-preview lookup and for the task actually
@@ -130,7 +184,7 @@ struct BacklogView: View {
         }
         .onAppear {
             if autoExpand && !activeTasks.isEmpty {
-                isExpanded = true
+                expansion = .compact
             }
         }
         .onDisappear {
@@ -146,13 +200,14 @@ struct BacklogView: View {
         HStack(spacing: DS.Spacing.sm) {
             Button {
                 withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-                    isExpanded.toggle()
+                    expansion = expansion.next
                 }
             } label: {
                 HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                    Image(systemName: expansion.iconName)
                         .font(.caption2)
                         .foregroundStyle(skin.resolvedTextSecondary)
+                        .contentTransition(.symbolEffect(.replace))
                     Text("Tasks")
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(skin.resolvedTextPrimary)
@@ -165,96 +220,103 @@ struct BacklogView: View {
                     } else {
                         // Birman: one signal, not two competing numbers. Show
                         // the urgent count when it matters, total otherwise.
+                        // Плоская цифра без капсулы — капсула оставлена
+                        // только для urgent, где она несёт тревожный акцент.
                         Text("\(activeTasks.count)")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(skin.resolvedTextSecondary)
-                            .padding(.horizontal, DS.Spacing.sm)
-                            .padding(.vertical, DS.Spacing.xxs)
-                            .adaptiveBadgeFill(skin.resolvedTextSecondary)
-                            .clipShape(Capsule())
+                            .font(.subheadline.weight(.regular))
+                            .foregroundStyle(skin.resolvedTextTertiary)
                             .contentTransition(.numericText())
                     }
                 }
             }
             .buttonStyle(.plain)
+            .help(expansion.accessibilityHint)
 
             Spacer()
 
             if !activeTasks.isEmpty {
-                Button("Schedule") {
-                    onScheduleTasks()
-                }
-                .font(.caption.weight(.medium))
-                .buttonStyle(.plain)
-                .foregroundStyle(skin.accentColor)
+                scheduleButton
             }
         }
         .padding(.horizontal, DS.Spacing.sm)
         .padding(.vertical, DS.Spacing.sm)
     }
 
+    /// HIG: главное действие должно читаться как кнопка. Tint + hover-капсула
+    /// дают affordance без тяжёлой заливки на покое.
+    private var scheduleButton: some View {
+        Button {
+            onScheduleTasks()
+        } label: {
+            Text("Schedule")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(skin.accentColor)
+                .padding(.horizontal, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xxs)
+                .background {
+                    Capsule()
+                        .fill(skin.accentColor.opacity(isScheduleHovering ? 0.14 : 0))
+                }
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
+                isScheduleHovering = hovering
+            }
+        }
+    }
+
     // MARK: - Task List
     //
-    // Collapsed (isExpanded = false): no task rows — only the header
-    // is visible, keeping the card minimal.
+    // Three-state disclosure, driven by `expansion`:
     //
-    // Expanded (isExpanded = true): a height-capped ScrollView wraps
-    // all rows so the user can browse long lists without pushing the
-    // Timeline off screen.  The cap is sized for `maxExpandedTasks`
-    // (4) rows plus any context group headers, keeping free slots
-    // reachable for drag-to-schedule.
+    // - .collapsed: no task rows — only the header is visible,
+    //   keeping the card minimal.
+    // - .compact: a height-capped ScrollView, ~4 rows visible, the rest
+    //   reached by internal scroll. Preserves the timeline strip below.
+    // - .expanded: cap raised to `fullyExpandedMaxHeight` (~10–11 rows);
+    //   the user explicitly traded timeline space for full visibility.
+    //
+    // Birman: один шеврон-триггер несёт все три смысла, без дублирующей
+    // кнопки «Show more».
 
     private var taskList: some View {
         let allTasks = activeTasks
 
         return VStack(spacing: 0) {
-            if isExpanded {
+            if expansion != .collapsed {
                 if !hasDragged && !allTasks.isEmpty {
                     dragDiscoveryHint
                 }
 
-                // Expanded — height-capped ScrollView, max 4 rows visible.
                 ScrollView {
                     VStack(spacing: 0) {
                         taskRowsContent(visibleIDs: nil)
                     }
                 }
                 .scrollIndicators(.automatic)
-                .frame(maxHeight: expandedScrollMaxHeight)
-                // Birman: удалена «Show fewer» — chevron в хедере уже делает
-                // ровно то же самое; два элемента для одной функции = шум.
+                .frame(maxHeight: scrollMaxHeight)
             }
         }
         .padding(.horizontal, DS.Spacing.sm)
         .motionAwareAnimation(DS.Animation.standard, value: activeTasks.map(\.id), reduceMotion: reduceMotion)
-        .motionAwareAnimation(DS.Animation.standard, value: isExpanded, reduceMotion: reduceMotion)
+        .motionAwareAnimation(DS.Animation.standard, value: expansion, reduceMotion: reduceMotion)
     }
 
     /// Renders grouped task rows. When `visibleIDs` is nil all tasks
     /// are rendered; otherwise only tasks whose id is in the set appear.
+    ///
+    /// Context-group headers are intentionally hidden: a single typographic
+    /// voice for the list reduces visual competition with task titles.
+    /// Grouping still drives ordering via `groupedByContext`, and each row
+    /// already surfaces its context in the subtitle.
     @ViewBuilder
     private func taskRowsContent(visibleIDs: Set<String>?) -> some View {
         let ids = visibleIDs ?? Set(activeTasks.map(\.id))
         let grouped = backlogService.groupedByContext
 
         ForEach(grouped, id: \.context) { group in
-            let groupHasVisibleTasks = group.tasks.contains { ids.contains($0.id) }
-
-            if let context = group.context, groupHasVisibleTasks {
-                // Birman: one typographic voice for quiet subheads —
-                // context-group headers share it with `SectionLabel` and
-                // `DaySectionHeader`, preserved via smaller caption2 weight.
-                Text(context)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(skin.resolvedTextTertiary)
-                    .textCase(.uppercase)
-                    .tracking(0.3)
-                    .padding(.horizontal, DS.Spacing.sm)
-                    // Symmetric top/bottom: the group header breathes evenly
-                    // against the surrounding rows. Previously 8/2 — uneven.
-                    .padding(.vertical, DS.Spacing.xs)
-            }
-
             ForEach(group.tasks) { task in
                 if ids.contains(task.id) {
                     if editingTaskId == task.id {
@@ -600,7 +662,9 @@ struct BacklogView: View {
         )
         withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
             backlogService.addTask(task)
-            isExpanded = true
+            if expansion == .collapsed {
+                expansion = .compact
+            }
         }
         newTaskTitle = ""
         ghostPreviewText = nil
