@@ -19,6 +19,10 @@ struct CalendarsTabView: View {
             .padding(DS.Spacing.xl)
         }
         .onAppear {
+            // Pull fresh status from the system — the ViewModel's cached value
+            // can be stale if the user changed permission in System Settings
+            // while the app was running.
+            viewModel.refreshCalendarAuthStatus()
             if viewModel.appleCalendarAccessGranted && viewModel.availableAppleCalendars.isEmpty {
                 viewModel.loadAppleCalendars()
             }
