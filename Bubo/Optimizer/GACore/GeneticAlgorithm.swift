@@ -84,6 +84,14 @@ struct GAConfiguration: Sendable {
     /// different neighbourhood.
     var chcRestartMutationRate: Double
 
+    /// When true, initial individuals get `selfAdaptiveMutationRate =
+    /// mutationRate`, and every mutation perturbs that value. Chromosomes
+    /// whose rates produced better fitness propagate their rates through
+    /// crossover, so the population's effective mutation rate drifts
+    /// toward whatever is working for the current landscape — no manual
+    /// tuning of `mutationRate` per workload.
+    var selfAdaptiveRates: Bool
+
     /// Memberwise init with defaults for new parameters so existing call sites compile unchanged.
     init(
         populationSize: Int,
@@ -112,7 +120,8 @@ struct GAConfiguration: Sendable {
         memeticHillClimbSteps: Int = 5,
         chcMaxRestarts: Int = 0,
         chcRestartEliteFraction: Double = 0.15,
-        chcRestartMutationRate: Double = 0.35
+        chcRestartMutationRate: Double = 0.35,
+        selfAdaptiveRates: Bool = false
     ) {
         self.populationSize = populationSize
         self.maxGenerations = maxGenerations
@@ -141,6 +150,7 @@ struct GAConfiguration: Sendable {
         self.chcMaxRestarts = chcMaxRestarts
         self.chcRestartEliteFraction = chcRestartEliteFraction
         self.chcRestartMutationRate = chcRestartMutationRate
+        self.selfAdaptiveRates = selfAdaptiveRates
     }
 
     static let `default` = GAConfiguration(
@@ -243,7 +253,8 @@ struct GAConfiguration: Sendable {
         memeticHillClimbSteps: 10,
         chcMaxRestarts: 2,
         chcRestartEliteFraction: 0.15,
-        chcRestartMutationRate: 0.35
+        chcRestartMutationRate: 0.35,
+        selfAdaptiveRates: true
     )
 
     /// Per-island config for island model GA. Smaller populations per island
@@ -356,6 +367,21 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         // Random individuals
         for _ in 0..<randomCount {
             individuals.append(C.random(context: context))
+        }
+
+        // Bootstrap self-adaptive rates, when enabled, on every AdaptiveMutation
+        // chromosome. Starting them at the config's baseline rate means evolution
+        // can only improve from there — the initial behaviour matches the old
+        // fixed-rate config, and drift into better rates is additive.
+        if config.selfAdaptiveRates {
+            for i in individuals.indices {
+                if var adaptive = individuals[i] as? ScheduleChromosome {
+                    adaptive.selfAdaptiveMutationRate = config.mutationRate
+                    if let casted = adaptive as? C {
+                        individuals[i] = casted
+                    }
+                }
+            }
         }
 
         return Population<C>(individuals: individuals, eliteCount: config.eliteCount)

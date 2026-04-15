@@ -63,8 +63,8 @@ enum Crossover {
         }
 
         return (
-            ScheduleChromosome(genes: child1Genes, needsEvaluation: true),
-            ScheduleChromosome(genes: child2Genes, needsEvaluation: true)
+            ScheduleChromosome.makeChild(genes: child1Genes, parents: (p1, p2), rng: rng),
+            ScheduleChromosome.makeChild(genes: child2Genes, parents: (p2, p1), rng: rng)
         )
     }
 
@@ -88,8 +88,8 @@ enum Crossover {
         }
 
         return (
-            ScheduleChromosome(genes: child1Genes, needsEvaluation: true),
-            ScheduleChromosome(genes: child2Genes, needsEvaluation: true)
+            ScheduleChromosome.makeChild(genes: child1Genes, parents: (p1, p2), rng: rng),
+            ScheduleChromosome.makeChild(genes: child2Genes, parents: (p2, p1), rng: rng)
         )
     }
 
@@ -158,8 +158,8 @@ enum Crossover {
         }
 
         return (
-            ScheduleChromosome(genes: child1Genes, needsEvaluation: true),
-            ScheduleChromosome(genes: child2Genes, needsEvaluation: true)
+            ScheduleChromosome.makeChild(genes: child1Genes, parents: (p1, p2), rng: rng),
+            ScheduleChromosome.makeChild(genes: child2Genes, parents: (p2, p1), rng: rng)
         )
     }
 

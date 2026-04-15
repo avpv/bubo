@@ -102,6 +102,14 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
     /// gene). Does not participate in equality/hashing.
     var lastMutationOperator: MutationOperator?
 
+    /// Self-adaptive mutation rate encoded directly in the genome. When > 0
+    /// it overrides the rate the GA would otherwise pass to `mutate(rate:)`,
+    /// and is itself perturbed on every mutation — so a chromosome descended
+    /// from individuals that benefited from higher rates will keep mutating
+    /// aggressively, and vice versa. 0 = disabled (the GA's externally-set
+    /// rate wins, preserving pre-existing behaviour).
+    var selfAdaptiveMutationRate: Double = 0
+
     /// Equality ignores needsEvaluation and caches — two chromosomes with the same genes and fitness are equal.
     static func == (lhs: ScheduleChromosome, rhs: ScheduleChromosome) -> Bool {
         lhs.genes == rhs.genes && lhs.fitness == rhs.fitness
@@ -334,9 +342,30 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         }
 
         return (
-            ScheduleChromosome(genes: child1Genes, needsEvaluation: true),
-            ScheduleChromosome(genes: child2Genes, needsEvaluation: true)
+            Self.makeChild(genes: child1Genes, parents: (self, other), rng: context.rng),
+            Self.makeChild(genes: child2Genes, parents: (other, self), rng: context.rng)
         )
+    }
+
+    /// Build a crossover child. Factored out so every crossover strategy
+    /// (singlePoint, twoPoint, uniform, dayBlock) propagates self-adaptive
+    /// parameters the same way: child.rate = mean(parents) jittered by ±5%.
+    /// Jitter keeps the rate-gene under selection pressure; without it the
+    /// whole population would converge on the mean almost immediately.
+    static func makeChild(
+        genes: [ScheduleGene],
+        parents: (ScheduleChromosome, ScheduleChromosome),
+        rng: GARandom
+    ) -> ScheduleChromosome {
+        var child = ScheduleChromosome(genes: genes, needsEvaluation: true)
+        let p1 = parents.0.selfAdaptiveMutationRate
+        let p2 = parents.1.selfAdaptiveMutationRate
+        if p1 > 0 || p2 > 0 {
+            let mean = (p1 + p2) / (p1 > 0 && p2 > 0 ? 2.0 : 1.0)
+            let jitter = rng.double(in: -0.05...0.05) * mean
+            child.selfAdaptiveMutationRate = min(0.8, max(0.01, mean + jitter))
+        }
+        return child
     }
 
     /// Strategy-aware crossover that delegates to the Crossover enum.
@@ -352,6 +381,21 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         let cal = context.calendar
         let horizonStart = context.planningHorizon.start
 
+        // Self-adaptive rate override. When the chromosome carries its own
+        // rate (inherited from parents or bootstrapped by the GA), perturb
+        // the rate first and then use the perturbed value as the *effective*
+        // mutation rate for this call. The small Gaussian-ish step keeps
+        // neighbourhood size under control — ±0.02 per step is big enough
+        // to drift but small enough that a good rate isn't lost in one draw.
+        let effectiveRate: Double
+        if selfAdaptiveMutationRate > 0 {
+            let delta = context.rng.double(in: -0.02...0.02)
+            selfAdaptiveMutationRate = min(0.8, max(0.01, selfAdaptiveMutationRate + delta))
+            effectiveRate = selfAdaptiveMutationRate
+        } else {
+            effectiveRate = rate
+        }
+
         // If a bandit is wired, choose one operator for this entire call and
         // use it for every gene that gets selected. The feedback loop works
         // at call granularity (pre vs. post fitness), so per-gene operator
@@ -362,7 +406,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         lastMutationOperator = bandedOperator
 
         for i in genes.indices {
-            guard context.rng.bool(probability: rate) else { continue }
+            guard context.rng.bool(probability: effectiveRate) else { continue }
 
             changed.insert(i)
 
