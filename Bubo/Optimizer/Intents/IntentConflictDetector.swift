@@ -16,6 +16,7 @@ enum IntentConflictDetector {
         let severity: Severity
         let message: String
         let involvedIndices: [Int]  // indices into the intents array
+        var resolutions: [ActionableResolution] = []
 
         enum Severity: Sendable {
             case error    // contradictory — will produce bad results
@@ -58,10 +59,18 @@ enum IntentConflictDetector {
         }()
 
         for (category, entries) in byCategory where entries.count > 1 {
+            var resolutions: [ActionableResolution] = []
+            for (_, intent) in entries {
+                resolutions.append(ActionableResolution(
+                    title: "Keep '\(intent.label)'",
+                    modifier: OptimizationRequest(intent)
+                ))
+            }
             conflicts.append(Conflict(
                 severity: .warning,
                 message: "Multiple \(category) settings — only the last applies",
-                involvedIndices: entries.map(\.0)
+                involvedIndices: entries.map(\.0),
+                resolutions: resolutions
             ))
         }
 
@@ -83,10 +92,19 @@ enum IntentConflictDetector {
             }
             let windowMinutes = (afterHour - beforeHour) * 60
             if windowMinutes > 0 && neededMinutes > windowMinutes {
+                var resolutions: [ActionableResolution] = []
+                let requiredHours = Int(ceil(Double(neededMinutes) / 60.0))
+                if beforeHour + requiredHours <= 24 {
+                    resolutions.append(ActionableResolution(
+                        title: "Expand window to \(requiredHours)h",
+                        modifier: OptimizationRequest(.workingHours(start: beforeHour, end: beforeHour + requiredHours))
+                    ))
+                }
                 conflicts.append(Conflict(
                     severity: .error,
                     message: "\(neededMinutes)m block won't fit in \(windowMinutes)m window",
-                    involvedIndices: [i]
+                    involvedIndices: [i],
+                    resolutions: resolutions
                 ))
             }
         }

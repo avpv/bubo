@@ -269,13 +269,13 @@ enum OptimizationResult: Sendable {
     case success(OptimizerResult)
     case noEventsToOptimize
     case infeasible(reason: String, snapshot: ScheduleSnapshot? = nil, resolutions: [ActionableResolution] = [])
-    case partialSuccess(OptimizerResult, warnings: [String])
+    case partialSuccess(OptimizerResult, warnings: [String], resolutions: [ActionableResolution] = [])
 
     var errorMessage: String? {
         switch self {
         case .noEventsToOptimize: return "No events to optimize"
         case .infeasible(let reason, _, _): return reason
-        case .partialSuccess(_, let warnings): return warnings.first
+        case .partialSuccess(_, let warnings, _): return warnings.first
         case .success: return nil
         }
     }
@@ -283,7 +283,7 @@ enum OptimizationResult: Sendable {
     var optimizerResult: OptimizerResult? {
         switch self {
         case .success(let r): return r
-        case .partialSuccess(let r, _): return r
+        case .partialSuccess(let r, _, _): return r
         default: return nil
         }
     }

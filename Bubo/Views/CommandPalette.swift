@@ -44,14 +44,14 @@ struct CommandPalette: View {
     private enum Phase: Equatable {
         case picking
         case working(String)
-        case applied([EventInfo])
+        case applied([EventInfo], resolutions: [ActionableResolution])
         case failed(message: String, resolutions: [ActionableResolution])
 
         static func == (lhs: Phase, rhs: Phase) -> Bool {
             switch (lhs, rhs) {
             case (.picking, .picking): return true
             case (.working(let a), .working(let b)): return a == b
-            case (.applied(let a), .applied(let b)): return a == b
+            case (.applied(let a, _), .applied(let b, _)): return a == b
             case (.failed(let a, _), .failed(let b, _)): return a == b
             default: return false
             }
@@ -286,7 +286,7 @@ struct CommandPalette: View {
                 switch phase {
                 case .picking: pickingContent
                 case .working(let label): statusView(label)
-                case .applied(let events): appliedView(events)
+                case .applied(let events, let resolutions): appliedView(events, resolutions: resolutions)
                 case .failed(let message, let resolutions): failedView(message, resolutions: resolutions)
                 }
             }
@@ -468,13 +468,29 @@ struct CommandPalette: View {
             // Conflicts
             if !conflicts.isEmpty {
                 ForEach(conflicts) { conflict in
-                    HStack(spacing: DS.Spacing.xs) {
-                        Image(systemName: conflict.severity == .error ? "xmark.circle.fill" : "info.circle.fill")
-                            .font(.caption2)
-                            .foregroundStyle(conflict.severity == .error ? skin.resolvedDestructiveColor : skin.resolvedTextTertiary)
-                        Text(conflict.message)
-                            .font(.caption2)
-                            .foregroundStyle(skin.resolvedTextSecondary)
+                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                        HStack(spacing: DS.Spacing.xs) {
+                            Image(systemName: conflict.severity == .error ? "xmark.circle.fill" : "info.circle.fill")
+                                .font(.caption2)
+                                .foregroundStyle(conflict.severity == .error ? skin.resolvedDestructiveColor : skin.resolvedTextTertiary)
+                            Text(conflict.message)
+                                .font(.caption2)
+                                .foregroundStyle(skin.resolvedTextSecondary)
+                        }
+                        
+                        if !conflict.resolutions.isEmpty {
+                            FlowLayout(spacing: DS.Spacing.xs) {
+                                ForEach(conflict.resolutions) { res in
+                                    Button(res.title) {
+                                        var newReq = request
+                                        newReq.merge(res.modifier)
+                                        updateComposed(newReq)
+                                    }
+                                    .buttonStyle(.action(role: .secondary, size: .compact))
+                                }
+                            }
+                            .padding(.leading, 20)
+                        }
                     }
                 }
             }
@@ -606,7 +622,7 @@ struct CommandPalette: View {
         .padding(.vertical, DS.Spacing.xxl)
     }
 
-    private func appliedView(_ events: [EventInfo]) -> some View {
+    private func appliedView(_ events: [EventInfo], resolutions: [ActionableResolution]) -> some View {
         VStack(spacing: DS.Spacing.sm) {
             Image(systemName: "checkmark.circle.fill")
                 .font(.title)
@@ -621,6 +637,22 @@ struct CommandPalette: View {
                 Text(notice)
                     .font(.caption)
                     .foregroundStyle(DS.Colors.textTertiary)
+            }
+            
+            if !resolutions.isEmpty {
+                VStack(spacing: DS.Spacing.xs) {
+                    ForEach(resolutions) { res in
+                        Button(res.title) {
+                            var newReq = composedRequest ?? OptimizationRequest()
+                            newReq.merge(res.modifier)
+                            composedRequest = newReq
+                            showPowerMode = true
+                            runRequest(newReq)
+                        }
+                        .buttonStyle(.action(role: .secondary, size: .compact))
+                    }
+                }
+                .padding(.top, DS.Spacing.sm)
             }
         }
         .frame(maxWidth: .infinity)
@@ -714,14 +746,20 @@ struct CommandPalette: View {
                         EventInfo(id: g.eventId, title: g.title,
                                   timeRange: "\(fmt.string(from: g.startTime))–\(fmt.string(from: g.endTime))")
                     }
-                    if case .partialSuccess(_, let warnings) = result {
+                    let resList: [ActionableResolution]
+                    if case .partialSuccess(_, let warnings, let resolutions) = result {
                         appliedNotice = warnings.first
+                        resList = resolutions
+                    } else {
+                        resList = []
                     }
-                    phase = .applied(infos)
+                    phase = .applied(infos, resolutions: resList)
                     onApplied(request) { optimizerService.undoLast(reminderService: reminderService) }
                     Task { @MainActor in
-                        try? await Task.sleep(for: .seconds(1))
-                        onDismiss()
+                        if resList.isEmpty {
+                            try? await Task.sleep(for: .seconds(1))
+                            onDismiss()
+                        }
                     }
                 case .noEventsToOptimize:
                     phase = .failed(message: "Add tasks first", resolutions: [])

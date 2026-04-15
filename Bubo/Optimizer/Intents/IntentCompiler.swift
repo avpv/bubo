@@ -162,7 +162,23 @@ struct IntentCompiler {
             } else {
                 warnings.append("Planned \(planned) of \(total) tasks")
             }
-            return .partialSuccess(filteredResult, warnings: warnings)
+            
+            var resolutions: [ActionableResolution] = []
+            let currentEnd = config.workingHours.upperBound
+            if currentEnd < 23 {
+                resolutions.append(ActionableResolution(
+                    title: "Extend day to \(min(24, currentEnd + 2)):00",
+                    modifier: OptimizationRequest(.workingHours(start: config.workingHours.lowerBound, end: min(24, currentEnd + 2)))
+                ))
+            }
+            if config.horizon == .today && !config.overflowToTomorrow {
+                resolutions.append(ActionableResolution(
+                    title: "Allow overflow to tomorrow",
+                    modifier: OptimizationRequest(.overflowToTomorrow)
+                ))
+            }
+
+            return .partialSuccess(filteredResult, warnings: warnings, resolutions: resolutions)
         }
 
         return .success(filteredResult)

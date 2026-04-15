@@ -153,7 +153,7 @@ final class OptimizerService {
             selectedScenarioIndex = scenarios.isEmpty ? nil : 0
             lastOptimizationDate = Date()
 
-        case .partialSuccess(let optimizerResult, let warnings):
+        case .partialSuccess(let optimizerResult, let warnings, _):
             scenarios = optimizerResult.scenarios
             selectedScenarioIndex = scenarios.isEmpty ? nil : 0
             lastOptimizationDate = Date()
@@ -213,7 +213,7 @@ final class OptimizerService {
         compiler.energyCheckInService = energyCheckInService
         let result = await compiler.execute(request, defaultWorkingHours: workingHours)
         switch result {
-        case .success(let r), .partialSuccess(let r, _):
+        case .success(let r), .partialSuccess(let r, _, _):
             return r.scenarios.first?.genes
         default:
             return nil
