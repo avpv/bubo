@@ -44,21 +44,17 @@ enum IntentConflictDetector {
             ))
         }
 
-        // Redundancy checks (multiple of same category)
-        let byCategory: [String: [(Int, ScheduleIntent)]] = {
-            var result: [String: [(Int, ScheduleIntent)]] = [:]
-            for (i, intent) in intents.enumerated() {
-                switch intent {
-                case .speed: result["speed", default: []].append((i, intent))
-                case .horizon: result["horizon", default: []].append((i, intent))
-                case .stability: result["stability", default: []].append((i, intent))
-                default: break
-                }
+        // Redundancy checks — driven by ScheduleIntent.singleCardinalityKey so
+        // the detector and the suggestion composer agree on which families
+        // collapse to a single value.
+        var byCardinality: [IntentCardinalityKey: [(Int, ScheduleIntent)]] = [:]
+        for (i, intent) in intents.enumerated() {
+            if let key = intent.singleCardinalityKey {
+                byCardinality[key, default: []].append((i, intent))
             }
-            return result
-        }()
+        }
 
-        for (category, entries) in byCategory where entries.count > 1 {
+        for (key, entries) in byCardinality where entries.count > 1 {
             var resolutions: [ActionableResolution] = []
             for (_, intent) in entries {
                 resolutions.append(ActionableResolution(
@@ -68,7 +64,7 @@ enum IntentConflictDetector {
             }
             conflicts.append(Conflict(
                 severity: .warning,
-                message: "Multiple \(category) settings — only the last applies",
+                message: "Multiple \(key.rawValue) settings — only the last applies",
                 involvedIndices: entries.map(\.0),
                 resolutions: resolutions
             ))
