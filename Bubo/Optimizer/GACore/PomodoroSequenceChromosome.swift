@@ -25,7 +25,7 @@ struct PomodoroSequenceChromosome: Chromosome, Sendable {
     static func random(context: OptimizerContext) -> PomodoroSequenceChromosome {
         let count = context.movableEvents.count
         var sequence = Array(0..<count)
-        sequence.shuffle()
+        context.rng.shuffle(&sequence)
         return PomodoroSequenceChromosome(sequence: sequence, needsEvaluation: true)
     }
 
@@ -40,8 +40,8 @@ struct PomodoroSequenceChromosome: Chromosome, Sendable {
         let n = sequence.count
         guard n > 2 else { return (self, other) }
 
-        let child1 = orderCrossover(parent1: sequence, parent2: other.sequence)
-        let child2 = orderCrossover(parent1: other.sequence, parent2: sequence)
+        let child1 = Self.orderCrossover(parent1: sequence, parent2: other.sequence, rng: context.rng)
+        let child2 = Self.orderCrossover(parent1: other.sequence, parent2: sequence, rng: context.rng)
 
         return (
             PomodoroSequenceChromosome(sequence: child1, needsEvaluation: true),
@@ -50,10 +50,10 @@ struct PomodoroSequenceChromosome: Chromosome, Sendable {
     }
 
     /// OX1: copy a random segment from parent1, fill the rest from parent2 in order.
-    private func orderCrossover(parent1: [Int], parent2: [Int]) -> [Int] {
+    private static func orderCrossover(parent1: [Int], parent2: [Int], rng: GARandom) -> [Int] {
         let n = parent1.count
-        let start = Int.random(in: 0..<n)
-        let end = Int.random(in: start..<n)
+        let start = rng.int(in: 0..<n)
+        let end = rng.int(in: start..<n)
 
         var child = [Int](repeating: -1, count: n)
         let segment = Set(parent1[start...end])
@@ -78,21 +78,22 @@ struct PomodoroSequenceChromosome: Chromosome, Sendable {
 
     mutating func mutate(rate: Double, context: OptimizerContext) {
         guard sequence.count > 1 else { return }
+        let rng = context.rng
 
         for _ in sequence.indices {
-            guard Double.random(in: 0...1) < rate else { continue }
+            guard rng.bool(probability: rate) else { continue }
             needsEvaluation = true
 
-            if Bool.random() {
+            if rng.bool(probability: 0.5) {
                 // Swap mutation: exchange two random positions
-                let i = Int.random(in: 0..<sequence.count)
-                var j = Int.random(in: 0..<sequence.count)
-                while j == i { j = Int.random(in: 0..<sequence.count) }
+                let i = rng.int(in: 0..<sequence.count)
+                var j = rng.int(in: 0..<sequence.count)
+                while j == i { j = rng.int(in: 0..<sequence.count) }
                 sequence.swapAt(i, j)
             } else {
                 // Inversion mutation: reverse a random sub-segment
-                let i = Int.random(in: 0..<sequence.count)
-                let j = Int.random(in: i..<sequence.count)
+                let i = rng.int(in: 0..<sequence.count)
+                let j = rng.int(in: i..<sequence.count)
                 sequence[i...j].reverse()
             }
         }

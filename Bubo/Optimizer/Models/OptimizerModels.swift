@@ -132,6 +132,14 @@ struct ScheduleGene: Codable, Hashable, Sendable {
 // MARK: - Optimizer Context
 
 /// All data the optimizer needs to generate and evaluate schedules.
+///
+/// Note on determinism: `rng` is a reference-typed `GARandom` shared across
+/// every operator (mutation, crossover, selection, …) during a run. Passing
+/// a seeded RNG makes the whole optimization reproducible, which is what the
+/// benchmark/regression suite relies on. Default is `GARandom()` with a
+/// system-derived seed so production runs stay non-repetitive while still
+/// being internally deterministic (the seed is recoverable via `rng.seed`
+/// for replaying a failing run).
 struct OptimizerContext: Sendable {
     let fixedEvents: [CalendarEvent]
     let movableEvents: [OptimizableEvent]
@@ -140,6 +148,7 @@ struct OptimizerContext: Sendable {
     let preferences: OptimizerPreferences
     let participantAvailability: [String: [DateInterval]]  // participantId -> free slots
     let calendar: Calendar
+    let rng: GARandom
 
     init(
         fixedEvents: [CalendarEvent] = [],
@@ -151,7 +160,8 @@ struct OptimizerContext: Sendable {
         ),
         preferences: OptimizerPreferences = OptimizerPreferences(),
         participantAvailability: [String: [DateInterval]] = [:],
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        rng: GARandom = GARandom()
     ) {
         self.fixedEvents = fixedEvents
         self.movableEvents = movableEvents
@@ -160,6 +170,7 @@ struct OptimizerContext: Sendable {
         self.preferences = preferences
         self.participantAvailability = participantAvailability
         self.calendar = calendar
+        self.rng = rng
     }
 }
 

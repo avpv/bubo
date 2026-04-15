@@ -397,7 +397,7 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         // Use genotypic diversity for a more accurate diversity signal.
         // Fitness diversity can be misleading when different schedules have similar scores.
         // Fall back to fitness diversity when genotypic is expensive (large populations).
-        let genotypicDiv = population.size <= 100 ? population.genotypicDiversity : fitnessDiversity
+        let genotypicDiv = population.size <= 100 ? population.genotypicDiversity(rng: context.rng) : fitnessDiversity
         let diversityIsLow = genotypicDiv < config.diversityThreshold
 
         // Immigration: inject random individuals when diversity collapses
@@ -423,7 +423,8 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         while offspring.count < targetCount {
             let (idx1, idx2) = Selection.selectPairIndices(
                 from: population,
-                strategy: config.selectionStrategy
+                strategy: config.selectionStrategy,
+                rng: context.rng
             )
             let parent1 = population.individuals[idx1]
             let parent2 = population.individuals[idx2]
@@ -431,7 +432,7 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             var child1: C
             var child2: C
 
-            if Double.random(in: 0...1) < effectiveCrossoverRate {
+            if context.rng.bool(probability: effectiveCrossoverRate) {
                 (child1, child2) = parent1.crossover(with: parent2, strategy: config.crossoverStrategy, context: context)
             } else {
                 child1 = parent1
@@ -578,7 +579,7 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             if delta > 0 {
                 // Always accept improvements
                 current = neighbor
-            } else if temperature > 1e-6 && Double.random(in: 0...1) < exp(delta / temperature) {
+            } else if temperature > 1e-6 && context.rng.bool(probability: exp(delta / temperature)) {
                 // Accept worse solution with SA probability
                 current = neighbor
             }

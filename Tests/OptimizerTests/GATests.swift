@@ -1463,7 +1463,7 @@ struct SUSTests {
 
         // Select multiple times — should not crash
         for _ in 0..<50 {
-            let selected = Selection.select(from: pop, strategy: .stochasticUniversalSampling)
+            let selected = Selection.select(from: pop, strategy: .stochasticUniversalSampling, rng: context.rng)
             #expect(selected.fitness > 0)
         }
     }
@@ -1478,7 +1478,7 @@ struct SUSTests {
             pop.individuals[i].fitness = Double.random(in: 0.1...1.0)
         }
 
-        let (p1, p2) = Selection.selectPair(from: pop, strategy: .stochasticUniversalSampling)
+        let (p1, p2) = Selection.selectPair(from: pop, strategy: .stochasticUniversalSampling, rng: context.rng)
         #expect(p1.genes.count == 2)
         #expect(p2.genes.count == 2)
     }
@@ -2626,11 +2626,11 @@ struct GenotypicDistanceTests {
             individuals: Array(repeating: same, count: 10),
             eliteCount: 1
         )
-        let homDiv = homogeneous.genotypicDiversity
+        let homDiv = homogeneous.genotypicDiversity(rng: context.rng)
 
         // Diverse population: all different
         let diverse = Population<ScheduleChromosome>(size: 10, eliteCount: 1, context: context)
-        let divDiv = diverse.genotypicDiversity
+        let divDiv = diverse.genotypicDiversity(rng: context.rng)
 
         #expect(homDiv < divDiv || homDiv == 0,
                 "Homogeneous (\(homDiv)) should have less diversity than diverse (\(divDiv))")
@@ -3127,7 +3127,8 @@ struct GACoreRegressionTests {
         for _ in 0..<50 {
             let (i, j) = Selection.selectPairIndices(
                 from: pop,
-                strategy: .tournament(size: 3)
+                strategy: .tournament(size: 3),
+                rng: context.rng
             )
             #expect(i != j, "Pair indices must always be distinct")
         }
@@ -3141,7 +3142,8 @@ struct GACoreRegressionTests {
         pop.individuals[0].fitness = 0.5
         let (i, j) = Selection.selectPairIndices(
             from: pop,
-            strategy: .tournament(size: 2)
+            strategy: .tournament(size: 2),
+            rng: context.rng
         )
         #expect(i == 0 && j == 0, "Degenerate singleton must not crash")
     }
@@ -3220,5 +3222,113 @@ struct GACoreRegressionTests {
             distanceFn: { $0.distance(to: $1) }
         )
         #expect(pop.size == 4)
+    }
+}
+
+// MARK: - GARandom Tests
+
+@Suite("GARandom Tests")
+struct GARandomTests {
+
+    @Test("Same seed produces identical sequences")
+    func sameSeedSameSequence() {
+        let a = GARandom(seed: 42)
+        let b = GARandom(seed: 42)
+        for _ in 0..<100 {
+            #expect(a.nextRaw() == b.nextRaw(), "Same seed must yield identical streams")
+        }
+    }
+
+    @Test("Different seeds diverge quickly")
+    func differentSeedsDiverge() {
+        let a = GARandom(seed: 42)
+        let b = GARandom(seed: 43)
+        var diffs = 0
+        for _ in 0..<100 {
+            if a.nextRaw() != b.nextRaw() { diffs += 1 }
+        }
+        #expect(diffs > 95, "Seeds differing by 1 must produce nearly disjoint streams (got \(diffs)/100 differences)")
+    }
+
+    @Test("Split produces independent generator")
+    func splitProducesIndependentStream() {
+        let parent = GARandom(seed: 1234)
+        let child = parent.split()
+        // Child must not be a trivial alias: compare a few draws
+        var differences = 0
+        for _ in 0..<50 {
+            if parent.nextRaw() != child.nextRaw() { differences += 1 }
+        }
+        #expect(differences > 40, "Split child stream should diverge from parent")
+    }
+
+    @Test("Split sequence is deterministic")
+    func splitDeterministic() {
+        let p1 = GARandom(seed: 99)
+        let p2 = GARandom(seed: 99)
+        let c1 = p1.split()
+        let c2 = p2.split()
+        for _ in 0..<50 {
+            #expect(c1.nextRaw() == c2.nextRaw(),
+                    "Splitting two same-seeded parents must yield identical child streams")
+        }
+    }
+
+    @Test("double(in:) respects bounds")
+    func doubleInRange() {
+        let rng = GARandom(seed: 7)
+        for _ in 0..<1000 {
+            let v = rng.double(in: -5.0..<5.0)
+            #expect(v >= -5.0 && v < 5.0)
+        }
+    }
+
+    @Test("int(in:) closed range reaches both endpoints")
+    func intClosedReachesEndpoints() {
+        let rng = GARandom(seed: 11)
+        var sawMin = false
+        var sawMax = false
+        for _ in 0..<5000 {
+            let v = rng.int(in: 0...3)
+            if v == 0 { sawMin = true }
+            if v == 3 { sawMax = true }
+            #expect(v >= 0 && v <= 3)
+        }
+        #expect(sawMin && sawMax)
+    }
+
+    @Test("shuffle produces permutation")
+    func shufflePreservesElements() {
+        let rng = GARandom(seed: 2024)
+        var arr = Array(0..<100)
+        rng.shuffle(&arr)
+        #expect(Set(arr) == Set(0..<100), "Shuffle must preserve multiset of elements")
+    }
+
+    @Test("GA run with seeded context is reproducible")
+    func seededGARunIsReproducible() {
+        let events = (0..<6).map { makeMovableEvent(id: "t\($0)", durationMinutes: 30) }
+
+        func runOnce(seed: UInt64) -> Double {
+            let ctx = OptimizerContext(
+                movableEvents: events,
+                planningHorizon: DateInterval(
+                    start: Calendar.current.startOfDay(for: Date()),
+                    duration: 24 * 3600
+                ),
+                rng: GARandom(seed: seed)
+            )
+            let evaluator = FitnessEvaluator.standard(preferences: ctx.preferences)
+            let ga = GeneticAlgorithm<ScheduleChromosome>(
+                config: .quick,
+                context: ctx,
+                evaluate: { c in evaluator.evaluateAndAssign(&c, context: ctx) }
+            )
+            return ga.run().first?.rawFitness ?? 0
+        }
+
+        let a = runOnce(seed: 12345)
+        let b = runOnce(seed: 12345)
+        #expect(a == b, "Same seed, same inputs must give identical best fitness (got \(a) vs \(b))")
     }
 }

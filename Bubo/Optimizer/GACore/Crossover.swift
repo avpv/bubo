@@ -24,9 +24,9 @@ enum Crossover {
         case .singlePoint:
             return parent1.crossover(with: parent2, context: context)
         case .twoPoint:
-            return twoPointCrossover(parent1, parent2)
+            return twoPointCrossover(parent1, parent2, rng: context.rng)
         case .uniform(let prob):
-            return uniformCrossover(parent1, parent2, swapProbability: prob)
+            return uniformCrossover(parent1, parent2, swapProbability: prob, rng: context.rng)
         }
     }
 
@@ -34,12 +34,13 @@ enum Crossover {
 
     private static func twoPointCrossover(
         _ p1: ScheduleChromosome,
-        _ p2: ScheduleChromosome
+        _ p2: ScheduleChromosome,
+        rng: GARandom
     ) -> (ScheduleChromosome, ScheduleChromosome) {
         guard p1.genes.count > 2, p1.genes.count == p2.genes.count else { return (p1, p2) }
 
-        var point1 = Int.random(in: 0..<p1.genes.count)
-        var point2 = Int.random(in: 0..<p1.genes.count)
+        var point1 = rng.int(in: 0..<p1.genes.count)
+        var point2 = rng.int(in: 0..<p1.genes.count)
         if point1 > point2 { swap(&point1, &point2) }
 
         var child1Genes = p1.genes
@@ -62,14 +63,15 @@ enum Crossover {
     private static func uniformCrossover(
         _ p1: ScheduleChromosome,
         _ p2: ScheduleChromosome,
-        swapProbability: Double
+        swapProbability: Double,
+        rng: GARandom
     ) -> (ScheduleChromosome, ScheduleChromosome) {
         guard p1.genes.count == p2.genes.count else { return (p1, p2) }
         var child1Genes = p1.genes
         var child2Genes = p2.genes
 
         for i in p1.genes.indices {
-            if Double.random(in: 0...1) < swapProbability {
+            if rng.bool(probability: swapProbability) {
                 child1Genes[i] = makeGene(from: p1.genes[i], withTimeOf: p2.genes[i])
                 child2Genes[i] = makeGene(from: p2.genes[i], withTimeOf: p1.genes[i])
             }

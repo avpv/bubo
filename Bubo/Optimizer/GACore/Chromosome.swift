@@ -91,11 +91,12 @@ struct ScheduleChromosome: Chromosome, Sendable {
                 for: event,
                 in: context.planningHorizon,
                 workingHours: context.workingHours,
-                calendar: cal
+                calendar: cal,
+                rng: context.rng
             )
             // Droppable genes start with ~70% chance of inclusion
             // so the GA explores both including and excluding them.
-            let included = event.isDroppable ? Double.random(in: 0...1) < 0.7 : true
+            let included = event.isDroppable ? context.rng.bool(probability: 0.7) : true
             return ScheduleGene(
                 eventId: event.id,
                 title: event.title,
@@ -166,7 +167,8 @@ struct ScheduleChromosome: Chromosome, Sendable {
                 for: event,
                 in: context.planningHorizon,
                 workingHours: context.workingHours,
-                calendar: cal
+                calendar: cal,
+                rng: context.rng
             )
 
             let gene = ScheduleGene(
@@ -200,7 +202,7 @@ struct ScheduleChromosome: Chromosome, Sendable {
         var result = orderedGenes
         let missing = context.movableEvents.filter { ev in !result.contains(where: { $0.eventId == ev.id }) }
         for event in missing {
-            let start = randomStartTime(for: event, in: context.planningHorizon, workingHours: context.workingHours, calendar: cal)
+            let start = randomStartTime(for: event, in: context.planningHorizon, workingHours: context.workingHours, calendar: cal, rng: context.rng)
             result.append(ScheduleGene(
                 eventId: event.id, title: event.title, startTime: start,
                 duration: event.duration, context: event.context, energyCost: event.energyCost,
@@ -286,7 +288,7 @@ struct ScheduleChromosome: Chromosome, Sendable {
     func crossover(with other: ScheduleChromosome, context: OptimizerContext) -> (ScheduleChromosome, ScheduleChromosome) {
         guard genes.count > 1, genes.count == other.genes.count else { return (self, other) }
 
-        let point = Int.random(in: 1..<genes.count)
+        let point = context.rng.int(in: 1..<genes.count)
 
         var child1Genes = Array(genes[..<point])
         var child2Genes = Array(other.genes[..<point])
@@ -316,12 +318,12 @@ struct ScheduleChromosome: Chromosome, Sendable {
         let cal = context.calendar
         let horizonStart = context.planningHorizon.start
         for i in genes.indices {
-            guard Double.random(in: 0...1) < rate else { continue }
+            guard context.rng.bool(probability: rate) else { continue }
 
             changed.insert(i)
 
             // Droppable genes: small chance to flip inclusion instead of moving
-            if genes[i].isDroppable && Double.random(in: 0...1) < 0.15 {
+            if genes[i].isDroppable && context.rng.bool(probability: 0.15) {
                 genes[i].isIncluded.toggle()
                 continue
             }
@@ -332,12 +334,13 @@ struct ScheduleChromosome: Chromosome, Sendable {
             let event = context.movableEvents.first { $0.id == genes[i].eventId }
             let earliest = event?.earliestStart
             let floor = [horizonStart, earliest].compactMap { $0 }.max() ?? horizonStart
-            let strategy = Int.random(in: 0...3)
+            let strategy = context.rng.int(in: 0...3)
 
             switch strategy {
             case 0:
                 // Small time shift: +-30 min
-                let newStart = max(genes[i].startTime.addingTimeInterval(.random(in: -1800...1800)), floor)
+                let shift = context.rng.double(in: -1800.0...1800.0)
+                let newStart = max(genes[i].startTime.addingTimeInterval(shift), floor)
                 genes[i] = genes[i].withStartTime(
                     clampToWorkingHours(newStart, duration: genes[i].duration, workingHours: context.workingHours, calendar: cal, floor: floor)
                 )
@@ -347,10 +350,15 @@ struct ScheduleChromosome: Chromosome, Sendable {
                 let mutLastDay = cal.startOfDay(for: context.planningHorizon.end.addingTimeInterval(-1))
                 let daysInHorizon = max(1, (cal.dateComponents([.day], from: mutStartDay, to: mutLastDay).day ?? 0) + 1)
                 guard daysInHorizon > 0 else { break }
-                let dayOffset = Int.random(in: 0..<daysInHorizon)
+                let dayOffset = context.rng.int(in: 0..<daysInHorizon)
                 let newDay = cal.date(byAdding: .day, value: dayOffset, to: horizonStart)!
-                let hour = event?.preferredHourRange?.randomElement() ?? Int.random(in: context.workingHours)
-                let rawStart = max(cal.date(bySettingHour: hour, minute: Int.random(in: 0...3) * 15, second: 0, of: newDay)!, floor)
+                let hour: Int
+                if let preferred = event?.preferredHourRange, !preferred.isEmpty {
+                    hour = context.rng.int(in: preferred)
+                } else {
+                    hour = context.rng.int(in: context.workingHours)
+                }
+                let rawStart = max(cal.date(bySettingHour: hour, minute: context.rng.int(in: 0...3) * 15, second: 0, of: newDay)!, floor)
                 genes[i] = genes[i].withStartTime(
                     clampToWorkingHours(rawStart, duration: genes[i].duration, workingHours: context.workingHours, calendar: cal, floor: floor)
                 )
@@ -560,7 +568,8 @@ struct ScheduleChromosome: Chromosome, Sendable {
         for event: OptimizableEvent,
         in horizon: DateInterval,
         workingHours: ClosedRange<Int>,
-        calendar: Calendar
+        calendar: Calendar,
+        rng: GARandom
     ) -> Date {
         // Count distinct calendar days spanned (not whole 24h periods) so
         // the GA can reach every day in the horizon, even when the start is
@@ -568,13 +577,13 @@ struct ScheduleChromosome: Chromosome, Sendable {
         let horizonStartDay = calendar.startOfDay(for: horizon.start)
         let horizonLastDay = calendar.startOfDay(for: horizon.end.addingTimeInterval(-1))
         let daysInHorizon = max(1, (calendar.dateComponents([.day], from: horizonStartDay, to: horizonLastDay).day ?? 0) + 1)
-        let dayOffset = Int.random(in: 0..<daysInHorizon)
+        let dayOffset = rng.int(in: 0..<daysInHorizon)
         let day = calendar.date(byAdding: .day, value: dayOffset, to: horizon.start)!
 
         let hourRange = event.preferredHourRange ?? workingHours
         let maxStartHour = max(hourRange.lowerBound, hourRange.upperBound - Int(event.duration / 3600))
-        let hour = Int.random(in: hourRange.lowerBound...max(hourRange.lowerBound, maxStartHour))
-        let minute = Int.random(in: 0...3) * 15
+        let hour = rng.int(in: hourRange.lowerBound...max(hourRange.lowerBound, maxStartHour))
+        let minute = rng.int(in: 0...3) * 15
 
         var result = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day)
             ?? horizon.start
