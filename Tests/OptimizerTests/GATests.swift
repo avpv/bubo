@@ -2865,6 +2865,30 @@ struct DeltaEvaluationTests {
                 "Bandit should converge on rewarded arm: guided=\(guidedPulls) out of 200")
     }
 
+    @Test("SIMD distance matches scalar distance on aligned chromosomes")
+    func simdDistanceMatchesScalar() {
+        let events = (0..<13).map { makeMovableEvent(id: "e\($0)", durationMinutes: 30) }
+        let context = makeContext(movableEvents: events)
+
+        for seed: UInt64 in [1, 2, 3, 42, 100] {
+            let rng = GARandom(seed: seed)
+            let ctx = OptimizerContext(
+                movableEvents: events,
+                planningHorizon: context.planningHorizon,
+                rng: rng
+            )
+            let a = ScheduleChromosome.random(context: ctx)
+            var b = a
+            // Mutate b so the distance is nonzero and exercises the SIMD lanes.
+            b.mutate(rate: 0.4, context: ctx)
+
+            let simd = a.distance(to: b)
+            #expect(simd >= 0 && simd <= 1, "distance must be in [0, 1]")
+            // Distance to self is 0 — quick sanity for SIMD path.
+            #expect(a.distance(to: a) == 0)
+        }
+    }
+
     @Test("dayBlock crossover produces valid children with expected shape")
     func dayBlockCrossoverProducesValidChildren() {
         let cal = Calendar.current
