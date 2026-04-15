@@ -7,11 +7,22 @@ import Foundation
 /// Users can pick a preset and add/remove intents before running.
 struct IntentPresets {
 
+    // MARK: - Stable preset names
+    //
+    // Display-name strings used elsewhere as `seedRecipeId` to pre-select a
+    // preset in the Command Palette. Centralised here so callers (e.g.
+    // `MenuBarView` after a Pomodoro timer finishes) can't drift out of sync
+    // with the preset's actual `name:`. Birman: одно место правды для строк.
+    enum Name {
+        static let pomodoroSession = "Pomodoro session"
+    }
+
     // MARK: - Quick Actions (shown prominently in palette)
 
     static let quickActions: [OptimizationRequest] = [
         .organizeDay,
         .findFocus(),
+        .pomodoroBlock(),
         .deadlineMode,
         .planWeek,
         .lowEnergyDay,
@@ -123,7 +134,9 @@ extension OptimizationRequest {
             .pomodoroSession(preset: preset),
             .horizon(.today), .findSlotsForBacklog,
             .speed(.quick), .scenarios(count: 1),
-            name: "Pomodoro session"
+            // Stable name constant — see IntentPresets.Name. Keeps the
+            // post-Pomodoro `seedRecipeId` lookup in MenuBarView in sync.
+            name: IntentPresets.Name.pomodoroSession
         )
     }
 

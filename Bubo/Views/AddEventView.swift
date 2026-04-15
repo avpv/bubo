@@ -96,10 +96,12 @@ struct AddEventView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // HIG/Birman: Pomodoro is a *mode* of the same event, not a
+            // separate kind of thing. The header reads as one consistent
+            // object regardless of whether the toggle is on. The
+            // "Pomodoro" badge in the section below already signals mode.
             PopoverHeader(
-                title: isEditing
-                    ? (isPomodoroMode ? "Edit Pomodoro" : "Edit Event")
-                    : (isPomodoroMode ? "New Pomodoro" : "New Event"),
+                title: isEditing ? "Edit Event" : "New Event",
                 showBack: true,
                 onBack: onDismiss
             )
@@ -162,13 +164,25 @@ struct AddEventView: View {
                             .padding(DS.Spacing.md)
                     }
 
-                    // Pomodoro controls (only when Pomodoro type selected)
+                    // Birman/HIG: Pomodoro — режим, а не тип. Toggle живёт в
+                    // самой форме, рядом с длительностью; при включении
+                    // раскрывается секция параметров (work/break/rounds).
+                    // Локальные события только: внешние календари (iCloud,
+                    // Google) хранят чужие данные, мы их не помодоризируем.
+                    if !isExternal {
+                        SkinSeparator()
+                        pomodoroToggleRow
+                            .padding(DS.Spacing.md)
+                    }
+
+                    // Pomodoro controls — раскрываются под toggle'ом.
                     if isPomodoroMode {
                         SkinSeparator()
                         pomodoroSection
                             .padding(DS.Spacing.md)
                             .disabled(isExternal)
                             .opacity(isExternal ? 0.6 : 1.0)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
                     }
 
                     // Calendar
@@ -424,7 +438,15 @@ struct AddEventView: View {
                     reminderMinutes = custom
                 }
                 recurrenceRule = event.recurrenceRule
-                selectedEventType = event.eventType
+                // "Convert to Pomodoro" routes through edit mode with
+                // `initialEventType: .pomodoro` to override the editing
+                // event's own type. Without this branch the Pomodoro toggle
+                // would silently snap back to .standard on the first render.
+                if initialEventType == .pomodoro, event.eventType == .standard {
+                    selectedEventType = .pomodoro
+                } else {
+                    selectedEventType = event.eventType
+                }
                 selectedColorTag = event.colorTag
                 contextTag = event.context ?? ""
                 // Load Pomodoro parameters when editing a Pomodoro event
@@ -602,6 +624,47 @@ struct AddEventView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Pomodoro Toggle (mode switch)
+
+    /// Binding that flips `selectedEventType` between `.standard` and
+    /// `.pomodoro`. Lives outside the body so SwiftUI doesn't recompute
+    /// it for every render. HIG: a Toggle is the platform-correct control
+    /// for "this event runs as a Pomodoro session" (boolean state).
+    private var pomodoroBinding: Binding<Bool> {
+        Binding(
+            get: { selectedEventType == .pomodoro },
+            set: { newValue in
+                withAnimation(DS.Animation.standard) {
+                    selectedEventType = newValue ? .pomodoro : .standard
+                }
+            }
+        )
+    }
+
+    private var pomodoroToggleRow: some View {
+        Toggle(isOn: pomodoroBinding) {
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: "timer")
+                    .font(.callout)
+                    .foregroundStyle(isPomodoroMode ? skinAccent : skin.resolvedTextSecondary)
+                    .frame(width: DS.Size.iconLarge)
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                    Text("Run as Pomodoro")
+                        .font(.callout)
+                        .foregroundStyle(skin.resolvedTextPrimary)
+                    // Birman: подзаголовок объясняет, что произойдёт, без
+                    // необходимости знать слово "Pomodoro" заранее.
+                    Text("Split into focused work + break sessions")
+                        .font(.caption2)
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                }
+            }
+        }
+        .toggleStyle(.switch)
+        .controlSize(.small)
+        .accessibilityHint("Splits this event into work and break intervals")
     }
 
     // MARK: - Pomodoro Section

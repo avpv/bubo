@@ -47,8 +47,6 @@ struct MenuBarView: View {
         case timer(CalendarEvent)
         case quickAddTasks
 
-        static var addPomodoro: Navigation { .addEvent(initialType: .pomodoro) }
-
         var isTimer: Bool {
             if case .timer = self { return true }
             return false
@@ -161,7 +159,10 @@ struct MenuBarView: View {
                         },
                         onScheduleNext: { _ in
                             navigation = .list
-                            paletteContext = PaletteContext(seedRecipeId: "pomodoro")
+                            // Stable preset name (was hard-coded "pomodoro"
+                            // which never matched the actual preset name
+                            // "Pomodoro session" → palette opened empty).
+                            paletteContext = PaletteContext(seedRecipeId: IntentPresets.Name.pomodoroSession)
                         }
                     )
                     .transition(
@@ -1128,6 +1129,13 @@ struct MenuBarView: View {
                             paletteContext = PaletteContext(seedEvent: event, seedRecipeId: "prep-meeting")
                         }
                     },
+                    onConvertToPomodoro: { event in
+                        // Route through edit form so the user reviews work/
+                        // break/rounds defaults instead of a silent mutation.
+                        // `initialType: .pomodoro` is honoured by AddEventView
+                        // even when `editingEvent` is set (see init logic).
+                        navigation = .addEvent(editing: event, initialType: .pomodoro)
+                    },
                     isFreshlyCreated: optimizerService.freshlyCreatedEventIds.contains(event.id)
                 )
             case .slot(let start, let end):
@@ -1295,18 +1303,17 @@ struct MenuBarView: View {
             // `lg` internal horizontal padding. Same treatment as
             // AddEventView's Add Event button, so both screens'
             // primary actions carry equal visual weight.
+            // Birman: Pomodoro — это режим выполнения фокус-блока, а не
+            // отдельный тип объекта. Раньше "New Pomodoro" жил здесь, в
+            // одной строке с "New Event" и "New Task", как будто это
+            // равноправный объект. Теперь Pomodoro включается toggle'ом
+            // внутри формы события — один правильный вход.
             Menu {
                 Button {
                     Haptics.tap()
                     navigation = .addEvent()
                 } label: {
                     Label("New Event", systemImage: "calendar.badge.plus")
-                }
-                Button {
-                    Haptics.tap()
-                    navigation = .addPomodoro
-                } label: {
-                    Label("New Pomodoro", systemImage: "timer")
                 }
                 Button {
                     Haptics.tap()

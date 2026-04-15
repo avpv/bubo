@@ -249,6 +249,18 @@ struct QuickActionRanker {
                 request: .findFocus(),
                 signal: .noFocusToday
             ),
+            // Pomodoro is a structured form of focus — same `noFocusToday`
+            // signal, distinct candidate so the user sees both options and
+            // the IntentLearner can learn which they prefer over time.
+            // Without this, Pomodoro was only reachable via free-text search
+            // in the palette (discoverability bug raised in UX review).
+            QuickActionCandidate(
+                id: "pomodoro",
+                label: "Pomodoro",
+                icon: "timer",
+                request: .pomodoroBlock(),
+                signal: .noFocusToday
+            ),
             QuickActionCandidate(
                 id: "organize",
                 label: "Organize",
