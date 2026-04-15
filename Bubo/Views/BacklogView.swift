@@ -1351,28 +1351,66 @@ struct BacklogTaskRow: View {
     ///
     /// Birman: один типографический голос для метаданных; срочный дедлайн
     /// получает красный акцент как единственная семантическая подсветка.
+    /// Single primary metric for the collapsed row.
+    ///
+    /// Birman: "one piece of information, not a salad." The deadline wins
+    /// whenever it's set — it's the most actionable answer to "should I do
+    /// this now?" — and gets the urgency colour (red today/overdue,
+    /// standard secondary otherwise). Without a deadline, duration fills
+    /// in; it's always useful for "does this fit in my next slot?"
+    ///
+    /// Story points, context, and other detail move to the hover-reveal
+    /// below (`secondaryMetaText`) and to the edit card. The title already
+    /// carries deadline urgency via the colour beacon, so this line doesn't
+    /// need to repeat "today / tomorrow" colour-wise — its role is to give
+    /// the *label* the beacon can't (e.g. "in 3 days").
     private var metaText: Text {
-        let dot = Text("\u{00A0}·\u{00A0}").foregroundStyle(skin.resolvedTextTertiary)
-
-        var out = Text(DS.formatMinutes(task.durationMinutes))
-            .foregroundStyle(skin.resolvedTextSecondary)
-
-        if let sp = task.storyPoints {
-            out = out + dot + Text("\(sp)\u{00A0}sp")
-                .foregroundStyle(skin.resolvedTextSecondary)
-        }
         if let deadline = task.deadline {
             let color: Color = isUrgent
                 ? skin.resolvedDestructiveColor
                 : skin.resolvedTextSecondary
-            out = out + dot + Text(deadlineLabel(deadline))
+            return Text(deadlineLabel(deadline))
                 .foregroundStyle(color)
         }
-        if let context = task.context {
-            out = out + dot + Text(context)
-                .foregroundStyle(skin.resolvedTextTertiary)
+        return Text(DS.formatMinutes(task.durationMinutes))
+            .foregroundStyle(skin.resolvedTextSecondary)
+    }
+
+    /// Everything that was pushed off the primary line — duration (when
+    /// deadline is primary), story points, project context. Revealed only
+    /// on hover so the collapsed row stays one clean statement. The hover
+    /// slot preview sits on the opposite end of the row, so the two never
+    /// fight for space.
+    private var secondaryMetaText: Text? {
+        let dot = Text("\u{00A0}·\u{00A0}").foregroundStyle(skin.resolvedTextTertiary)
+        var parts: [Text] = []
+
+        // Duration is redundant when the primary line is already showing it.
+        if task.deadline != nil {
+            parts.append(
+                Text(DS.formatMinutes(task.durationMinutes))
+                    .foregroundStyle(skin.resolvedTextTertiary)
+            )
         }
-        return out
+
+        if let sp = task.storyPoints {
+            parts.append(
+                Text("\(sp)\u{00A0}sp")
+                    .foregroundStyle(skin.resolvedTextTertiary)
+            )
+        }
+
+        if let context = task.context {
+            parts.append(
+                Text(context)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+            )
+        }
+
+        guard !parts.isEmpty else { return nil }
+        return parts.dropFirst().reduce(parts[0]) { acc, next in
+            acc + dot + next
+        }
     }
 
     /// Full VoiceOver label for the content button — assembles title,
@@ -1600,13 +1638,27 @@ struct BacklogTaskRow: View {
                         .accessibilityLabel("High priority")
                 }
 
-                // Metadata trail drops out in sprint mode — the whole point
-                // of that mode is to see just what's next, not every tag.
+                // One primary metric at rest (deadline if set, else duration).
+                // Birman: «одна метрика, а не панель». In sprint mode we drop
+                // even that — only the title matters, nothing else is on
+                // screen to fight with.
                 if !isSprintMode {
                     metaText
                         .font(.caption2)
                         .lineLimit(1)
                         .truncationMode(.tail)
+                }
+
+                // On hover, surface the richer metadata that was suppressed
+                // at rest — duration (when deadline was primary), story
+                // points, project context. `secondaryMetaText` already
+                // returns nil when there's nothing to add, so the pill
+                // simply doesn't appear for bare tasks.
+                if isHovered, !isSprintMode, let secondary = secondaryMetaText {
+                    secondary
+                        .font(.caption2)
+                        .lineLimit(1)
+                        .transition(.opacity)
                 }
 
                 // Hover-only slot preview. Mirrors the ghost preview that
