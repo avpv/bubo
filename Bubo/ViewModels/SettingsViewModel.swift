@@ -46,8 +46,22 @@ class SettingsViewModel {
             calendarAuthStatus = AppleCalendarService.authorizationStatus
             isRequestingCalendarAccess = false
             if granted {
+                // The shared EKEventStore caches the pre-grant TCC state; rebuild
+                // so `listCalendars()` below (and later fetches) see the new
+                // permission instead of returning empty results.
+                AppleCalendarService.shared.rebuildStore()
                 loadAppleCalendars()
             }
+        }
+    }
+
+    /// Refreshes the cached calendar authorization status from the system.
+    /// Call this when Settings appears so grants/denials made outside the
+    /// Connect button (e.g. via System Settings) are reflected in the UI.
+    func refreshCalendarAuthStatus() {
+        let current = AppleCalendarService.authorizationStatus
+        if calendarAuthStatus != current {
+            calendarAuthStatus = current
         }
     }
 
@@ -66,8 +80,19 @@ class SettingsViewModel {
             remindersAuthStatus = AppleRemindersService.authorizationStatus
             isRequestingRemindersAccess = false
             if granted {
+                // Same cache issue as the calendar flow — the pre-grant store
+                // keeps returning stale TCC state until it's rebuilt.
+                AppleCalendarService.shared.rebuildStore()
                 loadRemindersLists()
             }
+        }
+    }
+
+    /// Refreshes the cached Reminders authorization status from the system.
+    func refreshRemindersAuthStatus() {
+        let current = AppleRemindersService.authorizationStatus
+        if remindersAuthStatus != current {
+            remindersAuthStatus = current
         }
     }
 
