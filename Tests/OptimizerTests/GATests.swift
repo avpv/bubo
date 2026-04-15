@@ -2865,6 +2865,37 @@ struct DeltaEvaluationTests {
                 "Bandit should converge on rewarded arm: guided=\(guidedPulls) out of 200")
     }
 
+    @Test("dayBlock crossover produces valid children with expected shape")
+    func dayBlockCrossoverProducesValidChildren() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let nextWeek = cal.date(byAdding: .day, value: 7, to: today)!
+        let events = (0..<6).map { makeMovableEvent(id: "t\($0)", durationMinutes: 30) }
+        let context = OptimizerContext(
+            movableEvents: events,
+            planningHorizon: DateInterval(start: today, end: nextWeek),
+            rng: GARandom(seed: 13)
+        )
+
+        let p1 = ScheduleChromosome.random(context: context)
+        let p2 = ScheduleChromosome.random(context: context)
+        let (c1, c2) = Crossover.perform(p1, p2, strategy: .dayBlock, context: context)
+
+        // Children must preserve the movable-event identity set and gene count.
+        #expect(c1.genes.count == p1.genes.count)
+        #expect(c2.genes.count == p2.genes.count)
+        #expect(Set(c1.genes.map(\.eventId)) == Set(p1.genes.map(\.eventId)))
+        #expect(Set(c2.genes.map(\.eventId)) == Set(p2.genes.map(\.eventId)))
+
+        // Every child start time must come from one of the parents at the
+        // same gene position — that's the whole invariant of this operator.
+        for i in p1.genes.indices {
+            let t1 = c1.genes[i].startTime
+            #expect(t1 == p1.genes[i].startTime || t1 == p2.genes[i].startTime,
+                    "Child1 gene \(i) time must come from one of the parents")
+        }
+    }
+
     @Test("MutationBandit tracks selection on chromosome when wired")
     func mutationBanditSetsLastOperator() {
         let events = [makeMovableEvent(id: "t1", durationMinutes: 30)]

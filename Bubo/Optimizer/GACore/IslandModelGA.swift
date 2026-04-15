@@ -710,8 +710,11 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
                 config.greedySeedFraction = 0.1
 
             case 3:
-                // Island 3: uniform crossover — more gene mixing, adaptive rates
-                config.crossoverStrategy = .uniform(swapProbability: 0.5)
+                // Island 3: day-block crossover — preserves bundled day
+                // structures ("morning meeting block") instead of splitting
+                // gene-by-gene. Pairs well with adaptive crossover so early
+                // generations mix days aggressively and late ones settle.
+                config.crossoverStrategy = .dayBlock
                 config.crossoverRate = 0.9
                 config.adaptiveCrossover = true
                 config.enableCrowding = false
