@@ -301,6 +301,10 @@ struct MenuBarView: View {
             } else {
                 assertionFailure("BacklogService should be set in App.init")
             }
+            Task {
+                try? await Task.sleep(for: .seconds(5)) // wait for sync
+                await optimizerService.runWeekMockSimulator(reminderService: reminderService)
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: RemindersSyncService.didImportTasks)) { notification in
             guard let count = notification.object as? Int, count > 0 else { return }

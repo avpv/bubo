@@ -1,4 +1,6 @@
 import Foundation
+import OSLog
+import UserNotifications
 
 // MARK: - Optimizer Service
 
@@ -217,6 +219,35 @@ final class OptimizerService {
             return r.scenarios.first?.genes
         default:
             return nil
+        }
+    }
+
+    /// Week-Ahead Mock Simulator: proactively checks if all tasks fit in the week
+    func runWeekMockSimulator(reminderService: ReminderService) async {
+        guard let backlogSvc = backlogService else { return }
+        var compiler = IntentCompiler(
+            optimizer: optimizer,
+            reminderService: reminderService,
+            backlogService: backlogSvc
+        )
+        compiler.subgraphRegistry = subgraphRegistry
+        compiler.energyCheckInService = energyCheckInService
+        
+        let req = OptimizationRequest(.horizon(.week), .includeBacklog)
+        let result = await compiler.execute(req, defaultWorkingHours: workingHours)
+        
+        if case .partialSuccess(_, let warnings, _) = result {
+            let endangered = warnings.filter { $0.lowercased().contains("task") || $0.lowercased().contains("planned") }
+            if !endangered.isEmpty {
+                let count = endangered.count
+                let content = UNMutableNotificationContent()
+                content.title = "Дедлайны под угрозой!"
+                content.body = "Симулятор: задачи не укладываются в эту неделю. Разгрузить расписание?"
+                content.sound = .default
+                let request = UNNotificationRequest(identifier: "MockSimulator", content: content, trigger: nil)
+                try? await UNUserNotificationCenter.current().add(request)
+                _ = count
+            }
         }
     }
 

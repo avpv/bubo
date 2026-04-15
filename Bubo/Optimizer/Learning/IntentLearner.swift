@@ -239,6 +239,7 @@ final class IntentLearner {
         case .preferPeriod: return "preferPeriod"
         case .includeBacklog: return "includeBacklog"
         case .includeBacklogTasks: return "includeBacklogTasks"
+        case .limitToTopTasks: return "limitToTopTasks"
         case .findSlotsForBacklog: return "findSlotsForBacklog"
         case .speed(let s): return "speed.\(s.rawValue)"
         case .scenarios: return "scenarios"

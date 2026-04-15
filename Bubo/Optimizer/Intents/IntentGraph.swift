@@ -277,6 +277,7 @@ struct IntentGraph: Sendable {
         case .preferPeriod: return "preferPeriod"
         case .includeBacklog: return "includeBacklog"
         case .includeBacklogTasks: return "includeBacklogTasks"
+        case .limitToTopTasks(let c): return "limitToTopTasks.\(c)"
         case .findSlotsForBacklog: return "findSlotsForBacklog"
         case .speed(let s): return "speed.\(s.rawValue)"
         case .scenarios: return "scenarios"
@@ -358,7 +359,7 @@ struct IntentGraph: Sendable {
         case .noEventsBefore, .noEventsAfter, .workingHours, .horizon:
             return .context
         // Tasks
-        case .includeBacklog, .includeBacklogTasks, .findSlotsForBacklog:
+        case .includeBacklog, .includeBacklogTasks, .limitToTopTasks, .findSlotsForBacklog:
             return .tasks
         // Create
         case .focusBlock, .createBlock, .pomodoroSession:

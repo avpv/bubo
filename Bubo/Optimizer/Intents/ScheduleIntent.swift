@@ -99,6 +99,9 @@ indirect enum ScheduleIntent: Codable, Hashable, Sendable {
     /// Include only specific backlog task IDs.
     case includeBacklogTasks(ids: [String])
 
+    /// Limit the number of scheduled backlog tasks to the top N (drops everything else).
+    case limitToTopTasks(count: Int)
+
     /// Schedule backlog tasks, treating existing events as fixed obstacles.
     case findSlotsForBacklog
 
@@ -371,8 +374,9 @@ extension ScheduleIntent {
         case .onlyOptimize: return "Only optimize selected"
         case .preferPeriod(_, let p): return "Prefer \(p.rawValue)"
         case .includeBacklog: return "Include backlog tasks"
-        case .includeBacklogTasks: return "Include selected tasks"
-        case .findSlotsForBacklog: return "Find slots for tasks"
+        case .includeBacklogTasks(let ids): return "Limit to \(ids.count) specific tasks"
+        case .limitToTopTasks(let c): return "Only top \(c) tasks"
+        case .findSlotsForBacklog: return "Fill free slots for tasks"
         case .speed(let s): return "Speed: \(s.rawValue)"
         case .scenarios(let n): return n == 1 ? "Auto-apply" : "\(n) scenarios"
         // Smart scheduling
@@ -454,7 +458,7 @@ extension ScheduleIntent {
             return .energy
         case .stability, .keepFixed, .exclude, .onlyOptimize, .preferPeriod:
             return .rules
-        case .includeBacklog, .includeBacklogTasks, .findSlotsForBacklog:
+        case .includeBacklog, .includeBacklogTasks, .limitToTopTasks, .findSlotsForBacklog:
             return .tasks
         case .speed, .scenarios:
             return .meta

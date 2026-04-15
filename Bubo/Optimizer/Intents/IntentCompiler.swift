@@ -222,6 +222,7 @@ private extension IntentCompiler {
         // Backlog inclusion
         var includeBacklog: Bool = false
         var backlogTaskIds: Set<String>? = nil  // nil = all pending
+        var limitToTopTasksCount: Int? = nil
 
         // Task ordering
         var taskOrderStrategy: TaskOrderStrategy? = nil
@@ -344,7 +345,15 @@ private extension IntentCompiler {
             config.includeBacklog = true
         case .includeBacklogTasks(let ids):
             config.includeBacklog = true
-            config.backlogTaskIds = Set(ids)
+            let idSet = Set(ids)
+            if config.backlogTaskIds == nil {
+                config.backlogTaskIds = idSet
+            } else {
+                config.backlogTaskIds?.formUnion(idSet)
+            }
+        case .limitToTopTasks(let c):
+            config.includeBacklog = true
+            config.limitToTopTasksCount = c
         case .findSlotsForBacklog:
             config.includeBacklog = true
             config.findSlotsOnly = true
@@ -655,12 +664,26 @@ private extension IntentCompiler {
     func collectBacklogTasks(_ config: ResolvedConfig) -> [OptimizableEvent] {
         guard config.includeBacklog else { return [] }
         let candidates = backlogService.schedulable
-        let filtered: [BacklogTask]
+        var filtered: [BacklogTask]
         if let ids = config.backlogTaskIds {
             filtered = candidates.filter { ids.contains($0.id) }
         } else {
             filtered = candidates
         }
+        
+        if let limit = config.limitToTopTasksCount {
+            filtered.sort { 
+                if $0.priority.numericValue != $1.priority.numericValue {
+                    return $0.priority.numericValue > $1.priority.numericValue
+                }
+                if let d1 = $0.deadline, let d2 = $1.deadline {
+                    return d1 < d2
+                }
+                return $0.deadline != nil
+            }
+            filtered = Array(filtered.prefix(limit))
+        }
+
         return filtered.map { $0.toOptimizableEvent() }
     }
 

@@ -300,6 +300,44 @@ struct CommandPalette: View {
 
     @ViewBuilder
     private var pickingContent: some View {
+        // Burnout Rescue
+        if let checkInService = optimizerService.energyCheckInService,
+           let energy = checkInService.predictEnergy(atHour: Calendar.current.component(.hour, from: Date())),
+           energy <= 2.5, searchText.isEmpty {
+            Button {
+                var newReq = OptimizationRequest()
+                newReq.add(.limitToTopTasks(count: 2))
+                newReq.add(.protectLunch(start: 12, end: 14))
+                newReq.add(.breakEvery(workMinutes: 45, breakMinutes: 15))
+                newReq.add(.noEventsAfter(hour: 18))
+                
+                composedRequest = newReq
+                showPowerMode = true
+                runRequest(newReq)
+            } label: {
+                HStack(spacing: DS.Spacing.sm) {
+                    Image(systemName: "lifepreserver.fill")
+                        .font(.body)
+                        .foregroundStyle(.red) // Highlight color
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Разгрузи мой день (Burnout Rescue)")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.red)
+                        Text("Уровень энергии низкий. Отложить всё, кроме 2 главных задач.")
+                            .font(.caption)
+                            .foregroundStyle(.red.opacity(0.8))
+                    }
+                }
+                .padding(.vertical, DS.Spacing.sm)
+                .padding(.horizontal, DS.Spacing.sm)
+                .background(Color.red.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, DS.Spacing.sm)
+            .padding(.bottom, DS.Spacing.xs)
+        }
+
         // Smart suggestions — the main UI
         VStack(alignment: .leading, spacing: 2) {
             ForEach(Array(visibleItems.enumerated()), id: \.element.id) { index, item in
