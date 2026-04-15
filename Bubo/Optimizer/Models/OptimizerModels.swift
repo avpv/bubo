@@ -150,6 +150,12 @@ struct OptimizerContext: Sendable {
     let calendar: Calendar
     let rng: GARandom
 
+    /// Optional adaptive operator selector. When set, `ScheduleChromosome.mutate`
+    /// consults it to pick a mutation operator per call instead of rolling
+    /// uniformly. Shared across every mutation in a single run so the arm
+    /// reward statistics accumulate.
+    let mutationBandit: MutationBandit?
+
     init(
         fixedEvents: [CalendarEvent] = [],
         movableEvents: [OptimizableEvent] = [],
@@ -161,7 +167,8 @@ struct OptimizerContext: Sendable {
         preferences: OptimizerPreferences = OptimizerPreferences(),
         participantAvailability: [String: [DateInterval]] = [:],
         calendar: Calendar = .current,
-        rng: GARandom = GARandom()
+        rng: GARandom = GARandom(),
+        mutationBandit: MutationBandit? = nil
     ) {
         self.fixedEvents = fixedEvents
         self.movableEvents = movableEvents
@@ -171,6 +178,7 @@ struct OptimizerContext: Sendable {
         self.participantAvailability = participantAvailability
         self.calendar = calendar
         self.rng = rng
+        self.mutationBandit = mutationBandit
     }
 }
 

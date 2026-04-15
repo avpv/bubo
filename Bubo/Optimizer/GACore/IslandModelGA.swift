@@ -275,6 +275,13 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
     /// except the random-number generator with the parent. `split()` is called
     /// on the parent RNG in the order islands are created, so the sequence is
     /// deterministic — island 0 gets the first split, island 1 the second, etc.
+    ///
+    /// The `MutationBandit` is intentionally *shared* across islands when
+    /// present: every pull on every island contributes to the same UCB arm
+    /// statistics, which accelerates convergence of the operator allocation.
+    /// Islands evolve in parallel, so the bandit's lock is the only concurrency
+    /// point; lock contention is negligible (one acquisition per mutate call,
+    /// ~microsecond cost versus ms-scale eval cost).
     private func makeIslandContext() -> OptimizerContext {
         OptimizerContext(
             fixedEvents: context.fixedEvents,
@@ -284,7 +291,8 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             preferences: context.preferences,
             participantAvailability: context.participantAvailability,
             calendar: context.calendar,
-            rng: context.rng.split()
+            rng: context.rng.split(),
+            mutationBandit: context.mutationBandit
         )
     }
 

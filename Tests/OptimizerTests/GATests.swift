@@ -2845,6 +2845,46 @@ struct DeltaEvaluationTests {
         #expect(!cache.isEmpty)
     }
 
+    @Test("MutationBandit converges to the rewarded operator")
+    func mutationBanditPrefersRewarded() {
+        let bandit = MutationBandit(explorationC: 1.0)
+        let rng = GARandom(seed: 42)
+
+        // Teach the bandit that `.guided` is the only good operator.
+        for _ in 0..<200 {
+            let op = bandit.select(rng: rng)
+            let reward: Double = (op == .guided) ? 0.1 : 0.0
+            bandit.record(op: op, reward: reward)
+        }
+
+        let snap = bandit.snapshot
+        let guidedPulls = snap[.guided]?.pulls ?? 0
+        // Other arms still get exploration pulls, but the rewarded one should
+        // dominate — in 200 trials, at least 40% should land on guided.
+        #expect(guidedPulls > 80,
+                "Bandit should converge on rewarded arm: guided=\(guidedPulls) out of 200")
+    }
+
+    @Test("MutationBandit tracks selection on chromosome when wired")
+    func mutationBanditSetsLastOperator() {
+        let events = [makeMovableEvent(id: "t1", durationMinutes: 30)]
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let tomorrow = cal.date(byAdding: .day, value: 1, to: today)!
+        let bandit = MutationBandit()
+        let context = OptimizerContext(
+            movableEvents: events,
+            planningHorizon: DateInterval(start: today, end: tomorrow),
+            rng: GARandom(seed: 3),
+            mutationBandit: bandit
+        )
+
+        var chrom = ScheduleChromosome.random(context: context)
+        chrom.mutate(rate: 1.0, context: context)  // guaranteed to hit
+        #expect(chrom.lastMutationOperator != nil,
+                "Wired bandit must record the chosen operator on the chromosome")
+    }
+
     @Test("Repair respects dependsOn ordering")
     func repairEnforcesDependencies() {
         let cal = Calendar.current

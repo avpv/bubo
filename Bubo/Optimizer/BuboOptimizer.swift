@@ -49,6 +49,10 @@ final class BuboOptimizer {
         var prefs = context.preferences
         preferenceLearner.applyToPreferences(&prefs)
 
+        // Wire a fresh MutationBandit for this run. UCB1 stats don't carry
+        // over between optimizations because workload characteristics
+        // (fixed events, movable pool, preferences) differ per run, so a
+        // stale arm allocation would be actively misleading.
         let adjustedContext = OptimizerContext(
             fixedEvents: context.fixedEvents,
             movableEvents: context.movableEvents,
@@ -56,7 +60,9 @@ final class BuboOptimizer {
             planningHorizon: context.planningHorizon,
             preferences: prefs,
             participantAvailability: context.participantAvailability,
-            calendar: context.calendar
+            calendar: context.calendar,
+            rng: context.rng,
+            mutationBandit: MutationBandit()
         )
 
         let evaluator = FitnessEvaluator.standard(preferences: prefs)

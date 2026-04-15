@@ -65,7 +65,7 @@ extension Chromosome {
 
 /// A chromosome representing a complete schedule assignment.
 /// Each gene maps one movable event to a specific time slot.
-struct ScheduleChromosome: Chromosome, Sendable {
+struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
     var genes: [ScheduleGene]
     var fitness: Double = 0.0
     var rawFitness: Double = 0.0
@@ -94,6 +94,13 @@ struct ScheduleChromosome: Chromosome, Sendable {
     /// Indices of genes that were modified since last evaluation.
     /// Used by delta evaluation to skip recomputing unaffected local objectives.
     var mutatedGeneIndices: IndexSet?
+
+    /// The operator picked by the `MutationBandit` on the last `mutate()` call,
+    /// if any. The GA loop reads this post-evaluation to attribute the fitness
+    /// delta back to the operator, closing the UCB1 feedback loop. `nil` when
+    /// the bandit wasn't wired or when mutate() was skipped (no rate hit any
+    /// gene). Does not participate in equality/hashing.
+    var lastMutationOperator: MutationOperator?
 
     /// Equality ignores needsEvaluation and caches — two chromosomes with the same genes and fitness are equal.
     static func == (lhs: ScheduleChromosome, rhs: ScheduleChromosome) -> Bool {
@@ -344,6 +351,16 @@ struct ScheduleChromosome: Chromosome, Sendable {
         var changed = IndexSet()
         let cal = context.calendar
         let horizonStart = context.planningHorizon.start
+
+        // If a bandit is wired, choose one operator for this entire call and
+        // use it for every gene that gets selected. The feedback loop works
+        // at call granularity (pre vs. post fitness), so per-gene operator
+        // variation would make the reward signal harder to attribute. Without
+        // a bandit, we keep the per-gene uniform-random behaviour so existing
+        // runs produce the same distribution of mutations.
+        let bandedOperator: MutationOperator? = context.mutationBandit?.select(rng: context.rng)
+        lastMutationOperator = bandedOperator
+
         for i in genes.indices {
             guard context.rng.bool(probability: rate) else { continue }
 
@@ -361,7 +378,12 @@ struct ScheduleChromosome: Chromosome, Sendable {
             let event = context.movableEvents.first { $0.id == genes[i].eventId }
             let earliest = event?.earliestStart
             let floor = [horizonStart, earliest].compactMap { $0 }.max() ?? horizonStart
-            let strategy = context.rng.int(in: 0...3)
+            let strategy: Int
+            if let op = bandedOperator {
+                strategy = op.rawValue
+            } else {
+                strategy = context.rng.int(in: 0...3)
+            }
 
             switch strategy {
             case 0:

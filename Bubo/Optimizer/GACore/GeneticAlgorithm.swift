@@ -479,6 +479,11 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         var offspring: [C] = []
         var parentIndexPairs: [(Int, Int)] = []
         var offspringPairs: [(C, C)] = []
+        // Baseline fitness per offspring, used to compute the reward that
+        // feeds back into the MutationBandit. We capture max(parent1, parent2)
+        // because a useful mutation should improve on the better parent, not
+        // merely the worse one. Parallel array indexed the same as `offspring`.
+        var offspringBaselines: [Double] = []
         let targetCount = config.populationSize - config.eliteCount
 
         while offspring.count < targetCount {
@@ -489,6 +494,7 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             )
             let parent1 = population.individuals[idx1]
             let parent2 = population.individuals[idx2]
+            let baseline = max(parent1.rawFitness, parent2.rawFitness)
 
             var child1: C
             var child2: C
@@ -525,6 +531,8 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             if remaining >= 2 {
                 offspring.append(child1)
                 offspring.append(child2)
+                offspringBaselines.append(baseline)
+                offspringBaselines.append(baseline)
                 if config.enableCrowding {
                     parentIndexPairs.append((idx1, idx2))
                     offspringPairs.append((child1, child2))
@@ -533,6 +541,7 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
                 // Only 1 slot left — append child1 only, skip pair tracking
                 // (crowding requires matched pairs, so this child uses generational replacement)
                 offspring.append(child1)
+                offspringBaselines.append(baseline)
             }
         }
 
@@ -545,6 +554,20 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         } else {
             for i in offspring.indices {
                 evaluate(&offspring[i])
+            }
+        }
+
+        // Close the MutationBandit feedback loop. Reward is (rawFitness - baseline)
+        // so arms get credit only for beating the better parent. We read the
+        // rawFitness directly — fitness sharing hasn't been applied yet, and
+        // we want the attribution based on true quality rather than niche-
+        // penalised scores.
+        if let bandit = context.mutationBandit {
+            for i in offspring.indices {
+                guard let adaptive = offspring[i] as? any AdaptiveMutationChromosome,
+                      let op = adaptive.lastMutationOperator else { continue }
+                let reward = offspring[i].rawFitness - offspringBaselines[i]
+                bandit.record(op: op, reward: reward)
             }
         }
 
