@@ -37,6 +37,61 @@ struct GAConfiguration: Sendable {
     /// Enable adaptive crossover rate (decays with generation progress).
     var adaptiveCrossover: Bool
 
+    /// Above this duplicate fraction, force-mutate clones in the offspring
+    /// population with a boosted rate. 0 disables the mechanism. Measured in
+    /// fraction of the post-offspring population that shares a genome with
+    /// another individual.
+    var duplicateMutationThreshold: Double
+
+    /// Multiplier on `mutationRate` applied to clones when the threshold is
+    /// exceeded. 2.5 is the literature sweet spot: aggressive enough to break
+    /// the tie but gentle enough to keep the structure of the clone's parent.
+    var duplicateMutationBoost: Double
+
+    /// Run a short SA hill climb on the top individuals every N generations
+    /// during evolution, not just once at the end. 0 disables (pure GA).
+    /// Memetic intermediate hill climbing typically delivers +5-10% final
+    /// fitness for ~2-5% extra cost, because the climbs happen to the top
+    /// individuals whose refinements then propagate through selection.
+    var memeticHillClimbInterval: Int
+
+    /// Number of individuals to hill-climb on each memetic pass.
+    var memeticHillClimbCandidates: Int
+
+    /// Steps per memetic hill climb invocation. Keep modest — the point is
+    /// frequent local refinement, not a full deep optimization every cycle.
+    var memeticHillClimbSteps: Int
+
+    /// CHC-style restart: when the stagnation patience is exhausted,
+    /// instead of giving up, keep the top-K individuals and regenerate the
+    /// rest with high-rate mutation. 0 disables and the old "stop on
+    /// stagnation" behaviour is preserved. Values > 0 grant the evolution
+    /// this many restarts before actually stopping; each restart resets the
+    /// stagnation counter and lets the GA attack the landscape from a fresh
+    /// direction, which is often enough to escape basins immigration can't.
+    var chcMaxRestarts: Int
+
+    /// Fraction of the population kept verbatim at each CHC restart. The
+    /// rest are regenerated from those elites via high-rate mutation (0.35
+    /// per gene is standard CHC). Typically 0.1-0.2 — large enough to
+    /// preserve discovered structure, small enough to leave room for
+    /// meaningful renewal.
+    var chcRestartEliteFraction: Double
+
+    /// Per-gene mutation rate used when regenerating the non-elite portion
+    /// on a CHC restart. CHC's defining trick is this being much higher
+    /// than the normal rate so the regenerated portion really does probe a
+    /// different neighbourhood.
+    var chcRestartMutationRate: Double
+
+    /// When true, initial individuals get `selfAdaptiveMutationRate =
+    /// mutationRate`, and every mutation perturbs that value. Chromosomes
+    /// whose rates produced better fitness propagate their rates through
+    /// crossover, so the population's effective mutation rate drifts
+    /// toward whatever is working for the current landscape — no manual
+    /// tuning of `mutationRate` per workload.
+    var selfAdaptiveRates: Bool
+
     /// Memberwise init with defaults for new parameters so existing call sites compile unchanged.
     init(
         populationSize: Int,
@@ -57,7 +112,16 @@ struct GAConfiguration: Sendable {
         fitnessShareSigma: Double = 0.3,
         fitnessShareAlpha: Double = 1.0,
         enableCrowding: Bool = false,
-        adaptiveCrossover: Bool = false
+        adaptiveCrossover: Bool = false,
+        duplicateMutationThreshold: Double = 0.2,
+        duplicateMutationBoost: Double = 2.5,
+        memeticHillClimbInterval: Int = 0,
+        memeticHillClimbCandidates: Int = 3,
+        memeticHillClimbSteps: Int = 5,
+        chcMaxRestarts: Int = 0,
+        chcRestartEliteFraction: Double = 0.15,
+        chcRestartMutationRate: Double = 0.35,
+        selfAdaptiveRates: Bool = false
     ) {
         self.populationSize = populationSize
         self.maxGenerations = maxGenerations
@@ -78,6 +142,15 @@ struct GAConfiguration: Sendable {
         self.fitnessShareAlpha = fitnessShareAlpha
         self.enableCrowding = enableCrowding
         self.adaptiveCrossover = adaptiveCrossover
+        self.duplicateMutationThreshold = duplicateMutationThreshold
+        self.duplicateMutationBoost = duplicateMutationBoost
+        self.memeticHillClimbInterval = memeticHillClimbInterval
+        self.memeticHillClimbCandidates = memeticHillClimbCandidates
+        self.memeticHillClimbSteps = memeticHillClimbSteps
+        self.chcMaxRestarts = chcMaxRestarts
+        self.chcRestartEliteFraction = chcRestartEliteFraction
+        self.chcRestartMutationRate = chcRestartMutationRate
+        self.selfAdaptiveRates = selfAdaptiveRates
     }
 
     static let `default` = GAConfiguration(
@@ -99,7 +172,13 @@ struct GAConfiguration: Sendable {
         fitnessShareSigma: 0.3,
         fitnessShareAlpha: 1.0,
         enableCrowding: false,
-        adaptiveCrossover: true
+        adaptiveCrossover: true,
+        memeticHillClimbInterval: 25,
+        memeticHillClimbCandidates: 3,
+        memeticHillClimbSteps: 6,
+        chcMaxRestarts: 1,
+        chcRestartEliteFraction: 0.15,
+        chcRestartMutationRate: 0.35
     )
 
     static let quick = GAConfiguration(
@@ -168,7 +247,14 @@ struct GAConfiguration: Sendable {
         fitnessShareSigma: 0.25,
         fitnessShareAlpha: 1.0,
         enableCrowding: true,
-        adaptiveCrossover: true
+        adaptiveCrossover: true,
+        memeticHillClimbInterval: 40,
+        memeticHillClimbCandidates: 5,
+        memeticHillClimbSteps: 10,
+        chcMaxRestarts: 2,
+        chcRestartEliteFraction: 0.15,
+        chcRestartMutationRate: 0.35,
+        selfAdaptiveRates: true
     )
 
     /// Per-island config for island model GA. Smaller populations per island
@@ -194,7 +280,10 @@ struct GAConfiguration: Sendable {
         fitnessShareSigma: 0.3,
         fitnessShareAlpha: 1.0,
         enableCrowding: false,
-        adaptiveCrossover: true
+        adaptiveCrossover: true,
+        memeticHillClimbInterval: 30,
+        memeticHillClimbCandidates: 3,
+        memeticHillClimbSteps: 8
     )
 }
 
@@ -280,6 +369,21 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             individuals.append(C.random(context: context))
         }
 
+        // Bootstrap self-adaptive rates, when enabled, on every AdaptiveMutation
+        // chromosome. Starting them at the config's baseline rate means evolution
+        // can only improve from there — the initial behaviour matches the old
+        // fixed-rate config, and drift into better rates is additive.
+        if config.selfAdaptiveRates {
+            for i in individuals.indices {
+                if var adaptive = individuals[i] as? ScheduleChromosome {
+                    adaptive.selfAdaptiveMutationRate = config.mutationRate
+                    if let casted = adaptive as? C {
+                        individuals[i] = casted
+                    }
+                }
+            }
+        }
+
         return Population<C>(individuals: individuals, eliteCount: config.eliteCount)
     }
 
@@ -298,6 +402,7 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
 
         var staleGenerations = 0
         var lastBestFitness = bestEver?.rawFitness ?? 0
+        var restartsPerformed = 0
 
         for generation in 0..<config.maxGenerations {
             evolveOneGeneration(
@@ -307,6 +412,23 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
                 maxGenerations: config.maxGenerations,
                 parallelEvaluation: true
             )
+
+            // Memetic hill climb on the current top individuals every
+            // `memeticHillClimbInterval` generations. Applying SA locally to
+            // the elites mid-evolution lets their refinements propagate through
+            // subsequent selection rounds, which the final-only hill climb
+            // cannot — by then the GA is done and no downstream selection
+            // benefits. We write results back into the population so selection
+            // in the next generation sees the improved fitness.
+            if config.memeticHillClimbInterval > 0,
+               generation > 0,
+               generation % config.memeticHillClimbInterval == 0 {
+                memeticHillClimbStep(
+                    population: &population,
+                    candidates: config.memeticHillClimbCandidates,
+                    steps: config.memeticHillClimbSteps
+                )
+            }
 
             // Use rawFitness so fitness sharing (which deflates `fitness` for
             // crowded niches) can't demote the globally-best individual. Store
@@ -344,6 +466,24 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             lastBestFitness = currentFitness
 
             if staleGenerations >= config.convergencePatience {
+                // CHC restart: before giving up, try regenerating the
+                // non-elite portion from the surviving elites via high-rate
+                // mutation. This often escapes deep basins where plain
+                // immigration can't — the elites' discovered structure is
+                // preserved but the majority of the population is re-seeded
+                // in a meaningfully different neighbourhood.
+                if restartsPerformed < config.chcMaxRestarts {
+                    chcRestart(
+                        population: &population,
+                        config: config
+                    )
+                    restartsPerformed += 1
+                    staleGenerations = 0
+                    // Don't reset convergenceGeneration; the reported value
+                    // should still reflect when the bestEver was last
+                    // improved, not when we decided to relaunch.
+                    continue
+                }
                 convergenceGeneration = generation - config.convergencePatience
                 break
             }
@@ -397,7 +537,7 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         // Use genotypic diversity for a more accurate diversity signal.
         // Fitness diversity can be misleading when different schedules have similar scores.
         // Fall back to fitness diversity when genotypic is expensive (large populations).
-        let genotypicDiv = population.size <= 100 ? population.genotypicDiversity : fitnessDiversity
+        let genotypicDiv = population.size <= 100 ? population.genotypicDiversity(rng: context.rng) : fitnessDiversity
         let diversityIsLow = genotypicDiv < config.diversityThreshold
 
         // Immigration: inject random individuals when diversity collapses
@@ -418,20 +558,27 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         var offspring: [C] = []
         var parentIndexPairs: [(Int, Int)] = []
         var offspringPairs: [(C, C)] = []
+        // Baseline fitness per offspring, used to compute the reward that
+        // feeds back into the MutationBandit. We capture max(parent1, parent2)
+        // because a useful mutation should improve on the better parent, not
+        // merely the worse one. Parallel array indexed the same as `offspring`.
+        var offspringBaselines: [Double] = []
         let targetCount = config.populationSize - config.eliteCount
 
         while offspring.count < targetCount {
             let (idx1, idx2) = Selection.selectPairIndices(
                 from: population,
-                strategy: config.selectionStrategy
+                strategy: config.selectionStrategy,
+                rng: context.rng
             )
             let parent1 = population.individuals[idx1]
             let parent2 = population.individuals[idx2]
+            let baseline = max(parent1.rawFitness, parent2.rawFitness)
 
             var child1: C
             var child2: C
 
-            if Double.random(in: 0...1) < effectiveCrossoverRate {
+            if context.rng.bool(probability: effectiveCrossoverRate) {
                 (child1, child2) = parent1.crossover(with: parent2, strategy: config.crossoverStrategy, context: context)
             } else {
                 child1 = parent1
@@ -463,6 +610,8 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             if remaining >= 2 {
                 offspring.append(child1)
                 offspring.append(child2)
+                offspringBaselines.append(baseline)
+                offspringBaselines.append(baseline)
                 if config.enableCrowding {
                     parentIndexPairs.append((idx1, idx2))
                     offspringPairs.append((child1, child2))
@@ -471,6 +620,7 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
                 // Only 1 slot left — append child1 only, skip pair tracking
                 // (crowding requires matched pairs, so this child uses generational replacement)
                 offspring.append(child1)
+                offspringBaselines.append(baseline)
             }
         }
 
@@ -486,10 +636,43 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             }
         }
 
+        // Close the MutationBandit feedback loop. Reward is (rawFitness - baseline)
+        // so arms get credit only for beating the better parent. We read the
+        // rawFitness directly — fitness sharing hasn't been applied yet, and
+        // we want the attribution based on true quality rather than niche-
+        // penalised scores.
+        if let bandit = context.mutationBandit {
+            for i in offspring.indices {
+                guard let adaptive = offspring[i] as? any AdaptiveMutationChromosome,
+                      let op = adaptive.lastMutationOperator else { continue }
+                let reward = offspring[i].rawFitness - offspringBaselines[i]
+                bandit.record(op: op, reward: reward)
+            }
+        }
+
         // Fitness sharing (niching): divide each individual's fitness by its niche count
         // to maintain multiple diverse solution clusters in the population
         if config.enableFitnessSharing {
             applyFitnessSharing(to: &offspring, population: population, config: config)
+        }
+
+        // Force-diversify clones. When crossover/mutation produces many
+        // duplicates (common as the population converges), the visible
+        // diversity metric drops and adaptive mutation kicks in — but that
+        // feedback loop is slow. Direct duplicate mutation breaks the tie in
+        // one step, at roughly the cost of one extra evaluation per clone.
+        // When enabled (threshold > 0), clones beyond the first are re-mutated
+        // with a boosted rate; the FitnessCache absorbs most of the extra
+        // evaluation cost when the mutation happens to land on a previously
+        // seen genome.
+        if config.duplicateMutationThreshold > 0 && offspring.count > 1 {
+            forceDiversifyClones(
+                in: &offspring,
+                threshold: config.duplicateMutationThreshold,
+                boostedRate: min(1.0, config.mutationRate * config.duplicateMutationBoost),
+                enableRepair: config.enableRepair,
+                parallelEvaluation: parallelEvaluation
+            )
         }
 
         // Replacement strategy
@@ -504,6 +687,154 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             )
         } else {
             population.replaceGeneration(with: offspring)
+        }
+    }
+
+    // MARK: - CHC Restart
+
+    /// Keep the top-K elites, regenerate the rest from those elites via
+    /// high-rate mutation. "K" = `chcRestartEliteFraction * populationSize`,
+    /// clamped to at least `eliteCount` so elitism guarantees survive the
+    /// restart. Regenerated individuals are parented on a randomly-chosen
+    /// elite each, repaired, and re-evaluated before the GA continues.
+    ///
+    /// This is CHC Eshelman-style: the "cataclysmic mutation" phase the
+    /// algorithm is known for. We don't implement the full HUX/restart
+    /// machinery — we're only using the restart idea to replace a hard
+    /// stop — but the core hypothesis (preserve structure, perturb the
+    /// rest heavily) is the same.
+    private func chcRestart(
+        population: inout Population<C>,
+        config: GAConfiguration
+    ) {
+        let n = population.individuals.count
+        guard n > 0 else { return }
+
+        // Elite count: from config, bumped to ensure structure survives
+        // and the fraction isn't so small we effectively random-restart.
+        let fractionBasedElites = Int(Double(n) * config.chcRestartEliteFraction)
+        let elitesToKeep = max(config.eliteCount, max(1, fractionBasedElites))
+
+        // Take elites by rawFitness — consistent with bestEver tracking and
+        // immune to fitness sharing that may have deflated `fitness`.
+        let sorted = population.individuals.sorted { $0.rawFitness > $1.rawFitness }
+        let elites = Array(sorted.prefix(elitesToKeep))
+
+        var regenerated: [C] = elites
+        regenerated.reserveCapacity(n)
+
+        // Repopulate by cloning a random elite and hammering it with the
+        // CHC-level mutation rate. Repair brings it back into feasibility
+        // (working hours, overlap, dependencies). Evaluate closes the loop
+        // so the next generation's selection sees true fitness.
+        while regenerated.count < n {
+            let template = elites[context.rng.int(in: 0..<elites.count)]
+            var offspring = template
+            offspring.mutate(rate: config.chcRestartMutationRate, context: context)
+            if config.enableRepair {
+                offspring.repair(context: context)
+            }
+            evaluate(&offspring)
+            regenerated.append(offspring)
+        }
+
+        population.individuals = regenerated
+    }
+
+    // MARK: - Memetic Hill Climb
+
+    /// Run a short SA hill climb on the top `candidates` individuals and
+    /// write the refined versions back into the population. Unlike the
+    /// final-phase hill climb, this operates *during* evolution so any
+    /// improvements compound through subsequent selection rounds.
+    ///
+    /// Candidates are addressed by index to keep the update O(1) per slot;
+    /// we pick the indices of the top individuals by `rawFitness` so fitness
+    /// sharing (which deflates `fitness` for crowded niches) doesn't bias
+    /// selection toward sparse but poorly-scored solutions.
+    private func memeticHillClimbStep(
+        population: inout Population<C>,
+        candidates: Int,
+        steps: Int
+    ) {
+        let n = population.individuals.count
+        guard n > 0, candidates > 0, steps > 0 else { return }
+
+        // Pick top-K indices by rawFitness. We avoid `sortedByFitness` here
+        // because that would rely on the possibly-deflated `fitness` field.
+        let topIndices = population.individuals.indices
+            .sorted { population.individuals[$0].rawFitness > population.individuals[$1].rawFitness }
+            .prefix(min(candidates, n))
+
+        for idx in topIndices {
+            let refined = hillClimb(population.individuals[idx], steps: steps)
+            // Only accept a strictly better climb. Equal-fitness rewrites
+            // are harmless for scoring but could displace a more-diverse
+            // twin that the crowding/sharing pressure might prefer.
+            if refined.rawFitness > population.individuals[idx].rawFitness {
+                population.individuals[idx] = refined
+            }
+        }
+    }
+
+    // MARK: - Duplicate Diversification
+
+    /// Find every individual that shares a genome with at least one earlier
+    /// sibling, mutate it with `boostedRate`, and re-evaluate. No-ops when the
+    /// duplicate fraction is below `threshold` — avoids paying for the O(N)
+    /// scan on diverse populations where mutation is unnecessary.
+    ///
+    /// Hashable-based detection makes this O(N) per generation regardless of
+    /// population size. Without Hashable the equivalent check was O(N²)
+    /// Equatable comparisons, which would outweigh the diversification gain.
+    ///
+    /// The re-evaluation honours the same `parallelEvaluation` contract as the
+    /// main offspring evaluation step so the island model keeps its GCD thread
+    /// budget intact when duplicates appear mid-evolution.
+    private func forceDiversifyClones(
+        in individuals: inout [C],
+        threshold: Double,
+        boostedRate: Double,
+        enableRepair: Bool,
+        parallelEvaluation: Bool
+    ) {
+        // Pass 1: identify duplicates via Set insertion. `seen` contains a
+        // canonical copy of each unique genome; any individual whose genome
+        // is already in `seen` is a clone marked for re-mutation.
+        var seen: Set<C> = []
+        seen.reserveCapacity(individuals.count)
+        var duplicateIndices: [Int] = []
+        for i in individuals.indices {
+            if !seen.insert(individuals[i]).inserted {
+                duplicateIndices.append(i)
+            }
+        }
+        let dupeFraction = Double(duplicateIndices.count) / Double(individuals.count)
+        guard dupeFraction >= threshold else { return }
+
+        // Pass 2: boost-mutate and repair clones. Mutation sets
+        // `needsEvaluation = true`, so the subsequent evaluate() overwrites
+        // the stale clone fitness.
+        for idx in duplicateIndices {
+            individuals[idx].mutate(rate: boostedRate, context: context)
+            if enableRepair {
+                individuals[idx].repair(context: context)
+            }
+        }
+
+        // Pass 3: re-evaluate only the touched individuals. `evaluate` checks
+        // `needsEvaluation` internally and no-ops on unchanged ones, so even
+        // a bulk re-evaluation would be safe — but scoping here keeps the
+        // cost proportional to the number of clones we actually touched.
+        if parallelEvaluation && duplicateIndices.count > 1 {
+            DispatchQueue.concurrentPerform(iterations: duplicateIndices.count) { k in
+                let idx = duplicateIndices[k]
+                self.evaluate(&individuals[idx])
+            }
+        } else {
+            for idx in duplicateIndices {
+                evaluate(&individuals[idx])
+            }
         }
     }
 
@@ -578,7 +909,7 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             if delta > 0 {
                 // Always accept improvements
                 current = neighbor
-            } else if temperature > 1e-6 && Double.random(in: 0...1) < exp(delta / temperature) {
+            } else if temperature > 1e-6 && context.rng.bool(probability: exp(delta / temperature)) {
                 // Accept worse solution with SA probability
                 current = neighbor
             }

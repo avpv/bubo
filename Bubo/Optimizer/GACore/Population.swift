@@ -158,7 +158,12 @@ struct Population<C: Chromosome> {
     /// Genotypic diversity: average pairwise distance between a sample of individuals.
     /// Uses the chromosome's `distance(to:)` method for genotype-level comparison.
     /// Sampled to O(sampleSize²) comparisons to avoid O(n²) cost for large populations.
-    var genotypicDiversity: Double {
+    ///
+    /// Pass the caller's `GARandom` so the sample (and therefore the diversity
+    /// reading) is reproducible when the top-level seed is fixed. Without this,
+    /// two runs with the same seed could diverge the first time diversity is
+    /// low enough to trigger adaptive mutation or immigration.
+    func genotypicDiversity(rng: GARandom) -> Double {
         guard individuals.count > 1 else { return 0 }
 
         // Sample a subset for efficiency (max 20 individuals → 190 pairs)
@@ -167,7 +172,7 @@ struct Population<C: Chromosome> {
         if sampleSize == individuals.count {
             sample = individuals
         } else {
-            sample = Array(individuals.shuffled().prefix(sampleSize))
+            sample = Array(rng.shuffled(individuals).prefix(sampleSize))
         }
 
         var totalDistance = 0.0

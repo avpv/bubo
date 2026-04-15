@@ -3,7 +3,12 @@ import Foundation
 // MARK: - Chromosome Protocol
 
 /// A generic chromosome for the genetic algorithm.
-protocol Chromosome: Equatable {
+///
+/// Hashable conformance is required so the GA can detect duplicate individuals
+/// in O(N) via a Set lookup rather than O(N²) via pairwise Equatable. Every
+/// concrete chromosome in this codebase already has Hashable-ready fields
+/// (genes, sequence, …) so implementing `hash(into:)` is a one-liner.
+protocol Chromosome: Hashable {
     var fitness: Double { get set }
 
     /// Raw fitness before any diversity adjustments (fitness sharing, niching).
@@ -60,7 +65,7 @@ extension Chromosome {
 
 /// A chromosome representing a complete schedule assignment.
 /// Each gene maps one movable event to a specific time slot.
-struct ScheduleChromosome: Chromosome, Sendable {
+struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
     var genes: [ScheduleGene]
     var fitness: Double = 0.0
     var rawFitness: Double = 0.0
@@ -73,13 +78,50 @@ struct ScheduleChromosome: Chromosome, Sendable {
     /// Populated after full evaluation; reused when only a subset of genes change.
     var objectiveCache: [String: Double]?
 
+    /// Per-day breakdown for `DayPartitionedObjective` instances. Keys are
+    /// objective names; values are `[dayStart: dayScore]`. When delta evaluation
+    /// runs, only days that contain mutated genes (or used to, before the
+    /// mutation) are rescored — unaffected days are read from this cache.
+    var perDayObjectiveCache: [String: [Date: Double]]?
+
+    /// For each gene position, the day it sat on the last time this chromosome
+    /// was fully evaluated. Used to spot "a gene moved from day X to day Y"
+    /// and mark both X and Y as dirty, so per-day delta evaluation doesn't
+    /// leave stale scores on abandoned days. `nil` means "no prior evaluation"
+    /// and forces a full pass.
+    var geneDaysSnapshot: [Date]?
+
     /// Indices of genes that were modified since last evaluation.
     /// Used by delta evaluation to skip recomputing unaffected local objectives.
     var mutatedGeneIndices: IndexSet?
 
+    /// The operator picked by the `MutationBandit` on the last `mutate()` call,
+    /// if any. The GA loop reads this post-evaluation to attribute the fitness
+    /// delta back to the operator, closing the UCB1 feedback loop. `nil` when
+    /// the bandit wasn't wired or when mutate() was skipped (no rate hit any
+    /// gene). Does not participate in equality/hashing.
+    var lastMutationOperator: MutationOperator?
+
+    /// Self-adaptive mutation rate encoded directly in the genome. When > 0
+    /// it overrides the rate the GA would otherwise pass to `mutate(rate:)`,
+    /// and is itself perturbed on every mutation — so a chromosome descended
+    /// from individuals that benefited from higher rates will keep mutating
+    /// aggressively, and vice versa. 0 = disabled (the GA's externally-set
+    /// rate wins, preserving pre-existing behaviour).
+    var selfAdaptiveMutationRate: Double = 0
+
     /// Equality ignores needsEvaluation and caches — two chromosomes with the same genes and fitness are equal.
     static func == (lhs: ScheduleChromosome, rhs: ScheduleChromosome) -> Bool {
         lhs.genes == rhs.genes && lhs.fitness == rhs.fitness
+    }
+
+    /// Hash the same fields used by `==`. Keeping this in sync with equality is
+    /// a Hashable invariant; `fitness` is quantized to 4 decimal places so
+    /// float noise between otherwise-identical chromosomes doesn't produce
+    /// accidental hash divergence that would defeat duplicate detection.
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(genes)
+        hasher.combine(Int64((fitness * 10_000).rounded()))
     }
 
     // MARK: - Random Initialization
@@ -91,11 +133,12 @@ struct ScheduleChromosome: Chromosome, Sendable {
                 for: event,
                 in: context.planningHorizon,
                 workingHours: context.workingHours,
-                calendar: cal
+                calendar: cal,
+                rng: context.rng
             )
             // Droppable genes start with ~70% chance of inclusion
             // so the GA explores both including and excluding them.
-            let included = event.isDroppable ? Double.random(in: 0...1) < 0.7 : true
+            let included = event.isDroppable ? context.rng.bool(probability: 0.7) : true
             return ScheduleGene(
                 eventId: event.id,
                 title: event.title,
@@ -166,7 +209,8 @@ struct ScheduleChromosome: Chromosome, Sendable {
                 for: event,
                 in: context.planningHorizon,
                 workingHours: context.workingHours,
-                calendar: cal
+                calendar: cal,
+                rng: context.rng
             )
 
             let gene = ScheduleGene(
@@ -200,7 +244,7 @@ struct ScheduleChromosome: Chromosome, Sendable {
         var result = orderedGenes
         let missing = context.movableEvents.filter { ev in !result.contains(where: { $0.eventId == ev.id }) }
         for event in missing {
-            let start = randomStartTime(for: event, in: context.planningHorizon, workingHours: context.workingHours, calendar: cal)
+            let start = randomStartTime(for: event, in: context.planningHorizon, workingHours: context.workingHours, calendar: cal, rng: context.rng)
             result.append(ScheduleGene(
                 eventId: event.id, title: event.title, startTime: start,
                 duration: event.duration, context: event.context, energyCost: event.energyCost,
@@ -286,7 +330,7 @@ struct ScheduleChromosome: Chromosome, Sendable {
     func crossover(with other: ScheduleChromosome, context: OptimizerContext) -> (ScheduleChromosome, ScheduleChromosome) {
         guard genes.count > 1, genes.count == other.genes.count else { return (self, other) }
 
-        let point = Int.random(in: 1..<genes.count)
+        let point = context.rng.int(in: 1..<genes.count)
 
         var child1Genes = Array(genes[..<point])
         var child2Genes = Array(other.genes[..<point])
@@ -298,9 +342,30 @@ struct ScheduleChromosome: Chromosome, Sendable {
         }
 
         return (
-            ScheduleChromosome(genes: child1Genes, needsEvaluation: true),
-            ScheduleChromosome(genes: child2Genes, needsEvaluation: true)
+            Self.makeChild(genes: child1Genes, parents: (self, other), rng: context.rng),
+            Self.makeChild(genes: child2Genes, parents: (other, self), rng: context.rng)
         )
+    }
+
+    /// Build a crossover child. Factored out so every crossover strategy
+    /// (singlePoint, twoPoint, uniform, dayBlock) propagates self-adaptive
+    /// parameters the same way: child.rate = mean(parents) jittered by ±5%.
+    /// Jitter keeps the rate-gene under selection pressure; without it the
+    /// whole population would converge on the mean almost immediately.
+    static func makeChild(
+        genes: [ScheduleGene],
+        parents: (ScheduleChromosome, ScheduleChromosome),
+        rng: GARandom
+    ) -> ScheduleChromosome {
+        var child = ScheduleChromosome(genes: genes, needsEvaluation: true)
+        let p1 = parents.0.selfAdaptiveMutationRate
+        let p2 = parents.1.selfAdaptiveMutationRate
+        if p1 > 0 || p2 > 0 {
+            let mean = (p1 + p2) / (p1 > 0 && p2 > 0 ? 2.0 : 1.0)
+            let jitter = rng.double(in: -0.05...0.05) * mean
+            child.selfAdaptiveMutationRate = min(0.8, max(0.01, mean + jitter))
+        }
+        return child
     }
 
     /// Strategy-aware crossover that delegates to the Crossover enum.
@@ -315,13 +380,38 @@ struct ScheduleChromosome: Chromosome, Sendable {
         var changed = IndexSet()
         let cal = context.calendar
         let horizonStart = context.planningHorizon.start
+
+        // Self-adaptive rate override. When the chromosome carries its own
+        // rate (inherited from parents or bootstrapped by the GA), perturb
+        // the rate first and then use the perturbed value as the *effective*
+        // mutation rate for this call. The small Gaussian-ish step keeps
+        // neighbourhood size under control — ±0.02 per step is big enough
+        // to drift but small enough that a good rate isn't lost in one draw.
+        let effectiveRate: Double
+        if selfAdaptiveMutationRate > 0 {
+            let delta = context.rng.double(in: -0.02...0.02)
+            selfAdaptiveMutationRate = min(0.8, max(0.01, selfAdaptiveMutationRate + delta))
+            effectiveRate = selfAdaptiveMutationRate
+        } else {
+            effectiveRate = rate
+        }
+
+        // If a bandit is wired, choose one operator for this entire call and
+        // use it for every gene that gets selected. The feedback loop works
+        // at call granularity (pre vs. post fitness), so per-gene operator
+        // variation would make the reward signal harder to attribute. Without
+        // a bandit, we keep the per-gene uniform-random behaviour so existing
+        // runs produce the same distribution of mutations.
+        let bandedOperator: MutationOperator? = context.mutationBandit?.select(rng: context.rng)
+        lastMutationOperator = bandedOperator
+
         for i in genes.indices {
-            guard Double.random(in: 0...1) < rate else { continue }
+            guard context.rng.bool(probability: effectiveRate) else { continue }
 
             changed.insert(i)
 
             // Droppable genes: small chance to flip inclusion instead of moving
-            if genes[i].isDroppable && Double.random(in: 0...1) < 0.15 {
+            if genes[i].isDroppable && context.rng.bool(probability: 0.15) {
                 genes[i].isIncluded.toggle()
                 continue
             }
@@ -332,12 +422,18 @@ struct ScheduleChromosome: Chromosome, Sendable {
             let event = context.movableEvents.first { $0.id == genes[i].eventId }
             let earliest = event?.earliestStart
             let floor = [horizonStart, earliest].compactMap { $0 }.max() ?? horizonStart
-            let strategy = Int.random(in: 0...3)
+            let strategy: Int
+            if let op = bandedOperator {
+                strategy = op.rawValue
+            } else {
+                strategy = context.rng.int(in: 0...3)
+            }
 
             switch strategy {
             case 0:
                 // Small time shift: +-30 min
-                let newStart = max(genes[i].startTime.addingTimeInterval(.random(in: -1800...1800)), floor)
+                let shift = context.rng.double(in: -1800.0...1800.0)
+                let newStart = max(genes[i].startTime.addingTimeInterval(shift), floor)
                 genes[i] = genes[i].withStartTime(
                     clampToWorkingHours(newStart, duration: genes[i].duration, workingHours: context.workingHours, calendar: cal, floor: floor)
                 )
@@ -347,10 +443,15 @@ struct ScheduleChromosome: Chromosome, Sendable {
                 let mutLastDay = cal.startOfDay(for: context.planningHorizon.end.addingTimeInterval(-1))
                 let daysInHorizon = max(1, (cal.dateComponents([.day], from: mutStartDay, to: mutLastDay).day ?? 0) + 1)
                 guard daysInHorizon > 0 else { break }
-                let dayOffset = Int.random(in: 0..<daysInHorizon)
+                let dayOffset = context.rng.int(in: 0..<daysInHorizon)
                 let newDay = cal.date(byAdding: .day, value: dayOffset, to: horizonStart)!
-                let hour = event?.preferredHourRange?.randomElement() ?? Int.random(in: context.workingHours)
-                let rawStart = max(cal.date(bySettingHour: hour, minute: Int.random(in: 0...3) * 15, second: 0, of: newDay)!, floor)
+                let hour: Int
+                if let preferred = event?.preferredHourRange, !preferred.isEmpty {
+                    hour = context.rng.int(in: preferred)
+                } else {
+                    hour = context.rng.int(in: context.workingHours)
+                }
+                let rawStart = max(cal.date(bySettingHour: hour, minute: context.rng.int(in: 0...3) * 15, second: 0, of: newDay)!, floor)
                 genes[i] = genes[i].withStartTime(
                     clampToWorkingHours(rawStart, duration: genes[i].duration, workingHours: context.workingHours, calendar: cal, floor: floor)
                 )
@@ -443,6 +544,8 @@ struct ScheduleChromosome: Chromosome, Sendable {
     /// Fix hard constraint violations in-place:
     /// 1. Clamp all genes to working hours
     /// 2. Resolve overlaps by shifting conflicting genes to the nearest free slot
+    /// 3. Enforce `dependsOn` ordering: a gene may only start after every one
+    ///    of its (included) prerequisites has finished.
     mutating func repair(context: OptimizerContext) {
         let cal = context.calendar
         let horizonStart = context.planningHorizon.start
@@ -458,11 +561,14 @@ struct ScheduleChromosome: Chromosome, Sendable {
             )
         }
 
-        // Pass 2: Resolve overlaps greedily (higher-priority genes keep their slots)
-        // Sort by priority descending, then by start time
-        let sortedIndices = genes.indices
-            .filter { genes[$0].isIncluded }
-            .sorted { genes[$0].priority > genes[$1].priority }
+        // Pass 2: Resolve overlaps. We visit genes in topological order
+        // (prerequisites before dependents) so a dependent's overlap check
+        // observes already-placed prerequisites; ties broken by priority
+        // descending so high-priority tasks still keep their slots when no
+        // dependency edge dictates order. Cycles degrade gracefully: nodes
+        // left in the work list after Kahn's algorithm finishes get appended
+        // in priority order, preserving the pre-topological behaviour.
+        let sortedIndices = topoOrderedIndices(context: context)
 
         var occupied: [(start: Date, end: Date)] = context.fixedEvents.map {
             ($0.startDate, $0.endDate)
@@ -471,17 +577,32 @@ struct ScheduleChromosome: Chromosome, Sendable {
 
         for idx in sortedIndices {
             let gene = genes[idx]
+            let event = context.movableEvents.first { $0.id == gene.eventId }
+            let earliest = event?.earliestStart
+            var floor = [horizonStart, earliest].compactMap { $0 }.max() ?? horizonStart
+
+            // Dependency floor: this gene may not start before any of its
+            // included prerequisites has finished. Because we iterate in
+            // topological order, every prerequisite has already been placed
+            // in its final slot for this repair pass.
+            if let event, !event.dependsOn.isEmpty {
+                for depId in event.dependsOn {
+                    if let depGene = genes.first(where: { $0.eventId == depId && $0.isIncluded }) {
+                        floor = max(floor, depGene.endTime)
+                    }
+                }
+            }
+
+            // If the current slot is either before the dependency floor or
+            // overlaps an occupied interval, relocate to the nearest valid gap.
+            let beforeFloor = gene.startTime < floor
             let hasOverlap = occupied.contains { occ in
                 gene.startTime < occ.end && gene.endTime > occ.start
             }
 
-            if hasOverlap {
-                let event = context.movableEvents.first { $0.id == gene.eventId }
-                let earliest = event?.earliestStart
-                let floor = [horizonStart, earliest].compactMap { $0 }.max() ?? horizonStart
-
+            if beforeFloor || hasOverlap {
                 if let freeStart = findNearestFreeSlot(
-                    near: gene.startTime,
+                    near: max(gene.startTime, floor),
                     duration: gene.duration,
                     occupied: occupied,
                     workingHours: context.workingHours,
@@ -490,6 +611,16 @@ struct ScheduleChromosome: Chromosome, Sendable {
                     floor: floor
                 ) {
                     genes[idx] = gene.withStartTime(freeStart)
+                } else if beforeFloor {
+                    // No gap fits but dependency floor was violated — at least
+                    // honour the floor; this may still overlap, which leaves
+                    // the ConstraintEngine to penalise rather than failing
+                    // the whole repair silently.
+                    genes[idx] = gene.withStartTime(
+                        clampToWorkingHours(floor, duration: gene.duration,
+                                            workingHours: context.workingHours,
+                                            calendar: cal, floor: floor)
+                    )
                 }
             }
 
@@ -500,6 +631,81 @@ struct ScheduleChromosome: Chromosome, Sendable {
         needsEvaluation = true
     }
 
+    /// Kahn's algorithm on the `dependsOn` graph among included genes, with
+    /// ties broken by priority descending. Returns every included gene's
+    /// index exactly once: prerequisites first, then dependents. Dependencies
+    /// on excluded/absent genes are ignored (they can't influence timing).
+    /// Cycles leave some indices unvisited; those are appended at the end in
+    /// priority order so repair behaviour on malformed graphs matches the
+    /// pre-topological version.
+    private func topoOrderedIndices(context: OptimizerContext) -> [Int] {
+        let includedIndices = genes.indices.filter { genes[$0].isIncluded }
+        guard !includedIndices.isEmpty else { return [] }
+
+        // Map eventId → gene index for O(1) lookup during edge construction.
+        var indexByEventId: [String: Int] = [:]
+        indexByEventId.reserveCapacity(includedIndices.count)
+        for i in includedIndices { indexByEventId[genes[i].eventId] = i }
+
+        // Pre-compute inDegrees and adjacency (dependency → dependent edges).
+        var inDegree: [Int: Int] = [:]
+        var adjacency: [Int: [Int]] = [:]
+        for i in includedIndices { inDegree[i] = 0 }
+
+        let eventById: [String: OptimizableEvent] = Dictionary(
+            uniqueKeysWithValues: context.movableEvents.map { ($0.id, $0) }
+        )
+
+        for i in includedIndices {
+            guard let event = eventById[genes[i].eventId] else { continue }
+            for depId in event.dependsOn {
+                // Only count dependencies on included genes present in this
+                // chromosome. Excluded or missing prerequisites don't impose
+                // a scheduling order.
+                if let depIdx = indexByEventId[depId] {
+                    adjacency[depIdx, default: []].append(i)
+                    inDegree[i, default: 0] += 1
+                }
+            }
+        }
+
+        // Kahn's algorithm with a priority-ordered ready queue. A plain queue
+        // would be topologically valid but arbitrary on ties; using priority
+        // preserves the "important gene first" behaviour of the previous
+        // overlap-resolution pass.
+        var ready = includedIndices
+            .filter { (inDegree[$0] ?? 0) == 0 }
+            .sorted { genes[$0].priority > genes[$1].priority }
+        var result: [Int] = []
+        result.reserveCapacity(includedIndices.count)
+
+        while !ready.isEmpty {
+            // Always pop the highest-priority ready node. Linear scan is fine
+            // here because `ready` stays small relative to population sizes.
+            let head = ready.removeFirst()
+            result.append(head)
+            for dependent in adjacency[head] ?? [] {
+                let next = (inDegree[dependent] ?? 0) - 1
+                inDegree[dependent] = next
+                if next == 0 {
+                    // Insert keeping ready sorted by priority descending.
+                    let insertAt = ready.firstIndex { genes[$0].priority < genes[dependent].priority } ?? ready.count
+                    ready.insert(dependent, at: insertAt)
+                }
+            }
+        }
+
+        // Any indices still with inDegree > 0 are part of a cycle. Append them
+        // in priority order so repair still has something to iterate over —
+        // cycles are a data-integrity bug but shouldn't crash the optimizer.
+        let visited = Set(result)
+        let leftovers = includedIndices
+            .filter { !visited.contains($0) }
+            .sorted { genes[$0].priority > genes[$1].priority }
+        result.append(contentsOf: leftovers)
+        return result
+    }
+
     // MARK: - Genotypic Distance
 
     /// Normalized distance between two schedule chromosomes in [0, 1].
@@ -508,6 +714,12 @@ struct ScheduleChromosome: Chromosome, Sendable {
     /// - Complexity: O(n) — other.genes is indexed by eventId once. Previously
     ///   O(n²) due to repeated `.first(where:)` lookups, which was a hot path
     ///   because `genotypicDiversity` and crowding both call it every generation.
+    /// - SIMD: the aligned-by-index path (both parents descend from the same
+    ///   lineage — the common case in steady-state GA) processes four gene
+    ///   pairs at a time using `SIMD4<Double>` for the time-difference lanes.
+    ///   Branching on inclusion stays scalar because the three-way logic
+    ///   (both-excluded / mismatched / both-included) doesn't vectorize
+    ///   cleanly, but the time-diff lanes dominate the arithmetic cost.
     func distance(to other: ScheduleChromosome) -> Double {
         guard !genes.isEmpty else { return 0 }
 
@@ -516,26 +728,90 @@ struct ScheduleChromosome: Chromosome, Sendable {
         let alignedByIndex = genes.count == other.genes.count
             && zip(genes, other.genes).allSatisfy { $0.eventId == $1.eventId }
 
+        if alignedByIndex {
+            return simdAlignedDistance(to: other)
+        }
+
+        // Slow path: genes don't align by index (pre-crossover parents, or
+        // chromosomes from different lineages). Use dictionary lookup.
+        var totalDiff = 0.0
+        var count = 0
+        let otherById: [String: ScheduleGene] = Dictionary(
+            other.genes.map { ($0.eventId, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        for geneA in genes {
+            guard let geneB = otherById[geneA.eventId] else {
+                totalDiff += 1.0
+                count += 1
+                continue
+            }
+            totalDiff += pairDistance(geneA, geneB, &count)
+        }
+        return count > 0 ? totalDiff / Double(count) : 0
+    }
+
+    /// Aligned-index distance computed four lanes at a time.
+    ///
+    /// For each batch of 4 gene pairs, the time differences are computed in a
+    /// single `SIMD4<Double>` subtraction, absolute-valued, and normalized
+    /// against the 9h reference — three instructions instead of twelve. The
+    /// inclusion logic remains scalar; it's a cheap branch-predictor-friendly
+    /// pattern because in most generations the vast majority of genes keep
+    /// their inclusion flag.
+    @inline(__always)
+    private func simdAlignedDistance(to other: ScheduleChromosome) -> Double {
+        let n = genes.count
+        let normalize = 9.0 * 3600.0
         var totalDiff = 0.0
         var count = 0
 
-        if alignedByIndex {
-            for i in genes.indices {
-                totalDiff += pairDistance(genes[i], other.genes[i], &count)
-            }
-        } else {
-            let otherById: [String: ScheduleGene] = Dictionary(
-                other.genes.map { ($0.eventId, $0) },
-                uniquingKeysWith: { first, _ in first }
+        var i = 0
+        while i + 4 <= n {
+            // Gather four time differences in one SIMD op. We load
+            // timeIntervalSinceReferenceDate directly (Double) rather than
+            // going through timeIntervalSince() which would be an extra
+            // subtract per lane.
+            let aTimes = SIMD4<Double>(
+                genes[i].startTime.timeIntervalSinceReferenceDate,
+                genes[i + 1].startTime.timeIntervalSinceReferenceDate,
+                genes[i + 2].startTime.timeIntervalSinceReferenceDate,
+                genes[i + 3].startTime.timeIntervalSinceReferenceDate
             )
-            for geneA in genes {
-                guard let geneB = otherById[geneA.eventId] else {
+            let bTimes = SIMD4<Double>(
+                other.genes[i].startTime.timeIntervalSinceReferenceDate,
+                other.genes[i + 1].startTime.timeIntervalSinceReferenceDate,
+                other.genes[i + 2].startTime.timeIntervalSinceReferenceDate,
+                other.genes[i + 3].startTime.timeIntervalSinceReferenceDate
+            )
+            let rawDelta = aTimes - bTimes
+            // `.magnitude` returns abs value per-lane. Divide by normalize to
+            // put every lane in [0, ∞); the final min(1, ·) clamps the tail.
+            let normalized = rawDelta.magnitude / SIMD4(repeating: normalize)
+            let clamped = normalized.clamped(
+                lowerBound: SIMD4<Double>.zero,
+                upperBound: SIMD4(repeating: 1.0)
+            )
+
+            for lane in 0..<4 {
+                let a = genes[i + lane]
+                let b = other.genes[i + lane]
+                count += 1
+                if a.isIncluded != b.isIncluded {
                     totalDiff += 1.0
-                    count += 1
-                    continue
+                } else if !a.isIncluded {
+                    // Both excluded — distance contribution is 0, no-op.
+                } else {
+                    totalDiff += clamped[lane]
                 }
-                totalDiff += pairDistance(geneA, geneB, &count)
             }
+            i += 4
+        }
+
+        // Scalar remainder for tail < 4.
+        while i < n {
+            totalDiff += pairDistance(genes[i], other.genes[i], &count)
+            i += 1
         }
 
         return count > 0 ? totalDiff / Double(count) : 0
@@ -560,7 +836,8 @@ struct ScheduleChromosome: Chromosome, Sendable {
         for event: OptimizableEvent,
         in horizon: DateInterval,
         workingHours: ClosedRange<Int>,
-        calendar: Calendar
+        calendar: Calendar,
+        rng: GARandom
     ) -> Date {
         // Count distinct calendar days spanned (not whole 24h periods) so
         // the GA can reach every day in the horizon, even when the start is
@@ -568,13 +845,13 @@ struct ScheduleChromosome: Chromosome, Sendable {
         let horizonStartDay = calendar.startOfDay(for: horizon.start)
         let horizonLastDay = calendar.startOfDay(for: horizon.end.addingTimeInterval(-1))
         let daysInHorizon = max(1, (calendar.dateComponents([.day], from: horizonStartDay, to: horizonLastDay).day ?? 0) + 1)
-        let dayOffset = Int.random(in: 0..<daysInHorizon)
+        let dayOffset = rng.int(in: 0..<daysInHorizon)
         let day = calendar.date(byAdding: .day, value: dayOffset, to: horizon.start)!
 
         let hourRange = event.preferredHourRange ?? workingHours
         let maxStartHour = max(hourRange.lowerBound, hourRange.upperBound - Int(event.duration / 3600))
-        let hour = Int.random(in: hourRange.lowerBound...max(hourRange.lowerBound, maxStartHour))
-        let minute = Int.random(in: 0...3) * 15
+        let hour = rng.int(in: hourRange.lowerBound...max(hourRange.lowerBound, maxStartHour))
+        let minute = rng.int(in: 0...3) * 15
 
         var result = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day)
             ?? horizon.start

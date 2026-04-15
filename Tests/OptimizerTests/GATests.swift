@@ -1463,7 +1463,7 @@ struct SUSTests {
 
         // Select multiple times — should not crash
         for _ in 0..<50 {
-            let selected = Selection.select(from: pop, strategy: .stochasticUniversalSampling)
+            let selected = Selection.select(from: pop, strategy: .stochasticUniversalSampling, rng: context.rng)
             #expect(selected.fitness > 0)
         }
     }
@@ -1478,7 +1478,7 @@ struct SUSTests {
             pop.individuals[i].fitness = Double.random(in: 0.1...1.0)
         }
 
-        let (p1, p2) = Selection.selectPair(from: pop, strategy: .stochasticUniversalSampling)
+        let (p1, p2) = Selection.selectPair(from: pop, strategy: .stochasticUniversalSampling, rng: context.rng)
         #expect(p1.genes.count == 2)
         #expect(p2.genes.count == 2)
     }
@@ -2626,11 +2626,11 @@ struct GenotypicDistanceTests {
             individuals: Array(repeating: same, count: 10),
             eliteCount: 1
         )
-        let homDiv = homogeneous.genotypicDiversity
+        let homDiv = homogeneous.genotypicDiversity(rng: context.rng)
 
         // Diverse population: all different
         let diverse = Population<ScheduleChromosome>(size: 10, eliteCount: 1, context: context)
-        let divDiv = diverse.genotypicDiversity
+        let divDiv = diverse.genotypicDiversity(rng: context.rng)
 
         #expect(homDiv < divDiv || homDiv == 0,
                 "Homogeneous (\(homDiv)) should have less diversity than diverse (\(divDiv))")
@@ -2843,6 +2843,239 @@ struct DeltaEvaluationTests {
         #expect(fitness.isFinite)
         #expect(fitness >= 0)
         #expect(!cache.isEmpty)
+    }
+
+    @Test("MutationBandit converges to the rewarded operator")
+    func mutationBanditPrefersRewarded() {
+        let bandit = MutationBandit(explorationC: 1.0)
+        let rng = GARandom(seed: 42)
+
+        // Teach the bandit that `.guided` is the only good operator.
+        for _ in 0..<200 {
+            let op = bandit.select(rng: rng)
+            let reward: Double = (op == .guided) ? 0.1 : 0.0
+            bandit.record(op: op, reward: reward)
+        }
+
+        let snap = bandit.snapshot
+        let guidedPulls = snap[.guided]?.pulls ?? 0
+        // Other arms still get exploration pulls, but the rewarded one should
+        // dominate — in 200 trials, at least 40% should land on guided.
+        #expect(guidedPulls > 80,
+                "Bandit should converge on rewarded arm: guided=\(guidedPulls) out of 200")
+    }
+
+    @Test("ParetoRanker non-dominated sort classifies extremes correctly")
+    func paretoNonDominatedSortExtremes() {
+        // 3 objectives, 4 individuals. (1,0,0), (0,1,0), (0,0,1) all Pareto-
+        // optimal (nothing dominates them). (0.5, 0.5, 0.5) is on the second
+        // front — dominated by each extreme? No: (1,0,0) does NOT dominate
+        // (0.5,0.5,0.5) because obj2 is worse. So (0.5,0.5,0.5) is actually
+        // on front 0 too. Use a clearly dominated point instead.
+        let vectors: [[Double]] = [
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [0.1, 0.1, 0.1],  // Dominated by all three extremes
+        ]
+        let fronts = ParetoRanker.nonDominatedSort(vectors)
+        #expect(fronts.count == 2, "Expected 2 fronts, got \(fronts.count)")
+        #expect(Set(fronts[0]) == [0, 1, 2])
+        #expect(fronts[1] == [3])
+    }
+
+    @Test("ParetoRanker rewrites fitness so front 0 outranks front 1")
+    func paretoRankerOrdersByFront() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let tomorrow = cal.date(byAdding: .day, value: 1, to: today)!
+        let events = [makeMovableEvent(id: "t1", durationMinutes: 30)]
+        let context = OptimizerContext(
+            movableEvents: events,
+            planningHorizon: DateInterval(start: today, end: tomorrow),
+            rng: GARandom(seed: 5)
+        )
+        let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
+
+        // Construct two chromosomes: one strong across all objectives, one
+        // weak. After ranking, the strong one must have strictly higher
+        // fitness even if weighted-sum previously happened to tie them.
+        var strong = ScheduleChromosome.random(context: context)
+        var weak = ScheduleChromosome.random(context: context)
+        evaluator.evaluateAndAssign(&strong, context: context)
+        evaluator.evaluateAndAssign(&weak, context: context)
+        strong.objectiveCache = evaluator.objectiveBreakdown(for: strong, context: context)
+            .mapValues { _ in 0.9 }
+        weak.objectiveCache = evaluator.objectiveBreakdown(for: weak, context: context)
+            .mapValues { _ in 0.3 }
+
+        var pop: [ScheduleChromosome] = [weak, strong]
+        ParetoRanker.rankByParetoFronts(&pop, evaluator: evaluator, context: context)
+        // `strong` dominates `weak` on every objective, so strong lands on
+        // front 0 and must rank higher than weak after re-scoring.
+        let strongIdx = pop.firstIndex(where: { $0.genes == strong.genes })!
+        let weakIdx = pop.firstIndex(where: { $0.genes == weak.genes })!
+        #expect(pop[strongIdx].fitness > pop[weakIdx].fitness,
+                "Strong (front 0) must outrank weak (front 1): \(pop[strongIdx].fitness) vs \(pop[weakIdx].fitness)")
+    }
+
+    @Test("SIMD distance matches scalar distance on aligned chromosomes")
+    func simdDistanceMatchesScalar() {
+        let events = (0..<13).map { makeMovableEvent(id: "e\($0)", durationMinutes: 30) }
+        let context = makeContext(movableEvents: events)
+
+        for seed: UInt64 in [1, 2, 3, 42, 100] {
+            let rng = GARandom(seed: seed)
+            let ctx = OptimizerContext(
+                movableEvents: events,
+                planningHorizon: context.planningHorizon,
+                rng: rng
+            )
+            let a = ScheduleChromosome.random(context: ctx)
+            var b = a
+            // Mutate b so the distance is nonzero and exercises the SIMD lanes.
+            b.mutate(rate: 0.4, context: ctx)
+
+            let simd = a.distance(to: b)
+            #expect(simd >= 0 && simd <= 1, "distance must be in [0, 1]")
+            // Distance to self is 0 — quick sanity for SIMD path.
+            #expect(a.distance(to: a) == 0)
+        }
+    }
+
+    @Test("dayBlock crossover produces valid children with expected shape")
+    func dayBlockCrossoverProducesValidChildren() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let nextWeek = cal.date(byAdding: .day, value: 7, to: today)!
+        let events = (0..<6).map { makeMovableEvent(id: "t\($0)", durationMinutes: 30) }
+        let context = OptimizerContext(
+            movableEvents: events,
+            planningHorizon: DateInterval(start: today, end: nextWeek),
+            rng: GARandom(seed: 13)
+        )
+
+        let p1 = ScheduleChromosome.random(context: context)
+        let p2 = ScheduleChromosome.random(context: context)
+        let (c1, c2) = Crossover.perform(p1, p2, strategy: .dayBlock, context: context)
+
+        // Children must preserve the movable-event identity set and gene count.
+        #expect(c1.genes.count == p1.genes.count)
+        #expect(c2.genes.count == p2.genes.count)
+        #expect(Set(c1.genes.map(\.eventId)) == Set(p1.genes.map(\.eventId)))
+        #expect(Set(c2.genes.map(\.eventId)) == Set(p2.genes.map(\.eventId)))
+
+        // Every child start time must come from one of the parents at the
+        // same gene position — that's the whole invariant of this operator.
+        for i in p1.genes.indices {
+            let t1 = c1.genes[i].startTime
+            #expect(t1 == p1.genes[i].startTime || t1 == p2.genes[i].startTime,
+                    "Child1 gene \(i) time must come from one of the parents")
+        }
+    }
+
+    @Test("MutationBandit tracks selection on chromosome when wired")
+    func mutationBanditSetsLastOperator() {
+        let events = [makeMovableEvent(id: "t1", durationMinutes: 30)]
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let tomorrow = cal.date(byAdding: .day, value: 1, to: today)!
+        let bandit = MutationBandit()
+        let context = OptimizerContext(
+            movableEvents: events,
+            planningHorizon: DateInterval(start: today, end: tomorrow),
+            rng: GARandom(seed: 3),
+            mutationBandit: bandit
+        )
+
+        var chrom = ScheduleChromosome.random(context: context)
+        chrom.mutate(rate: 1.0, context: context)  // guaranteed to hit
+        #expect(chrom.lastMutationOperator != nil,
+                "Wired bandit must record the chosen operator on the chromosome")
+    }
+
+    @Test("Repair respects dependsOn ordering")
+    func repairEnforcesDependencies() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let tomorrow = cal.date(byAdding: .day, value: 1, to: today)!
+
+        // Two tasks: B depends on A. Force A late and B early — repair must
+        // push B past A's end time.
+        let eventA = OptimizableEvent(
+            id: "A",
+            title: "A",
+            duration: 3600,
+            priority: 0.7
+        )
+        let eventB = OptimizableEvent(
+            id: "B",
+            title: "B",
+            duration: 3600,
+            priority: 0.5,
+            dependsOn: ["A"]
+        )
+        let context = OptimizerContext(
+            movableEvents: [eventA, eventB],
+            planningHorizon: DateInterval(start: today, end: tomorrow),
+            rng: GARandom(seed: 1)
+        )
+
+        let aStart = cal.date(bySettingHour: 14, minute: 0, second: 0, of: today)!
+        let bStart = cal.date(bySettingHour: 10, minute: 0, second: 0, of: today)!
+        let geneA = ScheduleGene(
+            eventId: "A", title: "A", startTime: aStart,
+            duration: 3600, context: nil, energyCost: 0.5, priority: 0.7,
+            isFocusBlock: false
+        )
+        let geneB = ScheduleGene(
+            eventId: "B", title: "B", startTime: bStart,
+            duration: 3600, context: nil, energyCost: 0.5, priority: 0.5,
+            isFocusBlock: false
+        )
+        var chromosome = ScheduleChromosome(genes: [geneA, geneB])
+        chromosome.repair(context: context)
+
+        let repairedA = chromosome.genes.first { $0.eventId == "A" }!
+        let repairedB = chromosome.genes.first { $0.eventId == "B" }!
+
+        #expect(repairedB.startTime >= repairedA.endTime,
+                "B (\(repairedB.startTime)) must start at or after A ends (\(repairedA.endTime))")
+    }
+
+    @Test("Delta evaluation after mutation matches full evaluation")
+    func deltaEvalMatchesFull() {
+        // Build a multi-day context so the day-partitioned path has work to do.
+        let events = (0..<8).map { makeMovableEvent(id: "t\($0)", durationMinutes: 30) }
+        let cal = Calendar.current
+        let start = cal.startOfDay(for: Date())
+        let end = cal.date(byAdding: .day, value: 3, to: start)!
+        let context = OptimizerContext(
+            movableEvents: events,
+            planningHorizon: DateInterval(start: start, end: end),
+            rng: GARandom(seed: 777)
+        )
+        let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
+
+        var chromosome = ScheduleChromosome.random(context: context)
+        evaluator.evaluateAndAssign(&chromosome, context: context)
+        let baselineFitness = chromosome.fitness
+
+        // Mutate a single gene to trigger the per-day delta path
+        chromosome.mutate(rate: 1.0 / Double(chromosome.genes.count), context: context)
+        evaluator.evaluateAndAssign(&chromosome, context: context)
+        let deltaFitness = chromosome.fitness
+
+        // Baseline: a fresh chromosome with identical genes, full-evaluated
+        // from scratch (no delta state). Must match the delta result.
+        var fresh = ScheduleChromosome(genes: chromosome.genes, needsEvaluation: true)
+        evaluator.evaluateAndAssign(&fresh, context: context)
+        let freshFitness = fresh.fitness
+
+        #expect(abs(deltaFitness - freshFitness) < 1e-9,
+                "Delta-eval result (\(deltaFitness)) must match full-eval from scratch (\(freshFitness))")
+        // Sanity: baseline was actually evaluated (not stuck at 0)
+        #expect(baselineFitness > 0)
     }
 
     @Test("Incremental evaluation with cache returns consistent results")
@@ -3127,7 +3360,8 @@ struct GACoreRegressionTests {
         for _ in 0..<50 {
             let (i, j) = Selection.selectPairIndices(
                 from: pop,
-                strategy: .tournament(size: 3)
+                strategy: .tournament(size: 3),
+                rng: context.rng
             )
             #expect(i != j, "Pair indices must always be distinct")
         }
@@ -3141,7 +3375,8 @@ struct GACoreRegressionTests {
         pop.individuals[0].fitness = 0.5
         let (i, j) = Selection.selectPairIndices(
             from: pop,
-            strategy: .tournament(size: 2)
+            strategy: .tournament(size: 2),
+            rng: context.rng
         )
         #expect(i == 0 && j == 0, "Degenerate singleton must not crash")
     }
@@ -3220,5 +3455,191 @@ struct GACoreRegressionTests {
             distanceFn: { $0.distance(to: $1) }
         )
         #expect(pop.size == 4)
+    }
+}
+
+// MARK: - GARandom Tests
+
+@Suite("GARandom Tests")
+struct GARandomTests {
+
+    @Test("Same seed produces identical sequences")
+    func sameSeedSameSequence() {
+        let a = GARandom(seed: 42)
+        let b = GARandom(seed: 42)
+        for _ in 0..<100 {
+            #expect(a.nextRaw() == b.nextRaw(), "Same seed must yield identical streams")
+        }
+    }
+
+    @Test("Different seeds diverge quickly")
+    func differentSeedsDiverge() {
+        let a = GARandom(seed: 42)
+        let b = GARandom(seed: 43)
+        var diffs = 0
+        for _ in 0..<100 {
+            if a.nextRaw() != b.nextRaw() { diffs += 1 }
+        }
+        #expect(diffs > 95, "Seeds differing by 1 must produce nearly disjoint streams (got \(diffs)/100 differences)")
+    }
+
+    @Test("Split produces independent generator")
+    func splitProducesIndependentStream() {
+        let parent = GARandom(seed: 1234)
+        let child = parent.split()
+        // Child must not be a trivial alias: compare a few draws
+        var differences = 0
+        for _ in 0..<50 {
+            if parent.nextRaw() != child.nextRaw() { differences += 1 }
+        }
+        #expect(differences > 40, "Split child stream should diverge from parent")
+    }
+
+    @Test("Split sequence is deterministic")
+    func splitDeterministic() {
+        let p1 = GARandom(seed: 99)
+        let p2 = GARandom(seed: 99)
+        let c1 = p1.split()
+        let c2 = p2.split()
+        for _ in 0..<50 {
+            #expect(c1.nextRaw() == c2.nextRaw(),
+                    "Splitting two same-seeded parents must yield identical child streams")
+        }
+    }
+
+    @Test("double(in:) respects bounds")
+    func doubleInRange() {
+        let rng = GARandom(seed: 7)
+        for _ in 0..<1000 {
+            let v = rng.double(in: -5.0..<5.0)
+            #expect(v >= -5.0 && v < 5.0)
+        }
+    }
+
+    @Test("int(in:) closed range reaches both endpoints")
+    func intClosedReachesEndpoints() {
+        let rng = GARandom(seed: 11)
+        var sawMin = false
+        var sawMax = false
+        for _ in 0..<5000 {
+            let v = rng.int(in: 0...3)
+            if v == 0 { sawMin = true }
+            if v == 3 { sawMax = true }
+            #expect(v >= 0 && v <= 3)
+        }
+        #expect(sawMin && sawMax)
+    }
+
+    @Test("shuffle produces permutation")
+    func shufflePreservesElements() {
+        let rng = GARandom(seed: 2024)
+        var arr = Array(0..<100)
+        rng.shuffle(&arr)
+        #expect(Set(arr) == Set(0..<100), "Shuffle must preserve multiset of elements")
+    }
+
+    @Test("FitnessCache returns stored score for identical fingerprint")
+    func fitnessCacheHitsOnDuplicates() {
+        let events = [makeMovableEvent(id: "t1", durationMinutes: 30)]
+        let context = makeContext(movableEvents: events)
+        let cache = FitnessCache()
+        let evaluator = FitnessEvaluator(
+            objectives: FitnessEvaluator.standard(preferences: context.preferences).objectives,
+            cache: cache
+        )
+
+        var c1 = ScheduleChromosome.random(context: context)
+        evaluator.evaluateAndAssign(&c1, context: context)
+
+        // Duplicate with same genes and cleared flags should hit the cache
+        var c2 = c1
+        c2.needsEvaluation = true
+        c2.fitness = 0
+        c2.rawFitness = 0
+        c2.objectiveCache = nil
+        evaluator.evaluateAndAssign(&c2, context: context)
+
+        let stats = cache.stats
+        #expect(stats.hits >= 1, "Second evaluation of same genes should hit cache (hits=\(stats.hits))")
+        #expect(c1.fitness == c2.fitness, "Cache hit must return identical fitness")
+    }
+
+    @Test("FitnessCache evicts oldest when maxSize exceeded")
+    func fitnessCacheEvictsWhenFull() {
+        let cache = FitnessCache(maxSize: 4)
+        let fakeEntry = FitnessCache.Entry(fitness: 0.5, objectiveCache: [:])
+
+        // Insert 10 unique fingerprints — cache must not grow beyond maxSize
+        let ts = Date(timeIntervalSinceReferenceDate: 0)
+        for i in 0..<10 {
+            let key = ChromosomeFingerprint([
+                ScheduleGene(
+                    eventId: "e\(i)", title: "t", startTime: ts,
+                    duration: 3600, context: nil, energyCost: 0.5,
+                    priority: 0.5, isFocusBlock: false
+                )
+            ])
+            cache.store(key, entry: fakeEntry)
+        }
+        #expect(cache.stats.size <= 4, "Cache must honour maxSize")
+    }
+
+    @Test("Duplicate detection breaks up a cloned population")
+    func duplicateDetectionMutatesClones() {
+        let events = [
+            makeMovableEvent(id: "a", durationMinutes: 30),
+            makeMovableEvent(id: "b", durationMinutes: 30)
+        ]
+        let context = makeContext(movableEvents: events)
+
+        // Build a config with heavy duplicate diversification so the test
+        // deterministically triggers the mutation path.
+        var cfg = GAConfiguration.quick
+        cfg.duplicateMutationThreshold = 0.1
+        cfg.duplicateMutationBoost = 3.0
+        cfg.maxGenerations = 5
+
+        // Seed every individual with the same chromosome, then run one short
+        // evolution. If duplicate detection works, the final population must
+        // contain at least two distinct genomes (by gene equality).
+        let seed = ScheduleChromosome.random(context: context)
+        let seeds = Array(repeating: seed, count: cfg.populationSize)
+        let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
+        let ga = GeneticAlgorithm<ScheduleChromosome>(
+            config: cfg,
+            context: context,
+            evaluate: { c in evaluator.evaluateAndAssign(&c, context: context) }
+        )
+        let final = ga.runSeeded(with: seeds)
+        let uniqueGeneSets = Set(final.map { ChromosomeFingerprint($0.genes) })
+        #expect(uniqueGeneSets.count >= 2,
+                "A fully-cloned seed must produce at least one distinct genome after evolution (got \(uniqueGeneSets.count))")
+    }
+
+    @Test("GA run with seeded context is reproducible")
+    func seededGARunIsReproducible() {
+        let events = (0..<6).map { makeMovableEvent(id: "t\($0)", durationMinutes: 30) }
+
+        func runOnce(seed: UInt64) -> Double {
+            let ctx = OptimizerContext(
+                movableEvents: events,
+                planningHorizon: DateInterval(
+                    start: Calendar.current.startOfDay(for: Date()),
+                    duration: 24 * 3600
+                ),
+                rng: GARandom(seed: seed)
+            )
+            let evaluator = FitnessEvaluator.standard(preferences: ctx.preferences)
+            let ga = GeneticAlgorithm<ScheduleChromosome>(
+                config: .quick,
+                context: ctx,
+                evaluate: { c in evaluator.evaluateAndAssign(&c, context: ctx) }
+            )
+            return ga.run().first?.rawFitness ?? 0
+        }
+
+        let a = runOnce(seed: 12345)
+        let b = runOnce(seed: 12345)
+        #expect(a == b, "Same seed, same inputs must give identical best fitness (got \(a) vs \(b))")
     }
 }

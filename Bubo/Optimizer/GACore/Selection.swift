@@ -12,23 +12,19 @@ enum SelectionStrategy: Sendable {
 // MARK: - Selection
 
 /// Selects individuals from a population for reproduction.
+///
+/// Every entry point threads a `GARandom` so that selection pressure is
+/// reproducible across runs with the same seed. Call sites that previously
+/// used `Double.random`/`Int.random` implicitly now pass `context.rng`.
 enum Selection {
 
     /// Select one individual using the given strategy.
     static func select<C: Chromosome>(
         from population: Population<C>,
-        strategy: SelectionStrategy = .tournament(size: 3)
+        strategy: SelectionStrategy = .tournament(size: 3),
+        rng: GARandom
     ) -> C {
-        switch strategy {
-        case .tournament(let size):
-            return tournamentSelect(from: population, tournamentSize: size)
-        case .roulette:
-            return rouletteSelect(from: population)
-        case .rank:
-            return rankSelect(from: population)
-        case .stochasticUniversalSampling:
-            return susSelect(from: population)
-        }
+        population.individuals[selectIndex(from: population, strategy: strategy, rng: rng)]
     }
 
     /// Select a pair of parents. Avoids returning the same *index* twice so that
@@ -37,9 +33,10 @@ enum Selection {
     /// keeps crowding replacement correct when duplicates exist in the population).
     static func selectPair<C: Chromosome>(
         from population: Population<C>,
-        strategy: SelectionStrategy = .tournament(size: 3)
+        strategy: SelectionStrategy = .tournament(size: 3),
+        rng: GARandom
     ) -> (C, C) {
-        let pair = selectPairIndices(from: population, strategy: strategy)
+        let pair = selectPairIndices(from: population, strategy: strategy, rng: rng)
         return (population.individuals[pair.0], population.individuals[pair.1])
     }
 
@@ -48,18 +45,19 @@ enum Selection {
     /// lookup is ambiguous when duplicates exist or when fitness was adjusted).
     static func selectPairIndices<C: Chromosome>(
         from population: Population<C>,
-        strategy: SelectionStrategy = .tournament(size: 3)
+        strategy: SelectionStrategy = .tournament(size: 3),
+        rng: GARandom
     ) -> (Int, Int) {
         guard !population.individuals.isEmpty else {
             fatalError("Cannot select from empty population")
         }
         if population.individuals.count == 1 { return (0, 0) }
 
-        let i = selectIndex(from: population, strategy: strategy)
-        var j = selectIndex(from: population, strategy: strategy)
+        let i = selectIndex(from: population, strategy: strategy, rng: rng)
+        var j = selectIndex(from: population, strategy: strategy, rng: rng)
         var attempts = 0
         while j == i && attempts < 5 {
-            j = selectIndex(from: population, strategy: strategy)
+            j = selectIndex(from: population, strategy: strategy, rng: rng)
             attempts += 1
         }
         // Final fallback: step to a neighbouring slot if we still collided
@@ -73,39 +71,34 @@ enum Selection {
     /// Select one individual and return its index in `population.individuals`.
     static func selectIndex<C: Chromosome>(
         from population: Population<C>,
-        strategy: SelectionStrategy
+        strategy: SelectionStrategy,
+        rng: GARandom
     ) -> Int {
         switch strategy {
         case .tournament(let size):
-            return tournamentSelectIndex(from: population, tournamentSize: size)
+            return tournamentSelectIndex(from: population, tournamentSize: size, rng: rng)
         case .roulette:
-            return rouletteSelectIndex(from: population)
+            return rouletteSelectIndex(from: population, rng: rng)
         case .rank:
-            return rankSelectIndex(from: population)
+            return rankSelectIndex(from: population, rng: rng)
         case .stochasticUniversalSampling:
-            return susSelectIndex(from: population)
+            return susSelectIndex(from: population, rng: rng)
         }
     }
 
     // MARK: - Tournament Selection
 
-    private static func tournamentSelect<C: Chromosome>(
-        from population: Population<C>,
-        tournamentSize: Int
-    ) -> C {
-        population.individuals[tournamentSelectIndex(from: population, tournamentSize: tournamentSize)]
-    }
-
     private static func tournamentSelectIndex<C: Chromosome>(
         from population: Population<C>,
-        tournamentSize: Int
+        tournamentSize: Int,
+        rng: GARandom
     ) -> Int {
         let n = population.individuals.count
         guard n > 0 else { fatalError("Cannot select from empty population") }
-        var bestIdx = Int.random(in: 0..<n)
+        var bestIdx = rng.int(in: 0..<n)
         var bestFit = population.individuals[bestIdx].fitness
         for _ in 1..<max(1, tournamentSize) {
-            let idx = Int.random(in: 0..<n)
+            let idx = rng.int(in: 0..<n)
             let fit = population.individuals[idx].fitness
             if fit > bestFit {
                 bestFit = fit
@@ -117,19 +110,18 @@ enum Selection {
 
     // MARK: - Roulette Wheel Selection
 
-    private static func rouletteSelect<C: Chromosome>(from population: Population<C>) -> C {
-        population.individuals[rouletteSelectIndex(from: population)]
-    }
-
-    private static func rouletteSelectIndex<C: Chromosome>(from population: Population<C>) -> Int {
+    private static func rouletteSelectIndex<C: Chromosome>(
+        from population: Population<C>,
+        rng: GARandom
+    ) -> Int {
         let n = population.individuals.count
         guard n > 0 else { fatalError("Cannot select from empty population") }
         let minFitness = population.individuals.map(\.fitness).min() ?? 0
         let shifted = population.individuals.map { $0.fitness - minFitness + 1e-6 }
         let totalFitness = shifted.reduce(0, +)
-        guard totalFitness > 0 else { return Int.random(in: 0..<n) }
+        guard totalFitness > 0 else { return rng.int(in: 0..<n) }
 
-        var random = Double.random(in: 0..<totalFitness)
+        var random = rng.double(in: 0..<totalFitness)
         for (i, fitness) in shifted.enumerated() {
             random -= fitness
             if random <= 0 { return i }
@@ -139,11 +131,10 @@ enum Selection {
 
     // MARK: - Rank Selection
 
-    private static func rankSelect<C: Chromosome>(from population: Population<C>) -> C {
-        population.individuals[rankSelectIndex(from: population)]
-    }
-
-    private static func rankSelectIndex<C: Chromosome>(from population: Population<C>) -> Int {
+    private static func rankSelectIndex<C: Chromosome>(
+        from population: Population<C>,
+        rng: GARandom
+    ) -> Int {
         let n = population.individuals.count
         guard n > 0 else { fatalError("Cannot select from empty population") }
 
@@ -153,7 +144,7 @@ enum Selection {
             population.individuals[$0].fitness > population.individuals[$1].fitness
         }
         let totalRank = (1...n).reduce(0, +)
-        var random = Int.random(in: 0..<totalRank)
+        var random = rng.int(in: 0..<totalRank)
 
         for (pos, originalIdx) in orderedIndices.enumerated() {
             let rank = n - pos
@@ -168,21 +159,20 @@ enum Selection {
     /// SUS provides more uniform sampling pressure than roulette wheel.
     /// Uses evenly spaced pointers on the fitness-proportional wheel,
     /// reducing selection bias and variance.
-    private static func susSelect<C: Chromosome>(from population: Population<C>) -> C {
-        population.individuals[susSelectIndex(from: population)]
-    }
-
-    private static func susSelectIndex<C: Chromosome>(from population: Population<C>) -> Int {
+    private static func susSelectIndex<C: Chromosome>(
+        from population: Population<C>,
+        rng: GARandom
+    ) -> Int {
         let n = population.individuals.count
         guard n > 0 else { fatalError("Cannot select from empty population") }
         let minFitness = population.individuals.map(\.fitness).min() ?? 0
         let shifted = population.individuals.map { $0.fitness - minFitness + 1e-6 }
         let totalFitness = shifted.reduce(0, +)
-        guard totalFitness > 0 else { return Int.random(in: 0..<n) }
+        guard totalFitness > 0 else { return rng.int(in: 0..<n) }
 
         let spacing = totalFitness / Double(n)
-        let start = Double.random(in: 0..<spacing)
-        let pointerIndex = Int.random(in: 0..<n)
+        let start = rng.double(in: 0..<spacing)
+        let pointerIndex = rng.int(in: 0..<n)
         let pointer = start + spacing * Double(pointerIndex)
 
         var cumulative = 0.0

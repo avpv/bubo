@@ -156,14 +156,26 @@ struct IslandModelProgress: Sendable {
 
 /// A single island holding a population, its GA engine, and per-island evolution state.
 /// Reference type so that `concurrentPerform` can safely mutate separate instances.
+///
+/// Each island owns its own `OptimizerContext` with an independently-split
+/// `GARandom`. Two motivations:
+/// 1. Thread safety: GARandom mutates state on every draw; islands evolve in
+///    parallel, so they must not share a generator.
+/// 2. Determinism: deriving per-island seeds from the parent via `split()`
+///    makes the whole island model run reproducible when the top-level seed
+///    is fixed — every island gets the same private stream it would have
+///    gotten on any previous run with the same seed, regardless of thread
+///    scheduling.
 private final class Island<C: Chromosome> {
     var population: Population<C>
     let ga: GeneticAlgorithm<C>
+    let context: OptimizerContext
     var bestEver: C?
 
-    init(population: Population<C>, ga: GeneticAlgorithm<C>) {
+    init(population: Population<C>, ga: GeneticAlgorithm<C>, context: OptimizerContext) {
         self.population = population
         self.ga = ga
+        self.context = context
         self.bestEver = population.best
     }
 }
@@ -219,27 +231,30 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
                      "populationSize must be larger than eliteCount + 1")
 
         // 1. Create islands with (optionally) diversified configurations.
-        //    Each island gets its own GeneticAlgorithm instance for evolveOneGeneration.
+        //    Each island gets its own GeneticAlgorithm instance for evolveOneGeneration,
+        //    and an independently-split RNG so that parallel island evolution is both
+        //    thread-safe and deterministic under a fixed top-level seed.
         //    Greedy seeds are distributed per-island based on each island's config.
         let islandConfigs = makeIslandConfigs()
         let islands = islandConfigs.map { config -> Island<C> in
+            let islandContext = makeIslandContext()
             let greedyCount = max(0, Int(Double(config.populationSize) * config.greedySeedFraction))
             let randomCount = config.populationSize - greedyCount
 
             var individuals: [C] = []
             for i in 0..<greedyCount {
-                var ind = C.greedy(context: context)
-                if i > 0 { ind.mutate(rate: 0.1 + Double(i) * 0.05, context: context) }
+                var ind = C.greedy(context: islandContext)
+                if i > 0 { ind.mutate(rate: 0.1 + Double(i) * 0.05, context: islandContext) }
                 individuals.append(ind)
             }
             for _ in 0..<randomCount {
-                individuals.append(C.random(context: context))
+                individuals.append(C.random(context: islandContext))
             }
 
             // Repair initial population if enabled
             if config.enableRepair {
                 for i in individuals.indices {
-                    individuals[i].repair(context: context)
+                    individuals[i].repair(context: islandContext)
                 }
             }
 
@@ -247,13 +262,38 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             pop.evaluateAll(using: evaluate)
             let ga = GeneticAlgorithm<C>(
                 config: config,
-                context: context,
+                context: islandContext,
                 evaluate: evaluate
             )
-            return Island(population: pop, ga: ga)
+            return Island(population: pop, ga: ga, context: islandContext)
         }
 
         return evolveIslands(islands)
+    }
+
+    /// Build a fresh `OptimizerContext` for a single island, sharing everything
+    /// except the random-number generator with the parent. `split()` is called
+    /// on the parent RNG in the order islands are created, so the sequence is
+    /// deterministic — island 0 gets the first split, island 1 the second, etc.
+    ///
+    /// The `MutationBandit` is intentionally *shared* across islands when
+    /// present: every pull on every island contributes to the same UCB arm
+    /// statistics, which accelerates convergence of the operator allocation.
+    /// Islands evolve in parallel, so the bandit's lock is the only concurrency
+    /// point; lock contention is negligible (one acquisition per mutate call,
+    /// ~microsecond cost versus ms-scale eval cost).
+    private func makeIslandContext() -> OptimizerContext {
+        OptimizerContext(
+            fixedEvents: context.fixedEvents,
+            movableEvents: context.movableEvents,
+            workingHours: context.workingHours,
+            planningHorizon: context.planningHorizon,
+            preferences: context.preferences,
+            participantAvailability: context.participantAvailability,
+            calendar: context.calendar,
+            rng: context.rng.split(),
+            mutationBandit: context.mutationBandit
+        )
     }
 
     // MARK: - Run Seeded
@@ -277,6 +317,7 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         }
 
         let islands = islandConfigs.enumerated().map { (idx, config) -> Island<C> in
+            let islandContext = makeIslandContext()
             var individuals = seedBuckets[idx]
 
             // Evaluate seeds that haven't been evaluated
@@ -286,7 +327,7 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
 
             // Fill remaining slots with random individuals
             while individuals.count < config.populationSize {
-                var individual = C.random(context: context)
+                var individual = C.random(context: islandContext)
                 evaluate(&individual)
                 individuals.append(individual)
             }
@@ -294,10 +335,10 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             let pop = Population<C>(individuals: individuals, eliteCount: config.eliteCount)
             let ga = GeneticAlgorithm<C>(
                 config: config,
-                context: context,
+                context: islandContext,
                 evaluate: evaluate
             )
-            return Island(population: pop, ga: ga)
+            return Island(population: pop, ga: ga, context: islandContext)
         }
 
         return evolveIslands(islands)
@@ -531,6 +572,7 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
 
     /// Determine which island pairs exchange individuals based on topology.
     private func makeMigrationPairs(islandCount n: Int) -> [(source: Int, destination: Int)] {
+        let rng = context.rng
         switch islandConfig.topology {
         case .ring:
             // Unidirectional ring: i -> (i+1) % n
@@ -540,7 +582,7 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             // Each island sends to one randomly chosen neighbor per migration event.
             // This avoids elite flooding: N migrants per island instead of N*(N-1).
             return (0..<n).map { i in
-                var j = Int.random(in: 0..<(n - 1))
+                var j = rng.int(in: 0..<(n - 1))
                 if j >= i { j += 1 } // exclude self
                 return (i, j)
             }
@@ -548,7 +590,7 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         case .randomPairs:
             // Shuffle all islands into random pairs; every island participates exactly once.
             var indices = Array(0..<n)
-            indices.shuffle()
+            rng.shuffle(&indices)
             var pairs: [(Int, Int)] = []
             var i = 0
             while i + 1 < n {
@@ -559,7 +601,7 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             // If odd number of islands, the last one exchanges with a random partner.
             if n.isMultiple(of: 2) == false {
                 let last = indices[n - 1]
-                let partner = indices[Int.random(in: 0..<(n - 1))]
+                let partner = indices[rng.int(in: 0..<(n - 1))]
                 pairs.append((last, partner))
                 pairs.append((partner, last))
             }
@@ -580,7 +622,8 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             for _ in 0..<effectiveCount {
                 let candidate = Selection.select(
                     from: island.population,
-                    strategy: .tournament(size: tournamentSize)
+                    strategy: .tournament(size: tournamentSize),
+                    rng: context.rng
                 )
                 emigrants.append(candidate)
             }
@@ -610,7 +653,7 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             // Replace random non-elite individuals
             let nonEliteIndices = Array(eliteCount..<individuals.count)
             guard !nonEliteIndices.isEmpty else { return }
-            let replaceIndices = nonEliteIndices.shuffled().prefix(immigrants.count)
+            let replaceIndices = context.rng.shuffled(nonEliteIndices).prefix(immigrants.count)
             for (immigrant, idx) in zip(immigrants, replaceIndices) {
                 individuals[idx] = immigrant
             }
@@ -667,8 +710,11 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
                 config.greedySeedFraction = 0.1
 
             case 3:
-                // Island 3: uniform crossover — more gene mixing, adaptive rates
-                config.crossoverStrategy = .uniform(swapProbability: 0.5)
+                // Island 3: day-block crossover — preserves bundled day
+                // structures ("morning meeting block") instead of splitting
+                // gene-by-gene. Pairs well with adaptive crossover so early
+                // generations mix days aggressively and late ones settle.
+                config.crossoverStrategy = .dayBlock
                 config.crossoverRate = 0.9
                 config.adaptiveCrossover = true
                 config.enableCrowding = false
