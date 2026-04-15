@@ -517,8 +517,12 @@ struct MenuBarView: View {
                         backlog.restoreTask(task, at: originalIndex)
                     }
                 },
-                onReorderToast: { message, undo in
-                    toastState.showSuccess(message, icon: "arrow.up.arrow.down", onUndo: undo)
+                onUndoableAction: { message, undo in
+                    // Unified undo pipe for reorder / complete / context
+                    // moves. Icon stays neutral ("arrow.uturn.backward") so
+                    // the same toast reads as "you can undo this" across
+                    // different action kinds.
+                    toastState.showSuccess(message, icon: "arrow.uturn.backward", onUndo: undo)
                 },
                 focusRequested: $focusTaskInput,
                 autoExpand: autoExpand

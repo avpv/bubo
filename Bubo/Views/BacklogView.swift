@@ -18,10 +18,13 @@ struct BacklogView: View {
     var reminderService: ReminderService
     var onScheduleTasks: () -> Void
     var onDeleteTask: ((BacklogTask) -> Void)?
-    /// Fired when the user reorders or cross-context-drops a task. Lets the
-    /// parent surface an undo toast (it owns `ToastState`); nil disables the
-    /// toast but the reorder still happens.
-    var onReorderToast: ((_ message: String, _ undo: @escaping () -> Void) -> Void)? = nil
+    /// Fired for any reversible user action (reorder, complete, cross-context
+    /// drop) so the parent can surface a unified undo toast — it owns
+    /// `ToastState`. nil silently disables the toast; the action still runs.
+    ///
+    /// HIG: every destructive or hard-to-discover action gets an undo path.
+    /// Birman: undo instead of confirmation dialogs.
+    var onUndoableAction: ((_ message: String, _ undo: @escaping () -> Void) -> Void)? = nil
     /// External trigger: set to `true` to focus the "Add task…" field.
     /// BacklogView resets it to `false` after grabbing focus.
     @Binding var focusRequested: Bool
@@ -30,6 +33,7 @@ struct BacklogView: View {
     var autoExpand: Bool = false
 
     @Environment(\.activeSkin) private var skin
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Shared drag + ghost-preview state, injected by `MenuBarView` via the
     /// environment. May be nil in previews / settings panes, in which case
     /// the ghost-block and drag-highlighting features silently degrade to
@@ -141,28 +145,35 @@ struct BacklogView: View {
     private var backlogHeader: some View {
         HStack(spacing: DS.Spacing.sm) {
             Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
+                withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
                     isExpanded.toggle()
                 }
             } label: {
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(skin.resolvedTextSecondary)
                     Text("Tasks")
                         .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(skin.resolvedTextPrimary)
 
                     let urgent = backlogService.urgent(withinDays: 2)
                     if !urgent.isEmpty {
                         Text("\(urgent.count) urgent")
                             .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.red)
+                            .foregroundStyle(skin.resolvedDestructiveColor)
+                    } else {
+                        // Birman: one signal, not two competing numbers. Show
+                        // the urgent count when it matters, total otherwise.
+                        Text("\(activeTasks.count)")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(skin.resolvedTextSecondary)
+                            .padding(.horizontal, DS.Spacing.sm)
+                            .padding(.vertical, DS.Spacing.xxs)
+                            .adaptiveBadgeFill(skin.resolvedTextSecondary)
+                            .clipShape(Capsule())
+                            .contentTransition(.numericText())
                     }
-
-                    Text("\(activeTasks.count)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
             }
             .buttonStyle(.plain)
@@ -210,26 +221,13 @@ struct BacklogView: View {
                 }
                 .scrollIndicators(.automatic)
                 .frame(maxHeight: expandedScrollMaxHeight)
-
-                // "Show fewer" collapses back to header-only.
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        isExpanded = false
-                    }
-                } label: {
-                    Text("Show fewer")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(skin.resolvedTextTertiary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, DS.Spacing.sm)
-                        .padding(.vertical, DS.Spacing.xs)
-                }
-                .buttonStyle(.plain)
+                // Birman: удалена «Show fewer» — chevron в хедере уже делает
+                // ровно то же самое; два элемента для одной функции = шум.
             }
         }
         .padding(.horizontal, DS.Spacing.sm)
-        .animation(.easeInOut(duration: 0.2), value: activeTasks.map(\.id))
-        .animation(.easeInOut(duration: 0.2), value: isExpanded)
+        .motionAwareAnimation(DS.Animation.standard, value: activeTasks.map(\.id), reduceMotion: reduceMotion)
+        .motionAwareAnimation(DS.Animation.standard, value: isExpanded, reduceMotion: reduceMotion)
     }
 
     /// Renders grouped task rows. When `visibleIDs` is nil all tasks
@@ -243,13 +241,18 @@ struct BacklogView: View {
             let groupHasVisibleTasks = group.tasks.contains { ids.contains($0.id) }
 
             if let context = group.context, groupHasVisibleTasks {
+                // Birman: one typographic voice for quiet subheads —
+                // context-group headers share it with `SectionLabel` and
+                // `DaySectionHeader`, preserved via smaller caption2 weight.
                 Text(context)
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(skin.resolvedTextTertiary)
+                    .textCase(.uppercase)
                     .tracking(0.3)
                     .padding(.horizontal, DS.Spacing.sm)
-                    .padding(.top, DS.Spacing.sm)
-                    .padding(.bottom, DS.Spacing.xxs)
+                    // Symmetric top/bottom: the group header breathes evenly
+                    // against the surrounding rows. Previously 8/2 — uneven.
+                    .padding(.vertical, DS.Spacing.xs)
             }
 
             ForEach(group.tasks) { task in
@@ -268,11 +271,7 @@ struct BacklogView: View {
                             isDragging: coordinator?.draggedTask?.taskId == task.id,
                             canMoveUp: canMoveUp(task),
                             canMoveDown: canMoveDown(task),
-                            onComplete: {
-                                withAnimation(.easeInOut(duration: 0.3)) {
-                                    backlogService.completeTask(id: task.id)
-                                }
-                            },
+                            onComplete: { completeTaskWithUndo(task) },
                             onEdit: { editingTaskId = task.id },
                             onDelete: { onDeleteTask?(task) },
                             onDragStart: {
@@ -312,24 +311,21 @@ struct BacklogView: View {
         HStack(alignment: .top, spacing: DS.Spacing.xs) {
             Image(systemName: "hand.draw")
                 .font(.caption2)
-                .foregroundStyle(skin.accentColor.opacity(0.7))
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Drag a task onto a free slot to schedule it, or onto another task to reorder.")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text("Right-click a task for keyboard-friendly Move Up / Move Down.")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+                .foregroundStyle(skin.accentColor.opacity(DS.Opacity.accentMuted))
+            // Birman: один короткий совет вместо двух абзацев. Клавиатурный
+            // путь и так пропадёт из хинта, когда пользователь применит его
+            // через контекстное меню (см. `moveTask` / `moveTaskToEdge`).
+            Text("Drag a task onto a free slot to schedule it, or onto another to reorder.")
+                .font(.caption2)
+                .foregroundStyle(skin.resolvedTextSecondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, DS.Spacing.sm)
         .padding(.vertical, DS.Spacing.xs)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
-                .fill(skin.accentColor.opacity(0.05))
+                .fill(skin.accentColor.opacity(DS.Opacity.subtleFill))
         )
         .padding(.top, DS.Spacing.xxs)
         .padding(.bottom, DS.Spacing.xs)
@@ -356,7 +352,7 @@ struct BacklogView: View {
         let previousContext = originalTask.context
         let contextChanged = originalTask.context != target.context
 
-        withAnimation(.easeInOut(duration: 0.2)) {
+        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
             if contextChanged {
                 var updated = originalTask
                 updated.context = target.context
@@ -370,7 +366,7 @@ struct BacklogView: View {
         // Undo: restore index + context in one step.
         let taskId = originalTask.id
         let originalSnapshot = originalTask
-        onReorderToast?(
+        onUndoableAction?(
             contextChanged
                 ? "Moved \u{201C}\(originalTask.title)\u{201D} to \(target.context ?? "No project")"
                 : "Reordered \u{201C}\(originalTask.title)\u{201D}"
@@ -398,7 +394,7 @@ struct BacklogView: View {
         let targetId = ordered[target].id
 
         let previousIndex = backlogService.indexOfTask(id: task.id)
-        withAnimation(.easeInOut(duration: 0.2)) {
+        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
             if delta < 0 {
                 backlogService.moveTask(id: task.id, before: targetId)
             } else {
@@ -411,9 +407,13 @@ struct BacklogView: View {
                 }
             }
         }
+        // The user has discovered reorder — via keyboard, not drag, but the
+        // discoverability hint's job is done either way. Birman: don't keep
+        // selling a feature the user already uses.
+        if !hasDragged { hasDragged = true }
 
         let taskId = task.id
-        onReorderToast?("Reordered \u{201C}\(task.title)\u{201D}") { [backlogService] in
+        onUndoableAction?("Reordered \u{201C}\(task.title)\u{201D}") { [backlogService] in
             guard let previousIndex,
                   let current = backlogService.tasks.first(where: { $0.id == taskId })
             else { return }
@@ -424,7 +424,7 @@ struct BacklogView: View {
 
     private func moveTaskToEdge(_ task: BacklogTask, toTop: Bool) {
         let previousIndex = backlogService.indexOfTask(id: task.id)
-        withAnimation(.easeInOut(duration: 0.2)) {
+        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
             if toTop {
                 if let firstActive = activeTasks.first, firstActive.id != task.id {
                     backlogService.moveTask(id: task.id, before: firstActive.id)
@@ -433,8 +433,9 @@ struct BacklogView: View {
                 backlogService.moveTaskToEnd(id: task.id)
             }
         }
+        if !hasDragged { hasDragged = true }
         let taskId = task.id
-        onReorderToast?("Moved \u{201C}\(task.title)\u{201D} to \(toTop ? "top" : "bottom")") { [backlogService] in
+        onUndoableAction?("Moved \u{201C}\(task.title)\u{201D} to \(toTop ? "top" : "bottom")") { [backlogService] in
             guard let previousIndex,
                   let current = backlogService.tasks.first(where: { $0.id == taskId })
             else { return }
@@ -454,6 +455,26 @@ struct BacklogView: View {
     private func isUrgent(_ task: BacklogTask) -> Bool {
         guard let deadline = task.deadline else { return false }
         return deadline <= Calendar.current.date(byAdding: .day, value: 2, to: Date()) ?? Date()
+    }
+
+    // MARK: - Complete (undoable)
+
+    /// Complete a task and surface an undo toast.
+    ///
+    /// HIG / Birman: undo instead of confirmation. The user can always
+    /// change their mind within the toast window — `uncomplete` restores
+    /// the original `status` + clears `completedAt`.
+    private func completeTaskWithUndo(_ task: BacklogTask) {
+        // Snapshot the full task BEFORE completing so the undo restores the
+        // exact state (including any prior `.scheduled` status, not just a
+        // blanket `.pending`).
+        let snapshot = task
+        withAnimation(DS.Animation.motionAware(DS.Animation.entrance, reduceMotion: reduceMotion)) {
+            backlogService.completeTask(id: task.id)
+        }
+        onUndoableAction?("Completed \u{201C}\(task.title)\u{201D}") { [backlogService] in
+            backlogService.updateTask(snapshot)
+        }
     }
 
     // MARK: - Add Task Field
@@ -478,20 +499,20 @@ struct BacklogView: View {
             .padding(.vertical, DS.Spacing.xs)
             .background(
                 RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
-                    .fill(skin.accentColor.opacity(isInputFocused ? 0.06 : 0.03))
+                    .fill(skin.accentColor.opacity(isInputFocused ? DS.Opacity.lightFill : DS.Opacity.subtleFill))
             )
 
             // Hint for new users — disappears once they add a task.
             if activeTasks.isEmpty && !isInputFocused {
                 Text("Tasks you add here will be scheduled into free slots")
                     .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(skin.resolvedTextTertiary)
                     .transition(.opacity)
             }
         }
         .padding(.horizontal, DS.Spacing.sm)
         .padding(.vertical, DS.Spacing.sm)
-        .animation(.easeInOut(duration: 0.15), value: isInputFocused)
+        .motionAwareAnimation(DS.Animation.quick, value: isInputFocused, reduceMotion: reduceMotion)
     }
 
     // MARK: - Ghost Preview
@@ -502,21 +523,17 @@ struct BacklogView: View {
     @ViewBuilder
     private var ghostPreviewRow: some View {
         if let preview = ghostPreviewText, !newTaskTitle.trimmingCharacters(in: .whitespaces).isEmpty {
-            HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: "arrow.right.circle.fill")
-                    .font(.caption)
-                    .foregroundStyle(skin.accentColor.opacity(0.5))
-
-                Text(preview)
-                    .font(.caption2)
-                    .foregroundStyle(skin.accentColor.opacity(0.7))
-                    .lineLimit(1)
-            }
-            .padding(.horizontal, DS.Spacing.sm)
-            .padding(.vertical, DS.Spacing.xxs)
-            .transition(.opacity.combined(with: .move(edge: .top)))
-            .animation(.easeInOut(duration: 0.2), value: preview)
-            .accessibilityHint(Text("The new task would land at \(preview)."))
+            // Birman: текст сам по себе несёт смысл ("Today 14:00–15:00");
+            // декоративная иконка-стрелка только создавала шум. Убрана.
+            Text(preview)
+                .font(.caption2)
+                .foregroundStyle(skin.accentColor.opacity(DS.Opacity.accentMuted))
+                .lineLimit(1)
+                .padding(.horizontal, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xxs)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+                .motionAwareAnimation(DS.Animation.standard, value: preview, reduceMotion: reduceMotion)
+                .accessibilityHint(Text("The new task would land at \(preview)."))
         }
     }
 
@@ -581,7 +598,7 @@ struct BacklogView: View {
             durationMinutes: parsed.durationMinutes ?? Self.defaultTaskDurationMinutes,
             priority: .medium
         )
-        withAnimation(.easeInOut(duration: 0.2)) {
+        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
             backlogService.addTask(task)
             isExpanded = true
         }
@@ -623,6 +640,21 @@ struct BacklogTaskRow: View {
     @State private var isHovered = false
     @State private var isReorderTargeted = false
     @Environment(\.activeSkin) private var skin
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Full VoiceOver label for the content button — assembles title,
+    /// duration, priority, deadline and project in one sentence so the
+    /// row is announced meaningfully.
+    private var accessibilityRowLabel: String {
+        var parts: [String] = [task.title, DS.formatMinutes(task.durationMinutes)]
+        if task.priority == .high { parts.append("high priority") }
+        if let sp = task.storyPoints { parts.append("\(sp) story points") }
+        if let deadline = task.deadline {
+            parts.append("due \(deadlineLabel(deadline))")
+        }
+        if let context = task.context { parts.append("in \(context)") }
+        return parts.joined(separator: ", ")
+    }
 
     var body: some View {
         HStack(spacing: DS.Spacing.sm) {
@@ -636,10 +668,15 @@ struct BacklogTaskRow: View {
             // breaks in these contexts.
             Image(systemName: "line.3.horizontal")
                 .font(.caption2)
-                .foregroundStyle(.tertiary)
-                .frame(width: 16, height: 28)
+                // Birman: affordance you have to search for isn't an
+                // affordance. The handle is always visible (quietly, at
+                // `softAccent`), becoming fully opaque on hover so users
+                // see "I can grab this" without having to hover first.
+                .foregroundStyle(skin.resolvedTextTertiary)
+                .frame(width: DS.Size.iconLarge, height: DS.Size.accentBarHeight)
                 .contentShape(Rectangle())
-                .opacity(isHovered ? 1 : 0)
+                .opacity(isHovered ? 1 : DS.Opacity.softAccent)
+                .motionAwareAnimation(DS.Animation.quick, value: isHovered, reduceMotion: reduceMotion)
                 .accessibilityHidden(true)
                 .onDrag {
                     onDragStart()
@@ -666,13 +703,18 @@ struct BacklogTaskRow: View {
                             .font(.caption)
                         Text(task.title)
                             .font(.caption.weight(.medium))
-                        Text("\(task.durationMinutes)m")
+                        // DS.formatMinutes keeps the same non-breaking-space
+                        // format used everywhere else in the app.
+                        Text(DS.formatMinutes(task.durationMinutes))
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(skin.resolvedTextSecondary)
                     }
                     .padding(.horizontal, DS.Spacing.sm)
                     .padding(.vertical, DS.Spacing.xs)
-                    .background(.ultraThinMaterial, in: Capsule())
+                    // Use the skin's resolved button material so the drag
+                    // ghost reads as "part of this app", not as a generic
+                    // macOS blur.
+                    .background(skin.resolvedButtonMaterial, in: Capsule())
                     .onDisappear { onDragEnd() }
                 }
 
@@ -680,100 +722,119 @@ struct BacklogTaskRow: View {
             Button(action: onComplete) {
                 Image(systemName: "circle")
                     .font(.callout)
-                    .foregroundStyle(isUrgent ? .red : .secondary)
+                    .foregroundStyle(isUrgent ? skin.resolvedDestructiveColor : skin.resolvedTextSecondary)
             }
             .buttonStyle(.plain)
+            .help("Mark complete")
+            .accessibilityLabel("Mark \u{201C}\(task.title)\u{201D} complete")
 
             // Content — edit on tap
             Button(action: onEdit) {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(task.title)
-                        .font(.callout)
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                    HStack(spacing: DS.Spacing.xs) {
+                        // Birman: priority is a quiet, semantic marker — a
+                        // colored dot at the leading edge, not an exclamation
+                        // mark hack. Only shown for `.high` (absence = ok).
+                        if task.priority == .high {
+                            Circle()
+                                .fill(skin.resolvedDestructiveColor)
+                                .frame(width: DS.Size.recipeDotSize, height: DS.Size.recipeDotSize)
+                                .accessibilityLabel("High priority")
+                        }
+                        Text(task.title)
+                            .font(.callout)
+                            .foregroundStyle(skin.resolvedTextPrimary)
+                            .lineLimit(1)
+                    }
 
                     HStack(spacing: DS.Spacing.xs) {
-                        Text("\(task.durationMinutes)m")
+                        // Uses DS.formatMinutes so "1 h 30 min" has the same
+                        // non-breaking-space treatment as the rest of the app.
+                        Text(DS.formatMinutes(task.durationMinutes))
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
-
-                        if task.priority == .high {
-                            Text("!")
-                                .font(.caption2.weight(.bold))
-                                .foregroundStyle(.red)
-                        }
+                            .foregroundStyle(skin.resolvedTextSecondary)
 
                         if let sp = task.storyPoints {
-                            Text("\(sp)sp")
+                            Text("\(sp)\u{00A0}sp")
                                 .font(.caption2)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(skin.resolvedTextSecondary)
                         }
 
                         if let deadline = task.deadline {
                             Text(deadlineLabel(deadline))
                                 .font(.caption2)
-                                .foregroundStyle(isUrgent ? .red : .secondary)
+                                .foregroundStyle(isUrgent ? skin.resolvedDestructiveColor : skin.resolvedTextSecondary)
                         }
 
                         if let context = task.context {
                             Text(context)
                                 .font(.caption2)
-                                .foregroundStyle(.tertiary)
+                                .foregroundStyle(skin.resolvedTextTertiary)
                         }
                     }
                 }
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(accessibilityRowLabel)
+            .accessibilityHint("Double-tap to edit")
 
             Spacer()
 
-            // Reorder + delete controls — visible on hover
-            if isHovered {
-                HStack(spacing: DS.Spacing.xxs) {
-                    Button(action: onMoveUp) {
-                        Image(systemName: "chevron.up")
-                            .font(.caption2)
-                            .foregroundStyle(canMoveUp ? .secondary : .quaternary)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!canMoveUp)
-                    .help("Move up")
-
-                    Button(action: onMoveDown) {
-                        Image(systemName: "chevron.down")
-                            .font(.caption2)
-                            .foregroundStyle(canMoveDown ? .secondary : .quaternary)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!canMoveDown)
-                    .help("Move down")
-
-                    Button(action: onDelete) {
-                        Image(systemName: "xmark")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                    }
-                    .buttonStyle(.plain)
+            // Reorder + delete controls. HIG: reserve the space so the
+            // layout doesn't jump when the cursor enters/leaves — fade
+            // opacity instead (Apple Reminders / Things pattern).
+            HStack(spacing: DS.Spacing.xxs) {
+                Button(action: onMoveUp) {
+                    Image(systemName: "chevron.up")
+                        .font(.caption2)
+                        .foregroundStyle(canMoveUp ? skin.resolvedTextSecondary : skin.resolvedTextTertiary.opacity(DS.Opacity.half))
                 }
-                .transition(.opacity)
+                .buttonStyle(.plain)
+                .disabled(!canMoveUp)
+                .help("Move up")
+                .accessibilityLabel("Move \u{201C}\(task.title)\u{201D} up")
+
+                Button(action: onMoveDown) {
+                    Image(systemName: "chevron.down")
+                        .font(.caption2)
+                        .foregroundStyle(canMoveDown ? skin.resolvedTextSecondary : skin.resolvedTextTertiary.opacity(DS.Opacity.half))
+                }
+                .buttonStyle(.plain)
+                .disabled(!canMoveDown)
+                .help("Move down")
+                .accessibilityLabel("Move \u{201C}\(task.title)\u{201D} down")
+
+                Button(action: onDelete) {
+                    Image(systemName: "xmark")
+                        .font(.caption2)
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                }
+                .buttonStyle(.plain)
+                .help("Delete task")
+                .accessibilityLabel("Delete \u{201C}\(task.title)\u{201D}")
             }
+            .opacity(isHovered ? 1 : 0)
+            .motionAwareAnimation(DS.Animation.quick, value: isHovered, reduceMotion: reduceMotion)
+            // Keep the controls out of the accessibility tree when hidden
+            // so VoiceOver doesn't announce ghost buttons.
+            .accessibilityHidden(!isHovered)
         }
         .padding(.vertical, DS.Spacing.xs)
         .padding(.horizontal, DS.Spacing.xs)
         .frame(minHeight: DS.Size.backlogRowHeight)
         .contentShape(Rectangle())
-        .opacity(isDragging ? 0.4 : 1)
+        .opacity(isDragging ? DS.Opacity.tertiaryText : 1)
         .background(
             // Reorder drop highlight — a thin accent bar at the top edge so
             // the user sees exactly where the dropped task will land.
             RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
-                .fill(skin.accentColor.opacity(isReorderTargeted ? 0.10 : 0))
+                .fill(skin.accentColor.opacity(isReorderTargeted ? DS.Opacity.lightFill : 0))
         )
         .overlay(alignment: .top) {
             Rectangle()
                 .fill(skin.accentColor)
-                .frame(height: isReorderTargeted ? 2 : 0)
-                .animation(.easeInOut(duration: 0.12), value: isReorderTargeted)
+                .frame(height: isReorderTargeted ? DS.Border.selection : 0)
+                .motionAwareAnimation(DS.Animation.quick, value: isReorderTargeted, reduceMotion: reduceMotion)
         }
         .onHover { isHovered = $0 }
         .dropDestination(for: BacklogTaskDrag.self) { items, _ in
@@ -781,7 +842,7 @@ struct BacklogTaskRow: View {
             onReorderDrop(dropped)
             return true
         } isTargeted: { targeted in
-            withAnimation(.easeInOut(duration: 0.12)) {
+            withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
                 isReorderTargeted = targeted
             }
         }
@@ -815,15 +876,22 @@ struct BacklogTaskRow: View {
         if cal.isDateInToday(date) { return "Today" }
         if cal.isDateInTomorrow(date) { return "Tomorrow" }
         if date < now { return "Overdue" }
-        let days = cal.dateComponents([.day], from: now, to: date).day ?? 0
-        return "\(days)d"
+        // Birman: язык интерфейса — язык человека. "in 5 days" вместо "5d".
+        // `.relative(presentation: .numeric)` локализовано, без ручной сборки.
+        return date.formatted(.relative(presentation: .numeric))
     }
 }
 
-// MARK: - Backlog Task Edit Row (Inline)
+// MARK: - Backlog Task Edit Row (Inline, Autosave)
 
-/// Inline editing row — replaces the task row in-place.
-/// All properties editable without leaving the main screen (Birman: no modality).
+/// Truly inline editing — every change persists immediately, no Save/Cancel
+/// chrome, Esc collapses the card back to the read-only row.
+///
+/// HIG: direct manipulation — the form IS the task, not a dialog about the
+/// task. ⌘↩ and Esc (and clicking Return in the title) all end editing.
+/// Birman: *«редактирование без модальности»* — значит не «сохранить и
+/// применить», а «менять — уже применено». Отмена — через undo-toast на
+/// Complete / Delete / Reorder, не через Cancel-кнопку.
 struct BacklogTaskEditRow: View {
     let task: BacklogTask
     var backlogService: BacklogService
@@ -837,6 +905,7 @@ struct BacklogTaskEditRow: View {
     @State private var context: String
     @State private var storyPoints: Int?
     @Environment(\.activeSkin) private var skin
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var isTitleFocused: Bool
 
     init(task: BacklogTask, backlogService: BacklogService, onDone: @escaping () -> Void) {
@@ -854,58 +923,72 @@ struct BacklogTaskEditRow: View {
 
     private static let durationOptions = [15, 30, 45, 60, 90, 120, 180, 240]
     private static let spOptions: [Int?] = [nil, 1, 2, 3, 5, 8, 13]
+    /// Width of the "Project" inline text field — roughly 15 caption2-chars
+    /// at system font; wider than that wastes horizontal space in a
+    /// 360pt-wide popover.
+    private static let contextFieldWidth: CGFloat = 120
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            // Title
+            // Title. HIG: Return submits → ends editing; ⌘↩ and Esc do the
+            // same. Typography matches the display-state row (.callout, no
+            // weight bump) so entering edit mode doesn't feel like a jump.
             TextField("Task name", text: $title)
                 .textFieldStyle(.plain)
-                .font(.callout.weight(.medium))
+                .font(.callout)
                 .focused($isTitleFocused)
-                .onSubmit { save() }
+                .onSubmit { commit() }
+                .onChange(of: title) { _, _ in autosave() }
 
             // Duration pills
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text("Duration")
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(skin.resolvedTextSecondary)
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: DS.Spacing.xs) {
                         ForEach(Self.durationOptions, id: \.self) { mins in
                             chipButton(
-                                label: mins < 60 ? "\(mins)m" : "\(mins / 60)h\(mins % 60 > 0 ? "\(mins % 60)m" : "")",
+                                label: DS.formatMinutes(mins),
                                 isActive: durationMinutes == mins
-                            ) { durationMinutes = mins }
+                            ) {
+                                durationMinutes = mins
+                                autosave()
+                            }
                         }
                     }
                 }
             }
 
             // Priority pills
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text("Priority")
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(skin.resolvedTextSecondary)
                 HStack(spacing: DS.Spacing.xs) {
                     ForEach(TaskPriority.allCases, id: \.self) { p in
                         chipButton(label: p.label, isActive: priority == p) {
                             priority = p
+                            autosave()
                         }
                     }
                 }
             }
 
             // Story points
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text("Story points")
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(skin.resolvedTextSecondary)
                 HStack(spacing: DS.Spacing.xs) {
                     ForEach(Self.spOptions, id: \.self) { sp in
                         chipButton(
                             label: sp.map { "\($0)" } ?? "—",
                             isActive: storyPoints == sp
-                        ) { storyPoints = sp }
+                        ) {
+                            storyPoints = sp
+                            autosave()
+                        }
                     }
                 }
             }
@@ -916,10 +999,11 @@ struct BacklogTaskEditRow: View {
                     .font(.caption2)
                     .toggleStyle(.switch)
                     .controlSize(.mini)
+                    .onChange(of: hasDeadline) { _, _ in autosave() }
                 if hasDeadline {
                     DatePicker("", selection: Binding(
                         get: { deadline ?? Date() },
-                        set: { deadline = $0 }
+                        set: { deadline = $0; autosave() }
                     ), displayedComponents: .date)
                     .labelsHidden()
                     .controlSize(.small)
@@ -930,24 +1014,30 @@ struct BacklogTaskEditRow: View {
             HStack(spacing: DS.Spacing.xs) {
                 Text("Project")
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(skin.resolvedTextSecondary)
                 TextField("optional", text: $context)
                     .textFieldStyle(.plain)
                     .font(.caption2)
-                    .frame(maxWidth: 120)
+                    .frame(maxWidth: Self.contextFieldWidth)
+                    .onChange(of: context) { _, _ in autosave() }
+                    .onSubmit { commit() }
             }
 
-            // Save / Cancel
-            HStack {
+            // Footer hint — replaces the old Save/Cancel row. The intent
+            // is clear: changes are already saved; user only needs a way
+            // to leave edit mode.
+            HStack(spacing: DS.Spacing.xs) {
                 Spacer()
-                Button("Cancel") { onDone() }
-                    .font(.caption)
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
-                Button("Save") { save() }
+                Text("\u{23CE} or \u{238B} to finish")
+                    .font(.caption2)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                    .accessibilityHidden(true)
+                Button("Done") { commit() }
                     .font(.caption.weight(.semibold))
                     .buttonStyle(.plain)
                     .foregroundStyle(skin.accentColor)
+                    .keyboardShortcut(.return, modifiers: .command)
+                    .accessibilityLabel("Finish editing")
             }
         }
         .padding(.vertical, DS.Spacing.sm)
@@ -956,31 +1046,54 @@ struct BacklogTaskEditRow: View {
             RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
                 .fill(skin.accentColor.opacity(DS.Opacity.subtleFill))
         )
-        .onAppear { isTitleFocused = true }
+        // HIG: Escape exits the edit state cleanly — previously only a
+        // Cancel button handled this, which failed with keyboard-only use.
+        .onExitCommand { commit() }
+        .task {
+            // `.task` instead of `.onAppear` — fires only after the view is
+            // in the window hierarchy, which is where FocusState can
+            // actually take. Fixes a flaky focus bug where
+            // `isTitleFocused = true` in `.onAppear` silently missed.
+            try? await Task.sleep(for: .milliseconds(50))
+            isTitleFocused = true
+        }
     }
 
-    private func save() {
+    /// Persist the current snapshot without leaving edit mode — fired from
+    /// every field's onChange so there's no "unsaved state".
+    private func autosave() {
+        let trimmed = title.trimmingCharacters(in: .whitespaces)
+        // Don't clobber the title with an empty string — the user is
+        // probably mid-edit. Other fields save unconditionally.
+        guard !trimmed.isEmpty else { return }
         var updated = task
-        updated.title = title.trimmingCharacters(in: .whitespaces)
-        guard !updated.title.isEmpty else { return }
+        updated.title = trimmed
         updated.durationMinutes = durationMinutes
         updated.priority = priority
         updated.deadline = hasDeadline ? (deadline ?? Date()) : nil
         updated.context = context.isEmpty ? nil : context
         updated.storyPoints = storyPoints
         backlogService.updateTask(updated)
+    }
+
+    /// Final save + collapse the edit card back to the read-only row.
+    private func commit() {
+        autosave()
         onDone()
     }
 
     private func chipButton(label: String, isActive: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label)
+                // HIG: Contrast depends on the accent colour's luminance —
+                // white fails on pastel accents. Compute it per-skin instead
+                // of hard-coding .white like we did before.
                 .font(.caption2.weight(.medium))
-                .foregroundStyle(isActive ? Color.white : .primary)
+                .foregroundStyle(isActive ? DS.contrastingForeground(for: skin.accentColor) : skin.resolvedTextPrimary)
                 .padding(.horizontal, DS.Spacing.sm)
                 .padding(.vertical, DS.Spacing.pillVertical)
                 .background(
-                    Capsule().fill(isActive ? skin.accentColor : skin.accentColor.opacity(0.10))
+                    Capsule().fill(isActive ? skin.accentColor : skin.accentColor.opacity(DS.Opacity.lightFill))
                 )
         }
         .buttonStyle(.plain)
