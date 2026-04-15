@@ -328,7 +328,7 @@ struct BacklogView: View {
         .padding(.vertical, DS.Spacing.xs)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
+            RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
                 .fill(skin.accentColor.opacity(0.05))
         )
         .padding(.top, DS.Spacing.xxs)
@@ -477,7 +477,7 @@ struct BacklogView: View {
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, DS.Spacing.xs)
             .background(
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
                     .fill(skin.accentColor.opacity(isInputFocused ? 0.06 : 0.03))
             )
 
@@ -766,7 +766,7 @@ struct BacklogTaskRow: View {
         .background(
             // Reorder drop highlight — a thin accent bar at the top edge so
             // the user sees exactly where the dropped task will land.
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
+            RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
                 .fill(skin.accentColor.opacity(isReorderTargeted ? 0.10 : 0))
         )
         .overlay(alignment: .top) {
@@ -953,8 +953,8 @@ struct BacklogTaskEditRow: View {
         .padding(.vertical, DS.Spacing.sm)
         .padding(.horizontal, DS.Spacing.sm)
         .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(skin.accentColor.opacity(0.04))
+            RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
+                .fill(skin.accentColor.opacity(DS.Opacity.subtleFill))
         )
         .onAppear { isTitleFocused = true }
     }

@@ -391,7 +391,7 @@ struct CommandPalette: View {
         }
         .buttonStyle(.plain)
         .background(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius)
                 .fill(isTop
                     ? skin.accentColor.opacity(isSelected ? 0.18 : 0.08)
                     : (isSelected ? skin.accentColor.opacity(0.14) : .clear))

@@ -14,13 +14,13 @@ struct DaySectionHeader: View {
         HStack(spacing: DS.Spacing.sm) {
             // Level 4 (final): inside the timeline platter card, day headers
             // become quiet section dividers — same typographic language as
-            // AddEventView's form section labels (uppercase caption,
-            // semibold, tracked, tertiary colour). The today dot and the
-            // count badge carry the visual weight on the right side of the
-            // row, keeping the header informative without shouting.
-            Text(dayTitle.uppercased())
-                .font(.caption.weight(.semibold))
-                .tracking(0.4)
+            // AddEventView's form section labels (see `SectionLabel`). Both
+            // share the single `sectionHeaderStyle()` voice so one scale
+            // drives every subhead in the app. The today dot and the count
+            // badge carry the visual weight on the right side of the row,
+            // keeping the header informative without shouting.
+            Text(dayTitle)
+                .sectionHeaderStyle()
                 .foregroundStyle(skin.resolvedTextTertiary)
                 .fixedSize(horizontal: true, vertical: false)
             if isToday {
@@ -34,7 +34,7 @@ struct DaySectionHeader: View {
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(skin.resolvedTextSecondary)
                 .padding(.horizontal, DS.Spacing.sm)
-                .padding(.vertical, 2)
+                .padding(.vertical, DS.Spacing.xxs)
                 .adaptiveBadgeFill(skin.resolvedTextSecondary)
                 .clipShape(Capsule())
                 .contentTransition(.numericText())

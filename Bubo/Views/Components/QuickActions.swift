@@ -48,7 +48,7 @@ struct QuickActions: View {
                     Haptics.tap()
                     onOpenPalette()
                 } label: {
-                    HStack(spacing: 4) {
+                    HStack(spacing: DS.Spacing.xs) {
                         Group {
                             if isRunning {
                                 ProgressView()
@@ -59,18 +59,18 @@ struct QuickActions: View {
                                     .font(.caption2.weight(.semibold))
                             }
                         }
-                        .frame(width: 12, height: 12)
+                        .frame(width: DS.Size.iconSmall, height: DS.Size.iconSmall)
                         Text("Optimize")
                             .font(.caption.weight(.medium))
                             .lineLimit(1)
                         Text("⌘K")
                             .font(.caption2.monospaced())
-                            .foregroundStyle(primaryForeground.opacity(0.7))
+                            .foregroundStyle(primaryForeground.opacity(DS.Opacity.accentMuted))
                     }
                     .fixedSize()
                     .foregroundStyle(primaryForeground)
                     .padding(.horizontal, DS.Spacing.sm)
-                    .padding(.vertical, 4)
+                    .padding(.vertical, DS.Spacing.pillVertical)
                     .background(
                         Capsule().fill(skin.accentColor)
                     )
@@ -84,7 +84,7 @@ struct QuickActions: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(isRunning)
-                .opacity(isRunning ? 0.6 : 1)
+                .opacity(isRunning ? DS.Opacity.overlayLight : 1)
                 .help("AI optimizer (\u{2318}K)")
 
                 ForEach(rankedActions) { scored in
@@ -97,15 +97,15 @@ struct QuickActions: View {
                             .fixedSize()
                             .foregroundStyle(skin.accentColor)
                             .padding(.horizontal, DS.Spacing.sm)
-                            .padding(.vertical, 4)
+                            .padding(.vertical, DS.Spacing.pillVertical)
                             .background(
-                                Capsule().fill(skin.accentColor.opacity(0.10))
+                                Capsule().fill(skin.accentColor.opacity(DS.Opacity.lightFill))
                             )
                             .contentShape(Capsule())
                     }
                     .buttonStyle(.plain)
                     .disabled(isRunning)
-                    .opacity(isRunning ? 0.5 : 1)
+                    .opacity(isRunning ? DS.Opacity.half : 1)
                 }
             }
         }
