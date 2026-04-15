@@ -6,6 +6,12 @@ import Foundation
 protocol Chromosome: Equatable {
     var fitness: Double { get set }
 
+    /// Raw fitness before any diversity adjustments (fitness sharing, niching).
+    /// Equals `fitness` unless fitness sharing has reduced the visible fitness
+    /// for selection pressure. `bestEver` tracking must use `rawFitness` so that
+    /// a globally-best-but-crowded individual isn't lost to a sharing-penalized score.
+    var rawFitness: Double { get set }
+
     /// Create a random chromosome within the given context.
     static func random(context: OptimizerContext) -> Self
 
@@ -57,6 +63,7 @@ extension Chromosome {
 struct ScheduleChromosome: Chromosome, Sendable {
     var genes: [ScheduleGene]
     var fitness: Double = 0.0
+    var rawFitness: Double = 0.0
 
     /// Tracks whether this chromosome needs fitness re-evaluation.
     /// Set to true on creation, crossover, and mutation; cleared after evaluation.
@@ -497,39 +504,54 @@ struct ScheduleChromosome: Chromosome, Sendable {
 
     /// Normalized distance between two schedule chromosomes in [0, 1].
     /// Combines time displacement and inclusion differences across genes.
+    ///
+    /// - Complexity: O(n) — other.genes is indexed by eventId once. Previously
+    ///   O(n²) due to repeated `.first(where:)` lookups, which was a hot path
+    ///   because `genotypicDiversity` and crowding both call it every generation.
     func distance(to other: ScheduleChromosome) -> Double {
         guard !genes.isEmpty else { return 0 }
+
+        // Fast path: identical gene order (common when both descend from same parent).
+        // Avoid building the index dictionary when we can align by position.
+        let alignedByIndex = genes.count == other.genes.count
+            && zip(genes, other.genes).allSatisfy { $0.eventId == $1.eventId }
 
         var totalDiff = 0.0
         var count = 0
 
-        for geneA in genes {
-            guard let geneB = other.genes.first(where: { $0.eventId == geneA.eventId }) else {
-                totalDiff += 1.0
-                count += 1
-                continue
+        if alignedByIndex {
+            for i in genes.indices {
+                totalDiff += pairDistance(genes[i], other.genes[i], &count)
             }
-
-            // Inclusion mismatch = full difference
-            if geneA.isIncluded != geneB.isIncluded {
-                totalDiff += 1.0
-                count += 1
-                continue
+        } else {
+            let otherById: [String: ScheduleGene] = Dictionary(
+                other.genes.map { ($0.eventId, $0) },
+                uniquingKeysWith: { first, _ in first }
+            )
+            for geneA in genes {
+                guard let geneB = otherById[geneA.eventId] else {
+                    totalDiff += 1.0
+                    count += 1
+                    continue
+                }
+                totalDiff += pairDistance(geneA, geneB, &count)
             }
-
-            // Both excluded = identical
-            if !geneA.isIncluded {
-                count += 1
-                continue
-            }
-
-            // Time difference normalized by 9h working day
-            let timeDiff = abs(geneA.startTime.timeIntervalSince(geneB.startTime))
-            totalDiff += min(1.0, timeDiff / (9 * 3600))
-            count += 1
         }
 
         return count > 0 ? totalDiff / Double(count) : 0
+    }
+
+    /// Per-gene distance contribution. Mutates `count` to keep the two paths aligned.
+    @inline(__always)
+    private func pairDistance(_ a: ScheduleGene, _ b: ScheduleGene, _ count: inout Int) -> Double {
+        count += 1
+        // Inclusion mismatch = full difference
+        if a.isIncluded != b.isIncluded { return 1.0 }
+        // Both excluded = identical
+        if !a.isIncluded { return 0.0 }
+        // Time difference normalized by 9h working day
+        let timeDiff = abs(a.startTime.timeIntervalSince(b.startTime))
+        return min(1.0, timeDiff / (9 * 3600))
     }
 
     // MARK: - Helpers

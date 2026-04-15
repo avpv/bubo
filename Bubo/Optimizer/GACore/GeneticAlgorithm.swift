@@ -294,10 +294,10 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         }
 
         population.evaluateAll(using: evaluate)
-        bestEver = population.best
+        bestEver = population.individuals.max(by: { $0.rawFitness < $1.rawFitness })
 
         var staleGenerations = 0
-        var lastBestFitness = bestEver?.fitness ?? 0
+        var lastBestFitness = bestEver?.rawFitness ?? 0
 
         for generation in 0..<config.maxGenerations {
             evolveOneGeneration(
@@ -308,22 +308,29 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
                 parallelEvaluation: true
             )
 
-            if let currentBest = population.best {
-                if bestEver == nil || currentBest.fitness > bestEver!.fitness {
-                    bestEver = currentBest
+            // Use rawFitness so fitness sharing (which deflates `fitness` for
+            // crowded niches) can't demote the globally-best individual. Store
+            // a normalized copy (fitness == rawFitness) so external inspectors
+            // see the true quality, not a shared-fitness snapshot.
+            if let currentBest = population.individuals.max(by: { $0.rawFitness < $1.rawFitness }) {
+                if bestEver == nil || currentBest.rawFitness > bestEver!.rawFitness {
+                    var snapshot = currentBest
+                    if snapshot.rawFitness > 0 { snapshot.fitness = snapshot.rawFitness }
+                    bestEver = snapshot
                 }
             }
 
             let fitnessDiversity = population.fitnessDiversity
             onProgress?(GAProgress(
                 generation: generation,
-                bestFitness: bestEver?.fitness ?? 0,
+                bestFitness: bestEver?.rawFitness ?? 0,
                 averageFitness: population.averageFitness,
                 diversity: fitnessDiversity
             ))
 
-            // Relative convergence detection: handles both small and large fitness values
-            let currentFitness = bestEver?.fitness ?? 0
+            // Relative convergence detection: handles both small and large fitness values.
+            // Use rawFitness so fitness sharing can't confuse stagnation detection.
+            let currentFitness = bestEver?.rawFitness ?? 0
             let relativeImprovement = lastBestFitness > 1e-9
                 ? abs(currentFitness - lastBestFitness) / lastBestFitness
                 : abs(currentFitness - lastBestFitness)
@@ -349,12 +356,23 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             sorted[i] = hillClimb(sorted[i], steps: 20)
         }
 
-        // Update bestEver if hill climbing found something better
-        if let refined = sorted.first, (bestEver == nil || refined.fitness > bestEver!.fitness) {
-            bestEver = refined
+        // Update bestEver if hill climbing found something better (compare rawFitness).
+        if let refined = sorted.max(by: { $0.rawFitness < $1.rawFitness }),
+           bestEver == nil || refined.rawFitness > bestEver!.rawFitness {
+            var snapshot = refined
+            if snapshot.rawFitness > 0 { snapshot.fitness = snapshot.rawFitness }
+            bestEver = snapshot
         }
 
-        return sorted.sorted { $0.fitness > $1.fitness }
+        // Consumers expect `fitness` to reflect true quality. If fitness sharing
+        // reduced it during evolution, restore from rawFitness before returning.
+        if config.enableFitnessSharing {
+            for i in sorted.indices where sorted[i].rawFitness > 0 {
+                sorted[i].fitness = sorted[i].rawFitness
+            }
+        }
+
+        return sorted.sorted { $0.rawFitness > $1.rawFitness }
     }
 
     // MARK: - Single Generation (shared with IslandModelGA)
@@ -398,15 +416,17 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         }
 
         var offspring: [C] = []
-        var parentPairs: [(C, C)] = []
+        var parentIndexPairs: [(Int, Int)] = []
         var offspringPairs: [(C, C)] = []
         let targetCount = config.populationSize - config.eliteCount
 
         while offspring.count < targetCount {
-            let (parent1, parent2) = Selection.selectPair(
+            let (idx1, idx2) = Selection.selectPairIndices(
                 from: population,
                 strategy: config.selectionStrategy
             )
+            let parent1 = population.individuals[idx1]
+            let parent2 = population.individuals[idx2]
 
             var child1: C
             var child2: C
@@ -444,7 +464,7 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
                 offspring.append(child1)
                 offspring.append(child2)
                 if config.enableCrowding {
-                    parentPairs.append((parent1, parent2))
+                    parentIndexPairs.append((idx1, idx2))
                     offspringPairs.append((child1, child2))
                 }
             } else {
@@ -473,11 +493,12 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         }
 
         // Replacement strategy
-        if config.enableCrowding && !parentPairs.isEmpty {
+        if config.enableCrowding && !parentIndexPairs.isEmpty {
             // Deterministic crowding: each child competes with its closest parent.
-            // parentPairs and offspringPairs are always aligned (no trimming needed).
+            // Parents addressed by index (not Equatable) to handle duplicates and
+            // shifted fitness correctly.
             population.replaceByCrowding(
-                parents: parentPairs,
+                parentIndices: parentIndexPairs,
                 offspring: offspringPairs,
                 distanceFn: { $0.distance(to: $1) }
             )
@@ -515,7 +536,13 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
                     nicheCount += 1.0 - pow(dist / sigma, alpha)
                 }
             }
-            // Divide raw fitness by niche count to penalize crowded niches
+            // Preserve rawFitness (true quality) for bestEver tracking; only
+            // reduce the visible `fitness` used by selection and replacement.
+            // Without this, a globally-best-but-crowded individual would be
+            // lost to a shared-fitness-penalized score.
+            if offspring[i].rawFitness == 0 {
+                offspring[i].rawFitness = offspring[i].fitness
+            }
             offspring[i].fitness = offspring[i].fitness / nicheCount
         }
     }
@@ -533,15 +560,21 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         var current = chromosome
         var temperature = 0.05
         let coolingRate = 0.85
+        // Per-gene mutation probability for *fine-tuning*. The previous value
+        // (0.3) mutated ~30% of genes per step — that's not a local-search
+        // neighbourhood, that's a full mutation, so the SA temperature could
+        // not actually hold on to good solutions. 0.05 yields ~1 gene changed
+        // for typical 10-20 event schedules (and still more than one for very
+        // large schedules, which is the right direction).
+        let neighborhoodRate = 0.05
 
         for _ in 0..<steps {
             var neighbor = current
-            // Small mutation rate for fine-tuning
-            neighbor.mutate(rate: 0.3, context: context)
+            neighbor.mutate(rate: neighborhoodRate, context: context)
             neighbor.repair(context: context)
             evaluate(&neighbor)
 
-            let delta = neighbor.fitness - current.fitness
+            let delta = neighbor.rawFitness - current.rawFitness
             if delta > 0 {
                 // Always accept improvements
                 current = neighbor

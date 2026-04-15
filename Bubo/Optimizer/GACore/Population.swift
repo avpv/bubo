@@ -36,15 +36,28 @@ struct Population<C: Chromosome> {
     }
 
     /// Replace the population with a new generation, preserving elites.
+    /// When `newIndividuals` underfills the population, padding falls back to
+    /// duplicating offspring (diversity-neutral but collapses the population
+    /// toward clones). Callers that need random refills should inject immigrants
+    /// via `injectImmigrants` instead of relying on the padding path.
     mutating func replaceGeneration(with newIndividuals: [C]) {
         let currentElites = elites
         var next = currentElites
         // Fill remaining slots from new individuals
         let remaining = size - currentElites.count
         next.append(contentsOf: newIndividuals.prefix(remaining))
-        // If we still don't have enough, pad with random picks from newIndividuals to maintain diversity
-        while next.count < size, !newIndividuals.isEmpty {
-            next.append(newIndividuals.randomElement()!)
+        // Degenerate path: pad by repeating the best offspring rather than a
+        // uniformly-random duplicate (which amplified whatever arrived first).
+        // Sorted offspring guarantees determinism and keeps the higher-fitness
+        // material around. Immigration is handled separately via
+        // `injectImmigrants`; padding here is purely a safety net.
+        if next.count < size && !newIndividuals.isEmpty {
+            let sortedOffspring = newIndividuals.sorted { $0.fitness > $1.fitness }
+            var i = 0
+            while next.count < size {
+                next.append(sortedOffspring[i % sortedOffspring.count])
+                i += 1
+            }
         }
         individuals = next
     }
@@ -55,51 +68,63 @@ struct Population<C: Chromosome> {
     ///
     /// After crossover (parent1, parent2) -> (child1, child2), each child competes
     /// with the parent closest to it in genotype space. The winner survives.
+    ///
+    /// Parents are addressed by their index in `individuals` to correctly handle
+    /// duplicates and cases where fitness values shifted between selection and
+    /// replacement. A prior Equatable-based lookup (`firstIndex { $0 == parent }`)
+    /// would silently pick the first matching slot or fail entirely after fitness
+    /// sharing altered the stored fitness.
     mutating func replaceByCrowding(
-        parents: [(C, C)],
+        parentIndices: [(Int, Int)],
         offspring: [(C, C)],
         distanceFn: (C, C) -> Double
     ) {
-        let currentElites = elites
-        var next = individuals
+        precondition(parentIndices.count == offspring.count,
+                     "parentIndices and offspring must be the same length")
 
-        for (parentPair, childPair) in zip(parents, offspring) {
-            let (p1, p2) = parentPair
+        let elitesSnapshot = elites
+        var next = individuals
+        let n = next.count
+
+        for (parentIdx, childPair) in zip(parentIndices, offspring) {
+            let (i1, i2) = parentIdx
+            guard i1 < n, i2 < n else { continue }
+            let p1 = next[i1]
+            let p2 = next[i2]
             let (c1, c2) = childPair
 
-            // Determine pairing: which child is closer to which parent
+            // Determine pairing: which child is closer to which parent.
             let d_c1p1 = distanceFn(c1, p1)
             let d_c1p2 = distanceFn(c1, p2)
+            let sameSlotAssignment = d_c1p1 + distanceFn(c2, p2) <= d_c1p2 + distanceFn(c2, p1)
 
-            let (matchA, matchB): ((child: C, parent: C), (child: C, parent: C))
-            if d_c1p1 + distanceFn(c2, p2) <= d_c1p2 + distanceFn(c2, p1) {
-                matchA = (c1, p1)
-                matchB = (c2, p2)
+            let (slotA, childA, parentA): (Int, C, C)
+            let (slotB, childB, parentB): (Int, C, C)
+            if sameSlotAssignment {
+                (slotA, childA, parentA) = (i1, c1, p1)
+                (slotB, childB, parentB) = (i2, c2, p2)
             } else {
-                matchA = (c1, p2)
-                matchB = (c2, p1)
+                (slotA, childA, parentA) = (i1, c2, p1)
+                (slotB, childB, parentB) = (i2, c1, p2)
             }
 
-            // Each child competes with its matched parent
-            for match in [matchA, matchB] {
-                if match.child.fitness >= match.parent.fitness {
-                    // Replace the parent in the population with the child
-                    if let idx = next.firstIndex(where: { $0 == match.parent }) {
-                        next[idx] = match.child
-                    }
-                }
+            if childA.fitness >= parentA.fitness {
+                next[slotA] = childA
+            }
+            // Guard against i1 == i2 (degenerate case): the second write must
+            // not overwrite the first if we already replaced the slot above.
+            if slotB != slotA, childB.fitness >= parentB.fitness {
+                next[slotB] = childB
             }
         }
 
-        // Ensure elites survive regardless
-        for elite in currentElites {
-            if !next.contains(where: { $0 == elite }) {
-                // Elite was replaced — put it back by replacing worst non-elite
-                if let worstIdx = next.enumerated()
-                    .filter({ item in !currentElites.contains(where: { e in e == item.element }) })
-                    .min(by: { $0.element.fitness < $1.element.fitness })?.offset {
-                    next[worstIdx] = elite
-                }
+        // Ensure elites survive regardless — if any was replaced, put it back
+        // in place of the current worst non-elite slot.
+        for elite in elitesSnapshot where !next.contains(where: { $0 == elite }) {
+            if let worstIdx = next.enumerated()
+                .filter({ item in !elitesSnapshot.contains(where: { $0 == item.element }) })
+                .min(by: { $0.element.fitness < $1.element.fitness })?.offset {
+                next[worstIdx] = elite
             }
         }
 
