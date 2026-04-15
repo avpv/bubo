@@ -79,10 +79,12 @@ final class IncrementalReoptimizer: @unchecked Sendable {
             config: config,
             context: adjustedContext,
             evaluate: { chromosome in
-                chromosome.fitness = stabilityEvaluator.evaluate(
+                let score = stabilityEvaluator.evaluate(
                     chromosome: chromosome,
                     context: adjustedContext
                 )
+                chromosome.fitness = score
+                chromosome.rawFitness = score
             }
         )
 

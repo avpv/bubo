@@ -307,11 +307,11 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
 
     /// Shared evolution loop for both `run()` and `runSeeded(with:)`.
     private func evolveIslands(_ islands: [Island<C>]) -> [C] {
-        bestEver = islands.compactMap(\.bestEver).max(by: { $0.fitness < $1.fitness })
+        bestEver = islands.compactMap(\.bestEver).max(by: { $0.rawFitness < $1.rawFitness })
 
         let totalGenerations = baseConfig.maxGenerations
         var globalStaleGenerations = 0
-        var lastGlobalBestFitness = bestEver?.fitness ?? 0
+        var lastGlobalBestFitness = bestEver?.rawFitness ?? 0
         var totalMigrations = 0
 
         // Adaptive migration state
@@ -333,10 +333,14 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
                     parallelEvaluation: false
                 )
 
-                // Track per-island best
-                if let currentBest = island.population.best {
-                    if island.bestEver == nil || currentBest.fitness > island.bestEver!.fitness {
-                        island.bestEver = currentBest
+                // Track per-island best by rawFitness to avoid fitness-sharing
+                // demotion. Store a normalized copy so downstream consumers see
+                // true quality on `bestEver.fitness`.
+                if let currentBest = island.population.individuals.max(by: { $0.rawFitness < $1.rawFitness }) {
+                    if island.bestEver == nil || currentBest.rawFitness > island.bestEver!.rawFitness {
+                        var snapshot = currentBest
+                        if snapshot.rawFitness > 0 { snapshot.fitness = snapshot.rawFitness }
+                        island.bestEver = snapshot
                     }
                 }
             }
@@ -350,7 +354,7 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
                 crossDiversity = measureCrossIslandDiversity(islands)
             } else {
                 // Cheap fallback: just fitness spread, no Equatable scan
-                let fitnesses = islands.compactMap { $0.bestEver?.fitness }
+                let fitnesses = islands.compactMap { $0.bestEver?.rawFitness }
                 let range = (fitnesses.max() ?? 0) - (fitnesses.min() ?? 0)
                 crossDiversity = CrossIslandDiversity(
                     uniqueBestFraction: lastCrossDiversity?.uniqueBestFraction ?? 1.0,
@@ -385,10 +389,10 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
                 totalMigrations += 1
             }
 
-            // Update global best
+            // Update global best (by rawFitness — see per-island note above).
             for island in islands {
                 if let islandBest = island.bestEver {
-                    if bestEver == nil || islandBest.fitness > bestEver!.fitness {
+                    if bestEver == nil || islandBest.rawFitness > bestEver!.rawFitness {
                         bestEver = islandBest
                     }
                 }
@@ -397,8 +401,8 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             // Progress callback
             onProgress?(IslandModelProgress(
                 generation: generation,
-                globalBestFitness: bestEver?.fitness ?? 0,
-                islandBestFitnesses: islands.map { $0.bestEver?.fitness ?? 0 },
+                globalBestFitness: bestEver?.rawFitness ?? 0,
+                islandBestFitnesses: islands.map { $0.bestEver?.rawFitness ?? 0 },
                 islandDiversities: islands.map { $0.population.fitnessDiversity },
                 migrationsPerformed: totalMigrations,
                 crossIslandDiversity: crossDiversity.uniqueBestFraction,
@@ -406,7 +410,7 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             ))
 
             // Global convergence detection
-            let currentGlobalBest = bestEver?.fitness ?? 0
+            let currentGlobalBest = bestEver?.rawFitness ?? 0
             let relativeImprovement = lastGlobalBestFitness > 1e-9
                 ? abs(currentGlobalBest - lastGlobalBestFitness) / lastGlobalBestFitness
                 : abs(currentGlobalBest - lastGlobalBestFitness)
@@ -433,20 +437,31 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             combined.append(contentsOf: island.population.sortedByFitness.prefix(island.ga.config.eliteCount * 2))
         }
 
-        // Hill climb on top individuals (reuse GA's hill climbing)
-        combined.sort { $0.fitness > $1.fitness }
+        // Hill climb on top individuals (reuse GA's hill climbing). Sort by
+        // rawFitness since some islands may have fitness sharing enabled,
+        // which would bias selection of climb candidates toward sparse niches.
+        combined.sort { $0.rawFitness > $1.rawFitness }
         let refineCount = min(baseConfig.eliteCount * 2, combined.count)
         let refiner = islands[0].ga
         for i in 0..<refineCount {
             combined[i] = refiner.hillClimb(combined[i], steps: 20)
         }
 
-        // Update bestEver after hill climbing
-        if let refined = combined.first, (bestEver == nil || refined.fitness > bestEver!.fitness) {
+        // Update bestEver after hill climbing (by rawFitness).
+        if let refined = combined.max(by: { $0.rawFitness < $1.rawFitness }),
+           bestEver == nil || refined.rawFitness > bestEver!.rawFitness {
             bestEver = refined
         }
 
-        return combined.sorted { $0.fitness > $1.fitness }
+        // Restore `fitness` for consumers if sharing deflated it on any island.
+        let anyIslandSharing = islands.contains { $0.ga.config.enableFitnessSharing }
+        if anyIslandSharing {
+            for i in combined.indices where combined[i].rawFitness > 0 {
+                combined[i].fitness = combined[i].rawFitness
+            }
+        }
+
+        return combined.sorted { $0.rawFitness > $1.rawFitness }
     }
 
     // MARK: - Cross-Island Diversity

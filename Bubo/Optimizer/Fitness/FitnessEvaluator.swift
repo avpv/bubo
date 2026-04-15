@@ -121,6 +121,7 @@ final class FitnessEvaluator: @unchecked Sendable {
             context: context
         )
         chromosome.fitness = fitness
+        chromosome.rawFitness = fitness
         chromosome.objectiveCache = cache
         chromosome.mutatedGeneIndices = nil
         chromosome.needsEvaluation = false

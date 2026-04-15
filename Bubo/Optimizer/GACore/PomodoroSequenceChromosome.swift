@@ -13,6 +13,7 @@ struct PomodoroSequenceChromosome: Chromosome, Sendable {
     /// Each element is an index into the task list — the array is a permutation.
     var sequence: [Int]
     var fitness: Double = 0.0
+    var rawFitness: Double = 0.0
     var needsEvaluation: Bool = true
 
     static func == (lhs: Self, rhs: Self) -> Bool {
@@ -172,7 +173,9 @@ struct PomodoroSequenceEvaluator {
         context: OptimizerContext
     ) {
         guard chromosome.needsEvaluation else { return }
-        chromosome.fitness = evaluate(chromosome, context: context)
+        let score = evaluate(chromosome, context: context)
+        chromosome.fitness = score
+        chromosome.rawFitness = score
         chromosome.needsEvaluation = false
     }
 

@@ -2997,3 +2997,228 @@ struct GAConfigNewFieldsTests {
         #expect(ga.bestEver!.fitness > 0.1, "Should find a feasible solution")
     }
 }
+
+// MARK: - GA Core Regression Tests
+
+@Suite("GA Core Regression Tests")
+struct GACoreRegressionTests {
+
+    // MARK: distance() correctness + fast path
+
+    @Test("distance is 0 for identical schedules")
+    func distanceIdentical() {
+        let events = [makeMovableEvent(id: "a"), makeMovableEvent(id: "b")]
+        let context = makeContext(movableEvents: events)
+        let chromosome = ScheduleChromosome.random(context: context)
+        #expect(chromosome.distance(to: chromosome) == 0)
+    }
+
+    @Test("distance aligns genes by eventId even when order differs")
+    func distanceOrderInvariant() {
+        let events = [
+            makeMovableEvent(id: "a"),
+            makeMovableEvent(id: "b"),
+            makeMovableEvent(id: "c")
+        ]
+        let context = makeContext(movableEvents: events)
+        var a = ScheduleChromosome.random(context: context)
+        var b = a
+        // Reverse b's gene order — by-position would flag as different,
+        // by-eventId must report identical.
+        b.genes.reverse()
+        #expect(a.distance(to: b) == 0, "distance must be eventId-addressed, not position-addressed")
+
+        // Now actually shift one gene's time so we get a non-zero, bounded value.
+        a.genes[0] = a.genes[0].withStartTime(a.genes[0].startTime.addingTimeInterval(3600))
+        let d = a.distance(to: b)
+        #expect(d > 0 && d <= 1.0)
+    }
+
+    @Test("distance returns 1 when all events are missing")
+    func distanceAllMissing() {
+        let context = makeContext(movableEvents: [makeMovableEvent(id: "a")])
+        let a = ScheduleChromosome.random(context: context)
+        var b = a
+        // Rename every eventId in b so nothing matches — must be maximal distance.
+        b.genes = b.genes.map { gene in
+            ScheduleGene(
+                eventId: gene.eventId + "-renamed",
+                title: gene.title,
+                startTime: gene.startTime,
+                duration: gene.duration,
+                context: gene.context,
+                energyCost: gene.energyCost,
+                priority: gene.priority,
+                isFocusBlock: gene.isFocusBlock,
+                storyPoints: gene.storyPoints,
+                isDroppable: gene.isDroppable,
+                isIncluded: gene.isIncluded
+            )
+        }
+        #expect(a.distance(to: b) == 1.0)
+    }
+
+    // MARK: rawFitness separation under fitness sharing
+
+    @Test("rawFitness preserved when fitness sharing deflates visible fitness")
+    func rawFitnessPreservedUnderSharing() {
+        let events = (0..<6).map { makeMovableEvent(id: "t\($0)", durationMinutes: 30) }
+        let context = makeContext(movableEvents: events)
+        let evaluator = FitnessEvaluator.standard(preferences: OptimizerPreferences())
+
+        let config = GAConfiguration(
+            populationSize: 20,
+            maxGenerations: 8,
+            mutationRate: 0.2,
+            crossoverRate: 0.8,
+            eliteCount: 2,
+            selectionStrategy: .tournament(size: 3),
+            crossoverStrategy: .singlePoint,
+            convergenceThreshold: 0.001,
+            convergencePatience: 100, // disable early stop
+            adaptiveMutation: false,
+            diversityThreshold: 0.01,
+            immigrationRate: 0.0,
+            greedySeedFraction: 0.2,
+            enableRepair: true,
+            enableFitnessSharing: true,
+            fitnessShareSigma: 0.4,
+            fitnessShareAlpha: 1.0,
+            enableCrowding: false,
+            adaptiveCrossover: false
+        )
+
+        let ga = GeneticAlgorithm<ScheduleChromosome>(
+            config: config,
+            context: context,
+            evaluate: { chromosome in
+                evaluator.evaluateAndAssign(&chromosome, context: context)
+            }
+        )
+
+        let results = ga.run()
+        guard let best = ga.bestEver, let top = results.first else {
+            Issue.record("GA produced no results")
+            return
+        }
+        // bestEver must reflect true quality, not shared score.
+        #expect(best.rawFitness > 0, "bestEver must have a positive rawFitness")
+        #expect(abs(best.fitness - best.rawFitness) < 1e-9,
+                "bestEver.fitness must be normalized to rawFitness on capture")
+        // On exit the visible fitness is restored from rawFitness so consumers
+        // (IncrementalReoptimizer, UI) don't see deflated numbers.
+        #expect(abs(top.fitness - top.rawFitness) < 1e-9,
+                "Returned population must expose rawFitness as the visible fitness")
+    }
+
+    // MARK: selectPair distinct indices
+
+    @Test("selectPairIndices returns distinct indices")
+    func selectPairIndicesDistinct() {
+        let events = [makeMovableEvent(id: "a"), makeMovableEvent(id: "b")]
+        let context = makeContext(movableEvents: events)
+        var pop = Population<ScheduleChromosome>(size: 10, eliteCount: 2, context: context)
+        // Make every individual's fitness identical so Equatable-based dedup
+        // (the old behaviour) would collapse — only index-based dedup survives.
+        for i in pop.individuals.indices {
+            pop.individuals[i].fitness = 0.5
+            pop.individuals[i].rawFitness = 0.5
+        }
+        for _ in 0..<50 {
+            let (i, j) = Selection.selectPairIndices(
+                from: pop,
+                strategy: .tournament(size: 3)
+            )
+            #expect(i != j, "Pair indices must always be distinct")
+        }
+    }
+
+    @Test("selectPairIndices handles single-individual population")
+    func selectPairIndicesSingleton() {
+        let events = [makeMovableEvent(id: "a")]
+        let context = makeContext(movableEvents: events)
+        var pop = Population<ScheduleChromosome>(size: 1, eliteCount: 1, context: context)
+        pop.individuals[0].fitness = 0.5
+        let (i, j) = Selection.selectPairIndices(
+            from: pop,
+            strategy: .tournament(size: 2)
+        )
+        #expect(i == 0 && j == 0, "Degenerate singleton must not crash")
+    }
+
+    // MARK: replaceByCrowding with index-based parents
+
+    @Test("replaceByCrowding replaces parent slots by index, not by Equatable match")
+    func crowdingReplacesByIndex() {
+        let events = [makeMovableEvent(id: "a", durationMinutes: 30),
+                      makeMovableEvent(id: "b", durationMinutes: 30)]
+        let context = makeContext(movableEvents: events)
+
+        // Craft a population with TWO identical chromosomes at slots 0 and 1
+        // (by Equatable they compare equal). Old code would overwrite slot 0
+        // twice; new code must honour the requested slot.
+        var base = ScheduleChromosome.random(context: context)
+        base.fitness = 0.3
+        base.rawFitness = 0.3
+
+        var filler = ScheduleChromosome.random(context: context)
+        filler.fitness = 0.4
+        filler.rawFitness = 0.4
+
+        var pop = Population<ScheduleChromosome>(
+            individuals: [base, base, filler, filler, filler],
+            eliteCount: 1
+        )
+
+        // Two distinct children with higher fitness.
+        var child1 = ScheduleChromosome.random(context: context)
+        child1.fitness = 0.9
+        child1.rawFitness = 0.9
+        var child2 = ScheduleChromosome.random(context: context)
+        child2.fitness = 0.9
+        child2.rawFitness = 0.9
+
+        pop.replaceByCrowding(
+            parentIndices: [(0, 1)],
+            offspring: [(child1, child2)],
+            distanceFn: { $0.distance(to: $1) }
+        )
+
+        // Both of the two duplicate-base slots must have been replaced with
+        // the higher-fitness children (modulo crowding pairing choice).
+        #expect(pop.individuals[0].fitness >= 0.9 - 1e-9
+                || pop.individuals[1].fitness >= 0.9 - 1e-9,
+                "At least one duplicate parent slot must be replaced")
+        // Crucially, the filler trio must remain intact.
+        #expect(pop.individuals[2].fitness == 0.4)
+        #expect(pop.individuals[3].fitness == 0.4)
+        #expect(pop.individuals[4].fitness == 0.4)
+    }
+
+    @Test("replaceByCrowding tolerates degenerate parentIndices (same slot)")
+    func crowdingDegenerateSameSlot() {
+        let events = [makeMovableEvent(id: "a")]
+        let context = makeContext(movableEvents: events)
+        var pop = Population<ScheduleChromosome>(size: 4, eliteCount: 1, context: context)
+        for i in pop.individuals.indices {
+            pop.individuals[i].fitness = 0.1
+            pop.individuals[i].rawFitness = 0.1
+        }
+
+        var child1 = pop.individuals[0]
+        child1.fitness = 0.9
+        child1.rawFitness = 0.9
+        var child2 = pop.individuals[0]
+        child2.fitness = 0.8
+        child2.rawFitness = 0.8
+
+        // parentIndices (0, 0) — both children target the same slot. Must not
+        // write twice; must not trap.
+        pop.replaceByCrowding(
+            parentIndices: [(0, 0)],
+            offspring: [(child1, child2)],
+            distanceFn: { $0.distance(to: $1) }
+        )
+        #expect(pop.size == 4)
+    }
+}
