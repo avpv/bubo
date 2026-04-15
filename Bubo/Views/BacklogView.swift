@@ -1,6 +1,52 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+// MARK: - Task List Expansion
+
+/// Three-state disclosure for the Tasks card.
+///
+/// - `.collapsed`: только хедер, список полностью скрыт.
+/// - `.compact`: максимум 4 строки видны, остальные — внутренним скроллом.
+///   Сохраняет место под таймлайн ниже карточки.
+/// - `.expanded`: полностью раскрыт до `fullyExpandedMaxHeight`, пользователь
+///   осознанно жертвует видимостью таймлайна ради полного списка.
+///
+/// Birman: один триггер (шеврон) переключает состояния — без дублирующих
+/// кнопок «Show more» / «Show fewer».
+enum TaskListExpansion: Equatable, Hashable {
+    case collapsed
+    case compact
+    case expanded
+
+    /// Next state in the round-trip cycle.
+    var next: TaskListExpansion {
+        switch self {
+        case .collapsed: return .compact
+        case .compact:   return .expanded
+        case .expanded:  return .collapsed
+        }
+    }
+
+    /// SF Symbol for the disclosure chevron.
+    /// One arrow = стандартное раскрытие; двойная стрелка = «раскрыто
+    /// полностью».
+    var iconName: String {
+        switch self {
+        case .collapsed: return "chevron.right"
+        case .compact:   return "chevron.down"
+        case .expanded:  return "chevron.down.2"
+        }
+    }
+
+    var accessibilityHint: String {
+        switch self {
+        case .collapsed: return "Show tasks"
+        case .compact:   return "Show all tasks"
+        case .expanded:  return "Hide tasks"
+        }
+    }
+}
+
 // MARK: - Backlog View
 
 /// Inline backlog panel for the main screen.
@@ -41,13 +87,25 @@ struct BacklogView: View {
     @Environment(\.backlogCoordinator) private var coordinator
 
     @State private var newTaskTitle = ""
-    @State private var isExpanded = false
+    /// Three-state disclosure for the task list.
+    /// Birman: «информация важнее украшений» — шеврон сам несёт три смысла
+    /// (collapsed / compact / expanded), без дублирующей кнопки «Show more».
+    @State private var expansion: TaskListExpansion = .collapsed
     @State private var editingTaskId: String? = nil
+    /// Hover state for the Schedule pill — HIG: primary actions should read as
+    /// buttons, so a subtle capsule фон появляется на наведении.
+    @State private var isScheduleHovering: Bool = false
     /// Textual ghost — complements the ghost block on the timeline so
     /// assistive technologies and compact layouts still get "Today 14:00".
     @State private var ghostPreviewText: String? = nil
     @State private var ghostPreviewTask: Task<Void, Never>? = nil
     @FocusState private var isInputFocused: Bool
+    /// Row-level keyboard focus. `nil` when no row owns focus (e.g., input
+    /// field is focused instead). Driven by ↑ / ↓ in rows and by clicks.
+    @FocusState private var focusedTaskId: String?
+    /// Whether the "N completed today" tombstone is expanded. Collapsed by
+    /// default so finished work doesn't crowd the active list.
+    @State private var showCompletedToday: Bool = false
 
     /// User has already performed at least one drag — used to hide the
     /// onboarding hint once the affordance has been discovered.
@@ -57,48 +115,73 @@ struct BacklogView: View {
     /// Kept as a constant so tests and the ghost preview agree.
     static let defaultTaskDurationMinutes: Int = 60
 
-    /// Maximum number of task rows visible in the expanded state.
+    /// Maximum number of task rows visible in the compact expansion state.
     /// A height-capped ScrollView keeps the timeline reachable.
     private static let maxExpandedTasks = 4
 
-    /// Estimated height of a context group header inside the task list
-    /// (caption2 text + top/bottom padding).
-    private static let contextHeaderEstimatedHeight: CGFloat =
-        DS.Spacing.sm + 14 + DS.Spacing.xxs // 24pt
+    /// Hard ceiling for the fully-expanded state so the timeline below always
+    /// retains a usable strip. Generous enough for ~12 rows; anything
+    /// longer falls back to internal scrolling.
+    private static let fullyExpandedMaxHeight: CGFloat = 480
+
+    /// Single-line row height. Lower than the former 44pt because the row
+    /// is now one line (title + inline middot-separated metadata) instead
+    /// of a two-line stack.
+    static let compactRowHeight: CGFloat = 40
 
     private var activeTasks: [BacklogTask] {
         backlogService.tasks.filter { $0.status != .done }
     }
 
-    /// Height cap for the expanded ScrollView. Sums the first
-    /// `maxExpandedTasks` row heights plus any context group headers
-    /// that appear among them, so the visible area always fits 4 task rows.
-    private var expandedScrollMaxHeight: CGFloat {
-        let grouped = backlogService.groupedByContext
-        // Row height estimate: backlogRowHeight is the frame minHeight (44pt)
-        // but the two-line content + vertical padding can push the actual
-        // height a few points higher depending on platform font metrics.
-        let rowHeight = DS.Size.backlogRowHeight + DS.Spacing.xs // 48pt
-        var totalHeight: CGFloat = 0
-        var tasksSeen = 0
-        for group in grouped {
-            if tasksSeen >= Self.maxExpandedTasks { break }
-            let active = group.tasks.filter { $0.status != .done }
-            guard !active.isEmpty else { continue }
-            if group.context != nil {
-                totalHeight += Self.contextHeaderEstimatedHeight
-            }
-            let count = min(active.count, Self.maxExpandedTasks - tasksSeen)
-            totalHeight += rowHeight * CGFloat(count)
-            tasksSeen += count
+    /// Tasks completed since local midnight. Powers the «N completed today»
+    /// tombstone — HIG/Birman: сохраняем контекст «сколько сделано сегодня»,
+    /// но квартирантом, не жильцом: свёрнуто по умолчанию.
+    private var completedToday: [BacklogTask] {
+        let startOfDay = Calendar.current.startOfDay(for: Date())
+        return backlogService.tasks
+            .filter { $0.status == .done }
+            .filter { ($0.completedAt ?? .distantPast) >= startOfDay }
+            .sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) }
+    }
+
+    /// Height cap for the task list ScrollView.
+    ///
+    /// - `.compact`: sums the first `maxExpandedTasks` row heights so the
+    ///   visible area always fits 4 task rows, keeping the timeline reachable.
+    /// - `.expanded`: `min(contentHeight, fullyExpandedMaxHeight)` — shows
+    ///   every task up to a generous cap, longer lists scroll internally.
+    /// - `.collapsed`: zero (list hidden entirely).
+    private var scrollMaxHeight: CGFloat {
+        // Single-line row — see `compactRowHeight`. No extra inter-row
+        // spacing since the VStack uses spacing=0.
+        let rowHeight = Self.compactRowHeight
+        let activeCount = activeTasks.count
+        guard activeCount > 0 else { return 0 }
+
+        switch expansion {
+        case .collapsed:
+            return 0
+        case .compact:
+            let visible = min(activeCount, Self.maxExpandedTasks)
+            return rowHeight * CGFloat(visible)
+        case .expanded:
+            let content = rowHeight * CGFloat(activeCount)
+            return min(content, Self.fullyExpandedMaxHeight)
         }
-        return totalHeight
     }
 
     /// Duration to use for ghost-preview lookup and for the task actually
     /// created on submit. Reparses on every keystroke.
     private var parsedDurationMinutes: Int {
         BacklogTitleParser.parse(newTaskTitle).durationMinutes ?? Self.defaultTaskDurationMinutes
+    }
+
+    /// Same as `parsedDurationMinutes` but returns `nil` when the parser
+    /// didn't recognize an explicit duration. Drives the inline chip that
+    /// echoes what the parser understood — seeing "30 min" appear confirms
+    /// the shorthand was caught before the user commits.
+    private var recognizedDurationMinutes: Int? {
+        BacklogTitleParser.parse(newTaskTitle).durationMinutes
     }
 
     var body: some View {
@@ -130,7 +213,7 @@ struct BacklogView: View {
         }
         .onAppear {
             if autoExpand && !activeTasks.isEmpty {
-                isExpanded = true
+                expansion = .compact
             }
         }
         .onDisappear {
@@ -146,115 +229,126 @@ struct BacklogView: View {
         HStack(spacing: DS.Spacing.sm) {
             Button {
                 withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-                    isExpanded.toggle()
+                    expansion = expansion.next
                 }
             } label: {
                 HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                    Image(systemName: expansion.iconName)
                         .font(.caption2)
                         .foregroundStyle(skin.resolvedTextSecondary)
+                        .contentTransition(.symbolEffect(.replace))
                     Text("Tasks")
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(skin.resolvedTextPrimary)
 
+                    // Total count — always shown, tabular digits so the number
+                    // doesn't jitter horizontally when `.numericText()` rolls.
+                    Text("\(activeTasks.count)")
+                        .font(.subheadline.weight(.regular).monospacedDigit())
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                        .contentTransition(.numericText())
+
+                    // Additional red "urgent" signal appears only when it
+                    // matters — it augments the total rather than replacing
+                    // it, so the user never loses "how many tasks total".
                     let urgent = backlogService.urgent(withinDays: 2)
                     if !urgent.isEmpty {
                         Text("\(urgent.count) urgent")
-                            .font(.caption2.weight(.semibold))
+                            .font(.caption2.weight(.semibold).monospacedDigit())
                             .foregroundStyle(skin.resolvedDestructiveColor)
-                    } else {
-                        // Birman: one signal, not two competing numbers. Show
-                        // the urgent count when it matters, total otherwise.
-                        Text("\(activeTasks.count)")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(skin.resolvedTextSecondary)
-                            .padding(.horizontal, DS.Spacing.sm)
-                            .padding(.vertical, DS.Spacing.xxs)
-                            .adaptiveBadgeFill(skin.resolvedTextSecondary)
-                            .clipShape(Capsule())
                             .contentTransition(.numericText())
                     }
                 }
             }
             .buttonStyle(.plain)
+            .help(expansion.accessibilityHint)
 
             Spacer()
 
             if !activeTasks.isEmpty {
-                Button("Schedule") {
-                    onScheduleTasks()
-                }
-                .font(.caption.weight(.medium))
-                .buttonStyle(.plain)
-                .foregroundStyle(skin.accentColor)
+                scheduleButton
             }
         }
         .padding(.horizontal, DS.Spacing.sm)
         .padding(.vertical, DS.Spacing.sm)
     }
 
+    /// HIG: главное действие должно читаться как кнопка. Tint + hover-капсула
+    /// дают affordance без тяжёлой заливки на покое.
+    private var scheduleButton: some View {
+        Button {
+            onScheduleTasks()
+        } label: {
+            Text("Schedule")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(skin.accentColor)
+                .padding(.horizontal, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xxs)
+                .background {
+                    Capsule()
+                        .fill(skin.accentColor.opacity(isScheduleHovering ? 0.14 : 0))
+                }
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
+                isScheduleHovering = hovering
+            }
+        }
+    }
+
     // MARK: - Task List
     //
-    // Collapsed (isExpanded = false): no task rows — only the header
-    // is visible, keeping the card minimal.
+    // Three-state disclosure, driven by `expansion`:
     //
-    // Expanded (isExpanded = true): a height-capped ScrollView wraps
-    // all rows so the user can browse long lists without pushing the
-    // Timeline off screen.  The cap is sized for `maxExpandedTasks`
-    // (4) rows plus any context group headers, keeping free slots
-    // reachable for drag-to-schedule.
+    // - .collapsed: no task rows — only the header is visible,
+    //   keeping the card minimal.
+    // - .compact: a height-capped ScrollView, ~4 rows visible, the rest
+    //   reached by internal scroll. Preserves the timeline strip below.
+    // - .expanded: cap raised to `fullyExpandedMaxHeight` (~10–11 rows);
+    //   the user explicitly traded timeline space for full visibility.
+    //
+    // Birman: один шеврон-триггер несёт все три смысла, без дублирующей
+    // кнопки «Show more».
 
     private var taskList: some View {
         let allTasks = activeTasks
 
         return VStack(spacing: 0) {
-            if isExpanded {
+            if expansion != .collapsed {
                 if !hasDragged && !allTasks.isEmpty {
                     dragDiscoveryHint
                 }
 
-                // Expanded — height-capped ScrollView, max 4 rows visible.
                 ScrollView {
                     VStack(spacing: 0) {
                         taskRowsContent(visibleIDs: nil)
+                        completedTombstone
                     }
                 }
                 .scrollIndicators(.automatic)
-                .frame(maxHeight: expandedScrollMaxHeight)
-                // Birman: удалена «Show fewer» — chevron в хедере уже делает
-                // ровно то же самое; два элемента для одной функции = шум.
+                .frame(maxHeight: scrollMaxHeight)
             }
         }
         .padding(.horizontal, DS.Spacing.sm)
         .motionAwareAnimation(DS.Animation.standard, value: activeTasks.map(\.id), reduceMotion: reduceMotion)
-        .motionAwareAnimation(DS.Animation.standard, value: isExpanded, reduceMotion: reduceMotion)
+        .motionAwareAnimation(DS.Animation.standard, value: expansion, reduceMotion: reduceMotion)
     }
 
     /// Renders grouped task rows. When `visibleIDs` is nil all tasks
     /// are rendered; otherwise only tasks whose id is in the set appear.
+    ///
+    /// Context-group headers are intentionally hidden: a single typographic
+    /// voice for the list reduces visual competition with task titles.
+    /// Grouping still drives ordering via `groupedByContext`, and each row
+    /// already surfaces its context in the subtitle.
     @ViewBuilder
     private func taskRowsContent(visibleIDs: Set<String>?) -> some View {
         let ids = visibleIDs ?? Set(activeTasks.map(\.id))
         let grouped = backlogService.groupedByContext
 
         ForEach(grouped, id: \.context) { group in
-            let groupHasVisibleTasks = group.tasks.contains { ids.contains($0.id) }
-
-            if let context = group.context, groupHasVisibleTasks {
-                // Birman: one typographic voice for quiet subheads —
-                // context-group headers share it with `SectionLabel` and
-                // `DaySectionHeader`, preserved via smaller caption2 weight.
-                Text(context)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(skin.resolvedTextTertiary)
-                    .textCase(.uppercase)
-                    .tracking(0.3)
-                    .padding(.horizontal, DS.Spacing.sm)
-                    // Symmetric top/bottom: the group header breathes evenly
-                    // against the surrounding rows. Previously 8/2 — uneven.
-                    .padding(.vertical, DS.Spacing.xs)
-            }
-
             ForEach(group.tasks) { task in
                 if ids.contains(task.id) {
                     if editingTaskId == task.id {
@@ -285,12 +379,113 @@ struct BacklogView: View {
                             onMoveUp: { moveTask(task, by: -1) },
                             onMoveDown: { moveTask(task, by: +1) },
                             onMoveToTop: { moveTaskToEdge(task, toTop: true) },
-                            onMoveToBottom: { moveTaskToEdge(task, toTop: false) }
+                            onMoveToBottom: { moveTaskToEdge(task, toTop: false) },
+                            isFocused: focusedTaskId == task.id,
+                            onFocusPrev: { focusRow(offsetFrom: task.id, by: -1) },
+                            onFocusNext: { focusRow(offsetFrom: task.id, by: +1) }
                         )
+                        .focusable()
+                        .focused($focusedTaskId, equals: task.id)
+                        .focusEffectDisabled()
                         .transition(.opacity.combined(with: .move(edge: .leading)))
                     }
                 }
             }
+        }
+    }
+
+    // MARK: - Completed-today tombstone
+
+    /// «N completed today» summary + optional expanded list of completed rows.
+    /// Hidden entirely when no tasks were completed today so it doesn't add
+    /// visual weight to the empty state.
+    ///
+    /// Birman: «квартирант, а не жилец» — свёрнуто по умолчанию; клик на
+    /// заполненный чекбокс возвращает задачу обратно в активный список.
+    @ViewBuilder
+    private var completedTombstone: some View {
+        if !completedToday.isEmpty {
+            VStack(spacing: 0) {
+                Button {
+                    withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+                        showCompletedToday.toggle()
+                    }
+                } label: {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: showCompletedToday ? "chevron.down" : "chevron.right")
+                            .font(.caption2)
+                            .contentTransition(.symbolEffect(.replace))
+                        Text("\(completedToday.count) completed today")
+                            .font(.caption2.monospacedDigit())
+                            .contentTransition(.numericText())
+                        Spacer()
+                    }
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                    .padding(.horizontal, DS.Spacing.xs)
+                    .padding(.vertical, DS.Spacing.xs)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(completedToday.count) tasks completed today")
+                .accessibilityHint(showCompletedToday ? "Hide completed" : "Show completed")
+
+                if showCompletedToday {
+                    ForEach(completedToday) { task in
+                        completedRow(task)
+                            .transition(.opacity)
+                    }
+                }
+            }
+            .motionAwareAnimation(DS.Animation.standard, value: showCompletedToday, reduceMotion: reduceMotion)
+            .motionAwareAnimation(DS.Animation.quick, value: completedToday.map(\.id), reduceMotion: reduceMotion)
+        }
+    }
+
+    /// One completed-task row. Filled checkmark, dimmed strike-through title.
+    /// Tapping the checkmark restores the task to the active list.
+    @ViewBuilder
+    private func completedRow(_ task: BacklogTask) -> some View {
+        HStack(spacing: DS.Spacing.sm) {
+            // Reserve the same leading gutter as active rows so the checkmark
+            // column aligns vertically — keeps the two lists visually linked.
+            Color.clear
+                .frame(width: DS.Size.iconLarge, height: DS.Size.accentBarHeight)
+
+            Button {
+                uncompleteTask(task)
+            } label: {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.callout)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Restore task")
+            .accessibilityLabel("Restore \u{201C}\(task.title)\u{201D}")
+
+            Text(task.title)
+                .font(.callout)
+                .foregroundStyle(skin.resolvedTextTertiary)
+                .strikethrough()
+                .lineLimit(1)
+
+            Spacer()
+        }
+        .padding(.vertical, DS.Spacing.xxs)
+        .padding(.horizontal, DS.Spacing.xs)
+        .frame(minHeight: Self.compactRowHeight)
+    }
+
+    /// Restore a completed task to the pending list. Undo is the tombstone
+    /// itself — if the user changes their mind again, the task is right there
+    /// to re-complete.
+    private func uncompleteTask(_ task: BacklogTask) {
+        var restored = task
+        restored.status = .pending
+        restored.completedAt = nil
+        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+            backlogService.updateTask(restored)
         }
     }
 
@@ -457,6 +652,16 @@ struct BacklogView: View {
         return deadline <= Calendar.current.date(byAdding: .day, value: 2, to: Date()) ?? Date()
     }
 
+    /// Move keyboard focus between active-task rows by `delta` positions.
+    /// Boundaries clamp silently — no wrap-around, no audible warning.
+    private func focusRow(offsetFrom currentId: String, by delta: Int) {
+        let tasks = activeTasks
+        guard let idx = tasks.firstIndex(where: { $0.id == currentId }) else { return }
+        let target = idx + delta
+        guard target >= 0, target < tasks.count else { return }
+        focusedTaskId = tasks[target].id
+    }
+
     // MARK: - Complete (undoable)
 
     /// Complete a task and surface an undo toast.
@@ -486,7 +691,10 @@ struct BacklogView: View {
                     .font(.caption)
                     .foregroundStyle(isInputFocused ? AnyShapeStyle(skin.accentColor) : AnyShapeStyle(.tertiary))
 
-                TextField("Add task\u{2026}", text: $newTaskTitle)
+                // Birman: placeholder — возможность научить синтаксису, а не
+                // просто пустое «Add task…». На фокусе остаётся краткий
+                // «Add task…» — пример уже показан chip-подсказкой выше.
+                TextField(addTaskPlaceholder, text: $newTaskTitle)
                     .textFieldStyle(.plain)
                     .font(.callout)
                     .focused($isInputFocused)
@@ -494,6 +702,22 @@ struct BacklogView: View {
                     .onChange(of: newTaskTitle) {
                         computeGhostPreview()
                     }
+
+                // Parsed-duration chip — появляется в тот момент, когда
+                // парсер распознаёт «30m», «1h30m» и т.п. Пользователь
+                // видит, что понято, до того как нажмёт Return.
+                if let minutes = recognizedDurationMinutes {
+                    Text(DS.formatMinutes(minutes))
+                        .font(.caption2.weight(.medium).monospacedDigit())
+                        .foregroundStyle(skin.accentColor)
+                        .padding(.horizontal, DS.Spacing.sm)
+                        .padding(.vertical, DS.Spacing.xxs)
+                        .background(
+                            Capsule().fill(skin.accentColor.opacity(DS.Opacity.subtleFill))
+                        )
+                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                        .accessibilityLabel("Parsed duration: \(DS.formatMinutes(minutes))")
+                }
             }
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, DS.Spacing.xs)
@@ -501,6 +725,7 @@ struct BacklogView: View {
                 RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
                     .fill(skin.accentColor.opacity(isInputFocused ? DS.Opacity.lightFill : DS.Opacity.subtleFill))
             )
+            .motionAwareAnimation(DS.Animation.quick, value: recognizedDurationMinutes, reduceMotion: reduceMotion)
 
             // Hint for new users — disappears once they add a task.
             if activeTasks.isEmpty && !isInputFocused {
@@ -513,6 +738,14 @@ struct BacklogView: View {
         .padding(.horizontal, DS.Spacing.sm)
         .padding(.vertical, DS.Spacing.sm)
         .motionAwareAnimation(DS.Animation.quick, value: isInputFocused, reduceMotion: reduceMotion)
+    }
+
+    /// TextField placeholder. Teaching syntax when the backlog is empty
+    /// («try: Write report 30m»), compact «Add task…» otherwise.
+    private var addTaskPlaceholder: String {
+        activeTasks.isEmpty
+            ? "Add task — try: Write report 30m"
+            : "Add task\u{2026}"
     }
 
     // MARK: - Ghost Preview
@@ -600,7 +833,9 @@ struct BacklogView: View {
         )
         withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
             backlogService.addTask(task)
-            isExpanded = true
+            if expansion == .collapsed {
+                expansion = .compact
+            }
         }
         newTaskTitle = ""
         ghostPreviewText = nil
@@ -636,11 +871,48 @@ struct BacklogTaskRow: View {
     var onMoveDown: () -> Void = {}
     var onMoveToTop: () -> Void = {}
     var onMoveToBottom: () -> Void = {}
+    /// True when this row owns keyboard focus — drives the focus ring visual.
+    var isFocused: Bool = false
+    /// Move focus to the previous / next visible row. Called on plain ↑ / ↓
+    /// (without Cmd) so keyboard navigation feels like List without the
+    /// constraints of wrapping the backlog in a real List.
+    var onFocusPrev: () -> Void = {}
+    var onFocusNext: () -> Void = {}
 
     @State private var isHovered = false
     @State private var isReorderTargeted = false
     @Environment(\.activeSkin) private var skin
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Metadata rendered as a single `Text` with middot separators so the
+    /// whole chain truncates as one unit (`.lineLimit(1)` on the wrapping
+    /// view). Per-segment `foregroundStyle` survives concatenation.
+    ///
+    /// Birman: один типографический голос для метаданных; срочный дедлайн
+    /// получает красный акцент как единственная семантическая подсветка.
+    private var metaText: Text {
+        let dot = Text("\u{00A0}·\u{00A0}").foregroundStyle(skin.resolvedTextTertiary)
+
+        var out = Text(DS.formatMinutes(task.durationMinutes))
+            .foregroundStyle(skin.resolvedTextSecondary)
+
+        if let sp = task.storyPoints {
+            out = out + dot + Text("\(sp)\u{00A0}sp")
+                .foregroundStyle(skin.resolvedTextSecondary)
+        }
+        if let deadline = task.deadline {
+            let color: Color = isUrgent
+                ? skin.resolvedDestructiveColor
+                : skin.resolvedTextSecondary
+            out = out + dot + Text(deadlineLabel(deadline))
+                .foregroundStyle(color)
+        }
+        if let context = task.context {
+            out = out + dot + Text(context)
+                .foregroundStyle(skin.resolvedTextTertiary)
+        }
+        return out
+    }
 
     /// Full VoiceOver label for the content button — assembles title,
     /// duration, priority, deadline and project in one sentence so the
@@ -658,185 +930,25 @@ struct BacklogTaskRow: View {
 
     var body: some View {
         HStack(spacing: DS.Spacing.sm) {
-            // Drag handle — the ONLY drag source on this row.
-            //
-            // Uses .onDrag (NSItemProvider API) instead of .draggable
-            // (Transferable API). On macOS, .draggable() fails to start
-            // NSDrag sessions inside popover windows and when competing
-            // with child gestures. .onDrag uses NSItemProvider directly,
-            // bypassing the Transferable encoding path that silently
-            // breaks in these contexts.
-            Image(systemName: "line.3.horizontal")
-                .font(.caption2)
-                // Birman: affordance you have to search for isn't an
-                // affordance. The handle is always visible (quietly, at
-                // `softAccent`), becoming fully opaque on hover so users
-                // see "I can grab this" without having to hover first.
-                .foregroundStyle(skin.resolvedTextTertiary)
-                .frame(width: DS.Size.iconLarge, height: DS.Size.accentBarHeight)
-                .contentShape(Rectangle())
-                .opacity(isHovered ? 1 : DS.Opacity.softAccent)
-                .motionAwareAnimation(DS.Animation.quick, value: isHovered, reduceMotion: reduceMotion)
-                .accessibilityHidden(true)
-                .onDrag {
-                    onDragStart()
-                    let payload = BacklogTaskDrag(
-                        taskId: task.id,
-                        title: task.title,
-                        durationMinutes: task.durationMinutes,
-                        context: task.context
-                    )
-                    let provider = NSItemProvider()
-                    if let data = try? JSONEncoder().encode(payload) {
-                        provider.registerDataRepresentation(
-                            forTypeIdentifier: UTType.json.identifier,
-                            visibility: .ownProcess
-                        ) { completion in
-                            completion(data, nil)
-                            return nil
-                        }
-                    }
-                    return provider
-                } preview: {
-                    HStack(spacing: DS.Spacing.xs) {
-                        Image(systemName: "calendar.badge.plus")
-                            .font(.caption)
-                        Text(task.title)
-                            .font(.caption.weight(.medium))
-                        // DS.formatMinutes keeps the same non-breaking-space
-                        // format used everywhere else in the app.
-                        Text(DS.formatMinutes(task.durationMinutes))
-                            .font(.caption2)
-                            .foregroundStyle(skin.resolvedTextSecondary)
-                    }
-                    .padding(.horizontal, DS.Spacing.sm)
-                    .padding(.vertical, DS.Spacing.xs)
-                    // Use the skin's resolved button material so the drag
-                    // ghost reads as "part of this app", not as a generic
-                    // macOS blur.
-                    .background(skin.resolvedButtonMaterial, in: Capsule())
-                    .onDisappear { onDragEnd() }
-                }
-
-            // Checkbox — complete on tap
-            Button(action: onComplete) {
-                Image(systemName: "circle")
-                    .font(.callout)
-                    .foregroundStyle(isUrgent ? skin.resolvedDestructiveColor : skin.resolvedTextSecondary)
-            }
-            .buttonStyle(.plain)
-            .help("Mark complete")
-            .accessibilityLabel("Mark \u{201C}\(task.title)\u{201D} complete")
-
-            // Content — edit on tap
-            Button(action: onEdit) {
-                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                    HStack(spacing: DS.Spacing.xs) {
-                        // Birman: priority is a quiet, semantic marker — a
-                        // colored dot at the leading edge, not an exclamation
-                        // mark hack. Only shown for `.high` (absence = ok).
-                        if task.priority == .high {
-                            Circle()
-                                .fill(skin.resolvedDestructiveColor)
-                                .frame(width: DS.Size.recipeDotSize, height: DS.Size.recipeDotSize)
-                                .accessibilityLabel("High priority")
-                        }
-                        Text(task.title)
-                            .font(.callout)
-                            .foregroundStyle(skin.resolvedTextPrimary)
-                            .lineLimit(1)
-                    }
-
-                    HStack(spacing: DS.Spacing.xs) {
-                        // Uses DS.formatMinutes so "1 h 30 min" has the same
-                        // non-breaking-space treatment as the rest of the app.
-                        Text(DS.formatMinutes(task.durationMinutes))
-                            .font(.caption2)
-                            .foregroundStyle(skin.resolvedTextSecondary)
-
-                        if let sp = task.storyPoints {
-                            Text("\(sp)\u{00A0}sp")
-                                .font(.caption2)
-                                .foregroundStyle(skin.resolvedTextSecondary)
-                        }
-
-                        if let deadline = task.deadline {
-                            Text(deadlineLabel(deadline))
-                                .font(.caption2)
-                                .foregroundStyle(isUrgent ? skin.resolvedDestructiveColor : skin.resolvedTextSecondary)
-                        }
-
-                        if let context = task.context {
-                            Text(context)
-                                .font(.caption2)
-                                .foregroundStyle(skin.resolvedTextTertiary)
-                        }
-                    }
-                }
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(accessibilityRowLabel)
-            .accessibilityHint("Double-tap to edit")
-
-            Spacer()
-
-            // Reorder + delete controls. HIG: reserve the space so the
-            // layout doesn't jump when the cursor enters/leaves — fade
-            // opacity instead (Apple Reminders / Things pattern).
-            HStack(spacing: DS.Spacing.xxs) {
-                Button(action: onMoveUp) {
-                    Image(systemName: "chevron.up")
-                        .font(.caption2)
-                        .foregroundStyle(canMoveUp ? skin.resolvedTextSecondary : skin.resolvedTextTertiary.opacity(DS.Opacity.half))
-                }
-                .buttonStyle(.plain)
-                .disabled(!canMoveUp)
-                .help("Move up")
-                .accessibilityLabel("Move \u{201C}\(task.title)\u{201D} up")
-
-                Button(action: onMoveDown) {
-                    Image(systemName: "chevron.down")
-                        .font(.caption2)
-                        .foregroundStyle(canMoveDown ? skin.resolvedTextSecondary : skin.resolvedTextTertiary.opacity(DS.Opacity.half))
-                }
-                .buttonStyle(.plain)
-                .disabled(!canMoveDown)
-                .help("Move down")
-                .accessibilityLabel("Move \u{201C}\(task.title)\u{201D} down")
-
-                Button(action: onDelete) {
-                    Image(systemName: "xmark")
-                        .font(.caption2)
-                        .foregroundStyle(skin.resolvedTextTertiary)
-                }
-                .buttonStyle(.plain)
-                .help("Delete task")
-                .accessibilityLabel("Delete \u{201C}\(task.title)\u{201D}")
-            }
-            .opacity(isHovered ? 1 : 0)
-            .motionAwareAnimation(DS.Animation.quick, value: isHovered, reduceMotion: reduceMotion)
-            // Keep the controls out of the accessibility tree when hidden
-            // so VoiceOver doesn't announce ghost buttons.
-            .accessibilityHidden(!isHovered)
+            dragHandle
+            checkbox
+            content
+            Spacer(minLength: DS.Spacing.xs)
+            controls
         }
-        .padding(.vertical, DS.Spacing.xs)
+        .padding(.vertical, DS.Spacing.xxs)
         .padding(.horizontal, DS.Spacing.xs)
-        .frame(minHeight: DS.Size.backlogRowHeight)
+        .frame(minHeight: BacklogView.compactRowHeight)
         .contentShape(Rectangle())
         .opacity(isDragging ? DS.Opacity.tertiaryText : 1)
-        .background(
-            // Reorder drop highlight — a thin accent bar at the top edge so
-            // the user sees exactly where the dropped task will land.
-            RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
-                .fill(skin.accentColor.opacity(isReorderTargeted ? DS.Opacity.lightFill : 0))
-        )
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill(skin.accentColor)
-                .frame(height: isReorderTargeted ? DS.Border.selection : 0)
-                .motionAwareAnimation(DS.Animation.quick, value: isReorderTargeted, reduceMotion: reduceMotion)
+        .background(rowBackground)
+        .overlay(alignment: .top) { dropBar }
+        .overlay { focusRing }
+        .onHover { hovering in
+            withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
+                isHovered = hovering
+            }
         }
-        .onHover { isHovered = $0 }
         .dropDestination(for: BacklogTaskDrag.self) { items, _ in
             guard let dropped = items.first, dropped.taskId != task.id else { return false }
             onReorderDrop(dropped)
@@ -850,11 +962,6 @@ struct BacklogTaskRow: View {
             Button("Complete") { onComplete() }
             Button("Edit") { onEdit() }
             Divider()
-            // Keyboard-friendly reorder. Shortcut bindings aren't attached
-            // here because context menus are ephemeral — the shortcuts
-            // would only work while the menu itself is open, which is the
-            // opposite of useful. VoiceOver users reach the same actions
-            // through the `accessibilityAction` modifiers below.
             Button("Move Up") { onMoveUp() }
                 .disabled(!canMoveUp)
             Button("Move Down") { onMoveDown() }
@@ -868,6 +975,219 @@ struct BacklogTaskRow: View {
         }
         .accessibilityAction(named: "Move Up") { onMoveUp() }
         .accessibilityAction(named: "Move Down") { onMoveDown() }
+        // Keyboard navigation on the focused row. HIG: full keyboard access.
+        // Плоский arrow (без Cmd) перемещает фокус между строками, Cmd-arrow
+        // — переставляет сами строки. Space / Return / Delete — основные
+        // глаголы (complete / edit / delete).
+        .onKeyPress(keys: [.space, .return, .upArrow, .downArrow, .delete]) { press in
+            switch press.key {
+            case .space:
+                onComplete()
+                return .handled
+            case .return:
+                onEdit()
+                return .handled
+            case .delete:
+                onDelete()
+                return .handled
+            case .upArrow:
+                if press.modifiers.contains(.command) {
+                    if canMoveUp { onMoveUp() }
+                } else {
+                    onFocusPrev()
+                }
+                return .handled
+            case .downArrow:
+                if press.modifiers.contains(.command) {
+                    if canMoveDown { onMoveDown() }
+                } else {
+                    onFocusNext()
+                }
+                return .handled
+            default:
+                return .ignored
+            }
+        }
+    }
+
+    // MARK: - Row sub-views
+
+    /// Drag handle — the ONLY drag source on this row.
+    ///
+    /// Uses .onDrag (NSItemProvider API) instead of .draggable
+    /// (Transferable API). On macOS, .draggable() fails to start
+    /// NSDrag sessions inside popover windows and when competing
+    /// with child gestures. .onDrag uses NSItemProvider directly,
+    /// bypassing the Transferable encoding path that silently
+    /// breaks in these contexts.
+    ///
+    /// Birman: hover-only — affordance, который вечно светится, становится
+    /// шумом. Курсор и так подскажет grab при наведении; онбординг отдельной
+    /// подсказкой через `dragDiscoveryHint` в родителе.
+    private var dragHandle: some View {
+        Image(systemName: "line.3.horizontal")
+            .font(.caption2)
+            .foregroundStyle(skin.resolvedTextTertiary)
+            .frame(width: DS.Size.iconLarge, height: DS.Size.accentBarHeight)
+            .contentShape(Rectangle())
+            .opacity(isHovered ? 1 : 0)
+            .accessibilityHidden(true)
+            .onDrag {
+                onDragStart()
+                let payload = BacklogTaskDrag(
+                    taskId: task.id,
+                    title: task.title,
+                    durationMinutes: task.durationMinutes,
+                    context: task.context
+                )
+                let provider = NSItemProvider()
+                if let data = try? JSONEncoder().encode(payload) {
+                    provider.registerDataRepresentation(
+                        forTypeIdentifier: UTType.json.identifier,
+                        visibility: .ownProcess
+                    ) { completion in
+                        completion(data, nil)
+                        return nil
+                    }
+                }
+                return provider
+            } preview: {
+                HStack(spacing: DS.Spacing.xs) {
+                    Image(systemName: "calendar.badge.plus")
+                        .font(.caption)
+                    Text(task.title)
+                        .font(.caption.weight(.medium))
+                    Text(DS.formatMinutes(task.durationMinutes))
+                        .font(.caption2)
+                        .foregroundStyle(skin.resolvedTextSecondary)
+                }
+                .padding(.horizontal, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xs)
+                .background(skin.resolvedButtonMaterial, in: Capsule())
+                .onDisappear { onDragEnd() }
+            }
+    }
+
+    /// Checkbox — complete on tap.
+    /// HIG: controls should be at least 24pt on a side; the ~17pt glyph
+    /// gets wrapped in a 24pt hit-area so the tap target is forgiving.
+    private var checkbox: some View {
+        Button(action: onComplete) {
+            Image(systemName: "circle")
+                .font(.callout)
+                .foregroundStyle(isUrgent ? skin.resolvedDestructiveColor : skin.resolvedTextSecondary)
+                .frame(width: 24, height: 24)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Mark complete")
+        .accessibilityLabel("Mark \u{201C}\(task.title)\u{201D} complete")
+    }
+
+    /// Single-line content: title + priority dot + middot-separated metadata.
+    /// Title gets `layoutPriority(1)` so it holds onto space; metadata
+    /// truncates first when the row narrows.
+    ///
+    /// Birman: точка приоритета — пометка на полях, после заголовка, чтобы
+    /// первое касание взгляда получал смысл, а не маркер.
+    private var content: some View {
+        Button(action: onEdit) {
+            HStack(spacing: DS.Spacing.xs) {
+                Text(task.title)
+                    .font(.callout)
+                    .foregroundStyle(skin.resolvedTextPrimary)
+                    .lineLimit(1)
+                    .layoutPriority(1)
+
+                if task.priority == .high {
+                    Circle()
+                        .fill(skin.resolvedDestructiveColor)
+                        .frame(width: DS.Size.recipeDotSize, height: DS.Size.recipeDotSize)
+                        .accessibilityLabel("High priority")
+                }
+
+                metaText
+                    .font(.caption2)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityRowLabel)
+        .accessibilityHint("Double-tap to edit")
+    }
+
+    /// Reorder + delete controls, visible only on hover (Apple Reminders /
+    /// Things pattern). HIG: reserve the horizontal space so layout doesn't
+    /// jump when the cursor enters / leaves.
+    private var controls: some View {
+        HStack(spacing: DS.Spacing.xxs) {
+            Button(action: onMoveUp) {
+                Image(systemName: "chevron.up")
+                    .font(.caption2)
+                    .foregroundStyle(canMoveUp ? skin.resolvedTextSecondary : skin.resolvedTextTertiary.opacity(DS.Opacity.half))
+            }
+            .buttonStyle(.plain)
+            .disabled(!canMoveUp)
+            .help("Move up")
+            .accessibilityLabel("Move \u{201C}\(task.title)\u{201D} up")
+
+            Button(action: onMoveDown) {
+                Image(systemName: "chevron.down")
+                    .font(.caption2)
+                    .foregroundStyle(canMoveDown ? skin.resolvedTextSecondary : skin.resolvedTextTertiary.opacity(DS.Opacity.half))
+            }
+            .buttonStyle(.plain)
+            .disabled(!canMoveDown)
+            .help("Move down")
+            .accessibilityLabel("Move \u{201C}\(task.title)\u{201D} down")
+
+            Button(action: onDelete) {
+                Image(systemName: "xmark")
+                    .font(.caption2)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+            }
+            .buttonStyle(.plain)
+            .help("Delete task")
+            .accessibilityLabel("Delete \u{201C}\(task.title)\u{201D}")
+        }
+        .opacity(isHovered ? 1 : 0)
+        // Keep the controls out of the accessibility tree when hidden
+        // so VoiceOver doesn't announce ghost buttons.
+        .accessibilityHidden(!isHovered)
+    }
+
+    /// Row background — drop highlight wins over hover tint when both fire.
+    /// HIG: use colour purposefully; the accent fill *means* "drop lands here",
+    /// the neutral hover tint *means* "this row is under your cursor".
+    private var rowBackground: some View {
+        let accent = skin.accentColor.opacity(DS.Opacity.lightFill)
+        let hoverTint = skin.resolvedTextTertiary.opacity(0.06)
+        let fill: Color = isReorderTargeted
+            ? accent
+            : (isHovered ? hoverTint : .clear)
+        return RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
+            .fill(fill)
+    }
+
+    /// Thin accent bar at the top edge while a drag is targeted at this row —
+    /// makes the drop position unambiguous.
+    private var dropBar: some View {
+        Rectangle()
+            .fill(skin.accentColor)
+            .frame(height: isReorderTargeted ? DS.Border.selection : 0)
+            .motionAwareAnimation(DS.Animation.quick, value: isReorderTargeted, reduceMotion: reduceMotion)
+    }
+
+    /// Keyboard focus ring. Mirrors the system focus ring visually without
+    /// the heavyweight default (which also draws a halo around each embedded
+    /// button).
+    @ViewBuilder
+    private var focusRing: some View {
+        if isFocused {
+            RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
+                .strokeBorder(skin.accentColor, lineWidth: 2)
+        }
     }
 
     private func deadlineLabel(_ date: Date) -> String {
