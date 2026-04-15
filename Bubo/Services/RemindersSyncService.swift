@@ -13,6 +13,10 @@ import os
 /// Behaviours:
 ///   - **Import** (Reminders → Bubo): incomplete reminders from the
 ///     selected lists are added to the backlog, deduped by task ID.
+///   - **Edit merge** (Reminders → Bubo): when a reminder is edited
+///     externally (title / priority / deadline / context), the backlog
+///     task picks up the change on the next sync while preserving
+///     Bubo-owned fields like duration and scheduled slot.
 ///   - **External completion mirroring** (Reminders → Bubo): when a
 ///     reminder-backed task exists in Bubo but its source reminder is no
 ///     longer incomplete (user finished or deleted it in Reminders.app or
@@ -21,14 +25,24 @@ import os
 ///     task from the Bubo backlog, its ID is remembered so future syncs
 ///     don't re-import it. The set is pruned when the source reminder is
 ///     completed / deleted in Apple Reminders.
-///   - **Completion writeback** (Bubo → Reminders): when the user
-///     completes a reminder-backed task in Bubo, the source Apple
-///     Reminder is marked done. Off by default — the user opts in via a
-///     Settings toggle.
 ///   - **Export** (Bubo → Reminders): when enabled, every new
 ///     Bubo-native task is created as a reminder in the user's chosen
 ///     list. The linked `calendarItemIdentifier` is stored on the task
 ///     so subsequent syncs dedupe cleanly.
+///   - **Edit writeback** (Bubo → Reminders): when the user edits a
+///     linked task in Bubo, the reminder picks up the same title /
+///     priority / deadline. `updateReminder` does field-level diffing,
+///     so echoes of remote edits are no-ops.
+///   - **Schedule writeback** (Bubo → Reminders): when a linked task is
+///     scheduled (or un-scheduled), its Apple Reminder's due date is
+///     set to the scheduled time — so Bubo's schedule shows up in
+///     Reminders.app on iPhone / iPad.
+///   - **Completion writeback** (Bubo → Reminders): when the user
+///     completes a linked task in Bubo, the source Apple Reminder is
+///     marked done. Off by default — the user opts in via a toggle.
+///   - **Delete writeback** (Bubo → Reminders): when the user removes a
+///     linked task, the source Apple Reminder is deleted. Off by
+///     default — the user opts in via a separate toggle.
 ///
 /// Self-write suppression: every EventKit write we make triggers an
 /// async `EKEventStoreChanged` notification ~100ms later, which would
@@ -68,6 +82,8 @@ final class RemindersSyncService {
     private nonisolated(unsafe) var taskRemovedObserver: Any?
     private nonisolated(unsafe) var taskCompletedObserver: Any?
     private nonisolated(unsafe) var taskAddedObserver: Any?
+    private nonisolated(unsafe) var taskUpdatedObserver: Any?
+    private nonisolated(unsafe) var taskScheduleChangedObserver: Any?
     private var activeSyncTask: Task<Void, Never>?
 
     /// Ignore `remindersDataChanged` events that arrive before this time —
@@ -101,17 +117,19 @@ final class RemindersSyncService {
             }
         }
 
-        // Remember reminder-backed tasks the user removes, so we don't keep
-        // re-importing them. Non-reminder IDs are ignored.
+        // Handle task removals: remember dismissals for imported tasks so we
+        // don't re-import them, and optionally delete the linked reminder for
+        // exported tasks (opt-in via `remindersDeletionSync`). The full task
+        // is delivered as the notification `object` — we need fields like
+        // `reminderCalendarItemId` that can't be queried after removal.
         taskRemovedObserver = NotificationCenter.default.addObserver(
             forName: BacklogService.taskRemoved,
             object: nil,
             queue: .main
         ) { [weak self] notification in
-            guard let taskId = notification.object as? String,
-                  taskId.hasPrefix("reminder_") else { return }
+            guard let removed = notification.object as? BacklogTask else { return }
             Task { @MainActor in
-                self?.dismissedReminderIds.insert(taskId)
+                self?.handleTaskRemoved(removed)
             }
         }
 
@@ -141,6 +159,34 @@ final class RemindersSyncService {
                 self?.handleTaskAdded(taskId: taskId)
             }
         }
+
+        // Push Bubo edits (title / priority / deadline / context) to the
+        // linked reminder so Reminders.app stays in sync. `AppleRemindersService`
+        // does field-level diffing internally, so echo writes are no-ops.
+        taskUpdatedObserver = NotificationCenter.default.addObserver(
+            forName: BacklogService.taskUpdated,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let taskId = notification.object as? String else { return }
+            Task { @MainActor in
+                self?.handleTaskUpdated(taskId: taskId)
+            }
+        }
+
+        // When a task is scheduled (or un-scheduled) in Bubo, push the
+        // scheduled time as the linked reminder's due date. That's how
+        // Bubo's schedule shows up in Reminders.app on iPhone / iPad.
+        taskScheduleChangedObserver = NotificationCenter.default.addObserver(
+            forName: BacklogService.taskScheduleChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let taskId = notification.object as? String else { return }
+            Task { @MainActor in
+                self?.handleTaskScheduleChanged(taskId: taskId)
+            }
+        }
     }
 
     deinit {
@@ -148,6 +194,7 @@ final class RemindersSyncService {
         let observers = [
             remindersChangedObserver, taskRemovedObserver,
             taskCompletedObserver, taskAddedObserver,
+            taskUpdatedObserver, taskScheduleChangedObserver,
         ].compactMap { $0 }
         for observer in observers {
             NotificationCenter.default.removeObserver(observer)
@@ -245,8 +292,12 @@ final class RemindersSyncService {
                     // push the update through. Bubo-owned fields (duration,
                     // scheduling, story points, preferred period, status) are
                     // preserved — the user set those locally.
+                    //
+                    // `silentlyUpdate` bypasses `taskUpdated`; otherwise the
+                    // edit-writeback observer would immediately push the same
+                    // data back to the reminder we just read from.
                     if let merged = merging(remote: remote, into: existing) {
-                        backlogService.updateTask(merged)
+                        backlogService.silentlyUpdate(merged)
                     }
                     continue
                 }
@@ -399,16 +450,104 @@ final class RemindersSyncService {
         }
     }
 
+    // MARK: - Edit Writeback
+
+    /// Called whenever the user mutates a linked task in Bubo. Pushes the
+    /// updated title / priority / deadline / context to Apple Reminders so
+    /// the reminder stays in sync with the backlog.
+    ///
+    /// `AppleRemindersService.updateReminder` does field-level diffing, so
+    /// an echo of a just-imported remote edit is a no-op — no redundant save,
+    /// no extra `EKEventStoreChanged` fires.
+    private func handleTaskUpdated(taskId: String) {
+        guard AppleRemindersService.hasAccess,
+              let task = backlogService.tasks.first(where: { $0.id == taskId }),
+              let calendarItemId = calendarItemId(for: task) else {
+            return
+        }
+
+        markSelfWrite()
+        do {
+            try AppleRemindersService.shared.updateReminder(
+                calendarItemId: calendarItemId,
+                from: task
+            )
+        } catch {
+            logger.error("Failed to push task edit to Apple Reminders: \(error)")
+        }
+    }
+
+    // MARK: - Schedule Writeback
+
+    /// Called when a linked task is placed into (or removed from) a Bubo
+    /// schedule slot. Writes the scheduled time back as the reminder's due
+    /// date so the schedule shows up in Reminders.app on other devices.
+    /// When the task is un-scheduled, falls back to its remaining deadline
+    /// (or clears the due date entirely if there's no deadline).
+    private func handleTaskScheduleChanged(taskId: String) {
+        guard AppleRemindersService.hasAccess,
+              let task = backlogService.tasks.first(where: { $0.id == taskId }),
+              let calendarItemId = calendarItemId(for: task) else {
+            return
+        }
+
+        let newDueDate = task.scheduledDate ?? task.deadline
+        markSelfWrite()
+        do {
+            try AppleRemindersService.shared.updateReminderDueDate(
+                calendarItemId: calendarItemId,
+                date: newDueDate
+            )
+        } catch {
+            logger.error("Failed to push scheduling to Apple Reminders: \(error)")
+        }
+    }
+
+    // MARK: - Remove Writeback
+
+    /// Called whenever a task leaves the backlog. Imported tasks are added
+    /// to the dismissed set so they don't re-import; exported / imported
+    /// tasks with a linked reminder are deleted from Apple Reminders when
+    /// the user opted into deletion sync.
+    private func handleTaskRemoved(_ removed: BacklogTask) {
+        // Imported reminder → remember so we don't re-import next sync.
+        if removed.id.hasPrefix("reminder_") {
+            dismissedReminderIds.insert(removed.id)
+        }
+
+        // Delete the linked reminder when opt-in is on.
+        guard settings.remindersDeletionSync,
+              AppleRemindersService.hasAccess,
+              let calendarItemId = calendarItemId(for: removed) else {
+            return
+        }
+
+        markSelfWrite()
+        do {
+            try AppleRemindersService.shared.deleteReminder(calendarItemId: calendarItemId)
+        } catch {
+            logger.error("Failed to delete reminder in Apple Reminders: \(error)")
+        }
+    }
+
     // MARK: - Linkage Helpers
 
-    /// Returns the Apple Reminders `calendarItemIdentifier` linked to a Bubo
-    /// task, whether it was imported (ID prefix) or exported (stored on the
-    /// task). Returns nil when the task isn't linked to any reminder.
-    private func linkedCalendarItemId(for taskId: String) -> String? {
-        if let imported = AppleRemindersService.remindersId(from: taskId) {
+    /// Returns the Apple Reminders `calendarItemIdentifier` linked to a task,
+    /// whether it was imported (prefix) or exported (stored on the task).
+    private func calendarItemId(for task: BacklogTask) -> String? {
+        if let imported = AppleRemindersService.remindersId(from: task.id) {
             return imported
         }
-        return backlogService.tasks.first(where: { $0.id == taskId })?.reminderCalendarItemId
+        return task.reminderCalendarItemId
+    }
+
+    /// Look up the task and resolve its linked calendar-item identifier.
+    /// Kept as a convenience for handlers that only have the task ID.
+    private func linkedCalendarItemId(for taskId: String) -> String? {
+        guard let task = backlogService.tasks.first(where: { $0.id == taskId }) else {
+            return nil
+        }
+        return calendarItemId(for: task)
     }
 
     /// Bump the self-write suppression window so the `.EKEventStoreChanged`

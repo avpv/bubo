@@ -12,13 +12,25 @@ final class BacklogService {
     /// Posted when a task is marked done. `object` is the task ID (String).
     static let taskCompleted = Notification.Name("BuboBacklogTaskCompleted")
 
-    /// Posted when a task is removed. `object` is the task ID (String).
+    /// Posted when a task is removed. `object` is the removed `BacklogTask`
+    /// — downstream observers need fields like `reminderCalendarItemId` that
+    /// can't be looked up after the task is already gone from the array.
     static let taskRemoved = Notification.Name("BuboBacklogTaskRemoved")
 
     /// Posted when a new task is added. `object` is the task ID (String).
     /// Used by `RemindersSyncService` to push Bubo-native tasks out to
     /// Apple Reminders when the user opted into export.
     static let taskAdded = Notification.Name("BuboBacklogTaskAdded")
+
+    /// Posted when a task is updated via `updateTask`. `object` is the task
+    /// ID (String). Bypassed by `silentlyUpdate` for sync-driven merges so
+    /// we don't echo remote edits straight back to their source.
+    static let taskUpdated = Notification.Name("BuboBacklogTaskUpdated")
+
+    /// Posted when a task's schedule changes via `markScheduled` /
+    /// `unschedule`. `object` is the task ID (String). Lets
+    /// `RemindersSyncService` push the new due date back to Apple Reminders.
+    static let taskScheduleChanged = Notification.Name("BuboBacklogTaskScheduleChanged")
 
     private(set) var tasks: [BacklogTask] = []
     private let modelContainer: ModelContainer
@@ -122,13 +134,27 @@ final class BacklogService {
         guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return }
         tasks[index] = task
         saveTasks()
+        NotificationCenter.default.post(name: Self.taskUpdated, object: task.id)
+    }
+
+    /// Update without posting `taskUpdated`. Used by `RemindersSyncService`
+    /// when merging fields it just read from Apple Reminders — posting
+    /// `taskUpdated` there would cause the writeback observer to push the
+    /// same data straight back to the reminder we read from.
+    func silentlyUpdate(_ task: BacklogTask) {
+        guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return }
+        tasks[index] = task
+        saveTasks()
     }
 
     func removeTask(id: String) -> BacklogTask? {
         guard let index = tasks.firstIndex(where: { $0.id == id }) else { return nil }
         let removed = tasks.remove(at: index)
         saveTasks()
-        NotificationCenter.default.post(name: Self.taskRemoved, object: id)
+        // Post the full task so observers can inspect fields like
+        // `reminderCalendarItemId` for cleanup of external state — the task
+        // is already gone from `tasks` by the time they receive this.
+        NotificationCenter.default.post(name: Self.taskRemoved, object: removed)
         return removed
     }
 
@@ -170,6 +196,7 @@ final class BacklogService {
         tasks[index].scheduledEventId = eventId
         tasks[index].scheduledDate = date
         saveTasks()
+        NotificationCenter.default.post(name: Self.taskScheduleChanged, object: id)
     }
 
     func unschedule(id: String) {
@@ -178,6 +205,7 @@ final class BacklogService {
         tasks[index].scheduledEventId = nil
         tasks[index].scheduledDate = nil
         saveTasks()
+        NotificationCenter.default.post(name: Self.taskScheduleChanged, object: id)
     }
 
     /// Re-insert a previously removed task (for undo).

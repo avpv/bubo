@@ -320,10 +320,23 @@ struct AppleRemindersTabView: View {
                     }
                     .labelsHidden()
 
-                    Text("New Bubo tasks are created in this Reminders list.")
+                    Text("New Bubo tasks are created in this Reminders list. Edits and schedule changes in Bubo also push back automatically.")
                         .font(.caption)
                         .foregroundStyle(skin.resolvedTextSecondary)
                 }
+
+                SkinSeparator().padding(.vertical, DS.Spacing.xs)
+
+                Toggle(isOn: $settings.remindersDeletionSync) {
+                    Text("Delete reminder when task is removed")
+                        .fontWeight(.medium)
+                }
+                .toggleStyle(.switch)
+
+                Text("When you remove a linked task from the backlog, its reminder is deleted from Apple Reminders too.")
+                    .font(.caption)
+                    .foregroundStyle(skin.resolvedTextSecondary)
+                    .padding(.top, DS.Spacing.xs)
             }
         }
     }

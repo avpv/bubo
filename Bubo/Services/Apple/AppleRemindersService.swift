@@ -246,6 +246,27 @@ final class AppleRemindersService {
         try store.remove(reminder, commit: true)
     }
 
+    /// Sets just the due-date components of a reminder.  Used by the Bubo
+    /// scheduling writeback — `scheduledDate` replaces the reminder's due
+    /// date so iPhone users see the time slot Bubo assigned the task.
+    /// Pass `nil` to clear the due date. Returns `true` if anything actually
+    /// changed; callers can skip logging when nothing needed writing.
+    @discardableResult
+    func updateReminderDueDate(calendarItemId: String, date: Date?) throws -> Bool {
+        guard let reminder = store.calendarItem(withIdentifier: calendarItemId) as? EKReminder else {
+            throw NSError(
+                domain: "AppleRemindersService",
+                code: 404,
+                userInfo: [NSLocalizedDescriptionKey: "Reminder not found for due-date update."]
+            )
+        }
+        let newComponents: DateComponents? = date.map(Self.dueDateComponents(from:))
+        guard reminder.dueDateComponents != newComponents else { return false }
+        reminder.dueDateComponents = newComponents
+        try store.save(reminder, commit: true)
+        return true
+    }
+
     /// Fetches a single reminder by its calendarItemIdentifier.
     func fetchReminder(calendarItemId: String) -> EKReminder? {
         store.calendarItem(withIdentifier: calendarItemId) as? EKReminder
