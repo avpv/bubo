@@ -1,4 +1,5 @@
 import Foundation
+import simd
 
 // MARK: - Chromosome Protocol
 
@@ -785,9 +786,9 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 other.genes[i + 3].startTime.timeIntervalSinceReferenceDate
             )
             let rawDelta = aTimes - bTimes
-            // `.magnitude` returns abs value per-lane. Divide by normalize to
+            // `abs()` returns abs value per-lane. Divide by normalize to
             // put every lane in [0, ∞); the final min(1, ·) clamps the tail.
-            let normalized = rawDelta.magnitude / SIMD4(repeating: normalize)
+            let normalized = abs(rawDelta) / SIMD4(repeating: normalize)
             let clamped = normalized.clamped(
                 lowerBound: SIMD4<Double>.zero,
                 upperBound: SIMD4(repeating: 1.0)

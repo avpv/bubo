@@ -21,7 +21,7 @@ final class AppleRemindersService {
 
     /// Posted when the EKEventStore detects external changes to reminders
     /// (e.g. user edits in Reminders.app or iCloud sync).
-    static let remindersDataChanged = Notification.Name("AppleRemindersDataChanged")
+    nonisolated static let remindersDataChanged = Notification.Name("AppleRemindersDataChanged")
 
     private var storeChangedObserver: Any?
 
