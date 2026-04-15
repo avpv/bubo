@@ -1,5 +1,8 @@
 import SwiftUI
 import UniformTypeIdentifiers
+#if canImport(AppKit)
+import AppKit
+#endif
 
 // MARK: - Task List Expansion
 
@@ -92,6 +95,15 @@ struct BacklogView: View {
     /// (collapsed / compact / expanded), без дублирующей кнопки «Show more».
     @State private var expansion: TaskListExpansion = .collapsed
     @State private var editingTaskId: String? = nil
+    /// Snapshot of `expansion` captured the moment inline edit begins so we
+    /// can restore it when the user finishes editing. Editing forces the
+    /// list into `.expanded` to give the form room to breathe (HIG: don't
+    /// make the user scroll to see the field they're filling).
+    @State private var expansionBeforeEdit: TaskListExpansion? = nil
+    /// Measured height of the hosting popover. Drives the dynamic ceiling
+    /// for the fully-expanded and editing states so large screens are not
+    /// forced into a 480pt cap. Zero until the first layout pass.
+    @State private var measuredHostHeight: CGFloat = 0
     /// Hover state for the Schedule pill — HIG: primary actions should read as
     /// buttons, so a subtle capsule фон появляется на наведении.
     @State private var isScheduleHovering: Bool = false
@@ -139,10 +151,39 @@ struct BacklogView: View {
     /// A height-capped ScrollView keeps the timeline reachable.
     private static let maxExpandedTasks = 4
 
-    /// Hard ceiling for the fully-expanded state so the timeline below always
-    /// retains a usable strip. Generous enough for ~12 rows; anything
-    /// longer falls back to internal scrolling.
+    /// Floor for the fully-expanded state on small hosts. The effective
+    /// cap is `dynamicExpandedMaxHeight` — this constant only kicks in when
+    /// the host height is unknown (first layout, previews).
     private static let fullyExpandedMaxHeight: CGFloat = 480
+
+    /// Vertical space we reserve for header + input field + ghost-preview
+    /// row + card padding when sizing the list against the host. Leaves the
+    /// timeline below visible even when the list is fully expanded.
+    private static let nonListReservedHeight: CGFloat = 220
+
+    /// Ceiling for the fully-expanded list, derived from the measured host
+    /// height so large popovers get a tall list and small hosts stay honest.
+    /// Falls back to `fullyExpandedMaxHeight` before the first layout pass.
+    private var dynamicExpandedMaxHeight: CGFloat {
+        guard measuredHostHeight > 0 else { return Self.fullyExpandedMaxHeight }
+        return max(
+            Self.fullyExpandedMaxHeight,
+            measuredHostHeight - Self.nonListReservedHeight
+        )
+    }
+
+    /// Taller ceiling used while a task is being inline-edited. The edit
+    /// card itself is ~350–450pt tall; without the extra headroom the user
+    /// has to scroll inside the list to see the fields they're filling.
+    private var editingMaxHeight: CGFloat {
+        guard measuredHostHeight > 0 else { return Self.fullyExpandedMaxHeight + 200 }
+        // Reserve less space under the list during edit (the timeline is
+        // less relevant while the user is heads-down on a task).
+        return max(
+            Self.fullyExpandedMaxHeight + 200,
+            measuredHostHeight - 140
+        )
+    }
 
     /// Single-line row height. Lower than the former 44pt because the row
     /// is now one line (title + inline middot-separated metadata) instead
@@ -228,6 +269,19 @@ struct BacklogView: View {
 
         guard activeCount > 0 || tombstoneMin > 0 else { return 0 }
 
+        // While inline-editing, the edit card takes the place of a row and
+        // is several hundred points tall. Use a taller ceiling and skip the
+        // compact cap entirely so the form isn't clipped. The list still
+        // caps at `editingMaxHeight` so something of the footer stays
+        // reachable for users who want to click Add at the bottom.
+        if editingTaskId != nil {
+            // Rough budget: the edit card (~420pt) + remaining rows.
+            let editCardHeight: CGFloat = 420
+            let otherRows = max(0, activeCount - 1)
+            let content = editCardHeight + rowHeight * CGFloat(otherRows) + tombstoneMin
+            return min(content, editingMaxHeight)
+        }
+
         switch expansion {
         case .collapsed:
             return 0
@@ -236,7 +290,7 @@ struct BacklogView: View {
             return rowHeight * CGFloat(visible) + tombstoneMin
         case .expanded:
             let content = rowHeight * CGFloat(activeCount) + tombstoneMin
-            return min(content, Self.fullyExpandedMaxHeight)
+            return min(content, dynamicExpandedMaxHeight)
         }
     }
 
@@ -273,6 +327,31 @@ struct BacklogView: View {
             addTaskField
             ghostPreviewRow
         }
+        // Measure the hosting popover height so the fully-expanded list can
+        // grow on big screens instead of being pinned to 480pt. We sample
+        // via `NSApp.windows` lazily (not a GeometryReader on self, which
+        // would cycle: list height → host height → list height).
+        .background(hostHeightProbe)
+        .onChange(of: editingTaskId) { oldValue, newValue in
+            // Remember where the user was before entering edit, then force
+            // the list into `.expanded` so the form has room. On exit,
+            // restore the captured state — without this, finishing an edit
+            // could leave the card collapsed with the cursor hanging in
+            // empty space.
+            if oldValue == nil, newValue != nil {
+                expansionBeforeEdit = expansion
+                withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+                    if expansion == .collapsed { expansion = .expanded }
+                }
+            } else if oldValue != nil, newValue == nil {
+                if let previous = expansionBeforeEdit {
+                    withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+                        expansion = previous
+                    }
+                }
+                expansionBeforeEdit = nil
+            }
+        }
         .onChange(of: focusRequested) { _, requested in
             if requested {
                 isInputFocused = true
@@ -303,6 +382,29 @@ struct BacklogView: View {
             if autoExpand && !activeTasks.isEmpty {
                 expansion = .compact
             }
+            // Tombstones (completed-today, frozen) live inside the
+            // ScrollView, which is hidden while `expansion == .collapsed`.
+            // If the user returns to a state with zero active tasks but
+            // non-empty tombstones, auto-open to `.compact` so the history
+            // stays reachable — otherwise the chevron is the only clue
+            // anything survived.
+            if activeTasks.isEmpty,
+               !completedToday.isEmpty || !backlogService.frozen.isEmpty,
+               expansion == .collapsed {
+                expansion = .compact
+            }
+        }
+        .onChange(of: activeTasks.count) { _, newCount in
+            // Same auto-open rule on live state changes: the last active
+            // task just got completed and we still have tombstones — pop
+            // the list open so the user sees what happened.
+            if newCount == 0,
+               !completedToday.isEmpty || !backlogService.frozen.isEmpty,
+               expansion == .collapsed {
+                withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+                    expansion = .compact
+                }
+            }
         }
         .onDisappear {
             coordinator?.clearGhost()
@@ -310,6 +412,24 @@ struct BacklogView: View {
             ghostPreviewTask?.cancel()
             cancelAllRowSlotPreviews()
         }
+    }
+
+    /// Invisible background view that reads the hosting window's visible
+    /// height on appear. Plain AppKit — a GeometryReader rooted here would
+    /// report the BacklogView's own height, which is the value we're trying
+    /// to compute, so that would cycle. The window height is stable across
+    /// a session; we re-sample on appear to handle "user resized popover".
+    private var hostHeightProbe: some View {
+        Color.clear
+            .onAppear {
+                #if canImport(AppKit)
+                if let window = NSApp.windows.filter({ $0.isVisible })
+                    .max(by: { $0.frame.height < $1.frame.height }) {
+                    measuredHostHeight = window.contentView?.bounds.height
+                        ?? window.frame.height
+                }
+                #endif
+            }
     }
 
     // MARK: - Header
@@ -364,53 +484,110 @@ struct BacklogView: View {
                 )
                 .help(capacityRingTooltip)
 
-                // Smart Sort: re-orders the active list by
-                // deadline-urgency + priority. The stored order is untouched
-                // — the toggle is a viewing lens, not a destructive sort.
-                Button {
-                    withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-                        useSmartSort.toggle()
-                        if useSmartSort, expansion == .collapsed {
-                            expansion = .compact
-                        }
+                // Two header layouts via ViewThatFits: the full trio
+                // (smart-sort, sprint, Schedule) when there's room, and a
+                // collapsed "⋯" Menu + Schedule when the popover is narrow.
+                // Birman: progressive disclosure — sprint-mode и smart-sort
+                // нужны редко, поэтому первыми уступают место узкому окну.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: DS.Spacing.sm) {
+                        smartSortToggle
+                        sprintModeToggle
+                        scheduleButton
                     }
-                } label: {
-                    Image(systemName: useSmartSort ? "wand.and.stars" : "arrow.up.arrow.down")
-                        .font(.caption)
-                        .foregroundStyle(useSmartSort ? skin.accentColor : skin.resolvedTextSecondary)
-                        .contentTransition(.symbolEffect(.replace))
-                }
-                .buttonStyle(.plain)
-                .help(useSmartSort ? "Show in user order" : "Smart sort: order by deadline and priority")
-                .accessibilityLabel(useSmartSort ? "Disable smart sort" : "Enable smart sort")
-
-                // Sprint mode: one glyph, symmetric states (bolt on/off).
-                // Hidden while the backlog is empty — the mode would have
-                // nothing to display.
-                Button {
-                    withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-                        isSprintMode.toggle()
-                        // Entering sprint mode makes the list meaningless
-                        // if it's still collapsed — auto-open to compact.
-                        if isSprintMode, expansion == .collapsed {
-                            expansion = .compact
-                        }
+                    HStack(spacing: DS.Spacing.sm) {
+                        headerOverflowMenu
+                        scheduleButton
                     }
-                } label: {
-                    Image(systemName: isSprintMode ? "bolt.fill" : "bolt")
-                        .font(.caption)
-                        .foregroundStyle(isSprintMode ? skin.accentColor : skin.resolvedTextSecondary)
-                        .contentTransition(.symbolEffect(.replace))
                 }
-                .buttonStyle(.plain)
-                .help(isSprintMode ? "Exit sprint mode" : "Sprint mode: focus on the top \(Self.sprintModeMaxTasks) tasks")
-                .accessibilityLabel(isSprintMode ? "Exit sprint mode" : "Enter sprint mode")
-
-                scheduleButton
             }
         }
         .padding(.horizontal, DS.Spacing.sm)
         .padding(.vertical, DS.Spacing.sm)
+    }
+
+    /// Smart Sort toggle — lens that reorders the list by deadline+priority
+    /// without touching the stored sequence.
+    private var smartSortToggle: some View {
+        Button {
+            withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+                useSmartSort.toggle()
+                if useSmartSort, expansion == .collapsed {
+                    expansion = .compact
+                }
+            }
+        } label: {
+            Image(systemName: useSmartSort ? "wand.and.stars" : "arrow.up.arrow.down")
+                .font(.caption)
+                .foregroundStyle(useSmartSort ? skin.accentColor : skin.resolvedTextSecondary)
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .buttonStyle(.plain)
+        .help(useSmartSort ? "Show in user order" : "Smart sort: order by deadline and priority")
+        .accessibilityLabel(useSmartSort ? "Disable smart sort" : "Enable smart sort")
+    }
+
+    /// Sprint-mode toggle — collapses grouping to the top N tasks.
+    private var sprintModeToggle: some View {
+        Button {
+            withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+                isSprintMode.toggle()
+                if isSprintMode, expansion == .collapsed {
+                    expansion = .compact
+                }
+            }
+        } label: {
+            Image(systemName: isSprintMode ? "bolt.fill" : "bolt")
+                .font(.caption)
+                .foregroundStyle(isSprintMode ? skin.accentColor : skin.resolvedTextSecondary)
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .buttonStyle(.plain)
+        .help(isSprintMode ? "Exit sprint mode" : "Sprint mode: focus on the top \(Self.sprintModeMaxTasks) tasks")
+        .accessibilityLabel(isSprintMode ? "Exit sprint mode" : "Enter sprint mode")
+    }
+
+    /// Narrow-layout fallback for smart-sort + sprint — one ⋯ menu so the
+    /// "Schedule" button stays on the same row instead of wrapping.
+    private var headerOverflowMenu: some View {
+        Menu {
+            Button {
+                withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+                    useSmartSort.toggle()
+                    if useSmartSort, expansion == .collapsed {
+                        expansion = .compact
+                    }
+                }
+            } label: {
+                Label(
+                    useSmartSort ? "Show in user order" : "Smart sort",
+                    systemImage: useSmartSort ? "wand.and.stars" : "arrow.up.arrow.down"
+                )
+            }
+
+            Button {
+                withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+                    isSprintMode.toggle()
+                    if isSprintMode, expansion == .collapsed {
+                        expansion = .compact
+                    }
+                }
+            } label: {
+                Label(
+                    isSprintMode ? "Exit sprint mode" : "Sprint mode",
+                    systemImage: isSprintMode ? "bolt.fill" : "bolt"
+                )
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.caption)
+                .foregroundStyle(skin.resolvedTextSecondary)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("More options")
+        .accessibilityLabel("More task list options")
     }
 
     // MARK: - Capacity ring helpers
@@ -1099,6 +1276,13 @@ struct BacklogView: View {
                     .font(.callout)
                     .focused($isInputFocused)
                     .onSubmit { addTask() }
+                    .onExitCommand {
+                        // HIG: Escape cancels out of the field. Clears any
+                        // draft + ghost so the next ⌘K / tab lands on a
+                        // clean slate.
+                        newTaskTitle = ""
+                        isInputFocused = false
+                    }
                     .onChange(of: newTaskTitle) {
                         computeGhostPreview()
                     }
@@ -1134,6 +1318,24 @@ struct BacklogView: View {
                     .foregroundStyle(skin.resolvedTextTertiary)
                     .transition(.opacity)
             }
+
+            // Focused-state shortcut hint. HIG: discoverable shortcuts —
+            // surface the two keys that matter (submit + cancel) exactly
+            // while the field is active, then get out of the way. Birman:
+            // подсказка живёт в том же месте, что и поле, без отдельной
+            // «панели помощи».
+            if isInputFocused {
+                HStack(spacing: DS.Spacing.xs) {
+                    Text("\u{23CE} Add")
+                    Text("·").foregroundStyle(skin.resolvedTextTertiary.opacity(DS.Opacity.half))
+                    Text("\u{238B} Cancel")
+                    Spacer(minLength: 0)
+                }
+                .font(.caption2)
+                .foregroundStyle(skin.resolvedTextTertiary)
+                .transition(.opacity)
+                .accessibilityHidden(true)
+            }
         }
         .padding(.horizontal, DS.Spacing.sm)
         .padding(.vertical, DS.Spacing.sm)
@@ -1156,17 +1358,38 @@ struct BacklogView: View {
     @ViewBuilder
     private var ghostPreviewRow: some View {
         if let preview = ghostPreviewText, !newTaskTitle.trimmingCharacters(in: .whitespaces).isEmpty {
-            // Birman: текст сам по себе несёт смысл ("Today 14:00–15:00");
-            // декоративная иконка-стрелка только создавала шум. Убрана.
-            Text(preview)
-                .font(.caption2)
+            // Birman: если объект выглядит как кнопка — он должен быть
+            // кнопкой. Раньше предпросмотр слота был пассивным текстом, и
+            // мышиные пользователи всё равно тянулись к Return. Теперь это
+            // явный CTA: клик = добавить задачу (тот же путь, что Return).
+            // Знак «↩» подсказывает клавиатурный эквивалент без отдельной
+            // подписи.
+            let isNoSlot = preview == "no free slot this week"
+            Button {
+                if !isNoSlot { addTask() }
+            } label: {
+                HStack(spacing: DS.Spacing.xxs) {
+                    Text(preview)
+                        .font(.caption2)
+                    if !isNoSlot {
+                        Text("\u{23CE}")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(skin.accentColor.opacity(DS.Opacity.accentMuted))
+                    }
+                }
                 .foregroundStyle(skin.accentColor.opacity(DS.Opacity.accentMuted))
                 .lineLimit(1)
                 .padding(.horizontal, DS.Spacing.sm)
                 .padding(.vertical, DS.Spacing.xxs)
-                .transition(.opacity.combined(with: .move(edge: .top)))
-                .motionAwareAnimation(DS.Animation.standard, value: preview, reduceMotion: reduceMotion)
-                .accessibilityHint(Text("The new task would land at \(preview)."))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(isNoSlot)
+            .help(isNoSlot ? preview : "Schedule at \(preview)")
+            .transition(.opacity.combined(with: .move(edge: .top)))
+            .motionAwareAnimation(DS.Animation.standard, value: preview, reduceMotion: reduceMotion)
+            .accessibilityLabel(isNoSlot ? preview : "Schedule at \(preview)")
+            .accessibilityHint(Text("The new task would land at \(preview)."))
         }
     }
 
@@ -1498,7 +1721,14 @@ struct BacklogTaskRow: View {
                 onEdit()
                 return .handled
             case .delete:
-                onDelete()
+                // ⌘⌫ = freeze (non-destructive set-aside); plain ⌫ = delete.
+                // Mirrors the context-menu ordering: Freeze precedes Delete,
+                // so the safer verb gets the modifier shortcut.
+                if press.modifiers.contains(.command) {
+                    onFreeze()
+                } else {
+                    onDelete()
+                }
                 return .handled
             case .upArrow:
                 if press.modifiers.contains(.command) {
