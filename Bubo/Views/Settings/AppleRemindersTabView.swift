@@ -17,6 +17,7 @@ struct AppleRemindersTabView: View {
                 if settings.isRemindersSyncEnabled && viewModel.remindersAccessGranted {
                     listSelectionSection
                     importOptionsSection
+                    exportSection
                 }
             }
             .padding(DS.Spacing.xl)
@@ -278,6 +279,51 @@ struct AppleRemindersTabView: View {
                     syncService.syncNow()
                 }
                 .controlSize(.small)
+            }
+        }
+    }
+
+    // MARK: - Export (Bubo → Apple Reminders)
+
+    @ViewBuilder
+    private var exportSection: some View {
+        @Bindable var settings = settings
+        let allLists = viewModel.availableRemindersLists
+
+        SettingsPlatter("Sync to Apple Reminders") {
+            Toggle(isOn: $settings.remindersExportEnabled) {
+                Text("Push Bubo tasks to Reminders")
+                    .fontWeight(.medium)
+            }
+            .toggleStyle(.switch)
+
+            Text("New tasks created in Bubo are added to Apple Reminders so they appear on iPhone, iPad, and other devices via iCloud.")
+                .font(.caption)
+                .foregroundStyle(skin.resolvedTextSecondary)
+                .padding(.top, DS.Spacing.xs)
+
+            if settings.remindersExportEnabled {
+                SkinSeparator().padding(.vertical, DS.Spacing.xs)
+
+                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                    Text("Target list")
+                        .fontWeight(.medium)
+
+                    Picker("Target list", selection: Binding(
+                        get: { settings.remindersExportListId ?? "" },
+                        set: { settings.remindersExportListId = $0.isEmpty ? nil : $0 }
+                    )) {
+                        Text("Default list").tag("")
+                        ForEach(allLists) { list in
+                            Text(list.title).tag(list.id)
+                        }
+                    }
+                    .labelsHidden()
+
+                    Text("New Bubo tasks are created in this Reminders list.")
+                        .font(.caption)
+                        .foregroundStyle(skin.resolvedTextSecondary)
+                }
             }
         }
     }

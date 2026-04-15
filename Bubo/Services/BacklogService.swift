@@ -15,6 +15,11 @@ final class BacklogService {
     /// Posted when a task is removed. `object` is the task ID (String).
     static let taskRemoved = Notification.Name("BuboBacklogTaskRemoved")
 
+    /// Posted when a new task is added. `object` is the task ID (String).
+    /// Used by `RemindersSyncService` to push Bubo-native tasks out to
+    /// Apple Reminders when the user opted into export.
+    static let taskAdded = Notification.Name("BuboBacklogTaskAdded")
+
     private(set) var tasks: [BacklogTask] = []
     private let modelContainer: ModelContainer
 
@@ -102,11 +107,15 @@ final class BacklogService {
     func addTask(_ task: BacklogTask) {
         tasks.append(task)
         saveTasks()
+        NotificationCenter.default.post(name: Self.taskAdded, object: task.id)
     }
 
     func addTasks(_ newTasks: [BacklogTask]) {
         tasks.append(contentsOf: newTasks)
         saveTasks()
+        for task in newTasks {
+            NotificationCenter.default.post(name: Self.taskAdded, object: task.id)
+        }
     }
 
     func updateTask(_ task: BacklogTask) {
@@ -141,6 +150,17 @@ final class BacklogService {
         guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
         tasks[index].status = .done
         tasks[index].completedAt = Date()
+        saveTasks()
+    }
+
+    /// Store the Apple Reminders `calendarItemIdentifier` for a Bubo-native
+    /// task without firing any notifications. Used by `RemindersSyncService`
+    /// right after creating the linked reminder — we need to remember the ID
+    /// so future syncs dedupe correctly, but any notification here would
+    /// kick off another export attempt.
+    func silentlyUpdateReminderMapping(taskId: String, calendarItemId: String?) {
+        guard let index = tasks.firstIndex(where: { $0.id == taskId }) else { return }
+        tasks[index].reminderCalendarItemId = calendarItemId
         saveTasks()
     }
 
