@@ -10,18 +10,18 @@ import Foundation
 ///
 /// # Composition model
 ///
-/// Each schedule signal (overdue tasks, meeting-heavy day, no focus time…)
-/// is produced independently as a ``Signal``. A signal contributes:
-/// - a set of intents it wants to add,
-/// - a reason fragment (user-facing) or nothing (silent/time-aware),
-/// - a priority so headline reasons and single-cardinality conflicts
-///   resolve deterministically.
+/// Two kinds of contributors, composed additively:
 ///
-/// The composer merges all active signals, deduplicates exact matches,
-/// and for single-cardinality categories (speed, horizon, scenarios,
-/// stability) the highest-priority signal wins. This replaces the old
-/// if/else cascade where a meeting-heavy day with overdue tasks would
-/// silently drop the meeting-batching intents.
+/// - ``Signal`` — a user-facing observation (overdue tasks, meeting-heavy
+///   day…). Carries intents, a reason fragment, and a priority that
+///   resolves ``IntentCardinalityKey`` conflicts.
+/// - ``ContextLayer`` — a silent, always-on layer that fires on pure time
+///   context (protect lunch, wind down, meeting prep). No reason, never
+///   surfaces alone; loses every cardinality conflict to any signal.
+///
+/// The composer merges signals (highest priority first), then layers,
+/// deduplicates exact intent matches, and records an attribution map
+/// so the debug UI can show which contributor added which intent.
 @MainActor
 @Observable
 final class SuggestionEngine {
@@ -43,25 +43,36 @@ final class SuggestionEngine {
         startSuggestionTimer()
     }
 
+    // MARK: - Suggestion
+
     struct Suggestion: Sendable {
         let request: OptimizationRequest
         let reason: String
+
+        /// Which contributor added which intent. Empty arrays are omitted.
+        /// Used by the debug inspector and by tests — it answers
+        /// "why is `.focusBlock(120)` in this request?".
+        let contributions: [String: [ScheduleIntent]]
     }
 
-    // MARK: - Signal
+    // MARK: - Contributors
 
-    /// A single observation about the schedule that contributes intents.
-    ///
-    /// Signals are produced independently and composed additively.
-    /// `reasonFragment` is empty for silent signals (time-aware layers
-    /// like `protectLunch` that shouldn't show up in the banner text).
+    /// A user-facing observation that warrants showing the banner.
+    /// Signal priorities order both the cardinality resolution (higher wins)
+    /// and the reason fragment ranking (top two surface in the banner).
     struct Signal: Sendable, Equatable {
         let name: String
         let priority: Int
         let intents: [ScheduleIntent]
         let reasonFragment: String
+    }
 
-        var isSilent: Bool { reasonFragment.isEmpty }
+    /// A silent, always-on contribution triggered by pure time context.
+    /// Never stands alone — the composer returns `nil` if no ``Signal``
+    /// fired, even when several layers match.
+    struct ContextLayer: Sendable, Equatable {
+        let name: String
+        let intents: [ScheduleIntent]
     }
 
     // MARK: - Evaluate
@@ -85,8 +96,9 @@ final class SuggestionEngine {
             urgent: backlogService.urgent(withinDays: 2),
             overdue: backlogService.overdue
         )
+        let layers = Self.contextLayers(hour: hour, meetingsCount: meetings.count)
 
-        suggestion = Self.compose(signals)
+        suggestion = Self.compose(signals: signals, layers: layers)
     }
 
     // MARK: - Signal Production
@@ -159,103 +171,82 @@ final class SuggestionEngine {
             ))
         }
 
-        // Time-aware silent layers — no banner text, just composed intents.
+        return out
+    }
+
+    /// Produce silent time-aware layers. Pure function — testable in isolation.
+    static func contextLayers(hour: Int, meetingsCount: Int) -> [ContextLayer] {
+        var out: [ContextLayer] = []
         if hour >= 14 {
-            out.append(Signal(
-                name: "protect-lunch",
-                priority: 20,
-                intents: [.protectLunch()],
-                reasonFragment: ""
-            ))
+            out.append(ContextLayer(name: "protect-lunch", intents: [.protectLunch()]))
         }
-
         if hour >= 16 {
-            out.append(Signal(
-                name: "wind-down",
-                priority: 20,
-                intents: [.windDown(lastHours: 2)],
-                reasonFragment: ""
-            ))
+            out.append(ContextLayer(name: "wind-down", intents: [.windDown(lastHours: 2)]))
         }
-
         if meetingsCount >= 3 {
-            out.append(Signal(
-                name: "meeting-prep",
-                priority: 20,
-                intents: [.meetingPrep(minutes: 5)],
-                reasonFragment: ""
-            ))
+            out.append(ContextLayer(name: "meeting-prep", intents: [.meetingPrep(minutes: 5)]))
         }
-
         return out
     }
 
     // MARK: - Composer
 
-    /// Combine signals into a single suggestion.
+    /// Combine signals and context layers into a single suggestion.
     ///
-    /// - Returns `nil` when no signal carries a user-facing reason — we won't
-    ///   show the banner just because silent time-aware layers fired.
-    /// - Deduplicates exact intent matches so three signals voting
-    ///   `.includeBacklog` produce it once.
-    /// - For single-cardinality categories (speed, horizon, scenarios,
-    ///   stability) the highest-priority signal wins; lower-priority
-    ///   contributions for the same category are dropped.
-    /// - Reason text is the top two user-facing fragments joined with ` · `,
-    ///   so a day with both overdue tasks and 5 meetings reads honestly.
-    static func compose(_ signals: [Signal]) -> Suggestion? {
-        let userFacing = signals.filter { !$0.isSilent }
-        guard !userFacing.isEmpty else { return nil }
+    /// - Returns `nil` when no ``Signal`` fired. Context layers without a
+    ///   signal to ride on never surface — the banner needs a reason.
+    /// - Signals merge first, in descending priority order, so the most
+    ///   urgent observation wins single-cardinality categories
+    ///   (``IntentCardinalityKey``).
+    /// - Context layers merge last and only fill unseen cardinality slots;
+    ///   they never override a signal's `.speed` or `.stability`.
+    /// - Exact-value dedup: three signals voting `.includeBacklog` produce it
+    ///   once, attributed to the first contributor.
+    /// - Reason = top two signal fragments joined with ` · `.
+    /// - Attribution records the final owner of each intent (first to add it).
+    static func compose(signals: [Signal], layers: [ContextLayer]) -> Suggestion? {
+        guard !signals.isEmpty else { return nil }
 
-        let byPriority = signals.sorted { $0.priority > $1.priority }
+        let orderedSignals = signals.sorted { $0.priority > $1.priority }
 
+        // Composer state: intent list, dedup sets, attribution map.
         var composed: [ScheduleIntent] = [.horizon(.today)]
-        var seenExact = Set<ScheduleIntent>([.horizon(.today)])
-        var seenSingleCardinality = Set<SingleCardinalityKey>([.horizon])
+        var seenExact: Set<ScheduleIntent> = [.horizon(.today)]
+        var seenCardinality: Set<IntentCardinalityKey> = [.horizon]
+        var contributions: [String: [ScheduleIntent]] = ["seed": [.horizon(.today)]]
 
-        for signal in byPriority {
-            for intent in signal.intents {
-                if let key = singleCardinalityKey(of: intent) {
-                    if seenSingleCardinality.contains(key) { continue }
-                    seenSingleCardinality.insert(key)
+        func absorb(_ source: String, _ intents: [ScheduleIntent]) {
+            for intent in intents {
+                if let key = intent.singleCardinalityKey {
+                    if seenCardinality.contains(key) { continue }
+                    seenCardinality.insert(key)
                 }
                 if seenExact.contains(intent) { continue }
                 seenExact.insert(intent)
                 composed.append(intent)
+                contributions[source, default: []].append(intent)
             }
         }
 
-        let reasonFragments = userFacing
-            .sorted { $0.priority > $1.priority }
+        for signal in orderedSignals {
+            absorb(signal.name, signal.intents)
+        }
+        for layer in layers {
+            absorb(layer.name, layer.intents)
+        }
+
+        // Reason = top-2 user-facing fragments. Signals are already sorted by
+        // priority, so just take the first two.
+        let reason = orderedSignals
             .prefix(2)
             .map(\.reasonFragment)
-        let reason = reasonFragments.joined(separator: " · ")
+            .joined(separator: " · ")
 
         return Suggestion(
             request: OptimizationRequest(composed, name: reason),
-            reason: reason
+            reason: reason,
+            contributions: contributions.filter { !$0.value.isEmpty }
         )
-    }
-
-    // MARK: - Cardinality
-
-    /// Intent categories where only one setting makes sense per request.
-    /// Multiple contributions collapse to the highest-priority signal's choice.
-    private enum SingleCardinalityKey: Hashable {
-        case speed
-        case horizon
-        case scenarios
-        case stability
-    }
-
-    private static func singleCardinalityKey(of intent: ScheduleIntent) -> SingleCardinalityKey? {
-        switch intent {
-        case .speed: return .speed
-        case .horizon: return .horizon
-        case .scenarios: return .scenarios
-        case .stability: return .stability
-        default: return nil
-        }
     }
 
     // MARK: - Timer

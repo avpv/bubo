@@ -3,12 +3,13 @@ import XCTest
 
 /// Tests for the additive composition model in ``SuggestionEngine``.
 ///
-/// The production code uses signals (`overdue`, `urgent`, `meetings-heavy`,
-/// `pending-tasks`, `no-focus`, `organize-morning`, plus silent time-aware
-/// layers) that are produced independently and merged by the composer.
+/// Two contributor types are tested independently:
+/// - ``SuggestionEngine/Signal`` — user-facing, priority-ordered.
+/// - ``SuggestionEngine/ContextLayer`` — silent, always-on time layers.
 ///
-/// These tests exercise the composer through the static `signals(...)` +
-/// `compose(_:)` pair, which is pure and does not require a `ReminderService`.
+/// The composer is exercised through `signals(...)` + `contextLayers(...)` +
+/// `compose(signals:layers:)`, all of which are pure statics and do not
+/// require a live `ReminderService`.
 @MainActor
 final class SuggestionEngineTests: XCTestCase {
 
@@ -38,33 +39,16 @@ final class SuggestionEngineTests: XCTestCase {
     // MARK: - Empty State
 
     func testNoSignalsProducesNoSuggestion() {
-        let signals = SuggestionEngine.signals(
-            hour: 11,
-            meetingsCount: 0,
-            todayEventsCount: 0,
-            hasFocusToday: true,
-            pending: [],
-            urgent: [],
-            overdue: []
-        )
-        XCTAssertNil(SuggestionEngine.compose(signals))
+        let suggestion = SuggestionEngine.compose(signals: [], layers: [])
+        XCTAssertNil(suggestion)
     }
 
-    func testSilentSignalsAloneProduceNoSuggestion() {
-        // 15:00 triggers `protect-lunch` silently, but nothing else —
-        // the banner should stay empty.
-        let signals = SuggestionEngine.signals(
-            hour: 15,
-            meetingsCount: 0,
-            todayEventsCount: 0,
-            hasFocusToday: true,
-            pending: [],
-            urgent: [],
-            overdue: []
-        )
-        XCTAssertFalse(signals.isEmpty)
-        XCTAssertTrue(signals.allSatisfy(\.isSilent))
-        XCTAssertNil(SuggestionEngine.compose(signals))
+    /// Context layers alone (lunch/wind-down firing on time context) must not
+    /// surface the banner — the banner needs a reason, and layers carry none.
+    func testContextLayersAloneProduceNoSuggestion() {
+        let layers = SuggestionEngine.contextLayers(hour: 17, meetingsCount: 0)
+        XCTAssertFalse(layers.isEmpty)
+        XCTAssertNil(SuggestionEngine.compose(signals: [], layers: layers))
     }
 
     // MARK: - Additive Composition
@@ -81,8 +65,8 @@ final class SuggestionEngineTests: XCTestCase {
             urgent: [],
             overdue: [makeTask(title: "ship PR")]
         )
-        let suggestion = SuggestionEngine.compose(signals)
-        let request = try! XCTUnwrap(suggestion?.request)
+        let layers = SuggestionEngine.contextLayers(hour: 10, meetingsCount: 6)
+        let request = try! XCTUnwrap(SuggestionEngine.compose(signals: signals, layers: layers)?.request)
 
         // Overdue contributes findSlotsForBacklog + includeBacklog.
         XCTAssertTrue(hasIntent(request) {
@@ -108,7 +92,7 @@ final class SuggestionEngineTests: XCTestCase {
             urgent: [],
             overdue: [makeTask(title: "old")]
         )
-        let request = try! XCTUnwrap(SuggestionEngine.compose(signals)?.request)
+        let request = try! XCTUnwrap(SuggestionEngine.compose(signals: signals, layers: [])?.request)
 
         let includeBacklogCount = request.intents.filter {
             if case .includeBacklog = $0 { return true }; return false
@@ -123,8 +107,8 @@ final class SuggestionEngineTests: XCTestCase {
 
     // MARK: - Single-Cardinality Resolution
 
-    /// Speed is single-cardinality. With overdue (priority 100, `.quick`)
-    /// and urgent (priority 90, `.balanced`), overdue must win.
+    /// Speed is single-cardinality. Overdue (priority 100, `.quick`) beats
+    /// urgent (priority 90, `.balanced`).
     func testHigherPrioritySignalWinsSpeed() {
         let signals = SuggestionEngine.signals(
             hour: 11,
@@ -135,7 +119,7 @@ final class SuggestionEngineTests: XCTestCase {
             urgent: [makeTask(title: "demo", deadline: Date().addingTimeInterval(3600))],
             overdue: [makeTask(title: "old")]
         )
-        let request = try! XCTUnwrap(SuggestionEngine.compose(signals)?.request)
+        let request = try! XCTUnwrap(SuggestionEngine.compose(signals: signals, layers: [])?.request)
 
         let speeds = request.intents.compactMap { intent -> Speed? in
             if case .speed(let s) = intent { return s }
@@ -144,8 +128,31 @@ final class SuggestionEngineTests: XCTestCase {
         XCTAssertEqual(speeds, [.quick], "Only the highest-priority signal's speed should apply")
     }
 
+    /// Context layers must never override a signal's cardinality choice.
+    /// If a layer added `.speed(.thorough)` it would break the contract.
+    /// (None of the current layers set cardinality keys, but guard the rule.)
+    func testContextLayerCannotOverrideSignalCardinality() {
+        let signal = SuggestionEngine.Signal(
+            name: "test-signal",
+            priority: 50,
+            intents: [.speed(.quick)],
+            reasonFragment: "test"
+        )
+        let layer = SuggestionEngine.ContextLayer(
+            name: "rogue-layer",
+            intents: [.speed(.thorough)]
+        )
+        let request = try! XCTUnwrap(
+            SuggestionEngine.compose(signals: [signal], layers: [layer])?.request
+        )
+        let speeds = request.intents.compactMap { intent -> Speed? in
+            if case .speed(let s) = intent { return s }
+            return nil
+        }
+        XCTAssertEqual(speeds, [.quick])
+    }
+
     func testHorizonLockedToToday() {
-        // No signal adds .horizon explicitly; composer seeds it to .today.
         let signals = SuggestionEngine.signals(
             hour: 9,
             meetingsCount: 0,
@@ -155,7 +162,7 @@ final class SuggestionEngineTests: XCTestCase {
             urgent: [],
             overdue: []
         )
-        let request = try! XCTUnwrap(SuggestionEngine.compose(signals)?.request)
+        let request = try! XCTUnwrap(SuggestionEngine.compose(signals: signals, layers: [])?.request)
         let horizons = request.intents.compactMap { intent -> Horizon? in
             if case .horizon(let h) = intent { return h }
             return nil
@@ -165,9 +172,7 @@ final class SuggestionEngineTests: XCTestCase {
 
     // MARK: - Silent Time-Aware Layers
 
-    func testSilentLayersContributeIntentsButNotReason() {
-        // 16:00, overdue task, 3 meetings → wind-down + meeting-prep + protect-lunch
-        // should layer in silently; reason should only mention overdue.
+    func testLayersContributeIntentsButNotReason() {
         let signals = SuggestionEngine.signals(
             hour: 16,
             meetingsCount: 3,
@@ -177,7 +182,8 @@ final class SuggestionEngineTests: XCTestCase {
             urgent: [],
             overdue: [makeTask(title: "old")]
         )
-        let suggestion = try! XCTUnwrap(SuggestionEngine.compose(signals))
+        let layers = SuggestionEngine.contextLayers(hour: 16, meetingsCount: 3)
+        let suggestion = try! XCTUnwrap(SuggestionEngine.compose(signals: signals, layers: layers))
 
         XCTAssertTrue(hasIntent(suggestion.request) {
             if case .windDown = $0 { return true }; return false
@@ -195,8 +201,6 @@ final class SuggestionEngineTests: XCTestCase {
     // MARK: - Reason Text
 
     func testReasonJoinsTopTwoFragments() {
-        // overdue (pri 100) + meetings-heavy (pri 70) + pending (pri 60).
-        // Reason should be overdue · meetings, dropping pending.
         let signals = SuggestionEngine.signals(
             hour: 11,
             meetingsCount: 5,
@@ -206,7 +210,7 @@ final class SuggestionEngineTests: XCTestCase {
             urgent: [],
             overdue: [makeTask(title: "old")]
         )
-        let suggestion = try! XCTUnwrap(SuggestionEngine.compose(signals))
+        let suggestion = try! XCTUnwrap(SuggestionEngine.compose(signals: signals, layers: []))
 
         XCTAssertTrue(suggestion.reason.contains("overdue"), "reason: \(suggestion.reason)")
         XCTAssertTrue(suggestion.reason.contains("meetings"), "reason: \(suggestion.reason)")
@@ -223,7 +227,83 @@ final class SuggestionEngineTests: XCTestCase {
             urgent: [],
             overdue: []
         )
-        let suggestion = try! XCTUnwrap(SuggestionEngine.compose(signals))
+        let suggestion = try! XCTUnwrap(SuggestionEngine.compose(signals: signals, layers: []))
         XCTAssertFalse(suggestion.reason.contains(" · "))
+    }
+
+    // MARK: - Attribution
+
+    /// Attribution must answer "why did this intent appear?". Every intent
+    /// in the final request should be owned by exactly one contributor.
+    func testAttributionCoversAllIntents() {
+        let signals = SuggestionEngine.signals(
+            hour: 10,
+            meetingsCount: 6,
+            todayEventsCount: 6,
+            hasFocusToday: false,
+            pending: [],
+            urgent: [],
+            overdue: [makeTask(title: "old")]
+        )
+        let layers = SuggestionEngine.contextLayers(hour: 10, meetingsCount: 6)
+        let suggestion = try! XCTUnwrap(SuggestionEngine.compose(signals: signals, layers: layers))
+
+        let allAttributed = suggestion.contributions.values.flatMap { $0 }
+        let attributedSet = Set(allAttributed)
+        let requestSet = Set(suggestion.request.intents)
+        XCTAssertEqual(attributedSet, requestSet,
+                       "Every intent must be attributed to exactly one contributor")
+    }
+
+    /// Dedup attribution rule: the first contributor to add an intent owns it.
+    /// With overdue (100) + pending-tasks (60) both voting `.includeBacklog`,
+    /// overdue must be the credited owner.
+    func testAttributionCreditsFirstContributor() {
+        let signals = SuggestionEngine.signals(
+            hour: 11,
+            meetingsCount: 0,
+            todayEventsCount: 0,
+            hasFocusToday: true,
+            pending: [makeTask(), makeTask(), makeTask()],
+            urgent: [],
+            overdue: [makeTask(title: "old")]
+        )
+        let suggestion = try! XCTUnwrap(SuggestionEngine.compose(signals: signals, layers: []))
+
+        let overdueOwns = suggestion.contributions["overdue"] ?? []
+        let pendingOwns = suggestion.contributions["pending-tasks"] ?? []
+        XCTAssertTrue(overdueOwns.contains(.includeBacklog))
+        XCTAssertFalse(pendingOwns.contains(.includeBacklog),
+                       "Lower-priority signal must not re-claim a deduped intent")
+    }
+
+    // MARK: - IntentConflictDetector Integration
+
+    /// Both the detector and the composer must key off the same
+    /// ``IntentCardinalityKey``. If the composer emits a dedup'd request
+    /// the detector should see zero redundancy warnings.
+    func testComposedRequestHasNoCardinalityRedundancy() {
+        let signals = SuggestionEngine.signals(
+            hour: 11,
+            meetingsCount: 5,
+            todayEventsCount: 5,
+            hasFocusToday: true,
+            pending: Array(repeating: makeTask(), count: 3),
+            urgent: [makeTask(title: "demo", deadline: Date().addingTimeInterval(3600))],
+            overdue: [makeTask(title: "old")]
+        )
+        let layers = SuggestionEngine.contextLayers(hour: 11, meetingsCount: 5)
+        let request = try! XCTUnwrap(
+            SuggestionEngine.compose(signals: signals, layers: layers)?.request
+        )
+        let warnings = IntentConflictDetector.analyze(request.intents)
+            .filter { $0.severity == .warning }
+        let cardinalityWarnings = warnings.filter { conflict in
+            IntentCardinalityKey.allCases.contains {
+                conflict.message.contains($0.rawValue)
+            }
+        }
+        XCTAssertTrue(cardinalityWarnings.isEmpty,
+                      "Composer output must not trigger cardinality redundancy warnings")
     }
 }

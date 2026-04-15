@@ -512,6 +512,37 @@ extension IntentCondition {
     }
 }
 
+// MARK: - Single-Cardinality Categories
+
+/// Intent families where at most one setting makes sense per request.
+/// When a request ends up with two `.speed` intents the optimizer can only
+/// honour one, so both the conflict detector (to warn the user) and the
+/// suggestion composer (to auto-resolve) key off this enum.
+///
+/// Keep this enum and ``ScheduleIntent/singleCardinalityKey`` in sync when
+/// new single-valued intent families are introduced.
+enum IntentCardinalityKey: String, Hashable, Sendable, CaseIterable {
+    case speed
+    case horizon
+    case scenarios
+    case stability
+}
+
+extension ScheduleIntent {
+    /// Non-nil when this intent belongs to a single-cardinality family.
+    /// Consumers should treat two intents sharing a key as mutually
+    /// exclusive and pick one.
+    var singleCardinalityKey: IntentCardinalityKey? {
+        switch self {
+        case .speed: return .speed
+        case .horizon: return .horizon
+        case .scenarios: return .scenarios
+        case .stability: return .stability
+        default: return nil
+        }
+    }
+}
+
 // MARK: - Intent Category
 
 enum IntentCategory: String, CaseIterable, Sendable {
