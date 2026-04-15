@@ -989,7 +989,14 @@ private extension IntentCompiler {
             return ("Need \(Int(requiredMinutes)) min but only \(Int(availableMinutes)) min available", resolutions)
         }
         if longestEventMinutes > largestGapMinutes {
-            return ("Longest event (\(Int(longestEventMinutes)) min) doesn't fit in largest gap (\(Int(largestGapMinutes)) min)", [])
+            var resolutions: [ActionableResolution] = []
+            if largestGapMinutes >= 15 {
+                resolutions.append(ActionableResolution(
+                    title: "Split to fit \(Int(largestGapMinutes))m",
+                    modifier: OptimizationRequest(.splitLong(maxMinutes: Int(largestGapMinutes)))
+                ))
+            }
+            return ("Longest event (\(Int(longestEventMinutes)) min) doesn't fit in largest gap (\(Int(largestGapMinutes)) min)", resolutions)
         }
         return nil
     }

@@ -18,6 +18,23 @@ struct AssistantTabView: View {
         ScrollView {
             VStack(spacing: DS.Spacing.lg) {
 
+                if let backlogService = optimizerService.backlogService, !backlogService.staleTasks.isEmpty {
+                    SettingsPlatter("Backlog Cleanup") {
+                        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                            Text("You have \(backlogService.staleTasks.count) tasks pending for over 14 days.")
+                                .font(.caption)
+                                .foregroundStyle(skin.resolvedTextSecondary)
+                            
+                            Button("Drop Stale Tasks") {
+                                withAnimation(DS.Animation.quick) {
+                                    backlogService.dropStaleTasks()
+                                }
+                            }
+                            .buttonStyle(.action(role: .destructive, size: .compact))
+                        }
+                    }
+                }
+
                 // ── Schedule ──
 
                 Text("Schedule")

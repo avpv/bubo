@@ -654,6 +654,20 @@ struct CommandPalette: View {
                 }
                 .padding(.top, DS.Spacing.sm)
             }
+            
+            Button("Undo") {
+                optimizerService.undoLast(reminderService: reminderService)
+                let resolutions = [
+                    ActionableResolution(title: "Too dense", modifier: OptimizationRequest(.addBuffer(minutes: 15))),
+                    ActionableResolution(title: "Too late", modifier: OptimizationRequest(.noEventsAfter(hour: 18))),
+                    ActionableResolution(title: "Move to tomorrow", modifier: OptimizationRequest(.horizon(.tomorrow)))
+                ]
+                withAnimation(DS.Animation.quick) {
+                    phase = .failed(message: "Why did you undo?", resolutions: resolutions)
+                }
+            }
+            .buttonStyle(.action(role: .secondary, size: .compact))
+            .padding(.top, DS.Spacing.xs)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, DS.Spacing.xl)
@@ -757,8 +771,10 @@ struct CommandPalette: View {
                     onApplied(request) { optimizerService.undoLast(reminderService: reminderService) }
                     Task { @MainActor in
                         if resList.isEmpty {
-                            try? await Task.sleep(for: .seconds(1))
-                            onDismiss()
+                            try? await Task.sleep(for: .seconds(3))
+                            if case .applied = phase {
+                                onDismiss()
+                            }
                         }
                     }
                 case .noEventsToOptimize:

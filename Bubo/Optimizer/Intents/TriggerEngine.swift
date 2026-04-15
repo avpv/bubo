@@ -1,4 +1,5 @@
 import Foundation
+import UserNotifications
 
 // MARK: - Trigger Engine
 
@@ -58,6 +59,13 @@ final class TriggerEngine {
 
     /// Called when an event is deleted. Finds and executes matching triggers.
     func onEventDeleted(eventId: String) async {
+        let content = UNMutableNotificationContent()
+        content.title = "Свободное окно!"
+        content.body = "Встреча отменилась. Устроить спринт-сессию?"
+        content.sound = .default
+        let req = UNNotificationRequest(identifier: "Opportunity-\(eventId)", content: content, trigger: nil)
+        try? await UNUserNotificationCenter.current().add(req)
+
         await executeTrigger(.onEventDeleted, context: "Event \(eventId) deleted")
     }
 

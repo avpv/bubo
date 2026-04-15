@@ -62,6 +62,14 @@ final class BacklogService {
         tasks.filter { $0.status == .done }
     }
 
+    /// Tasks pending for more than 14 days
+    var staleTasks: [BacklogTask] {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -14, to: Date()) ?? Date()
+        return tasks.filter { task in
+            task.status == .pending && task.createdAt <= cutoff
+        }
+    }
+
     /// Overdue tasks — were scheduled for a past date but not completed.
     var overdue: [BacklogTask] {
         let today = Calendar.current.startOfDay(for: Date())
@@ -280,6 +288,18 @@ final class BacklogService {
     }
 
     // MARK: - Persistence (SwiftData — single shared ModelContainer)
+    
+    func dropStaleTasks() {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -14, to: Date()) ?? Date()
+        let stale = tasks.filter { $0.status == .pending && $0.createdAt <= cutoff }
+        guard !stale.isEmpty else { return }
+        
+        tasks.removeAll { task in stale.contains { $0.id == task.id } }
+        saveTasks()
+        for task in stale {
+            NotificationCenter.default.post(name: Self.taskRemoved, object: task)
+        }
+    }
     //
     // Pattern inherited from `EventCache`: each load/save creates a fresh
     // `ModelContext(modelContainer)` rather than using `container.mainContext`.
