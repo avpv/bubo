@@ -128,8 +128,8 @@ struct IntentCompiler {
         // Phase 5: Pre-flight check (only for non-droppable events)
         let snapshot = buildSnapshot(fixedEvents: allFixed, workingHours: workingHours, horizon: horizon)
         let hasDroppable = allMovable.contains { $0.isDroppable }
-        if !hasDroppable, let error = preflightCheck(context: context) {
-            return .infeasible(reason: error, snapshot: snapshot)
+        if !hasDroppable, let failure = preflightCheck(context: context) {
+            return .infeasible(reason: failure.reason, snapshot: snapshot, resolutions: failure.resolutions)
         }
 
         // Phase 6: Run GA
@@ -889,7 +889,7 @@ private extension IntentCompiler {
         }
     }
 
-    func preflightCheck(context: OptimizerContext) -> String? {
+    func preflightCheck(context: OptimizerContext) -> (reason: String, resolutions: [ActionableResolution])? {
         let cal = context.calendar
         let now = Date()
         var availableMinutes: Double = 0
@@ -942,13 +942,38 @@ private extension IntentCompiler {
         let longestEventMinutes = requiredEvents.map { $0.duration / 60 }.max() ?? 0
 
         if availableMinutes < 1 {
-            return "No working time left — try tomorrow"
+            return ("No working time left — try tomorrow", [
+                ActionableResolution(
+                    title: "Schedule tomorrow",
+                    modifier: OptimizationRequest(.horizon(.tomorrow))
+                )
+            ])
         }
         if requiredMinutes > availableMinutes {
-            return "Need \(Int(requiredMinutes)) min but only \(Int(availableMinutes)) min available"
+            var resolutions: [ActionableResolution] = []
+            
+            if let taskToDrop = context.movableEvents.sorted(by: { $0.priority < $1.priority }).first {
+                resolutions.append(ActionableResolution(
+                    title: "Drop '\(taskToDrop.title)'",
+                    modifier: OptimizationRequest(.exclude(eventIds: [taskToDrop.id]))
+                ))
+            }
+            
+            let needExtraMinutes = requiredMinutes - availableMinutes
+            let extraHours = Int(ceil(needExtraMinutes / 60.0))
+            let currentEnd = context.workingHours.upperBound
+            
+            if currentEnd + extraHours <= 24 {
+                resolutions.append(ActionableResolution(
+                    title: "Extend day to \(currentEnd + extraHours):00",
+                    modifier: OptimizationRequest(.workingHours(start: context.workingHours.lowerBound, end: currentEnd + extraHours))
+                ))
+            }
+
+            return ("Need \(Int(requiredMinutes)) min but only \(Int(availableMinutes)) min available", resolutions)
         }
         if longestEventMinutes > largestGapMinutes {
-            return "Longest event (\(Int(longestEventMinutes)) min) doesn't fit in largest gap (\(Int(largestGapMinutes)) min)"
+            return ("Longest event (\(Int(longestEventMinutes)) min) doesn't fit in largest gap (\(Int(largestGapMinutes)) min)", [])
         }
         return nil
     }

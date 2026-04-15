@@ -45,7 +45,17 @@ struct CommandPalette: View {
         case picking
         case working(String)
         case applied([EventInfo])
-        case failed(String)
+        case failed(message: String, resolutions: [ActionableResolution])
+
+        static func == (lhs: Phase, rhs: Phase) -> Bool {
+            switch (lhs, rhs) {
+            case (.picking, .picking): return true
+            case (.working(let a), .working(let b)): return a == b
+            case (.applied(let a), .applied(let b)): return a == b
+            case (.failed(let a, _), .failed(let b, _)): return a == b
+            default: return false
+            }
+        }
     }
 
     struct EventInfo: Equatable, Identifiable {
@@ -277,7 +287,7 @@ struct CommandPalette: View {
                 case .picking: pickingContent
                 case .working(let label): statusView(label)
                 case .applied(let events): appliedView(events)
-                case .failed(let message): failedView(message)
+                case .failed(let message, let resolutions): failedView(message, resolutions: resolutions)
                 }
             }
             .padding(.vertical, DS.Spacing.sm)
@@ -617,7 +627,7 @@ struct CommandPalette: View {
         .padding(.vertical, DS.Spacing.xl)
     }
 
-    private func failedView(_ message: String) -> some View {
+    private func failedView(_ message: String, resolutions: [ActionableResolution]) -> some View {
         VStack(spacing: DS.Spacing.md) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.largeTitle)
@@ -625,6 +635,23 @@ struct CommandPalette: View {
             Text(message)
                 .font(.subheadline.weight(.medium))
                 .multilineTextAlignment(.center)
+            
+            if !resolutions.isEmpty {
+                VStack(spacing: DS.Spacing.xs) {
+                    ForEach(resolutions) { res in
+                        Button(res.title) {
+                            var newReq = composedRequest ?? OptimizationRequest()
+                            newReq.merge(res.modifier)
+                            composedRequest = newReq
+                            showPowerMode = true
+                            runRequest(newReq)
+                        }
+                        .buttonStyle(.action(role: .secondary, size: .compact))
+                    }
+                }
+                .padding(.top, DS.Spacing.sm)
+            }
+
             HStack(spacing: DS.Spacing.sm) {
                 Button("Back") {
                     withAnimation(DS.Animation.quick) { phase = .picking }
@@ -632,11 +659,13 @@ struct CommandPalette: View {
                 .font(.caption.weight(.medium))
                 .foregroundStyle(skin.accentColor)
                 .buttonStyle(.plain)
+                
                 Button("Close") { onDismiss() }
                     .font(.caption.weight(.medium))
                     .foregroundStyle(skin.resolvedTextSecondary)
                     .buttonStyle(.plain)
             }
+            .padding(.top, resolutions.isEmpty ? 0 : DS.Spacing.sm)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, DS.Spacing.xxl)
@@ -674,7 +703,7 @@ struct CommandPalette: View {
                 switch result {
                 case .success, .partialSuccess:
                     guard !optimizerService.scenarios.isEmpty else {
-                        phase = .failed("No valid schedule found")
+                        phase = .failed(message: "No valid schedule found", resolutions: [])
                         return
                     }
                     optimizerService.applyScenario(at: 0, to: reminderService)
@@ -695,9 +724,9 @@ struct CommandPalette: View {
                         onDismiss()
                     }
                 case .noEventsToOptimize:
-                    phase = .failed("Add tasks first")
-                case .infeasible(let reason, _):
-                    phase = .failed(reason)
+                    phase = .failed(message: "Add tasks first", resolutions: [])
+                case .infeasible(let reason, _, let resolutions):
+                    phase = .failed(message: reason, resolutions: resolutions)
                 }
             }
         }
@@ -705,7 +734,7 @@ struct CommandPalette: View {
 
     private func askAI(_ prompt: String) {
         guard agentService.isConfigured else {
-            phase = .failed("Add API key in Settings → Assistant")
+            phase = .failed(message: "Add API key in Settings → Assistant", resolutions: [])
             return
         }
         Haptics.tap()
@@ -715,7 +744,7 @@ struct CommandPalette: View {
             await MainActor.run {
                 switch result {
                 case .success(let req): runRequest(req)
-                case .failure(let err): phase = .failed(err.localizedDescription)
+                case .failure(let err): phase = .failed(message: err.localizedDescription, resolutions: [])
                 }
             }
         }

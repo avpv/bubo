@@ -253,19 +253,28 @@ struct ScheduleSnapshot: Sendable {
     let planningHorizon: DateInterval
 }
 
+// MARK: - Actionable Resolution
+
+/// An actionable resolution generated when a schedule fails.
+struct ActionableResolution: Sendable, Identifiable {
+    let id = UUID()
+    let title: String
+    let modifier: OptimizationRequest
+}
+
 // MARK: - Optimization Result Wrapper
 
 /// Result of running the optimizer through any entry point.
 enum OptimizationResult: Sendable {
     case success(OptimizerResult)
     case noEventsToOptimize
-    case infeasible(reason: String, snapshot: ScheduleSnapshot? = nil)
+    case infeasible(reason: String, snapshot: ScheduleSnapshot? = nil, resolutions: [ActionableResolution] = [])
     case partialSuccess(OptimizerResult, warnings: [String])
 
     var errorMessage: String? {
         switch self {
         case .noEventsToOptimize: return "No events to optimize"
-        case .infeasible(let reason, _): return reason
+        case .infeasible(let reason, _, _): return reason
         case .partialSuccess(_, let warnings): return warnings.first
         case .success: return nil
         }

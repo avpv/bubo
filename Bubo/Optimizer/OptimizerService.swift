@@ -162,7 +162,7 @@ final class OptimizerService {
         case .noEventsToOptimize:
             error = "No events to optimize"
 
-        case .infeasible(let reason, _):
+        case .infeasible(let reason, _, _):
             error = reason
         }
 
