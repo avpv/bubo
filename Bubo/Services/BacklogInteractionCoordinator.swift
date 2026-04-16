@@ -106,7 +106,6 @@ enum BacklogTitleParser {
     ///   "write report 1h"        → ("write report", 60)
     ///   "review PR 90m"          → ("review PR", 90)
     ///   "design sync 1h30m"      → ("design sync", 90)
-    ///   "отчёт 45 мин"           → ("отчёт", 45)
     ///   "coffee 2h"              → ("coffee", 120)
     ///
     /// Returns `(cleaned, minutes)` where `cleaned` has the duration token
@@ -117,7 +116,7 @@ enum BacklogTitleParser {
 
         // Anchor at end-of-string so a word like "30-minute meeting"
         // in the middle of the title isn't mistaken for a duration.
-        let pattern = #"(?:\s|^)(?:(\d+)\s*(?:h|hr|hrs|hour|hours|ч|час|часа|часов)(?:\s*(\d+)\s*(?:m|min|mins|minute|minutes|м|мин|минут|минуты|минуту))?|(\d+)\s*(?:m|min|mins|minute|minutes|м|мин|минут|минуты|минуту))\s*$"#
+        let pattern = #"(?:\s|^)(?:(\d+)\s*(?:h|hr|hrs|hour|hours)(?:\s*(\d+)\s*(?:m|min|mins|minute|minutes))?|(\d+)\s*(?:m|min|mins|minute|minutes))\s*$"#
 
         guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else {
             return (trimmed, nil)

@@ -378,12 +378,6 @@ final class BacklogTitleParserTests: XCTestCase {
         XCTAssertEqual(r.durationMinutes, 15)
     }
 
-    func testRecognisesRussianUnits() {
-        let r = BacklogTitleParser.parse("отчёт 45 мин")
-        XCTAssertEqual(r.cleaned, "отчёт")
-        XCTAssertEqual(r.durationMinutes, 45)
-    }
-
     func testIgnoresDurationInTheMiddleOfTitle() {
         // "30-minute" in the middle shouldn't be scooped up.
         let r = BacklogTitleParser.parse("30 minute standup with team")

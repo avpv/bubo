@@ -241,8 +241,8 @@ final class OptimizerService {
             if !endangered.isEmpty {
                 let count = endangered.count
                 let content = UNMutableNotificationContent()
-                content.title = "Дедлайны под угрозой!"
-                content.body = "Симулятор: задачи не укладываются в эту неделю. Разгрузить расписание?"
+                content.title = "Deadlines at risk!"
+                content.body = "Simulator: tasks don't fit this week. Unload the schedule?"
                 content.sound = .default
                 let request = UNNotificationRequest(identifier: "MockSimulator", content: content, trigger: nil)
                 try? await UNUserNotificationCenter.current().add(request)
