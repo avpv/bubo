@@ -4,8 +4,10 @@ import SwiftData
 // MARK: - Persisted Backlog Task (SwiftData)
 
 /// SwiftData record for a backlog task.  Mirrors the in-memory `BacklogTask`
-/// struct field-for-field.  Stored locally only — no CloudKit — so init is
-/// fast and never blocks the main thread trying to authenticate with iCloud.
+/// struct field-for-field.  Stored locally by default; can opt into CloudKit
+/// sync via the `BuboBacklogCloudSyncEnabled` flag (see `BuboApp.makeContainer`).
+/// All properties have defaults or are optional so the CloudKit mirror is
+/// happy when the flag is on.
 ///
 /// `BacklogService` owns the only `ModelContainer` reference and uses a fresh
 /// `ModelContext` per operation, the same pattern as `EventCache`.  We never
@@ -35,15 +37,27 @@ final class PersistedBacklogTask {
     var isRecurring: Bool = false
     var recurrenceTag: String?
 
-    /// Plain integer position.  `BacklogService` rewrites all rows on every
-    /// save, so there's no need for fractional indexing or conflict
-    /// resolution — `sortOrder` simply mirrors the in-memory array index.
+    /// Plain integer position.  `BacklogService` rewrites `sortOrder` on
+    /// every save in line with the in-memory array index — the incremental
+    /// diff touches only rows whose position actually moved, but the
+    /// invariant (`sortOrder == tasks.index(of: task)`) is maintained on
+    /// every write, so there's no need for fractional indexing or conflict
+    /// resolution.
     var sortOrder: Int = 0
 
     init() {}
 
     init(from task: BacklogTask, sortOrder: Int) {
         self.taskId = task.id
+        self.sortOrder = sortOrder
+        apply(task)
+    }
+
+    /// Update an existing persisted row in place from a fresh `BacklogTask`
+    /// snapshot. Used by the incremental-save path so mutations touch only
+    /// the rows that actually changed instead of wiping and rebuilding the
+    /// whole table.
+    func apply(_ task: BacklogTask, sortOrder: Int? = nil) {
         self.title = task.title
         self.durationMinutes = task.durationMinutes
         self.priorityRaw = task.priority.rawValue
@@ -61,7 +75,7 @@ final class PersistedBacklogTask {
         self.reminderCalendarItemId = task.reminderCalendarItemId
         self.isRecurring = task.isRecurring
         self.recurrenceTag = task.recurrenceTag
-        self.sortOrder = sortOrder
+        if let sortOrder { self.sortOrder = sortOrder }
     }
 
     func toBacklogTask() -> BacklogTask {

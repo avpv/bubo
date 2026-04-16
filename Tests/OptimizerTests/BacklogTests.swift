@@ -130,6 +130,10 @@ final class BacklogTaskTests: XCTestCase {
 @MainActor
 final class BacklogServiceTests: XCTestCase {
 
+    /// Legacy UserDefaults key used before BacklogService moved to SwiftData.
+    /// Kept around as defensive scrubbing so a developer running tests on
+    /// a machine with a live Bubo install doesn't leak pre-v1.10 state
+    /// into the live app — the key is otherwise unused.
     private static let persistenceKey = "BuboBacklogTasks"
 
     private var savedState: Data?
@@ -140,10 +144,10 @@ final class BacklogServiceTests: XCTestCase {
         savedState = UserDefaults.standard.data(forKey: Self.persistenceKey)
         UserDefaults.standard.removeObject(forKey: Self.persistenceKey)
 
-        // The service stores a ModelContainer but only ever persists to
-        // UserDefaults, so any valid container will do.
+        // In-memory container with the backlog schema registered so the
+        // service's targeted persist paths can round-trip cleanly.
         let container = try ModelContainer(
-            for: PersistedLocalEvent.self,
+            for: PersistedBacklogTask.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
         service = BacklogService(modelContainer: container)
