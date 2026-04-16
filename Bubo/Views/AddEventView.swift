@@ -121,56 +121,64 @@ struct AddEventView: View {
             }
 
             ScrollView {
-                // Birman: related form fields share ONE surface, separated by
-                // thin rules — not a stack of floating carts.
-                VStack(alignment: .leading, spacing: 0) {
+                // Each logical section lives on its own platter. Spacing
+                // between cards replaces the in-platter separators that used
+                // to mark section boundaries. Separators now live only
+                // WITHIN a section (e.g. between Location and Notes).
+                VStack(alignment: .leading, spacing: DS.Spacing.md) {
 
                     // Title — focused state is signalled only by the system
                     // caret, no extra glow shadow.
-                    TextField("Title", text: $title, prompt: Text("Meeting with Anna, Deep work, etc.").foregroundStyle(skin.resolvedTextSecondary))
-                        .textFieldStyle(.plain)
-                        .font(.headline)
-                        .focused($isTitleFocused)
-                        .defaultFocus($isTitleFocused, true)
-                        .padding(DS.Spacing.md)
-                        .disabled(isExternal)
-                        .opacity(isExternal ? 0.6 : 1.0)
-
-                    SkinSeparator()
+                    sectionBlock {
+                        TextField("Title", text: $title, prompt: Text("Meeting with Anna, Deep work, etc.").foregroundStyle(skin.resolvedTextSecondary))
+                            .textFieldStyle(.plain)
+                            .font(.headline)
+                            .focused($isTitleFocused)
+                            .defaultFocus($isTitleFocused, true)
+                            .padding(DS.Spacing.md)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .disabled(isExternal)
+                            .opacity(isExternal ? 0.6 : 1.0)
+                    }
 
                     // Date & Time
-                    VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                        sectionLabel("Date & Time")
+                    sectionBlock {
+                        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                            sectionLabel("Date & Time")
 
-                        Grid(alignment: .leading, horizontalSpacing: DS.Spacing.sm, verticalSpacing: DS.Spacing.md) {
-                            GridRow {
-                                Text("Starts")
-                                    .foregroundStyle(skin.resolvedTextSecondary)
-                                    .gridColumnAlignment(.trailing)
-
-                                DateTimePickerPills(date: $date)
-                            }
-
-                            if selectedEventType != .pomodoro {
+                            Grid(alignment: .leading, horizontalSpacing: DS.Spacing.sm, verticalSpacing: DS.Spacing.md) {
                                 GridRow {
-                                    Text("Ends")
+                                    Text("Starts")
                                         .foregroundStyle(skin.resolvedTextSecondary)
                                         .gridColumnAlignment(.trailing)
 
-                                    DateTimePickerPills(date: endDateBinding, range: date...)
+                                    DateTimePickerPills(date: $date)
+                                }
+
+                                if selectedEventType != .pomodoro {
+                                    GridRow {
+                                        Text("Ends")
+                                            .foregroundStyle(skin.resolvedTextSecondary)
+                                            .gridColumnAlignment(.trailing)
+
+                                        DateTimePickerPills(date: endDateBinding, range: date...)
+                                    }
                                 }
                             }
                         }
+                        .padding(DS.Spacing.md)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .disabled(isExternal)
+                        .opacity(isExternal ? 0.6 : 1.0)
                     }
-                    .padding(DS.Spacing.md)
-                    .disabled(isExternal)
-                    .opacity(isExternal ? 0.6 : 1.0)
 
                     // Find Best Time (optimizer suggestion)
                     if !isEditing, !isExternal, isTitleValid, let optimizerService {
-                        SkinSeparator()
-                        findBestTimeSection(optimizerService)
-                            .padding(DS.Spacing.md)
+                        sectionBlock {
+                            findBestTimeSection(optimizerService)
+                                .padding(DS.Spacing.md)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                     }
 
                     // Birman/HIG: Pomodoro — режим, а не тип. Toggle и его
@@ -180,209 +188,219 @@ struct AddEventView: View {
                     // — для встречи в 5 минут предложение «Run as Pomodoro»
                     // — это шум.
                     if !isExternal, isPomodorizable {
-                        SkinSeparator()
-                        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                            pomodoroToggleRow
-                            if isPomodoroMode {
-                                pomodoroSection
-                                    .disabled(isExternal)
-                                    .opacity(isExternal ? 0.6 : 1.0)
-                                    .transition(.opacity.combined(with: .move(edge: .top)))
+                        sectionBlock {
+                            VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                                pomodoroToggleRow
+                                if isPomodoroMode {
+                                    pomodoroSection
+                                        .disabled(isExternal)
+                                        .opacity(isExternal ? 0.6 : 1.0)
+                                        .transition(.opacity.combined(with: .move(edge: .top)))
+                                }
                             }
+                            .padding(DS.Spacing.md)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        .padding(DS.Spacing.md)
                     }
 
                     // Calendar
                     if !isEditing {
-                        SkinSeparator()
-                        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                            Toggle("Add to Calendar", isOn: $addToCalendar)
+                        sectionBlock {
+                            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                                Toggle("Add to Calendar", isOn: $addToCalendar)
 
-                            if addToCalendar && !availableCalendars.isEmpty {
-                                Picker("Calendar", selection: $selectedCalendarId) {
-                                    ForEach(availableCalendars) { cal in
-                                        Text(cal.title)
-                                            .tag(cal.id)
+                                if addToCalendar && !availableCalendars.isEmpty {
+                                    Picker("Calendar", selection: $selectedCalendarId) {
+                                        ForEach(availableCalendars) { cal in
+                                            Text(cal.title)
+                                                .tag(cal.id)
+                                        }
                                     }
+                                    .pickerStyle(.menu)
+                                    .controlSize(.large)
+                                    .frame(height: DS.Size.controlHeight)
                                 }
-                                .pickerStyle(.menu)
-                                .controlSize(.large)
-                                .frame(height: DS.Size.controlHeight)
-                            }
 
-                            if !addToCalendar {
-                                Text("Event will be stored locally in Bubo only")
-                                    .font(.caption)
-                                    .foregroundStyle(skin.resolvedTextSecondary)
+                                if !addToCalendar {
+                                    Text("Event will be stored locally in Bubo only")
+                                        .font(.caption)
+                                        .foregroundStyle(skin.resolvedTextSecondary)
+                                }
                             }
+                            .padding(DS.Spacing.md)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        .padding(DS.Spacing.md)
                     }
 
                     // More options — collapsed by default for new events
                     if !isExternal {
-                        SkinSeparator()
-                        Button {
-                            withAnimation(skin.resolvedMicroAnimation) {
-                                showMoreOptions.toggle()
+                        sectionBlock {
+                            Button {
+                                withAnimation(skin.resolvedMicroAnimation) {
+                                    showMoreOptions.toggle()
+                                }
+                            } label: {
+                                HStack(spacing: DS.Spacing.xs) {
+                                    Text("More options")
+                                        .font(.caption.weight(.medium))
+                                        .foregroundStyle(skinAccent)
+                                    Image(systemName: showMoreOptions ? "chevron.up" : "chevron.down")
+                                        .font(.caption2)
+                                        .foregroundStyle(skinAccent)
+                                    Spacer()
+                                }
                             }
-                        } label: {
-                            HStack(spacing: DS.Spacing.xs) {
-                                Text("More options")
-                                    .font(.caption.weight(.medium))
-                                    .foregroundStyle(skinAccent)
-                                Image(systemName: showMoreOptions ? "chevron.up" : "chevron.down")
-                                    .font(.caption2)
-                                    .foregroundStyle(skinAccent)
-                                Spacer()
-                            }
+                            .buttonStyle(.plain)
+                            .padding(DS.Spacing.md)
                         }
-                        .buttonStyle(.plain)
-                        .padding(DS.Spacing.md)
                     }
 
                     if showMoreOptions || isExternal {
-                        SkinSeparator()
                         // Color
-                        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                            sectionLabel("Color")
+                        sectionBlock {
+                            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                                sectionLabel("Color")
 
-                            HStack(spacing: DS.Spacing.xs) {
-                                ForEach(EventColorTag.allCases, id: \.self) { tag in
-                                    ColorDotButton(
-                                        tag: tag,
-                                        isActive: selectedColorTag == tag,
-                                        action: {
-                                            Haptics.tap()
-                                            selectedColorTag = selectedColorTag == tag ? nil : tag
-                                        }
-                                    )
+                                HStack(spacing: DS.Spacing.xs) {
+                                    ForEach(EventColorTag.allCases, id: \.self) { tag in
+                                        ColorDotButton(
+                                            tag: tag,
+                                            isActive: selectedColorTag == tag,
+                                            action: {
+                                                Haptics.tap()
+                                                selectedColorTag = selectedColorTag == tag ? nil : tag
+                                            }
+                                        )
+                                    }
                                 }
                             }
+                            .padding(DS.Spacing.md)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .disabled(isExternal)
+                            .opacity(isExternal ? 0.6 : 1.0)
                         }
-                        .padding(DS.Spacing.md)
-                        .disabled(isExternal)
-                        .opacity(isExternal ? 0.6 : 1.0)
-
-                        SkinSeparator()
 
                         // Context (Project / Category)
-                        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                            sectionLabel("Context")
+                        sectionBlock {
+                            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                                sectionLabel("Context")
 
-                            TextField("Project or category", text: $contextTag, prompt: Text("e.g. backend, design, personal").foregroundStyle(skin.resolvedTextSecondary))
-                                .textFieldStyle(.plain)
+                                TextField("Project or category", text: $contextTag, prompt: Text("e.g. backend, design, personal").foregroundStyle(skin.resolvedTextSecondary))
+                                    .textFieldStyle(.plain)
+                            }
+                            .padding(DS.Spacing.md)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .disabled(isExternal)
+                            .opacity(isExternal ? 0.6 : 1.0)
                         }
-                        .padding(DS.Spacing.md)
-                        .disabled(isExternal)
-                        .opacity(isExternal ? 0.6 : 1.0)
-
-                        SkinSeparator()
 
                         // Details
-                        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                            sectionLabel("Details")
+                        sectionBlock {
+                            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                                sectionLabel("Details")
 
-                            TextField("Location", text: $location, prompt: Text("Zoom link or room 302").foregroundStyle(skin.resolvedTextSecondary))
-                                .textFieldStyle(.plain)
-                                .focused($isLocationFocused)
+                                TextField("Location", text: $location, prompt: Text("Zoom link or room 302").foregroundStyle(skin.resolvedTextSecondary))
+                                    .textFieldStyle(.plain)
+                                    .focused($isLocationFocused)
 
-                            SkinSeparator()
+                                SkinSeparator()
 
-                            HStack(alignment: .top, spacing: DS.Spacing.sm) {
-                                FormattableTextView(text: $description, prompt: "Add notes, agenda, or attachments", promptStyle: skin.resolvedTextSecondary)
-                                    .frame(minHeight: 60, maxHeight: 160)
+                                HStack(alignment: .top, spacing: DS.Spacing.sm) {
+                                    FormattableTextView(text: $description, prompt: "Add notes, agenda, or attachments", promptStyle: skin.resolvedTextSecondary)
+                                        .frame(minHeight: 60, maxHeight: 160)
 
-                                EmojiPickerButton(text: $description)
-                                    .padding(.top, DS.Spacing.xxs)
+                                    EmojiPickerButton(text: $description)
+                                        .padding(.top, DS.Spacing.xxs)
+                                }
                             }
+                            .padding(DS.Spacing.md)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .disabled(isExternal)
+                            .opacity(isExternal ? 0.6 : 1.0)
                         }
-                        .padding(DS.Spacing.md)
-                        .disabled(isExternal)
-                        .opacity(isExternal ? 0.6 : 1.0)
 
                         // Recurrence (only for standard events)
                         if !isPomodoroMode {
-                            SkinSeparator()
-                            RecurrencePickerView(rule: $recurrenceRule, eventDuration: $duration, eventStartDate: date)
-                                .padding(DS.Spacing.md)
-                                .disabled(isExternal)
-                                .opacity(isExternal ? 0.6 : 1.0)
+                            sectionBlock {
+                                RecurrencePickerView(rule: $recurrenceRule, eventDuration: $duration, eventStartDate: date)
+                                    .padding(DS.Spacing.md)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .disabled(isExternal)
+                                    .opacity(isExternal ? 0.6 : 1.0)
+                            }
                         }
 
                         // Reminders
-                        SkinSeparator()
-                        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                            sectionLabel("Reminders")
+                        sectionBlock {
+                            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                                sectionLabel("Reminders")
 
-                            Toggle("Custom reminders", isOn: $useCustomReminders)
+                                Toggle("Custom reminders", isOn: $useCustomReminders)
 
-                            if useCustomReminders {
-                                ForEach(Array(reminderMinutes.sorted().enumerated()), id: \.element) { index, minutes in
-                                    HStack {
-                                        Label(DS.formatMinutes(minutes), systemImage: "bell.fill")
-                                        Spacer()
-                                        Button(role: .destructive) {
-                                            reminderMinutes.removeAll { $0 == minutes }
-                                        } label: {
-                                            Image(systemName: "trash")
-                                        }
-                                        .buttonStyle(.borderless)
-                                    }
-                                    SkinSeparator()
-                                }
-
-                                Grid(alignment: .leading, horizontalSpacing: DS.Spacing.sm) {
-                                    GridRow {
-                                        Text("\(DS.formatMinutes(newReminderValue))")
-                                            .frame(minWidth: 60, alignment: .leading)
-                                            .monospacedDigit()
-
-                                        Stepper("Reminder minutes", value: $newReminderValue, in: 1...120)
-                                            .labelsHidden()
-
-                                        Button {
-                                            if !reminderMinutes.contains(newReminderValue) {
-                                                reminderMinutes.append(newReminderValue)
-                                            }
-                                        } label: {
-                                            Label("Add", systemImage: "plus")
-                                        }
-                                        .buttonStyle(.action(role: .primary, size: .compact))
-                                    }
-                                }
-
-                                let available = Self.presetReminders.filter { !reminderMinutes.contains($0) }
-                                if !available.isEmpty {
-                                    HStack(spacing: DS.Spacing.xs) {
-                                        ForEach(available.prefix(5), id: \.self) { preset in
-                                            Button {
-                                                Haptics.tap()
-                                                reminderMinutes.append(preset)
+                                if useCustomReminders {
+                                    ForEach(Array(reminderMinutes.sorted().enumerated()), id: \.element) { index, minutes in
+                                        HStack {
+                                            Label(DS.formatMinutes(minutes), systemImage: "bell.fill")
+                                            Spacer()
+                                            Button(role: .destructive) {
+                                                reminderMinutes.removeAll { $0 == minutes }
                                             } label: {
-                                                Text(DS.formatMinutes(preset))
-                                                    .font(.caption)
+                                                Image(systemName: "trash")
                                             }
-                                            .buttonStyle(.action(role: .secondary, size: .compact))
+                                            .buttonStyle(.borderless)
+                                        }
+                                        SkinSeparator()
+                                    }
+
+                                    Grid(alignment: .leading, horizontalSpacing: DS.Spacing.sm) {
+                                        GridRow {
+                                            Text("\(DS.formatMinutes(newReminderValue))")
+                                                .frame(minWidth: 60, alignment: .leading)
+                                                .monospacedDigit()
+
+                                            Stepper("Reminder minutes", value: $newReminderValue, in: 1...120)
+                                                .labelsHidden()
+
+                                            Button {
+                                                if !reminderMinutes.contains(newReminderValue) {
+                                                    reminderMinutes.append(newReminderValue)
+                                                }
+                                            } label: {
+                                                Label("Add", systemImage: "plus")
+                                            }
+                                            .buttonStyle(.action(role: .primary, size: .compact))
                                         }
                                     }
+
+                                    let available = Self.presetReminders.filter { !reminderMinutes.contains($0) }
+                                    if !available.isEmpty {
+                                        HStack(spacing: DS.Spacing.xs) {
+                                            ForEach(available.prefix(5), id: \.self) { preset in
+                                                Button {
+                                                    Haptics.tap()
+                                                    reminderMinutes.append(preset)
+                                                } label: {
+                                                    Text(DS.formatMinutes(preset))
+                                                        .font(.caption)
+                                                }
+                                                .buttonStyle(.action(role: .secondary, size: .compact))
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    Label(
+                                            "Default: \(reminderService.defaultReminderMinutesList.map { DS.formatMinutes($0) }.joined(separator: ", "))",
+                                            systemImage: "bell.fill"
+                                        )
+                                        .font(.subheadline)
+                                        .foregroundStyle(skin.resolvedTextSecondary)
                                 }
-                            } else {
-                                Label(
-                                        "Default: \(reminderService.defaultReminderMinutesList.map { DS.formatMinutes($0) }.joined(separator: ", "))",
-                                        systemImage: "bell.fill"
-                                    )
-                                    .font(.subheadline)
-                                    .foregroundStyle(skin.resolvedTextSecondary)
                             }
+                            .padding(DS.Spacing.md)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        .padding(DS.Spacing.md)
                     } // end showMoreOptions
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .skinPlatter(skin)
-                .skinPlatterDepth(skin)
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.vertical, DS.Spacing.lg)
             }
@@ -486,6 +504,17 @@ struct AddEventView: View {
     /// every form surface uses the exact same treatment.
     private func sectionLabel(_ text: String) -> some View {
         SectionLabel(text: text)
+    }
+
+    // MARK: - Section Block
+
+    /// Wraps a form section in its own platter card. The form is a vertical
+    /// stack of these blocks with DS.Spacing.md between them.
+    @ViewBuilder
+    private func sectionBlock<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        content()
+            .skinPlatter(skin)
+            .skinPlatterDepth(skin)
     }
 
     // MARK: - Draft Persistence
