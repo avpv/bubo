@@ -113,6 +113,68 @@ enum BacklogStatus: String, Codable, Hashable, Sendable, CaseIterable {
     case frozen
 }
 
+// MARK: - Cross-Device Merge
+
+extension BacklogTask {
+
+    /// Merge two copies of the same task — one from the local in-memory
+    /// state, one freshly loaded from SwiftData after a CloudKit import.
+    /// Returns the "strongest" version.
+    ///
+    /// We can't intercept CloudKit's own last-writer-wins row merge, so
+    /// this runs as a post-import reconciliation pass: if the disk copy
+    /// regressed a field that should be monotonic, we re-apply the local
+    /// winner. The reverse case (disk has the newer completion, memory
+    /// is stale) is also handled — the "done + completedAt set" side wins.
+    ///
+    /// Rules:
+    ///   - `status == .done` is monotonic for non-recurring tasks: once a
+    ///     task is completed on any device, a stale remote edit that says
+    ///     `.pending` must not resurrect it. Guarded by `completedAt`.
+    ///   - For recurring tasks, we trust `modifiedAt` — a remote "reset"
+    ///     after completion is legitimate.
+    ///   - `scheduledEventId` + `scheduledDate` follow `status`: when we
+    ///     force status back to `.done`, the schedule slot is cleared.
+    ///   - All other fields fall back to last-writer-wins via `modifiedAt`.
+    static func merged(local: BacklogTask, remote: BacklogTask) -> BacklogTask {
+        guard local.id == remote.id else { return remote }
+
+        // Pick the newer base by `modifiedAt`; treat missing stamps as
+        // "older than anything" so a fresh edit always wins over legacy data.
+        let localStamp = local.modifiedAt ?? .distantPast
+        let remoteStamp = remote.modifiedAt ?? .distantPast
+        var winner = remoteStamp >= localStamp ? remote : local
+        let loser  = remoteStamp >= localStamp ? local  : remote
+
+        // Monotonic completion: if either side says "done + completedAt
+        // set", preserve that over a regression. Skipped for recurring
+        // tasks, which legitimately reset to `.pending` on every cycle.
+        let eitherCompleted = (local.status == .done && local.completedAt != nil)
+            || (remote.status == .done && remote.completedAt != nil)
+        if eitherCompleted, !winner.isRecurring, winner.status != .done {
+            winner.status = .done
+            winner.completedAt = winner.completedAt
+                ?? local.completedAt
+                ?? remote.completedAt
+            winner.scheduledEventId = nil
+            winner.scheduledDate = nil
+            // Re-stamp so the monotonic promotion propagates back out to
+            // the losing device on the next sync.
+            winner.modifiedAt = max(localStamp, remoteStamp, winner.completedAt ?? .distantPast)
+        }
+
+        // `reminderCalendarItemId` is effectively write-once: once a task
+        // is linked to Apple Reminders, losing that link to a stale remote
+        // means both sides re-create the reminder, duplicating it. Keep
+        // the non-nil side.
+        if winner.reminderCalendarItemId == nil, loser.reminderCalendarItemId != nil {
+            winner.reminderCalendarItemId = loser.reminderCalendarItemId
+        }
+
+        return winner
+    }
+}
+
 // MARK: - Conversion to OptimizableEvent
 
 extension BacklogTask {

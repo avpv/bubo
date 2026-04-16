@@ -196,6 +196,16 @@ struct BuboApp: App {
         // new dedicated store. No-op on second launch thanks to the flag.
         Self.migrateLegacyBacklogIfNeeded(into: backlog)
 
+        // Surface CloudKit sync state to the UI. Events from the shared
+        // `NSPersistentCloudKitContainer` are posted globally, so we don't
+        // need to hand the container reference in — the monitor just needs
+        // to be alive before the first import/export fires.
+        if cloudPreference {
+            CloudKitSyncMonitor.shared.start(
+                containerIdentifier: "iCloud.\(Bundle.main.bundleIdentifier ?? "")"
+            )
+        }
+
         let s = ReminderSettings.load()
         _settings = State(wrappedValue: s)
         _reminderService = State(wrappedValue: ReminderService(settings: s, modelContainer: eventsContainer))

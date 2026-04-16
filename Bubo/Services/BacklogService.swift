@@ -34,10 +34,31 @@ final class BacklogService {
 
     private(set) var tasks: [BacklogTask] = []
     private let modelContainer: ModelContainer
+    /// See `RemindersSyncService` — `Any?` NotificationCenter tokens need to
+    /// be readable from `deinit`, which is nonisolated on a `@MainActor` class.
+    private nonisolated(unsafe) var cloudImportObserver: Any?
 
     init(modelContainer: ModelContainer) {
         self.modelContainer = modelContainer
         loadTasks()
+
+        // After every successful CloudKit import, re-load from disk and
+        // reconcile monotonic fields that last-writer-wins could otherwise
+        // regress (see `BacklogTask.merged`). This is the bridge between
+        // SwiftData's silent merge and our domain invariants.
+        cloudImportObserver = NotificationCenter.default.addObserver(
+            forName: CloudKitSyncMonitor.didFinishImport,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.reconcileAfterCloudImport()
+            }
+        }
+    }
+
+    deinit {
+        if let o = cloudImportObserver { NotificationCenter.default.removeObserver(o) }
     }
 
     // MARK: - Queries
@@ -415,6 +436,43 @@ final class BacklogService {
         )
         guard let persisted = try? context.fetch(descriptor) else { return }
         tasks = persisted.map { $0.toBacklogTask() }
+    }
+
+    /// Reload from disk after a CloudKit import, merge each row with its
+    /// pre-import in-memory version, and if the merge elevated any field
+    /// (e.g. "remote said .pending but we had .done + completedAt"), write
+    /// the winner back so the losing device eventually sees it too.
+    private func reconcileAfterCloudImport() {
+        let context = ModelContext(modelContainer)
+        let descriptor = FetchDescriptor<PersistedBacklogTask>(
+            sortBy: [SortDescriptor(\.sortOrder)]
+        )
+        guard let rows = try? context.fetch(descriptor) else { return }
+
+        let before = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, $0) })
+        var merged: [BacklogTask] = []
+        merged.reserveCapacity(rows.count)
+
+        for (index, row) in rows.enumerated() {
+            let disk = row.toBacklogTask()
+            let winner: BacklogTask
+            if let local = before[disk.id] {
+                winner = BacklogTask.merged(local: local, remote: disk)
+            } else {
+                winner = disk
+            }
+            merged.append(winner)
+
+            // If the merge winner differs from what's on disk, push the
+            // correction back so the other device converges on next sync.
+            if winner != disk {
+                row.apply(winner, sortOrder: index)
+            }
+        }
+        try? context.save()
+
+        tasks = merged
+        NotificationCenter.default.post(name: Self.taskUpdated, object: nil)
     }
 
     /// Fetch exactly one persisted row by taskId, via predicate, so we
