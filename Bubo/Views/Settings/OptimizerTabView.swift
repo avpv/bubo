@@ -7,10 +7,12 @@ struct OptimizerTabView: View {
     @Environment(OptimizerService.self) var optimizerService
     @Environment(\.activeSkin) private var skin
 
-    /// Canonical steps for the default-duration picker. Four round values
-    /// that cover the common task shapes — quick hit, half-hour, hour,
-    /// focus block — without overwhelming the picker.
-    private let defaultDurationChoices: [Int] = [15, 30, 60, 90]
+    /// Fibonacci-seeded steps for the default-duration picker, starting at
+    /// 60. Seeds 60 + 90 (≈ 60·φ), each next term is the sum of the
+    /// previous two: 60, 90, 150, 240, 390. The non-linear spacing
+    /// discourages false precision — exactly what Scrum-style estimation
+    /// is trying to signal.
+    private let defaultDurationChoices: [Int] = [60, 90, 150, 240, 390]
 
     var body: some View {
         @Bindable var service = optimizerService
