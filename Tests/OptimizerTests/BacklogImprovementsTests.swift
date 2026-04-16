@@ -583,4 +583,83 @@ final class BacklogServicePersistenceTests: XCTestCase {
         XCTAssertNotNil(service.tasks.first?.modifiedAt,
                         "updateTask should stamp modifiedAt for iCloud conflict resolution")
     }
+
+    func testUpdateSkipsNoOpChanges() {
+        let service = BacklogService(modelContainer: container)
+        let task = BacklogTask(id: "a", title: "Alpha", durationMinutes: 30)
+        service.addTask(task)
+
+        // First real update stamps modifiedAt.
+        var updated = service.tasks.first!
+        updated.durationMinutes = 45
+        service.updateTask(updated)
+        let firstStamp = service.tasks.first?.modifiedAt
+        XCTAssertNotNil(firstStamp)
+
+        // Identical update should NOT bump modifiedAt — callers like the
+        // edit-row autosave fire on every keystroke, and we don't want to
+        // churn CloudKit traffic when nothing really changed.
+        let echo = service.tasks.first!
+        service.updateTask(echo)
+        XCTAssertEqual(service.tasks.first?.modifiedAt, firstStamp,
+                       "No-op updateTask must not rewrite modifiedAt")
+    }
+
+    func testRemovePreservesOtherSortOrder() {
+        let service = BacklogService(modelContainer: container)
+        service.addTask(BacklogTask(id: "a", title: "Alpha"))
+        service.addTask(BacklogTask(id: "b", title: "Beta"))
+        service.addTask(BacklogTask(id: "c", title: "Gamma"))
+
+        _ = service.removeTask(id: "b")
+
+        let reader = BacklogService(modelContainer: container)
+        XCTAssertEqual(reader.tasks.map(\.id), ["a", "c"],
+                       "Remaining tasks must keep their relative order")
+    }
+
+    func testCompleteTaskPersistsStatusTransition() {
+        let service = BacklogService(modelContainer: container)
+        service.addTask(BacklogTask(id: "a", title: "Alpha"))
+        service.completeTask(id: "a")
+
+        let reader = BacklogService(modelContainer: container)
+        XCTAssertEqual(reader.tasks.first?.status, .done)
+    }
+
+    func testMoveTaskToEndPersistsSortOrder() {
+        let service = BacklogService(modelContainer: container)
+        service.addTask(BacklogTask(id: "a", title: "Alpha"))
+        service.addTask(BacklogTask(id: "b", title: "Beta"))
+        service.addTask(BacklogTask(id: "c", title: "Gamma"))
+
+        service.moveTaskToEnd(id: "a")
+
+        let reader = BacklogService(modelContainer: container)
+        XCTAssertEqual(reader.tasks.map(\.id), ["b", "c", "a"])
+    }
+
+    func testFreezeTaskPersists() {
+        let service = BacklogService(modelContainer: container)
+        service.addTask(BacklogTask(id: "a", title: "Alpha"))
+
+        service.freezeTask(id: "a")
+
+        let reader = BacklogService(modelContainer: container)
+        XCTAssertEqual(reader.tasks.first?.status, .frozen)
+    }
+
+    func testRestoreTaskAtIndexKeepsSortOrderConsistent() {
+        let service = BacklogService(modelContainer: container)
+        let b = BacklogTask(id: "b", title: "Beta")
+        service.addTask(BacklogTask(id: "a", title: "Alpha"))
+        service.addTask(b)
+        service.addTask(BacklogTask(id: "c", title: "Gamma"))
+
+        _ = service.removeTask(id: "b")
+        service.restoreTask(b, at: 1)
+
+        let reader = BacklogService(modelContainer: container)
+        XCTAssertEqual(reader.tasks.map(\.id), ["a", "b", "c"])
+    }
 }

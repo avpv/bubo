@@ -128,14 +128,18 @@ final class BacklogService {
     // MARK: - Mutations
 
     func addTask(_ task: BacklogTask) {
+        let index = tasks.count
         tasks.append(task)
-        saveTasks()
+        persistInsert(task, at: index)
         NotificationCenter.default.post(name: Self.taskAdded, object: task.id)
     }
 
     func addTasks(_ newTasks: [BacklogTask]) {
+        let baseIndex = tasks.count
         tasks.append(contentsOf: newTasks)
-        saveTasks()
+        for (offset, task) in newTasks.enumerated() {
+            persistInsert(task, at: baseIndex + offset)
+        }
         for task in newTasks {
             NotificationCenter.default.post(name: Self.taskAdded, object: task.id)
         }
@@ -143,16 +147,23 @@ final class BacklogService {
 
     func updateTask(_ task: BacklogTask) {
         guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return }
-        var stamped = task
+        let existing = tasks[index]
+        // Skip no-op updates — without this, every autosave keystroke would
+        // bump `modifiedAt` and kick observers. Identity on the struct covers
+        // every field we persist (see `BacklogTask: Hashable`) except for
+        // `modifiedAt` itself, which we're about to set.
+        var incoming = task
+        incoming.modifiedAt = existing.modifiedAt
+        guard incoming != existing else { return }
         // Stamp a fresh `modifiedAt` so CloudKit-driven merges on other
         // devices can tell which copy of the task is newer. Callers that
         // *don't* want to bump the stamp (notably `silentlyUpdate`, which
         // applies remote edits back into the local store) have their own
         // code path that skips this.
-        stamped.modifiedAt = Date()
-        tasks[index] = stamped
-        saveTasks()
-        NotificationCenter.default.post(name: Self.taskUpdated, object: stamped.id)
+        incoming.modifiedAt = Date()
+        tasks[index] = incoming
+        persistUpdate(incoming, at: index)
+        NotificationCenter.default.post(name: Self.taskUpdated, object: incoming.id)
     }
 
     /// Update without posting `taskUpdated`. Used by `RemindersSyncService`
@@ -162,13 +173,14 @@ final class BacklogService {
     func silentlyUpdate(_ task: BacklogTask) {
         guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return }
         tasks[index] = task
-        saveTasks()
+        persistUpdate(task, at: index)
     }
 
     func removeTask(id: String) -> BacklogTask? {
         guard let index = tasks.firstIndex(where: { $0.id == id }) else { return nil }
         let removed = tasks.remove(at: index)
-        saveTasks()
+        persistRemove(id: id)
+        persistReorder(fromIndex: index)
         // Post the full task so observers can inspect fields like
         // `reminderCalendarItemId` for cleanup of external state — the task
         // is already gone from `tasks` by the time they receive this.
@@ -204,7 +216,7 @@ final class BacklogService {
             tasks[index].completedAt = now
         }
 
-        saveTasks()
+        persistUpdate(tasks[index], at: index)
         NotificationCenter.default.post(name: Self.taskCompleted, object: id)
     }
 
@@ -217,7 +229,7 @@ final class BacklogService {
         // Drop schedule linkage so the calendar slot is freed.
         tasks[index].scheduledEventId = nil
         tasks[index].scheduledDate = nil
-        saveTasks()
+        persistUpdate(tasks[index], at: index)
         NotificationCenter.default.post(name: Self.taskUpdated, object: id)
         NotificationCenter.default.post(name: Self.taskScheduleChanged, object: id)
     }
@@ -227,19 +239,21 @@ final class BacklogService {
         guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
         guard tasks[index].status == .frozen else { return }
         tasks[index].status = .pending
-        saveTasks()
+        persistUpdate(tasks[index], at: index)
         NotificationCenter.default.post(name: Self.taskUpdated, object: id)
     }
 
     /// Bulk restore — powers the "Unfreeze all" button on the frozen tombstone.
     func unfreezeAll() {
-        var changed = false
+        var changedIndexes: [Int] = []
         for i in tasks.indices where tasks[i].status == .frozen {
             tasks[i].status = .pending
-            changed = true
+            changedIndexes.append(i)
         }
-        if changed {
-            saveTasks()
+        if !changedIndexes.isEmpty {
+            for i in changedIndexes {
+                persistUpdate(tasks[i], at: i)
+            }
             NotificationCenter.default.post(name: Self.taskUpdated, object: nil)
         }
     }
@@ -254,7 +268,7 @@ final class BacklogService {
         guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
         tasks[index].status = .done
         tasks[index].completedAt = Date()
-        saveTasks()
+        persistUpdate(tasks[index], at: index)
     }
 
     /// Store the Apple Reminders `calendarItemIdentifier` for a Bubo-native
@@ -265,7 +279,7 @@ final class BacklogService {
     func silentlyUpdateReminderMapping(taskId: String, calendarItemId: String?) {
         guard let index = tasks.firstIndex(where: { $0.id == taskId }) else { return }
         tasks[index].reminderCalendarItemId = calendarItemId
-        saveTasks()
+        persistUpdate(tasks[index], at: index)
     }
 
     func markScheduled(id: String, eventId: String, date: Date) {
@@ -273,7 +287,7 @@ final class BacklogService {
         tasks[index].status = .scheduled
         tasks[index].scheduledEventId = eventId
         tasks[index].scheduledDate = date
-        saveTasks()
+        persistUpdate(tasks[index], at: index)
         NotificationCenter.default.post(name: Self.taskScheduleChanged, object: id)
     }
 
@@ -282,7 +296,7 @@ final class BacklogService {
         tasks[index].status = .pending
         tasks[index].scheduledEventId = nil
         tasks[index].scheduledDate = nil
-        saveTasks()
+        persistUpdate(tasks[index], at: index)
         NotificationCenter.default.post(name: Self.taskScheduleChanged, object: id)
     }
 
@@ -291,12 +305,16 @@ final class BacklogService {
     /// the user-controlled order survives the delete/undo round-trip; falls
     /// back to appending if the index is out of range or nil.
     func restoreTask(_ task: BacklogTask, at index: Int? = nil) {
+        let insertIndex: Int
         if let index, index >= 0, index <= tasks.count {
             tasks.insert(task, at: index)
+            insertIndex = index
         } else {
             tasks.append(task)
+            insertIndex = tasks.count - 1
         }
-        saveTasks()
+        persistInsert(task, at: insertIndex)
+        persistReorder(fromIndex: insertIndex + 1)
     }
 
     /// Current global index of a task by ID, or nil if it's not in the list.
@@ -308,7 +326,7 @@ final class BacklogService {
     /// Move tasks that were scheduled in the past but not completed back to pending.
     func carryOverUnfinished() {
         let today = Calendar.current.startOfDay(for: Date())
-        var changed = false
+        var changedIndexes: [Int] = []
         for i in tasks.indices {
             if tasks[i].status == .scheduled,
                let scheduled = tasks[i].scheduledDate,
@@ -316,10 +334,12 @@ final class BacklogService {
                 tasks[i].status = .pending
                 tasks[i].scheduledEventId = nil
                 tasks[i].scheduledDate = nil
-                changed = true
+                changedIndexes.append(i)
             }
         }
-        if changed { saveTasks() }
+        for i in changedIndexes {
+            persistUpdate(tasks[i], at: i)
+        }
     }
 
     func reorderTask(from: Int, to: Int) {
@@ -331,7 +351,7 @@ final class BacklogService {
               let toGlobal = tasks.firstIndex(where: { $0.id == targetId }) else { return }
         let task = tasks.remove(at: fromGlobal)
         tasks.insert(task, at: toGlobal)
-        saveTasks()
+        persistReorder(fromIndex: min(fromGlobal, toGlobal))
     }
 
     /// Move `moved` so it sits directly before `target` in the storage order.
@@ -346,7 +366,7 @@ final class BacklogService {
             return
         }
         tasks.insert(task, at: targetIdx)
-        saveTasks()
+        persistReorder(fromIndex: min(fromIdx, targetIdx))
     }
 
     /// Move `moved` to the very end of the active storage order.
@@ -354,7 +374,7 @@ final class BacklogService {
         guard let fromIdx = tasks.firstIndex(where: { $0.id == moved }) else { return }
         let task = tasks.remove(at: fromIdx)
         tasks.append(task)
-        saveTasks()
+        persistReorder(fromIndex: fromIdx)
     }
 
     // MARK: - Persistence (SwiftData — single shared ModelContainer)
@@ -364,8 +384,13 @@ final class BacklogService {
         let stale = tasks.filter { $0.status == .pending && $0.createdAt <= cutoff }
         guard !stale.isEmpty else { return }
 
-        tasks.removeAll { task in stale.contains { $0.id == task.id } }
-        saveTasks()
+        let staleIds = Set(stale.map(\.id))
+        let firstRemovedIndex = tasks.firstIndex(where: { staleIds.contains($0.id) }) ?? tasks.count
+        tasks.removeAll { staleIds.contains($0.id) }
+        for id in staleIds {
+            persistRemove(id: id)
+        }
+        persistReorder(fromIndex: firstRemovedIndex)
         for task in stale {
             NotificationCenter.default.post(name: Self.taskRemoved, object: task)
         }
@@ -376,12 +401,12 @@ final class BacklogService {
     // This avoids the main-actor SwiftData threading hazards that broke
     // v1.10.30–v1.10.41.
     //
-    // `saveTasks()` now performs an **incremental diff** against the persisted
-    // store instead of the previous wipe-and-reinsert. A single-task edit
-    // updates one row; a delete deletes one row; a reorder touches only the
-    // rows whose `sortOrder` actually moved. This scales with the diff size
-    // rather than the backlog size, which matters once CloudKit sync is on
-    // because every persisted write becomes a CK transaction.
+    // Persistence is now **targeted per mutation** — `persistInsert`,
+    // `persistUpdate`, `persistRemove` and `persistReorder` each touch only
+    // the rows that actually changed, using `#Predicate` to scope the fetch
+    // to one row (or a sortOrder range for reorder). The legacy `saveAll()`
+    // reconciliation remains as a safety net for tests that need to force
+    // a full rewrite of the store, but no production path calls it.
 
     private func loadTasks() {
         let context = ModelContext(modelContainer)
@@ -392,10 +417,85 @@ final class BacklogService {
         tasks = persisted.map { $0.toBacklogTask() }
     }
 
-    private func saveTasks() {
+    /// Fetch exactly one persisted row by taskId, via predicate, so we
+    /// don't pull the whole table to find one record.
+    private func fetchPersisted(taskId: String, context: ModelContext) -> PersistedBacklogTask? {
+        var descriptor = FetchDescriptor<PersistedBacklogTask>(
+            predicate: #Predicate { $0.taskId == taskId }
+        )
+        descriptor.fetchLimit = 1
+        return (try? context.fetch(descriptor))?.first
+    }
+
+    private func persistInsert(_ task: BacklogTask, at sortOrder: Int) {
+        let context = ModelContext(modelContainer)
+        // Defensive: if the same id already exists (e.g. a CloudKit merge
+        // landed a row before our local insert), update in place rather
+        // than creating a duplicate that a later dedup pass would have to
+        // clean up.
+        if let existing = fetchPersisted(taskId: task.id, context: context) {
+            existing.apply(task, sortOrder: sortOrder)
+        } else {
+            context.insert(PersistedBacklogTask(from: task, sortOrder: sortOrder))
+        }
+        try? context.save()
+    }
+
+    private func persistUpdate(_ task: BacklogTask, at sortOrder: Int) {
+        let context = ModelContext(modelContainer)
+        if let row = fetchPersisted(taskId: task.id, context: context) {
+            row.apply(task, sortOrder: sortOrder)
+        } else {
+            // Row vanished on us (e.g. remote delete); recreate to keep
+            // memory and disk in sync.
+            context.insert(PersistedBacklogTask(from: task, sortOrder: sortOrder))
+        }
+        try? context.save()
+    }
+
+    private func persistRemove(id: String) {
+        let context = ModelContext(modelContainer)
+        if let row = fetchPersisted(taskId: id, context: context) {
+            context.delete(row)
+            try? context.save()
+        }
+    }
+
+    /// Rewrite `sortOrder` for rows at or after `fromIndex` to match the
+    /// in-memory array. Touched-rows-only: we don't reassign the whole
+    /// table — anything before `fromIndex` already has the correct index.
+    private func persistReorder(fromIndex: Int) {
+        guard fromIndex >= 0, fromIndex < tasks.count else { return }
+        let context = ModelContext(modelContainer)
+        let affected = tasks[fromIndex...]
+        for (offset, task) in affected.enumerated() {
+            let expectedOrder = fromIndex + offset
+            guard let row = fetchPersisted(taskId: task.id, context: context) else { continue }
+            if row.sortOrder != expectedOrder {
+                row.sortOrder = expectedOrder
+            }
+        }
+        try? context.save()
+    }
+
+    /// Full reconcile: fetch every row and align the store to `tasks`.
+    /// Preserved as a safety net for tests + future bulk import paths;
+    /// production mutations use the targeted `persist*` helpers above.
+    func saveAll() {
         let context = ModelContext(modelContainer)
         let existing = (try? context.fetch(FetchDescriptor<PersistedBacklogTask>())) ?? []
-        var byId = Dictionary(uniqueKeysWithValues: existing.map { ($0.taskId, $0) })
+        // Group by taskId so a duplicate row (possible during a CloudKit
+        // merge window) doesn't trap `Dictionary(uniqueKeysWithValues:)`.
+        // Duplicates are collapsed: the first instance is kept and the
+        // others are deleted so the store converges to one row per task.
+        var byId: [String: PersistedBacklogTask] = [:]
+        for row in existing {
+            if byId[row.taskId] == nil {
+                byId[row.taskId] = row
+            } else {
+                context.delete(row)
+            }
+        }
 
         let liveIds = Set(tasks.map(\.id))
         for (id, row) in byId where !liveIds.contains(id) {
