@@ -7,13 +7,6 @@ struct OptimizerTabView: View {
     @Environment(OptimizerService.self) var optimizerService
     @Environment(\.activeSkin) private var skin
 
-    /// Fibonacci-seeded steps for the default-duration picker, starting at
-    /// 60. Seeds 60 + 90 (≈ 60·φ), each next term is the sum of the
-    /// previous two: 60, 90, 150, 240, 390. The non-linear spacing
-    /// discourages false precision — exactly what Scrum-style estimation
-    /// is trying to signal.
-    private let defaultDurationChoices: [Int] = [60, 90, 150, 240, 390]
-
     var body: some View {
         @Bindable var service = optimizerService
 
@@ -49,26 +42,6 @@ struct OptimizerTabView: View {
                         Text("The Tasks capacity ring compares your pending workload to the minutes left before the end of the working day.")
                             .font(.caption)
                             .foregroundStyle(skin.resolvedTextSecondary)
-                    }
-                }
-
-                SettingsPlatter("New Tasks") {
-                    HStack(alignment: .firstTextBaseline) {
-                        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                            Text("Default duration")
-                            Text("Used when a task is added without a duration suffix (e.g. “write report 30m”).")
-                                .font(.caption)
-                                .foregroundStyle(skin.resolvedTextSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        Spacer()
-                        Picker("Default task duration", selection: $service.defaultTaskDurationMinutes) {
-                            ForEach(defaultDurationChoices, id: \.self) { minutes in
-                                Text(DS.formatMinutes(minutes)).tag(minutes)
-                            }
-                        }
-                        .labelsHidden()
-                        .frame(width: 120)
                     }
                 }
 
