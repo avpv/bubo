@@ -24,6 +24,24 @@ final class BuboOptimizer {
     /// stop being useful (e.g. a calendar import).
     let mapElitesArchive = MAPElitesArchive()
 
+    /// Optional CVT-MAP-Elites archive — a Voronoi-tessellation-based
+    /// QD archive that gives better coverage on non-uniformly-distributed
+    /// behaviour spaces. Off by default because it needs an upfront
+    /// sample for Lloyd's initialisation; flip on after a handful of
+    /// runs have populated `mapElitesArchive`.
+    let cvtArchive = CVTArchive()
+
+    /// REINFORCE-style neural policy over mutation operators. Kept
+    /// alive across runs because the policy gradient needs many samples
+    /// to converge and resetting it would throw them away.
+    let neuralOperatorPolicy = NeuralOperatorPolicy()
+
+    /// Default structural repairer. Heuristic — calls out to
+    /// `ScheduleChromosome.repair` first, then runs a per-gene scan
+    /// that consults `ConstraintEngine.violations`. App layers that
+    /// wire `LLMRepairer` override this.
+    let scheduleRepairer: ScheduleRepairer = HeuristicRepairer()
+
     /// Persistent experience archive: remembered high-fitness schedules
     /// bucketed by workload signature. Feeds warm-start seeds into GA
     /// initialisation without any UI change; users see faster convergence
@@ -77,6 +95,12 @@ final class BuboOptimizer {
             // something to blend/admit against from the very first run.
             if gaConfig.noveltyWeight == 0 { gaConfig.noveltyWeight = 0.15 }
             gaConfig.enableMAPElites = true
+            gaConfig.useProgressiveEvaluation = true
+            gaConfig.deterministicParallelEvaluation = true
+            // Multi-fidelity off by default — best-fit for `.quick` /
+            // `.instant` configs, and those route through different
+            // entry points. The flag lives on the config so callers
+            // who do opt in on the main path get the behaviour.
         }
     }
 
@@ -103,9 +127,15 @@ final class BuboOptimizer {
         // stale arm allocation would be actively misleading.
         //
         // When SOTA augmentations are enabled, long-lived archives
-        // (novelty, MAP-Elites, experience, contextual bandit, surrogate)
-        // thread through the context so their state survives across runs.
+        // (novelty, MAP-Elites, experience, contextual bandit, surrogate,
+        // neural policy, multi-fidelity, CP repairer) thread through the
+        // context so their state survives across runs.
         let augmented = sotaAugmentationsEnabled
+        let evaluator = FitnessEvaluator.standard(preferences: prefs)
+        let mfe = augmented
+            ? MultiFidelityEvaluator(full: evaluator, preferences: prefs)
+            : nil
+
         let adjustedContext = OptimizerContext(
             fixedEvents: context.fixedEvents,
             movableEvents: context.movableEvents,
@@ -120,10 +150,12 @@ final class BuboOptimizer {
             noveltyArchive: augmented ? NoveltyArchive() : nil,
             mapElitesArchive: augmented ? mapElitesArchive : nil,
             surrogate: augmented ? surrogate : nil,
-            experienceArchive: augmented ? experienceArchive : nil
+            experienceArchive: augmented ? experienceArchive : nil,
+            multiFidelityEvaluator: mfe,
+            neuralOperatorPolicy: augmented ? neuralOperatorPolicy : nil,
+            scheduleRepairer: augmented ? scheduleRepairer : nil,
+            fitnessEvaluator: evaluator
         )
-
-        let evaluator = FitnessEvaluator.standard(preferences: prefs)
 
         // Hyperparameter tuner proposal: when enabled and history exists,
         // swap a tuned config in for this workload. Base config is still
@@ -232,6 +264,10 @@ final class BuboOptimizer {
         preferenceLearner.applyToPreferences(&prefs)
 
         let augmented = sotaAugmentationsEnabled
+        let evaluator = FitnessEvaluator.standard(preferences: prefs)
+        let mfe = augmented
+            ? MultiFidelityEvaluator(full: evaluator, preferences: prefs)
+            : nil
         let adjustedContext = OptimizerContext(
             fixedEvents: context.fixedEvents,
             movableEvents: context.movableEvents,
@@ -246,10 +282,12 @@ final class BuboOptimizer {
             noveltyArchive: augmented ? NoveltyArchive() : nil,
             mapElitesArchive: augmented ? mapElitesArchive : nil,
             surrogate: augmented ? surrogate : nil,
-            experienceArchive: augmented ? experienceArchive : nil
+            experienceArchive: augmented ? experienceArchive : nil,
+            multiFidelityEvaluator: mfe,
+            neuralOperatorPolicy: augmented ? neuralOperatorPolicy : nil,
+            scheduleRepairer: augmented ? scheduleRepairer : nil,
+            fitnessEvaluator: evaluator
         )
-
-        let evaluator = FitnessEvaluator.standard(preferences: prefs)
         let config = overrideConfig ?? gaConfig
         let capturedIslandConfig = overrideIslandConfig ?? islandConfig
         let scenGen = scenarioGenerator

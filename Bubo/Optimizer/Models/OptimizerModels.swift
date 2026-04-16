@@ -201,6 +201,33 @@ struct OptimizerContext: Sendable {
     /// seeding at the beginning of a new run. Nil = cold start every time.
     let experienceArchive: ExperienceArchive?
 
+    /// Optional multi-fidelity evaluator. When set *and* the GA config
+    /// opts into `useMultiFidelity`, early generations score offspring
+    /// through the cheap proxy and only promote the top fraction to
+    /// full evaluation.
+    let multiFidelityEvaluator: MultiFidelityEvaluator?
+
+    /// Optional REINFORCE-style neural policy over mutation operators.
+    /// Takes precedence over the two bandits when
+    /// `GAConfiguration.useNeuralPolicy` is on. Nil = bandit / uniform
+    /// routes stay in charge.
+    let neuralOperatorPolicy: NeuralOperatorPolicy?
+
+    /// Optional specialised repair strategy. When the GA produces an
+    /// offspring that `ConstraintEngine` still rejects after the
+    /// built-in `ScheduleChromosome.repair`, we hand it to this
+    /// repairer. Defaults to the quick heuristic chain when nil.
+    let scheduleRepairer: ScheduleRepairer?
+
+    /// Back-reference to the evaluator currently driving the run. Used
+    /// by the progressive-eval pruning pass inside
+    /// `GeneticAlgorithm.evolveOneGeneration` — it needs to call
+    /// `progressiveEvaluate` against the same objective configuration
+    /// that produced the main fitness readings. Optional because not
+    /// every caller wires one; when nil the progressive-eval path is
+    /// skipped even if `GAConfiguration.useProgressiveEvaluation` is on.
+    let fitnessEvaluator: FitnessEvaluator?
+
     init(
         fixedEvents: [CalendarEvent] = [],
         movableEvents: [OptimizableEvent] = [],
@@ -218,7 +245,11 @@ struct OptimizerContext: Sendable {
         noveltyArchive: NoveltyArchive? = nil,
         mapElitesArchive: MAPElitesArchive? = nil,
         surrogate: FitnessSurrogate? = nil,
-        experienceArchive: ExperienceArchive? = nil
+        experienceArchive: ExperienceArchive? = nil,
+        multiFidelityEvaluator: MultiFidelityEvaluator? = nil,
+        neuralOperatorPolicy: NeuralOperatorPolicy? = nil,
+        scheduleRepairer: ScheduleRepairer? = nil,
+        fitnessEvaluator: FitnessEvaluator? = nil
     ) {
         self.fixedEvents = fixedEvents
         self.movableEvents = movableEvents
@@ -234,6 +265,10 @@ struct OptimizerContext: Sendable {
         self.mapElitesArchive = mapElitesArchive
         self.surrogate = surrogate
         self.experienceArchive = experienceArchive
+        self.multiFidelityEvaluator = multiFidelityEvaluator
+        self.neuralOperatorPolicy = neuralOperatorPolicy
+        self.scheduleRepairer = scheduleRepairer
+        self.fitnessEvaluator = fitnessEvaluator
     }
 }
 

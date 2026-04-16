@@ -307,7 +307,11 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             noveltyArchive: context.noveltyArchive,
             mapElitesArchive: context.mapElitesArchive,
             surrogate: context.surrogate,
-            experienceArchive: context.experienceArchive
+            experienceArchive: context.experienceArchive,
+            multiFidelityEvaluator: context.multiFidelityEvaluator,
+            neuralOperatorPolicy: context.neuralOperatorPolicy,
+            scheduleRepairer: context.scheduleRepairer,
+            fitnessEvaluator: context.fitnessEvaluator
         )
     }
 

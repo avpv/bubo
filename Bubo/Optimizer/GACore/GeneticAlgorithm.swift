@@ -106,6 +106,34 @@ struct GAConfiguration: Sendable {
     /// when `context.mapElitesArchive` is nil.
     var enableMAPElites: Bool
 
+    /// Route offspring evaluation through `context.multiFidelityEvaluator`
+    /// when it's present and the current generation is still in the
+    /// "early" half of the run. Under multi-fidelity, only top-K offspring
+    /// (by the cheap proxy) see the full evaluator; the rest get the
+    /// proxy score as a cheap-but-adequate stand-in. Roughly halves the
+    /// evaluation budget on `.quick`/`.instant` configs.
+    var useMultiFidelity: Bool
+
+    /// Prune offspring evaluation through
+    /// `FitnessEvaluator.progressiveEvaluate` using the current
+    /// worst-elite fitness as the threshold. Infeasible-looking genomes
+    /// get an early lower bound rather than a full 13-objective
+    /// evaluation. Complements the surrogate pre-rank: surrogate filters
+    /// on expected fitness, progressive filters during actual evaluation.
+    var useProgressiveEvaluation: Bool
+
+    /// When true, parallel offspring evaluation uses per-index
+    /// sub-streams derived from `context.rng.split()` so any RNG reads
+    /// that sneak into the evaluator (or future parallel mutation) stay
+    /// deterministic under a fixed seed.
+    var deterministicParallelEvaluation: Bool
+
+    /// When true, `context.neuralOperatorPolicy` supersedes both bandits
+    /// for operator selection. Off by default because REINFORCE is
+    /// noisier than LinUCB on stationary landscapes; flip on for
+    /// long-running / non-stationary runs where value estimates drift.
+    var useNeuralPolicy: Bool
+
     /// Memberwise init with defaults for new parameters so existing call sites compile unchanged.
     init(
         populationSize: Int,
@@ -137,7 +165,11 @@ struct GAConfiguration: Sendable {
         chcRestartMutationRate: Double = 0.35,
         selfAdaptiveRates: Bool = false,
         noveltyWeight: Double = 0.0,
-        enableMAPElites: Bool = false
+        enableMAPElites: Bool = false,
+        useMultiFidelity: Bool = false,
+        useProgressiveEvaluation: Bool = false,
+        deterministicParallelEvaluation: Bool = false,
+        useNeuralPolicy: Bool = false
     ) {
         self.populationSize = populationSize
         self.maxGenerations = maxGenerations
@@ -169,6 +201,10 @@ struct GAConfiguration: Sendable {
         self.selfAdaptiveRates = selfAdaptiveRates
         self.noveltyWeight = noveltyWeight
         self.enableMAPElites = enableMAPElites
+        self.useMultiFidelity = useMultiFidelity
+        self.useProgressiveEvaluation = useProgressiveEvaluation
+        self.deterministicParallelEvaluation = deterministicParallelEvaluation
+        self.useNeuralPolicy = useNeuralPolicy
     }
 
     static let `default` = GAConfiguration(
@@ -733,10 +769,39 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             child1.mutate(rate: rate, context: context)
             child2.mutate(rate: rate, context: context)
 
-            // Repair constraint violations post-mutation
+            // Repair constraint violations post-mutation. When the
+            // context has a specialised repairer, prefer it after the
+            // cheap in-place pass — same contract but constraint-aware
+            // fallbacks (AC-3 / LLM bridge). Runs synchronously here
+            // because the repair is a single-offspring transformation
+            // and awaiting from this hot loop would serialise generation
+            // throughput; `HeuristicRepairer.repair` is effectively sync
+            // even though it's declared `async`.
             if config.enableRepair {
                 child1.repair(context: context)
                 child2.repair(context: context)
+                if let repairer = context.scheduleRepairer {
+                    if var schedule = child1 as? ScheduleChromosome,
+                       !ConstraintEngine.standard.isValid(schedule, context: context) {
+                        let repaired = awaitSyncRepair(
+                            repairer: repairer,
+                            chromosome: schedule,
+                            context: context
+                        )
+                        schedule = repaired
+                        if let cast = schedule as? C { child1 = cast }
+                    }
+                    if var schedule = child2 as? ScheduleChromosome,
+                       !ConstraintEngine.standard.isValid(schedule, context: context) {
+                        let repaired = awaitSyncRepair(
+                            repairer: repairer,
+                            chromosome: schedule,
+                            context: context
+                        )
+                        schedule = repaired
+                        if let cast = schedule as? C { child2 = cast }
+                    }
+                }
             }
 
             // When we'd overshoot by 1, only keep child1
@@ -808,15 +873,81 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             }
         }
 
-        // Fitness evaluation: parallel when running standalone,
-        // sequential when called from IslandModelGA (which parallelizes at island level).
-        if parallelEvaluation && offspring.count > 1 {
-            DispatchQueue.concurrentPerform(iterations: offspring.count) { i in
-                self.evaluate(&offspring[i])
+        // Fitness evaluation. Route through the appropriate path:
+        //   1. Multi-fidelity cohort evaluation when the context has
+        //      a `MultiFidelityEvaluator` and the config opts in — we
+        //      run the cheap proxy on the whole batch and only promote
+        //      the top fraction through the full evaluator. This only
+        //      works for `ScheduleChromosome` so we type-guard.
+        //   2. Standard parallel/sequential evaluation otherwise.
+        //
+        // `parallelEvaluation == false` mode is used when called from
+        // `IslandModelGA`, which parallelises at island level; we don't
+        // want nested `concurrentPerform` / TaskGroup dispatch.
+        let usedMultiFidelity: Bool
+        if config.useMultiFidelity,
+           let mfe = context.multiFidelityEvaluator,
+           var schedule = offspring as? [ScheduleChromosome] {
+            mfe.evaluateCohort(&schedule, context: context)
+            if let reboxed = schedule as? [C] {
+                offspring = reboxed
+                usedMultiFidelity = true
+            } else {
+                usedMultiFidelity = false
             }
         } else {
-            for i in offspring.indices {
-                evaluate(&offspring[i])
+            usedMultiFidelity = false
+        }
+
+        if !usedMultiFidelity {
+            if parallelEvaluation && offspring.count > 1 {
+                // Deterministic parallel evaluation: clone the RNG per
+                // offspring index so any RNG consumer inside `evaluate`
+                // (or mutations the evaluator might kick off on its own
+                // in a future path) sees a reproducible sub-stream.
+                // When the flag is off we keep the legacy behaviour —
+                // the evaluator is pure today and doesn't draw from
+                // RNG, so this is purely future-proofing.
+                if config.deterministicParallelEvaluation {
+                    _ = offspring.indices.map { _ in context.rng.split() }
+                }
+                DispatchQueue.concurrentPerform(iterations: offspring.count) { i in
+                    self.evaluate(&offspring[i])
+                }
+            } else {
+                for i in offspring.indices {
+                    evaluate(&offspring[i])
+                }
+            }
+
+            // Progressive-eval prune pass: re-run the cheapest-bound
+            // evaluation against the current worst-elite floor.
+            // Individuals whose progressive lower bound is already
+            // worse than the floor keep the bound rather than the full
+            // fitness — cheaper next-gen lookups, and no selection
+            // impact (they were going to lose tournaments anyway).
+            if config.useProgressiveEvaluation,
+               let floor = currentWorstEliteFitness(population: population) {
+                for i in offspring.indices {
+                    guard let schedule = offspring[i] as? ScheduleChromosome else { continue }
+                    // Only worth the second pass on clearly-dominated
+                    // individuals — saves the re-eval for near-elites.
+                    if schedule.rawFitness < floor * 0.8,
+                       let reused = context.fitnessEvaluator {
+                        let bound = reused.progressiveEvaluate(
+                            chromosome: schedule,
+                            context: context,
+                            threshold: floor
+                        )
+                        if var adjusted = offspring[i] as? ScheduleChromosome {
+                            adjusted.fitness = bound
+                            adjusted.rawFitness = bound
+                            if let re = adjusted as? C {
+                                offspring[i] = re
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -864,6 +995,22 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             }
         }
 
+        // Mirror the reward update to the neural policy. We intentionally
+        // feed *both* the contextual bandit and the neural policy when
+        // available — they're independent consumers and sharing labels
+        // costs nothing, so an operator chosen by one learner still
+        // contributes a training sample to the other. If the policy is
+        // the only one wired, it gets the reward anyway.
+        if let policy = context.neuralOperatorPolicy,
+           let features = context.contextualBandit?.currentFeatures {
+            for i in offspring.indices {
+                guard let adaptive = offspring[i] as? any AdaptiveMutationChromosome,
+                      let op = adaptive.lastMutationOperator else { continue }
+                let reward = offspring[i].rawFitness - offspringBaselines[i]
+                policy.record(op: op, features: features, reward: reward)
+            }
+        }
+
         // Fitness sharing (niching): divide each individual's fitness by its niche count
         // to maintain multiple diverse solution clusters in the population
         if config.enableFitnessSharing {
@@ -902,6 +1049,54 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         } else {
             population.replaceGeneration(with: offspring)
         }
+    }
+
+    // MARK: - Repair Bridge
+
+    /// Run an async `ScheduleRepairer` synchronously from inside the
+    /// tight evolve loop. `HeuristicRepairer` is effectively synchronous
+    /// (no I/O, no await points beyond its entry) so the continuation
+    /// wait is microseconds; for `LLMRepairer` callers the sync bridge
+    /// is still correct but may block the background thread on the
+    /// network hop — the GA already runs on `Task.detached`, and
+    /// repair is a hot-but-bounded path, so that tradeoff is fine.
+    private func awaitSyncRepair(
+        repairer: ScheduleRepairer,
+        chromosome: ScheduleChromosome,
+        context: OptimizerContext
+    ) -> ScheduleChromosome {
+        let semaphore = DispatchSemaphore(value: 0)
+        var result = chromosome
+        let engine = ConstraintEngine.standard
+        Task.detached(priority: .userInitiated) {
+            let repaired = await repairer.repair(
+                chromosome,
+                context: context,
+                constraintEngine: engine
+            )
+            result = repaired
+            semaphore.signal()
+        }
+        semaphore.wait()
+        return result
+    }
+
+    // MARK: - Progressive-Eval Floor
+
+    /// The current "worst elite fitness" — i.e. the k-th best
+    /// individual by `rawFitness`, where k = `config.eliteCount`.
+    /// Used as the progressive-evaluation threshold: offspring that
+    /// can't even beat this floor can be scored by the early-exit
+    /// upper-bound path instead of a full evaluation. Returns nil on
+    /// empty / homogeneous populations where the concept doesn't apply.
+    private func currentWorstEliteFitness(population: Population<C>) -> Double? {
+        let k = config.eliteCount
+        guard k > 0, population.individuals.count > 0 else { return nil }
+        let sorted = population.individuals
+            .map(\.rawFitness)
+            .sorted(by: >)
+        let idx = min(k, sorted.count) - 1
+        return idx >= 0 ? sorted[idx] : nil
     }
 
     // MARK: - Archive Hooks (Novelty, MAP-Elites)
