@@ -1,6 +1,11 @@
 import SwiftUI
 
-// MARK: - Combined Assistant Settings Tab (Schedule + AI)
+// MARK: - Assistant Settings Tab (AI)
+//
+// Schedule-side settings (working hours, peak energy, lunch, learning)
+// moved to Settings → Optimizer. What remains here is purely about the
+// AI assistant: mode, key, usage, privacy — plus a one-off Backlog
+// Cleanup nudge when stale tasks pile up.
 
 struct AssistantTabView: View {
     @Environment(ReminderSettings.self) var settings
@@ -13,8 +18,6 @@ struct AssistantTabView: View {
     @State private var showSaved: Bool = false
 
     var body: some View {
-        @Bindable var service = optimizerService
-
         ScrollView {
             VStack(spacing: DS.Spacing.lg) {
 
@@ -35,111 +38,9 @@ struct AssistantTabView: View {
                     }
                 }
 
-                // ── Schedule ──
-
-                Text("Schedule")
-                    .font(.title3.weight(.semibold))
-                    .fontDesign(skin.resolvedFontDesign)
-                    .foregroundStyle(skin.resolvedTextPrimary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                SettingsPlatter("Working Hours") {
-                    Grid(alignment: .leading, verticalSpacing: DS.Spacing.md) {
-                        GridRow {
-                            Text("Start:")
-                                .gridColumnAlignment(.leading)
-                            Picker("Working hours start", selection: $service.workingHoursStart) {
-                                ForEach(0...23, id: \.self) { hour in
-                                    Text("\(hour):00").tag(hour)
-                                }
-                            }
-                            .labelsHidden()
-                            .frame(width: 100)
-                            .gridColumnAlignment(.trailing)
-                        }
-                        GridRow {
-                            Text("End:")
-                            Picker("Working hours end", selection: $service.workingHoursEnd) {
-                                ForEach(0...23, id: \.self) { hour in
-                                    Text("\(hour):00").tag(hour)
-                                }
-                            }
-                            .labelsHidden()
-                            .frame(width: 100)
-                        }
-                    }
-                }
-
-                SettingsPlatter("Your Day") {
-                    VStack(spacing: DS.Spacing.lg) {
-                        HStack {
-                            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                                Text("Peak energy hour")
-                                Text("When you're most productive")
-                                    .font(.caption)
-                                    .foregroundStyle(skin.resolvedTextSecondary)
-                            }
-                            Spacer()
-                            Picker("Peak energy hour", selection: Binding(
-                                get: { optimizerService.optimizer.preferences.peakEnergyHour },
-                                set: { optimizerService.optimizer.preferences.peakEnergyHour = $0; optimizerService.savePreferences() }
-                            )) {
-                                ForEach(0...23, id: \.self) { hour in
-                                    Text("\(hour):00").tag(hour)
-                                }
-                            }
-                            .labelsHidden()
-                            .frame(width: 100)
-                        }
-
-                        Divider()
-                            .opacity(0.3)
-
-                        HStack {
-                            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                                Text("Lunch window")
-                                Text("Keep this time free for lunch")
-                                    .font(.caption)
-                                    .foregroundStyle(skin.resolvedTextSecondary)
-                            }
-                            Spacer()
-                            HStack(spacing: DS.Spacing.sm) {
-                                Picker("Lunch window start", selection: Binding(
-                                    get: { optimizerService.optimizer.preferences.lunchWindowStart },
-                                    set: { optimizerService.optimizer.preferences.lunchWindowStart = $0; optimizerService.savePreferences() }
-                                )) {
-                                    ForEach(0...23, id: \.self) { h in
-                                        Text("\(h):00").tag(h)
-                                    }
-                                }
-                                .labelsHidden()
-                                .frame(width: 90)
-                                Text("\u{2013}")
-                                    .foregroundStyle(skin.resolvedTextSecondary)
-                                Picker("Lunch window end", selection: Binding(
-                                    get: { optimizerService.optimizer.preferences.lunchWindowEnd },
-                                    set: { optimizerService.optimizer.preferences.lunchWindowEnd = $0; optimizerService.savePreferences() }
-                                )) {
-                                    ForEach(0...23, id: \.self) { h in
-                                        Text("\(h):00").tag(h)
-                                    }
-                                }
-                                .labelsHidden()
-                                .frame(width: 90)
-                            }
-                        }
-                    }
-                }
-
-
-                // ── AI ──
-
-                Text("AI")
-                    .font(.title3.weight(.semibold))
-                    .fontDesign(skin.resolvedFontDesign)
-                    .foregroundStyle(skin.resolvedTextPrimary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, DS.Spacing.sm)
+                // Working Hours, Your Day and Learning now live in
+                // Settings → Optimizer — this tab is purely about the AI
+                // assistant (mode, key, usage, privacy).
 
                 SettingsPlatter("Mode") {
                     VStack(alignment: .leading, spacing: DS.Spacing.md) {
@@ -176,19 +77,6 @@ struct AssistantTabView: View {
 
                 SettingsPlatter("Privacy") {
                     privacySection
-                }
-
-                // ── Learning ──
-
-                SettingsPlatter("Learning") {
-                    let feedbackCount = optimizerService.optimizer.preferenceLearner.feedbackHistory.count
-                    Text("Feedback collected: \(feedbackCount) action(s)")
-                        .font(.caption)
-                        .foregroundStyle(skin.resolvedTextSecondary)
-
-                    Button("Reset Learned Preferences", role: .destructive) {
-                        optimizerService.optimizer.preferenceLearner.reset()
-                    }
                 }
             }
             .padding(DS.Spacing.xl)
