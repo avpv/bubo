@@ -3,6 +3,7 @@ import SwiftUI
 struct CalendarsTabView: View {
     @Environment(ReminderSettings.self) var settings
     @Environment(SettingsViewModel.self) var viewModel
+    @Environment(ReminderService.self) var reminderService
     @Environment(\.activeSkin) private var skin
 
     var body: some View {
@@ -26,6 +27,21 @@ struct CalendarsTabView: View {
             if viewModel.appleCalendarAccessGranted && viewModel.availableAppleCalendars.isEmpty {
                 viewModel.loadAppleCalendars()
             }
+        }
+        // Auto-sync calendar events once access is granted — without this, the
+        // popover stays empty until the next 5-minute sync-timer tick even
+        // though the user just clicked Connect. Mirrors the Reminders tab.
+        .onChange(of: viewModel.calendarAuthStatus) { _, newStatus in
+            guard newStatus == .fullAccess else { return }
+            if viewModel.availableAppleCalendars.isEmpty {
+                viewModel.loadAppleCalendars()
+            }
+            // Rebuild the shared EKEventStore so the fresh TCC grant is
+            // picked up before we read events. `requestAccess` already does
+            // this once, but onChange can fire for System-Settings grants
+            // that never routed through the in-app Connect button.
+            AppleCalendarService.shared.rebuildStore()
+            reminderService.syncNow()
         }
     }
 
