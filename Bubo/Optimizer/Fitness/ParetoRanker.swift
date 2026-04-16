@@ -139,6 +139,196 @@ struct ParetoRanker {
         return fronts
     }
 
+    /// NSGA-III-style re-ranking using reference directions. Drop-in
+    /// alternative to `rankByParetoFronts` for many-objective problems
+    /// (>3 objectives), where NSGA-II's crowding distance degenerates
+    /// because nearly every solution ends up on the first Pareto front.
+    ///
+    /// The pipeline:
+    ///   1. Non-dominated sort as usual (front indices unchanged).
+    ///   2. Normalise objectives to [0, 1] via ideal/nadir from fronts ≤ k.
+    ///   3. Generate reference directions on the (M-1)-simplex (Das–Dennis
+    ///      systematic layering).
+    ///   4. Associate each individual with its nearest reference line by
+    ///      perpendicular distance.
+    ///   5. Reward coverage: within a front, an individual attached to an
+    ///      under-populated reference direction outranks one clustered
+    ///      with many peers. This preserves Pareto-frontier *coverage*
+    ///      on problems with 4-13 objectives, which NSGA-II cannot do.
+    ///
+    /// Reference directions accept an optional `userPreference` point in
+    /// objective space — when set, the reference set is biased toward
+    /// that direction (anchored Das–Dennis). Callers surface this as a
+    /// "slider" so users can say "lean toward focus" or "lean toward
+    /// deadline adherence" without retuning weights.
+    static func rankByNSGA3(
+        _ population: inout [ScheduleChromosome],
+        evaluator: FitnessEvaluator,
+        context: OptimizerContext,
+        userPreference: [Double]? = nil,
+        divisions: Int = 4
+    ) {
+        guard population.count > 1 else { return }
+        let objectiveNames = evaluator.objectives.map(\.name)
+        let m = objectiveNames.count
+        guard m >= 2 else { return }
+
+        // Extract objective vectors identically to NSGA-II.
+        let vectors: [[Double]] = population.map { chromosome -> [Double] in
+            let cache: [String: Double]
+            if let existing = chromosome.objectiveCache, !existing.isEmpty {
+                cache = existing
+            } else {
+                cache = evaluator.objectiveBreakdown(for: chromosome, context: context)
+            }
+            return objectiveNames.map { cache[$0] ?? 0 }
+        }
+
+        // NSGA-II sort reused — front structure is identical.
+        let fronts = nonDominatedSort(vectors)
+        guard !fronts.isEmpty else { return }
+
+        // Normalise by per-objective range across the union of fronts.
+        // We invert before normalising so "higher = better" objectives
+        // look like a minimisation problem, which is what the standard
+        // NSGA-III formulation expects.
+        var minVals = [Double](repeating: .infinity, count: m)
+        var maxVals = [Double](repeating: -.infinity, count: m)
+        for v in vectors {
+            for j in 0..<m {
+                minVals[j] = min(minVals[j], v[j])
+                maxVals[j] = max(maxVals[j], v[j])
+            }
+        }
+
+        // Invert: higher rawFitness → lower "distance from ideal".
+        let normalised: [[Double]] = vectors.map { v in
+            v.enumerated().map { j, val in
+                let range = max(1e-9, maxVals[j] - minVals[j])
+                return (maxVals[j] - val) / range
+            }
+        }
+
+        // Build reference directions via Das–Dennis.
+        var references = dasDennisDirections(objectiveCount: m, divisions: max(2, divisions))
+        if let pref = userPreference, pref.count == m {
+            // Pull every reference direction toward the user preference
+            // (ε-anchoring). Simple convex blend with ε = 0.3 is enough
+            // to bias coverage without collapsing to a single direction.
+            let epsilon = 0.3
+            for i in references.indices {
+                for j in 0..<m {
+                    references[i][j] = (1 - epsilon) * references[i][j] + epsilon * pref[j]
+                }
+                // Re-normalise each direction to unit sum for consistent
+                // perpendicular-distance semantics.
+                let s = references[i].reduce(0, +)
+                if s > 0 {
+                    for j in 0..<m { references[i][j] /= s }
+                }
+            }
+        }
+
+        // Associate each individual with its nearest reference direction.
+        var association: [Int] = Array(repeating: 0, count: population.count)
+        var distanceToRef: [Double] = Array(repeating: 0.0, count: population.count)
+        for i in 0..<population.count {
+            var bestRef = 0
+            var bestDist = Double.infinity
+            for (rIdx, ref) in references.enumerated() {
+                let d = perpendicularDistance(point: normalised[i], direction: ref)
+                if d < bestDist {
+                    bestDist = d
+                    bestRef = rIdx
+                }
+            }
+            association[i] = bestRef
+            distanceToRef[i] = bestDist
+        }
+
+        // Niche counts: how many individuals are currently associated
+        // with each reference direction. Used to reward under-populated
+        // directions during the re-score.
+        var nicheCount = [Int: Int]()
+        for refIdx in association {
+            nicheCount[refIdx, default: 0] += 1
+        }
+
+        // Map (frontIndex, niche-normalised crowding) → new fitness so
+        // downstream sorting by `.fitness` produces NSGA-III order.
+        let frontCount = max(1, fronts.count)
+        for (frontIndex, indices) in fronts.enumerated() {
+            let frontBase = 1.0 - Double(frontIndex) / Double(frontCount)
+            let frontWidth = 1.0 / Double(frontCount)
+            let maxNiche = Double(nicheCount.values.max() ?? 1)
+
+            for popIdx in indices {
+                let nicheRank = Double(nicheCount[association[popIdx]] ?? 1)
+                // Coverage bonus: smaller niches score higher. Sub-niche
+                // tiebreaker is perpendicular distance (smaller = closer
+                // to the reference direction = more representative).
+                let coverageBonus = (maxNiche - nicheRank + 1) / maxNiche
+                let refProximity = max(0, 1 - distanceToRef[popIdx])
+                let bonus = 0.6 * coverageBonus + 0.4 * refProximity
+                let rescored = max(0.01, min(1.0, frontBase - frontWidth + bonus * frontWidth * 0.9))
+                population[popIdx].fitness = rescored
+                population[popIdx].needsEvaluation = false
+            }
+        }
+    }
+
+    /// Das–Dennis systematic layering on the (M−1)-simplex. Generates
+    /// `C(M + p − 1, M − 1)` directions for a given divisions parameter
+    /// `p`. For a 13-objective schedule and p=2, that's 91 directions —
+    /// plenty of coverage without exploding the niche count.
+    static func dasDennisDirections(objectiveCount m: Int, divisions p: Int) -> [[Double]] {
+        precondition(m >= 1 && p >= 1)
+        var results: [[Double]] = []
+        var current = [Int](repeating: 0, count: m)
+        generate(partial: &current, position: 0, remaining: p, out: &results, m: m)
+        return results.map { partition in
+            partition.map { Double($0) / Double(p) }
+        }
+    }
+
+    /// Recursive partition enumeration: fill `current` with non-negative
+    /// integers summing to `remaining` across `m` slots.
+    private static func generate(
+        partial: inout [Int],
+        position: Int,
+        remaining: Int,
+        out: inout [[Int]],
+        m: Int
+    ) {
+        if position == m - 1 {
+            partial[position] = remaining
+            out.append(partial)
+            return
+        }
+        for v in 0...remaining {
+            partial[position] = v
+            generate(partial: &partial, position: position + 1, remaining: remaining - v, out: &out, m: m)
+        }
+    }
+
+    /// Perpendicular distance from `point` to the line through the origin
+    /// with direction `direction`. Both arrays must have equal length.
+    /// Formula: ‖p − ((p·d)/(d·d)) · d‖₂.
+    static func perpendicularDistance(point p: [Double], direction d: [Double]) -> Double {
+        var dotPD = 0.0, dotDD = 0.0
+        for i in 0..<p.count {
+            dotPD += p[i] * d[i]
+            dotDD += d[i] * d[i]
+        }
+        let scale = dotDD > 0 ? dotPD / dotDD : 0
+        var sqSum = 0.0
+        for i in 0..<p.count {
+            let diff = p[i] - scale * d[i]
+            sqSum += diff * diff
+        }
+        return sqSum.squareRoot()
+    }
+
     /// `a` Pareto-dominates `b` iff `a` is at least as good on every
     /// objective and strictly better on at least one. "Higher is better"
     /// here because every objective is a fitness contribution in [0, 1].

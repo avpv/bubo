@@ -18,6 +18,34 @@ final class BuboOptimizer {
     private let scenarioGenerator = ScenarioGenerator()
     let reoptimizer = IncrementalReoptimizer()
 
+    /// Persistent Quality-Diversity archive. Survives across optimize()
+    /// calls so cells populated on past runs seed future ones. Reset it
+    /// explicitly when workloads change enough that historical elites
+    /// stop being useful (e.g. a calendar import).
+    let mapElitesArchive = MAPElitesArchive()
+
+    /// Persistent experience archive: remembered high-fitness schedules
+    /// bucketed by workload signature. Feeds warm-start seeds into GA
+    /// initialisation without any UI change; users see faster convergence
+    /// on days whose shape resembles something we've solved before.
+    let experienceArchive = ExperienceArchive()
+
+    /// Persistent contextual bandit over mutation operators. LinUCB
+    /// retains its per-arm model across runs because the landscape
+    /// features already encode "where in the search are we", so an
+    /// across-run stable model generalises better than resetting.
+    let contextualBandit = ContextualBandit()
+
+    /// Online fitness surrogate. Warms up mid-run from real evaluations
+    /// and then pre-ranks offspring before full evaluation. Shared
+    /// across runs so the model keeps accumulating evidence.
+    let surrogate = FitnessSurrogate()
+
+    /// Per-workload hyperparameter tuner. Consulted at run start to
+    /// propose an overridden `GAConfiguration`; trained at run end on
+    /// the observed final fitness.
+    let hyperparamTuner = HyperparamTuner()
+
     // MARK: - State
 
     private(set) var isOptimizing = false
@@ -31,6 +59,26 @@ final class BuboOptimizer {
     var gaConfig: GAConfiguration = .default
     var islandConfig: IslandConfiguration = .default
     var preferences: OptimizerPreferences = OptimizerPreferences()
+
+    /// Enable novelty + MAP-Elites + experience warm-starts in the GA.
+    /// Keeps backward-compatible defaults off; `optimize(...)` callers
+    /// can flip this on via `setSOTAAugmentations(true)`.
+    var sotaAugmentationsEnabled: Bool = false
+
+    /// Enable the full SOTA 2026 augmentations: novelty archive, MAP-Elites
+    /// QD archive, contextual bandit, surrogate pre-ranking, experience
+    /// replay, and hyperparameter self-tuning. Off by default so regression
+    /// tests keep their deterministic behaviour; apps that want the new
+    /// capabilities flip it on once at startup.
+    func setSOTAAugmentations(_ enabled: Bool) {
+        sotaAugmentationsEnabled = enabled
+        if enabled {
+            // Light-touch config bump so novelty and MAP-Elites have
+            // something to blend/admit against from the very first run.
+            if gaConfig.noveltyWeight == 0 { gaConfig.noveltyWeight = 0.15 }
+            gaConfig.enableMAPElites = true
+        }
+    }
 
     // MARK: - Full Optimization (Async)
 
@@ -53,6 +101,11 @@ final class BuboOptimizer {
         // over between optimizations because workload characteristics
         // (fixed events, movable pool, preferences) differ per run, so a
         // stale arm allocation would be actively misleading.
+        //
+        // When SOTA augmentations are enabled, long-lived archives
+        // (novelty, MAP-Elites, experience, contextual bandit, surrogate)
+        // thread through the context so their state survives across runs.
+        let augmented = sotaAugmentationsEnabled
         let adjustedContext = OptimizerContext(
             fixedEvents: context.fixedEvents,
             movableEvents: context.movableEvents,
@@ -62,13 +115,39 @@ final class BuboOptimizer {
             participantAvailability: context.participantAvailability,
             calendar: context.calendar,
             rng: context.rng,
-            mutationBandit: MutationBandit()
+            mutationBandit: MutationBandit(),
+            contextualBandit: augmented ? contextualBandit : nil,
+            noveltyArchive: augmented ? NoveltyArchive() : nil,
+            mapElitesArchive: augmented ? mapElitesArchive : nil,
+            surrogate: augmented ? surrogate : nil,
+            experienceArchive: augmented ? experienceArchive : nil
         )
 
         let evaluator = FitnessEvaluator.standard(preferences: prefs)
-        let config = overrideConfig ?? gaConfig
+
+        // Hyperparameter tuner proposal: when enabled and history exists,
+        // swap a tuned config in for this workload. Base config is still
+        // used when `overrideConfig` is set — explicit caller intent wins
+        // over automated tuning.
+        let baseConfig = overrideConfig ?? gaConfig
+        let config: GAConfiguration
+        let signature = WorkloadSignature(context: adjustedContext)
+        if augmented && overrideConfig == nil {
+            config = hyperparamTuner.proposeConfig(
+                base: baseConfig,
+                signature: signature,
+                rng: adjustedContext.rng
+            )
+        } else {
+            config = baseConfig
+        }
+
         let capturedIslandConfig = overrideIslandConfig ?? islandConfig
         let scenGen = scenarioGenerator
+        let capturedTuner = hyperparamTuner
+        let capturedSignature = signature
+        let capturedConfig = config
+        let capturedAugmented = augmented
 
         // Run island model GA on background thread
         let (population, convergenceGen, duration) = await Task.detached(priority: .userInitiated) {
@@ -76,7 +155,7 @@ final class BuboOptimizer {
 
             let islandGA = IslandModelGA<ScheduleChromosome>(
                 islandConfig: capturedIslandConfig,
-                baseConfig: config,
+                baseConfig: capturedConfig,
                 context: adjustedContext,
                 evaluate: { chromosome in
                     evaluator.evaluateAndAssign(&chromosome, context: adjustedContext)
@@ -85,6 +164,18 @@ final class BuboOptimizer {
 
             let pop = islandGA.run()
             let elapsed = Date().timeIntervalSince(startTime)
+
+            // Record the run's best observed fitness against the
+            // hyperparameters that produced it so the next equivalent
+            // workload benefits from the tuner's accumulated knowledge.
+            if capturedAugmented, let bestFitness = pop.first?.rawFitness {
+                capturedTuner.record(
+                    signature: capturedSignature,
+                    config: capturedConfig,
+                    fitness: bestFitness
+                )
+            }
+
             return (pop, islandGA.convergenceGeneration, elapsed)
         }.value
 
@@ -140,6 +231,7 @@ final class BuboOptimizer {
         var prefs = context.preferences
         preferenceLearner.applyToPreferences(&prefs)
 
+        let augmented = sotaAugmentationsEnabled
         let adjustedContext = OptimizerContext(
             fixedEvents: context.fixedEvents,
             movableEvents: context.movableEvents,
@@ -149,13 +241,22 @@ final class BuboOptimizer {
             participantAvailability: context.participantAvailability,
             calendar: context.calendar,
             rng: context.rng,
-            mutationBandit: MutationBandit()
+            mutationBandit: MutationBandit(),
+            contextualBandit: augmented ? contextualBandit : nil,
+            noveltyArchive: augmented ? NoveltyArchive() : nil,
+            mapElitesArchive: augmented ? mapElitesArchive : nil,
+            surrogate: augmented ? surrogate : nil,
+            experienceArchive: augmented ? experienceArchive : nil
         )
 
         let evaluator = FitnessEvaluator.standard(preferences: prefs)
         let config = overrideConfig ?? gaConfig
         let capturedIslandConfig = overrideIslandConfig ?? islandConfig
         let scenGen = scenarioGenerator
+        // NSGA-III kicks in automatically when the objective count passes
+        // the threshold where NSGA-II's crowding distance loses signal (4+).
+        // Under that threshold the tried-and-tested NSGA-II path is used.
+        let useNSGA3 = augmented && evaluator.objectives.count >= 4
 
         let (population, convergenceGen, duration) = await Task.detached(priority: .userInitiated) {
             let startTime = Date()
@@ -171,7 +272,11 @@ final class BuboOptimizer {
             // Post-hoc Pareto re-ranking. Rewrites `.fitness` on every
             // individual so scenario generation sees the Pareto-adjusted
             // ordering instead of the weighted-sum one.
-            ParetoRanker.rankByParetoFronts(&pop, evaluator: evaluator, context: adjustedContext)
+            if useNSGA3 {
+                ParetoRanker.rankByNSGA3(&pop, evaluator: evaluator, context: adjustedContext)
+            } else {
+                ParetoRanker.rankByParetoFronts(&pop, evaluator: evaluator, context: adjustedContext)
+            }
             pop.sort { $0.fitness > $1.fitness }
             let elapsed = Date().timeIntervalSince(startTime)
             return (pop, islandGA.convergenceGeneration, elapsed)

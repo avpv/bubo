@@ -15,7 +15,19 @@ import Foundation
 /// schedules that differ by sub-second noise really do produce identical
 /// fitness because every objective operates on minute-level aggregates.
 struct ChromosomeFingerprint: Hashable {
-    /// One entry per gene, in positional order.
+    /// One entry per gene, in *canonical* order (sorted by eventId).
+    ///
+    /// Canonicalisation breaks positional symmetry: two chromosomes whose
+    /// genes are permutations of each other (same {eventId, startMinute,
+    /// isIncluded} triples in different array slots) collapse to the same
+    /// key and therefore share a cache entry. The GA itself preserves
+    /// gene order across crossover and mutation, so this only fires for
+    /// semantically-equivalent schedules that arrived via different
+    /// lineages — which is exactly when we want a cache hit.
+    ///
+    /// The sort key is `eventId`, a stable UUID-shaped string, so the
+    /// canonicalised order is deterministic and never depends on the
+    /// order in which a gene was originally inserted.
     let entries: [Entry]
 
     struct Entry: Hashable {
@@ -25,11 +37,11 @@ struct ChromosomeFingerprint: Hashable {
     }
 
     init(_ genes: [ScheduleGene]) {
-        self.entries = genes.map { gene in
-            // `Date.timeIntervalSinceReferenceDate` is seconds since 2001-01-01;
-            // rounding to minutes fits in Int64 for all practical dates and
-            // makes the key deterministic across mutation → repair round-trips
-            // that might produce e.g. 1e-12 differences.
+        // Build then sort. `sorted(by:)` on small arrays (typical schedule
+        // sizes 5-50 genes) is on the order of microseconds and happens
+        // at most once per evaluation — negligible next to the evaluator
+        // cost it enables memoising away on duplicate hits.
+        let raw = genes.map { gene -> Entry in
             let minute = Int64((gene.startTime.timeIntervalSinceReferenceDate / 60.0).rounded())
             return Entry(
                 eventId: gene.eventId,
@@ -37,6 +49,7 @@ struct ChromosomeFingerprint: Hashable {
                 isIncluded: gene.isIncluded
             )
         }
+        self.entries = raw.sorted { $0.eventId < $1.eventId }
     }
 }
 

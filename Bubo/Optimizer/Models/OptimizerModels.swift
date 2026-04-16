@@ -83,6 +83,15 @@ struct ScheduleGene: Codable, Hashable, Sendable {
     let isDroppable: Bool           // whether the GA may exclude this gene
     var isIncluded: Bool            // whether this gene is active in the schedule
 
+    /// Frozen-region flag. When true, the gene is pinned at its current
+    /// `startTime` — `mutate()` skips it, `repair()` ignores it for
+    /// relocation (but still uses it as an overlap constraint for other
+    /// genes), and crossover preserves the locked slot rather than swapping
+    /// in a partner's value. Populated by `IncrementalReoptimizer` for
+    /// ruin-and-recreate reflows where only a subset of events should
+    /// move. Default `false` keeps prior behaviour intact.
+    var isLocked: Bool
+
     var endTime: Date { startTime.addingTimeInterval(duration) }
 
     init(
@@ -96,7 +105,8 @@ struct ScheduleGene: Codable, Hashable, Sendable {
         isFocusBlock: Bool,
         storyPoints: Int? = nil,
         isDroppable: Bool = false,
-        isIncluded: Bool = true
+        isIncluded: Bool = true,
+        isLocked: Bool = false
     ) {
         self.eventId = eventId
         self.title = title
@@ -109,11 +119,15 @@ struct ScheduleGene: Codable, Hashable, Sendable {
         self.storyPoints = storyPoints
         self.isDroppable = isDroppable
         self.isIncluded = isIncluded
+        self.isLocked = isLocked
     }
 
     /// Create a copy with a new start time (preserves all other fields).
+    /// Locked genes return `self` unchanged — reflects the pin semantics
+    /// at the value-type level so callers can't accidentally move them.
     func withStartTime(_ newStart: Date) -> ScheduleGene {
-        ScheduleGene(
+        guard !isLocked else { return self }
+        return ScheduleGene(
             eventId: eventId,
             title: title,
             startTime: newStart,
@@ -124,7 +138,8 @@ struct ScheduleGene: Codable, Hashable, Sendable {
             isFocusBlock: isFocusBlock,
             storyPoints: storyPoints,
             isDroppable: isDroppable,
-            isIncluded: isIncluded
+            isIncluded: isIncluded,
+            isLocked: isLocked
         )
     }
 }
@@ -156,6 +171,36 @@ struct OptimizerContext: Sendable {
     /// reward statistics accumulate.
     let mutationBandit: MutationBandit?
 
+    /// Optional contextual (LinUCB-style) bandit. When set, it supersedes
+    /// `mutationBandit` for operator selection: features like diversity,
+    /// generation progress, and conflict rate are passed in, and the bandit
+    /// picks an operator conditional on that landscape state. Nil = use
+    /// the simpler stateless `mutationBandit` (or uniform random when both
+    /// are nil). Shared across a run the same way `mutationBandit` is.
+    let contextualBandit: ContextualBandit?
+
+    /// Optional novelty archive. When present, the GA's effective fitness
+    /// blends rawFitness with a k-NN novelty score in behaviour-descriptor
+    /// space (see `NoveltyArchive`). Nil = pure fitness selection.
+    let noveltyArchive: NoveltyArchive?
+
+    /// Optional Quality-Diversity archive. Every evaluated chromosome is
+    /// offered for archival; initial populations can pull warm-start elites
+    /// from it via `MAPElitesArchive.sampleSeeds`. Nil = single-best GA.
+    let mapElitesArchive: MAPElitesArchive?
+
+    /// Optional surrogate model used by Surrogate-Assisted Evolution. When
+    /// set, the GA pre-filters offspring through the surrogate before full
+    /// evaluation; only top-K by predicted fitness + a small exploration
+    /// bonus are sent to the real evaluator. Nil = evaluate everything
+    /// (pre-existing behaviour).
+    let surrogate: FitnessSurrogate?
+
+    /// Optional experience archive — a persistent store of high-fitness
+    /// chromosomes keyed by workload signature, consulted for warm-start
+    /// seeding at the beginning of a new run. Nil = cold start every time.
+    let experienceArchive: ExperienceArchive?
+
     init(
         fixedEvents: [CalendarEvent] = [],
         movableEvents: [OptimizableEvent] = [],
@@ -168,7 +213,12 @@ struct OptimizerContext: Sendable {
         participantAvailability: [String: [DateInterval]] = [:],
         calendar: Calendar = .current,
         rng: GARandom = GARandom(),
-        mutationBandit: MutationBandit? = nil
+        mutationBandit: MutationBandit? = nil,
+        contextualBandit: ContextualBandit? = nil,
+        noveltyArchive: NoveltyArchive? = nil,
+        mapElitesArchive: MAPElitesArchive? = nil,
+        surrogate: FitnessSurrogate? = nil,
+        experienceArchive: ExperienceArchive? = nil
     ) {
         self.fixedEvents = fixedEvents
         self.movableEvents = movableEvents
@@ -179,6 +229,11 @@ struct OptimizerContext: Sendable {
         self.calendar = calendar
         self.rng = rng
         self.mutationBandit = mutationBandit
+        self.contextualBandit = contextualBandit
+        self.noveltyArchive = noveltyArchive
+        self.mapElitesArchive = mapElitesArchive
+        self.surrogate = surrogate
+        self.experienceArchive = experienceArchive
     }
 }
 

@@ -207,6 +207,13 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
     private(set) var bestEver: C?
     private(set) var convergenceGeneration: Int = 0
 
+    /// Anytime deadline plumbed from `run(deadline:)`/`runSeeded(with:deadline:)`
+    /// into the shared `evolveIslands` loop. Held on the instance (rather than
+    /// passed as a parameter) because `run()` already calls into `evolveIslands`
+    /// via an unsplit code path and adding a parameter would ripple through
+    /// every test callsite. Reset to nil once the run returns.
+    private var deadline: Date?
+
     init(
         islandConfig: IslandConfiguration = .default,
         baseConfig: GAConfiguration = .thorough,
@@ -224,7 +231,10 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
     // MARK: - Run
 
     /// Run the island model GA and return the combined final population (sorted by fitness).
-    func run() -> [C] {
+    /// - Parameter deadline: optional anytime cut-off. See `GeneticAlgorithm.run(deadline:)`.
+    func run(deadline: Date? = nil) -> [C] {
+        self.deadline = deadline
+        defer { self.deadline = nil }
         precondition(islandConfig.islandCount >= 1, "IslandModelGA requires at least 1 island")
         precondition(islandConfig.migrationInterval >= 1, "migrationInterval must be >= 1")
         precondition(baseConfig.populationSize >= baseConfig.eliteCount + 2,
@@ -292,7 +302,12 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             participantAvailability: context.participantAvailability,
             calendar: context.calendar,
             rng: context.rng.split(),
-            mutationBandit: context.mutationBandit
+            mutationBandit: context.mutationBandit,
+            contextualBandit: context.contextualBandit,
+            noveltyArchive: context.noveltyArchive,
+            mapElitesArchive: context.mapElitesArchive,
+            surrogate: context.surrogate,
+            experienceArchive: context.experienceArchive
         )
     }
 
@@ -301,7 +316,10 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
     /// Run the island model GA seeded with existing individuals (for warm-start re-optimization).
     /// Seeds are distributed across islands round-robin so every island gets warm-start
     /// material. Remaining slots per island are filled with random individuals.
-    func runSeeded(with seed: [C]) -> [C] {
+    /// - Parameter deadline: optional anytime cut-off. See `GeneticAlgorithm.run(deadline:)`.
+    func runSeeded(with seed: [C], deadline: Date? = nil) -> [C] {
+        self.deadline = deadline
+        defer { self.deadline = nil }
         precondition(islandConfig.islandCount >= 1, "IslandModelGA requires at least 1 island")
         precondition(islandConfig.migrationInterval >= 1, "migrationInterval must be >= 1")
         precondition(baseConfig.populationSize >= baseConfig.eliteCount + 2,
@@ -360,7 +378,13 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         var effectiveSize = islandConfig.migrationSize
         var lastCrossDiversity: CrossIslandDiversity?
 
+        @inline(__always) func deadlineReached() -> Bool {
+            guard let deadline else { return false }
+            return Date() >= deadline
+        }
+
         for generation in 0..<totalGenerations {
+            if deadlineReached() { break }
             // Evolve each island for one generation in parallel.
             // Each Island is a reference type, so concurrent access to separate
             // instances is safe. parallelEvaluation=false avoids nested concurrentPerform.
@@ -481,10 +505,12 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         // Hill climb on top individuals (reuse GA's hill climbing). Sort by
         // rawFitness since some islands may have fitness sharing enabled,
         // which would bias selection of climb candidates toward sparse niches.
+        // Respect the anytime deadline — skip the final polish when time's up.
         combined.sort { $0.rawFitness > $1.rawFitness }
         let refineCount = min(baseConfig.eliteCount * 2, combined.count)
         let refiner = islands[0].ga
         for i in 0..<refineCount {
+            if deadlineReached() { break }
             combined[i] = refiner.hillClimb(combined[i], steps: 20)
         }
 

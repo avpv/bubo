@@ -14,6 +14,18 @@ enum CrossoverStrategy: Sendable {
     /// independent for each day, so children still explore the combinatorial
     /// space of day-sized recombinations.
     case dayBlock
+
+    /// Differential evolution recombination on the time-offset dimension:
+    ///     child.startTime = p1.startTime + F · (p2.startTime − p1.startTime)
+    /// where F is a scaling factor ∈ (0, 1]. Unlike categorical crossover
+    /// strategies, DE exploits the fact that "10am ±15min" is a continuous
+    /// neighbourhood — the child's time is a genuine interpolation between
+    /// parents rather than a pick-one-or-the-other swap. Each gene's
+    /// interpolation is sampled independently with probability CR
+    /// (crossover rate), otherwise the child keeps parent 1's slot. F and
+    /// CR ship with literature-standard defaults (F=0.5, CR=0.9) so the
+    /// call site stays ergonomic; override for more exploration.
+    case differentialEvolution(F: Double, CR: Double)
 }
 
 // MARK: - Crossover
@@ -37,7 +49,94 @@ enum Crossover {
             return uniformCrossover(parent1, parent2, swapProbability: prob, rng: context.rng)
         case .dayBlock:
             return dayBlockCrossover(parent1, parent2, context: context)
+        case .differentialEvolution(let F, let CR):
+            return differentialEvolutionCrossover(parent1, parent2, F: F, CR: CR, context: context)
         }
+    }
+
+    // MARK: - Differential Evolution Crossover
+
+    /// DE/rand/1-style arithmetic recombination on the time dimension. For
+    /// each positionally-aligned gene pair we sample a decision r ∈ [0, 1]:
+    ///
+    ///   r < CR →  child1.startTime = p1.startTime + F · (p2 − p1)
+    ///             child2.startTime = p2.startTime − F · (p2 − p1)
+    ///   r ≥ CR →  children keep their primary parent's slot
+    ///
+    /// The resulting time is then clamped to working hours and the floor
+    /// (earliest-start / horizon bounds), so infeasible extrapolations are
+    /// snapped to the nearest legal position. Compared with positional
+    /// swaps, DE lets the GA refine minute-level offsets without spending
+    /// an entire `mutate()` call — especially useful late in evolution
+    /// when the population has locked onto a structural layout and only
+    /// the exact minute is still under search.
+    ///
+    /// Locked genes are returned verbatim; `withStartTime` on a locked
+    /// gene already no-ops, but explicit handling here keeps the code
+    /// path obvious for future readers.
+    private static func differentialEvolutionCrossover(
+        _ p1: ScheduleChromosome,
+        _ p2: ScheduleChromosome,
+        F: Double,
+        CR: Double,
+        context: OptimizerContext
+    ) -> (ScheduleChromosome, ScheduleChromosome) {
+        guard p1.genes.count == p2.genes.count, !p1.genes.isEmpty else {
+            return (p1, p2)
+        }
+        let rng = context.rng
+        let cal = context.calendar
+        let horizonStart = context.planningHorizon.start
+        let clampedF = min(1.0, max(0.05, F))
+        let clampedCR = min(1.0, max(0.0, CR))
+
+        var child1Genes = p1.genes
+        var child2Genes = p2.genes
+
+        for i in p1.genes.indices {
+            guard p1.genes[i].eventId == p2.genes[i].eventId else { continue }
+            if p1.genes[i].isLocked || p2.genes[i].isLocked { continue }
+            guard rng.double(in: 0.0...1.0) < clampedCR else { continue }
+
+            let t1 = p1.genes[i].startTime.timeIntervalSinceReferenceDate
+            let t2 = p2.genes[i].startTime.timeIntervalSinceReferenceDate
+            let delta = t2 - t1
+
+            // Symmetric pair: one child interpolates toward p2, the other
+            // extrapolates away. DE's hallmark — forwards *and* backwards
+            // step so the offspring cover both sides of the parent line.
+            let blended1 = Date(timeIntervalSinceReferenceDate: t1 + clampedF * delta)
+            let blended2 = Date(timeIntervalSinceReferenceDate: t2 - clampedF * delta)
+
+            // Floor per event so dependencies/earliestStart aren't violated
+            // by the arithmetic. Subsequent repair() finalises feasibility.
+            let event = context.movableEvents.first { $0.id == p1.genes[i].eventId }
+            let earliest = event?.earliestStart
+            let floor = [horizonStart, earliest].compactMap { $0 }.max() ?? horizonStart
+
+            let c1Start = clampToWorkingHours(
+                max(blended1, floor),
+                duration: p1.genes[i].duration,
+                workingHours: context.workingHours,
+                calendar: cal,
+                floor: floor
+            )
+            let c2Start = clampToWorkingHours(
+                max(blended2, floor),
+                duration: p2.genes[i].duration,
+                workingHours: context.workingHours,
+                calendar: cal,
+                floor: floor
+            )
+
+            child1Genes[i] = p1.genes[i].withStartTime(c1Start)
+            child2Genes[i] = p2.genes[i].withStartTime(c2Start)
+        }
+
+        return (
+            ScheduleChromosome.makeChild(genes: child1Genes, parents: (p1, p2), rng: rng),
+            ScheduleChromosome.makeChild(genes: child2Genes, parents: (p2, p1), rng: rng)
+        )
     }
 
     // MARK: - Two-Point Crossover

@@ -429,6 +429,82 @@ final class FitnessEvaluator: @unchecked Sendable {
         return (result.fitness, result.objectiveCache)
     }
 
+    // MARK: - Progressive / Racing Evaluation
+
+    /// Evaluate objectives in order of weight (heaviest first) and stop
+    /// early once the partial weighted sum plus the best remaining
+    /// contribution can no longer beat `threshold`. Returns a lower
+    /// bound of the chromosome's fitness. When the evaluation completes
+    /// without pruning, the returned bound equals the exact fitness.
+    ///
+    /// Used by selection-racing paths that need "is this clearly worse
+    /// than the current worst elite?" without paying for the full
+    /// objective set. Callers pass the current elite floor as
+    /// `threshold`; a chromosome that can't reach the threshold is
+    /// discarded before the tail objectives ever run.
+    ///
+    /// This is a Monte-Carlo racing technique (F-Race family) adapted
+    /// to the single-point case. Feasibility constraints still run in
+    /// full up front because skipping them would let infeasible
+    /// chromosomes masquerade as feasible on partial scores.
+    func progressiveEvaluate(
+        chromosome: ScheduleChromosome,
+        context: OptimizerContext,
+        threshold: Double
+    ) -> Double {
+        // Constraints up front: infeasibility short-circuits as in the
+        // full-fat path, so the prune check below is always computing
+        // against a feasible partial score.
+        if !constraintEngine.isValid(chromosome, context: context) {
+            let hardPenalty = constraintEngine.constraints
+                .filter { $0.isHard }
+                .reduce(0.0) { $0 + $1.penalty(for: chromosome, context: context) }
+            return 0.09 / (1.0 + hardPenalty * 0.01)
+        }
+
+        let softPenalty = constraintEngine.constraints
+            .filter { !$0.isHard }
+            .reduce(0.0) { $0 + $1.penalty(for: chromosome, context: context) }
+
+        let totalWeight = objectives.reduce(0.0) { $0 + $1.weight }
+        guard totalWeight > 0 else { return 0.1 }
+
+        // Sort objectives by weight descending so the pruner sees the
+        // highest-signal scores first. Ties keep insertion order for
+        // reproducibility.
+        let ordered = objectives.enumerated()
+            .sorted { $0.element.weight > $1.element.weight }
+            .map(\.element)
+
+        var weightedSum = 0.0
+        var remainingWeight = totalWeight
+
+        for (idx, objective) in ordered.enumerated() {
+            let score = max(0, min(1, objective.evaluate(chromosome: chromosome, context: context)))
+            weightedSum += score * objective.weight
+            remainingWeight -= objective.weight
+
+            // Upper bound on the final fitness assuming every remaining
+            // objective scores a perfect 1.0. If even that can't beat
+            // the threshold, prune.
+            let maxPossible = (weightedSum + remainingWeight) / totalWeight
+            let penaltyFactor = 1.0 / (1.0 + softPenalty * 0.01)
+            let upperBound = 0.1 + maxPossible * penaltyFactor * 0.9
+
+            if upperBound < threshold && idx < ordered.count - 1 {
+                // Prune: return the current (pessimistic) lower bound so
+                // downstream comparisons treat this individual as worse
+                // than the threshold without a re-eval.
+                let lower = (weightedSum + 0.0) / totalWeight
+                return 0.1 + lower * penaltyFactor * 0.9
+            }
+        }
+
+        let normalizedScore = weightedSum / totalWeight
+        let penaltyFactor = 1.0 / (1.0 + softPenalty * 0.01)
+        return 0.1 + normalizedScore * penaltyFactor * 0.9
+    }
+
     /// Detailed breakdown of all objective scores (clamped to [0, 1]).
     func objectiveBreakdown(
         for chromosome: ScheduleChromosome,

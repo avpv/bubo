@@ -403,10 +403,26 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         // variation would make the reward signal harder to attribute. Without
         // a bandit, we keep the per-gene uniform-random behaviour so existing
         // runs produce the same distribution of mutations.
-        let bandedOperator: MutationOperator? = context.mutationBandit?.select(rng: context.rng)
+        //
+        // Contextual bandit takes precedence when present. It consumes the
+        // most recently published landscape features; the GA loop refreshes
+        // those before each generation via `ContextualBandit.publish`. When
+        // no features have been published yet we fall back to the stateless
+        // `mutationBandit`, which in turn falls back to uniform.
+        let bandedOperator: MutationOperator?
+        if let ctxBandit = context.contextualBandit,
+           let features = ctxBandit.currentFeatures {
+            bandedOperator = ctxBandit.select(features: features, rng: context.rng)
+        } else {
+            bandedOperator = context.mutationBandit?.select(rng: context.rng)
+        }
         lastMutationOperator = bandedOperator
 
         for i in genes.indices {
+            // Locked genes are pinned by the caller (frozen-region reflow)
+            // and must not move under any mutation operator.
+            if genes[i].isLocked { continue }
+
             guard context.rng.bool(probability: effectiveRate) else { continue }
 
             changed.insert(i)
@@ -477,11 +493,147 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 ) {
                     genes[i] = genes[i].withStartTime(freeStart)
                 }
+            case 4:
+                // Large-Neighbourhood Search: ruin this gene's day and
+                // recreate the placements greedily. See `applyLNSStep`.
+                // Reads/writes `genes` at multiple indices, so we mark the
+                // full day as changed once the step completes rather than
+                // tracking individual writes.
+                let touched = applyLNSStep(pivotIndex: i, context: context)
+                for t in touched { changed.insert(t) }
             default:
                 break
             }
         }
         mutatedGeneIndices = changed.isEmpty ? nil : changed
+    }
+
+    // MARK: - LNS Helper
+
+    /// Destroy + rebuild the day containing `pivotIndex`: collect every
+    /// non-locked included gene on that day, sort by priority descending,
+    /// and place each into the first feasible gap using the same
+    /// scan-the-day logic as `greedy`. Fixed events and locked siblings
+    /// on the same day act as hard blockers, so the rebuild stays feasible
+    /// by construction — no repair pass needed afterwards in the common
+    /// case (repair is still invoked by the caller as a safety net).
+    ///
+    /// Returns the set of indices whose genes were rewritten, so
+    /// `mutatedGeneIndices` stays accurate and downstream delta evaluation
+    /// rescans only the affected days.
+    mutating func applyLNSStep(pivotIndex: Int, context: OptimizerContext) -> Set<Int> {
+        let cal = context.calendar
+        let pivotDay = cal.startOfDay(for: genes[pivotIndex].startTime)
+        let horizonStart = context.planningHorizon.start
+
+        // Partition the day's genes: locked/excluded stay in place,
+        // everything else gets torn down and re-placed.
+        var dayIndices: [Int] = []
+        for i in genes.indices where genes[i].isIncluded && !genes[i].isLocked {
+            if cal.isDate(genes[i].startTime, inSameDayAs: pivotDay) {
+                dayIndices.append(i)
+            }
+        }
+        guard !dayIndices.isEmpty else { return [] }
+
+        // Sort indices by priority descending so high-value events get
+        // first pick of the day's slots. Stable tiebreaker by earliest
+        // deadline (falling back to shortest duration) mirrors the greedy
+        // initialiser so LNS lands on the same structural decisions the
+        // greedy seed would have.
+        dayIndices.sort { a, b in
+            if genes[a].priority != genes[b].priority {
+                return genes[a].priority > genes[b].priority
+            }
+            return genes[a].duration < genes[b].duration
+        }
+
+        // Collect the day's immovable obstacles: fixed events and any
+        // locked gene that happens to live on this day.
+        var occupied: [(start: Date, end: Date)] = []
+        for event in context.fixedEvents {
+            if cal.isDate(event.startDate, inSameDayAs: pivotDay) {
+                occupied.append((event.startDate, event.endDate))
+            }
+        }
+        for i in genes.indices where genes[i].isLocked && genes[i].isIncluded {
+            if cal.isDate(genes[i].startTime, inSameDayAs: pivotDay) {
+                occupied.append((genes[i].startTime, genes[i].endTime))
+            }
+        }
+        // Other days' genes we leave alone, but we still respect them when
+        // the pivot day's events overflow — rebuild targets this day only.
+
+        occupied.sort { $0.start < $1.start }
+
+        var touched: Set<Int> = []
+        for idx in dayIndices {
+            let duration = genes[idx].duration
+            let event = context.movableEvents.first { $0.id == genes[idx].eventId }
+            let earliest = event?.earliestStart
+            let floor = [horizonStart, earliest].compactMap { $0 }.max() ?? horizonStart
+            let preferredHours = event?.preferredHourRange ?? context.workingHours
+
+            // First-fit scan within the working window of the pivot day.
+            let bounds = dayWorkingBounds(
+                day: pivotDay,
+                hours: preferredHours,
+                fallback: context.workingHours,
+                cal: cal
+            )
+            guard let (dayStart, dayEnd) = bounds else { continue }
+
+            var candidate = max(dayStart, floor)
+            let latestStart = dayEnd.addingTimeInterval(-duration)
+            var placed: Date?
+
+            while candidate <= latestStart {
+                let candEnd = candidate.addingTimeInterval(duration)
+                let overlap = occupied.first { occ in
+                    candidate < occ.end && candEnd > occ.start
+                }
+                if let overlap {
+                    // Jump past the blocker, minimum 15-minute step to
+                    // avoid pathological infinite loops on zero-width
+                    // overlaps.
+                    let next = overlap.end > candidate ? overlap.end : candidate.addingTimeInterval(900)
+                    candidate = next
+                    continue
+                }
+                placed = candidate
+                break
+            }
+
+            if let placed {
+                genes[idx] = genes[idx].withStartTime(placed)
+                occupied.append((placed, placed.addingTimeInterval(duration)))
+                occupied.sort { $0.start < $1.start }
+                touched.insert(idx)
+            }
+            // If nothing fits we leave the gene where it was; repair() will
+            // have another go with the full horizon.
+        }
+
+        return touched
+    }
+
+    /// Clamp the preferred range to the global working hours and return
+    /// the concrete (start, end) dates for a single day. Returns nil when
+    /// the preferred window is empty or the date arithmetic fails.
+    private func dayWorkingBounds(
+        day: Date,
+        hours: ClosedRange<Int>,
+        fallback: ClosedRange<Int>,
+        cal: Calendar
+    ) -> (start: Date, end: Date)? {
+        let lower = max(hours.lowerBound, fallback.lowerBound)
+        let upper = min(hours.upperBound, fallback.upperBound)
+        guard lower < upper else { return nil }
+        guard let s = cal.date(bySettingHour: lower, minute: 0, second: 0, of: day),
+              let e = cal.date(bySettingHour: upper, minute: 0, second: 0, of: day) else {
+            return nil
+        }
+        return (s, e)
     }
 
     // MARK: - Guided Mutation Helpers
@@ -551,8 +703,12 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         let cal = context.calendar
         let horizonStart = context.planningHorizon.start
 
-        // Pass 1: Clamp to working hours and planning horizon
-        for i in genes.indices where genes[i].isIncluded {
+        // Pass 1: Clamp to working hours and planning horizon. Locked
+        // genes are skipped — the caller has explicitly pinned them, and
+        // repair must honour that even when the pin lands outside the
+        // working hours (the frozen region may legitimately include,
+        // e.g., an already-started meeting).
+        for i in genes.indices where genes[i].isIncluded && !genes[i].isLocked {
             let event = context.movableEvents.first { $0.id == genes[i].eventId }
             let earliest = event?.earliestStart
             let floor = [horizonStart, earliest].compactMap { $0 }.max() ?? horizonStart
@@ -578,6 +734,18 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
 
         for idx in sortedIndices {
             let gene = genes[idx]
+
+            // Locked genes are fixed points for the repair pass — we
+            // never relocate them, but we do register them as occupied so
+            // unlocked siblings respect their slots. This is the core of
+            // the frozen-region contract: the pinned gene's overlap is
+            // still a binding constraint on everyone else.
+            if gene.isLocked {
+                occupied.append((gene.startTime, gene.endTime))
+                occupied.sort { $0.start < $1.start }
+                continue
+            }
+
             let event = context.movableEvents.first { $0.id == gene.eventId }
             let earliest = event?.earliestStart
             var floor = [horizonStart, earliest].compactMap { $0 }.max() ?? horizonStart

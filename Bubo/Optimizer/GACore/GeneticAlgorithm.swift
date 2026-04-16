@@ -92,6 +92,20 @@ struct GAConfiguration: Sendable {
     /// tuning of `mutationRate` per workload.
     var selfAdaptiveRates: Bool
 
+    /// Blend raw fitness with behaviour-space novelty to escape deceptive
+    /// local optima. 0 = pure fitness (legacy behaviour); values in
+    /// (0, 1] pull selection pressure toward schedules that occupy sparse
+    /// regions of `BehaviorDescriptor` space. 0.2 is a standard starting
+    /// point from the novelty-search literature. Requires
+    /// `context.noveltyArchive` to be set, otherwise the weight is ignored.
+    var noveltyWeight: Double
+
+    /// Enable Quality-Diversity via `MAPElitesArchive`. When set, every
+    /// evaluated chromosome is offered to the archive, and (when seeded)
+    /// the initial population draws elites from it for warm-start. Ignored
+    /// when `context.mapElitesArchive` is nil.
+    var enableMAPElites: Bool
+
     /// Memberwise init with defaults for new parameters so existing call sites compile unchanged.
     init(
         populationSize: Int,
@@ -121,7 +135,9 @@ struct GAConfiguration: Sendable {
         chcMaxRestarts: Int = 0,
         chcRestartEliteFraction: Double = 0.15,
         chcRestartMutationRate: Double = 0.35,
-        selfAdaptiveRates: Bool = false
+        selfAdaptiveRates: Bool = false,
+        noveltyWeight: Double = 0.0,
+        enableMAPElites: Bool = false
     ) {
         self.populationSize = populationSize
         self.maxGenerations = maxGenerations
@@ -151,6 +167,8 @@ struct GAConfiguration: Sendable {
         self.chcRestartEliteFraction = chcRestartEliteFraction
         self.chcRestartMutationRate = chcRestartMutationRate
         self.selfAdaptiveRates = selfAdaptiveRates
+        self.noveltyWeight = noveltyWeight
+        self.enableMAPElites = enableMAPElites
     }
 
     static let `default` = GAConfiguration(
@@ -322,13 +340,23 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
     }
 
     /// Run the full GA and return the final population (sorted by fitness).
-    func run() -> [C] {
+    ///
+    /// - Parameter deadline: optional anytime cut-off. When set, the main
+    ///   evolution loop exits at the first generation boundary past the
+    ///   deadline and returns the best-so-far population. This gives UI
+    ///   callers a hard latency SLA instead of a probabilistic
+    ///   "maxGenerations or convergence" stopping rule. Memetic hill climb,
+    ///   CHC restart, and final-pass refinement all respect the deadline too
+    ///   — whichever budget runs out first wins. Default `nil` = pre-existing
+    ///   generation-bound behaviour.
+    func run(deadline: Date? = nil) -> [C] {
         var population = createInitialPopulation()
-        return evolve(&population)
+        return evolve(&population, deadline: deadline)
     }
 
     /// Run the GA seeded with an existing population (for incremental re-optimization).
-    func runSeeded(with seed: [C]) -> [C] {
+    /// - Parameter deadline: see `run(deadline:)`.
+    func runSeeded(with seed: [C], deadline: Date? = nil) -> [C] {
         var population = Population<C>(
             individuals: seed,
             eliteCount: config.eliteCount
@@ -341,18 +369,71 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             population.individuals.append(individual)
         }
 
-        return evolve(&population)
+        return evolve(&population, deadline: deadline)
     }
 
     // MARK: - Initial Population with Greedy Seeding
 
-    /// Create initial population with a mix of greedy-seeded and random individuals.
-    /// Greedy seeds provide feasible starting points; random individuals maintain diversity.
+    /// Create initial population with a mix of experience-seeded,
+    /// greedy-seeded, and random individuals. Experience seeds provide
+    /// a warm start drawn from past runs of structurally-similar
+    /// workloads; greedy seeds provide feasible baselines; random
+    /// individuals preserve diversity. Fractions:
+    ///
+    ///   experience ≤ 20% of population (capped so we don't overfit to
+    ///                                    past runs)
+    ///   greedy     = config.greedySeedFraction - experience
+    ///   random     = remainder
     private func createInitialPopulation() -> Population<C> {
-        let greedyCount = max(0, Int(Double(config.populationSize) * config.greedySeedFraction))
-        let randomCount = config.populationSize - greedyCount
+        // Pull experience seeds first — they're the highest-quality warm
+        // starts we know about. We never exceed 20% of the population or
+        // half the greedy budget, whichever is smaller, so the population
+        // stays structurally diverse even for well-represented workloads.
+        var experienceSeeds: [ScheduleChromosome] = []
+        if let archive = context.experienceArchive {
+            let signature = WorkloadSignature(context: context)
+            let cap = min(
+                max(1, config.populationSize / 5),
+                max(1, Int(Double(config.populationSize) * config.greedySeedFraction / 2))
+            )
+            experienceSeeds = archive.retrieve(signature: signature, count: cap)
+        }
+
+        // Same QD-backed warm start: if the MAP-Elites archive has survived
+        // a previous run, pick the top elites from it too. They come from
+        // this run's own earlier generations in the common case, so this
+        // path mostly fires when the archive is a cross-run shared object.
+        if let mapArchive = context.mapElitesArchive {
+            let extras = mapArchive.sampleSeeds(
+                count: max(0, config.populationSize / 10),
+                distinctCells: true,
+                rng: context.rng
+            )
+            experienceSeeds.append(contentsOf: extras)
+        }
+
+        // Convert experience seeds to the generic chromosome type if
+        // compatible. Non-convertible (e.g. Pomodoro) chromosomes silently
+        // fall through to the greedy path.
+        let experienceCasted: [C] = experienceSeeds.compactMap { $0 as? C }
+
+        let experienceCount = min(experienceCasted.count, config.populationSize)
+        let targetGreedy = max(0, Int(Double(config.populationSize) * config.greedySeedFraction))
+        let greedyCount = max(0, targetGreedy - experienceCount)
+        let randomCount = max(0, config.populationSize - experienceCount - greedyCount)
 
         var individuals: [C] = []
+        individuals.reserveCapacity(config.populationSize)
+
+        // Warm starts — used verbatim on the first pass, lightly shaken so
+        // we don't just re-report an old optimum.
+        for (i, seed) in experienceCasted.prefix(experienceCount).enumerated() {
+            var clone = seed
+            if i > 0 {
+                clone.mutate(rate: 0.05 + Double(i) * 0.02, context: context)
+            }
+            individuals.append(clone)
+        }
 
         // Greedy seeds: each gets a slight random perturbation for variety
         for i in 0..<greedyCount {
@@ -389,7 +470,7 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
 
     // MARK: - Core Evolution Loop
 
-    private func evolve(_ population: inout Population<C>) -> [C] {
+    private func evolve(_ population: inout Population<C>, deadline: Date? = nil) -> [C] {
         // Repair initial population if enabled
         if config.enableRepair {
             for i in population.individuals.indices {
@@ -404,7 +485,16 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         var lastBestFitness = bestEver?.rawFitness ?? 0
         var restartsPerformed = 0
 
+        // Cheap inline check: a nil deadline skips the time sample entirely,
+        // so generation-bound callers pay nothing.
+        @inline(__always) func deadlineReached() -> Bool {
+            guard let deadline else { return false }
+            return Date() >= deadline
+        }
+
         for generation in 0..<config.maxGenerations {
+            if deadlineReached() { break }
+
             evolveOneGeneration(
                 &population,
                 config: config,
@@ -422,13 +512,22 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             // in the next generation sees the improved fitness.
             if config.memeticHillClimbInterval > 0,
                generation > 0,
-               generation % config.memeticHillClimbInterval == 0 {
+               generation % config.memeticHillClimbInterval == 0,
+               !deadlineReached() {
                 memeticHillClimbStep(
                     population: &population,
                     candidates: config.memeticHillClimbCandidates,
                     steps: config.memeticHillClimbSteps
                 )
             }
+
+            // QD / novelty hooks. Runs after evaluation, before selection
+            // feedback at generation end. Offers every individual to the
+            // `MAPElitesArchive` (when present) and blends rawFitness with a
+            // behaviour-space novelty score (when `noveltyWeight > 0`). Both
+            // are no-ops on non-schedule chromosomes and when archives are
+            // unset, so pre-existing GA paths are unchanged.
+            applyArchiveHooks(population: &population)
 
             // Use rawFitness so fitness sharing (which deflates `fitness` for
             // crowded niches) can't demote the globally-best individual. Store
@@ -489,11 +588,16 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             }
         }
 
-        // Local search: refine top individuals with SA-hybrid hill climbing
+        // Local search: refine top individuals with SA-hybrid hill climbing.
+        // Skip when the anytime deadline has already fired; at that point the
+        // caller has explicitly chosen latency over one more polish pass.
         var sorted = population.sortedByFitness
         let refineCount = min(config.eliteCount, sorted.count)
-        for i in 0..<refineCount {
-            sorted[i] = hillClimb(sorted[i], steps: 20)
+        if !deadlineReached() {
+            for i in 0..<refineCount {
+                if deadlineReached() { break }
+                sorted[i] = hillClimb(sorted[i], steps: 20)
+            }
         }
 
         // Update bestEver if hill climbing found something better (compare rawFitness).
@@ -506,10 +610,20 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
 
         // Consumers expect `fitness` to reflect true quality. If fitness sharing
         // reduced it during evolution, restore from rawFitness before returning.
-        if config.enableFitnessSharing {
+        if config.enableFitnessSharing || config.noveltyWeight > 0 {
             for i in sorted.indices where sorted[i].rawFitness > 0 {
                 sorted[i].fitness = sorted[i].rawFitness
             }
+        }
+
+        // Record the converged best to the experience archive so the next
+        // run on a workload with the same signature can warm-start from it.
+        // Guarded by type cast — only ScheduleChromosome knows how to build
+        // a WorkloadSignature from the context.
+        if let archive = context.experienceArchive,
+           let best = bestEver as? ScheduleChromosome {
+            let signature = WorkloadSignature(context: context)
+            archive.record(signature: signature, chromosome: best, fitness: best.rawFitness)
         }
 
         return sorted.sorted { $0.rawFitness > $1.rawFitness }
@@ -533,6 +647,26 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         maxGenerations: Int,
         parallelEvaluation: Bool = true
     ) {
+        // Publish landscape features for the contextual bandit *before*
+        // any operator selection runs this generation. The bandit reads
+        // these on every `select()` call, so a stale snapshot would
+        // misattribute rewards. Only runs when the bandit and schedule
+        // chromosome type line up — generic Pomodoro-only runs get a
+        // no-op.
+        if let ctxBandit = context.contextualBandit,
+           let schedulePop = population.individuals as? [ScheduleChromosome] {
+            let bestSchedule = schedulePop.max(by: { $0.rawFitness < $1.rawFitness })
+            let features = LandscapeFeatures.extract(
+                population: schedulePop,
+                best: bestSchedule,
+                context: context,
+                generation: generation,
+                maxGenerations: maxGenerations,
+                constraintEngine: ConstraintEngine.standard
+            )
+            ctxBandit.publish(features: features)
+        }
+
         let fitnessDiversity = population.fitnessDiversity
         // Use genotypic diversity for a more accurate diversity signal.
         // Fitness diversity can be misleading when different schedules have similar scores.
@@ -624,6 +758,56 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             }
         }
 
+        // Surrogate pre-ranking (SAEA). When the surrogate has warmed up,
+        // cheaply predict fitness for every offspring. The prediction
+        // doesn't *replace* real evaluation — the evaluator still runs
+        // downstream — but it orders offspring so the evaluator visits
+        // the likely-best ones first. That matters when a downstream
+        // budget (e.g. anytime deadline, multi-fidelity cut-off) may
+        // truncate the pass: high-surrogate offspring end up evaluated,
+        // low-surrogate ones get skipped rather than evaluated and
+        // discarded. Zero-cost when the surrogate is absent or unwarmed.
+        if let surrogate = context.surrogate, surrogate.warmedUp {
+            // Build predictions in parallel with the same parallelism
+            // guard the evaluator uses — the prediction itself is O(D)
+            // per chromosome and embarrassingly parallel.
+            var scores: [(Int, Double)] = offspring.indices.compactMap { i -> (Int, Double)? in
+                guard let schedule = offspring[i] as? ScheduleChromosome,
+                      let score = surrogate.predict(schedule, context: context) else {
+                    return nil
+                }
+                return (i, score)
+            }
+            scores.sort { $0.1 > $1.1 }
+            if !scores.isEmpty {
+                var reordered: [C] = []
+                reordered.reserveCapacity(offspring.count)
+                var seen = Set<Int>()
+                for (idx, _) in scores {
+                    reordered.append(offspring[idx])
+                    seen.insert(idx)
+                }
+                for i in offspring.indices where !seen.contains(i) {
+                    reordered.append(offspring[i])
+                }
+                offspring = reordered
+                // Baselines were appended in lockstep with offspring;
+                // mirror the permutation so reward attribution stays
+                // aligned after reordering.
+                var permutedBaselines: [Double] = []
+                permutedBaselines.reserveCapacity(offspringBaselines.count)
+                var seen2 = Set<Int>()
+                for (idx, _) in scores where idx < offspringBaselines.count {
+                    permutedBaselines.append(offspringBaselines[idx])
+                    seen2.insert(idx)
+                }
+                for i in offspringBaselines.indices where !seen2.contains(i) {
+                    permutedBaselines.append(offspringBaselines[i])
+                }
+                offspringBaselines = permutedBaselines
+            }
+        }
+
         // Fitness evaluation: parallel when running standalone,
         // sequential when called from IslandModelGA (which parallelizes at island level).
         if parallelEvaluation && offspring.count > 1 {
@@ -633,6 +817,19 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         } else {
             for i in offspring.indices {
                 evaluate(&offspring[i])
+            }
+        }
+
+        // Train the surrogate on each observed (features, fitness) pair.
+        // Done after evaluation so the labels are the real evaluator's
+        // output, not a stale cached value. Cheap O(D²) update per sample.
+        // D = 9, which is dwarfed by the fitness evaluation cost.
+        if let surrogate = context.surrogate {
+            for child in offspring {
+                guard let schedule = child as? ScheduleChromosome,
+                      schedule.rawFitness > 0 else { continue }
+                let features = SurrogateFeatures(chromosome: schedule, context: context)
+                surrogate.train(features: features, fitness: schedule.rawFitness)
             }
         }
 
@@ -647,6 +844,23 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
                       let op = adaptive.lastMutationOperator else { continue }
                 let reward = offspring[i].rawFitness - offspringBaselines[i]
                 bandit.record(op: op, reward: reward)
+            }
+        }
+
+        // Mirror the reward update to the contextual bandit, using the
+        // same landscape features that drove operator selection in this
+        // generation. We read them once up-front so every offspring gets
+        // attributed against a consistent snapshot — the published features
+        // may advance to the next generation in between select() and
+        // record() otherwise, and the bandit would train on mismatched
+        // (state, action, reward) tuples.
+        if let ctxBandit = context.contextualBandit,
+           let features = ctxBandit.currentFeatures {
+            for i in offspring.indices {
+                guard let adaptive = offspring[i] as? any AdaptiveMutationChromosome,
+                      let op = adaptive.lastMutationOperator else { continue }
+                let reward = offspring[i].rawFitness - offspringBaselines[i]
+                ctxBandit.record(op: op, features: features, reward: reward)
             }
         }
 
@@ -687,6 +901,60 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             )
         } else {
             population.replaceGeneration(with: offspring)
+        }
+    }
+
+    // MARK: - Archive Hooks (Novelty, MAP-Elites)
+
+    /// Offer each `ScheduleChromosome` individual to the MAP-Elites archive
+    /// and blend its fitness with a novelty score when those archives are
+    /// wired on the context. Generic-by-cast so this is a no-op on other
+    /// chromosome types without polluting the `Chromosome` protocol.
+    ///
+    /// Fitness blend:
+    ///     effective = (1 - w) · rawFitness + w · novelty
+    /// with w = `config.noveltyWeight`. `rawFitness` stays untouched so
+    /// `bestEver` tracking, fitness-sharing, and CHC restarts all still see
+    /// the true objective value. Only the `fitness` field used for selection
+    /// pressure is rewritten, matching how fitness sharing overlays onto
+    /// the same field.
+    private func applyArchiveHooks(population: inout Population<C>) {
+        let hasNovelty = config.noveltyWeight > 0 && context.noveltyArchive != nil
+        let hasMAPElites = config.enableMAPElites && context.mapElitesArchive != nil
+        guard hasNovelty || hasMAPElites else { return }
+
+        // Build descriptors for every schedule individual in one pass; QD
+        // and novelty reuse the same 4-D descriptor, so computing it once
+        // avoids duplicate O(n) scans over genes.
+        var descriptors: [(index: Int, descriptor: BehaviorDescriptor, chromo: ScheduleChromosome)] = []
+        descriptors.reserveCapacity(population.individuals.count)
+        for (idx, ind) in population.individuals.enumerated() {
+            guard let schedule = ind as? ScheduleChromosome else { continue }
+            descriptors.append((idx, BehaviorDescriptor(chromosome: schedule, context: context), schedule))
+        }
+        guard !descriptors.isEmpty else { return }
+
+        if hasMAPElites, let archive = context.mapElitesArchive {
+            for entry in descriptors {
+                archive.admit(entry.chromo, descriptor: entry.descriptor)
+            }
+        }
+
+        if hasNovelty, let archive = context.noveltyArchive {
+            let w = config.noveltyWeight
+            let peers = descriptors.map(\.descriptor)
+            for entry in descriptors {
+                let nov = archive.novelty(of: entry.descriptor, peers: peers)
+                archive.admit(entry.descriptor, peers: peers)
+                let raw = entry.chromo.rawFitness
+                let blended = (1 - w) * raw + w * nov
+                if var casted = population.individuals[entry.index] as? ScheduleChromosome {
+                    casted.fitness = blended
+                    if let recasted = casted as? C {
+                        population.individuals[entry.index] = recasted
+                    }
+                }
+            }
         }
     }
 
@@ -885,10 +1153,19 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
     /// with a probability that decreases over time (temperature cooling).
     /// This allows escaping shallow local optima that pure greedy hill climbing misses.
     ///
+    /// A short-term tabu list tracks recently visited genomes (via `Hashable`)
+    /// and rejects neighbours that match a tabu entry *and* don't improve on
+    /// the best-so-far within this climb (classic aspiration criterion). This
+    /// breaks the common degenerate cycle where SA oscillates between two
+    /// near-equal states and wastes steps. Tabu memory is bounded to the
+    /// small window typical of SA practice (~8-16 entries) so the Set lookup
+    /// stays O(1) and memory overhead is trivial.
+    ///
     /// - Important: Internal API for `IslandModelGA`. Do not call directly from
     ///   application code.
     func hillClimb(_ chromosome: C, steps: Int) -> C {
         var current = chromosome
+        var bestInClimb = current
         var temperature = 0.05
         let coolingRate = 0.85
         // Per-gene mutation probability for *fine-tuning*. The previous value
@@ -899,24 +1176,66 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         // large schedules, which is the right direction).
         let neighborhoodRate = 0.05
 
+        // Tabu memory. FIFO of recent genomes; new entries push oldest out
+        // once capacity is hit. Capacity 12 is a literature sweet spot for
+        // short-term memory — large enough to catch oscillations, small
+        // enough that the tabu rarely pins a truly novel improvement down.
+        let tabuCapacity = 12
+        var tabuSet: Set<C> = []
+        var tabuOrder: [C] = []
+        tabuSet.reserveCapacity(tabuCapacity)
+        tabuOrder.reserveCapacity(tabuCapacity)
+        tabuSet.insert(current)
+        tabuOrder.append(current)
+
+        @inline(__always) func pushTabu(_ item: C) {
+            guard !tabuSet.contains(item) else { return }
+            if tabuOrder.count >= tabuCapacity {
+                let evicted = tabuOrder.removeFirst()
+                tabuSet.remove(evicted)
+            }
+            tabuOrder.append(item)
+            tabuSet.insert(item)
+        }
+
         for _ in 0..<steps {
             var neighbor = current
             neighbor.mutate(rate: neighborhoodRate, context: context)
             neighbor.repair(context: context)
             evaluate(&neighbor)
 
+            // Tabu check with aspiration: a tabu neighbour is allowed through
+            // only if it's strictly better than the best we've seen so far in
+            // this climb. Without aspiration, a good genome that happens to
+            // coincide with a recently visited one would be pointlessly
+            // rejected.
+            let isTabu = tabuSet.contains(neighbor)
+            let aspiration = neighbor.rawFitness > bestInClimb.rawFitness
+            if isTabu && !aspiration {
+                temperature *= coolingRate
+                continue
+            }
+
             let delta = neighbor.rawFitness - current.rawFitness
             if delta > 0 {
                 // Always accept improvements
                 current = neighbor
+                if current.rawFitness > bestInClimb.rawFitness {
+                    bestInClimb = current
+                }
+                pushTabu(current)
             } else if temperature > 1e-6 && context.rng.bool(probability: exp(delta / temperature)) {
                 // Accept worse solution with SA probability
                 current = neighbor
+                pushTabu(current)
             }
 
             temperature *= coolingRate
         }
 
-        return current
+        // Return the best genome encountered during the climb, not the last
+        // one — SA can finish on a worse state than one it visited mid-run,
+        // and we shouldn't discard that improvement silently.
+        return bestInClimb.rawFitness > current.rawFitness ? bestInClimb : current
     }
 }

@@ -24,6 +24,16 @@ enum MutationOperator: Int, CaseIterable, Sendable, Hashable {
     /// and place there. Most expensive per invocation; typically the highest
     /// average reward once the schedule is near-feasible.
     case guided = 3
+
+    /// Large-Neighbourhood Search: destroy a window (contiguous day or
+    /// 15-25% of genes) and greedily rebuild it using the placement
+    /// heuristic from `ScheduleChromosome.greedy`. Expensive per call
+    /// but produces feasible, structurally-different neighbours in one
+    /// shot — invaluable when conflict rate is high or the population
+    /// has clustered around a bad basin. Contextual bandit typically
+    /// picks this one when `conflictRate` and `peakDayOccupancy` are
+    /// both high.
+    case lns = 4
 }
 
 // MARK: - Mutation Bandit (UCB1)
