@@ -100,6 +100,13 @@ struct BacklogView: View {
     /// list into `.expanded` to give the form room to breathe (HIG: don't
     /// make the user scroll to see the field they're filling).
     @State private var expansionBeforeEdit: TaskListExpansion? = nil
+    /// Snapshot of `expansion` captured the moment a drag starts. Same
+    /// idea as `expansionBeforeEdit`: during a drag the list flips to
+    /// `.expanded` so the user sees every reorder target at once, and the
+    /// pre-drag state is restored when the drag ends. Decoupled from
+    /// `expansionBeforeEdit` because the two can nest (user starts editing,
+    /// then drags a row from inside the edit session).
+    @State private var expansionBeforeDrag: TaskListExpansion? = nil
     /// Measured height of the hosting popover. Drives the dynamic ceiling
     /// for the fully-expanded and editing states so large screens are not
     /// forced into a 480pt cap. Zero until the first layout pass.
@@ -130,6 +137,11 @@ struct BacklogView: View {
     /// instead of user drag order. Survives per session only — the stored
     /// order remains the user's canonical sequence.
     @State private var useSmartSort: Bool = false
+    /// Urgent-only filter: narrows the visible list to tasks whose deadline
+    /// falls within `isUrgent`'s window. Toggled by tapping the red «N urgent»
+    /// counter in the header — Бирман: «информация, а не украшение».
+    /// Session-local only; survives popover close, not app restart.
+    @State private var urgentOnlyFilter: Bool = false
 
     /// Cached "where would this land?" answer per task ID. Populated lazily
     /// on first hover — the lookup runs the same `FreeSlotFinder.nextSlot`
@@ -161,14 +173,27 @@ struct BacklogView: View {
     /// timeline below visible even when the list is fully expanded.
     private static let nonListReservedHeight: CGFloat = 220
 
+    /// Vertical space we reserve under the list while a backlog task is in
+    /// flight. The timeline below collapses to one «N events · Xh booked»
+    /// header + 2–3 free slots ≈ 120–140pt — keeping the full 220pt reserve
+    /// wastes ~80pt that the task list could use to show more reorder
+    /// targets without scrolling.
+    private static let dragReservedHeight: CGFloat = 140
+
     /// Ceiling for the fully-expanded list, derived from the measured host
     /// height so large popovers get a tall list and small hosts stay honest.
-    /// Falls back to `fullyExpandedMaxHeight` before the first layout pass.
+    /// While a drag is in flight, the reserve shrinks to `dragReservedHeight`
+    /// so Tasks can grow into the space the collapsed timeline no longer
+    /// needs. Falls back to `fullyExpandedMaxHeight` before the first
+    /// layout pass.
     private var dynamicExpandedMaxHeight: CGFloat {
         guard measuredHostHeight > 0 else { return Self.fullyExpandedMaxHeight }
+        let reserve = coordinator?.isDraggingTask == true
+            ? Self.dragReservedHeight
+            : Self.nonListReservedHeight
         return max(
             Self.fullyExpandedMaxHeight,
-            measuredHostHeight - Self.nonListReservedHeight
+            measuredHostHeight - reserve
         )
     }
 
@@ -194,10 +219,24 @@ struct BacklogView: View {
     /// point of the mode is to see exactly what's next without a scroll.
     static let sprintModeMaxTasks = 5
 
-    private var activeTasks: [BacklogTask] {
+    /// All non-done, non-frozen tasks — the "real" active set used for
+    /// totals, capacity math and onAppear heuristics. Not subject to the
+    /// urgent-only UI filter, so the header counter doesn't lie about
+    /// what's actually in the backlog.
+    private var allActiveTasks: [BacklogTask] {
         // Frozen tasks live in their own tombstone below — excluding them
         // here keeps the active list's count, sort and rendering honest.
         backlogService.tasks.filter { $0.status != .done && $0.status != .frozen }
+    }
+
+    /// Tasks visible in the list. Equals `allActiveTasks` unless the
+    /// urgent-only filter is engaged, in which case only tasks whose
+    /// deadline falls inside the urgency window survive. Keeping the
+    /// filter here (not in the service) means the storage order stays
+    /// the user's canonical sequence.
+    private var activeTasks: [BacklogTask] {
+        guard urgentOnlyFilter else { return allActiveTasks }
+        return allActiveTasks.filter { isUrgent($0) }
     }
 
     /// Deadline-urgency + priority score. Higher = more urgent.
@@ -315,7 +354,10 @@ struct BacklogView: View {
             // last completion would make the tombstone unreachable — it
             // would render inside a hidden subtree, and "undo by clicking
             // the checkmark" would be gone.
-            if !activeTasks.isEmpty
+            // Use `allActiveTasks` so the urgent-only filter can't hide the
+            // header — the user needs a way to flip the filter back off even
+            // when no urgent tasks match.
+            if !allActiveTasks.isEmpty
                 || isInputFocused
                 || !completedToday.isEmpty
                 || !backlogService.frozen.isEmpty {
@@ -368,6 +410,37 @@ struct BacklogView: View {
             for (_, task) in rowSlotPreviewTasks { task.cancel() }
             rowSlotPreviewTasks.removeAll()
         }
+        // Drag = focus mode. The moment the user grabs a task:
+        //   • Tasks flip to `.expanded` — every other row becomes a
+        //     legitimate reorder target, visible at once.
+        //   • EventRowView listens to the same flag and compresses itself
+        //     to a single-line sliver, so the timeline below becomes a
+        //     column of highlighted free slots with thin booked-time
+        //     dividers between them. See `EventRowView.isCompressedForDrag`.
+        // Pre-drag expansion is restored on drop/cancel.
+        .onChange(of: coordinator?.isDraggingTask ?? false) { _, dragging in
+            if dragging {
+                // Only snapshot the first time a drag starts while we're
+                // idle. Don't overwrite a snapshot if (somehow) the flag
+                // toggles mid-session — the first pre-drag state is what
+                // we want to return to.
+                if expansionBeforeDrag == nil {
+                    expansionBeforeDrag = expansion
+                }
+                if expansion != .expanded {
+                    withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+                        expansion = .expanded
+                    }
+                }
+            } else {
+                if let snapshot = expansionBeforeDrag {
+                    withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+                        expansion = snapshot
+                    }
+                    expansionBeforeDrag = nil
+                }
+            }
+        }
         .onChange(of: isInputFocused) { _, focused in
             // Hide the ghost block the moment the user tabs away from the
             // input — otherwise it would linger on the timeline even though
@@ -379,7 +452,7 @@ struct BacklogView: View {
             }
         }
         .onAppear {
-            if autoExpand && !activeTasks.isEmpty {
+            if autoExpand && !allActiveTasks.isEmpty {
                 expansion = .compact
             }
             // Tombstones (completed-today, frozen) live inside the
@@ -388,22 +461,30 @@ struct BacklogView: View {
             // non-empty tombstones, auto-open to `.compact` so the history
             // stays reachable — otherwise the chevron is the only clue
             // anything survived.
-            if activeTasks.isEmpty,
+            if allActiveTasks.isEmpty,
                !completedToday.isEmpty || !backlogService.frozen.isEmpty,
                expansion == .collapsed {
                 expansion = .compact
             }
         }
-        .onChange(of: activeTasks.count) { _, newCount in
+        .onChange(of: allActiveTasks.count) { _, newCount in
             // Same auto-open rule on live state changes: the last active
             // task just got completed and we still have tombstones — pop
-            // the list open so the user sees what happened.
+            // the list open so the user sees what happened. Based on
+            // `allActiveTasks` so toggling the urgent-only filter doesn't
+            // trigger false positives.
             if newCount == 0,
                !completedToday.isEmpty || !backlogService.frozen.isEmpty,
                expansion == .collapsed {
                 withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
                     expansion = .compact
                 }
+            }
+            // If the user had `urgentOnlyFilter` engaged and the urgent set
+            // dries up (last urgent task completed), automatically disengage
+            // so the filter doesn't strand the user in an empty view.
+            if urgentOnlyFilter, activeTasks.isEmpty {
+                urgentOnlyFilter = false
             }
         }
         .onDisappear {
@@ -435,7 +516,23 @@ struct BacklogView: View {
     // MARK: - Header
 
     private var backlogHeader: some View {
-        HStack(spacing: DS.Spacing.sm) {
+        let totalCount = allActiveTasks.count
+        let urgentCount = backlogService.urgent(withinDays: 2).count
+
+        return HStack(spacing: DS.Spacing.sm) {
+            // Capacity ring FIRST — it answers the main question «влезет
+            // ли сегодня» и раньше терялось между иконок справа. HIG: put
+            // glanceable status where the eye lands first, not buried in
+            // trailing controls. Birman: кольцо — это первая «подпись» к
+            // слову Tasks, не украшение на периферии.
+            if totalCount > 0 {
+                BacklogCapacityRing(
+                    pendingMinutes: pendingWorkloadMinutes,
+                    remainingWorkdayMinutes: remainingWorkdayMinutes
+                )
+                .help(capacityRingTooltip)
+            }
+
             Button {
                 withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
                     expansion = expansion.next
@@ -452,103 +549,94 @@ struct BacklogView: View {
 
                     // Total count — always shown, tabular digits so the number
                     // doesn't jitter horizontally when `.numericText()` rolls.
-                    Text("\(activeTasks.count)")
+                    Text("\(totalCount)")
                         .font(.subheadline.weight(.regular).monospacedDigit())
                         .foregroundStyle(skin.resolvedTextTertiary)
                         .contentTransition(.numericText())
-
-                    // Additional red "urgent" signal appears only when it
-                    // matters — it augments the total rather than replacing
-                    // it, so the user never loses "how many tasks total".
-                    let urgent = backlogService.urgent(withinDays: 2)
-                    if !urgent.isEmpty {
-                        Text("\(urgent.count) urgent")
-                            .font(.caption2.weight(.semibold).monospacedDigit())
-                            .foregroundStyle(skin.resolvedDestructiveColor)
-                            .contentTransition(.numericText())
-                    }
                 }
             }
             .buttonStyle(.plain)
             .help(expansion.accessibilityHint)
 
+            // Urgent-count pill — now a real control. Clicking it toggles
+            // the urgent-only filter. Middot separator visually attaches it
+            // to the total count without the two numbers fighting.
+            // Birman: «информация — это кнопка», иначе это просто краска.
+            if urgentCount > 0 {
+                urgentFilterButton(urgentCount: urgentCount)
+            }
+
             Spacer()
 
-            if !activeTasks.isEmpty {
-                // Tiny capacity ring: at a glance, does today's remaining
-                // work time cover the pending backlog? Green = yes, orange
-                // = tight, red = overflow. One channel, no numeric display.
-                BacklogCapacityRing(
-                    pendingMinutes: pendingWorkloadMinutes,
-                    remainingWorkdayMinutes: remainingWorkdayMinutes
-                )
-                .help(capacityRingTooltip)
-
-                // Two header layouts via ViewThatFits: the full trio
-                // (smart-sort, sprint, Schedule) when there's room, and a
-                // collapsed "⋯" Menu + Schedule when the popover is narrow.
-                // Birman: progressive disclosure — sprint-mode и smart-sort
-                // нужны редко, поэтому первыми уступают место узкому окну.
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: DS.Spacing.sm) {
-                        smartSortToggle
-                        sprintModeToggle
-                        scheduleButton
-                    }
-                    HStack(spacing: DS.Spacing.sm) {
-                        headerOverflowMenu
-                        scheduleButton
-                    }
-                }
+            if totalCount > 0 {
+                // Overflow menu holds smart-sort + sprint (was: two cryptic
+                // icon buttons). HIG: secondary actions without a clear
+                // glyph belong in a menu with labels. One icon in the header
+                // + named actions in the dropdown is both calmer and more
+                // discoverable.
+                headerOverflowMenu
+                scheduleButton
             }
         }
         .padding(.horizontal, DS.Spacing.sm)
         .padding(.vertical, DS.Spacing.sm)
     }
 
-    /// Smart Sort toggle — lens that reorders the list by deadline+priority
-    /// without touching the stored sequence.
-    private var smartSortToggle: some View {
+    /// Red «N urgent» pill — acts as a filter toggle. Selected state gets a
+    /// filled background so the user can see the filter is engaged; a
+    /// second click releases it. Hidden entirely when no urgent tasks exist.
+    @ViewBuilder
+    private func urgentFilterButton(urgentCount: Int) -> some View {
         Button {
-            withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-                useSmartSort.toggle()
-                if useSmartSort, expansion == .collapsed {
+            withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
+                urgentOnlyFilter.toggle()
+                // Engaging the filter while the list is collapsed would hide
+                // everything — open to `.compact` so the filtered set is
+                // immediately visible.
+                if urgentOnlyFilter, expansion == .collapsed {
                     expansion = .compact
                 }
             }
         } label: {
-            Image(systemName: useSmartSort ? "wand.and.stars" : "arrow.up.arrow.down")
-                .font(.caption)
-                .foregroundStyle(useSmartSort ? skin.accentColor : skin.resolvedTextSecondary)
-                .contentTransition(.symbolEffect(.replace))
-        }
-        .buttonStyle(.plain)
-        .help(useSmartSort ? "Show in user order" : "Smart sort: order by deadline and priority")
-        .accessibilityLabel(useSmartSort ? "Disable smart sort" : "Enable smart sort")
-    }
-
-    /// Sprint-mode toggle — collapses grouping to the top N tasks.
-    private var sprintModeToggle: some View {
-        Button {
-            withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-                isSprintMode.toggle()
-                if isSprintMode, expansion == .collapsed {
-                    expansion = .compact
-                }
+            HStack(spacing: DS.Spacing.xxs) {
+                Text("·")
+                    .font(.caption2)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                Text("\(urgentCount) urgent")
+                    .font(.caption2.weight(.semibold).monospacedDigit())
+                    .foregroundStyle(skin.resolvedDestructiveColor)
+                    .contentTransition(.numericText())
             }
-        } label: {
-            Image(systemName: isSprintMode ? "bolt.fill" : "bolt")
-                .font(.caption)
-                .foregroundStyle(isSprintMode ? skin.accentColor : skin.resolvedTextSecondary)
-                .contentTransition(.symbolEffect(.replace))
+            .padding(.horizontal, DS.Spacing.xs)
+            .padding(.vertical, DS.Spacing.xxs)
+            .background(
+                Capsule().fill(
+                    skin.resolvedDestructiveColor
+                        .opacity(urgentOnlyFilter ? DS.Opacity.lightFill : 0)
+                )
+            )
+            .overlay(
+                Capsule().strokeBorder(
+                    skin.resolvedDestructiveColor.opacity(urgentOnlyFilter ? DS.Opacity.softAccent : 0),
+                    lineWidth: DS.Border.thin
+                )
+            )
+            .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .help(isSprintMode ? "Exit sprint mode" : "Sprint mode: focus on the top \(Self.sprintModeMaxTasks) tasks")
-        .accessibilityLabel(isSprintMode ? "Exit sprint mode" : "Enter sprint mode")
+        .help(urgentOnlyFilter ? "Show all tasks" : "Show only urgent tasks")
+        .accessibilityLabel(
+            urgentOnlyFilter
+                ? "Showing only urgent tasks — tap to clear filter"
+                : "\(urgentCount) urgent tasks — tap to filter"
+        )
     }
 
-    /// Narrow-layout fallback for smart-sort + sprint — one ⋯ menu so the
-    /// "Schedule" button stays on the same row instead of wrapping.
+    /// Overflow menu — the single home for secondary view controls
+    /// (smart-sort, sprint mode). Previously these were two bare icon
+    /// buttons in the header; Бирман: «пиктограмма без подписи —
+    /// загадка». Inside the menu each action gets a real verb and
+    /// active state shows the SF Symbol swap.
     private var headerOverflowMenu: some View {
         Menu {
             Button {
@@ -595,7 +683,10 @@ struct BacklogView: View {
     /// Total scheduled minutes across all non-done, non-frozen tasks —
     /// the workload the user would need to fit into today's remaining hours.
     private var pendingWorkloadMinutes: Int {
-        activeTasks.reduce(0) { $0 + $1.durationMinutes }
+        // Use `allActiveTasks` — capacity-vs-workday is about the total
+        // backlog, not a UI-filtered subset. Otherwise toggling the urgent
+        // filter would make the ring falsely turn green.
+        allActiveTasks.reduce(0) { $0 + $1.durationMinutes }
     }
 
     /// Remaining minutes between "now" and the end of the working day.
@@ -622,8 +713,10 @@ struct BacklogView: View {
         return "Backlog: \(DS.formatMinutes(workload)); remaining today: \(DS.formatMinutes(remaining))"
     }
 
-    /// HIG: главное действие должно читаться как кнопка. Tint + hover-капсула
-    /// дают affordance без тяжёлой заливки на покое.
+    /// HIG: главное действие должно читаться как кнопка и в покое, не только
+    /// на hover. Subtle fill + hairline border = affordance без тяжёлой
+    /// заливки; оба канала усиливаются на hover, так что жест наведения
+    /// остаётся информативным.
     private var scheduleButton: some View {
         Button {
             onScheduleTasks()
@@ -635,7 +728,14 @@ struct BacklogView: View {
                 .padding(.vertical, DS.Spacing.xxs)
                 .background {
                     Capsule()
-                        .fill(skin.accentColor.opacity(isScheduleHovering ? 0.14 : 0))
+                        .fill(skin.accentColor.opacity(isScheduleHovering ? 0.16 : DS.Opacity.lightFill))
+                }
+                .overlay {
+                    Capsule()
+                        .strokeBorder(
+                            skin.accentColor.opacity(isScheduleHovering ? DS.Opacity.softAccent : DS.Opacity.subtleBorder),
+                            lineWidth: DS.Border.thin
+                        )
                 }
                 .contentShape(Capsule())
         }
@@ -662,14 +762,13 @@ struct BacklogView: View {
     // кнопки «Show more».
 
     private var taskList: some View {
-        let allTasks = activeTasks
-
-        return VStack(spacing: 0) {
+        // Discoverability hint ("drag onto a free slot") used to live here
+        // as a fat banner above the task list. It now appears contextually,
+        // on hover, as a caption inside the `FreeSlotRow` — Бирман: «покажите
+        // пример там, где действие происходит, не инструкцию где-то сверху».
+        // See `FreeSlotRow.canShowDragHint`.
+        VStack(spacing: 0) {
             if expansion != .collapsed {
-                if !hasDragged && !allTasks.isEmpty {
-                    dragDiscoveryHint
-                }
-
                 ScrollView {
                     VStack(spacing: 0) {
                         taskRowsContent(visibleIDs: nil)
@@ -990,33 +1089,6 @@ struct BacklogView: View {
             durationMinutes: task.durationMinutes,
             context: task.context
         )
-    }
-
-    /// One-time onboarding hint: explains the drag gestures and keyboard
-    /// alternatives. Disappears permanently after the first drag.
-    private var dragDiscoveryHint: some View {
-        HStack(alignment: .top, spacing: DS.Spacing.xs) {
-            Image(systemName: "hand.draw")
-                .font(.caption2)
-                .foregroundStyle(skin.accentColor.opacity(DS.Opacity.accentMuted))
-            // Birman: один короткий совет вместо двух абзацев. Клавиатурный
-            // путь и так пропадёт из хинта, когда пользователь применит его
-            // через контекстное меню (см. `moveTask` / `moveTaskToEdge`).
-            Text("Drag a task onto a free slot to schedule it, or onto another to reorder.")
-                .font(.caption2)
-                .foregroundStyle(skin.resolvedTextSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.horizontal, DS.Spacing.sm)
-        .padding(.vertical, DS.Spacing.xs)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
-                .fill(skin.accentColor.opacity(DS.Opacity.subtleFill))
-        )
-        .padding(.top, DS.Spacing.xxs)
-        .padding(.bottom, DS.Spacing.xs)
-        .transition(.opacity)
     }
 
     // MARK: - Reorder handling
@@ -1370,18 +1442,32 @@ struct BacklogView: View {
             } label: {
                 HStack(spacing: DS.Spacing.xxs) {
                     Text(preview)
-                        .font(.caption2)
+                        // Бump to .caption + medium weight so the main
+                        // feedback to typing isn't mistaken for a footnote.
+                        // no-slot case stays quiet (it's info, not a CTA).
+                        .font(isNoSlot ? .caption2 : .caption.weight(.medium))
                     if !isNoSlot {
                         Text("\u{23CE}")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(skin.accentColor.opacity(DS.Opacity.accentMuted))
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(skin.accentColor)
                     }
                 }
-                .foregroundStyle(skin.accentColor.opacity(DS.Opacity.accentMuted))
+                .foregroundStyle(
+                    isNoSlot
+                        ? skin.resolvedTextTertiary
+                        : skin.accentColor
+                )
                 .lineLimit(1)
                 .padding(.horizontal, DS.Spacing.sm)
                 .padding(.vertical, DS.Spacing.xxs)
-                .contentShape(Rectangle())
+                .background {
+                    // Subtle capsule reinforces «это кнопка» — only for the
+                    // actionable variant; no-slot text stays unboxed.
+                    if !isNoSlot {
+                        Capsule().fill(skin.accentColor.opacity(DS.Opacity.lightFill))
+                    }
+                }
+                .contentShape(Capsule())
             }
             .buttonStyle(.plain)
             .disabled(isNoSlot)
@@ -1670,7 +1756,6 @@ struct BacklogTaskRow: View {
         .contentShape(Rectangle())
         .opacity(isDragging ? DS.Opacity.tertiaryText : 1)
         .background(rowBackground)
-        .overlay(alignment: .top) { dropBar }
         .overlay { focusRing }
         .onHover { hovering in
             withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
@@ -1762,8 +1847,8 @@ struct BacklogTaskRow: View {
     /// breaks in these contexts.
     ///
     /// Birman: hover-only — affordance, который вечно светится, становится
-    /// шумом. Курсор и так подскажет grab при наведении; онбординг отдельной
-    /// подсказкой через `dragDiscoveryHint` в родителе.
+    /// шумом. Курсор и так подскажет grab при наведении; онбординг живёт
+    /// на самой цели — в `FreeSlotRow` через `canShowDragHint`.
     private var dragHandle: some View {
         Image(systemName: "line.3.horizontal")
             .font(.caption2)
@@ -1836,19 +1921,43 @@ struct BacklogTaskRow: View {
     private var content: some View {
         Button(action: onEdit) {
             HStack(spacing: DS.Spacing.xs) {
+                // Title wraps to two lines instead of ellipsising.
+                // Birman: «…» прячет ровно ту информацию, по которой
+                // принимается решение. Row height is `minHeight`, so
+                // short titles still sit in 40pt; long ones breathe.
+                // Tooltip backstop for cases where wrap still truncates.
                 Text(task.title)
                     .font(isSprintMode ? .headline.weight(.medium) : .callout)
                     .foregroundStyle(titleColor)
-                    .lineLimit(1)
+                    .lineLimit(isSprintMode ? 1 : 2)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
                     .layoutPriority(1)
+                    .help(task.title)
 
-                // Recurring marker — single glyph after the title, quiet
-                // tertiary colour so the title keeps its visual weight.
+                // Recurring marker. If the task carries a `recurrenceTag`
+                // ("weekly review", "daily standup"), show it as human text
+                // instead of only a cryptic glyph — Бирман: «язык интерфейса —
+                // язык человека». The bare ⟲ remains for tag-less recurring
+                // tasks so the affordance is still present.
                 if task.isRecurring {
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.caption2)
-                        .foregroundStyle(skin.resolvedTextTertiary)
-                        .accessibilityLabel("Recurring")
+                    HStack(spacing: DS.Spacing.xxs) {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .font(.caption2)
+                        if let tag = task.recurrenceTag,
+                           !tag.trimmingCharacters(in: .whitespaces).isEmpty {
+                            Text(tag)
+                                .font(.caption2)
+                                .lineLimit(1)
+                        }
+                    }
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(
+                        (task.recurrenceTag?.isEmpty == false)
+                            ? "Recurring: \(task.recurrenceTag!)"
+                            : "Recurring"
+                    )
                 }
 
                 // Dependency marker — mirrors the edit form's "depends on"
@@ -1969,23 +2078,19 @@ struct BacklogTaskRow: View {
     /// Row background — drop highlight wins over hover tint when both fire.
     /// HIG: use colour purposefully; the accent fill *means* "drop lands here",
     /// the neutral hover tint *means* "this row is under your cursor".
+    ///
+    /// Birman: один визуальный язык для одного жеста. Раньше drop-на-задачу
+    /// читался тонкой accent-полосой сверху (`dropBar`), а drop-на-слот —
+    /// заливкой всей площади. Теперь и там, и там — mediumFill заливка,
+    /// `dropBar` удалён как дублирующий сигнал.
     private var rowBackground: some View {
-        let accent = skin.accentColor.opacity(DS.Opacity.lightFill)
+        let targetedFill = skin.accentColor.opacity(DS.Opacity.mediumFill)
         let hoverTint = skin.resolvedTextTertiary.opacity(0.06)
         let fill: Color = isReorderTargeted
-            ? accent
+            ? targetedFill
             : (isHovered ? hoverTint : .clear)
         return RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
             .fill(fill)
-    }
-
-    /// Thin accent bar at the top edge while a drag is targeted at this row —
-    /// makes the drop position unambiguous.
-    private var dropBar: some View {
-        Rectangle()
-            .fill(skin.accentColor)
-            .frame(height: isReorderTargeted ? DS.Border.selection : 0)
-            .motionAwareAnimation(DS.Animation.quick, value: isReorderTargeted, reduceMotion: reduceMotion)
     }
 
     /// Keyboard focus ring. Mirrors the system focus ring visually without
@@ -2034,6 +2139,7 @@ struct BacklogTaskEditRow: View {
     @State private var context: String
     @State private var storyPoints: Int?
     @State private var isRecurring: Bool
+    @State private var recurrenceTag: String
     @State private var dependsOn: [String]
     /// Currently-selected task in the "Add dependency" picker — resets to nil
     /// after each successful add so the picker returns to its placeholder.
@@ -2054,6 +2160,7 @@ struct BacklogTaskEditRow: View {
         _context = State(initialValue: task.context ?? "")
         _storyPoints = State(initialValue: task.storyPoints)
         _isRecurring = State(initialValue: task.isRecurring)
+        _recurrenceTag = State(initialValue: task.recurrenceTag ?? "")
         _dependsOn = State(initialValue: task.dependsOn)
     }
 
@@ -2161,15 +2268,34 @@ struct BacklogTaskEditRow: View {
 
             // Recurring toggle. Flipped on, completion will reset the task
             // to pending instead of marking it done — useful for weekly
-            // reviews, daily standups, etc. No cadence picker yet: the tag
-            // field below lets the user label the rhythm for themselves.
-            HStack {
-                Toggle("Repeats", isOn: $isRecurring)
-                    .font(.caption2)
-                    .toggleStyle(.switch)
-                    .controlSize(.mini)
-                    .onChange(of: isRecurring) { _, _ in autosave() }
+            // reviews, daily standups, etc. A free-form tag becomes the
+            // human label shown next to the ⟲ glyph on the row
+            // («⟲ weekly review») — Бирман: «язык интерфейса — язык
+            // человека», глиф без подписи ничего не говорит.
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                HStack {
+                    Toggle("Repeats", isOn: $isRecurring)
+                        .font(.caption2)
+                        .toggleStyle(.switch)
+                        .controlSize(.mini)
+                        .onChange(of: isRecurring) { _, _ in autosave() }
+                }
+                if isRecurring {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .font(.caption2)
+                            .foregroundStyle(skin.resolvedTextTertiary)
+                        TextField("e.g. weekly review, daily standup", text: $recurrenceTag)
+                            .textFieldStyle(.plain)
+                            .font(.caption2)
+                            .onChange(of: recurrenceTag) { _, _ in autosave() }
+                            .onSubmit { commit() }
+                    }
+                    .padding(.leading, DS.Spacing.sm)
+                    .transition(.opacity)
+                }
             }
+            .motionAwareAnimation(DS.Animation.quick, value: isRecurring, reduceMotion: reduceMotion)
 
             // Dependencies. Each entry is another task whose completion
             // should block this one. The picker offers all active tasks
@@ -2227,6 +2353,10 @@ struct BacklogTaskEditRow: View {
         updated.context = context.isEmpty ? nil : context
         updated.storyPoints = storyPoints
         updated.isRecurring = isRecurring
+        // Stored as optional so an empty tag round-trips to nil —
+        // the row renders the bare ⟲ glyph without an empty label.
+        let trimmedTag = recurrenceTag.trimmingCharacters(in: .whitespaces)
+        updated.recurrenceTag = (isRecurring && !trimmedTag.isEmpty) ? trimmedTag : nil
         updated.dependsOn = dependsOn
         backlogService.updateTask(updated)
     }

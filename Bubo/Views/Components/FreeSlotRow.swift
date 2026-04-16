@@ -22,12 +22,34 @@ struct FreeSlotRow: View {
     let onFillTapped: (_ minutes: Int) -> Void
     /// Called when a backlog task is dropped onto this slot.
     var onTaskDropped: ((_ drag: BacklogTaskDrag) -> Void)? = nil
+    /// Caller-provided permission to display the one-time «drag tasks here»
+    /// hint for this slot. The caller decides which slots are eligible
+    /// (usually: the first free slot on the earliest day with backlog tasks)
+    /// so the hint doesn't repeat on every gap. The row itself gates on
+    /// `hasDragged` via `@AppStorage`, so once the user has dragged anything
+    /// at least once the hint vanishes permanently even if the flag stays true.
+    var canShowDragHint: Bool = false
 
     @State private var isHovered: Bool = false
     @State private var isDropTargeted: Bool = false
+    /// Mirrors `BuboBacklogHasDragged` used by `BacklogView`. Sharing the key
+    /// means "user dragged a task" flips off both the old inline hint and
+    /// the new in-slot example at the same moment.
+    @AppStorage("BuboBacklogHasDragged") private var hasDragged: Bool = false
 
     private var isAwaitingDrop: Bool {
         coordinator?.isDraggingTask == true
+    }
+
+    /// Final gate for the drag-onboarding hint. Permission from the caller
+    /// (`canShowDragHint`), not yet dragged, and neither hovered nor being
+    /// targeted by an in-flight drop — so the hint cedes the space to
+    /// stronger, more immediate signals the moment the user engages.
+    private var showsDragHint: Bool {
+        canShowDragHint
+            && !hasDragged
+            && !isHovered
+            && !isAwaitingDrop
     }
 
     private var durationMinutes: Int {
@@ -87,6 +109,22 @@ struct FreeSlotRow: View {
 
             Spacer(minLength: DS.Spacing.md)
 
+            // Drag onboarding example — replaces the old inline banner in
+            // BacklogView. Lives on the *target* of the gesture so the user
+            // learns the affordance where it actually matters. Disappears
+            // permanently after the first real drag (shared AppStorage key).
+            // Hidden while the drag is in flight or while the cursor is
+            // hovering, since both states already convey their own signal
+            // and a second caption would clutter the row.
+            if showsDragHint {
+                Text("\u{2190} Drag a task here")
+                    .font(.caption2)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                    .lineLimit(1)
+                    .transition(.opacity)
+                    .accessibilityHidden(true)
+            }
+
             Button {
                 Haptics.tap()
                 onFillTapped(durationMinutes)
@@ -125,6 +163,30 @@ struct FreeSlotRow: View {
         } isTargeted: { targeted in
             withAnimation(skin.resolvedMicroAnimation) {
                 isDropTargeted = targeted
+            }
+            // Predictive ghost during drag: when the cursor enters this
+            // slot mid-drag, publish the would-be scheduled interval to
+            // the shared coordinator so MenuBarView replaces this slot
+            // with a translucent «<title> · HH:MM–HH:MM» block. Birman:
+            // «покажи, что случится, до того как случится».
+            //
+            // `isTargeted` is the right signal here (not `.onHover`) —
+            // macOS fires hover callbacks only while no drag is in
+            // flight; drop-target callbacks are the drag-aware equivalent.
+            if targeted, let drag = coordinator?.draggedTask {
+                let needed = TimeInterval(drag.durationMinutes * 60)
+                let available = end.timeIntervalSince(start)
+                let fit = min(needed, available)
+                coordinator?.setGhost(
+                    slot: DateInterval(start: start, duration: fit),
+                    title: drag.title
+                )
+            } else if !targeted, coordinator?.ghostSlot?.start == start {
+                // Only clear if the ghost still points at THIS slot. A
+                // fast drag across rows can fire exit-on-A *after*
+                // enter-on-B; the start-equality check stops us from
+                // blanking the next slot's fresh ghost.
+                coordinator?.clearGhost()
             }
         }
         // Drop-target state — flat rectangle stroke, matches the card

@@ -594,6 +594,13 @@ struct MenuBarView: View {
         // — even if the drag-preview lifecycle callback hasn't fired yet.
         backlogCoordinator.endDrag()
 
+        // Full pre-drop snapshot — `unschedule` sets status=.pending and
+        // drops both scheduledEventId/scheduledDate. If the task was
+        // already `.scheduled` against a *different* event (re-scheduling
+        // via drag), straight unschedule would lose that prior binding.
+        // `updateTask(snapshot)` restores every field exactly.
+        let taskSnapshot = task
+
         let duration = min(
             TimeInterval(task.durationMinutes * 60),
             slotEnd.timeIntervalSince(slotStart)
@@ -619,9 +626,16 @@ struct MenuBarView: View {
             "\(task.title) → \(fmt.string(from: slotStart))",
             icon: "calendar.badge.plus"
         ) {
-            // Undo: remove event and unschedule task
+            // Undo: remove the event we just created and restore the
+            // task's full pre-drop state (status, scheduledEventId,
+            // scheduledDate, etc.). `updateTask(snapshot)` is a clean
+            // reverse of `markScheduled` because every mutable field is
+            // set back to its pre-drop value. notifyScheduleChange with
+            // the event id poke the optimizer's trigger engine so it
+            // sees the rollback.
             reminderService.removeLocalEvent(id: eventId)
-            backlog.unschedule(id: task.id)
+            backlog.updateTask(taskSnapshot)
+            notifyScheduleChange(deleted: eventId)
         }
         notifyScheduleChange()
     }
@@ -1094,15 +1108,24 @@ struct MenuBarView: View {
                     )
                 }
 
+                // Once-per-user drag-onboarding lives on the first free slot
+                // of the earliest day group, and only while the backlog
+                // actually has something to drag. See
+                // `FreeSlotRow.canShowDragHint`.
+                let backlogHasPending = !(optimizerService.backlogService?.pending.isEmpty ?? true)
+                let firstDayDate = filteredEventsByDay.first?.date
                 ForEach(filteredEventsByDay, id: \.date) { dayGroup in
-                    if dayGroup.date != filteredEventsByDay.first?.date {
+                    if dayGroup.date != firstDayDate {
                         // Inset by `sm` so the divider sits between day
                         // groups without running all the way to the
                         // popover edges — matches native macOS List
                         // section dividers inside a scrollable area.
                         SkinSeparator()
                     }
-                    dayGroupSection(dayGroup)
+                    dayGroupSection(
+                        dayGroup,
+                        showDragHintOnFirstSlot: backlogHasPending && dayGroup.date == firstDayDate
+                    )
                 }
             }
             .padding(.horizontal, DS.Spacing.contentMargin)
@@ -1118,7 +1141,10 @@ struct MenuBarView: View {
     // MARK: - Day Group Section (extracted for release-mode type checker)
 
     @ViewBuilder
-    private func dayGroupSection(_ dayGroup: (date: Date, events: [CalendarEvent])) -> some View {
+    private func dayGroupSection(
+        _ dayGroup: (date: Date, events: [CalendarEvent]),
+        showDragHintOnFirstSlot: Bool = false
+    ) -> some View {
         let visibleCount = visibleEventCount(for: dayGroup.events)
 
         DaySectionHeader(date: dayGroup.date, count: visibleCount)
@@ -1138,10 +1164,31 @@ struct MenuBarView: View {
         )
 
         let ghost = ghostForDay(dayGroup.date)
+        let interleaved = interleave(events: dayGroup.events, freeSlots: freeSlots, ghost: ghost)
+        // Pick the first `.slot` item's id inside this day — only that row
+        // gets the onboarding hint. Precomputing keeps the ForEach body a
+        // pure function of the item and avoids per-iteration scanning.
+        let hintSlotId: String? = showDragHintOnFirstSlot
+            ? interleaved.first(where: { if case .slot = $0 { return true } else { return false } })?.id
+            : nil
 
-        ForEach(interleave(events: dayGroup.events, freeSlots: freeSlots, ghost: ghost), id: \.id) { item in
+        // During a backlog-task drag, events are not valid drop targets.
+        // Collapse them into a single «N events · Xh booked» header so the
+        // free slots (the real targets) and the expanded task list above
+        // share the vertical space. One header > N thin slivers — Бирман:
+        // «свернуть в строку-заголовок, а не уменьшать всё пропорционально».
+        if backlogCoordinator.isDraggingTask && !dayGroup.events.isEmpty {
+            collapsedEventsHeader(for: dayGroup.events)
+        }
+
+        ForEach(interleaved, id: \.id) { item in
             switch item {
             case .event(let event):
+                // Skip per-event rendering while a task is being dragged;
+                // the summary header above stands in for the whole group.
+                if backlogCoordinator.isDraggingTask {
+                    EmptyView()
+                } else {
                 EventRowView(
                     event: event,
                     reminderService: reminderService,
@@ -1197,41 +1244,81 @@ struct MenuBarView: View {
                     },
                     isFreshlyCreated: optimizerService.freshlyCreatedEventIds.contains(event.id)
                 )
+                }
             case .slot(let start, let end):
-                FreeSlotRow(
-                    start: start,
-                    end: end,
-                    onFillTapped: { _ in
-                        let backlog = optimizerService.backlogService
-                        let hasPending = !(backlog?.pending.isEmpty ?? true)
-                        let hasOverdue = !(backlog?.overdue.isEmpty ?? true)
+                // Ghost suppression: when the shared coordinator already
+                // has a ghost block starting at this slot's start (user
+                // is hovering a dragged task over it, or typing into the
+                // backlog input) — skip the "Free · Xh" row so we don't
+                // double-render the same time as two rows.
+                if let ghost, ghost.start == start {
+                    EmptyView()
+                } else {
+                    FreeSlotRow(
+                        start: start,
+                        end: end,
+                        onFillTapped: { _ in
+                            let backlog = optimizerService.backlogService
+                            let hasPending = !(backlog?.pending.isEmpty ?? true)
+                            let hasOverdue = !(backlog?.overdue.isEmpty ?? true)
 
-                        if !hasPending && !hasOverdue {
-                            // No tasks at all → direct focus fill.
-                            fillSlotWithFocus(start: start, end: end)
-                        } else if !hasPending && hasOverdue {
-                            // Only overdue → reschedule directly, no palette.
-                            rescheduleOverdue(into: start, end: end)
-                        } else {
-                            // Pending tasks (maybe overdue too) → show palette for choice.
-                            withAnimation(DS.Animation.quick) {
-                                paletteContext = PaletteContext(
-                                    seedSlotMinutes: Int(end.timeIntervalSince(start) / 60),
-                                    seedSlotStart: start,
-                                    seedSlotEnd: end
-                                )
+                            if !hasPending && !hasOverdue {
+                                // No tasks at all → direct focus fill.
+                                fillSlotWithFocus(start: start, end: end)
+                            } else if !hasPending && hasOverdue {
+                                // Only overdue → reschedule directly, no palette.
+                                rescheduleOverdue(into: start, end: end)
+                            } else {
+                                // Pending tasks (maybe overdue too) → show palette for choice.
+                                withAnimation(DS.Animation.quick) {
+                                    paletteContext = PaletteContext(
+                                        seedSlotMinutes: Int(end.timeIntervalSince(start) / 60),
+                                        seedSlotStart: start,
+                                        seedSlotEnd: end
+                                    )
+                                }
                             }
-                        }
-                    },
-                    onTaskDropped: { drag in
-                        handleTaskDrop(drag: drag, slotStart: start, slotEnd: end)
-                    }
-                )
+                        },
+                        onTaskDropped: { drag in
+                            handleTaskDrop(drag: drag, slotStart: start, slotEnd: end)
+                        },
+                        canShowDragHint: item.id == hintSlotId
+                    )
+                }
             case .ghost(let start, let end, let title):
                 GhostEventRow(start: start, end: end, title: title)
                     .transition(.opacity.combined(with: .scale(scale: 0.96)))
             }
         }
+    }
+
+    /// One-line collapsed summary of a day's events — rendered in place
+    /// of the individual `EventRowView`s while the user is dragging a
+    /// backlog task. Free slots remain visible as drop targets, so the
+    /// timeline area reduces to «где занято + куда можно положить».
+    @ViewBuilder
+    private func collapsedEventsHeader(for events: [CalendarEvent]) -> some View {
+        let bookedMinutes = events.reduce(0) { acc, event in
+            acc + max(0, Int(event.endDate.timeIntervalSince(event.startDate) / 60))
+        }
+        HStack(spacing: DS.Spacing.sm) {
+            // Three stacked hash marks echo the booked-time feel without
+            // any one event's title dominating — the whole group reads as
+            // a single «block».
+            Image(systemName: "rectangle.stack.fill")
+                .font(.caption2)
+                .foregroundStyle(activeSkin.resolvedTextTertiary)
+            Text("\(events.count) event\(events.count == 1 ? "" : "s") · \(DS.formatMinutes(bookedMinutes)) booked")
+                .font(.caption)
+                .foregroundStyle(activeSkin.resolvedTextSecondary)
+                .lineLimit(1)
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, DS.Spacing.xs)
+        .padding(.horizontal, DS.Spacing.sm)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .transition(.opacity.combined(with: .move(edge: .top)))
+        .accessibilityLabel("\(events.count) booked events totalling \(DS.formatMinutes(bookedMinutes))")
     }
 
     // MARK: - List Items (events + free slots interleaved)
