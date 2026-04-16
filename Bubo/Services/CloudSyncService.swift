@@ -65,6 +65,22 @@ final class CloudSyncService {
     /// Quota soft limit (80 % of 1 MB).
     private static let quotaWarningThreshold = 819_200
 
+    /// Hard threshold that triggers proactive cleanup of the keys we know
+    /// how to prune (energy check-ins, dismissed reminder IDs). Smaller
+    /// than `quotaWarningThreshold` on purpose — by the time we've hit the
+    /// warning, iCloud is rejecting writes.
+    private static let cleanupThreshold = 716_800  // ~70 %
+
+    /// Maximum number of dismissed reminder IDs we're willing to keep in
+    /// the cloud KV store. Each UUID is ~36 bytes plus plist overhead,
+    /// so 2000 ≈ 80 KB — well inside quota even with a few hundred
+    /// other settings hanging off the same bucket.
+    static let maxDismissedReminderIds = 2000
+
+    /// Stricter retention when we're close to quota. Normal retention is
+    /// 90 days (see `mergeEnergyCheckIns`).
+    private static let emergencyEnergyRetentionDays: Double = 45
+
     // MARK: - Internal State
 
     private let cloud = NSUbiquitousKeyValueStore.default
@@ -136,6 +152,7 @@ final class CloudSyncService {
 
         cloud.set(Self.schemaVersion, forKey: Self.schemaVersionKey)
 
+        performCleanupIfNeeded()
         estimatedStorageBytes = estimateStorageUsed()
         lastSyncDate = Date()
         status = estimatedStorageBytes > Self.quotaWarningThreshold
@@ -199,6 +216,7 @@ final class CloudSyncService {
             )
         }
 
+        performCleanupIfNeeded()
         estimatedStorageBytes = estimateStorageUsed()
         lastSyncDate = Date()
         status = estimatedStorageBytes > Self.quotaWarningThreshold
@@ -290,13 +308,74 @@ final class CloudSyncService {
         let local = UserDefaults.standard.stringArray(forKey: key) ?? []
         let merged = Self.mergeStringArrays(local: local, remote: remote)
         UserDefaults.standard.set(merged, forKey: key)
+        // If the cap bit, push the trimmed set back so remote converges too.
+        if merged.count < Set(local).union(Set(remote)).count {
+            cloud.set(merged, forKey: key)
+        }
     }
 
     /// Pure merge — testable.
+    ///
+    /// `BuboDismissedReminderIds` is unbounded by construction (every
+    /// ignored reminder leaves a tombstone), so we cap it at
+    /// `maxDismissedReminderIds` after the set-union. The cap is applied
+    /// deterministically (sorted, then truncated) so every device converges
+    /// on the same trimmed set instead of picking a different 2000-subset
+    /// each sync.
     static func mergeStringArrays(
-        local: [String], remote: [String]
+        local: [String], remote: [String],
+        cap: Int = maxDismissedReminderIds
     ) -> [String] {
-        Array(Set(local).union(Set(remote)))
+        let union = Set(local).union(Set(remote))
+        guard union.count > cap else { return Array(union) }
+        return Array(union.sorted().prefix(cap))
+    }
+
+    // MARK: - Proactive Cleanup
+
+    /// Trim the largest prunable keys when we cross `cleanupThreshold`.
+    /// Writes the trimmed values back to both UserDefaults and the cloud
+    /// store so the freed quota is actually reclaimed. Returns the number
+    /// of bytes freed (0 when no cleanup was needed).
+    @discardableResult
+    func performCleanupIfNeeded() -> Int {
+        let before = estimateStorageUsed()
+        guard before > Self.cleanupThreshold else { return 0 }
+
+        // Energy check-ins — drop anything older than the emergency
+        // retention window.
+        let checkInKey = "BuboEnergyCheckIns"
+        if let data = UserDefaults.standard.data(forKey: checkInKey),
+           let items = try? JSONDecoder().decode(
+               [EnergyCheckInService.CheckIn].self, from: data
+           ) {
+            let cutoff = Date().addingTimeInterval(
+                -Self.emergencyEnergyRetentionDays * 86400
+            )
+            let trimmed = items.filter { $0.timestamp >= cutoff }
+            if trimmed.count < items.count,
+               let newData = try? JSONEncoder().encode(trimmed) {
+                UserDefaults.standard.set(newData, forKey: checkInKey)
+                if FileManager.default.ubiquityIdentityToken != nil {
+                    cloud.set(newData, forKey: checkInKey)
+                }
+            }
+        }
+
+        // Dismissed reminder IDs — enforce the hard cap.
+        let dismissedKey = "BuboDismissedReminderIds"
+        if let ids = UserDefaults.standard.stringArray(forKey: dismissedKey),
+           ids.count > Self.maxDismissedReminderIds {
+            let trimmed = Array(ids.sorted().prefix(Self.maxDismissedReminderIds))
+            UserDefaults.standard.set(trimmed, forKey: dismissedKey)
+            if FileManager.default.ubiquityIdentityToken != nil {
+                cloud.set(trimmed, forKey: dismissedKey)
+            }
+        }
+
+        let after = estimateStorageUsed()
+        estimatedStorageBytes = after
+        return max(0, before - after)
     }
 
     // MARK: - Quota Monitoring

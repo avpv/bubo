@@ -33,6 +33,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var unpinObserver: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Register for remote notifications so `NSPersistentCloudKitContainer`
+        // receives the silent pushes it uses to pull remote changes live.
+        // Without this, backlog sync only catches up on the next foreground
+        // launch. No-op on machines without the APS entitlement — the
+        // registration call is cheap and CloudKit still works in pull mode.
+        NSApp.registerForRemoteNotifications()
+
         alertObserver = NotificationCenter.default.addObserver(
             forName: .showFullScreenAlert,
             object: nil,

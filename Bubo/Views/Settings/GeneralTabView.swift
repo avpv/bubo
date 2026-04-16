@@ -387,6 +387,67 @@ struct WallpaperSectionView: View {
 
 // MARK: - General Tab
 
+// MARK: - iCloud Sync Section
+
+/// Surfaces CloudKit account + sync state so the user can tell whether
+/// backlog sync is actually working. Reads live state from the shared
+/// `CloudKitSyncMonitor` (populated by
+/// `NSPersistentCloudKitContainer.eventChangedNotification` observers).
+struct CloudSyncStatusSection: View {
+    @Environment(\.activeSkin) private var skin
+    @State private var monitor = CloudKitSyncMonitor.shared
+    @State private var kvSync = CloudSyncService.shared
+
+    var body: some View {
+        SettingsPlatter("iCloud Sync") {
+            LabeledContent("Backlog (CloudKit)") {
+                HStack(spacing: DS.Spacing.xxs) {
+                    if monitor.phase != .idle {
+                        ProgressView().controlSize(.small)
+                    }
+                    Text(monitor.summary)
+                        .font(.caption)
+                        .foregroundStyle(
+                            monitor.lastError != nil
+                                ? skin.resolvedWarningColor
+                                : skin.resolvedTextSecondary
+                        )
+                }
+            }
+
+            LabeledContent("Settings (iCloud KV)") {
+                Text(kvStatusLabel)
+                    .font(.caption)
+                    .foregroundStyle(
+                        kvIsWarning
+                            ? skin.resolvedWarningColor
+                            : skin.resolvedTextSecondary
+                    )
+            }
+        }
+    }
+
+    private var kvStatusLabel: String {
+        switch kvSync.status {
+        case .idle: return "Idle"
+        case .synced(let date):
+            return "Synced \(date.formatted(.relative(presentation: .named)))"
+        case .quotaWarning(let bytes):
+            let kb = bytes / 1024
+            return "Approaching quota (\(kb) KB / 1024 KB)"
+        case .error(let msg): return msg
+        case .unavailable: return "Not signed in to iCloud"
+        }
+    }
+
+    private var kvIsWarning: Bool {
+        switch kvSync.status {
+        case .quotaWarning, .error, .unavailable: return true
+        default: return false
+        }
+    }
+}
+
 struct GeneralTabView: View {
     @Environment(ReminderSettings.self) var settings
     @Environment(ReminderService.self) var reminderService
@@ -472,6 +533,8 @@ struct GeneralTabView: View {
                         .font(.caption)
                 }
             }
+
+            CloudSyncStatusSection()
 
             SettingsPlatter {
                 VStack(spacing: DS.Spacing.xs) {
