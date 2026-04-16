@@ -320,10 +320,10 @@ struct CommandPalette: View {
                         .font(.body)
                         .foregroundStyle(.red) // Highlight color
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Разгрузи мой день (Burnout Rescue)")
+                        Text("Unload my day (Burnout Rescue)")
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.red)
-                        Text("Уровень энергии низкий. Отложить всё, кроме 2 главных задач.")
+                        Text("Energy level is low. Defer everything except the 2 top tasks.")
                             .font(.caption)
                             .foregroundStyle(.red.opacity(0.8))
                     }
