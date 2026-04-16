@@ -90,6 +90,11 @@ struct BacklogView: View {
     @Environment(\.backlogCoordinator) private var coordinator
 
     @State private var newTaskTitle = ""
+    /// Cached parse result for `newTaskTitle`. Updated from `onChange` so
+    /// the title/duration pair is computed once per keystroke instead of
+    /// re-evaluated inside every SwiftUI computed property that reads it
+    /// (parsed duration chip, ghost preview, row-count math).
+    @State private var parsedNewTaskTitle: (cleaned: String, durationMinutes: Int?) = ("", nil)
     /// Three-state disclosure for the task list.
     /// Birman: «информация важнее украшений» — шеврон сам несёт три смысла
     /// (collapsed / compact / expanded), без дублирующей кнопки «Show more».
@@ -116,6 +121,9 @@ struct BacklogView: View {
     @State private var isScheduleHovering: Bool = false
     /// Textual ghost — complements the ghost block on the timeline so
     /// assistive technologies and compact layouts still get "Today 14:00".
+    /// The label itself lives in `slotPreviewCache`; `ghostPreviewText`
+    /// mirrors the last value rendered under the input so SwiftUI still
+    /// animates the row in/out on string change.
     @State private var ghostPreviewText: String? = nil
     @State private var ghostPreviewTask: Task<Void, Never>? = nil
     @FocusState private var isInputFocused: Bool
@@ -143,13 +151,11 @@ struct BacklogView: View {
     /// Session-local only; survives popover close, not app restart.
     @State private var urgentOnlyFilter: Bool = false
 
-    /// Cached "where would this land?" answer per task ID. Populated lazily
-    /// on first hover — the lookup runs the same `FreeSlotFinder.nextSlot`
-    /// that drives the ghost preview for new tasks, so the two signals agree.
-    @State private var rowSlotPreviews: [String: String] = [:]
-    /// In-flight debounced lookups keyed by task ID so we can cancel a pending
-    /// compute if the cursor leaves the row before the result arrives.
-    @State private var rowSlotPreviewTasks: [String: Task<Void, Never>] = [:]
+    /// Shared cache for "where would a task of N minutes land?" lookups.
+    /// Both the per-row hover hint and the ghost preview under the input
+    /// read from this single source, so they always agree and a calendar
+    /// mutation invalidates both signals at once.
+    @State private var slotPreviewCache = SlotPreviewCache()
 
     /// User has already performed at least one drag — used to hide the
     /// onboarding hint once the affordance has been discovered.
@@ -220,9 +226,7 @@ struct BacklogView: View {
     /// urgent-only UI filter, so the header counter doesn't lie about
     /// what's actually in the backlog.
     private var allActiveTasks: [BacklogTask] {
-        // Frozen tasks live in their own tombstone below — excluding them
-        // here keeps the active list's count, sort and rendering honest.
-        backlogService.tasks.filter { $0.status != .done && $0.status != .frozen }
+        BacklogLogic.activeTasks(backlogService.tasks)
     }
 
     /// Tasks visible in the list. Equals `allActiveTasks` unless the
@@ -235,49 +239,18 @@ struct BacklogView: View {
         return allActiveTasks.filter { isUrgent($0) }
     }
 
-    /// Deadline-urgency + priority score. Higher = more urgent.
-    /// Today / overdue dominates, tomorrow is a strong second, week-out is
-    /// a nudge; without a deadline, only priority contributes. Weighted so
-    /// "high priority, no deadline" still outranks "low priority, week out".
-    private func smartScore(for task: BacklogTask) -> Double {
-        var score = task.priority.numericValue * 100
-        if let deadline = task.deadline {
-            let cal = Calendar.current
-            if deadline < Date() || cal.isDateInToday(deadline) {
-                score += 1000
-            } else if cal.isDateInTomorrow(deadline) {
-                score += 500
-            } else {
-                let days = max(1, cal.dateComponents([.day], from: Date(), to: deadline).day ?? 7)
-                score += max(0, 300 - Double(days) * 20)
-            }
-        }
-        return score
-    }
-
-    /// Active tasks as a flat list ordered by `smartScore`. Stable for equal
-    /// scores: falls back to the user's storage order, so the sorted list
-    /// never "shuffles" two tasks the user tied deliberately.
+    /// Active tasks as a flat list ordered by `BacklogLogic.smartScore`.
+    /// Stable for equal scores: falls back to storage order, so the sorted
+    /// list never "shuffles" two tasks the user tied deliberately.
     private var smartSortedActiveTasks: [BacklogTask] {
-        let indexed = activeTasks.enumerated().map { ($0.offset, $0.element) }
-        let sorted = indexed.sorted { lhs, rhs in
-            let lScore = smartScore(for: lhs.1)
-            let rScore = smartScore(for: rhs.1)
-            if lScore == rScore { return lhs.0 < rhs.0 }
-            return lScore > rScore
-        }
-        return sorted.map { $0.1 }
+        BacklogLogic.smartSorted(activeTasks)
     }
 
     /// Tasks completed since local midnight. Powers the «N completed today»
     /// tombstone — HIG/Birman: сохраняем контекст «сколько сделано сегодня»,
     /// но квартирантом, не жильцом: свёрнуто по умолчанию.
     private var completedToday: [BacklogTask] {
-        let startOfDay = Calendar.current.startOfDay(for: Date())
-        return backlogService.tasks
-            .filter { $0.status == .done }
-            .filter { ($0.completedAt ?? .distantPast) >= startOfDay }
-            .sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) }
+        BacklogLogic.completedToday(backlogService.tasks)
     }
 
     /// Height cap for the task list ScrollView.
@@ -330,9 +303,10 @@ struct BacklogView: View {
     }
 
     /// Duration to use for ghost-preview lookup and for the task actually
-    /// created on submit. Reparses on every keystroke.
+    /// created on submit. Reads from `parsedNewTaskTitle`, which is kept
+    /// in sync by an `onChange` on the text field.
     private var parsedDurationMinutes: Int {
-        BacklogTitleParser.parse(newTaskTitle).durationMinutes ?? optimizerService.defaultTaskDurationMinutes
+        parsedNewTaskTitle.durationMinutes ?? optimizerService.defaultTaskDurationMinutes
     }
 
     /// Same as `parsedDurationMinutes` but returns `nil` when the parser
@@ -340,7 +314,7 @@ struct BacklogView: View {
     /// echoes what the parser understood — seeing "30 min" appear confirms
     /// the shorthand was caught before the user commits.
     private var recognizedDurationMinutes: Int? {
-        BacklogTitleParser.parse(newTaskTitle).durationMinutes
+        parsedNewTaskTitle.durationMinutes
     }
 
     var body: some View {
@@ -397,14 +371,12 @@ struct BacklogView: View {
             }
         }
         // Any backlog edit (duration, context) or event change invalidates
-        // the hover-preview cache — otherwise a row that was edited 10s ago
+        // the shared preview cache — otherwise a row that was edited 10s ago
         // could keep showing a slot computed against a stale duration. The
         // count + sum is a cheap fingerprint: changes whenever any task
         // grows or shrinks, reschedules, or is added/removed.
-        .onChange(of: taskHoverCacheFingerprint) { _, _ in
-            rowSlotPreviews.removeAll()
-            for (_, task) in rowSlotPreviewTasks { task.cancel() }
-            rowSlotPreviewTasks.removeAll()
+        .onChange(of: taskHoverCacheFingerprint) { _, newValue in
+            slotPreviewCache.invalidateIfChanged(to: newValue)
         }
         // Drag = focus mode. The moment the user grabs a task:
         //   • Tasks flip to `.expanded` — every other row becomes a
@@ -487,7 +459,7 @@ struct BacklogView: View {
             coordinator?.clearGhost()
             coordinator?.endDrag()
             ghostPreviewTask?.cancel()
-            cancelAllRowSlotPreviews()
+            slotPreviewCache.cancelAll()
         }
     }
 
@@ -691,17 +663,7 @@ struct BacklogView: View {
     /// instead of going negative. Uses `OptimizerService.workingHours` — the
     /// same source of truth as the free-slot finder.
     private var remainingWorkdayMinutes: Int {
-        let cal = Calendar.current
-        let now = Date()
-        let endHour = optimizerService.workingHours.upperBound
-        guard let endOfWorkday = cal.date(
-            bySettingHour: endHour,
-            minute: 0,
-            second: 0,
-            of: now
-        ) else { return 0 }
-        let seconds = max(0, endOfWorkday.timeIntervalSince(now))
-        return Int(seconds / 60)
+        BacklogLogic.remainingWorkdayMinutes(workingHours: optimizerService.workingHours)
     }
 
     private var capacityRingTooltip: String {
@@ -865,7 +827,7 @@ struct BacklogView: View {
                 isFocused: focusedTaskId == task.id,
                 onFocusPrev: { focusRow(offsetFrom: task.id, by: -1) },
                 onFocusNext: { focusRow(offsetFrom: task.id, by: +1) },
-                slotPreview: rowSlotPreviews[task.id],
+                slotPreview: slotPreviewCache.cached(durationMinutes: task.durationMinutes),
                 onHoverChanged: { hovering in
                     handleRowHover(task: task, hovering: hovering)
                 }
@@ -1209,8 +1171,7 @@ struct BacklogView: View {
     }
 
     private func isUrgent(_ task: BacklogTask) -> Bool {
-        guard let deadline = task.deadline else { return false }
-        return deadline <= Calendar.current.date(byAdding: .day, value: 2, to: Date()) ?? Date()
+        BacklogLogic.isUrgent(task)
     }
 
     /// Move keyboard focus between active-task rows by `delta` positions.
@@ -1245,74 +1206,31 @@ struct BacklogView: View {
 
     // MARK: - Hover slot preview
 
-    /// Debounce constant for per-row slot lookups. Matches the 300 ms used
-    /// by the ghost preview under the "Add task" field so the two signals
-    /// feel like the same feature.
-    private static let slotPreviewHoverDebounceMs: Int = 250
-
     /// Cheap fingerprint covering the fields that affect "where would this
     /// land?" answers — any change invalidates all cached previews. Includes
     /// total duration, task count, and calendar event count so edits,
     /// additions, deletions and calendar mutations all trip the refresh.
     private var taskHoverCacheFingerprint: Int {
-        var hasher = Hasher()
-        hasher.combine(activeTasks.count)
-        hasher.combine(activeTasks.reduce(0) { $0 + $1.durationMinutes })
-        hasher.combine(reminderService.allEvents.count)
-        return hasher.finalize()
+        SlotPreviewCache.fingerprint(
+            tasks: activeTasks,
+            eventCount: reminderService.allEvents.count
+        )
     }
 
     /// Kick off (or cancel) the slot lookup for a row the cursor entered or
-    /// left. Results land in `rowSlotPreviews` so SwiftUI re-renders the
-    /// inline "→ Today 15:00" hint. A cached answer short-circuits the
-    /// compute — calendar state rarely shifts enough during a single hover
-    /// session to make a re-lookup worth the cost.
+    /// left. The shared `SlotPreviewCache` owns the computation and result
+    /// storage — row rendering reads through `slotPreviewCache.cached(...)`.
     private func handleRowHover(task: BacklogTask, hovering: Bool) {
-        let taskId = task.id
-
-        // Cursor left the row — cancel any pending lookup but keep the cache
-        // so a quick return flashes the preview without spinning again.
+        let duration = task.durationMinutes
         guard hovering else {
-            rowSlotPreviewTasks[taskId]?.cancel()
-            rowSlotPreviewTasks[taskId] = nil
+            slotPreviewCache.cancel(durationMinutes: duration)
             return
         }
-
-        // Already cached → nothing to do; the row reads `rowSlotPreviews`
-        // directly via `slotPreview`.
-        if rowSlotPreviews[taskId] != nil { return }
-        if rowSlotPreviewTasks[taskId] != nil { return }
-
-        let duration = task.durationMinutes
-        rowSlotPreviewTasks[taskId] = Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(Self.slotPreviewHoverDebounceMs))
-            guard !Task.isCancelled else { return }
-
-            let slot = FreeSlotFinder.nextSlot(
-                matching: duration,
-                in: reminderService.allEvents,
-                workingHours: optimizerService.workingHours,
-                maxDaysAhead: 7
-            )
-            guard !Task.isCancelled else { return }
-
-            if let slot {
-                let fmt = DateFormatter()
-                fmt.setLocalizedDateFormatFromTemplate("H:mm")
-                let range = "\(fmt.string(from: slot.start))–\(fmt.string(from: slot.end))"
-                rowSlotPreviews[taskId] = "\(Self.dayLabel(for: slot.start)) \(range)"
-            } else {
-                rowSlotPreviews[taskId] = "no free slot this week"
-            }
-            rowSlotPreviewTasks[taskId] = nil
-        }
-    }
-
-    /// Cancel every in-flight hover lookup. Called from `.onDisappear` so
-    /// Task closures don't outlive the view.
-    private func cancelAllRowSlotPreviews() {
-        for (_, task) in rowSlotPreviewTasks { task.cancel() }
-        rowSlotPreviewTasks.removeAll()
+        _ = slotPreviewCache.preview(
+            durationMinutes: duration,
+            events: reminderService.allEvents,
+            workingHours: optimizerService.workingHours
+        )
     }
 
     /// Freeze a task and surface an undo toast. Mirrors
@@ -1350,9 +1268,11 @@ struct BacklogView: View {
                         // draft + ghost so the next ⌘K / tab lands on a
                         // clean slate.
                         newTaskTitle = ""
+                        parsedNewTaskTitle = ("", nil)
                         isInputFocused = false
                     }
-                    .onChange(of: newTaskTitle) {
+                    .onChange(of: newTaskTitle) { _, newValue in
+                        parsedNewTaskTitle = BacklogTitleParser.parse(newValue)
                         computeGhostPreview()
                     }
 
@@ -1478,7 +1398,7 @@ struct BacklogView: View {
 
     private func computeGhostPreview() {
         ghostPreviewTask?.cancel()
-        let parsed = BacklogTitleParser.parse(newTaskTitle)
+        let parsed = parsedNewTaskTitle
         guard !parsed.cleaned.isEmpty else {
             ghostPreviewText = nil
             coordinator?.clearGhost()
@@ -1488,30 +1408,21 @@ struct BacklogView: View {
         let duration = parsed.durationMinutes ?? optimizerService.defaultTaskDurationMinutes
         let previewTitle = parsed.cleaned
 
+        // Share one cache with the per-row hover previews so the row the
+        // user will see and the ghost preview always agree. The cache
+        // debounces the underlying FreeSlotFinder call (250ms).
+        let request = slotPreviewCache.preview(
+            durationMinutes: duration,
+            events: reminderService.allEvents,
+            workingHours: optimizerService.workingHours
+        )
         ghostPreviewTask = Task { @MainActor in
-            // Debounce: wait 300 ms after last keystroke so we don't thrash
-            // the slot finder for every character.
-            try? await Task.sleep(for: .milliseconds(300))
-            guard !Task.isCancelled else { return }
-
-            // Share one shared finder with FreeSlotRow so the row the user
-            // will see and the ghost preview always agree.
-            let slot = FreeSlotFinder.nextSlot(
-                matching: duration,
-                in: reminderService.allEvents,
-                workingHours: optimizerService.workingHours,
-                maxDaysAhead: 7
-            )
-            guard !Task.isCancelled else { return }
-
-            if let slot {
-                let fmt = DateFormatter()
-                fmt.setLocalizedDateFormatFromTemplate("H:mm")
-                let range = "\(fmt.string(from: slot.start))–\(fmt.string(from: slot.end))"
-                ghostPreviewText = "\(Self.dayLabel(for: slot.start)) \(range)"
+            guard let result = await request.value else { return }
+            if Task.isCancelled { return }
+            ghostPreviewText = result.label
+            if let slot = result.slot {
                 coordinator?.setGhost(slot: slot, title: previewTitle)
             } else {
-                ghostPreviewText = "no free slot this week"
                 coordinator?.clearGhost()
             }
         }
@@ -1520,15 +1431,11 @@ struct BacklogView: View {
     /// Localised label describing how far off `date` is from today.
     /// Used by the ghost preview — keep it short so it fits on one line.
     static func dayLabel(for date: Date, calendar cal: Calendar = .current) -> String {
-        if cal.isDateInToday(date) { return "Today" }
-        if cal.isDateInTomorrow(date) { return "Tomorrow" }
-        let fmt = DateFormatter()
-        fmt.setLocalizedDateFormatFromTemplate("EEE")
-        return fmt.string(from: date)
+        SlotPreviewCache.dayLabel(for: date, calendar: cal)
     }
 
     private func addTask() {
-        let parsed = BacklogTitleParser.parse(newTaskTitle)
+        let parsed = parsedNewTaskTitle
         let title = parsed.cleaned
         guard !title.isEmpty else { return }
 
@@ -1544,6 +1451,7 @@ struct BacklogView: View {
             }
         }
         newTaskTitle = ""
+        parsedNewTaskTitle = ("", nil)
         ghostPreviewText = nil
         ghostPreviewTask?.cancel()
         coordinator?.clearGhost()
@@ -1571,9 +1479,10 @@ struct BacklogCapacityRing: View {
     /// when the workday is over (remaining = 0): in that case, any workload
     /// is overflow; an empty backlog still reads as "fine" (returns 0).
     private var fraction: Double {
-        guard pendingMinutes > 0 else { return 0 }
-        guard remainingWorkdayMinutes > 0 else { return 1.5 } // overflow sentinel
-        return Double(pendingMinutes) / Double(remainingWorkdayMinutes)
+        BacklogLogic.capacityFraction(
+            pendingMinutes: pendingMinutes,
+            remainingWorkdayMinutes: remainingWorkdayMinutes
+        )
     }
 
     private var color: Color {
@@ -2280,9 +2189,17 @@ struct BacklogTaskEditRow: View {
     @State private var isRecurring: Bool
     @State private var recurrenceTag: String
     @State private var dependsOn: [String]
+    /// Preferred time of day for this task — morning/afternoon/evening or
+    /// "any" (nil). Fed into the optimizer via `toOptimizableEvent`'s
+    /// `preferredHourRange`, which nudges the scheduler without forcing it.
+    @State private var preferredPeriod: Period?
     /// Currently-selected task in the "Add dependency" picker — resets to nil
     /// after each successful add so the picker returns to its placeholder.
     @State private var newDependencyId: String? = nil
+    /// Substring filter for the dependency picker — lets the user narrow a
+    /// long backlog down to the task they want to link without scrolling
+    /// through dozens of menu entries.
+    @State private var dependencyQuery: String = ""
     @Environment(\.activeSkin) private var skin
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var isTitleFocused: Bool
@@ -2301,10 +2218,17 @@ struct BacklogTaskEditRow: View {
         _isRecurring = State(initialValue: task.isRecurring)
         _recurrenceTag = State(initialValue: task.recurrenceTag ?? "")
         _dependsOn = State(initialValue: task.dependsOn)
+        _preferredPeriod = State(initialValue: task.preferredPeriod)
     }
 
     private static let durationOptions = [15, 30, 45, 60, 90, 120, 180, 240]
     private static let spOptions: [Int?] = [nil, 1, 2, 3, 5, 8, 13]
+    /// Periods exposed as pills. Night is intentionally omitted — it's in
+    /// the optimizer model to cover after-midnight slots, but surfacing
+    /// "Night" on a daytime planner reads as a trap. Users who really
+    /// want night work can still get there via preferred-hour logic
+    /// elsewhere.
+    private static let periodOptions: [Period?] = [nil, .morning, .afternoon, .evening]
     /// Width of the "Project" inline text field — roughly 15 caption2-chars
     /// at system font; wider than that wastes horizontal space in a
     /// 360pt-wide popover.
@@ -2405,6 +2329,28 @@ struct BacklogTaskEditRow: View {
                     .onSubmit { commit() }
             }
 
+            // Preferred time of day. Nudges the optimizer toward a part
+            // of the day ("do focus work in the morning") without hard-
+            // binding the task to specific hours. The pill labelled "Any"
+            // clears the preference so the scheduler can place the task
+            // wherever fits best.
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                Text("Time of day")
+                    .font(.caption2)
+                    .foregroundStyle(skin.resolvedTextSecondary)
+                HStack(spacing: DS.Spacing.xs) {
+                    ForEach(Self.periodOptions, id: \.self) { period in
+                        chipButton(
+                            label: period?.displayLabel ?? "Any",
+                            isActive: preferredPeriod == period
+                        ) {
+                            preferredPeriod = period
+                            autosave()
+                        }
+                    }
+                }
+            }
+
             // Recurring toggle. Flipped on, completion will reset the task
             // to pending instead of marking it done — useful for weekly
             // reviews, daily standups, etc. A free-form tag becomes the
@@ -2497,6 +2443,7 @@ struct BacklogTaskEditRow: View {
         let trimmedTag = recurrenceTag.trimmingCharacters(in: .whitespaces)
         updated.recurrenceTag = (isRecurring && !trimmedTag.isEmpty) ? trimmedTag : nil
         updated.dependsOn = dependsOn
+        updated.preferredPeriod = preferredPeriod
         backlogService.updateTask(updated)
     }
 
@@ -2504,6 +2451,11 @@ struct BacklogTaskEditRow: View {
     /// pills with an ✕ button; a trailing picker adds a new link.
     /// Other active tasks from the backlog populate the picker. Frozen/done
     /// tasks are excluded because depending on them means "never unblocks".
+    ///
+    /// An inline substring filter keeps the picker usable once the backlog
+    /// grows past ~20 tasks — scrolling through the whole menu to find one
+    /// specific task is the exact thing HIG's "direct manipulation" warns
+    /// against.
     @ViewBuilder
     private var dependencySection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
@@ -2524,35 +2476,80 @@ struct BacklogTaskEditRow: View {
 
             // Picker for adding a new dependency. Hidden when there are no
             // candidates so we don't show a dead dropdown.
-            let candidates = backlogService.tasks.filter { other in
+            let allCandidates = backlogService.tasks.filter { other in
                 other.id != task.id
                     && other.status != .done
                     && other.status != .frozen
                     && !dependsOn.contains(other.id)
             }
-            if !candidates.isEmpty {
-                Picker("Add dependency", selection: Binding(
-                    get: { newDependencyId },
-                    set: { selected in
-                        if let selected, !dependsOn.contains(selected) {
-                            dependsOn.append(selected)
-                            autosave()
+            let filtered = BacklogTaskEditRow.filterDependencyCandidates(
+                allCandidates,
+                query: dependencyQuery
+            )
+            if !allCandidates.isEmpty {
+                HStack(spacing: DS.Spacing.xs) {
+                    // Search field appears only when the candidate pool is
+                    // long enough that scrolling would become friction.
+                    // Small backlogs keep the bare picker — simplicity wins.
+                    if allCandidates.count >= Self.dependencySearchThreshold {
+                        Image(systemName: "magnifyingglass")
+                            .font(.caption2)
+                            .foregroundStyle(skin.resolvedTextTertiary)
+                        TextField("Filter", text: $dependencyQuery)
+                            .textFieldStyle(.plain)
+                            .font(.caption2)
+                            .frame(maxWidth: Self.contextFieldWidth)
+                    }
+                    Picker("Add dependency", selection: Binding(
+                        get: { newDependencyId },
+                        set: { selected in
+                            if let selected, !dependsOn.contains(selected) {
+                                dependsOn.append(selected)
+                                autosave()
+                            }
+                            // Reset selection + query so the picker returns
+                            // to the placeholder row for the next add.
+                            newDependencyId = nil
+                            dependencyQuery = ""
                         }
-                        // Reset selection so the picker returns to the
-                        // placeholder row and can be used again.
-                        newDependencyId = nil
+                    )) {
+                        if filtered.isEmpty {
+                            Text("No matches").tag(String?.none)
+                        } else {
+                            Text("Add dependency\u{2026}").tag(String?.none)
+                            ForEach(filtered, id: \.id) { candidate in
+                                Text(candidate.title).tag(String?.some(candidate.id))
+                            }
+                        }
                     }
-                )) {
-                    Text("Add dependency\u{2026}").tag(String?.none)
-                    ForEach(candidates, id: \.id) { candidate in
-                        Text(candidate.title).tag(String?.some(candidate.id))
-                    }
+                    .pickerStyle(.menu)
+                    .font(.caption2)
+                    .controlSize(.small)
+                    .labelsHidden()
+                    .disabled(filtered.isEmpty)
                 }
-                .pickerStyle(.menu)
-                .font(.caption2)
-                .controlSize(.small)
-                .labelsHidden()
             }
+        }
+    }
+
+    /// Threshold above which the dependency picker grows a search field.
+    /// Small pools stay uncluttered; longer pools get the filter to keep
+    /// the menu manageable.
+    private static let dependencySearchThreshold: Int = 8
+
+    /// Pure filter for the dependency picker. Case-insensitive substring
+    /// match over `title` and `context`. Empty query returns the full set
+    /// so callers can always round-trip the input unchanged.
+    static func filterDependencyCandidates(
+        _ candidates: [BacklogTask],
+        query: String
+    ) -> [BacklogTask] {
+        let trimmed = query.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !trimmed.isEmpty else { return candidates }
+        return candidates.filter { task in
+            if task.title.lowercased().contains(trimmed) { return true }
+            if let ctx = task.context?.lowercased(), ctx.contains(trimmed) { return true }
+            return false
         }
     }
 

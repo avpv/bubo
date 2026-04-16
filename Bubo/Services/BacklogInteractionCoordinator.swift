@@ -120,6 +120,18 @@ extension EnvironmentValues {
 /// spinning up a SwiftUI view.
 enum BacklogTitleParser {
 
+    /// Pre-compiled regex for the trailing-duration pattern.
+    /// The TextField calls `parse` on every keystroke, which used to
+    /// re-compile this regex every time — small cost in isolation, but
+    /// enough to show up as a main-thread hotspot once the parser was
+    /// also wired into SwiftUI computed properties (body re-eval path).
+    /// Compiling once and reusing drops the steady-state cost to a
+    /// single `firstMatch` call per keystroke.
+    private static let trailingDurationRegex: NSRegularExpression? = {
+        let pattern = #"(?:\s|^)(?:(\d+)\s*(?:h|hr|hrs|hour|hours)(?:\s*(\d+)\s*(?:m|min|mins|minute|minutes))?|(\d+)\s*(?:m|min|mins|minute|minutes))\s*$"#
+        return try? NSRegularExpression(pattern: pattern, options: .caseInsensitive)
+    }()
+
     /// Parse a trailing duration hint out of a task title.
     ///
     /// Recognises simple patterns at the very end of the title:
@@ -136,9 +148,7 @@ enum BacklogTitleParser {
 
         // Anchor at end-of-string so a word like "30-minute meeting"
         // in the middle of the title isn't mistaken for a duration.
-        let pattern = #"(?:\s|^)(?:(\d+)\s*(?:h|hr|hrs|hour|hours)(?:\s*(\d+)\s*(?:m|min|mins|minute|minutes))?|(\d+)\s*(?:m|min|mins|minute|minutes))\s*$"#
-
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else {
+        guard let regex = trailingDurationRegex else {
             return (trimmed, nil)
         }
         let range = NSRange(trimmed.startIndex..., in: trimmed)

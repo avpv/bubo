@@ -122,13 +122,7 @@ final class BacklogService {
 
     /// Urgent tasks — deadline within N days.
     func urgent(withinDays days: Int = 2) -> [BacklogTask] {
-        let cutoff = Calendar.current.date(byAdding: .day, value: days, to: Date()) ?? Date()
-        return tasks.filter { task in
-            task.status != .done
-                && task.status != .frozen
-                && task.deadline != nil
-                && task.deadline! <= cutoff
-        }
+        BacklogLogic.urgentTasks(tasks, withinDays: days)
     }
 
     // MARK: - Mutations
@@ -149,9 +143,16 @@ final class BacklogService {
 
     func updateTask(_ task: BacklogTask) {
         guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return }
-        tasks[index] = task
+        var stamped = task
+        // Stamp a fresh `modifiedAt` so CloudKit-driven merges on other
+        // devices can tell which copy of the task is newer. Callers that
+        // *don't* want to bump the stamp (notably `silentlyUpdate`, which
+        // applies remote edits back into the local store) have their own
+        // code path that skips this.
+        stamped.modifiedAt = Date()
+        tasks[index] = stamped
         saveTasks()
-        NotificationCenter.default.post(name: Self.taskUpdated, object: task.id)
+        NotificationCenter.default.post(name: Self.taskUpdated, object: stamped.id)
     }
 
     /// Update without posting `taskUpdated`. Used by `RemindersSyncService`
@@ -178,20 +179,29 @@ final class BacklogService {
     func completeTask(id: String) {
         guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
 
+        let now = Date()
         if tasks[index].isRecurring {
             // Recurring tasks reset instead of moving to `.done`: the row
             // survives the completion gesture, ready for the next occurrence.
             // `createdAt` is refreshed so "stale" logic treats this as new,
             // and any prior schedule linkage is dropped so the task re-enters
-            // planning cleanly next time.
+            // planning cleanly next time. `deadline` is advanced by the
+            // `RecurrenceEngine` so a "weekly review" completed on Friday
+            // re-surfaces next Friday instead of staying at today's urgency.
             tasks[index].status = .pending
-            tasks[index].completedAt = Date()
-            tasks[index].createdAt = Date()
+            tasks[index].completedAt = now
+            tasks[index].createdAt = now
             tasks[index].scheduledEventId = nil
             tasks[index].scheduledDate = nil
+            if let next = RecurrenceEngine.nextOccurrence(
+                after: now,
+                tag: tasks[index].recurrenceTag
+            ) {
+                tasks[index].deadline = next
+            }
         } else {
             tasks[index].status = .done
-            tasks[index].completedAt = Date()
+            tasks[index].completedAt = now
         }
 
         saveTasks()
@@ -348,31 +358,30 @@ final class BacklogService {
     }
 
     // MARK: - Persistence (SwiftData — single shared ModelContainer)
-    
+
     func dropStaleTasks() {
         let cutoff = Calendar.current.date(byAdding: .day, value: -14, to: Date()) ?? Date()
         let stale = tasks.filter { $0.status == .pending && $0.createdAt <= cutoff }
         guard !stale.isEmpty else { return }
-        
+
         tasks.removeAll { task in stale.contains { $0.id == task.id } }
         saveTasks()
         for task in stale {
             NotificationCenter.default.post(name: Self.taskRemoved, object: task)
         }
     }
-    //
+
     // Pattern inherited from `EventCache`: each load/save creates a fresh
     // `ModelContext(modelContainer)` rather than using `container.mainContext`.
     // This avoids the main-actor SwiftData threading hazards that broke
-    // v1.10.30–v1.10.41. The store is local-only (no CloudKit), so the
-    // initial `loadTasks()` in `init` returns quickly — a few SQLite reads,
-    // no network, no authentication.
+    // v1.10.30–v1.10.41.
     //
-    // `saveTasks()` performs a full delete-and-reinsert on every mutation.
-    // That is O(n) in the number of tasks, but n is small (backlogs of
-    // hundreds, not millions), the writes are off-main (fresh context), and
-    // the simplicity avoids the whole class of `#Predicate` / `findPersisted`
-    // pitfalls that also contributed to the v1.10.30 regression.
+    // `saveTasks()` now performs an **incremental diff** against the persisted
+    // store instead of the previous wipe-and-reinsert. A single-task edit
+    // updates one row; a delete deletes one row; a reorder touches only the
+    // rows whose `sortOrder` actually moved. This scales with the diff size
+    // rather than the backlog size, which matters once CloudKit sync is on
+    // because every persisted write becomes a CK transaction.
 
     private func loadTasks() {
         let context = ModelContext(modelContainer)
@@ -385,11 +394,23 @@ final class BacklogService {
 
     private func saveTasks() {
         let context = ModelContext(modelContainer)
-        // Wipe existing rows — `tasks` is the source of truth in memory.
-        try? context.delete(model: PersistedBacklogTask.self)
-        for (index, task) in tasks.enumerated() {
-            context.insert(PersistedBacklogTask(from: task, sortOrder: index))
+        let existing = (try? context.fetch(FetchDescriptor<PersistedBacklogTask>())) ?? []
+        var byId = Dictionary(uniqueKeysWithValues: existing.map { ($0.taskId, $0) })
+
+        let liveIds = Set(tasks.map(\.id))
+        for (id, row) in byId where !liveIds.contains(id) {
+            context.delete(row)
+            byId.removeValue(forKey: id)
         }
+
+        for (index, task) in tasks.enumerated() {
+            if let row = byId[task.id] {
+                row.apply(task, sortOrder: index)
+            } else {
+                context.insert(PersistedBacklogTask(from: task, sortOrder: index))
+            }
+        }
+
         try? context.save()
     }
 }

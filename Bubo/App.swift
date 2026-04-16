@@ -20,38 +20,69 @@ struct BuboApp: App {
 
     private let modelContainer: ModelContainer
 
+    /// UserDefaults flag controlling whether the backlog store opts into
+    /// CloudKit-backed SwiftData sync. Defaults to `false` until the
+    /// companion event models drop their `@Attribute(.unique)` constraints
+    /// (CloudKit rejects unique attributes) — until then, a flip of the
+    /// flag attempts a CloudKit build and `init` falls back to the local
+    /// config on failure, so the app still launches. Users who know they
+    /// want iCloud round-trip of backlog rows can override the default
+    /// from Settings once the event-side blockers are cleared.
+    static let cloudSyncPreferenceKey = "BuboBacklogCloudSyncEnabled"
+
+    /// Build the shared `ModelContainer`. When `cloudEnabled` is true the
+    /// container runs with `cloudKitDatabase: .automatic`; on failure the
+    /// caller retries with a local-only config so a missing iCloud account
+    /// (or a schema constraint CloudKit rejects) never blocks app launch.
+    private static func makeContainer(cloudEnabled: Bool) throws -> ModelContainer {
+        let schema = Schema([
+            PersistedLocalEvent.self,
+            PersistedCachedEvent.self,
+            PersistedExcludedOccurrence.self,
+            PersistedReminderOverride.self,
+            PersistedBacklogTask.self,
+        ])
+        let config = ModelConfiguration(
+            schema: schema,
+            cloudKitDatabase: cloudEnabled ? .automatic : .none
+        )
+        return try ModelContainer(for: schema, configurations: config)
+    }
+
     init() {
+        let defaults = UserDefaults.standard
+        let cloudPreference = defaults.object(forKey: Self.cloudSyncPreferenceKey) as? Bool ?? false
+
         let container: ModelContainer
         do {
-            container = try ModelContainer(for:
-                PersistedLocalEvent.self,
-                PersistedCachedEvent.self,
-                PersistedExcludedOccurrence.self,
-                PersistedReminderOverride.self,
-                PersistedBacklogTask.self
-            )
+            container = try Self.makeContainer(cloudEnabled: cloudPreference)
         } catch {
-            // Schema migration failed — delete the corrupted store and retry
-            // so the app can launch instead of crashing on every open.
-            let storeURL = URL.applicationSupportDirectory
-                .appending(path: "default.store")
-            try? FileManager.default.removeItem(at: storeURL)
-            // Also remove WAL/SHM sidecar files
-            for suffix in ["-wal", "-shm"] {
-                let sidecar = storeURL.deletingPathExtension()
-                    .appendingPathExtension(storeURL.pathExtension + suffix)
-                try? FileManager.default.removeItem(at: sidecar)
-            }
-            do {
-                container = try ModelContainer(for:
-                    PersistedLocalEvent.self,
-                    PersistedCachedEvent.self,
-                    PersistedExcludedOccurrence.self,
-                    PersistedReminderOverride.self,
-                    PersistedBacklogTask.self
-                )
-            } catch {
-                fatalError("Failed to create ModelContainer after reset: \(error)")
+            // First failure can be iCloud unavailability (offline first
+            // launch, signed-out account) — retry with CloudKit disabled
+            // before resorting to nuking the store.
+            if cloudPreference, let retry = try? Self.makeContainer(cloudEnabled: false) {
+                container = retry
+            } else {
+                // Schema migration failed — delete the corrupted store and
+                // retry so the app can launch instead of crashing on every
+                // open.
+                let storeURL = URL.applicationSupportDirectory
+                    .appending(path: "default.store")
+                try? FileManager.default.removeItem(at: storeURL)
+                for suffix in ["-wal", "-shm"] {
+                    let sidecar = storeURL.deletingPathExtension()
+                        .appendingPathExtension(storeURL.pathExtension + suffix)
+                    try? FileManager.default.removeItem(at: sidecar)
+                }
+                do {
+                    container = try Self.makeContainer(cloudEnabled: cloudPreference)
+                } catch {
+                    do {
+                        container = try Self.makeContainer(cloudEnabled: false)
+                    } catch {
+                        fatalError("Failed to create ModelContainer after reset: \(error)")
+                    }
+                }
             }
         }
         self.modelContainer = container

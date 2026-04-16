@@ -54,6 +54,17 @@ enum Period: String, Codable, Hashable, CaseIterable, Sendable {
         case .evening: return 18...23
         }
     }
+
+    /// Short human label used by pill controls and accessibility hints.
+    /// Keeps the vocabulary consistent wherever the period surfaces.
+    var displayLabel: String {
+        switch self {
+        case .night: return "Night"
+        case .morning: return "Morning"
+        case .afternoon: return "Afternoon"
+        case .evening: return "Evening"
+        }
+    }
 }
 
 // MARK: - Pomodoro Preset
