@@ -65,6 +65,22 @@ final class OptimizerService {
         }
     }
 
+    /// Default duration (in minutes) applied to new backlog tasks when the
+    /// user doesn't specify one (no `1h`/`30m` suffix in the title). The
+    /// ghost preview and the actual create path share this value via
+    /// `BacklogView`. Clamped on assignment to the same 5 min – 12 h window
+    /// as `BacklogTitleParser` so the two stay consistent.
+    var defaultTaskDurationMinutes: Int {
+        didSet {
+            let clamped = max(5, min(12 * 60, defaultTaskDurationMinutes))
+            if clamped != defaultTaskDurationMinutes {
+                defaultTaskDurationMinutes = clamped
+                return
+            }
+            saveSettings()
+        }
+    }
+
     var minSlotMinutes: Int {
         FreeSlotFinder.defaultMinSlotMinutes
     }
@@ -80,6 +96,7 @@ final class OptimizerService {
         let saved = Self.loadSettings()
         self.workingHoursStart = saved.start
         self.workingHoursEnd = saved.end
+        self.defaultTaskDurationMinutes = saved.defaultDuration
         if let data = UserDefaults.standard.data(forKey: "BuboOptimizerPreferences"),
            let prefs = try? JSONDecoder().decode(OptimizerPreferences.self, from: data) {
             self.optimizer.preferences = prefs
@@ -109,6 +126,7 @@ final class OptimizerService {
             let saved = Self.loadSettings()
             workingHoursStart = saved.start
             workingHoursEnd = saved.end
+            defaultTaskDurationMinutes = saved.defaultDuration
         case preferencesKey:
             if let data = UserDefaults.standard.data(forKey: preferencesKey),
                let prefs = try? JSONDecoder().decode(OptimizerPreferences.self, from: data) {
@@ -411,11 +429,19 @@ final class OptimizerService {
     private struct SavedSettings: Codable {
         let start: Int
         let end: Int
+        /// Optional for backward compatibility with payloads serialised before
+        /// the default-duration setting existed. Decoded via the failable
+        /// `decodeIfPresent`, so an old blob falls back to the 60-minute default.
+        let defaultDurationMinutes: Int?
     }
 
     private func saveSettings() {
         guard !isReloadingFromCloud else { return }
-        let saved = SavedSettings(start: workingHoursStart, end: workingHoursEnd)
+        let saved = SavedSettings(
+            start: workingHoursStart,
+            end: workingHoursEnd,
+            defaultDurationMinutes: defaultTaskDurationMinutes
+        )
         if let data = try? JSONEncoder().encode(saved) {
             UserDefaults.standard.set(data, forKey: persistenceKey)
             CloudSyncService.shared.push(persistenceKey)
@@ -429,11 +455,15 @@ final class OptimizerService {
         }
     }
 
-    private static func loadSettings() -> (start: Int, end: Int) {
+    private static func loadSettings() -> (start: Int, end: Int, defaultDuration: Int) {
         guard let data = UserDefaults.standard.data(forKey: "BuboOptimizerServiceSettings"),
               let saved = try? JSONDecoder().decode(SavedSettings.self, from: data) else {
-            return (start: 9, end: 18)
+            return (start: 9, end: 18, defaultDuration: 60)
         }
-        return (start: saved.start, end: saved.end)
+        return (
+            start: saved.start,
+            end: saved.end,
+            defaultDuration: saved.defaultDurationMinutes ?? 60
+        )
     }
 }

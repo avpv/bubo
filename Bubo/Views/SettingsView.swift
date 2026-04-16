@@ -16,6 +16,7 @@ struct SettingsView: View {
         case appleReminders = "Reminders"
         case notifications = "Notifications"
         case worldClock = "World Clock"
+        case optimizer = "Optimizer"
         case assistant = "Assistant"
 
         var id: String { rawValue }
@@ -28,6 +29,7 @@ struct SettingsView: View {
             case .appleReminders: "checklist"
             case .notifications: "bell"
             case .worldClock: "globe"
+            case .optimizer: "slider.horizontal.3"
             case .assistant: "wand.and.sparkles"
             }
         }
@@ -59,6 +61,8 @@ struct SettingsView: View {
                     RemindersTabView()
                 case .worldClock:
                     WorldClockTabView()
+                case .optimizer:
+                    OptimizerTabView()
                 case .assistant:
                     AssistantTabView(agentService: agentService)
                 }

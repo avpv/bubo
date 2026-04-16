@@ -7,6 +7,13 @@ struct OptimizerTabView: View {
     @Environment(OptimizerService.self) var optimizerService
     @Environment(\.activeSkin) private var skin
 
+    /// Canonical steps for the default-duration picker. 15-min increments up
+    /// to an hour, half-hour from there — same cadence used by the inline
+    /// `DurationPicker` so the two controls feel like one family.
+    private let defaultDurationChoices: [Int] = [
+        15, 25, 30, 45, 60, 90, 120, 180, 240
+    ]
+
     var body: some View {
         @Bindable var service = optimizerService
 
@@ -14,29 +21,54 @@ struct OptimizerTabView: View {
             VStack(spacing: DS.Spacing.lg) {
 
                 SettingsPlatter("Working Hours") {
-                    Grid(alignment: .leading, verticalSpacing: DS.Spacing.md) {
-                        GridRow {
-                            Text("Start:")
-                                .gridColumnAlignment(.leading)
-                            Picker("Working hours start", selection: $service.workingHoursStart) {
-                                ForEach(0...23, id: \.self) { hour in
-                                    Text("\(hour):00").tag(hour)
+                    VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                        Grid(alignment: .leading, verticalSpacing: DS.Spacing.md) {
+                            GridRow {
+                                Text("Start:")
+                                    .gridColumnAlignment(.leading)
+                                Picker("Working hours start", selection: $service.workingHoursStart) {
+                                    ForEach(0...23, id: \.self) { hour in
+                                        Text("\(hour):00").tag(hour)
+                                    }
                                 }
+                                .labelsHidden()
+                                .frame(width: 100)
+                                .gridColumnAlignment(.trailing)
                             }
-                            .labelsHidden()
-                            .frame(width: 100)
-                            .gridColumnAlignment(.trailing)
-                        }
-                        GridRow {
-                            Text("End:")
-                            Picker("Working hours end", selection: $service.workingHoursEnd) {
-                                ForEach(0...23, id: \.self) { hour in
-                                    Text("\(hour):00").tag(hour)
+                            GridRow {
+                                Text("End:")
+                                Picker("Working hours end", selection: $service.workingHoursEnd) {
+                                    ForEach(0...23, id: \.self) { hour in
+                                        Text("\(hour):00").tag(hour)
+                                    }
                                 }
+                                .labelsHidden()
+                                .frame(width: 100)
                             }
-                            .labelsHidden()
-                            .frame(width: 100)
                         }
+                        Text("The Tasks capacity ring compares your pending workload to the minutes left before the end of the working day.")
+                            .font(.caption)
+                            .foregroundStyle(skin.resolvedTextSecondary)
+                    }
+                }
+
+                SettingsPlatter("New Tasks") {
+                    HStack(alignment: .firstTextBaseline) {
+                        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                            Text("Default duration")
+                            Text("Used when a task is added without a duration suffix (e.g. “write report 30m”).")
+                                .font(.caption)
+                                .foregroundStyle(skin.resolvedTextSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer()
+                        Picker("Default task duration", selection: $service.defaultTaskDurationMinutes) {
+                            ForEach(defaultDurationChoices, id: \.self) { minutes in
+                                Text(DS.formatMinutes(minutes)).tag(minutes)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(width: 120)
                     }
                 }
 

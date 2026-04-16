@@ -155,10 +155,6 @@ struct BacklogView: View {
     /// onboarding hint once the affordance has been discovered.
     @AppStorage("BuboBacklogHasDragged") private var hasDragged: Bool = false
 
-    /// Default duration applied to new tasks (before parsing).
-    /// Kept as a constant so tests and the ghost preview agree.
-    static let defaultTaskDurationMinutes: Int = 60
-
     /// Maximum number of task rows visible in the compact expansion state.
     /// A height-capped ScrollView keeps the timeline reachable.
     private static let maxExpandedTasks = 4
@@ -336,7 +332,7 @@ struct BacklogView: View {
     /// Duration to use for ghost-preview lookup and for the task actually
     /// created on submit. Reparses on every keystroke.
     private var parsedDurationMinutes: Int {
-        BacklogTitleParser.parse(newTaskTitle).durationMinutes ?? Self.defaultTaskDurationMinutes
+        BacklogTitleParser.parse(newTaskTitle).durationMinutes ?? optimizerService.defaultTaskDurationMinutes
     }
 
     /// Same as `parsedDurationMinutes` but returns `nil` when the parser
@@ -1489,7 +1485,7 @@ struct BacklogView: View {
             return
         }
 
-        let duration = parsed.durationMinutes ?? Self.defaultTaskDurationMinutes
+        let duration = parsed.durationMinutes ?? optimizerService.defaultTaskDurationMinutes
         let previewTitle = parsed.cleaned
 
         ghostPreviewTask = Task { @MainActor in
@@ -1538,7 +1534,7 @@ struct BacklogView: View {
 
         let task = BacklogTask(
             title: title,
-            durationMinutes: parsed.durationMinutes ?? Self.defaultTaskDurationMinutes,
+            durationMinutes: parsed.durationMinutes ?? optimizerService.defaultTaskDurationMinutes,
             priority: .medium
         )
         withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
