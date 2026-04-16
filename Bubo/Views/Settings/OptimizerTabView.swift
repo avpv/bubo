@@ -7,12 +7,10 @@ struct OptimizerTabView: View {
     @Environment(OptimizerService.self) var optimizerService
     @Environment(\.activeSkin) private var skin
 
-    /// Canonical steps for the default-duration picker. 15-min increments up
-    /// to an hour, half-hour from there — same cadence used by the inline
-    /// `DurationPicker` so the two controls feel like one family.
-    private let defaultDurationChoices: [Int] = [
-        15, 25, 30, 45, 60, 90, 120, 180, 240
-    ]
+    /// Canonical steps for the default-duration picker. Four round values
+    /// that cover the common task shapes — quick hit, half-hour, hour,
+    /// focus block — without overwhelming the picker.
+    private let defaultDurationChoices: [Int] = [15, 30, 60, 90]
 
     var body: some View {
         @Bindable var service = optimizerService
