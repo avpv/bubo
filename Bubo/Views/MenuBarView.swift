@@ -594,6 +594,13 @@ struct MenuBarView: View {
         // — even if the drag-preview lifecycle callback hasn't fired yet.
         backlogCoordinator.endDrag()
 
+        // Full pre-drop snapshot — `unschedule` sets status=.pending and
+        // drops both scheduledEventId/scheduledDate. If the task was
+        // already `.scheduled` against a *different* event (re-scheduling
+        // via drag), straight unschedule would lose that prior binding.
+        // `updateTask(snapshot)` restores every field exactly.
+        let taskSnapshot = task
+
         let duration = min(
             TimeInterval(task.durationMinutes * 60),
             slotEnd.timeIntervalSince(slotStart)
@@ -619,9 +626,16 @@ struct MenuBarView: View {
             "\(task.title) → \(fmt.string(from: slotStart))",
             icon: "calendar.badge.plus"
         ) {
-            // Undo: remove event and unschedule task
+            // Undo: remove the event we just created and restore the
+            // task's full pre-drop state (status, scheduledEventId,
+            // scheduledDate, etc.). `updateTask(snapshot)` is a clean
+            // reverse of `markScheduled` because every mutable field is
+            // set back to its pre-drop value. notifyScheduleChange with
+            // the event id poke the optimizer's trigger engine so it
+            // sees the rollback.
             reminderService.removeLocalEvent(id: eventId)
-            backlog.unschedule(id: task.id)
+            backlog.updateTask(taskSnapshot)
+            notifyScheduleChange(deleted: eventId)
         }
         notifyScheduleChange()
     }
@@ -1232,36 +1246,45 @@ struct MenuBarView: View {
                 )
                 }
             case .slot(let start, let end):
-                FreeSlotRow(
-                    start: start,
-                    end: end,
-                    onFillTapped: { _ in
-                        let backlog = optimizerService.backlogService
-                        let hasPending = !(backlog?.pending.isEmpty ?? true)
-                        let hasOverdue = !(backlog?.overdue.isEmpty ?? true)
+                // Ghost suppression: when the shared coordinator already
+                // has a ghost block starting at this slot's start (user
+                // is hovering a dragged task over it, or typing into the
+                // backlog input) — skip the "Free · Xh" row so we don't
+                // double-render the same time as two rows.
+                if let ghost, ghost.start == start {
+                    EmptyView()
+                } else {
+                    FreeSlotRow(
+                        start: start,
+                        end: end,
+                        onFillTapped: { _ in
+                            let backlog = optimizerService.backlogService
+                            let hasPending = !(backlog?.pending.isEmpty ?? true)
+                            let hasOverdue = !(backlog?.overdue.isEmpty ?? true)
 
-                        if !hasPending && !hasOverdue {
-                            // No tasks at all → direct focus fill.
-                            fillSlotWithFocus(start: start, end: end)
-                        } else if !hasPending && hasOverdue {
-                            // Only overdue → reschedule directly, no palette.
-                            rescheduleOverdue(into: start, end: end)
-                        } else {
-                            // Pending tasks (maybe overdue too) → show palette for choice.
-                            withAnimation(DS.Animation.quick) {
-                                paletteContext = PaletteContext(
-                                    seedSlotMinutes: Int(end.timeIntervalSince(start) / 60),
-                                    seedSlotStart: start,
-                                    seedSlotEnd: end
-                                )
+                            if !hasPending && !hasOverdue {
+                                // No tasks at all → direct focus fill.
+                                fillSlotWithFocus(start: start, end: end)
+                            } else if !hasPending && hasOverdue {
+                                // Only overdue → reschedule directly, no palette.
+                                rescheduleOverdue(into: start, end: end)
+                            } else {
+                                // Pending tasks (maybe overdue too) → show palette for choice.
+                                withAnimation(DS.Animation.quick) {
+                                    paletteContext = PaletteContext(
+                                        seedSlotMinutes: Int(end.timeIntervalSince(start) / 60),
+                                        seedSlotStart: start,
+                                        seedSlotEnd: end
+                                    )
+                                }
                             }
-                        }
-                    },
-                    onTaskDropped: { drag in
-                        handleTaskDrop(drag: drag, slotStart: start, slotEnd: end)
-                    },
-                    canShowDragHint: item.id == hintSlotId
-                )
+                        },
+                        onTaskDropped: { drag in
+                            handleTaskDrop(drag: drag, slotStart: start, slotEnd: end)
+                        },
+                        canShowDragHint: item.id == hintSlotId
+                    )
+                }
             case .ghost(let start, let end, let title):
                 GhostEventRow(start: start, end: end, title: title)
                     .transition(.opacity.combined(with: .scale(scale: 0.96)))

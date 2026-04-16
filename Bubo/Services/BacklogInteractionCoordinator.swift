@@ -49,12 +49,28 @@ final class BacklogInteractionCoordinator {
 
     var isDraggingTask: Bool { draggedTask != nil }
 
+    /// Wrapping the mutation in `withAnimation` means every subscriber
+    /// (BacklogView's expansion, MenuBarView's collapsed-events header,
+    /// FreeSlotRow's drop-awaiting border, any future consumers) animates
+    /// in lockstep. Without this, each observer picks its own timing and
+    /// the transition «щёлкает».
     func beginDrag(_ payload: BacklogTaskDrag) {
-        draggedTask = payload
+        withAnimation(DS.Animation.standard) {
+            draggedTask = payload
+        }
     }
 
     func endDrag() {
-        draggedTask = nil
+        withAnimation(DS.Animation.standard) {
+            draggedTask = nil
+            // Drag-initiated ghost (from FreeSlotRow's drop-target hover)
+            // is bound to the drag lifetime: once the drop lands or the
+            // drag is cancelled, the ghost has nothing to predict. Clear
+            // it here so MenuBarView's suppression logic doesn't freeze
+            // a slot as "filled" after the fact.
+            ghostSlot = nil
+            ghostTitle = nil
+        }
     }
 
     // MARK: Ghost preview state
@@ -67,13 +83,17 @@ final class BacklogInteractionCoordinator {
     var ghostTitle: String? = nil
 
     func setGhost(slot: DateInterval?, title: String?) {
-        ghostSlot = slot
-        ghostTitle = title
+        withAnimation(DS.Animation.quick) {
+            ghostSlot = slot
+            ghostTitle = title
+        }
     }
 
     func clearGhost() {
-        ghostSlot = nil
-        ghostTitle = nil
+        withAnimation(DS.Animation.quick) {
+            ghostSlot = nil
+            ghostTitle = nil
+        }
     }
 }
 

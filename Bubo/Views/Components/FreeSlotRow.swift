@@ -164,6 +164,30 @@ struct FreeSlotRow: View {
             withAnimation(skin.resolvedMicroAnimation) {
                 isDropTargeted = targeted
             }
+            // Predictive ghost during drag: when the cursor enters this
+            // slot mid-drag, publish the would-be scheduled interval to
+            // the shared coordinator so MenuBarView replaces this slot
+            // with a translucent «<title> · HH:MM–HH:MM» block. Birman:
+            // «покажи, что случится, до того как случится».
+            //
+            // `isTargeted` is the right signal here (not `.onHover`) —
+            // macOS fires hover callbacks only while no drag is in
+            // flight; drop-target callbacks are the drag-aware equivalent.
+            if targeted, let drag = coordinator?.draggedTask {
+                let needed = TimeInterval(drag.durationMinutes * 60)
+                let available = end.timeIntervalSince(start)
+                let fit = min(needed, available)
+                coordinator?.setGhost(
+                    slot: DateInterval(start: start, duration: fit),
+                    title: drag.title
+                )
+            } else if !targeted, coordinator?.ghostSlot?.start == start {
+                // Only clear if the ghost still points at THIS slot. A
+                // fast drag across rows can fire exit-on-A *after*
+                // enter-on-B; the start-equality check stops us from
+                // blanking the next slot's fresh ghost.
+                coordinator?.clearGhost()
+            }
         }
         // Drop-target state — flat rectangle stroke, matches the card
         // paradigm. Only visible when a drag is happening, not at rest.

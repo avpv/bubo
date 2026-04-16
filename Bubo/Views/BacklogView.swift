@@ -173,14 +173,27 @@ struct BacklogView: View {
     /// timeline below visible even when the list is fully expanded.
     private static let nonListReservedHeight: CGFloat = 220
 
+    /// Vertical space we reserve under the list while a backlog task is in
+    /// flight. The timeline below collapses to one «N events · Xh booked»
+    /// header + 2–3 free slots ≈ 120–140pt — keeping the full 220pt reserve
+    /// wastes ~80pt that the task list could use to show more reorder
+    /// targets without scrolling.
+    private static let dragReservedHeight: CGFloat = 140
+
     /// Ceiling for the fully-expanded list, derived from the measured host
     /// height so large popovers get a tall list and small hosts stay honest.
-    /// Falls back to `fullyExpandedMaxHeight` before the first layout pass.
+    /// While a drag is in flight, the reserve shrinks to `dragReservedHeight`
+    /// so Tasks can grow into the space the collapsed timeline no longer
+    /// needs. Falls back to `fullyExpandedMaxHeight` before the first
+    /// layout pass.
     private var dynamicExpandedMaxHeight: CGFloat {
         guard measuredHostHeight > 0 else { return Self.fullyExpandedMaxHeight }
+        let reserve = coordinator?.isDraggingTask == true
+            ? Self.dragReservedHeight
+            : Self.nonListReservedHeight
         return max(
             Self.fullyExpandedMaxHeight,
-            measuredHostHeight - Self.nonListReservedHeight
+            measuredHostHeight - reserve
         )
     }
 
@@ -1743,7 +1756,6 @@ struct BacklogTaskRow: View {
         .contentShape(Rectangle())
         .opacity(isDragging ? DS.Opacity.tertiaryText : 1)
         .background(rowBackground)
-        .overlay(alignment: .top) { dropBar }
         .overlay { focusRing }
         .onHover { hovering in
             withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
@@ -2066,23 +2078,19 @@ struct BacklogTaskRow: View {
     /// Row background — drop highlight wins over hover tint when both fire.
     /// HIG: use colour purposefully; the accent fill *means* "drop lands here",
     /// the neutral hover tint *means* "this row is under your cursor".
+    ///
+    /// Birman: один визуальный язык для одного жеста. Раньше drop-на-задачу
+    /// читался тонкой accent-полосой сверху (`dropBar`), а drop-на-слот —
+    /// заливкой всей площади. Теперь и там, и там — mediumFill заливка,
+    /// `dropBar` удалён как дублирующий сигнал.
     private var rowBackground: some View {
-        let accent = skin.accentColor.opacity(DS.Opacity.lightFill)
+        let targetedFill = skin.accentColor.opacity(DS.Opacity.mediumFill)
         let hoverTint = skin.resolvedTextTertiary.opacity(0.06)
         let fill: Color = isReorderTargeted
-            ? accent
+            ? targetedFill
             : (isHovered ? hoverTint : .clear)
         return RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
             .fill(fill)
-    }
-
-    /// Thin accent bar at the top edge while a drag is targeted at this row —
-    /// makes the drop position unambiguous.
-    private var dropBar: some View {
-        Rectangle()
-            .fill(skin.accentColor)
-            .frame(height: isReorderTargeted ? DS.Border.selection : 0)
-            .motionAwareAnimation(DS.Animation.quick, value: isReorderTargeted, reduceMotion: reduceMotion)
     }
 
     /// Keyboard focus ring. Mirrors the system focus ring visually without
