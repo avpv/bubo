@@ -36,19 +36,6 @@ struct EventRowView: View {
     @FocusState private var isFocused: Bool
     @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.activeSkin) private var skin
-    /// Shared drag-state coordinator. When a backlog task is being dragged,
-    /// every event row compresses to a thin sliver — events aren't valid
-    /// drop targets, so they cede vertical space to the free slots below
-    /// and the expanded task list above. Degrades gracefully to the normal
-    /// layout when the coordinator is missing (tests, previews).
-    @Environment(\.backlogCoordinator) private var backlogCoordinator
-
-    /// True while the user is dragging a backlog task. Drives the
-    /// `compressed-for-drag` layout: minimal padding, hidden hover
-    /// actions, hidden join button, single-line minHeight.
-    private var isCompressedForDrag: Bool {
-        backlogCoordinator?.isDraggingTask == true
-    }
 
     private var isLocal: Bool {
         event.isLocalEvent
@@ -70,31 +57,19 @@ struct EventRowView: View {
 
             Spacer(minLength: DS.Spacing.md)
 
-            // Join meeting — always visible when meeting link exists, except
-            // while a backlog drag is in flight: during drag the row is
-            // inert context, and a bright-accent Join button would both
-            // steal attention and become a misclick hazard.
-            if let meetingURL = event.meetingLink, !isCompressedForDrag {
+            // Join meeting — always visible when meeting link exists
+            if let meetingURL = event.meetingLink {
                 joinButton(meetingURL)
             }
 
-            // Other actions on hover — slide in from right. Also suppressed
-            // during drag: the row is not a target, so don't light it up.
-            if isHovered, !isCompressedForDrag {
+            // Other actions on hover — slide in from right
+            if isHovered {
                 hoverActions
             }
         }
-        // Tighter row during drag: ~20pt instead of 36pt, minimal padding.
-        // Events become thin «booked-time» dividers between the highlighted
-        // free slots, and the expanded task list above gets the reclaimed
-        // vertical space. Birman: «убрать лишнее, а не уменьшить всё
-        // пропорционально» — во время перетаскивания смысл строки события
-        // схлопывается до «здесь занято».
-        .frame(minHeight: isCompressedForDrag ? 20 : DS.Size.eventRowMinHeight)
-        .padding(.vertical, isCompressedForDrag ? DS.Spacing.xxs : DS.Spacing.sm)
+        .frame(minHeight: DS.Size.eventRowMinHeight)
+        .padding(.vertical, DS.Spacing.sm)
         .padding(.horizontal, DS.Spacing.sm)
-        .opacity(isCompressedForDrag ? DS.Opacity.overlayLight : 1)
-        .animation(skin.resolvedMicroAnimation, value: isCompressedForDrag)
         // Level 4 (final): the timeline is now wrapped in a single platter
         // card (see MenuBarView.mainContent). Rows therefore shed their
         // individual platter backgrounds, drop shadows, AND their rounded

@@ -1158,9 +1158,23 @@ struct MenuBarView: View {
             ? interleaved.first(where: { if case .slot = $0 { return true } else { return false } })?.id
             : nil
 
+        // During a backlog-task drag, events are not valid drop targets.
+        // Collapse them into a single «N events · Xh booked» header so the
+        // free slots (the real targets) and the expanded task list above
+        // share the vertical space. One header > N thin slivers — Бирман:
+        // «свернуть в строку-заголовок, а не уменьшать всё пропорционально».
+        if backlogCoordinator.isDraggingTask && !dayGroup.events.isEmpty {
+            collapsedEventsHeader(for: dayGroup.events)
+        }
+
         ForEach(interleaved, id: \.id) { item in
             switch item {
             case .event(let event):
+                // Skip per-event rendering while a task is being dragged;
+                // the summary header above stands in for the whole group.
+                if backlogCoordinator.isDraggingTask {
+                    EmptyView()
+                } else {
                 EventRowView(
                     event: event,
                     reminderService: reminderService,
@@ -1216,6 +1230,7 @@ struct MenuBarView: View {
                     },
                     isFreshlyCreated: optimizerService.freshlyCreatedEventIds.contains(event.id)
                 )
+                }
             case .slot(let start, let end):
                 FreeSlotRow(
                     start: start,
@@ -1252,6 +1267,35 @@ struct MenuBarView: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.96)))
             }
         }
+    }
+
+    /// One-line collapsed summary of a day's events — rendered in place
+    /// of the individual `EventRowView`s while the user is dragging a
+    /// backlog task. Free slots remain visible as drop targets, so the
+    /// timeline area reduces to «где занято + куда можно положить».
+    @ViewBuilder
+    private func collapsedEventsHeader(for events: [CalendarEvent]) -> some View {
+        let bookedMinutes = events.reduce(0) { acc, event in
+            acc + max(0, Int(event.endDate.timeIntervalSince(event.startDate) / 60))
+        }
+        HStack(spacing: DS.Spacing.sm) {
+            // Three stacked hash marks echo the booked-time feel without
+            // any one event's title dominating — the whole group reads as
+            // a single «block».
+            Image(systemName: "rectangle.stack.fill")
+                .font(.caption2)
+                .foregroundStyle(activeSkin.resolvedTextTertiary)
+            Text("\(events.count) event\(events.count == 1 ? "" : "s") · \(DS.formatMinutes(bookedMinutes)) booked")
+                .font(.caption)
+                .foregroundStyle(activeSkin.resolvedTextSecondary)
+                .lineLimit(1)
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, DS.Spacing.xs)
+        .padding(.horizontal, DS.Spacing.sm)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .transition(.opacity.combined(with: .move(edge: .top)))
+        .accessibilityLabel("\(events.count) booked events totalling \(DS.formatMinutes(bookedMinutes))")
     }
 
     // MARK: - List Items (events + free slots interleaved)
