@@ -1696,8 +1696,8 @@ struct BacklogCapacityPopover: View {
 
             // Inline configuration — the ring is about «влезет ли сегодня»,
             // and the workday length is the lever that answers that
-            // question. Surface it where the answer is, not three screens
-            // away in Settings.
+            // question. Surface it where the answer is, not buried behind
+            // Settings → Assistant.
             VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                 Text("Working hours")
                     .font(.caption.weight(.semibold))
