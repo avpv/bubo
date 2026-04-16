@@ -429,10 +429,7 @@ final class OptimizerService {
     private struct SavedSettings: Codable {
         let start: Int
         let end: Int
-        /// Optional for backward compatibility with payloads serialised before
-        /// the default-duration setting existed. Decoded via the failable
-        /// `decodeIfPresent`, so an old blob falls back to the 60-minute default.
-        let defaultDurationMinutes: Int?
+        let defaultDurationMinutes: Int
     }
 
     private func saveSettings() {
@@ -463,7 +460,7 @@ final class OptimizerService {
         return (
             start: saved.start,
             end: saved.end,
-            defaultDuration: saved.defaultDurationMinutes ?? 60
+            defaultDuration: saved.defaultDurationMinutes
         )
     }
 }
