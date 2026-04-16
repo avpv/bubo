@@ -23,6 +23,12 @@ class AppleCalendarService {
     /// in Calendar.app or via iCloud sync). Observers should re-fetch events.
     static let calendarDataChanged = Notification.Name("AppleCalendarDataChanged")
 
+    /// Posted when the user resolves the Calendar permission prompt (grant
+    /// or deny) via the in-app Connect button. Mirrors
+    /// `AppleRemindersService.authorizationDidChange` so the menu bar
+    /// permission banner can drop the moment access is granted.
+    static let authorizationDidChange = Notification.Name("AppleCalendarAuthorizationDidChange")
+
     private var storeChangedObserver: Any?
 
     private init() {
@@ -54,9 +60,12 @@ class AppleCalendarService {
     /// Request access to the user's calendars. Returns true if access was granted.
     func requestAccess() async -> Bool {
         do {
-            return try await store.requestFullAccessToEvents()
+            let granted = try await store.requestFullAccessToEvents()
+            NotificationCenter.default.post(name: Self.authorizationDidChange, object: nil)
+            return granted
         } catch {
             logger.error("Failed to request full access: \(error)")
+            NotificationCenter.default.post(name: Self.authorizationDidChange, object: nil)
             return false
         }
     }

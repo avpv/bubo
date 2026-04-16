@@ -23,6 +23,13 @@ final class AppleRemindersService {
     /// (e.g. user edits in Reminders.app or iCloud sync).
     nonisolated static let remindersDataChanged = Notification.Name("AppleRemindersDataChanged")
 
+    /// Posted when the user resolves the Reminders permission prompt (grant
+    /// or deny) via the in-app Connect button. Listeners — notably the menu
+    /// bar's "Reminders access not granted" banner — refresh their cached
+    /// `hasAccess` snapshot in response so the UI stops showing the banner
+    /// the moment access is granted.
+    nonisolated static let authorizationDidChange = Notification.Name("AppleRemindersAuthorizationDidChange")
+
     private var storeChangedObserver: Any?
 
     private init() {
@@ -53,9 +60,15 @@ final class AppleRemindersService {
 
     func requestAccess() async -> Bool {
         do {
-            return try await store.requestFullAccessToReminders()
+            let granted = try await store.requestFullAccessToReminders()
+            // Fire-and-forget signal so views that snapshot `hasAccess`
+            // (e.g. the menu bar permission banner) can refresh without
+            // having to poll a static EventKit property.
+            NotificationCenter.default.post(name: Self.authorizationDidChange, object: nil)
+            return granted
         } catch {
             logger.error("Failed to request full Reminders access: \(error)")
+            NotificationCenter.default.post(name: Self.authorizationDidChange, object: nil)
             return false
         }
     }

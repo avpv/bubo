@@ -32,6 +32,15 @@ struct MenuBarView: View {
         return Set(stored)
     }()
 
+    /// Cached EventKit permission snapshots driving the permission banners.
+    /// EventKit exposes auth status only as a non-observable static call, so
+    /// the view body cannot reactively re-evaluate it. Mirroring it into
+    /// `@State` (refreshed on the services' `authorizationDidChange`
+    /// notifications and on appear) makes the banner disappear immediately
+    /// when the user grants access via the Settings pane.
+    @State private var calendarHasAccess: Bool = AppleCalendarService.hasAccess
+    @State private var remindersHasAccess: Bool = AppleRemindersService.hasAccess
+
     /// Measured bottom edge (in the root coordinate space) of the QuickActions
     /// "Optimize" bar. We anchor the command palette overlay just below this
     /// point so the optimizer trigger stays visible while the palette is open.
@@ -290,6 +299,12 @@ struct MenuBarView: View {
         .onPreferenceChange(OptimizerBottomKey.self) { optimizerBottomY = $0 }
         .frame(width: DS.Popover.width, height: navigation.isTimer ? DS.Popover.timerHeight : DS.Popover.height)
         .onAppear {
+            // Refresh permission snapshots every time the popover surfaces
+            // — covers the case where the user granted access via System
+            // Settings while we were closed. Cheap, idempotent, and
+            // independent of the one-shot `hasStartedSync` guard below.
+            refreshPermissionSnapshots()
+
             guard !hasStartedSync else { return }
             hasStartedSync = true
             reminderService.updateSettings(settings)
@@ -305,6 +320,12 @@ struct MenuBarView: View {
                 try? await Task.sleep(for: .seconds(5)) // wait for sync
                 await optimizerService.runWeekMockSimulator(reminderService: reminderService)
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AppleCalendarService.authorizationDidChange)) { _ in
+            refreshPermissionSnapshots()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AppleRemindersService.authorizationDidChange)) { _ in
+            refreshPermissionSnapshots()
         }
         .onReceive(NotificationCenter.default.publisher(for: RemindersSyncService.didImportTasks)) { notification in
             guard let count = notification.object as? Int, count > 0 else { return }
@@ -1004,13 +1025,24 @@ struct MenuBarView: View {
     /// turns into a horizontal pager.
     private var permissionBannerSpecs: [PermissionBannerSpec] {
         var specs: [PermissionBannerSpec] = []
-        if settings.isCalendarSyncEnabled && !AppleCalendarService.hasAccess {
+        if settings.isCalendarSyncEnabled && !calendarHasAccess {
             specs.append(.calendar)
         }
-        if settings.isRemindersSyncEnabled && !AppleRemindersService.hasAccess {
+        if settings.isRemindersSyncEnabled && !remindersHasAccess {
             specs.append(.reminders)
         }
         return specs
+    }
+
+    /// Re-reads the EventKit permission snapshots into `@State`. Called on
+    /// appear and whenever the services post `authorizationDidChange`, so
+    /// the banner reflects access changes from both the in-app Connect
+    /// button and System Settings while the popover is open.
+    private func refreshPermissionSnapshots() {
+        let calendar = AppleCalendarService.hasAccess
+        let reminders = AppleRemindersService.hasAccess
+        if calendarHasAccess != calendar { calendarHasAccess = calendar }
+        if remindersHasAccess != reminders { remindersHasAccess = reminders }
     }
 
     private var usedColorTags: [EventColorTag] {
