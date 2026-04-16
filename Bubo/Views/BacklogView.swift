@@ -100,6 +100,13 @@ struct BacklogView: View {
     /// list into `.expanded` to give the form room to breathe (HIG: don't
     /// make the user scroll to see the field they're filling).
     @State private var expansionBeforeEdit: TaskListExpansion? = nil
+    /// Snapshot of `expansion` captured the moment a drag starts. Same
+    /// idea as `expansionBeforeEdit`: during a drag the list flips to
+    /// `.expanded` so the user sees every reorder target at once, and the
+    /// pre-drag state is restored when the drag ends. Decoupled from
+    /// `expansionBeforeEdit` because the two can nest (user starts editing,
+    /// then drags a row from inside the edit session).
+    @State private var expansionBeforeDrag: TaskListExpansion? = nil
     /// Measured height of the hosting popover. Drives the dynamic ceiling
     /// for the fully-expanded and editing states so large screens are not
     /// forced into a 480pt cap. Zero until the first layout pass.
@@ -389,6 +396,37 @@ struct BacklogView: View {
             rowSlotPreviews.removeAll()
             for (_, task) in rowSlotPreviewTasks { task.cancel() }
             rowSlotPreviewTasks.removeAll()
+        }
+        // Drag = focus mode. The moment the user grabs a task:
+        //   • Tasks flip to `.expanded` — every other row becomes a
+        //     legitimate reorder target, visible at once.
+        //   • EventRowView listens to the same flag and compresses itself
+        //     to a single-line sliver, so the timeline below becomes a
+        //     column of highlighted free slots with thin booked-time
+        //     dividers between them. See `EventRowView.isCompressedForDrag`.
+        // Pre-drag expansion is restored on drop/cancel.
+        .onChange(of: coordinator?.isDraggingTask ?? false) { _, dragging in
+            if dragging {
+                // Only snapshot the first time a drag starts while we're
+                // idle. Don't overwrite a snapshot if (somehow) the flag
+                // toggles mid-session — the first pre-drag state is what
+                // we want to return to.
+                if expansionBeforeDrag == nil {
+                    expansionBeforeDrag = expansion
+                }
+                if expansion != .expanded {
+                    withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+                        expansion = .expanded
+                    }
+                }
+            } else {
+                if let snapshot = expansionBeforeDrag {
+                    withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+                        expansion = snapshot
+                    }
+                    expansionBeforeDrag = nil
+                }
+            }
         }
         .onChange(of: isInputFocused) { _, focused in
             // Hide the ghost block the moment the user tabs away from the
