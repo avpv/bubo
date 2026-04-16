@@ -47,7 +47,8 @@ struct BuboApp: App {
                     PersistedLocalEvent.self,
                     PersistedCachedEvent.self,
                     PersistedExcludedOccurrence.self,
-                    PersistedReminderOverride.self
+                    PersistedReminderOverride.self,
+                    PersistedBacklogTask.self
                 )
             } catch {
                 fatalError("Failed to create ModelContainer after reset: \(error)")

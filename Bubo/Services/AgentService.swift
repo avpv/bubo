@@ -56,7 +56,6 @@ final class AgentService {
     // MARK: - Own API Key (stored in macOS Keychain)
 
     private static let keychainKey = "anthropic-api-key"
-    private static let legacyDefaultsKey = "BuboAgentAPIKey"
 
     var ownAPIKey: String {
         get { Keychain.load(key: Self.keychainKey) ?? "" }
@@ -104,19 +103,6 @@ final class AgentService {
             let newId = UUID().uuidString
             defaults.set(newId, forKey: Self.deviceIdKey)
             deviceId = newId
-        }
-
-        migrateAPIKeyFromUserDefaults()
-    }
-
-    private func migrateAPIKeyFromUserDefaults() {
-        let defaults = UserDefaults.standard
-        if let legacyKey = defaults.string(forKey: Self.legacyDefaultsKey),
-           !legacyKey.trimmingCharacters(in: .whitespaces).isEmpty {
-            Keychain.save(key: Self.keychainKey, value: legacyKey)
-            defaults.removeObject(forKey: Self.legacyDefaultsKey)
-            // User had their own key → keep them in own-key mode
-            mode = .ownKey
         }
     }
 
