@@ -1094,15 +1094,24 @@ struct MenuBarView: View {
                     )
                 }
 
+                // Once-per-user drag-onboarding lives on the first free slot
+                // of the earliest day group, and only while the backlog
+                // actually has something to drag. See
+                // `FreeSlotRow.canShowDragHint`.
+                let backlogHasPending = !(optimizerService.backlogService?.pending.isEmpty ?? true)
+                let firstDayDate = filteredEventsByDay.first?.date
                 ForEach(filteredEventsByDay, id: \.date) { dayGroup in
-                    if dayGroup.date != filteredEventsByDay.first?.date {
+                    if dayGroup.date != firstDayDate {
                         // Inset by `sm` so the divider sits between day
                         // groups without running all the way to the
                         // popover edges — matches native macOS List
                         // section dividers inside a scrollable area.
                         SkinSeparator()
                     }
-                    dayGroupSection(dayGroup)
+                    dayGroupSection(
+                        dayGroup,
+                        showDragHintOnFirstSlot: backlogHasPending && dayGroup.date == firstDayDate
+                    )
                 }
             }
             .padding(.horizontal, DS.Spacing.contentMargin)
@@ -1118,7 +1127,10 @@ struct MenuBarView: View {
     // MARK: - Day Group Section (extracted for release-mode type checker)
 
     @ViewBuilder
-    private func dayGroupSection(_ dayGroup: (date: Date, events: [CalendarEvent])) -> some View {
+    private func dayGroupSection(
+        _ dayGroup: (date: Date, events: [CalendarEvent]),
+        showDragHintOnFirstSlot: Bool = false
+    ) -> some View {
         let visibleCount = visibleEventCount(for: dayGroup.events)
 
         DaySectionHeader(date: dayGroup.date, count: visibleCount)
@@ -1138,8 +1150,15 @@ struct MenuBarView: View {
         )
 
         let ghost = ghostForDay(dayGroup.date)
+        let interleaved = interleave(events: dayGroup.events, freeSlots: freeSlots, ghost: ghost)
+        // Pick the first `.slot` item's id inside this day — only that row
+        // gets the onboarding hint. Precomputing keeps the ForEach body a
+        // pure function of the item and avoids per-iteration scanning.
+        let hintSlotId: String? = showDragHintOnFirstSlot
+            ? interleaved.first(where: { if case .slot = $0 { return true } else { return false } })?.id
+            : nil
 
-        ForEach(interleave(events: dayGroup.events, freeSlots: freeSlots, ghost: ghost), id: \.id) { item in
+        ForEach(interleaved, id: \.id) { item in
             switch item {
             case .event(let event):
                 EventRowView(
@@ -1225,7 +1244,8 @@ struct MenuBarView: View {
                     },
                     onTaskDropped: { drag in
                         handleTaskDrop(drag: drag, slotStart: start, slotEnd: end)
-                    }
+                    },
+                    canShowDragHint: item.id == hintSlotId
                 )
             case .ghost(let start, let end, let title):
                 GhostEventRow(start: start, end: end, title: title)
