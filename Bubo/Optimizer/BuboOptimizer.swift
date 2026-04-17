@@ -51,10 +51,16 @@ final class BuboOptimizer {
         var prefs = context.preferences
         preferenceLearner.applyToPreferences(&prefs)
 
-        // Wire a fresh MutationBandit for this run. UCB1 stats don't carry
-        // over between optimizations because workload characteristics
+        // Wire a fresh MutationBandit for this run. LinUCB stats don't
+        // carry over between optimizations because workload characteristics
         // (fixed events, movable pool, preferences) differ per run, so a
         // stale arm allocation would be actively misleading.
+        //
+        // LinkageModel is always wired so islands that diversify onto
+        // `.linkageTree` crossover can consult a shared tree. Rebuild
+        // cost is amortized across the rebuild interval (every 5
+        // generations); when no island actually uses LTGA the tree
+        // simply never gets sampled.
         let adjustedContext = OptimizerContext(
             fixedEvents: context.fixedEvents,
             movableEvents: context.movableEvents,
@@ -64,7 +70,8 @@ final class BuboOptimizer {
             participantAvailability: context.participantAvailability,
             calendar: context.calendar,
             rng: context.rng,
-            mutationBandit: MutationBandit()
+            mutationBandit: MutationBandit(),
+            linkageModel: LinkageModel()
         )
 
         let evaluator = FitnessEvaluator.standard(preferences: prefs)

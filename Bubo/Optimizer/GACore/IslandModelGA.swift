@@ -296,7 +296,8 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             participantAvailability: context.participantAvailability,
             calendar: context.calendar,
             rng: context.rng.split(),
-            mutationBandit: context.mutationBandit
+            mutationBandit: context.mutationBandit,
+            linkageModel: context.linkageModel
         )
     }
 
@@ -800,17 +801,23 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             default:
                 // Additional islands: deterministic parameter variations
                 // based on index. Each island gets a unique combination so
-                // results are reproducible.
-                let variations: [(mutMul: Double, xRate: Double, sel: SelectionStrategy)] = [
-                    (1.8, 0.75, .tournament(size: 3)),
-                    (0.7, 0.90, .stochasticUniversalSampling),
-                    (2.2, 0.80, .tournament(size: 5)),
-                    (1.5, 0.70, .rank),
+                // results are reproducible. Island (4) enables linkage-
+                // tree crossover — the LTGA-learned groups tend to pick up
+                // morning/afternoon or context-shared clusters that the
+                // other islands don't see.
+                let variations: [(mutMul: Double, xRate: Double, sel: SelectionStrategy, xStrategy: CrossoverStrategy?)] = [
+                    (1.8, 0.75, .tournament(size: 3), .linkageTree),
+                    (0.7, 0.90, .stochasticUniversalSampling, nil),
+                    (2.2, 0.80, .tournament(size: 5), nil),
+                    (1.5, 0.70, .rank, .linkageTree),
                 ]
                 let v = variations[(i - 4) % variations.count]
                 config.mutationRate = baseConfig.mutationRate * v.mutMul
                 config.crossoverRate = v.xRate
                 config.selectionStrategy = v.sel
+                if let strategy = v.xStrategy {
+                    config.crossoverStrategy = strategy
+                }
             }
             configs.append(config)
         }

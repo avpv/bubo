@@ -521,6 +521,18 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         let genotypicDiv = population.size <= 100 ? population.genotypicDiversity(rng: context.rng) : fitnessDiversity
         let diversityIsLow = genotypicDiv < config.diversityThreshold
 
+        // LTGA: periodically rebuild the linkage tree from the current
+        // population. `LinkageModel` decides internally whether enough
+        // generations have passed since the last rebuild, so calling it
+        // every generation is cheap when no rebuild is due.
+        if let linkageModel = context.linkageModel {
+            linkageModel.rebuildIfNeeded(
+                from: population.individuals,
+                generation: generation,
+                context: context
+            )
+        }
+
         // Refresh the contextual bandit's context vector so the operator
         // chosen during mutation reflects the current GA regime. Imbalance
         // is the std dev across objectives on the best individual — reads
@@ -644,6 +656,16 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
                 let reward = offspring[i].rawFitness - offspringBaselines[i]
                 bandit.record(op: op, reward: reward)
             }
+        }
+
+        // CMA-ES-lite feedback: let every offspring self-adapt its per-gene
+        // sigma based on whether it beat the baseline. The call is generic
+        // over `C` and defaults to a no-op for genomes that don't carry
+        // adaptive state (PomodoroSequenceChromosome), so this costs
+        // nothing when the chromosome type doesn't need it.
+        for i in offspring.indices {
+            let improved = offspring[i].rawFitness > offspringBaselines[i]
+            offspring[i].adaptOperatorState(improved: improved)
         }
 
         // Survivor selection: (μ+λ) combine, then NSGA-III if multi-

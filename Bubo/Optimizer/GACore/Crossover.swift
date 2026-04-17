@@ -14,6 +14,15 @@ enum CrossoverStrategy: Sendable {
     /// independent for each day, so children still explore the combinatorial
     /// space of day-sized recombinations.
     case dayBlock
+
+    /// Linkage-tree crossover (LTGA). The gene group copied from donor to
+    /// recipient is drawn from a linkage tree learned from the current
+    /// population's MI structure. Recombines at the granularity of
+    /// empirically co-varying gene sets, which on schedule data usually
+    /// means "morning bundle + lunch", "three tasks that share context",
+    /// or other learned building blocks. Falls back to uniform crossover
+    /// when the linkage model hasn't built a tree yet (warm-up phase).
+    case linkageTree
 }
 
 // MARK: - Crossover
@@ -37,7 +46,46 @@ enum Crossover {
             return uniformCrossover(parent1, parent2, swapProbability: prob, rng: context.rng)
         case .dayBlock:
             return dayBlockCrossover(parent1, parent2, context: context)
+        case .linkageTree:
+            return linkageTreeCrossover(parent1, parent2, context: context)
         }
+    }
+
+    // MARK: - Linkage-Tree Crossover (LTGA)
+
+    /// Pick a gene group from the learned linkage tree and copy its
+    /// start times from the donor parent to the child. When no linkage
+    /// tree is available (model still warming up, or `linkageModel` not
+    /// wired on the context), fall back to uniform crossover at 50% —
+    /// that's the granularity-agnostic default that still mixes genes.
+    private static func linkageTreeCrossover(
+        _ p1: ScheduleChromosome,
+        _ p2: ScheduleChromosome,
+        context: OptimizerContext
+    ) -> (ScheduleChromosome, ScheduleChromosome) {
+        guard p1.genes.count == p2.genes.count, p1.genes.count > 1 else {
+            return (p1, p2)
+        }
+        let rng = context.rng
+        guard let model = context.linkageModel,
+              let group = model.sampleGroup(rng: rng),
+              !group.isEmpty,
+              model.currentTree?.geneCount == p1.genes.count
+        else {
+            return uniformCrossover(p1, p2, swapProbability: 0.5, rng: rng)
+        }
+
+        var child1Genes = p1.genes
+        var child2Genes = p2.genes
+        for idx in group where idx < p1.genes.count {
+            child1Genes[idx] = makeGene(from: p1.genes[idx], withTimeOf: p2.genes[idx])
+            child2Genes[idx] = makeGene(from: p2.genes[idx], withTimeOf: p1.genes[idx])
+        }
+
+        return (
+            ScheduleChromosome.makeChild(genes: child1Genes, parents: (p1, p2), rng: rng),
+            ScheduleChromosome.makeChild(genes: child2Genes, parents: (p2, p1), rng: rng)
+        )
     }
 
     // MARK: - Two-Point Crossover
