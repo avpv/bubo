@@ -19,7 +19,7 @@ private let logger = Logger(subsystem: "com.avpv.Bubo", category: "LocalEventSto
 /// persistence failures instead of losing data into `logger.error`.
 @Observable
 @MainActor
-final class LocalEventStore {
+final class LocalEventStore: LocalEventStoring {
     private let container: ModelContainer
     private(set) var lastError: String?
 

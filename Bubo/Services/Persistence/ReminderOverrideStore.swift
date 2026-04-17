@@ -10,7 +10,7 @@ private let logger = Logger(subsystem: "com.avpv.Bubo", category: "ReminderOverr
 /// pattern as `LocalEventStore`.
 @Observable
 @MainActor
-final class ReminderOverrideStore {
+final class ReminderOverrideStore: ReminderOverrideStoring {
     private let container: ModelContainer
     private(set) var lastError: String?
 

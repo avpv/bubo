@@ -1,56 +1,79 @@
 import Foundation
-import UserNotifications
 import AppKit
 import SwiftData
 import os
 
 private let logger = Logger(subsystem: "com.avpv.Bubo", category: "ReminderService")
 
+// MARK: - Reminder Service (Orchestrator)
+//
+// This was a 700-line god-object that owned EventKit sync timers, the
+// notification firing pipeline, three persistence stores, and the
+// in-memory event source of truth. The mechanical pieces have been
+// extracted into:
+//
+//   - `EventKitSyncCoordinator` — periodic sync, post-sync follow-ups,
+//     calendar-data observer, on-disk cache.
+//   - `NotificationScheduler` — per-event timers, fired-key dedup,
+//     UNNotificationCenter delivery.
+//   - `LocalEventStore` / `ExcludedOccurrenceStore` /
+//     `ReminderOverrideStore` — CloudKit-safe persistence.
+//
+// What's left here is the orchestration that was load-bearing and
+// can't move without breaking the public API: in-memory `upcomingEvents`
+// and `localEvents`, computed view properties (`allEvents`,
+// `eventsByDay`, `badgeCount`), and the wiring that ties the four
+// services together. Everything else is delegation.
 @MainActor
 @Observable
 class ReminderService {
-    /// How many days ahead to fetch events. Used as the ceiling for badge time window.
+    /// How many days ahead to fetch events. Used as the ceiling for the
+    /// badge time window. Kept here for source-compat with views.
     static let fetchWindowDays = 7
 
     var upcomingEvents: [CalendarEvent] = []
     var localEvents: [CalendarEvent] = []
-    var lastSyncDate: Date?
-    var syncError: String?
-    var isSyncing = false
-    var isUsingCache = false
 
-    private nonisolated(unsafe) var syncTimer: Timer?
-    private nonisolated(unsafe) var reminderTimers: [String: [Timer]] = [:]
-    private var settings: ReminderSettings
-    private var firedReminders: Set<String> = []
-    private let eventCache: EventCache
-
-    /// Persistence stores. Split out of `ReminderService` so the service
-    /// can focus on scheduling / notifications / in-memory state while
-    /// each store owns CloudKit-safe upsert for its own model.
-    private let localEventStore: LocalEventStore
-    private let excludedOccurrenceStore: ExcludedOccurrenceStore
-    private let reminderOverrideStore: ReminderOverrideStore
+    /// Computed proxies into `EventKitSyncCoordinator` so views keep
+    /// reading these off `ReminderService`. The Observation framework
+    /// tracks the underlying property accesses transparently.
+    var lastSyncDate: Date? { syncCoordinator.lastSyncDate }
+    var syncError: String? { syncCoordinator.syncError }
+    var isSyncing: Bool { syncCoordinator.isSyncing }
+    var isUsingCache: Bool { syncCoordinator.isUsingCache }
 
     /// Aggregated persistence error surfaced to the UI. Picks the first
-    /// non-nil error across the three stores so Settings can show one
+    /// non-nil error across the three stores so Settings shows one
     /// warning instead of three.
     var lastPersistenceError: String? {
         localEventStore.lastError
             ?? excludedOccurrenceStore.lastError
             ?? reminderOverrideStore.lastError
     }
-    private nonisolated(unsafe) var settingsObserver: Any?
-    private nonisolated(unsafe) var cloudImportObserver: Any?
+
+    private var settings: ReminderSettings
+
+    // Sub-services. All four are owned by this orchestrator and live
+    // for the lifetime of the app.
+    private let scheduler: NotificationScheduler
+    private let syncCoordinator: EventKitSyncCoordinator
+    /// Typed by protocol so tests can swap in `InMemoryLocalEventStore`
+    /// (etc.) without spinning up SwiftData. The concrete implementation
+    /// in production is the CloudKit-backed `LocalEventStore`.
+    private let localEventStore: any LocalEventStoring
+    private let excludedOccurrenceStore: any ExcludedOccurrenceStoring
+    private let reminderOverrideStore: any ReminderOverrideStoring
+
     private var excludedOccurrences: Set<String> = []
     private var localRemindersOverrides: [String: [Int]] = [:]
+
+    private nonisolated(unsafe) var settingsObserver: Any?
     private nonisolated(unsafe) var snoozeObserver: Any?
-    private nonisolated(unsafe) var appleCalendarObserver: Any?
-    private nonisolated(unsafe) var pendingAppleRefreshTask: Task<Void, Never>?
-    private var hasCompletedLiveSync = false
+    private nonisolated(unsafe) var cloudImportObserver: Any?
 
     /// IDs of events currently playing their disintegration animation.
-    /// These events are kept in the list briefly after ending so the dust effect can finish.
+    /// These events are kept in the list briefly after ending so the
+    /// dust effect can finish.
     private(set) var disintegratingEventIDs: Set<String> = []
 
     var allEvents: [CalendarEvent] {
@@ -62,23 +85,23 @@ class ReminderService {
             .sorted { $0.startDate < $1.startDate }
     }
 
-    /// Mark an event as disintegrating (keeps it visible while animation plays).
     func beginDisintegration(for eventID: String) {
         disintegratingEventIDs.insert(eventID)
     }
 
-    /// Remove an event after its disintegration animation completes.
     func completeDisintegration(for eventID: String) {
         disintegratingEventIDs.remove(eventID)
     }
 
-    /// Count of real (non-disintegrating) upcoming events — used to decide
-    /// when to show the empty state so it appears before the dust settles.
+    /// Count of real (non-disintegrating) upcoming events — used to
+    /// decide when to show the empty state so it appears before the
+    /// dust settles.
     var nonDisintegratingEventCount: Int {
         allEvents.filter { !disintegratingEventIDs.contains($0.id) }.count
     }
 
-    /// Number of remaining events to show as badge on the menu bar icon.
+    /// Number of remaining events to show as a badge on the menu bar
+    /// icon.
     var badgeCount: Int {
         guard settings.showBadgeCount else { return 0 }
         let calendar = Calendar.current
@@ -92,12 +115,10 @@ class ReminderService {
             cutoff = now.addingTimeInterval(TimeInterval(settings.badgeTimeWindowHours) * 60 * 60)
         }
 
-        return allEvents.filter { event in
-            event.endDate > now && event.startDate < cutoff
-        }.count
+        return allEvents.filter { $0.endDate > now && $0.startDate < cutoff }.count
     }
 
-    /// Events grouped by day for display, including days with no events
+    /// Events grouped by day for display, including days with no events.
     var eventsByDay: [(date: Date, events: [CalendarEvent])] {
         let calendar = Calendar.current
         let grouped = Dictionary(grouping: allEvents) { event in
@@ -107,30 +128,68 @@ class ReminderService {
         var results: [(date: Date, events: [CalendarEvent])] = []
         for offset in 0..<Self.fetchWindowDays {
             guard let day = calendar.date(byAdding: .day, value: offset, to: today) else { continue }
-            let events = grouped[day] ?? []
-            results.append((date: day, events: events))
+            results.append((date: day, events: grouped[day] ?? []))
         }
         return results
     }
 
-    init(
+    /// Production initializer. Builds the SwiftData-backed stores from
+    /// the two containers. Tests should use the designated initializer
+    /// below and inject in-memory or fake stores instead.
+    convenience init(
         settings: ReminderSettings,
         eventCacheContainer: ModelContainer,
         userEventsContainer: ModelContainer
     ) {
+        self.init(
+            settings: settings,
+            eventCacheContainer: eventCacheContainer,
+            localEventStore: LocalEventStore(container: userEventsContainer),
+            excludedOccurrenceStore: ExcludedOccurrenceStore(container: userEventsContainer),
+            reminderOverrideStore: ReminderOverrideStore(container: userEventsContainer)
+        )
+    }
+
+    /// Designated initializer. Takes stores by protocol so tests can
+    /// drive the orchestrator with `InMemory*` doubles instead of
+    /// SwiftData containers.
+    init(
+        settings: ReminderSettings,
+        eventCacheContainer: ModelContainer,
+        localEventStore: any LocalEventStoring,
+        excludedOccurrenceStore: any ExcludedOccurrenceStoring,
+        reminderOverrideStore: any ReminderOverrideStoring
+    ) {
         self.settings = settings
-        self.eventCache = EventCache(modelContainer: eventCacheContainer)
-        self.localEventStore = LocalEventStore(container: userEventsContainer)
-        self.excludedOccurrenceStore = ExcludedOccurrenceStore(container: userEventsContainer)
-        self.reminderOverrideStore = ReminderOverrideStore(container: userEventsContainer)
-        requestNotificationPermission()
+        self.localEventStore = localEventStore
+        self.excludedOccurrenceStore = excludedOccurrenceStore
+        self.reminderOverrideStore = reminderOverrideStore
+        self.scheduler = NotificationScheduler(settings: settings)
+        self.syncCoordinator = EventKitSyncCoordinator(
+            eventCacheContainer: eventCacheContainer,
+            settings: settings
+        )
+
+        // All stored properties exist — safe to wire up the closures
+        // that capture `self`.
+        self.syncCoordinator.overridesProvider = { [weak self] in
+            self?.localRemindersOverrides ?? [:]
+        }
+        self.syncCoordinator.onEventsUpdated = { [weak self] events, _ in
+            guard let self = self else { return }
+            self.upcomingEvents = events
+            self.scheduler.pruneFiredReminders(keepingEventIds: Set(events.map { $0.id }))
+            self.scheduler.schedule(events)
+        }
+
         loadLocalEvents()
         loadLocalRemindersOverrides()
+        wireObservers()
+    }
 
-        // Reconcile in-memory state after CloudKit lands a remote batch.
-        // Same signal `BacklogService` listens to — collapses duplicates
-        // and picks up edits made on another device without requiring a
-        // restart.
+    private func wireObservers() {
+        // Reconcile after CloudKit lands a remote batch — collapses
+        // duplicates and picks up edits from other devices.
         cloudImportObserver = NotificationCenter.default.addObserver(
             forName: CloudKitSyncMonitor.didFinishImport,
             object: nil,
@@ -146,7 +205,7 @@ class ReminderService {
             object: nil,
             queue: .main
         ) { [weak self] notification in
-            guard let self = self,
+            guard let self,
                   let event = notification.userInfo?["event"] as? CalendarEvent,
                   let minutes = notification.userInfo?["minutes"] as? Int else { return }
             Task { @MainActor in
@@ -154,7 +213,6 @@ class ReminderService {
             }
         }
 
-        // Observe settings changes via NotificationCenter (replaces Combine pipeline)
         settingsObserver = NotificationCenter.default.addObserver(
             forName: ReminderSettings.settingsDidChange,
             object: nil,
@@ -164,24 +222,6 @@ class ReminderService {
                 self?.onSettingsChanged()
             }
         }
-
-        // Auto-sync when Calendar.app data changes (edits, iCloud sync).
-        // Debounced: EKEventStoreChanged can fire in bursts.
-        appleCalendarObserver = NotificationCenter.default.addObserver(
-            forName: AppleCalendarService.calendarDataChanged,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in
-                self?.scheduleAppleCalendarRefresh()
-            }
-        }
-    }
-
-    private func onSettingsChanged() {
-        // Immediately sync (which will drop external events if disabled)
-        syncNow()
-        startSyncTimer()
     }
 
     deinit {
@@ -191,258 +231,44 @@ class ReminderService {
         if let observer = settingsObserver {
             NotificationCenter.default.removeObserver(observer)
         }
-        if let observer = appleCalendarObserver {
-            NotificationCenter.default.removeObserver(observer)
-        }
         if let observer = cloudImportObserver {
             NotificationCenter.default.removeObserver(observer)
         }
-        pendingAppleRefreshTask?.cancel()
-        pendingPostSyncTask?.cancel()
-        for timers in reminderTimers.values {
-            timers.forEach { $0.invalidate() }
-        }
-        syncTimer?.invalidate()
     }
 
-    private func scheduleAppleCalendarRefresh() {
-        pendingAppleRefreshTask?.cancel()
-        pendingAppleRefreshTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(1))
-            guard !Task.isCancelled else { return }
-            self?.syncNow()
-        }
+    private func onSettingsChanged() {
+        // Re-sync immediately (drops external events if disabled) and
+        // restart the timer with the new interval.
+        syncCoordinator.syncNow()
+        syncCoordinator.startSyncTimer()
     }
 
     func updateSettings(_ settings: ReminderSettings) {
         self.settings = settings
-        rescheduleAllReminders()
+        scheduler.updateSettings(settings)
+        syncCoordinator.updateSettings(settings)
+        scheduler.rescheduleAll(allEvents)
     }
 
-    // MARK: - Sync
+    // MARK: - Sync (delegated)
 
-    func startSync() {
-        loadCachedEvents()
-        syncNow()
-        startSyncTimer()
-    }
-
+    func startSync() { syncCoordinator.start() }
     func stopSync() {
-        syncTimer?.invalidate()
-        syncTimer = nil
-        pendingPostSyncTask?.cancel()
-        pendingPostSyncTask = nil
-        for timers in reminderTimers.values {
-            timers.forEach { $0.invalidate() }
-        }
-        reminderTimers.removeAll()
+        syncCoordinator.stop()
+        scheduler.cancelAll()
     }
 
-    func startSyncTimer() {
-        syncTimer?.invalidate()
-        let interval = TimeInterval(settings.syncIntervalMinutes * 60)
-        syncTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.syncNow()
-            }
-        }
-    }
-
-    func syncNow() {
-        guard settings.isCalendarSyncEnabled else {
-            upcomingEvents = []
-            isUsingCache = false
-            syncError = "Calendar sync disabled"
-            rescheduleAllReminders()
-            return
-        }
-
-        guard AppleCalendarService.hasAccess else {
-            syncError = "Calendar access not granted"
-            return
-        }
-
-        isSyncing = true
-        syncError = nil
-
-        // Ask EventKit to pull fresh data from remote calendar servers
-        // (iCloud, Google, Exchange, CalDAV) BEFORE we read events.
-        // Rebuilding the store forces a fresh IPC connection to the calendard
-        // background daemon, which is necessary because the daemon often stops
-        // sending updates to long-lived EventKit connections, especially when
-        // Apple Calendar.app is closed.
-        AppleCalendarService.shared.rebuildStore()
-        AppleCalendarService.shared.triggerRemoteRefresh()
-
-        let now = Date()
-        let endDate = Calendar.current.date(byAdding: .day, value: Self.fetchWindowDays, to: now) ?? now
-
-        var events = AppleCalendarService.shared.fetchEvents(
-            from: now,
-            to: endDate,
-            onlyCalendarIds: settings.selectedCalendarIds
-        )
-
-        // Apply local overrides
-        for i in events.indices {
-            let uniqueId = events[i].id
-            let seriesOverrides = events[i].seriesId.flatMap { localRemindersOverrides[$0] }
-            let exactOverrides = localRemindersOverrides[uniqueId]
-
-            if let active = exactOverrides ?? seriesOverrides {
-                events[i].customReminderMinutes = active.isEmpty ? nil : active
-            }
-        }
-
-        upcomingEvents = events.sorted { $0.startDate < $1.startDate }
-        lastSyncDate = Date()
-        isSyncing = false
-        isUsingCache = false
-        hasCompletedLiveSync = true
-
-        // Clean up firedReminders for events no longer in the window
-        let currentEventIds = Set(events.map { $0.id })
-        firedReminders = firedReminders.filter { key in
-            guard let lastUnderscore = key.lastIndex(of: "_") else { return false }
-            let eventId = String(key[..<lastUnderscore])
-            return currentEventIds.contains(eventId)
-        }
-
-        scheduleReminders(for: events)
-
-        Task {
-            await eventCache.save(events: events)
-        }
-
-        // Schedule a delayed follow-up fetch so that changes arriving from the
-        // async remote refresh we just triggered are picked up promptly, rather
-        // than waiting for the next full sync cycle (up to 5 minutes).
-        schedulePostSyncRefresh()
-    }
-
-    /// Re-fetches events after a sync so that any data pulled by the async
-    /// `refreshSourcesIfNecessary()` call is picked up. When Calendar.app is
-    /// not running the `calendard` daemon may take longer to sync with remote
-    /// servers, so we perform multiple follow-ups at increasing intervals and
-    /// prod the daemon again between them.
-    private nonisolated(unsafe) var pendingPostSyncTask: Task<Void, Never>?
-
-    private func schedulePostSyncRefresh() {
-        pendingPostSyncTask?.cancel()
-        pendingPostSyncTask = Task { @MainActor [weak self] in
-            // 1st follow-up: quick catch for fast servers / local changes
-            try? await Task.sleep(for: .seconds(4))
-            guard !Task.isCancelled else { return }
-            self?.fetchAndUpdate()
-
-            // Prod the sync daemon again — the first
-            // refreshSourcesIfNecessary() may have been throttled.
-            AppleCalendarService.shared.triggerRemoteRefresh()
-
-            // 2nd follow-up: catch slower remote responses (Google, Exchange)
-            try? await Task.sleep(for: .seconds(12))
-            guard !Task.isCancelled else { return }
-            self?.fetchAndUpdate()
-
-            // 3rd follow-up: when Calendar.app is closed, calendard can take
-            // 30-60s to actually pull from remote servers. Prod once more and
-            // re-fetch after a longer delay to catch these late responses.
-            AppleCalendarService.shared.triggerRemoteRefresh()
-
-            try? await Task.sleep(for: .seconds(30))
-            guard !Task.isCancelled else { return }
-            self?.fetchAndUpdate()
-
-            // 4th follow-up: calendard can be very slow when Calendar.app has
-            // not been opened for a while. Give it another prod and a final
-            // long-delay re-fetch to catch deletions that take 60-90s to arrive.
-            AppleCalendarService.shared.triggerRemoteRefresh()
-
-            try? await Task.sleep(for: .seconds(60))
-            guard !Task.isCancelled else { return }
-            self?.fetchAndUpdate()
-        }
-    }
-
-    /// Lightweight re-fetch: reads events from EventKit and updates the UI
-    /// without triggering another remote refresh (avoids infinite loop).
-    /// Resets the store's in-memory cache first so we pick up any changes
-    /// the calendard daemon has processed since our last read.
-    private func fetchAndUpdate() {
-        guard settings.isCalendarSyncEnabled, AppleCalendarService.hasAccess else { return }
-
-        // Flush the EKEventStore's in-memory cache so we read the latest
-        // state from the calendard daemon's database, not stale cache.
-        AppleCalendarService.shared.resetCache()
-
-        let now = Date()
-        let endDate = Calendar.current.date(byAdding: .day, value: Self.fetchWindowDays, to: now) ?? now
-
-        var events = AppleCalendarService.shared.fetchEvents(
-            from: now,
-            to: endDate,
-            onlyCalendarIds: settings.selectedCalendarIds
-        )
-
-        for i in events.indices {
-            let uniqueId = events[i].id
-            let seriesOverrides = events[i].seriesId.flatMap { localRemindersOverrides[$0] }
-            let exactOverrides = localRemindersOverrides[uniqueId]
-            if let active = exactOverrides ?? seriesOverrides {
-                events[i].customReminderMinutes = active.isEmpty ? nil : active
-            }
-        }
-
-        let updated = events.sorted { $0.startDate < $1.startDate }
-
-        // Only update if the event set actually changed to avoid unnecessary UI churn.
-        // Compare both IDs and event count — cancelled/deleted events that are now
-        // filtered out change the count even when the remaining IDs overlap.
-        let oldIds = Set(upcomingEvents.map { $0.id })
-        let newIds = Set(updated.map { $0.id })
-        guard oldIds != newIds || upcomingEvents.count != updated.count else { return }
-
-        upcomingEvents = updated
-        lastSyncDate = Date()
-
-        let currentEventIds = newIds
-        firedReminders = firedReminders.filter { key in
-            guard let lastUnderscore = key.lastIndex(of: "_") else { return false }
-            let eventId = String(key[..<lastUnderscore])
-            return currentEventIds.contains(eventId)
-        }
-
-        scheduleReminders(for: events)
-
-        Task {
-            await eventCache.save(events: events)
-        }
-    }
-
-    // MARK: - Cache
-
-    private func loadCachedEvents() {
-        Task {
-            let cached = await eventCache.loadEvents()
-            // Only use cache if a live sync hasn't already completed —
-            // prevents stale cached data from overwriting fresh results.
-            if !cached.isEmpty && !self.hasCompletedLiveSync && self.upcomingEvents.isEmpty {
-                self.upcomingEvents = cached
-                self.isUsingCache = true
-                self.scheduleReminders(for: cached)
-            }
-        }
-    }
+    func syncNow() { syncCoordinator.syncNow() }
 
     // MARK: - Local Events
 
     func addCalendarEvent(_ event: CalendarEvent, calendarId: String? = nil) {
         do {
-            // For pomodoro events, expand into work + break + long break events
+            // Pomodoro events expand into work + break + long break events.
             if event.eventType == .pomodoro, event.recurrenceRule?.isPomodoro == true {
                 let expanded = RecurrenceExpander.expand(event)
                 for occurrence in expanded {
-                    // Create each expanded event without recurrence rule (they are individual events)
+                    // Each expanded event is individual (no recurrence rule).
                     let calEvent = CalendarEvent(
                         id: occurrence.id,
                         title: occurrence.title,
@@ -458,7 +284,7 @@ class ReminderService {
             } else {
                 try AppleCalendarService.shared.createEvent(event, calendarId: calendarId)
             }
-            syncNow()
+            syncCoordinator.syncNow()
         } catch {
             logger.error("Failed to create Apple Calendar event: \(error)")
         }
@@ -466,25 +292,25 @@ class ReminderService {
 
     func addLocalEvent(_ event: CalendarEvent) {
         localEvents.append(event)
-        saveLocalEvents()
-        scheduleReminders(for: RecurrenceExpander.expand(event, excludedIds: excludedOccurrences))
+        localEventStore.save(localEvents)
+        scheduler.schedule(RecurrenceExpander.expand(event, excludedIds: excludedOccurrences))
     }
 
     func removeLocalEvent(id: String) {
         if let event = localEvents.first(where: { $0.id == id }) {
             let expanded = RecurrenceExpander.expand(event, excludedIds: excludedOccurrences)
-            for occurrence in expanded { cancelReminders(for: occurrence.id) }
+            for occurrence in expanded { scheduler.cancel(eventId: occurrence.id) }
         }
         excludedOccurrences = excludedOccurrences.filter { !$0.hasPrefix(id) }
-        saveExcludedOccurrences()
+        excludedOccurrenceStore.save(excludedOccurrences)
         localEvents.removeAll { $0.id == id }
-        saveLocalEvents()
+        localEventStore.save(localEvents)
     }
 
     func excludeOccurrence(occurrenceId: String) {
         excludedOccurrences.insert(occurrenceId)
-        saveExcludedOccurrences()
-        cancelReminders(for: occurrenceId)
+        excludedOccurrenceStore.save(excludedOccurrences)
+        scheduler.cancel(eventId: occurrenceId)
     }
 
     func seriesEvent(for event: CalendarEvent) -> CalendarEvent? {
@@ -495,30 +321,15 @@ class ReminderService {
     func updateLocalEvent(_ event: CalendarEvent) {
         guard let index = localEvents.firstIndex(where: { $0.id == event.id }) else { return }
         let oldExpanded = RecurrenceExpander.expand(localEvents[index], excludedIds: excludedOccurrences)
-        for occurrence in oldExpanded { cancelReminders(for: occurrence.id) }
+        for occurrence in oldExpanded { scheduler.cancel(eventId: occurrence.id) }
         localEvents[index] = event
-        saveLocalEvents()
-        scheduleReminders(for: RecurrenceExpander.expand(event, excludedIds: excludedOccurrences))
-    }
-
-    /// Thin delegate to `LocalEventStore`. Filters to events that are
-    /// worth keeping in memory (upcoming or recurring) — the store itself
-    /// returns everything so other call sites can make their own choice.
-    private func saveLocalEvents() {
         localEventStore.save(localEvents)
+        scheduler.schedule(RecurrenceExpander.expand(event, excludedIds: excludedOccurrences))
     }
 
     private func loadLocalEvents() {
         localEvents = localEventStore.loadAll()
             .filter { $0.isUpcoming || $0.recurrenceRule != nil }
-        loadExcludedOccurrences()
-    }
-
-    private func saveExcludedOccurrences() {
-        excludedOccurrenceStore.save(excludedOccurrences)
-    }
-
-    private func loadExcludedOccurrences() {
         excludedOccurrences = excludedOccurrenceStore.loadAll()
     }
 
@@ -526,42 +337,46 @@ class ReminderService {
 
     func updateLocalReminder(for eventId: String, minutes: [Int]?) {
         localRemindersOverrides[eventId] = minutes ?? []
-        saveLocalRemindersOverrides()
+        reminderOverrideStore.save(localRemindersOverrides)
 
-        // Apply immediately to the current state if it's an upcoming event
+        // Apply immediately so the user sees the change without waiting
+        // for the next sync.
         if let idx = upcomingEvents.firstIndex(where: { $0.id == eventId }) {
             upcomingEvents[idx].customReminderMinutes = minutes
-            scheduleReminders(for: [upcomingEvents[idx]])
+            scheduler.schedule([upcomingEvents[idx]])
         } else if let idx = localEvents.firstIndex(where: { $0.id == eventId }) {
             localEvents[idx].customReminderMinutes = minutes
-            scheduleReminders(for: RecurrenceExpander.expand(localEvents[idx], excludedIds: excludedOccurrences))
+            scheduler.schedule(
+                RecurrenceExpander.expand(localEvents[idx], excludedIds: excludedOccurrences)
+            )
         }
-    }
-
-    private func saveLocalRemindersOverrides() {
-        reminderOverrideStore.save(localRemindersOverrides)
     }
 
     private func loadLocalRemindersOverrides() {
         localRemindersOverrides = reminderOverrideStore.loadAll()
     }
 
+    // MARK: - Reminder Intervals (delegated)
+
+    var defaultReminderMinutesList: [Int] { scheduler.defaultReminderMinutesList }
+    func activeReminderMinutes(for event: CalendarEvent) -> [Int] {
+        scheduler.activeReminderMinutes(for: event)
+    }
+
     // MARK: - CloudKit Reconcile
 
     /// Called after `NSPersistentCloudKitContainer` finishes an import.
-    /// Reloads in-memory mirrors of the three user-event collections so
-    /// edits from other devices become visible without a restart, and
-    /// re-saves to collapse any duplicates CloudKit's merge may have
-    /// introduced. Reminder scheduling is not replayed here — the next
-    /// sync tick picks up the new events naturally.
+    /// Reloads the three user-event collections so edits from other
+    /// devices become visible without a restart, and re-saves to
+    /// collapse any duplicates CloudKit's merge introduced.
     private func reconcileAfterCloudImport() {
         loadLocalEvents()
         loadLocalRemindersOverrides()
-        // Writing back flushes duplicate-collapse results to disk so we
-        // don't keep re-deduplicating on every read.
-        saveLocalEvents()
-        saveExcludedOccurrences()
-        saveLocalRemindersOverrides()
+        // Writing back flushes duplicate-collapse to disk so we don't
+        // keep re-deduplicating on every read.
+        localEventStore.save(localEvents)
+        excludedOccurrenceStore.save(excludedOccurrences)
+        reminderOverrideStore.save(localRemindersOverrides)
     }
 
     // MARK: - Snooze
@@ -569,7 +384,7 @@ class ReminderService {
     func snoozeReminder(for event: CalendarEvent, minutes: Int) {
         if event.isLocalEvent {
             let interval = TimeInterval(minutes * 60)
-            let updatedEvent = CalendarEvent(
+            let updated = CalendarEvent(
                 id: event.id,
                 title: event.title,
                 startDate: event.startDate.addingTimeInterval(interval),
@@ -582,7 +397,7 @@ class ReminderService {
                 seriesId: event.seriesId,
                 eventType: event.eventType
             )
-            updateLocalEvent(updatedEvent)
+            updateLocalEvent(updated)
         } else {
             do {
                 try AppleCalendarService.shared.shiftEventTime(id: event.id, byMinutes: minutes)
@@ -591,125 +406,4 @@ class ReminderService {
             }
         }
     }
-
-    // MARK: - Reminders
-
-    private static let defaultReminderMinutes = [5]
-
-    /// The default reminder minutes that would apply to an event without custom reminders.
-    var defaultReminderMinutesList: [Int] {
-        let enabledIntervals = settings.intervals.filter { $0.isEnabled }
-        if !enabledIntervals.isEmpty {
-            return enabledIntervals.map { $0.minutes }.sorted()
-        }
-        return Self.defaultReminderMinutes
-    }
-
-    func activeReminderMinutes(for event: CalendarEvent) -> [Int] {
-        if let custom = event.customReminderMinutes {
-            return custom
-        }
-        let enabledIntervals = settings.intervals.filter { $0.isEnabled }
-        if !enabledIntervals.isEmpty {
-            return enabledIntervals.map { $0.minutes }
-        }
-        return Self.defaultReminderMinutes
-    }
-
-    private func scheduleReminders(for events: [CalendarEvent]) {
-        for event in events where event.isUpcoming {
-            cancelReminders(for: event.id)
-            var timers: [Timer] = []
-
-            let minutesList = activeReminderMinutes(for: event)
-
-            for minutes in minutesList {
-                let reminderKey = "\(event.id)_\(minutes)"
-                guard !firedReminders.contains(reminderKey) else { continue }
-
-                let fireDate = event.startDate.addingTimeInterval(-TimeInterval(minutes * 60))
-                guard fireDate > Date() else { continue }
-
-                let timer = Timer(fire: fireDate, interval: 0, repeats: false) { [weak self] _ in
-                    Task { @MainActor in
-                        self?.fireReminder(for: event, minutesBefore: minutes, isSnooze: false)
-                        self?.firedReminders.insert(reminderKey)
-                    }
-                }
-                RunLoop.main.add(timer, forMode: .common)
-                timers.append(timer)
-            }
-
-            if !timers.isEmpty {
-                reminderTimers[event.id] = timers
-            }
-        }
-    }
-
-    private func cancelReminders(for eventId: String) {
-        reminderTimers[eventId]?.forEach { $0.invalidate() }
-        reminderTimers.removeValue(forKey: eventId)
-    }
-
-    private func rescheduleAllReminders() {
-        for timers in reminderTimers.values {
-            timers.forEach { $0.invalidate() }
-        }
-        reminderTimers.removeAll()
-        firedReminders.removeAll()
-        scheduleReminders(for: allEvents)
-    }
-
-    private func fireReminder(for event: CalendarEvent, minutesBefore: Int, isSnooze: Bool) {
-        if settings.showSystemNotification {
-            sendNotification(for: event, minutesBefore: minutesBefore, isSnooze: isSnooze)
-        }
-
-        if settings.showFullScreenAlert {
-            showFullScreenAlert(for: event, minutesBefore: minutesBefore)
-        }
-    }
-
-    private func sendNotification(for event: CalendarEvent, minutesBefore: Int, isSnooze: Bool) {
-        let content = UNMutableNotificationContent()
-
-        if isSnooze {
-            content.title = "Reminder (snoozed)"
-        } else if minutesBefore <= 0 {
-            content.title = "Meeting starting!"
-        } else {
-            content.title = "Meeting in \(minutesBefore) min"
-        }
-
-        content.body = "\(event.title)\n\(event.formattedTime)"
-        if let location = event.location {
-            content.body += "\n\(location)"
-        }
-        let request = UNNotificationRequest(
-            identifier: "\(event.id)_\(minutesBefore)_\(Date().timeIntervalSince1970)",
-            content: content,
-            trigger: nil
-        )
-
-        UNUserNotificationCenter.current().add(request)
-    }
-
-    private func showFullScreenAlert(for event: CalendarEvent, minutesBefore: Int) {
-        NotificationCenter.default.post(
-            name: .showFullScreenAlert,
-            object: nil,
-            userInfo: [
-                "event": event,
-                "minutesBefore": minutesBefore
-            ]
-        )
-    }
-
-    private func requestNotificationPermission() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge]) { _, _ in }
-    }
-}
-
-extension Notification.Name {
-    static let showFullScreenAlert = Notification.Name("showFullScreenAlert")
 }

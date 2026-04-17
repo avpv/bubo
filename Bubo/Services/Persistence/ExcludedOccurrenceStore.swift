@@ -12,7 +12,7 @@ private let logger = Logger(subsystem: "com.avpv.Bubo", category: "ExcludedOccur
 /// instead of silently logged.
 @Observable
 @MainActor
-final class ExcludedOccurrenceStore {
+final class ExcludedOccurrenceStore: ExcludedOccurrenceStoring {
     private let container: ModelContainer
     private(set) var lastError: String?
 

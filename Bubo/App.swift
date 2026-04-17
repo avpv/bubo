@@ -11,162 +11,29 @@ private let sharedIconCache = MenuBarIconCache()
 @main
 struct BuboApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+
     @State private var settings: ReminderSettings
     @State private var reminderService: ReminderService
-    @State private var networkMonitor = NetworkMonitor()
+    @State private var networkMonitor: NetworkMonitor
     @State private var optimizerService: OptimizerService
-    @State private var agentService = AgentService()
+    @State private var agentService: AgentService
     @State private var remindersSyncService: RemindersSyncService
     @State private var cloudServices: CloudServicesCoordinator
 
-    /// Local-only container for Apple Calendar event cache. Stays out of
-    /// CloudKit because EventKit already syncs iCloud calendars at the OS
-    /// level, and the cache is a per-device scratch pad atomically rebuilt
-    /// on every sync. Keeps `@Attribute(.unique)` on `PersistedCachedEvent`
-    /// as a last-line dedup defence.
-    private let eventCacheContainer: ModelContainer
-
-    /// User-authored event data: manually created local events, excluded
-    /// recurrence occurrences, and per-event reminder overrides. Opts into
-    /// CloudKit when the user enables sync. Models here deliberately avoid
-    /// `@Attribute(.unique)` (CloudKit rejects it) and carry `updatedAt`
-    /// for last-writer-wins reconciliation on import.
-    private let userEventsContainer: ModelContainer
-
-    /// Backlog tasks container — opts into CloudKit on the same flag.
-    private let backlogContainer: ModelContainer
-
-    /// UserDefaults flag controlling whether CloudKit-backed SwiftData
-    /// stores (user events + backlog) opt into sync. Defaults to `false` —
-    /// users flip it from Settings. The flag is read at launch; switching
-    /// it requires a restart because `ModelContainer` is built once per
-    /// process.
-    static let cloudSyncPreferenceKey = "BuboCloudSyncEnabled"
-
-    /// URLs of the dedicated stores. Keeping each model family in its own
-    /// file lets us mix local and CloudKit-backed configurations in one
-    /// process without the "one unique attribute poisons the whole
-    /// container" problem.
-    static let eventCacheStoreURL: URL = URL.applicationSupportDirectory
-        .appending(path: "EventCache.store")
-    static let userEventsStoreURL: URL = URL.applicationSupportDirectory
-        .appending(path: "UserEvents.store")
-    static let backlogStoreURL: URL = URL.applicationSupportDirectory
-        .appending(path: "Backlog.store")
-
-    private static func makeEventCacheContainer() throws -> ModelContainer {
-        let schema = Schema([PersistedCachedEvent.self])
-        let config = ModelConfiguration(
-            schema: schema,
-            url: eventCacheStoreURL,
-            cloudKitDatabase: .none
-        )
-        return try ModelContainer(for: schema, configurations: config)
-    }
-
-    private static func makeUserEventsContainer(cloudEnabled: Bool) throws -> ModelContainer {
-        let schema = Schema([
-            PersistedLocalEvent.self,
-            PersistedExcludedOccurrence.self,
-            PersistedReminderOverride.self,
-        ])
-        let config = ModelConfiguration(
-            schema: schema,
-            url: userEventsStoreURL,
-            cloudKitDatabase: cloudEnabled ? .automatic : .none
-        )
-        return try ModelContainer(for: schema, configurations: config)
-    }
-
-    private static func makeBacklogContainer(cloudEnabled: Bool) throws -> ModelContainer {
-        let schema = Schema([PersistedBacklogTask.self])
-        let config = ModelConfiguration(
-            schema: schema,
-            url: backlogStoreURL,
-            cloudKitDatabase: cloudEnabled ? .automatic : .none
-        )
-        return try ModelContainer(for: schema, configurations: config)
-    }
-
-    /// Build a container, retrying once with CloudKit disabled if the
-    /// mirrored build fails, and falling back to a clean local store if
-    /// the file itself is corrupt. Centralising this keeps the three
-    /// container init sites from repeating the same recovery dance.
-    private static func resilientContainer(
-        storeURL: URL,
-        cloudEnabled: Bool,
-        build: (Bool) throws -> ModelContainer
-    ) -> ModelContainer {
-        do {
-            return try build(cloudEnabled)
-        } catch {
-            if cloudEnabled, let retry = try? build(false) {
-                return retry
-            }
-            try? FileManager.default.removeItem(at: storeURL)
-            for suffix in ["-wal", "-shm"] {
-                let sidecar = storeURL.deletingPathExtension()
-                    .appendingPathExtension(storeURL.pathExtension + suffix)
-                try? FileManager.default.removeItem(at: sidecar)
-            }
-            do {
-                return try build(false)
-            } catch {
-                fatalError("Failed to create ModelContainer at \(storeURL.lastPathComponent) after reset: \(error)")
-            }
-        }
-    }
+    /// Source-compat shim. The preference key lives on `AppContainer`
+    /// now; views that read it via `BuboApp.cloudSyncPreferenceKey` keep
+    /// working without churn.
+    static let cloudSyncPreferenceKey = AppContainer.cloudSyncPreferenceKey
 
     init() {
-        let defaults = UserDefaults.standard
-        let cloudPreference = defaults.object(forKey: Self.cloudSyncPreferenceKey) as? Bool ?? false
-
-        self.eventCacheContainer = Self.resilientContainer(
-            storeURL: Self.eventCacheStoreURL,
-            cloudEnabled: false
-        ) { _ in try Self.makeEventCacheContainer() }
-
-        self.userEventsContainer = Self.resilientContainer(
-            storeURL: Self.userEventsStoreURL,
-            cloudEnabled: cloudPreference
-        ) { try Self.makeUserEventsContainer(cloudEnabled: $0) }
-
-        self.backlogContainer = Self.resilientContainer(
-            storeURL: Self.backlogStoreURL,
-            cloudEnabled: cloudPreference
-        ) { try Self.makeBacklogContainer(cloudEnabled: $0) }
-
-        // Surface CloudKit + KV sync state to the UI behind a single
-        // coordinator. Events from `NSPersistentCloudKitContainer` are
-        // posted globally, so we don't need to hand container references
-        // in — the coordinator just needs to be alive before the first
-        // import/export fires.
-        let cloudCoordinator = CloudServicesCoordinator()
-        if cloudPreference {
-            cloudCoordinator.start(
-                containerIdentifier: "iCloud.\(Bundle.main.bundleIdentifier ?? "")"
-            )
-        }
-        _cloudServices = State(wrappedValue: cloudCoordinator)
-
-        let s = ReminderSettings.load()
-        _settings = State(wrappedValue: s)
-        _reminderService = State(wrappedValue: ReminderService(
-            settings: s,
-            eventCacheContainer: eventCacheContainer,
-            userEventsContainer: userEventsContainer
-        ))
-
-        let optimizer = OptimizerService()
-        let backlogService = BacklogService(modelContainer: backlogContainer)
-        optimizer.backlogService = backlogService
-        optimizer.energyCheckInService = EnergyCheckInService()
-        _optimizerService = State(wrappedValue: optimizer)
-
-        _remindersSyncService = State(wrappedValue: RemindersSyncService(
-            settings: s,
-            backlogService: backlogService
-        ))
+        let container = AppContainer.make()
+        _settings = State(wrappedValue: container.settings)
+        _reminderService = State(wrappedValue: container.reminderService)
+        _networkMonitor = State(wrappedValue: container.networkMonitor)
+        _optimizerService = State(wrappedValue: container.optimizerService)
+        _agentService = State(wrappedValue: container.agentService)
+        _remindersSyncService = State(wrappedValue: container.remindersSyncService)
+        _cloudServices = State(wrappedValue: container.cloudServices)
     }
 
     private func drawOwl(in ctx: CGContext, size s: CGFloat, color: CGColor) {
