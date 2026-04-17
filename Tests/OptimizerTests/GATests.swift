@@ -341,7 +341,7 @@ struct GAIntegrationTests {
             }
         )
 
-        let results = ga.run()
+        let results = try! ga.run()
 
         #expect(!results.isEmpty)
         #expect(results[0].fitness >= results.last!.fitness) // Sorted by fitness
@@ -366,7 +366,7 @@ struct GAIntegrationTests {
             }
         )
 
-        let population = ga.run()
+        let population = try! ga.run()
 
         var archive = MAPElitesArchive()
         archive.depositAll(population, context: context)
@@ -849,7 +849,7 @@ struct ConstraintEnforcementTests {
             }
         )
 
-        let results = ga.run()
+        let results = try! ga.run()
         guard let best = results.first else {
             #expect(Bool(false), "GA returned empty results")
             return
@@ -877,7 +877,7 @@ struct ConstraintEnforcementTests {
             }
         )
 
-        let results = ga.run()
+        let results = try! ga.run()
         guard let best = results.first else { return }
 
         let constraint = WorkingHoursConstraint()
@@ -1376,7 +1376,7 @@ struct DiversityDrivenMutationTests {
             }
         )
 
-        _ = ga.run()
+        _ = try! ga.run()
 
         // Diversity should not collapse to zero — immigration and boosted mutation prevent it
         let lastFew = diversityHistory.suffix(5)
@@ -1517,7 +1517,7 @@ struct CrossoverStrategyTests {
             }
         )
 
-        let results = ga.run()
+        let results = try! ga.run()
         #expect(!results.isEmpty)
         #expect(results[0].fitness >= results.last!.fitness)
     }
@@ -1542,7 +1542,7 @@ struct CrossoverStrategyTests {
             }
         )
 
-        let results = ga.run()
+        let results = try! ga.run()
         #expect(!results.isEmpty)
         #expect(ga.bestEver != nil)
     }
@@ -1589,7 +1589,7 @@ struct HillClimbingTests {
             }
         )
 
-        let results = ga.run()
+        let results = try! ga.run()
         #expect(!results.isEmpty)
 
         // bestEver should reflect hill climbing refinement
@@ -2733,7 +2733,7 @@ struct AdaptiveCrossoverTests {
             }
         )
 
-        let results = ga.run()
+        let results = try! ga.run()
         #expect(!results.isEmpty)
         #expect(ga.bestEver != nil)
         #expect(ga.bestEver!.fitness > 0)
@@ -2775,7 +2775,7 @@ struct CrowdingReplacementTests {
             }
         )
 
-        let results = ga.run()
+        let results = try! ga.run()
         #expect(!results.isEmpty)
         #expect(results[0].fitness >= results.last!.fitness)
     }
@@ -3176,7 +3176,7 @@ struct GAConfigNewFieldsTests {
             }
         )
 
-        let results = ga.run()
+        let results = try! ga.run()
         #expect(!results.isEmpty)
         #expect(ga.bestEver != nil)
         #expect(ga.bestEver!.fitness > 0.1, "Should find a feasible solution")
@@ -3282,7 +3282,7 @@ struct GACoreRegressionTests {
             multiObjective: mo
         )
 
-        let results = ga.run()
+        let results = try! ga.run()
         guard let best = ga.bestEver, !results.isEmpty else {
             Issue.record("GA produced no results")
             return
@@ -3508,7 +3508,7 @@ struct GARandomTests {
             evaluate: { c in evaluator.evaluateAndAssign(&c, context: context) },
             multiObjective: mo
         )
-        let final = ga.runSeeded(with: seeds)
+        let final = try! ga.runSeeded(with: seeds)
         let uniqueGeneSets = Set(final.map { ChromosomeFingerprint($0.genes) })
         #expect(uniqueGeneSets.count >= 2,
                 "A fully-cloned seed must diverge during evolution (got \(uniqueGeneSets.count))")
@@ -3533,7 +3533,7 @@ struct GARandomTests {
                 context: ctx,
                 evaluate: { c in evaluator.evaluateAndAssign(&c, context: ctx) }
             )
-            return ga.run().first?.rawFitness ?? 0
+            return (try? ga.run())?.first?.rawFitness ?? 0
         }
 
         let a = runOnce(seed: 12345)

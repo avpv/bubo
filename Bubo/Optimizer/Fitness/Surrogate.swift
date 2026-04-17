@@ -35,6 +35,12 @@ final class RBFSurrogate: @unchecked Sendable {
     struct TrainingSample: Sendable {
         let features: ContiguousArray<Double>
         let fitness: Double
+        /// Per-objective scores in a canonical order (same order used by
+        /// `MultiObjectiveContext.objectiveVectorOf`). When present, the
+        /// surrogate predicts this vector on accept so downstream
+        /// consumers (NSGA-III, hypervolume) see non-zero objective
+        /// caches for surrogate-predicted individuals.
+        let objectives: ContiguousArray<Double>?
     }
 
     /// All knobs settable at construction. No runtime mutation.
@@ -80,11 +86,17 @@ final class RBFSurrogate: @unchecked Sendable {
 
     /// Result of a screen decision.
     enum Screen: Sendable {
-        /// Surrogate trusts its prediction.
-        case accept(predictedFitness: Double)
+        /// Surrogate trusts its prediction. Includes the predicted
+        /// objective vector when training samples carried one — nil
+        /// means objective-cache-aware callers must still fall back
+        /// to the real evaluator.
+        case accept(predictedFitness: Double, predictedObjectives: ContiguousArray<Double>?)
         /// Surrogate doesn't trust itself; GA must run the real
-        /// evaluator. The string is a coarse reason for telemetry.
-        case realEvaluate(reason: String)
+        /// evaluator. `priorPrediction` is what the RBF *would* have
+        /// predicted for the feature vector — pass it back to
+        /// `record` to track rolling MAE against the real result.
+        /// Nil during warm-up (no neighbours yet).
+        case realEvaluate(reason: String, priorPrediction: Double?)
     }
 
     struct Telemetry: Sendable {
@@ -118,6 +130,9 @@ final class RBFSurrogate: @unchecked Sendable {
 
     /// Decide whether the caller should trust the surrogate's
     /// prediction for `features`, or fall back to the real evaluator.
+    /// `.realEvaluate` carries a prior prediction when one was
+    /// computed so the caller can feed it back through `record` for
+    /// MAE tracking.
     func screen(features: ContiguousArray<Double>) -> Screen {
         lock.lock()
         defer { lock.unlock() }
@@ -126,47 +141,54 @@ final class RBFSurrogate: @unchecked Sendable {
 
         guard samples.count >= config.warmupSamples else {
             realEvaluated += 1
-            return .realEvaluate(reason: "warmup")
+            return .realEvaluate(reason: "warmup", priorPrediction: nil)
         }
+
+        // Compute distances and prediction upfront so every `realEvaluate`
+        // return path can surface the would-be prediction. It's cheap
+        // (~N·16 float ops) vs. the real evaluator's millisecond cost.
+        let distances = computeDistances(to: features)
+        let k = min(config.neighbors, distances.count)
+        let topK = partialSort(distances: distances, k: k)
+        let prediction: Double? = topK.isEmpty ? nil : rbfPredict(neighbours: topK)
 
         if screensSinceRefresh >= config.trustRefreshInterval {
             screensSinceRefresh = 0
             realEvaluated += 1
-            return .realEvaluate(reason: "calibrationRefresh")
+            return .realEvaluate(reason: "calibrationRefresh", priorPrediction: prediction)
         }
 
-        // Compute every distance once, then partial-sort the top-k.
-        // Linear-scan distance + heap selection is O(N + N log k),
-        // beats full sort for k << N.
-        let distances = computeDistances(to: features)
-        let k = min(config.neighbors, distances.count)
-        let topK = partialSort(distances: distances, k: k)
         guard let closest = topK.first else {
             realEvaluated += 1
-            return .realEvaluate(reason: "noNeighbors")
+            return .realEvaluate(reason: "noNeighbors", priorPrediction: nil)
         }
         if closest.distance > config.realEvalThreshold {
             realEvaluated += 1
-            return .realEvaluate(reason: "highUncertainty")
+            return .realEvaluate(reason: "highUncertainty", priorPrediction: prediction)
         }
-        let predicted = rbfPredict(neighbours: topK)
+        let predictedObjectives = rbfPredictObjectives(neighbours: topK)
         accepted += 1
-        return .accept(predictedFitness: predicted)
+        return .accept(predictedFitness: prediction ?? 0, predictedObjectives: predictedObjectives)
     }
 
     // MARK: - Update
 
-    /// Register a (features → fitness) pair. Optionally pass the
-    /// `priorPrediction` the surrogate emitted before the caller ran
-    /// the real evaluator so we can track running MAE.
+    /// Register a (features → fitness) pair. Optional `objectives`
+    /// populates the 13-dim per-objective vector so subsequent
+    /// surrogate-accepts can supply a predicted objective cache to
+    /// NSGA-III / hypervolume consumers. `priorPrediction` closes the
+    /// MAE tracking loop — pass the value surrogate returned *before*
+    /// this real evaluation so `rollingMAE` in telemetry reflects
+    /// drift against reality.
     func record(
         features: ContiguousArray<Double>,
         fitness: Double,
+        objectives: ContiguousArray<Double>? = nil,
         priorPrediction: Double? = nil
     ) {
         lock.lock()
         defer { lock.unlock() }
-        samples.append(TrainingSample(features: features, fitness: fitness))
+        samples.append(TrainingSample(features: features, fitness: fitness, objectives: objectives))
         if samples.count > config.capacity {
             samples.removeFirst(samples.count - config.capacity)
             // Reset MAE periodically so drift is measured on recent
@@ -252,6 +274,36 @@ final class RBFSurrogate: @unchecked Sendable {
             return sum / Double(neighbours.count)
         }
         return weightedFitnessSum / weightSum
+    }
+
+    /// Predict the 13-dim objective vector by RBF-weighted average of
+    /// training samples' objective vectors. Returns nil when no
+    /// neighbour carries one (either the surrogate was fed scalar-only
+    /// samples, or training is mixed — we require all-or-nothing per
+    /// neighbour to avoid silently averaging across different
+    /// objective orderings).
+    private func rbfPredictObjectives(neighbours: [NeighborDistance]) -> ContiguousArray<Double>? {
+        guard !neighbours.isEmpty else { return nil }
+        guard let firstVec = samples[neighbours[0].sampleIndex].objectives else {
+            return nil
+        }
+        let dim = firstVec.count
+        var weightSum = 0.0
+        var accumulator = ContiguousArray<Double>(repeating: 0, count: dim)
+        let invBandwidthSq = 1.0 / (config.bandwidth * config.bandwidth)
+
+        for n in neighbours {
+            guard let vec = samples[n.sampleIndex].objectives, vec.count == dim else {
+                // Heterogeneous training — don't predict objectives.
+                return nil
+            }
+            let w = exp(-(n.distance * n.distance) * invBandwidthSq)
+            weightSum += w
+            for k in 0..<dim { accumulator[k] += w * vec[k] }
+        }
+        guard weightSum > 1e-12 else { return nil }
+        for k in 0..<dim { accumulator[k] /= weightSum }
+        return accumulator
     }
 
     /// Fixed-dimension Euclidean distance. Uses `withUnsafeBufferPointer`

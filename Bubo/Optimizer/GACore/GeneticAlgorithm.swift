@@ -350,13 +350,17 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
     }
 
     /// Run the full GA and return the final population (sorted by fitness).
-    func run() -> [C] {
+    /// Throws `CancellationError` when the enclosing `Task` is cancelled —
+    /// the caller receives whatever was evolved before cancellation via
+    /// `bestEver` / partial population observation.
+    func run() throws -> [C] {
         var population = createInitialPopulation()
-        return evolve(&population)
+        return try evolve(&population)
     }
 
-    /// Run the GA seeded with an existing population (for incremental re-optimization).
-    func runSeeded(with seed: [C]) -> [C] {
+    /// Run the GA seeded with an existing population. Same cancellation
+    /// semantics as `run()`.
+    func runSeeded(with seed: [C]) throws -> [C] {
         var population = Population<C>(
             individuals: seed,
             eliteCount: config.eliteCount
@@ -369,7 +373,7 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             population.individuals.append(individual)
         }
 
-        return evolve(&population)
+        return try evolve(&population)
     }
 
     // MARK: - Initial Population with Greedy Seeding
@@ -417,7 +421,7 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
 
     // MARK: - Core Evolution Loop
 
-    private func evolve(_ population: inout Population<C>) -> [C] {
+    private func evolve(_ population: inout Population<C>) throws -> [C] {
         // Repair initial population if enabled
         if config.enableRepair {
             for i in population.individuals.indices {
@@ -433,6 +437,12 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         var restartsPerformed = 0
 
         for generation in 0..<config.maxGenerations {
+            // Cooperative cancellation: UI-triggered task cancellation
+            // lands here. `bestEver` is already populated with whatever
+            // the current best is, so callers catching CancellationError
+            // can still surface a usable result.
+            try Task.checkCancellation()
+
             evolveOneGeneration(
                 &population,
                 config: config,

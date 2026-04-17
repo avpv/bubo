@@ -20,6 +20,19 @@ final class BuboOptimizer {
     /// Number of scenarios to return per optimization.
     var scenarioCount: Int = 3
 
+    // MARK: - Learned State (persists across optimize() calls)
+
+    /// Per-instance mutation bandit. Instance-level (not per-run) so
+    /// reinforcement from user feedback carries into subsequent
+    /// optimizations. LinUCB's contextual features (diversity,
+    /// stagnation, imbalance) already discriminate regimes, so
+    /// cross-workload bleed is bounded.
+    let mutationBandit: MutationBandit = MutationBandit()
+
+    /// Per-instance attention head. Same rationale as `mutationBandit`:
+    /// user feedback nudges weights across runs.
+    let contextualCrossoverHead: GeneAttentionHead = GeneAttentionHead()
+
     // MARK: - State
 
     private(set) var isOptimizing = false
@@ -55,6 +68,12 @@ final class BuboOptimizer {
         // carry over between optimizations because workload
         // characteristics (fixed events, movable pool, preferences)
         // differ per run; stale weights would be actively misleading.
+        //
+        // RNG is *split* from the caller's generator, not shared:
+        // `GARandom` is a reference type, and two concurrent
+        // `optimize()` calls on the same BuboOptimizer would otherwise
+        // interleave draws from a single stream. The split keeps the
+        // caller's stream reproducible across concurrent runs.
         let adjustedContext = OptimizerContext(
             fixedEvents: context.fixedEvents,
             movableEvents: context.movableEvents,
@@ -63,7 +82,9 @@ final class BuboOptimizer {
             preferences: prefs,
             participantAvailability: context.participantAvailability,
             calendar: context.calendar,
-            rng: context.rng
+            rng: context.rng.split(),
+            mutationBandit: mutationBandit,
+            contextualCrossoverHead: contextualCrossoverHead
         )
 
         let evaluator = FitnessEvaluator.standard(preferences: prefs)
@@ -93,23 +114,61 @@ final class BuboOptimizer {
         // evaluator runs on warm-up samples and on uncertain queries.
         let surrogate = RBFSurrogate()
 
-        // Federated mutation bandit: per-island LinUCB with a merge
-        // every migration boundary. Replaces the single shared bandit
-        // so islands can specialize while still exchanging experience.
-        let federatedBandit = FederatedMutationBandit(islandCount: capturedIslandConfig.islandCount)
+        // Canonical objective ordering for surrogate's objective-vector
+        // prediction. Must match the order `MultiObjectiveContext`
+        // reads from `objectiveCache`, else NSGA-III associates
+        // surrogate-predicted individuals with the wrong reference
+        // directions.
+        let objectiveNames = evaluator.objectives.map(\.name)
 
         // Schedule-specific evolution hooks. Composed via the generic
         // `EvolutionHooks` API so the engine never sees schedule types.
+        //
+        // The evaluator does two things differently from the baseline
+        // path:
+        //   (1) On surrogate-accept, it fills `objectiveCache` with a
+        //       predicted objective vector so NSGA-III / hypervolume
+        //       selection sees non-zero per-axis scores. Without this,
+        //       surrogate-predicted individuals land on front 0 with
+        //       a phantom-perfect Pareto position.
+        //   (2) On calibration refresh / high-uncertainty real
+        //       evaluation, it passes the surrogate's pre-call
+        //       prediction back via `priorPrediction` so rolling MAE
+        //       in telemetry actually tracks drift.
         let surrogateAssistedEvaluator: @Sendable (inout ScheduleChromosome) -> Void = { chromosome in
             let features = ScheduleFeatureVector.extract(chromosome, context: adjustedContext).values
             switch surrogate.screen(features: features) {
-            case .accept(let predicted):
+            case .accept(let predicted, let predictedObjectives):
                 chromosome.fitness = predicted
                 chromosome.rawFitness = predicted
                 chromosome.needsEvaluation = false
-            case .realEvaluate:
+                if let vec = predictedObjectives, vec.count == objectiveNames.count {
+                    var cache: [String: Double] = [:]
+                    cache.reserveCapacity(objectiveNames.count)
+                    for (i, name) in objectiveNames.enumerated() {
+                        cache[name] = vec[i]
+                    }
+                    chromosome.objectiveCache = cache
+                }
+            case .realEvaluate(_, let priorPrediction):
                 evaluator.evaluateAndAssign(&chromosome, context: adjustedContext)
-                surrogate.record(features: features, fitness: chromosome.rawFitness)
+                let objectivesVec: ContiguousArray<Double>?
+                if let cache = chromosome.objectiveCache {
+                    var v = ContiguousArray<Double>()
+                    v.reserveCapacity(objectiveNames.count)
+                    for name in objectiveNames {
+                        v.append(cache[name] ?? 0)
+                    }
+                    objectivesVec = v
+                } else {
+                    objectivesVec = nil
+                }
+                surrogate.record(
+                    features: features,
+                    fitness: chromosome.rawFitness,
+                    objectives: objectivesVec,
+                    priorPrediction: priorPrediction
+                )
             }
         }
 
@@ -124,46 +183,45 @@ final class BuboOptimizer {
             )
         )
 
-        // Run island model GA on background thread
+        // Run island model GA on background thread. All islands share
+        // the instance-level `mutationBandit` and `contextualCrossoverHead`
+        // via `adjustedContext` so user feedback (recorded after the
+        // run via `recordAcceptance` / `recordRejection`) reaches the
+        // same objects on subsequent optimizations.
+        //
+        // `FederatedMutationBandit` remains available as an opt-in
+        // optimization for callers that want per-island bandits with
+        // periodic merging — not wired by default because it fights
+        // with the persistent-feedback path.
         let (population, convergenceGen, duration) = await Task.detached(priority: .userInitiated) {
             let startTime = Date()
-
-            // Per-island federated bandit: each island gets its own
-            // bandit copy. The IslandModelGA loop merges the
-            // federation on every migration boundary.
-            let banditByIsland = (0..<capturedIslandConfig.islandCount).map { i in
-                federatedBandit.bandit(forIsland: i)
-            }
-            // Island 0's bandit doubles as the context bandit for the
-            // shared OptimizerContext that the island model uses
-            // before per-island contexts are created. Per-island
-            // contexts get their own bandits via a closure passed
-            // through the IslandModelGA wiring; here we set the
-            // base context to bandit 0 as a sensible default.
-            let federatedContext = OptimizerContext(
-                fixedEvents: adjustedContext.fixedEvents,
-                movableEvents: adjustedContext.movableEvents,
-                workingHours: adjustedContext.workingHours,
-                planningHorizon: adjustedContext.planningHorizon,
-                preferences: adjustedContext.preferences,
-                participantAvailability: adjustedContext.participantAvailability,
-                calendar: adjustedContext.calendar,
-                rng: adjustedContext.rng,
-                mutationBandit: banditByIsland[0],
-                contextualCrossoverHead: adjustedContext.contextualCrossoverHead
-            )
 
             let islandGA = IslandModelGA<ScheduleChromosome>(
                 islandConfig: capturedIslandConfig,
                 baseConfig: config,
-                context: federatedContext,
+                context: adjustedContext,
                 evaluate: surrogateAssistedEvaluator,
                 multiObjective: multiObjective,
-                hooks: hooks,
-                federatedBandit: federatedBandit
+                hooks: hooks
             )
 
-            let pop = islandGA.run()
+            // Cooperative cancellation: `islandGA.run()` throws
+            // `CancellationError` when the enclosing Task is cancelled
+            // mid-evolution. We surface whatever `bestEver` was found
+            // before interruption so the UI always gets a usable
+            // (if suboptimal) result.
+            let pop: [ScheduleChromosome]
+            do {
+                pop = try islandGA.run()
+            } catch is CancellationError {
+                if let best = islandGA.bestEver {
+                    pop = [best]
+                } else {
+                    pop = []
+                }
+            } catch {
+                pop = islandGA.bestEver.map { [$0] } ?? []
+            }
             let elapsed = Date().timeIntervalSince(startTime)
             return (pop, islandGA.convergenceGeneration, elapsed)
         }.value
@@ -332,19 +390,66 @@ final class BuboOptimizer {
     }
 
     // MARK: - User Feedback (#24)
+    //
+    // Feedback is fanned out to three learners:
+    //   • `PreferenceLearner` — evolves per-objective weights via its
+    //     meta-GA (unchanged).
+    //   • `MutationBandit` — a bounded reward per operator nudges the
+    //     LinUCB estimates so operators that produced accepted
+    //     schedules get reinforced on subsequent runs.
+    //   • `GeneAttentionHead` — a small feature-weight step biases
+    //     contextual crossover toward (or away from) the patterns
+    //     that led to user-visible success/failure.
+    //
+    // The bandit/head updates are intentionally small (~0.1 magnitude)
+    // so a single decision doesn't dominate learned state; many pieces
+    // of feedback converge meaningfully while one noisy accept
+    // doesn't derail the model.
 
     func acceptScenario(_ scenario: ScheduleScenario) {
         currentSchedule = scenario.genes
         preferenceLearner.recordAcceptance(scenarioFitness: scenario.fitness)
+        propagateFeedbackReward(+0.1, scenario: scenario)
     }
 
     func rejectScenario(_ scenario: ScheduleScenario) {
         preferenceLearner.recordRejection(scenarioFitness: scenario.fitness)
+        propagateFeedbackReward(-0.1, scenario: scenario)
     }
 
     func recordManualEdit(original: [ScheduleGene], edited: [ScheduleGene]) {
         currentSchedule = edited
         preferenceLearner.recordModification(original: original, edited: edited)
+        // Modification means "close but not right" — a mild negative
+        // on both bandit and head; PreferenceLearner handles the
+        // objective-weight refinement separately.
+        for op in MutationOperator.allCases {
+            mutationBandit.record(op: op, reward: -0.03)
+        }
+        contextualCrossoverHead.updateWeights(
+            features: [1, 1, 1, 1],
+            rewardSign: -0.3
+        )
+    }
+
+    /// Apply a uniform reward signal to every bandit arm and a
+    /// scenario-magnitude-scaled nudge to the attention head.
+    /// Uniform across operators because we don't retain per-gene
+    /// lineage — LinUCB's context features already discriminate
+    /// regimes, so "reinforce whatever you were doing" averages out
+    /// to the useful signal over many feedback events.
+    private func propagateFeedbackReward(_ reward: Double, scenario: ScheduleScenario) {
+        for op in MutationOperator.allCases {
+            mutationBandit.record(op: op, reward: reward)
+        }
+        // Head feedback: scale by scenario fitness — high-fitness
+        // accepted scenarios mean the head is doing well; weak
+        // scenarios that were accepted anyway carry less signal.
+        let signedMagnitude = reward.signum() * max(0.3, scenario.fitness)
+        contextualCrossoverHead.updateWeights(
+            features: [1, 1, 1, 1],
+            rewardSign: signedMagnitude
+        )
     }
 
     // MARK: - Scenario Comparison (#27)

@@ -521,7 +521,9 @@ struct PomodoroSequenceOptimizer {
             }
         )
 
-        var sorted = ga.run()
+        // Swallow cancellation: this path is a best-effort Pomodoro
+        // sequencer, so an empty result on cancellation is acceptable.
+        var sorted = (try? ga.run()) ?? []
 
         // Apply Pareto ranking to final population to identify diverse solutions
         evaluator.rankByParetoFronts(&sorted)

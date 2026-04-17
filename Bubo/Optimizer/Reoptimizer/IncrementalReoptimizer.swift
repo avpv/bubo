@@ -88,7 +88,11 @@ final class IncrementalReoptimizer: @unchecked Sendable {
             }
         )
 
-        let results = ga.runSeeded(with: seeds)
+        // `runSeeded` is `throws` for cooperative cancellation; the
+        // incremental reoptimizer is synchronous and tolerates no
+        // cancellation, so we swallow any error and fall back to
+        // "no improvement found" semantics.
+        guard let results = try? ga.runSeeded(with: seeds) else { return nil }
 
         // 6. Check if the new schedule is significantly better
         guard let best = results.first else { return nil }

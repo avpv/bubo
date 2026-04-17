@@ -243,7 +243,7 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
     // MARK: - Run
 
     /// Run the island model GA and return the combined final population (sorted by fitness).
-    func run() -> [C] {
+    func run() throws -> [C] {
         precondition(islandConfig.islandCount >= 1, "IslandModelGA requires at least 1 island")
         precondition(islandConfig.migrationInterval >= 1, "migrationInterval must be >= 1")
         precondition(baseConfig.populationSize >= baseConfig.eliteCount + 2,
@@ -289,7 +289,7 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             return Island(population: pop, ga: ga, context: islandContext)
         }
 
-        return evolveIslands(islands)
+        return try evolveIslands(islands)
     }
 
     /// Build a fresh `OptimizerContext` for a single island, sharing everything
@@ -330,7 +330,7 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
     /// Run the island model GA seeded with existing individuals (for warm-start re-optimization).
     /// Seeds are distributed across islands round-robin so every island gets warm-start
     /// material. Remaining slots per island are filled with random individuals.
-    func runSeeded(with seed: [C]) -> [C] {
+    func runSeeded(with seed: [C]) throws -> [C] {
         precondition(islandConfig.islandCount >= 1, "IslandModelGA requires at least 1 island")
         precondition(islandConfig.migrationInterval >= 1, "migrationInterval must be >= 1")
         precondition(baseConfig.populationSize >= baseConfig.eliteCount + 2,
@@ -372,13 +372,13 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             return Island(population: pop, ga: ga, context: islandContext)
         }
 
-        return evolveIslands(islands)
+        return try evolveIslands(islands)
     }
 
     // MARK: - Core Evolution Loop
 
     /// Shared evolution loop for both `run()` and `runSeeded(with:)`.
-    private func evolveIslands(_ islands: [Island<C>]) -> [C] {
+    private func evolveIslands(_ islands: [Island<C>]) throws -> [C] {
         bestEver = islands.compactMap(\.bestEver).max(by: { $0.rawFitness < $1.rawFitness })
 
         let totalGenerations = baseConfig.maxGenerations
@@ -392,6 +392,12 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         var lastCrossDiversity: CrossIslandDiversity?
 
         for generation in 0..<totalGenerations {
+            // Cooperative cancellation — UI can stop a long `.thorough`
+            // run between generations. `bestEver` is already kept up to
+            // date so callers catching `CancellationError` get whatever
+            // was found before interruption.
+            try Task.checkCancellation()
+
             // Evolve each island for one generation in parallel.
             // Each Island is a reference type, so concurrent access to separate
             // instances is safe. parallelEvaluation=false avoids nested concurrentPerform.

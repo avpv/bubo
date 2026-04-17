@@ -13,7 +13,7 @@ struct RBFSurrogateTests {
     func warmupScreens() {
         let surrogate = RBFSurrogate(config: .default)
         switch surrogate.screen(features: makeFeatures(0.5)) {
-        case .realEvaluate:
+        case .realEvaluate(_, _):
             #expect(true)
         case .accept:
             Issue.record("Surrogate should not accept during warm-up")
@@ -37,7 +37,7 @@ struct RBFSurrogateTests {
         var near = baseline
         near[0] += 0.01
         switch surrogate.screen(features: near) {
-        case .accept(let predicted):
+        case .accept(let predicted, _):
             #expect(abs(predicted - 0.8) < 0.1)
         case .realEvaluate:
             Issue.record("Expected surrogate to accept a near-duplicate query")
@@ -63,6 +63,57 @@ struct RBFSurrogateTests {
             #expect(true)
         case .accept:
             Issue.record("Expected real-evaluate on a far-away query")
+        }
+    }
+
+    @Test("Accepted queries carry a predicted objective vector when training had one")
+    func acceptReturnsObjectiveVector() {
+        let config = RBFSurrogate.Configuration(
+            capacity: 100,
+            bandwidth: 0.3,
+            neighbors: 5,
+            realEvalThreshold: 0.5,
+            trustRefreshInterval: 100,
+            warmupSamples: 10
+        )
+        let surrogate = RBFSurrogate(config: config)
+        let baseline = makeFeatures(0.5)
+        let objectiveVec = ContiguousArray<Double>(repeating: 0.7, count: 13)
+        for _ in 0..<15 {
+            surrogate.record(features: baseline, fitness: 0.8, objectives: objectiveVec)
+        }
+        switch surrogate.screen(features: baseline) {
+        case .accept(_, let predictedObjectives):
+            #expect(predictedObjectives != nil)
+            #expect(predictedObjectives?.count == 13)
+            if let vec = predictedObjectives {
+                for v in vec { #expect(abs(v - 0.7) < 0.1) }
+            }
+        case .realEvaluate:
+            Issue.record("Expected accept on a baseline-duplicate query")
+        }
+    }
+
+    @Test("realEvaluate carries prior prediction once warm-up passes")
+    func realEvaluateExposesPriorPrediction() {
+        let config = RBFSurrogate.Configuration(
+            capacity: 100,
+            bandwidth: 0.3,
+            neighbors: 5,
+            realEvalThreshold: 0.05,    // tight threshold forces uncertainty
+            trustRefreshInterval: 1000,
+            warmupSamples: 5
+        )
+        let surrogate = RBFSurrogate(config: config)
+        let baseline = makeFeatures(0.0)
+        for _ in 0..<10 { surrogate.record(features: baseline, fitness: 0.5) }
+
+        // Ask about a point far enough to trip the threshold.
+        switch surrogate.screen(features: makeFeatures(0.4)) {
+        case .realEvaluate(_, let priorPrediction):
+            #expect(priorPrediction != nil)
+        case .accept:
+            Issue.record("Expected high-uncertainty realEvaluate")
         }
     }
 }
