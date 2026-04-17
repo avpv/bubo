@@ -2,21 +2,34 @@ import Foundation
 import SwiftData
 
 // MARK: - Persisted Local Event
+//
+// CloudKit-backed models in this file (LocalEvent, ExcludedOccurrence,
+// ReminderOverride) deliberately avoid `@Attribute(.unique)` because
+// `NSPersistentCloudKitContainer` rejects unique constraints. Every property
+// has a default value or is optional — that's a hard CloudKit-mirroring
+// requirement, and the same reason `PersistedBacklogTask` is structured the
+// way it is.
+//
+// Dedup is handled in the owning service (ReminderService) via upsert:
+// `fetch` by logical key, update in place if found, otherwise insert. The
+// `updatedAt` field is set on every mutation so the collapse-duplicates pass
+// on load and the post-import reconcile can deterministically pick the
+// latest writer.
 
 /// SwiftData model for locally-created calendar events.
 @Model
 final class PersistedLocalEvent {
-    @Attribute(.unique) var eventId: String
-    var title: String
-    var startDate: Date
-    var endDate: Date
+    var eventId: String = ""
+    var title: String = ""
+    var startDate: Date = Date()
+    var endDate: Date = Date()
     var location: String?
     var eventDescription: String?
     var calendarName: String?
     var customReminderMinutes: [Int]?
     var recurrenceRuleData: Data?
     var seriesId: String?
-    var eventTypeRaw: String
+    var eventTypeRaw: String = "standard"
     var colorTagRaw: String?
     var context: String?
     var storyPoints: Int?
@@ -25,9 +38,17 @@ final class PersistedLocalEvent {
     var taskStatusRaw: String = "todo"
     var completedAt: Date?
     var dependsOn: [String] = []
+    var updatedAt: Date = Date()
 
-    init(from event: CalendarEvent) {
+    init() {}
+
+    init(from event: CalendarEvent, updatedAt: Date = Date()) {
         self.eventId = event.id
+        self.updatedAt = updatedAt
+        apply(event, updatedAt: updatedAt)
+    }
+
+    func apply(_ event: CalendarEvent, updatedAt: Date = Date()) {
         self.title = event.title
         self.startDate = event.startDate
         self.endDate = event.endDate
@@ -46,6 +67,7 @@ final class PersistedLocalEvent {
         self.taskStatusRaw = event.taskStatus.rawValue
         self.completedAt = event.completedAt
         self.dependsOn = event.dependsOn
+        self.updatedAt = updatedAt
     }
 
     func toCalendarEvent() -> CalendarEvent {
@@ -75,32 +97,16 @@ final class PersistedLocalEvent {
         event.dependsOn = dependsOn
         return event
     }
-
-    func update(from event: CalendarEvent) {
-        self.title = event.title
-        self.startDate = event.startDate
-        self.endDate = event.endDate
-        self.location = event.location
-        self.eventDescription = event.description
-        self.calendarName = event.calendarName
-        self.customReminderMinutes = event.customReminderMinutes
-        self.recurrenceRuleData = event.recurrenceRule.flatMap { try? JSONEncoder().encode($0) }
-        self.seriesId = event.seriesId
-        self.eventTypeRaw = event.eventType.rawValue
-        self.colorTagRaw = event.colorTag?.rawValue
-        self.context = event.context
-        self.storyPoints = event.storyPoints
-        self.isTask = event.isTask
-        self.deadline = event.deadline
-        self.taskStatusRaw = event.taskStatus.rawValue
-        self.completedAt = event.completedAt
-        self.dependsOn = event.dependsOn
-    }
 }
 
 // MARK: - Persisted Cached Event
 
 /// SwiftData model for Apple Calendar events cached for offline access.
+/// Stays local (never mirrored to CloudKit) because EventKit itself already
+/// syncs iCloud calendars at the OS level, and the cache is a per-device
+/// scratch pad that's atomically rebuilt on every sync. Keeping the unique
+/// constraint here is safe (and useful) since this model never enters a
+/// CloudKit-backed container.
 @Model
 final class PersistedCachedEvent {
     @Attribute(.unique) var eventId: String
@@ -181,10 +187,14 @@ final class PersistedCachedEvent {
 /// SwiftData model for excluded recurrence occurrence IDs.
 @Model
 final class PersistedExcludedOccurrence {
-    @Attribute(.unique) var occurrenceId: String
+    var occurrenceId: String = ""
+    var updatedAt: Date = Date()
 
-    init(occurrenceId: String) {
+    init() {}
+
+    init(occurrenceId: String, updatedAt: Date = Date()) {
         self.occurrenceId = occurrenceId
+        self.updatedAt = updatedAt
     }
 }
 
@@ -193,11 +203,15 @@ final class PersistedExcludedOccurrence {
 /// SwiftData model for per-event reminder time overrides.
 @Model
 final class PersistedReminderOverride {
-    @Attribute(.unique) var eventId: String
-    var minutes: [Int]
+    var eventId: String = ""
+    var minutes: [Int] = []
+    var updatedAt: Date = Date()
 
-    init(eventId: String, minutes: [Int]) {
+    init() {}
+
+    init(eventId: String, minutes: [Int], updatedAt: Date = Date()) {
         self.eventId = eventId
         self.minutes = minutes
+        self.updatedAt = updatedAt
     }
 }
