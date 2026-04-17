@@ -116,18 +116,18 @@ final class FitnessEvaluator: @unchecked Sendable {
     }
 
     // MARK: - Objective Classification
-
-    /// Objectives that depend only on individual gene properties and local neighbors.
-    /// These can be incrementally updated when only a few genes change.
-    private static let localObjectiveNames: Set<String> = [
-        "BreakPlacement", "Buffer", "Deadline", "EnergyBalance"
-    ]
-
-    /// Objectives that depend on global schedule structure and cannot be incrementally updated.
-    private static let globalObjectiveNames: Set<String> = [
-        "FocusBlock", "PomodoroFit", "Conflict", "TaskPlacement",
-        "WeekBalance", "MultiPerson", "ContextSwitch", "MeetingClustering", "TaskInclusion"
-    ]
+    //
+    // Delta-eval capability is now discovered at runtime via
+    // `objective as? DayPartitionedObjective`; explicit classification
+    // lists would immediately rot as new objectives opt in. The following
+    // objectives conform today:
+    //   BreakPlacement, Buffer  — original two.
+    //   FocusBlock, ContextSwitch, MeetingClustering — converted when
+    //     delta-evaluation was extended in the NSGA-III rewrite.
+    // Remaining objectives (Conflict, PomodoroFit, TaskPlacement,
+    // WeekBalance, MultiPerson, EnergyBalance, Deadline, TaskInclusion)
+    // stay global because their scores depend on cross-day structure or
+    // properties that don't decompose cleanly per day.
 
     // MARK: - Evaluation
 

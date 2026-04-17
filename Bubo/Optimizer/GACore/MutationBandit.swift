@@ -26,79 +26,141 @@ enum MutationOperator: Int, CaseIterable, Sendable, Hashable {
     case guided = 3
 }
 
-// MARK: - Mutation Bandit (UCB1)
+// MARK: - Bandit Context
+//
+// Three descriptors of the current population state, all in [0, 1]. The
+// bandit uses them as features in a LinUCB model so operator choice varies
+// with whatever regime the GA is in.
 
-/// Upper-confidence-bound bandit that picks which mutation operator to use
-/// on a given `mutate()` call. Classical UCB1: `mean + c · √(ln N / n_i)`.
+/// Vector of situational features the bandit conditions on. A 4th constant
+/// "1" coefficient is appended internally as the intercept term — callers
+/// construct a `BanditContext` with the three semantic features only.
+struct BanditContext: Sendable {
+    /// Population diversity in [0, 1]. Low = converged.
+    let diversity: Double
+    /// Stagnation ratio in [0, 1]. High = many stale generations since the
+    /// last improvement.
+    let stagnation: Double
+    /// Objective imbalance in [0, 1]. Standard deviation across objective
+    /// scores on the best individual, rescaled so 1 ≈ "one objective is
+    /// dominating everything else" and 0 ≈ "all objectives equally-met".
+    let imbalance: Double
+
+    static let neutral = BanditContext(diversity: 0.5, stagnation: 0.0, imbalance: 0.0)
+
+    /// Feature vector with intercept. Lives here so both select and record
+    /// produce byte-identical `x` values for the same context.
+    var featureVector: [Double] {
+        // Clamp at construction in case a caller supplies out-of-range
+        // inputs (defensive — fitness diversity can numerically exceed 1
+        // in pathological populations).
+        [
+            1.0,
+            max(0, min(1, diversity)),
+            max(0, min(1, stagnation)),
+            max(0, min(1, imbalance))
+        ]
+    }
+}
+
+// MARK: - Contextual Mutation Bandit (LinUCB)
+
+/// LinUCB contextual bandit over mutation operators. Replaces the flat UCB1
+/// that ignored population state — now the arm choice varies with whether
+/// the GA is converging, diversifying, or stuck on one objective.
 ///
-/// Why this helps: uniform random selection spends 25% of mutations on every
-/// op, including ones that are empirically useless on the current workload.
-/// UCB1 converges on the workload's best-performing operators while still
-/// periodically revisiting the others, so if workload characteristics shift
-/// mid-run (which they do: early exploration vs. late exploitation), the
-/// allocation follows. Adaptive operator selection consistently delivers
-/// +10-20% end-of-run fitness in the GA literature.
+/// Model per arm `k`:
+///   A_k = λ I + Σ x_t x_tᵀ
+///   b_k = Σ r_t x_t
+///   μ̂_k(x) = (A_k⁻¹ b_k) · x
+///   σ̂_k(x) = α · sqrt(xᵀ A_k⁻¹ x)
+///   score = μ̂_k(x) + σ̂_k(x)
 ///
-/// Thread safety: islands run in parallel, and each island gets its own
-/// `OptimizerContext` with its own bandit (see `IslandModelGA.makeIslandContext`).
-/// Within one island, mutate/evaluate runs sequentially before the offspring
-/// are dispatched for parallel fitness evaluation, so all reward recording
-/// happens on a single thread. The NSLock is cheap insurance against future
-/// callers that deviate from that pattern.
+/// The 4-dim feature vector is (1, diversity, stagnation, imbalance), so
+/// every matrix is 4×4 and inversion is closed-form (Gauss–Jordan in the
+/// loop, ~microseconds per `select`). Shared across islands via NSLock —
+/// contention is negligible compared to fitness evaluation cost.
+///
+/// Thread safety: islands run in parallel and share one bandit; select /
+/// record acquire the lock for O(d²) work (~16 float ops) before releasing.
 final class MutationBandit: @unchecked Sendable {
     private struct Arm {
+        /// Information matrix A = λI + Σ xxᵀ. Invertible as long as λ > 0.
+        var A: [[Double]]
+        /// Reward-weighted feature sum b = Σ r x.
+        var b: [Double]
+        /// Total pulls — informational, not used in the LinUCB update.
         var pulls: Int = 0
+        /// Sum of raw (pre-squash) rewards — informational.
         var rewardSum: Double = 0
-        /// Mean reward with a mild prior so unexplored arms aren't written
-        /// off instantly by a single bad pull.
-        var mean: Double {
-            guard pulls > 0 else { return 0 }
-            return rewardSum / Double(pulls)
+
+        init(dim: Int, lambda: Double) {
+            A = (0..<dim).map { i in
+                (0..<dim).map { j in i == j ? lambda : 0.0 }
+            }
+            b = [Double](repeating: 0, count: dim)
         }
     }
 
     private var arms: [MutationOperator: Arm] = [:]
-    private var totalPulls: Int = 0
+    private var currentContext: BanditContext = .neutral
     private let lock = NSLock()
 
-    /// Exploration-exploitation trade-off constant. UCB1's canonical value
-    /// is √2 ≈ 1.41. Smaller = more exploitation; larger = more exploration.
-    /// We use a slightly smaller value because GA populations give each arm
-    /// many samples per generation, so we can lean on exploitation sooner.
-    let explorationC: Double
+    /// UCB exploration multiplier. LinUCB's bound derives `α = 1 + sqrt(ln(2/δ)/2)`;
+    /// with δ = 0.1 that's ≈ 1.96. We use a slightly smaller value because GA
+    /// populations give every arm many pulls per generation, so we lean on
+    /// exploitation sooner than a tabular bandit would.
+    let explorationAlpha: Double
 
-    init(explorationC: Double = 1.0) {
-        self.explorationC = explorationC
+    /// Ridge regularization. Keeps A_k positive-definite when an arm has
+    /// been pulled few times and every feature vector happens to be
+    /// colinear (rare, but the inversion would blow up without λ).
+    let regularizationLambda: Double
+
+    /// Feature dimension (= `BanditContext.featureVector.count`).
+    static let featureDim = 4
+
+    init(explorationAlpha: Double = 1.5, regularizationLambda: Double = 1.0) {
+        self.explorationAlpha = explorationAlpha
+        self.regularizationLambda = regularizationLambda
         for op in MutationOperator.allCases {
-            arms[op] = Arm()
+            arms[op] = Arm(dim: Self.featureDim, lambda: regularizationLambda)
         }
     }
 
-    /// Pick the operator with the highest UCB1 score. Unpulled arms have
-    /// priority by convention — we must try every arm at least once before
-    /// UCB1's log-term is defined.
+    // MARK: - Context update
+
+    /// Called once per generation by the GA loop to refresh the context
+    /// features. Every subsequent `select` / `record` until the next
+    /// `updateContext` call uses this vector.
+    func updateContext(_ context: BanditContext) {
+        lock.lock()
+        currentContext = context
+        lock.unlock()
+    }
+
+    // MARK: - Select
+
+    /// Pick the operator with the highest LinUCB score for the current
+    /// context. Deterministic under a fixed RNG — ties are broken with
+    /// the supplied `GARandom` so runs stay reproducible.
     func select(rng: GARandom) -> MutationOperator {
         lock.lock()
         defer { lock.unlock() }
-
-        // Cold start: hand out one pull per arm before the UCB formula is
-        // well-defined. Deterministic order to keep the RNG stream stable.
-        for op in MutationOperator.allCases {
-            if (arms[op]?.pulls ?? 0) == 0 { return op }
-        }
-
-        let logTotal = log(Double(max(1, totalPulls)))
+        let x = currentContext.featureVector
         var bestOp = MutationOperator.shift
         var bestScore = -Double.infinity
-        // Tie-breaking: when two arms share a UCB score (very common early
-        // on), we pick one with the caller's RNG so runs stay reproducible
-        // under the same top-level seed.
         var ties: [MutationOperator] = []
 
         for op in MutationOperator.allCases {
-            guard let arm = arms[op], arm.pulls > 0 else { continue }
-            let bonus = explorationC * sqrt(logTotal / Double(arm.pulls))
-            let score = arm.mean + bonus
+            guard let arm = arms[op] else { continue }
+            guard let aInv = Self.invert4x4(arm.A) else { continue }
+            let theta = Self.matvec(aInv, arm.b)
+            let mean = Self.dot(theta, x)
+            let xAinvX = max(0, Self.quadForm(x, aInv))
+            let bonus = explorationAlpha * xAinvX.squareRoot()
+            let score = mean + bonus
+
             if score > bestScore + 1e-12 {
                 bestScore = score
                 bestOp = op
@@ -114,34 +176,127 @@ final class MutationBandit: @unchecked Sendable {
         return bestOp
     }
 
-    /// Record the observed fitness delta for a mutation that used `op`.
-    /// The reward is mapped to [0, 1] via a soft sigmoid so extreme deltas
-    /// don't dominate the running mean; 0 reward means "no change", 0.5
-    /// means "modest improvement", 1.0 means "very large gain".
-    func record(op: MutationOperator, reward: Double) {
-        // Symmetric logistic squashing: `1 / (1 + exp(-x))` centred on 0.
-        // `reward · 10` spreads typical per-generation deltas (≈ 0.01-0.1)
-        // into the [0.52, 0.73] range and very large gains saturate near 1.
-        let squashed = 1.0 / (1.0 + exp(-reward * 10.0))
+    // MARK: - Record
 
+    /// Record an observed reward for the operator that was most recently
+    /// selected. `reward` is the fitness delta (post - pre) — LinUCB
+    /// tolerates negative rewards directly, no sigmoid squashing needed.
+    /// We clip the magnitude so a single pathological mutation can't
+    /// dominate the running estimate.
+    func record(op: MutationOperator, reward: Double) {
+        // Clip to [-0.5, +0.5] — typical per-generation fitness deltas
+        // sit in [-0.1, +0.1]; larger values are almost always spikes
+        // from a newly-feasible schedule and should not overwhelm the
+        // running mean. Clipping also keeps θ well-scaled when operators
+        // get lucky early.
+        let clipped = max(-0.5, min(0.5, reward))
         lock.lock()
         defer { lock.unlock() }
-        var arm = arms[op] ?? Arm()
+
+        let x = currentContext.featureVector
+        guard var arm = arms[op] else { return }
+        // A += x xᵀ
+        for i in 0..<Self.featureDim {
+            for j in 0..<Self.featureDim {
+                arm.A[i][j] += x[i] * x[j]
+            }
+        }
+        // b += reward · x
+        for i in 0..<Self.featureDim {
+            arm.b[i] += clipped * x[i]
+        }
         arm.pulls += 1
-        arm.rewardSum += squashed
+        arm.rewardSum += clipped
         arms[op] = arm
-        totalPulls += 1
     }
 
-    /// Snapshot for telemetry / tests. Returns per-op (pulls, mean reward).
-    var snapshot: [MutationOperator: (pulls: Int, mean: Double)] {
+    // MARK: - Telemetry
+
+    struct ArmTelemetry: Sendable {
+        let pulls: Int
+        let meanReward: Double
+        /// Estimated weight vector θ_k — useful for debugging which context
+        /// features the arm is exploiting. First element is the intercept.
+        let theta: [Double]
+    }
+
+    /// Snapshot for tests and logging. Computes θ_k = A_k⁻¹ b_k on read so
+    /// callers see the freshest model state.
+    var snapshot: [MutationOperator: ArmTelemetry] {
         lock.lock()
         defer { lock.unlock() }
-        var out: [MutationOperator: (Int, Double)] = [:]
+        var out: [MutationOperator: ArmTelemetry] = [:]
         for (op, arm) in arms {
-            out[op] = (arm.pulls, arm.mean)
+            let mean = arm.pulls > 0 ? arm.rewardSum / Double(arm.pulls) : 0
+            let theta: [Double]
+            if let aInv = Self.invert4x4(arm.A) {
+                theta = Self.matvec(aInv, arm.b)
+            } else {
+                theta = [Double](repeating: 0, count: Self.featureDim)
+            }
+            out[op] = ArmTelemetry(pulls: arm.pulls, meanReward: mean, theta: theta)
         }
         return out
+    }
+
+    // MARK: - Linear algebra (inline 4×4)
+
+    /// Closed-form 4×4 inverse via Gauss–Jordan. Returns `nil` when the
+    /// matrix is singular (never happens in practice thanks to λI).
+    private static func invert4x4(_ m: [[Double]]) -> [[Double]]? {
+        precondition(m.count == 4 && m.allSatisfy { $0.count == 4 })
+        // Build augmented 4×8 [M | I].
+        var a = [[Double]](repeating: [Double](repeating: 0, count: 8), count: 4)
+        for i in 0..<4 {
+            for j in 0..<4 { a[i][j] = m[i][j] }
+            a[i][4 + i] = 1.0
+        }
+        for col in 0..<4 {
+            // Partial pivot: find the row with the largest absolute value
+            // in this column and swap into place. Guards against zero or
+            // tiny pivots that would blow up the reduction.
+            var pivot = col
+            for r in (col + 1)..<4 where abs(a[r][col]) > abs(a[pivot][col]) {
+                pivot = r
+            }
+            if abs(a[pivot][col]) < 1e-12 { return nil }
+            if pivot != col { a.swapAt(col, pivot) }
+            // Scale pivot row to 1.
+            let div = a[col][col]
+            for j in 0..<8 { a[col][j] /= div }
+            // Eliminate other rows.
+            for r in 0..<4 where r != col {
+                let factor = a[r][col]
+                if factor == 0 { continue }
+                for j in 0..<8 { a[r][j] -= factor * a[col][j] }
+            }
+        }
+        var inv = [[Double]](repeating: [Double](repeating: 0, count: 4), count: 4)
+        for i in 0..<4 {
+            for j in 0..<4 { inv[i][j] = a[i][4 + j] }
+        }
+        return inv
+    }
+
+    private static func matvec(_ m: [[Double]], _ v: [Double]) -> [Double] {
+        var out = [Double](repeating: 0, count: v.count)
+        for i in 0..<v.count {
+            var sum = 0.0
+            for j in 0..<v.count { sum += m[i][j] * v[j] }
+            out[i] = sum
+        }
+        return out
+    }
+
+    private static func dot(_ a: [Double], _ b: [Double]) -> Double {
+        var sum = 0.0
+        for i in 0..<a.count { sum += a[i] * b[i] }
+        return sum
+    }
+
+    private static func quadForm(_ x: [Double], _ m: [[Double]]) -> Double {
+        let mx = matvec(m, x)
+        return dot(x, mx)
     }
 }
 
@@ -157,4 +312,3 @@ protocol AdaptiveMutationChromosome: Chromosome {
     /// bandit was not wired on the `OptimizerContext`.
     var lastMutationOperator: MutationOperator? { get set }
 }
-

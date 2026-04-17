@@ -368,11 +368,12 @@ struct GAIntegrationTests {
 
         let population = ga.run()
 
-        let generator = ScenarioGenerator()
-        let scenarios = generator.generateScenarios(
-            from: population,
-            context: context,
-            evaluator: evaluator
+        var archive = MAPElitesArchive()
+        archive.depositAll(population, context: context)
+        let scenarios = archive.diverseScenarios(
+            count: 3,
+            evaluator: evaluator,
+            context: context
         )
 
         #expect(scenarios.count >= 1)
@@ -645,23 +646,25 @@ struct EdgeCaseTests {
         #expect(penalty == 0)
     }
 
-    @Test("ScenarioGenerator with empty population")
-    func scenarioGeneratorEmpty() {
+    @Test("MAPElitesArchive with empty deposit returns no scenarios")
+    func archiveEmpty() {
         let context = makeContext()
         let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
-        let gen = ScenarioGenerator()
-        let scenarios = gen.generateScenarios(from: [], context: context, evaluator: evaluator)
+        let archive = MAPElitesArchive()
+        let scenarios = archive.diverseScenarios(count: 3, evaluator: evaluator, context: context)
         #expect(scenarios.isEmpty)
     }
 
-    @Test("ScenarioGenerator with single chromosome")
-    func scenarioGeneratorSingle() {
+    @Test("MAPElitesArchive with single chromosome yields exactly one scenario")
+    func archiveSingle() {
         let events = [makeMovableEvent()]
         let context = makeContext(movableEvents: events)
         let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
-        let chromosome = ScheduleChromosome.random(context: context)
-        let gen = ScenarioGenerator()
-        let scenarios = gen.generateScenarios(from: [chromosome], context: context, evaluator: evaluator)
+        var chromosome = ScheduleChromosome.random(context: context)
+        evaluator.evaluateAndAssign(&chromosome, context: context)
+        var archive = MAPElitesArchive()
+        archive.depositAll([chromosome], context: context)
+        let scenarios = archive.diverseScenarios(count: 3, evaluator: evaluator, context: context)
         #expect(scenarios.count == 1)
     }
 
@@ -1318,11 +1321,15 @@ struct ScenarioGeneratorRelaxationTests {
         }
         population.sort { $0.fitness > $1.fitness }
 
-        let generator = ScenarioGenerator()
-        let scenarios = generator.generateScenarios(from: population, context: context, evaluator: evaluator)
+        var archive = MAPElitesArchive()
+        archive.depositAll(population, context: context)
+        let scenarios = archive.diverseScenarios(
+            count: 3,
+            evaluator: evaluator,
+            context: context
+        )
 
-        // With relaxed diversity, we should get more than 1 scenario
-        // (strict threshold might fail, but relaxation should find some)
+        // With relaxation, we should get at least one scenario.
         #expect(scenarios.count >= 1)
     }
 }
@@ -2757,8 +2764,7 @@ struct CrowdingReplacementTests {
             convergencePatience: 15,
             adaptiveMutation: false,
             diversityThreshold: 0.01,
-            immigrationRate: 0.0,
-            enableCrowding: true
+            immigrationRate: 0.0
         )
 
         let ga = GeneticAlgorithm<ScheduleChromosome>(
@@ -2772,51 +2778,6 @@ struct CrowdingReplacementTests {
         let results = ga.run()
         #expect(!results.isEmpty)
         #expect(results[0].fitness >= results.last!.fitness)
-    }
-}
-
-@Suite("Fitness Sharing Tests")
-struct FitnessSharingTests {
-
-    @Test("GA with fitness sharing produces results")
-    func fitnessSharingProducesResults() {
-        let events = [
-            makeMovableEvent(id: "t1", durationMinutes: 60),
-            makeMovableEvent(id: "t2", durationMinutes: 30),
-            makeMovableEvent(id: "t3", durationMinutes: 45),
-        ]
-        let context = makeContext(movableEvents: events)
-        let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
-
-        let config = GAConfiguration(
-            populationSize: 30,
-            maxGenerations: 30,
-            mutationRate: 0.2,
-            crossoverRate: 0.8,
-            eliteCount: 2,
-            selectionStrategy: .tournament(size: 3),
-            crossoverStrategy: .singlePoint,
-            convergenceThreshold: 0.005,
-            convergencePatience: 15,
-            adaptiveMutation: false,
-            diversityThreshold: 0.01,
-            immigrationRate: 0.0,
-            enableFitnessSharing: true,
-            fitnessShareSigma: 0.3,
-            fitnessShareAlpha: 1.0
-        )
-
-        let ga = GeneticAlgorithm<ScheduleChromosome>(
-            config: config,
-            context: context,
-            evaluate: { chromosome in
-                evaluator.evaluateAndAssign(&chromosome, context: context)
-            }
-        )
-
-        let results = ga.run()
-        #expect(!results.isEmpty)
-        #expect(ga.bestEver != nil)
     }
 }
 
@@ -2845,12 +2806,16 @@ struct DeltaEvaluationTests {
         #expect(!cache.isEmpty)
     }
 
-    @Test("MutationBandit converges to the rewarded operator")
-    func mutationBanditPrefersRewarded() {
-        let bandit = MutationBandit(explorationC: 1.0)
+    @Test("ContextualBandit adjusts arm choice with varying context")
+    func contextualBanditResponds() {
+        let bandit = MutationBandit()
         let rng = GARandom(seed: 42)
 
-        // Teach the bandit that `.guided` is the only good operator.
+        // Teach the bandit that guided is the only good operator in a
+        // stagnation-heavy regime. Feed the same context every call so
+        // the linear model can fit a clear preference.
+        let stagnant = BanditContext(diversity: 0.1, stagnation: 0.9, imbalance: 0.2)
+        bandit.updateContext(stagnant)
         for _ in 0..<200 {
             let op = bandit.select(rng: rng)
             let reward: Double = (op == .guided) ? 0.1 : 0.0
@@ -2859,33 +2824,27 @@ struct DeltaEvaluationTests {
 
         let snap = bandit.snapshot
         let guidedPulls = snap[.guided]?.pulls ?? 0
-        // Other arms still get exploration pulls, but the rewarded one should
-        // dominate — in 200 trials, at least 40% should land on guided.
         #expect(guidedPulls > 80,
-                "Bandit should converge on rewarded arm: guided=\(guidedPulls) out of 200")
+                "Contextual bandit should lean on the rewarded arm: guided=\(guidedPulls) out of 200")
     }
 
-    @Test("ParetoRanker non-dominated sort classifies extremes correctly")
-    func paretoNonDominatedSortExtremes() {
-        // 3 objectives, 4 individuals. (1,0,0), (0,1,0), (0,0,1) all Pareto-
-        // optimal (nothing dominates them). (0.5, 0.5, 0.5) is on the second
-        // front — dominated by each extreme? No: (1,0,0) does NOT dominate
-        // (0.5,0.5,0.5) because obj2 is worse. So (0.5,0.5,0.5) is actually
-        // on front 0 too. Use a clearly dominated point instead.
+    @Test("NSGA-III non-dominated sort classifies extremes correctly")
+    func nsga3NonDominatedSortExtremes() {
         let vectors: [[Double]] = [
             [1.0, 0.0, 0.0],
             [0.0, 1.0, 0.0],
             [0.0, 0.0, 1.0],
-            [0.1, 0.1, 0.1],  // Dominated by all three extremes
+            [0.1, 0.1, 0.1],
         ]
-        let fronts = ParetoRanker.nonDominatedSort(vectors)
+        let ranker = NSGA3.forPopulation(objectiveCount: 3, populationSize: 4)
+        let fronts = ranker.nonDominatedSort(vectors)
         #expect(fronts.count == 2, "Expected 2 fronts, got \(fronts.count)")
         #expect(Set(fronts[0]) == [0, 1, 2])
         #expect(fronts[1] == [3])
     }
 
-    @Test("ParetoRanker rewrites fitness so front 0 outranks front 1")
-    func paretoRankerOrdersByFront() {
+    @Test("NSGA-III applyScalarFitness puts front 0 above front 1")
+    func nsga3ScalarOrdersByFront() {
         let cal = Calendar.current
         let today = cal.startOfDay(for: Date())
         let tomorrow = cal.date(byAdding: .day, value: 1, to: today)!
@@ -2897,9 +2856,6 @@ struct DeltaEvaluationTests {
         )
         let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
 
-        // Construct two chromosomes: one strong across all objectives, one
-        // weak. After ranking, the strong one must have strictly higher
-        // fitness even if weighted-sum previously happened to tie them.
         var strong = ScheduleChromosome.random(context: context)
         var weak = ScheduleChromosome.random(context: context)
         evaluator.evaluateAndAssign(&strong, context: context)
@@ -2910,9 +2866,13 @@ struct DeltaEvaluationTests {
             .mapValues { _ in 0.3 }
 
         var pop: [ScheduleChromosome] = [weak, strong]
-        ParetoRanker.rankByParetoFronts(&pop, evaluator: evaluator, context: context)
-        // `strong` dominates `weak` on every objective, so strong lands on
-        // front 0 and must rank higher than weak after re-scoring.
+        let mo = MultiObjectiveContext<ScheduleChromosome>.schedule(
+            evaluator: evaluator,
+            populationSize: pop.count
+        )
+        let vectors = pop.map(mo.objectiveVectorOf)
+        let result = mo.ranker.select(vectors, count: pop.count)
+        NSGA3.applyScalarFitness(result, to: &pop)
         let strongIdx = pop.firstIndex(where: { $0.genes == strong.genes })!
         let weakIdx = pop.firstIndex(where: { $0.genes == weak.genes })!
         #expect(pop[strongIdx].fitness > pop[weakIdx].fitness,
@@ -3148,8 +3108,6 @@ struct GAConfigNewFieldsTests {
         let config = GAConfiguration.default
         #expect(config.greedySeedFraction >= 0 && config.greedySeedFraction <= 1)
         #expect(config.enableRepair == true)
-        #expect(config.fitnessShareSigma > 0)
-        #expect(config.fitnessShareAlpha >= 1.0)
     }
 
     @Test("Instant config uses higher greedy fraction")
@@ -3178,8 +3136,6 @@ struct GAConfigNewFieldsTests {
         // New fields should have their defaults
         #expect(config.greedySeedFraction == 0.0)
         #expect(config.enableRepair == false)
-        #expect(config.enableFitnessSharing == false)
-        #expect(config.enableCrowding == false)
         #expect(config.adaptiveCrossover == false)
     }
 
@@ -3209,10 +3165,6 @@ struct GAConfigNewFieldsTests {
             immigrationRate: 0.1,
             greedySeedFraction: 0.2,
             enableRepair: true,
-            enableFitnessSharing: true,
-            fitnessShareSigma: 0.3,
-            fitnessShareAlpha: 1.0,
-            enableCrowding: false,  // Can't combine with fitness sharing easily
             adaptiveCrossover: true
         )
 
@@ -3291,10 +3243,10 @@ struct GACoreRegressionTests {
         #expect(a.distance(to: b) == 1.0)
     }
 
-    // MARK: rawFitness separation under fitness sharing
+    // MARK: rawFitness separation under NSGA-III scalarization
 
-    @Test("rawFitness preserved when fitness sharing deflates visible fitness")
-    func rawFitnessPreservedUnderSharing() {
+    @Test("rawFitness preserved when NSGA-III rewrites visible fitness")
+    func rawFitnessPreservedUnderNSGA3() {
         let events = (0..<6).map { makeMovableEvent(id: "t\($0)", durationMinutes: 30) }
         let context = makeContext(movableEvents: events)
         let evaluator = FitnessEvaluator.standard(preferences: OptimizerPreferences())
@@ -3314,34 +3266,32 @@ struct GACoreRegressionTests {
             immigrationRate: 0.0,
             greedySeedFraction: 0.2,
             enableRepair: true,
-            enableFitnessSharing: true,
-            fitnessShareSigma: 0.4,
-            fitnessShareAlpha: 1.0,
-            enableCrowding: false,
             adaptiveCrossover: false
         )
 
+        let mo = MultiObjectiveContext<ScheduleChromosome>.schedule(
+            evaluator: evaluator,
+            populationSize: config.populationSize
+        )
         let ga = GeneticAlgorithm<ScheduleChromosome>(
             config: config,
             context: context,
             evaluate: { chromosome in
                 evaluator.evaluateAndAssign(&chromosome, context: context)
-            }
+            },
+            multiObjective: mo
         )
 
         let results = ga.run()
-        guard let best = ga.bestEver, let top = results.first else {
+        guard let best = ga.bestEver, !results.isEmpty else {
             Issue.record("GA produced no results")
             return
         }
-        // bestEver must reflect true quality, not shared score.
+        // bestEver must reflect true quality on rawFitness regardless of
+        // how NSGA-III rescaled the visible fitness. The surviving
+        // population keeps rawFitness as the weighted-sum scalar for
+        // anyone who still needs it.
         #expect(best.rawFitness > 0, "bestEver must have a positive rawFitness")
-        #expect(abs(best.fitness - best.rawFitness) < 1e-9,
-                "bestEver.fitness must be normalized to rawFitness on capture")
-        // On exit the visible fitness is restored from rawFitness so consumers
-        // (IncrementalReoptimizer, UI) don't see deflated numbers.
-        #expect(abs(top.fitness - top.rawFitness) < 1e-9,
-                "Returned population must expose rawFitness as the visible fitness")
     }
 
     // MARK: selectPair distinct indices
@@ -3381,80 +3331,27 @@ struct GACoreRegressionTests {
         #expect(i == 0 && j == 0, "Degenerate singleton must not crash")
     }
 
-    // MARK: replaceByCrowding with index-based parents
+    // MARK: NSGA-III (μ+λ) replacement
+    //
+    // Crowding replacement was removed — NSGA-III niching preserves
+    // diversity in objective space, which subsumes the job genotypic
+    // crowding used to do. These tests exercise the new survivor
+    // selection directly.
 
-    @Test("replaceByCrowding replaces parent slots by index, not by Equatable match")
-    func crowdingReplacesByIndex() {
-        let events = [makeMovableEvent(id: "a", durationMinutes: 30),
-                      makeMovableEvent(id: "b", durationMinutes: 30)]
-        let context = makeContext(movableEvents: events)
-
-        // Craft a population with TWO identical chromosomes at slots 0 and 1
-        // (by Equatable they compare equal). Old code would overwrite slot 0
-        // twice; new code must honour the requested slot.
-        var base = ScheduleChromosome.random(context: context)
-        base.fitness = 0.3
-        base.rawFitness = 0.3
-
-        var filler = ScheduleChromosome.random(context: context)
-        filler.fitness = 0.4
-        filler.rawFitness = 0.4
-
-        var pop = Population<ScheduleChromosome>(
-            individuals: [base, base, filler, filler, filler],
-            eliteCount: 1
-        )
-
-        // Two distinct children with higher fitness.
-        var child1 = ScheduleChromosome.random(context: context)
-        child1.fitness = 0.9
-        child1.rawFitness = 0.9
-        var child2 = ScheduleChromosome.random(context: context)
-        child2.fitness = 0.9
-        child2.rawFitness = 0.9
-
-        pop.replaceByCrowding(
-            parentIndices: [(0, 1)],
-            offspring: [(child1, child2)],
-            distanceFn: { $0.distance(to: $1) }
-        )
-
-        // Both of the two duplicate-base slots must have been replaced with
-        // the higher-fitness children (modulo crowding pairing choice).
-        #expect(pop.individuals[0].fitness >= 0.9 - 1e-9
-                || pop.individuals[1].fitness >= 0.9 - 1e-9,
-                "At least one duplicate parent slot must be replaced")
-        // Crucially, the filler trio must remain intact.
-        #expect(pop.individuals[2].fitness == 0.4)
-        #expect(pop.individuals[3].fitness == 0.4)
-        #expect(pop.individuals[4].fitness == 0.4)
-    }
-
-    @Test("replaceByCrowding tolerates degenerate parentIndices (same slot)")
-    func crowdingDegenerateSameSlot() {
-        let events = [makeMovableEvent(id: "a")]
-        let context = makeContext(movableEvents: events)
-        var pop = Population<ScheduleChromosome>(size: 4, eliteCount: 1, context: context)
-        for i in pop.individuals.indices {
-            pop.individuals[i].fitness = 0.1
-            pop.individuals[i].rawFitness = 0.1
+    @Test("NSGA-III keeps front-0 individuals over worse front entries")
+    func nsga3KeepsFrontZero() {
+        let ranker = NSGA3.forPopulation(objectiveCount: 3, populationSize: 6)
+        // Three boundary points on front 0, three dominated points on front 1.
+        let vectors: [[Double]] = [
+            [1, 0, 0], [0, 1, 0], [0, 0, 1],
+            [0.1, 0.1, 0.1], [0.05, 0.05, 0.05], [0.2, 0.2, 0.2]
+        ]
+        let result = ranker.select(vectors, count: 3)
+        // All selected indices must sit on front 0.
+        for idx in result.selectedIndices {
+            #expect(result.frontOf[idx] == 0)
         }
-
-        var child1 = pop.individuals[0]
-        child1.fitness = 0.9
-        child1.rawFitness = 0.9
-        var child2 = pop.individuals[0]
-        child2.fitness = 0.8
-        child2.rawFitness = 0.8
-
-        // parentIndices (0, 0) — both children target the same slot. Must not
-        // write twice; must not trap.
-        pop.replaceByCrowding(
-            parentIndices: [(0, 0)],
-            offspring: [(child1, child2)],
-            distanceFn: { $0.distance(to: $1) }
-        )
-        #expect(pop.size == 4)
+        #expect(Set(result.selectedIndices) == [0, 1, 2])
     }
 }
 
@@ -3584,36 +3481,37 @@ struct GARandomTests {
         #expect(cache.stats.size <= 4, "Cache must honour maxSize")
     }
 
-    @Test("Duplicate detection breaks up a cloned population")
-    func duplicateDetectionMutatesClones() {
+    @Test("NSGA-III survivor selection breaks up a cloned population")
+    func nsga3SurvivorBreaksClones() {
         let events = [
             makeMovableEvent(id: "a", durationMinutes: 30),
             makeMovableEvent(id: "b", durationMinutes: 30)
         ]
         let context = makeContext(movableEvents: events)
 
-        // Build a config with heavy duplicate diversification so the test
-        // deterministically triggers the mutation path.
         var cfg = GAConfiguration.quick
-        cfg.duplicateMutationThreshold = 0.1
-        cfg.duplicateMutationBoost = 3.0
         cfg.maxGenerations = 5
 
-        // Seed every individual with the same chromosome, then run one short
-        // evolution. If duplicate detection works, the final population must
-        // contain at least two distinct genomes (by gene equality).
+        // Seed every individual with the same chromosome, then run a short
+        // evolution. Mutation alone must inject variance NSGA-III can
+        // propagate through survivor selection.
         let seed = ScheduleChromosome.random(context: context)
         let seeds = Array(repeating: seed, count: cfg.populationSize)
         let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
+        let mo = MultiObjectiveContext<ScheduleChromosome>.schedule(
+            evaluator: evaluator,
+            populationSize: cfg.populationSize
+        )
         let ga = GeneticAlgorithm<ScheduleChromosome>(
             config: cfg,
             context: context,
-            evaluate: { c in evaluator.evaluateAndAssign(&c, context: context) }
+            evaluate: { c in evaluator.evaluateAndAssign(&c, context: context) },
+            multiObjective: mo
         )
         let final = ga.runSeeded(with: seeds)
         let uniqueGeneSets = Set(final.map { ChromosomeFingerprint($0.genes) })
         #expect(uniqueGeneSets.count >= 2,
-                "A fully-cloned seed must produce at least one distinct genome after evolution (got \(uniqueGeneSets.count))")
+                "A fully-cloned seed must diverge during evolution (got \(uniqueGeneSets.count))")
     }
 
     @Test("GA run with seeded context is reproducible")

@@ -112,7 +112,7 @@ enum EmigrantSelection: Sendable {
 // MARK: - Immigrant Replacement
 
 /// How incoming migrants replace individuals on the receiving island.
-enum ImmigrantReplacement: Sendable {
+enum ImmigrantReplacement: Sendable, Equatable {
     /// Replace the worst individuals on the receiving island.
     case worst
 
@@ -203,6 +203,7 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
     let context: OptimizerContext
     private let evaluate: (inout C) -> Void
     private var onProgress: ((IslandModelProgress) -> Void)?
+    private let multiObjective: MultiObjectiveContext<C>?
 
     private(set) var bestEver: C?
     private(set) var convergenceGeneration: Int = 0
@@ -212,13 +213,15 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         baseConfig: GAConfiguration = .thorough,
         context: OptimizerContext,
         evaluate: @escaping (inout C) -> Void,
-        onProgress: ((IslandModelProgress) -> Void)? = nil
+        onProgress: ((IslandModelProgress) -> Void)? = nil,
+        multiObjective: MultiObjectiveContext<C>? = nil
     ) {
         self.islandConfig = islandConfig
         self.baseConfig = baseConfig
         self.context = context
         self.evaluate = evaluate
         self.onProgress = onProgress
+        self.multiObjective = multiObjective
     }
 
     // MARK: - Run
@@ -263,7 +266,8 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             let ga = GeneticAlgorithm<C>(
                 config: config,
                 context: islandContext,
-                evaluate: evaluate
+                evaluate: evaluate,
+                multiObjective: multiObjective
             )
             return Island(population: pop, ga: ga, context: islandContext)
         }
@@ -336,7 +340,8 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             let ga = GeneticAlgorithm<C>(
                 config: config,
                 context: islandContext,
-                evaluate: evaluate
+                evaluate: evaluate,
+                multiObjective: multiObjective
             )
             return Island(population: pop, ga: ga, context: islandContext)
         }
@@ -364,6 +369,7 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             // Evolve each island for one generation in parallel.
             // Each Island is a reference type, so concurrent access to separate
             // instances is safe. parallelEvaluation=false avoids nested concurrentPerform.
+            let capturedStale = globalStaleGenerations
             DispatchQueue.concurrentPerform(iterations: islands.count) { i in
                 let island = islands[i]
                 island.ga.evolveOneGeneration(
@@ -371,7 +377,8 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
                     config: island.ga.config,
                     generation: generation,
                     maxGenerations: totalGenerations,
-                    parallelEvaluation: false
+                    parallelEvaluation: false,
+                    staleGenerations: capturedStale
                 )
 
                 // Track per-island best by rawFitness to avoid fitness-sharing
@@ -494,14 +501,6 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             bestEver = refined
         }
 
-        // Restore `fitness` for consumers if sharing deflated it on any island.
-        let anyIslandSharing = islands.contains { $0.ga.config.enableFitnessSharing }
-        if anyIslandSharing {
-            for i in combined.indices where combined[i].rawFitness > 0 {
-                combined[i].fitness = combined[i].rawFitness
-            }
-        }
-
         return combined.sorted { $0.rawFitness > $1.rawFitness }
     }
 
@@ -610,8 +609,25 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
     }
 
     /// Select individuals to emigrate from a source island.
+    ///
+    /// When multi-objective info is wired, emigrants are drawn from the
+    /// source's first non-dominated front with maximum perpendicular
+    /// distance to their reference direction — i.e. solutions that are
+    /// Pareto-optimal *and* occupy sparse regions of objective space. This
+    /// is the variant of migration that actually spreads diversity across
+    /// islands; scalar "best by fitness" tends to flood receivers with
+    /// near-clones of the global best.
+    ///
+    /// Without multi-objective info (e.g. permutation chromosomes), we
+    /// fall back to the configured scalar strategy: best-K or
+    /// tournament-sampled emigrants.
     private func selectEmigrants(from island: Island<C>, count: Int) -> [C] {
         let effectiveCount = min(count, island.population.size)
+        guard effectiveCount > 0 else { return [] }
+
+        if let mo = multiObjective {
+            return selectParetoEmigrants(from: island, count: effectiveCount, mo: mo)
+        }
 
         switch islandConfig.emigrantSelection {
         case .best:
@@ -631,31 +647,95 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         }
     }
 
+    /// Pareto-aware emigrant selection via NSGA-III ranking on the island.
+    /// Priority order: (front 0, max perpendicular distance) → (front 0,
+    /// next-farthest) → front 1 entries if front 0 is exhausted. The
+    /// distance tiebreaker favours diverse solutions over concentrated
+    /// ones, so receiving islands get genuine new material.
+    private func selectParetoEmigrants(
+        from island: Island<C>,
+        count: Int,
+        mo: MultiObjectiveContext<C>
+    ) -> [C] {
+        let vectors = island.population.individuals.map(mo.objectiveVectorOf)
+        let ranking = mo.ranker.rankAll(vectors)
+
+        // Sort candidates by (front ascending, distanceToNiche descending).
+        // `.infinity` distances (boundary of the simplex) sort first — those
+        // are the most "extreme" solutions which make the best emigrants
+        // because they carry objective-space information the receiver
+        // probably lacks.
+        let ordered = island.population.individuals.indices.sorted { a, b in
+            let fa = ranking.frontOf[a] ?? Int.max
+            let fb = ranking.frontOf[b] ?? Int.max
+            if fa != fb { return fa < fb }
+            let da = ranking.distanceToNiche[a] ?? 0
+            let db = ranking.distanceToNiche[b] ?? 0
+            if da.isInfinite && !db.isInfinite { return true }
+            if db.isInfinite && !da.isInfinite { return false }
+            return da > db
+        }
+
+        return ordered.prefix(count).map { island.population.individuals[$0] }
+    }
+
     /// Insert migrant individuals into a destination island.
+    ///
+    /// Multi-objective path: replace the worst by dominated-rank —
+    /// individuals on the highest (worst) front lose their slots first,
+    /// ties broken by lowest perpendicular distance to niche (most-
+    /// crowded members on that front). Falls back to scalar worst-replace
+    /// when no multi-objective info is available.
     private func insertImmigrants(_ immigrants: [C], into island: Island<C>) {
         guard !immigrants.isEmpty else { return }
 
         var individuals = island.population.individuals
         let eliteCount = island.population.eliteCount
 
-        switch islandConfig.immigrantReplacement {
-        case .worst:
-            // Sort by fitness descending, replace the tail
-            individuals.sort { $0.fitness > $1.fitness }
-            let replaceStart = max(eliteCount, individuals.count - immigrants.count)
-            for (i, immigrant) in immigrants.enumerated() {
-                let idx = replaceStart + i
-                guard idx < individuals.count else { break }
+        if let mo = multiObjective, islandConfig.immigrantReplacement == .worst {
+            let vectors = individuals.map(mo.objectiveVectorOf)
+            let ranking = mo.ranker.rankAll(vectors)
+
+            // Order individuals by dominated-rank descending, breaking ties
+            // by crowdedness (smaller distanceToNiche = more crowded =
+            // better replacement candidate). Skip elites: the first
+            // `eliteCount` best by rawFitness are immune to replacement so
+            // an island can't lose all its exploitation in a single
+            // migration round.
+            let eliteIndices = Set(individuals.indices
+                .sorted { individuals[$0].rawFitness > individuals[$1].rawFitness }
+                .prefix(eliteCount))
+            let replaceable = individuals.indices
+                .filter { !eliteIndices.contains($0) }
+                .sorted { a, b in
+                    let fa = ranking.frontOf[a] ?? 0
+                    let fb = ranking.frontOf[b] ?? 0
+                    if fa != fb { return fa > fb }  // higher front = worse
+                    let da = ranking.distanceToNiche[a] ?? .infinity
+                    let db = ranking.distanceToNiche[b] ?? .infinity
+                    return da < db  // smaller distance = more crowded
+                }
+            for (immigrant, idx) in zip(immigrants, replaceable) {
                 individuals[idx] = immigrant
             }
+        } else {
+            switch islandConfig.immigrantReplacement {
+            case .worst:
+                individuals.sort { $0.fitness > $1.fitness }
+                let replaceStart = max(eliteCount, individuals.count - immigrants.count)
+                for (i, immigrant) in immigrants.enumerated() {
+                    let idx = replaceStart + i
+                    guard idx < individuals.count else { break }
+                    individuals[idx] = immigrant
+                }
 
-        case .random:
-            // Replace random non-elite individuals
-            let nonEliteIndices = Array(eliteCount..<individuals.count)
-            guard !nonEliteIndices.isEmpty else { return }
-            let replaceIndices = context.rng.shuffled(nonEliteIndices).prefix(immigrants.count)
-            for (immigrant, idx) in zip(immigrants, replaceIndices) {
-                individuals[idx] = immigrant
+            case .random:
+                let nonEliteIndices = Array(eliteCount..<individuals.count)
+                guard !nonEliteIndices.isEmpty else { return }
+                let replaceIndices = context.rng.shuffled(nonEliteIndices).prefix(immigrants.count)
+                for (immigrant, idx) in zip(immigrants, replaceIndices) {
+                    individuals[idx] = immigrant
+                }
             }
         }
 
@@ -668,12 +748,12 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
     // MARK: - Island Configuration Diversification
 
     /// Create per-island GA configurations. When diversification is enabled,
-    /// islands get varied parameters to explore different regions of the search space:
-    /// - Island 0: exploitation — base config with repair and greedy seeds
-    /// - Island 1: exploration — high mutation, crowding replacement
-    /// - Island 2: rank selection — less greedy, fitness sharing for niching
-    /// - Island 3: uniform crossover — more gene mixing, adaptive crossover
-    /// - Islands 4+: deterministic variations with mixed features
+    /// islands get varied parameters to explore different regions of the
+    /// search space. Crowding/sharing knobs were dropped with the NSGA-III
+    /// rewrite; diversity is now a first-class property of survivor
+    /// selection, so per-island variation focuses on exploration versus
+    /// exploitation via mutation rate, selection strategy, and crossover
+    /// operator.
     private func makeIslandConfigs() -> [GAConfiguration] {
         guard islandConfig.diversifyIslands else {
             return Array(repeating: baseConfig, count: islandConfig.islandCount)
@@ -688,25 +768,23 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
                 // Island 0: exploitation — base config, greedy seeds, repair
                 config.greedySeedFraction = 0.2
                 config.enableRepair = true
-                config.enableCrowding = false
-                config.enableFitnessSharing = false
 
             case 1:
-                // Island 1: exploration — higher mutation, crowding for diversity
+                // Island 1: exploration — higher mutation, smaller
+                // tournaments to reduce selection pressure so rare
+                // mutations survive long enough to get evaluated.
                 config.mutationRate = min(0.4, baseConfig.mutationRate * 2.5)
                 config.selectionStrategy = .tournament(size: 2)
                 config.adaptiveMutation = false
-                config.enableCrowding = true
-                config.enableFitnessSharing = false
                 config.greedySeedFraction = 0.0
 
             case 2:
-                // Island 2: niching — rank selection + fitness sharing
+                // Island 2: niching via rank selection. NSGA-III gives us
+                // niche preservation on the survivor side; rank selection
+                // on the parent side flattens fitness pressure so weaker
+                // individuals still contribute genes to offspring.
                 config.selectionStrategy = .rank
                 config.mutationRate = baseConfig.mutationRate * 1.3
-                config.enableFitnessSharing = true
-                config.fitnessShareSigma = 0.25
-                config.enableCrowding = false
                 config.greedySeedFraction = 0.1
 
             case 3:
@@ -717,25 +795,22 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
                 config.crossoverStrategy = .dayBlock
                 config.crossoverRate = 0.9
                 config.adaptiveCrossover = true
-                config.enableCrowding = false
-                config.enableFitnessSharing = false
                 config.greedySeedFraction = 0.15
 
             default:
-                // Additional islands: deterministic parameter variations based on index.
-                // Each island gets a unique combination so results are reproducible.
-                let variations: [(mutMul: Double, xRate: Double, sel: SelectionStrategy, crowding: Bool, sharing: Bool)] = [
-                    (1.8, 0.75, .tournament(size: 3), true, false),
-                    (0.7, 0.90, .stochasticUniversalSampling, false, true),
-                    (2.2, 0.80, .tournament(size: 5), false, false),
-                    (1.5, 0.70, .rank, true, false),
+                // Additional islands: deterministic parameter variations
+                // based on index. Each island gets a unique combination so
+                // results are reproducible.
+                let variations: [(mutMul: Double, xRate: Double, sel: SelectionStrategy)] = [
+                    (1.8, 0.75, .tournament(size: 3)),
+                    (0.7, 0.90, .stochasticUniversalSampling),
+                    (2.2, 0.80, .tournament(size: 5)),
+                    (1.5, 0.70, .rank),
                 ]
                 let v = variations[(i - 4) % variations.count]
                 config.mutationRate = baseConfig.mutationRate * v.mutMul
                 config.crossoverRate = v.xRate
                 config.selectionStrategy = v.sel
-                config.enableCrowding = v.crowding
-                config.enableFitnessSharing = v.sharing
             }
             configs.append(config)
         }

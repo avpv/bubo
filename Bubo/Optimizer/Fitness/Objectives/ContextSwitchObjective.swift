@@ -4,7 +4,7 @@ import Foundation
 
 /// Penalizes frequent context switches between different projects/categories.
 /// Rewards grouping events with the same context together.
-struct ContextSwitchObjective: FitnessObjective {
+struct ContextSwitchObjective: DayPartitionedObjective {
     let name = "ContextSwitch"
     var weight: Double
 
@@ -13,9 +13,14 @@ struct ContextSwitchObjective: FitnessObjective {
     }
 
     func evaluate(chromosome: ScheduleChromosome, context: OptimizerContext) -> Double {
-        let cal = context.calendar
+        combinePerDay(evaluatePerDay(chromosome: chromosome, context: context))
+    }
 
-        // Group all events by day with their context
+    func evaluatePerDay(
+        chromosome: ScheduleChromosome,
+        context: OptimizerContext
+    ) -> [Date: Double] {
+        let cal = context.calendar
         var eventsByDay: [Date: [(start: Date, end: Date, context: String?)]] = [:]
 
         for event in context.fixedEvents {
@@ -27,47 +32,49 @@ struct ContextSwitchObjective: FitnessObjective {
             eventsByDay[day, default: []].append((gene.startTime, gene.endTime, gene.context))
         }
 
-        guard !eventsByDay.isEmpty else { return 1.0 }
+        var scores: [Date: Double] = [:]
+        for (day, events) in eventsByDay {
+            scores[day] = scoreDay(events: events)
+        }
+        return scores
+    }
 
-        var totalScore = 0.0
-        var dayCount = 0
+    func evaluateOneDay(
+        day: Date,
+        chromosome: ScheduleChromosome,
+        context: OptimizerContext
+    ) -> Double {
+        let cal = context.calendar
+        var events: [(start: Date, end: Date, context: String?)] = []
+        for event in context.fixedEvents where cal.startOfDay(for: event.startDate) == day {
+            events.append((event.startDate, event.endDate, event.resolvedContext()))
+        }
+        for gene in chromosome.genes where gene.isIncluded && cal.startOfDay(for: gene.startTime) == day {
+            events.append((gene.startTime, gene.endTime, gene.context))
+        }
+        return scoreDay(events: events)
+    }
 
-        for (_, events) in eventsByDay {
-            guard events.count > 1 else {
-                totalScore += 1.0
-                dayCount += 1
-                continue
-            }
+    /// Score a single day's context-switch severity. Called by both the
+    /// bulk and single-day paths so scoring logic lives in one place.
+    private func scoreDay(
+        events: [(start: Date, end: Date, context: String?)]
+    ) -> Double {
+        guard events.count > 1 else { return 1.0 }
+        let sorted = events.sorted { $0.start < $1.start }
 
-            let sorted = events.sorted { $0.start < $1.start }
-
-            // Measure context switch severity using composite key prefix overlap.
-            // "Work/backend/API" → "Work/backend/DB" is a partial switch (0.33),
-            // "Work/backend" → "Personal/sport" is a full switch (1.0),
-            // "Work/backend" → "Work/backend" is no switch (0.0).
-            var totalSwitchSeverity = 0.0
-            for i in 0..<(sorted.count - 1) {
-                let ctx1 = sorted[i].context ?? "__none__"
-                let ctx2 = sorted[i + 1].context ?? "__none__"
-                totalSwitchSeverity += Self.switchSeverity(from: ctx1, to: ctx2)
-            }
-
-            // Normalize: severity per transition, 0 = no switches, 1 = all full switches
-            let maxSwitches = sorted.count - 1
-            let switchRatio = maxSwitches > 0 ? totalSwitchSeverity / Double(maxSwitches) : 0
-
-            // Score: fewer/lighter switches = better
-            // switchRatio 0 = 1.0, switchRatio 1 = ~0.37
-            let dayScore = exp(-switchRatio * 1.5)
-
-            // Bonus: check for context clusters (3+ same-context events in a row)
-            let clusterBonus = contextClusterBonus(sorted)
-
-            totalScore += min(1.0, dayScore + clusterBonus)
-            dayCount += 1
+        var totalSwitchSeverity = 0.0
+        for i in 0..<(sorted.count - 1) {
+            let ctx1 = sorted[i].context ?? "__none__"
+            let ctx2 = sorted[i + 1].context ?? "__none__"
+            totalSwitchSeverity += Self.switchSeverity(from: ctx1, to: ctx2)
         }
 
-        return dayCount > 0 ? totalScore / Double(dayCount) : 0.5
+        let maxSwitches = sorted.count - 1
+        let switchRatio = maxSwitches > 0 ? totalSwitchSeverity / Double(maxSwitches) : 0
+        let dayScore = exp(-switchRatio * 1.5)
+        let clusterBonus = contextClusterBonus(sorted)
+        return min(1.0, dayScore + clusterBonus)
     }
 
     /// Bonus for having clusters of same-context events.

@@ -24,29 +24,8 @@ struct GAConfiguration: Sendable {
     /// Converts infeasible offspring into feasible ones, avoiding wasted evaluations.
     var enableRepair: Bool
 
-    /// Enable fitness sharing (niching) to maintain diverse solution clusters.
-    /// The sharing radius sigma controls niche size; smaller = more niches.
-    var enableFitnessSharing: Bool
-    var fitnessShareSigma: Double      // sharing radius in genotype distance [0, 1]
-    var fitnessShareAlpha: Double      // shape parameter (1.0 = linear, 2.0 = quadratic)
-
-    /// Enable crowding replacement instead of generational replacement.
-    /// Children compete with their most similar parent, preserving diversity.
-    var enableCrowding: Bool
-
     /// Enable adaptive crossover rate (decays with generation progress).
     var adaptiveCrossover: Bool
-
-    /// Above this duplicate fraction, force-mutate clones in the offspring
-    /// population with a boosted rate. 0 disables the mechanism. Measured in
-    /// fraction of the post-offspring population that shares a genome with
-    /// another individual.
-    var duplicateMutationThreshold: Double
-
-    /// Multiplier on `mutationRate` applied to clones when the threshold is
-    /// exceeded. 2.5 is the literature sweet spot: aggressive enough to break
-    /// the tie but gentle enough to keep the structure of the clone's parent.
-    var duplicateMutationBoost: Double
 
     /// Run a short SA hill climb on the top individuals every N generations
     /// during evolution, not just once at the end. 0 disables (pure GA).
@@ -92,7 +71,6 @@ struct GAConfiguration: Sendable {
     /// tuning of `mutationRate` per workload.
     var selfAdaptiveRates: Bool
 
-    /// Memberwise init with defaults for new parameters so existing call sites compile unchanged.
     init(
         populationSize: Int,
         maxGenerations: Int,
@@ -108,13 +86,7 @@ struct GAConfiguration: Sendable {
         immigrationRate: Double,
         greedySeedFraction: Double = 0.0,
         enableRepair: Bool = false,
-        enableFitnessSharing: Bool = false,
-        fitnessShareSigma: Double = 0.3,
-        fitnessShareAlpha: Double = 1.0,
-        enableCrowding: Bool = false,
         adaptiveCrossover: Bool = false,
-        duplicateMutationThreshold: Double = 0.2,
-        duplicateMutationBoost: Double = 2.5,
         memeticHillClimbInterval: Int = 0,
         memeticHillClimbCandidates: Int = 3,
         memeticHillClimbSteps: Int = 5,
@@ -137,13 +109,7 @@ struct GAConfiguration: Sendable {
         self.immigrationRate = immigrationRate
         self.greedySeedFraction = greedySeedFraction
         self.enableRepair = enableRepair
-        self.enableFitnessSharing = enableFitnessSharing
-        self.fitnessShareSigma = fitnessShareSigma
-        self.fitnessShareAlpha = fitnessShareAlpha
-        self.enableCrowding = enableCrowding
         self.adaptiveCrossover = adaptiveCrossover
-        self.duplicateMutationThreshold = duplicateMutationThreshold
-        self.duplicateMutationBoost = duplicateMutationBoost
         self.memeticHillClimbInterval = memeticHillClimbInterval
         self.memeticHillClimbCandidates = memeticHillClimbCandidates
         self.memeticHillClimbSteps = memeticHillClimbSteps
@@ -168,10 +134,6 @@ struct GAConfiguration: Sendable {
         immigrationRate: 0.1,
         greedySeedFraction: 0.15,
         enableRepair: true,
-        enableFitnessSharing: false,
-        fitnessShareSigma: 0.3,
-        fitnessShareAlpha: 1.0,
-        enableCrowding: false,
         adaptiveCrossover: true,
         memeticHillClimbInterval: 25,
         memeticHillClimbCandidates: 3,
@@ -196,10 +158,6 @@ struct GAConfiguration: Sendable {
         immigrationRate: 0.1,
         greedySeedFraction: 0.2,
         enableRepair: true,
-        enableFitnessSharing: false,
-        fitnessShareSigma: 0.3,
-        fitnessShareAlpha: 1.0,
-        enableCrowding: false,
         adaptiveCrossover: false
     )
 
@@ -221,10 +179,6 @@ struct GAConfiguration: Sendable {
         immigrationRate: 0.0,
         greedySeedFraction: 0.3,
         enableRepair: true,
-        enableFitnessSharing: false,
-        fitnessShareSigma: 0.3,
-        fitnessShareAlpha: 1.0,
-        enableCrowding: false,
         adaptiveCrossover: false
     )
 
@@ -243,10 +197,6 @@ struct GAConfiguration: Sendable {
         immigrationRate: 0.15,
         greedySeedFraction: 0.1,
         enableRepair: true,
-        enableFitnessSharing: true,
-        fitnessShareSigma: 0.25,
-        fitnessShareAlpha: 1.0,
-        enableCrowding: true,
         adaptiveCrossover: true,
         memeticHillClimbInterval: 40,
         memeticHillClimbCandidates: 5,
@@ -276,10 +226,6 @@ struct GAConfiguration: Sendable {
         immigrationRate: 0.1,
         greedySeedFraction: 0.1,
         enableRepair: true,
-        enableFitnessSharing: false,
-        fitnessShareSigma: 0.3,
-        fitnessShareAlpha: 1.0,
-        enableCrowding: false,
         adaptiveCrossover: true,
         memeticHillClimbInterval: 30,
         memeticHillClimbCandidates: 3,
@@ -296,6 +242,44 @@ struct GAProgress: Sendable {
     let diversity: Double
 }
 
+// MARK: - Multi-Objective Selection Hook
+
+/// Plumbing that lets the generic `GeneticAlgorithm<C>` invoke NSGA-III
+/// survivor selection when the chromosome exposes per-objective scores.
+/// Chromosomes without a multi-objective breakdown (e.g. permutation
+/// genomes used by `PomodoroSequenceChromosome`) pass `nil` and the
+/// engine falls back to scalar-fitness generational replacement.
+struct MultiObjectiveContext<C: Chromosome>: @unchecked Sendable {
+    let ranker: NSGA3
+    let objectiveVectorOf: (C) -> [Double]
+
+    /// Produce the NSGA-III harness for the default 13-objective
+    /// ScheduleChromosome evaluator. Reads `objectiveCache` directly so
+    /// no extra evaluation runs during survivor selection.
+    static func schedule(
+        evaluator: FitnessEvaluator,
+        populationSize: Int
+    ) -> MultiObjectiveContext<ScheduleChromosome> {
+        let names = evaluator.objectives.map(\.name)
+        // Combined parent + offspring pool is 2·N, so feed NSGA-III that
+        // many reference directions — each individual can be associated
+        // with a distinct direction in dense regions of the simplex.
+        let ranker = NSGA3.forPopulation(
+            objectiveCount: names.count,
+            populationSize: max(2, populationSize * 2)
+        )
+        return MultiObjectiveContext<ScheduleChromosome>(
+            ranker: ranker,
+            objectiveVectorOf: { chromosome in
+                if let cache = chromosome.objectiveCache, !cache.isEmpty {
+                    return names.map { cache[$0] ?? 0.0 }
+                }
+                return names.map { _ in 0.0 }
+            }
+        )
+    }
+}
+
 // MARK: - Genetic Algorithm Engine
 
 /// The core genetic algorithm engine, generic over chromosome type.
@@ -305,6 +289,7 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
     let context: OptimizerContext
     private let evaluate: (inout C) -> Void
     private var onProgress: ((GAProgress) -> Void)?
+    private let multiObjective: MultiObjectiveContext<C>?
 
     private(set) var bestEver: C?
     private(set) var convergenceGeneration: Int = 0
@@ -313,12 +298,14 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         config: GAConfiguration = .default,
         context: OptimizerContext,
         evaluate: @escaping (inout C) -> Void,
-        onProgress: ((GAProgress) -> Void)? = nil
+        onProgress: ((GAProgress) -> Void)? = nil,
+        multiObjective: MultiObjectiveContext<C>? = nil
     ) {
         self.config = config
         self.context = context
         self.evaluate = evaluate
         self.onProgress = onProgress
+        self.multiObjective = multiObjective
     }
 
     /// Run the full GA and return the final population (sorted by fitness).
@@ -410,7 +397,8 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
                 config: config,
                 generation: generation,
                 maxGenerations: config.maxGenerations,
-                parallelEvaluation: true
+                parallelEvaluation: true,
+                staleGenerations: staleGenerations
             )
 
             // Memetic hill climb on the current top individuals every
@@ -504,14 +492,6 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             bestEver = snapshot
         }
 
-        // Consumers expect `fitness` to reflect true quality. If fitness sharing
-        // reduced it during evolution, restore from rawFitness before returning.
-        if config.enableFitnessSharing {
-            for i in sorted.indices where sorted[i].rawFitness > 0 {
-                sorted[i].fitness = sorted[i].rawFitness
-            }
-        }
-
         return sorted.sorted { $0.rawFitness > $1.rawFitness }
     }
 
@@ -531,7 +511,8 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         config: GAConfiguration,
         generation: Int,
         maxGenerations: Int,
-        parallelEvaluation: Bool = true
+        parallelEvaluation: Bool = true,
+        staleGenerations: Int = 0
     ) {
         let fitnessDiversity = population.fitnessDiversity
         // Use genotypic diversity for a more accurate diversity signal.
@@ -539,6 +520,22 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         // Fall back to fitness diversity when genotypic is expensive (large populations).
         let genotypicDiv = population.size <= 100 ? population.genotypicDiversity(rng: context.rng) : fitnessDiversity
         let diversityIsLow = genotypicDiv < config.diversityThreshold
+
+        // Refresh the contextual bandit's context vector so the operator
+        // chosen during mutation reflects the current GA regime. Imbalance
+        // is the std dev across objectives on the best individual — reads
+        // the cached breakdown (delta-eval keeps it fresh).
+        if let bandit = context.mutationBandit {
+            let imbalance = objectiveImbalance(in: population)
+            let stagnation = config.convergencePatience > 0
+                ? min(1.0, Double(staleGenerations) / Double(max(1, config.convergencePatience)))
+                : 0.0
+            bandit.updateContext(BanditContext(
+                diversity: min(1.0, genotypicDiv / max(1e-6, config.diversityThreshold * 4)),
+                stagnation: stagnation,
+                imbalance: imbalance
+            ))
+        }
 
         // Immigration: inject random individuals when diversity collapses
         if diversityIsLow && config.immigrationRate > 0 {
@@ -556,14 +553,21 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         }
 
         var offspring: [C] = []
-        var parentIndexPairs: [(Int, Int)] = []
-        var offspringPairs: [(C, C)] = []
         // Baseline fitness per offspring, used to compute the reward that
         // feeds back into the MutationBandit. We capture max(parent1, parent2)
         // because a useful mutation should improve on the better parent, not
         // merely the worse one. Parallel array indexed the same as `offspring`.
         var offspringBaselines: [Double] = []
-        let targetCount = config.populationSize - config.eliteCount
+        // NSGA-III uses (μ+λ) survivor selection, so we generate a full
+        // offspring population of size N and combine it with the current
+        // population before ranking. That preserves the "better parent
+        // must win" invariant without special-casing elitism — top-ranked
+        // parents survive because they land on front 0. The scalar-only
+        // fallback (no multiObjective) keeps the generational N − elites
+        // target because `replaceGeneration` re-appends elites on its own.
+        let targetCount = multiObjective != nil
+            ? config.populationSize
+            : config.populationSize - config.eliteCount
 
         while offspring.count < targetCount {
             let (idx1, idx2) = Selection.selectPairIndices(
@@ -612,13 +616,7 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
                 offspring.append(child2)
                 offspringBaselines.append(baseline)
                 offspringBaselines.append(baseline)
-                if config.enableCrowding {
-                    parentIndexPairs.append((idx1, idx2))
-                    offspringPairs.append((child1, child2))
-                }
             } else {
-                // Only 1 slot left — append child1 only, skip pair tracking
-                // (crowding requires matched pairs, so this child uses generational replacement)
                 offspring.append(child1)
                 offspringBaselines.append(baseline)
             }
@@ -637,10 +635,8 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         }
 
         // Close the MutationBandit feedback loop. Reward is (rawFitness - baseline)
-        // so arms get credit only for beating the better parent. We read the
-        // rawFitness directly — fitness sharing hasn't been applied yet, and
-        // we want the attribution based on true quality rather than niche-
-        // penalised scores.
+        // so arms get credit only for beating the better parent. LinUCB handles
+        // the context attribution internally; we just supply the raw delta.
         if let bandit = context.mutationBandit {
             for i in offspring.indices {
                 guard let adaptive = offspring[i] as? any AdaptiveMutationChromosome,
@@ -650,44 +646,54 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             }
         }
 
-        // Fitness sharing (niching): divide each individual's fitness by its niche count
-        // to maintain multiple diverse solution clusters in the population
-        if config.enableFitnessSharing {
-            applyFitnessSharing(to: &offspring, population: population, config: config)
-        }
-
-        // Force-diversify clones. When crossover/mutation produces many
-        // duplicates (common as the population converges), the visible
-        // diversity metric drops and adaptive mutation kicks in — but that
-        // feedback loop is slow. Direct duplicate mutation breaks the tie in
-        // one step, at roughly the cost of one extra evaluation per clone.
-        // When enabled (threshold > 0), clones beyond the first are re-mutated
-        // with a boosted rate; the FitnessCache absorbs most of the extra
-        // evaluation cost when the mutation happens to land on a previously
-        // seen genome.
-        if config.duplicateMutationThreshold > 0 && offspring.count > 1 {
-            forceDiversifyClones(
-                in: &offspring,
-                threshold: config.duplicateMutationThreshold,
-                boostedRate: min(1.0, config.mutationRate * config.duplicateMutationBoost),
-                enableRepair: config.enableRepair,
-                parallelEvaluation: parallelEvaluation
+        // Survivor selection: (μ+λ) combine, then NSGA-III if multi-
+        // objective vectors are available, else scalar generational.
+        if let mo = multiObjective {
+            let combined = population.individuals + offspring
+            let vectors = combined.map(mo.objectiveVectorOf)
+            let result = mo.ranker.select(vectors, count: config.populationSize)
+            var nextIndividuals = result.selectedIndices.map { combined[$0] }
+            // Rebuild a SelectionResult keyed by 0..<N (positions in the
+            // trimmed survivor array) so scalar fitness rewrite works
+            // generically over C. Without this remapping the scalarizer
+            // would look up the original combined-pool indices and miss.
+            var frontOfLocal: [Int: Int] = [:]
+            var nicheOfLocal: [Int: Int] = [:]
+            var distLocal: [Int: Double] = [:]
+            for (localIdx, combinedIdx) in result.selectedIndices.enumerated() {
+                frontOfLocal[localIdx] = result.frontOf[combinedIdx] ?? 0
+                nicheOfLocal[localIdx] = result.nicheOf[combinedIdx] ?? 0
+                distLocal[localIdx] = result.distanceToNiche[combinedIdx] ?? 0
+            }
+            let localResult = NSGA3.SelectionResult(
+                selectedIndices: Array(0..<nextIndividuals.count),
+                frontOf: frontOfLocal,
+                nicheOf: nicheOfLocal,
+                distanceToNiche: distLocal
             )
-        }
-
-        // Replacement strategy
-        if config.enableCrowding && !parentIndexPairs.isEmpty {
-            // Deterministic crowding: each child competes with its closest parent.
-            // Parents addressed by index (not Equatable) to handle duplicates and
-            // shifted fitness correctly.
-            population.replaceByCrowding(
-                parentIndices: parentIndexPairs,
-                offspring: offspringPairs,
-                distanceFn: { $0.distance(to: $1) }
-            )
+            NSGA3.applyScalarFitness(localResult, to: &nextIndividuals)
+            population.individuals = nextIndividuals
         } else {
             population.replaceGeneration(with: offspring)
         }
+    }
+
+    // MARK: - Objective Imbalance (bandit context feature)
+
+    /// Std dev across objective scores on the population's current best
+    /// individual, mapped to [0, 1]. High values mean one objective is
+    /// dominating — telling the bandit "switch tactics." Returns 0 when
+    /// no multi-objective breakdown is available.
+    private func objectiveImbalance(in population: Population<C>) -> Double {
+        guard let mo = multiObjective else { return 0 }
+        guard let best = population.individuals.max(by: { $0.rawFitness < $1.rawFitness }) else { return 0 }
+        let v = mo.objectiveVectorOf(best)
+        guard v.count > 1 else { return 0 }
+        let mean = v.reduce(0, +) / Double(v.count)
+        let variance = v.reduce(0.0) { $0 + ($1 - mean) * ($1 - mean) } / Double(v.count)
+        // Max std dev on a [0, 1]-clamped vector is 0.5 (half ones, half zeros),
+        // so dividing by 0.5 gives a [0, 1] range.
+        return min(1.0, variance.squareRoot() / 0.5)
     }
 
     // MARK: - CHC Restart
@@ -774,107 +780,6 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             if refined.rawFitness > population.individuals[idx].rawFitness {
                 population.individuals[idx] = refined
             }
-        }
-    }
-
-    // MARK: - Duplicate Diversification
-
-    /// Find every individual that shares a genome with at least one earlier
-    /// sibling, mutate it with `boostedRate`, and re-evaluate. No-ops when the
-    /// duplicate fraction is below `threshold` — avoids paying for the O(N)
-    /// scan on diverse populations where mutation is unnecessary.
-    ///
-    /// Hashable-based detection makes this O(N) per generation regardless of
-    /// population size. Without Hashable the equivalent check was O(N²)
-    /// Equatable comparisons, which would outweigh the diversification gain.
-    ///
-    /// The re-evaluation honours the same `parallelEvaluation` contract as the
-    /// main offspring evaluation step so the island model keeps its GCD thread
-    /// budget intact when duplicates appear mid-evolution.
-    private func forceDiversifyClones(
-        in individuals: inout [C],
-        threshold: Double,
-        boostedRate: Double,
-        enableRepair: Bool,
-        parallelEvaluation: Bool
-    ) {
-        // Pass 1: identify duplicates via Set insertion. `seen` contains a
-        // canonical copy of each unique genome; any individual whose genome
-        // is already in `seen` is a clone marked for re-mutation.
-        var seen: Set<C> = []
-        seen.reserveCapacity(individuals.count)
-        var duplicateIndices: [Int] = []
-        for i in individuals.indices {
-            if !seen.insert(individuals[i]).inserted {
-                duplicateIndices.append(i)
-            }
-        }
-        let dupeFraction = Double(duplicateIndices.count) / Double(individuals.count)
-        guard dupeFraction >= threshold else { return }
-
-        // Pass 2: boost-mutate and repair clones. Mutation sets
-        // `needsEvaluation = true`, so the subsequent evaluate() overwrites
-        // the stale clone fitness.
-        for idx in duplicateIndices {
-            individuals[idx].mutate(rate: boostedRate, context: context)
-            if enableRepair {
-                individuals[idx].repair(context: context)
-            }
-        }
-
-        // Pass 3: re-evaluate only the touched individuals. `evaluate` checks
-        // `needsEvaluation` internally and no-ops on unchanged ones, so even
-        // a bulk re-evaluation would be safe — but scoping here keeps the
-        // cost proportional to the number of clones we actually touched.
-        if parallelEvaluation && duplicateIndices.count > 1 {
-            DispatchQueue.concurrentPerform(iterations: duplicateIndices.count) { k in
-                let idx = duplicateIndices[k]
-                self.evaluate(&individuals[idx])
-            }
-        } else {
-            for idx in duplicateIndices {
-                evaluate(&individuals[idx])
-            }
-        }
-    }
-
-    // MARK: - Fitness Sharing
-
-    /// Apply fitness sharing to maintain population diversity.
-    /// Each individual's fitness is divided by its niche count — the sum of
-    /// sharing function values with all other individuals in the population.
-    /// Individuals in crowded regions get reduced fitness, encouraging the GA
-    /// to explore multiple peaks.
-    private func applyFitnessSharing(
-        to offspring: inout [C],
-        population: Population<C>,
-        config: GAConfiguration
-    ) {
-        let sigma = config.fitnessShareSigma
-        let alpha = config.fitnessShareAlpha
-        guard sigma > 0 else { return }
-
-        // Combine current population + offspring for sharing computation
-        let allIndividuals = population.individuals + offspring
-
-        for i in offspring.indices {
-            var nicheCount = 1.0 // count self
-            for other in allIndividuals {
-                guard other != offspring[i] else { continue }
-                let dist = offspring[i].distance(to: other)
-                if dist < sigma {
-                    // Sharing function: 1 - (d/sigma)^alpha
-                    nicheCount += 1.0 - pow(dist / sigma, alpha)
-                }
-            }
-            // Preserve rawFitness (true quality) for bestEver tracking; only
-            // reduce the visible `fitness` used by selection and replacement.
-            // Without this, a globally-best-but-crowded individual would be
-            // lost to a shared-fitness-penalized score.
-            if offspring[i].rawFitness == 0 {
-                offspring[i].rawFitness = offspring[i].fitness
-            }
-            offspring[i].fitness = offspring[i].fitness / nicheCount
         }
     }
 

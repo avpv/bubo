@@ -15,8 +15,10 @@ final class BuboOptimizer {
     // MARK: - Components
 
     let preferenceLearner = PreferenceLearner()
-    private let scenarioGenerator = ScenarioGenerator()
     let reoptimizer = IncrementalReoptimizer()
+
+    /// Number of scenarios to return per optimization.
+    var scenarioCount: Int = 3
 
     // MARK: - State
 
@@ -68,7 +70,15 @@ final class BuboOptimizer {
         let evaluator = FitnessEvaluator.standard(preferences: prefs)
         let config = overrideConfig ?? gaConfig
         let capturedIslandConfig = overrideIslandConfig ?? islandConfig
-        let scenGen = scenarioGenerator
+        let capturedScenarioCount = scenarioCount
+
+        // Wire the NSGA-III survivor selector for ScheduleChromosome. The
+        // harness reads per-objective scores straight out of the chromosome
+        // cache, so survivor selection imposes zero extra evaluation cost.
+        let multiObjective = MultiObjectiveContext<ScheduleChromosome>.schedule(
+            evaluator: evaluator,
+            populationSize: config.populationSize
+        )
 
         // Run island model GA on background thread
         let (population, convergenceGen, duration) = await Task.detached(priority: .userInitiated) {
@@ -80,7 +90,8 @@ final class BuboOptimizer {
                 context: adjustedContext,
                 evaluate: { chromosome in
                     evaluator.evaluateAndAssign(&chromosome, context: adjustedContext)
-                }
+                },
+                multiObjective: multiObjective
             )
 
             let pop = islandGA.run()
@@ -88,11 +99,14 @@ final class BuboOptimizer {
             return (pop, islandGA.convergenceGeneration, elapsed)
         }.value
 
-        // Back on main thread — generate scenarios and update state
-        let scenarios = scenGen.generateScenarios(
-            from: population,
-            context: adjustedContext,
-            evaluator: evaluator
+        // Back on main thread — deposit every island individual into the
+        // MAP-Elites archive and read diverse scenarios out of it.
+        var archive = MAPElitesArchive()
+        archive.depositAll(population, context: adjustedContext)
+        let scenarios = archive.diverseScenarios(
+            count: capturedScenarioCount,
+            evaluator: evaluator,
+            context: adjustedContext
         )
 
         let populationCount = population.prefix(10).count
@@ -116,92 +130,21 @@ final class BuboOptimizer {
         return result
     }
 
-    // MARK: - Pareto Optimize
+    // MARK: - Pareto Optimize (alias)
 
-    /// Run the GA as usual, then re-rank the final population using NSGA-II
-    /// non-dominated sorting + crowding distance. The returned scenarios
-    /// represent the Pareto frontier of the final population, so the user
-    /// sees a handful of meaningfully different trade-offs (more focus vs.
-    /// more clustering vs. more slack) rather than N near-clones of the
-    /// weighted-sum winner.
-    ///
-    /// Pareto mode is strictly post-hoc: the GA itself still uses the scalar
-    /// weighted-sum fitness for selection pressure, which keeps the per-
-    /// generation cost identical to the default path. NSGA-II is O(N² · M)
-    /// and runs exactly once, on the converged final population.
+    /// NSGA-III is now the default survivor-selection strategy, so this
+    /// method is a thin alias over `optimize`. Kept to avoid breaking
+    /// callers that specifically asked for Pareto-aware scenarios.
     func optimizeWithPareto(
         context: OptimizerContext,
         overrideConfig: GAConfiguration? = nil,
         overrideIslandConfig: IslandConfiguration? = nil
     ) async -> OptimizerResult {
-        isOptimizing = true
-        defer { isOptimizing = false }
-
-        var prefs = context.preferences
-        preferenceLearner.applyToPreferences(&prefs)
-
-        let adjustedContext = OptimizerContext(
-            fixedEvents: context.fixedEvents,
-            movableEvents: context.movableEvents,
-            workingHours: context.workingHours,
-            planningHorizon: context.planningHorizon,
-            preferences: prefs,
-            participantAvailability: context.participantAvailability,
-            calendar: context.calendar,
-            rng: context.rng,
-            mutationBandit: MutationBandit()
+        await optimize(
+            context: context,
+            overrideConfig: overrideConfig,
+            overrideIslandConfig: overrideIslandConfig
         )
-
-        let evaluator = FitnessEvaluator.standard(preferences: prefs)
-        let config = overrideConfig ?? gaConfig
-        let capturedIslandConfig = overrideIslandConfig ?? islandConfig
-        let scenGen = scenarioGenerator
-
-        let (population, convergenceGen, duration) = await Task.detached(priority: .userInitiated) {
-            let startTime = Date()
-            let islandGA = IslandModelGA<ScheduleChromosome>(
-                islandConfig: capturedIslandConfig,
-                baseConfig: config,
-                context: adjustedContext,
-                evaluate: { chromosome in
-                    evaluator.evaluateAndAssign(&chromosome, context: adjustedContext)
-                }
-            )
-            var pop = islandGA.run()
-            // Post-hoc Pareto re-ranking. Rewrites `.fitness` on every
-            // individual so scenario generation sees the Pareto-adjusted
-            // ordering instead of the weighted-sum one.
-            ParetoRanker.rankByParetoFronts(&pop, evaluator: evaluator, context: adjustedContext)
-            pop.sort { $0.fitness > $1.fitness }
-            let elapsed = Date().timeIntervalSince(startTime)
-            return (pop, islandGA.convergenceGeneration, elapsed)
-        }.value
-
-        let scenarios = scenGen.generateScenarios(
-            from: population,
-            context: adjustedContext,
-            evaluator: evaluator
-        )
-
-        let populationCount = population.prefix(10).count
-        let metadata = OptimizationMetadata(
-            generations: convergenceGen,
-            totalDuration: duration,
-            bestFitness: population.first?.fitness ?? 0,
-            averageFitness: populationCount > 0
-                ? population.prefix(10).reduce(0) { $0 + $1.fitness } / Double(populationCount)
-                : 0,
-            convergenceGeneration: convergenceGen
-        )
-
-        let result = OptimizerResult(scenarios: scenarios, metadata: metadata)
-        lastResult = result
-
-        if let best = scenarios.first {
-            currentSchedule = best.genes
-        }
-
-        return result
     }
 
     // MARK: - Quick Optimize (Day)
@@ -339,7 +282,7 @@ final class BuboOptimizer {
 
     func compareLastScenarios() -> [ScenarioComparison] {
         guard let result = lastResult else { return [] }
-        return scenarioGenerator.compareScenarios(result.scenarios)
+        return ScenarioComparer.compare(result.scenarios)
     }
 
     // MARK: - Focus Block Suggestions (#1)
