@@ -204,6 +204,12 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
     private let evaluate: (inout C) -> Void
     private var onProgress: ((IslandModelProgress) -> Void)?
     private let multiObjective: MultiObjectiveContext<C>?
+    private let metaBandit: IslandConfigMetaBandit?
+
+    /// Variation keys assigned per slot on the current run. Stored so
+    /// the post-evolution feedback loop can credit each variation with
+    /// the island's final best-ever fitness.
+    private var variationKeysPerSlot: [Int: String] = [:]
 
     private(set) var bestEver: C?
     private(set) var convergenceGeneration: Int = 0
@@ -214,7 +220,8 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         context: OptimizerContext,
         evaluate: @escaping (inout C) -> Void,
         onProgress: ((IslandModelProgress) -> Void)? = nil,
-        multiObjective: MultiObjectiveContext<C>? = nil
+        multiObjective: MultiObjectiveContext<C>? = nil,
+        metaBandit: IslandConfigMetaBandit? = nil
     ) {
         self.islandConfig = islandConfig
         self.baseConfig = baseConfig
@@ -222,6 +229,7 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         self.evaluate = evaluate
         self.onProgress = onProgress
         self.multiObjective = multiObjective
+        self.metaBandit = metaBandit
     }
 
     // MARK: - Run
@@ -297,7 +305,8 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             calendar: context.calendar,
             rng: context.rng.split(),
             mutationBandit: context.mutationBandit,
-            linkageModel: context.linkageModel
+            linkageModel: context.linkageModel,
+            surrogate: context.surrogate
         )
     }
 
@@ -501,6 +510,11 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
            bestEver == nil || refined.rawFitness > bestEver!.rawFitness {
             bestEver = refined
         }
+
+        // Credit the meta-bandit with each slot's final best-ever
+        // fitness, so subsequent runs drift toward variations that
+        // historically produced strong islands on this workload.
+        recordMetaBanditRewards(islands: islands)
 
         return combined.sorted { $0.rawFitness > $1.rawFitness }
     }
@@ -800,18 +814,22 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
 
             default:
                 // Additional islands: deterministic parameter variations
-                // based on index. Each island gets a unique combination so
-                // results are reproducible. Island (4) enables linkage-
-                // tree crossover — the LTGA-learned groups tend to pick up
-                // morning/afternoon or context-shared clusters that the
-                // other islands don't see.
-                let variations: [(mutMul: Double, xRate: Double, sel: SelectionStrategy, xStrategy: CrossoverStrategy?)] = [
-                    (1.8, 0.75, .tournament(size: 3), .linkageTree),
-                    (0.7, 0.90, .stochasticUniversalSampling, nil),
-                    (2.2, 0.80, .tournament(size: 5), nil),
-                    (1.5, 0.70, .rank, .linkageTree),
-                ]
-                let v = variations[(i - 4) % variations.count]
+                // based on index. Each variation carries a stable string
+                // key so the meta-bandit can attribute reward across
+                // runs. Without a bandit we round-robin by slot index,
+                // matching the pre-Phase-3 behaviour; with a bandit the
+                // assignment becomes epsilon-greedy over historical
+                // reward per variation.
+                let variations = Self.namedVariations
+                let chosenKey: String
+                if let bandit = metaBandit {
+                    let candidateKeys = variations.map(\.key)
+                    chosenKey = bandit.select(from: candidateKeys, rng: context.rng)
+                } else {
+                    chosenKey = variations[(i - 4) % variations.count].key
+                }
+                variationKeysPerSlot[i] = chosenKey
+                let v = variations.first(where: { $0.key == chosenKey }) ?? variations[0]
                 config.mutationRate = baseConfig.mutationRate * v.mutMul
                 config.crossoverRate = v.xRate
                 config.selectionStrategy = v.sel
@@ -823,5 +841,29 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         }
 
         return configs
+    }
+
+    /// Named variation pool used by both the round-robin fallback and
+    /// the meta-bandit. Keys are stable across runs so persisted arm
+    /// scores survive process restarts.
+    static let namedVariations: [(key: String, mutMul: Double, xRate: Double, sel: SelectionStrategy, xStrategy: CrossoverStrategy?)] = [
+        ("variant.linkageTree.t3", 1.8, 0.75, .tournament(size: 3), .linkageTree),
+        ("variant.sus.noLinkage",  0.7, 0.90, .stochasticUniversalSampling, nil),
+        ("variant.t5.noLinkage",   2.2, 0.80, .tournament(size: 5), nil),
+        ("variant.rank.linkageTree", 1.5, 0.70, .rank, .linkageTree),
+    ]
+
+    /// Feed observed island best-ever fitness back into the meta-bandit
+    /// so future runs bias toward variations that historically produced
+    /// good islands. Called once per run after `evolveIslands` returns.
+    /// Slots 0..3 are intentionally not tracked — their configurations
+    /// are hand-specialised and shouldn't be swapped around.
+    fileprivate func recordMetaBanditRewards(islands: [Island<C>]) {
+        guard let bandit = metaBandit else { return }
+        for (slot, key) in variationKeysPerSlot {
+            guard slot < islands.count else { continue }
+            let reward = islands[slot].bestEver?.rawFitness ?? 0
+            bandit.record(key: key, reward: reward)
+        }
     }
 }

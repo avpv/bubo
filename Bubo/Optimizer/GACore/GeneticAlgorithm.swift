@@ -581,7 +581,16 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             ? config.populationSize
             : config.populationSize - config.eliteCount
 
-        while offspring.count < targetCount {
+        // Surrogate-assisted overgeneration: when active, produce a
+        // larger candidate pool and let the surrogate prune it down to
+        // `targetCount`. The extra crossover+mutate cost is dwarfed by
+        // the eval cost we skip on culled candidates. When inactive
+        // (`overgenerationFactor == 1`), this collapses to the base
+        // N offspring and there's zero overhead.
+        let overgenFactor = context.surrogate?.overgenerationFactor ?? 1.0
+        let overgenCount = Int(Double(targetCount) * overgenFactor)
+
+        while offspring.count < overgenCount {
             let (idx1, idx2) = Selection.selectPairIndices(
                 from: population,
                 strategy: config.selectionStrategy,
@@ -622,7 +631,7 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             }
 
             // When we'd overshoot by 1, only keep child1
-            let remaining = targetCount - offspring.count
+            let remaining = overgenCount - offspring.count
             if remaining >= 2 {
                 offspring.append(child1)
                 offspring.append(child2)
@@ -632,6 +641,43 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
                 offspring.append(child1)
                 offspringBaselines.append(baseline)
             }
+        }
+
+        // Surrogate pruning: rank the oversized offspring pool by
+        // predicted fitness and keep the top `targetCount`. Silently
+        // collapses to a pass-through when the surrogate archive is
+        // too sparse to predict reliably, or when `overgenerationFactor`
+        // is 1.0. The generic-to-concrete projection uses compactMap
+        // (rather than Array<C> as? Array<Schedule>) to avoid relying
+        // on covariant array casts that Swift generics don't guarantee.
+        if let surrogate = context.surrogate, surrogate.isActive,
+           offspring.count > targetCount {
+            var schedules: [ScheduleChromosome] = []
+            schedules.reserveCapacity(offspring.count)
+            var allSchedules = true
+            for item in offspring {
+                if let s = item as? ScheduleChromosome {
+                    schedules.append(s)
+                } else {
+                    allSchedules = false
+                    break
+                }
+            }
+            if allSchedules {
+                let keep = surrogate.rankAndSelect(schedules, targetCount: targetCount)
+                if keep.count == targetCount {
+                    offspring = keep.map { offspring[$0] }
+                    offspringBaselines = keep.map { offspringBaselines[$0] }
+                }
+            }
+        }
+        // If surrogate didn't prune (inactive, too sparse, or non-
+        // schedule chromosomes), trim to targetCount by simple suffix
+        // — offspring order is already the natural generation order so
+        // truncation is unbiased.
+        if offspring.count > targetCount {
+            offspring = Array(offspring.prefix(targetCount))
+            offspringBaselines = Array(offspringBaselines.prefix(targetCount))
         }
 
         // Fitness evaluation: parallel when running standalone,
@@ -655,6 +701,27 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
                       let op = adaptive.lastMutationOperator else { continue }
                 let reward = offspring[i].rawFitness - offspringBaselines[i]
                 bandit.record(op: op, reward: reward)
+            }
+        }
+
+        // Feed the surrogate archive. Every newly-evaluated ScheduleChromosome
+        // is a training sample — doing the bulk record once per generation
+        // amortizes the lock overhead. Non-schedule chromosome types skip
+        // silently (per-element cast fails → early return).
+        if let surrogate = context.surrogate {
+            var pairs: [(genes: [ScheduleGene], fitness: Double)] = []
+            pairs.reserveCapacity(offspring.count)
+            var allSchedules = true
+            for item in offspring {
+                if let s = item as? ScheduleChromosome {
+                    pairs.append((s.genes, s.rawFitness))
+                } else {
+                    allSchedules = false
+                    break
+                }
+            }
+            if allSchedules {
+                surrogate.bulkRecord(pairs)
             }
         }
 

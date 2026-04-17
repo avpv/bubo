@@ -164,6 +164,12 @@ struct OptimizerContext: Sendable {
     /// crossover strategy that doesn't need it).
     let linkageModel: LinkageModel?
 
+    /// Optional surrogate filter. When active, the GA over-generates
+    /// offspring and asks the surrogate to rank candidates; only the
+    /// top-predicted subset gets the expensive evaluator. Shared across
+    /// islands so the training archive stays dense.
+    let surrogate: SurrogateFilter?
+
     init(
         fixedEvents: [CalendarEvent] = [],
         movableEvents: [OptimizableEvent] = [],
@@ -177,7 +183,8 @@ struct OptimizerContext: Sendable {
         calendar: Calendar = .current,
         rng: GARandom = GARandom(),
         mutationBandit: MutationBandit? = nil,
-        linkageModel: LinkageModel? = nil
+        linkageModel: LinkageModel? = nil,
+        surrogate: SurrogateFilter? = nil
     ) {
         self.fixedEvents = fixedEvents
         self.movableEvents = movableEvents
@@ -189,6 +196,7 @@ struct OptimizerContext: Sendable {
         self.rng = rng
         self.mutationBandit = mutationBandit
         self.linkageModel = linkageModel
+        self.surrogate = surrogate
     }
 }
 
