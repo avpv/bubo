@@ -33,32 +33,79 @@ import Foundation
 //     state allocation is zero.
 
 /// Monte Carlo hypervolume estimator.
-struct HypervolumeEstimator: Sendable {
+///
+/// Reference point is **adaptive**: the caller invokes `updateNadir`
+/// with observed objective vectors each generation, and the estimator
+/// rescales its sampling box to the worst-seen per-axis value. This
+/// matters when several objectives saturate near 1.0 — the origin
+/// nadir would then over-count empty volume below the achievable
+/// region, giving identical-looking contributions to genuinely
+/// different individuals. A live-tracked nadir concentrates samples
+/// in the region the population actually spans.
+final class HypervolumeEstimator: @unchecked Sendable {
     /// Samples per `contributions` / `totalHypervolume` call.
     let sampleCount: Int
 
     /// Objective count.
     let objectiveCount: Int
 
-    /// Reference point (per-axis "worst"). For unit-cube objectives
-    /// this is the origin.
-    let referencePoint: ContiguousArray<Double>
-
     /// Base seed for the per-call sampler. Mixed with a salt on each
     /// call so concurrent invocations get disjoint streams.
     let baseSeed: UInt64
+
+    /// Live per-axis nadir. Starts at the origin; `updateNadir` walks
+    /// it toward the worst-seen per-axis value with a small EMA so
+    /// single outliers don't swing the sampling box.
+    private var nadir: ContiguousArray<Double>
+    private let nadirLock = NSLock()
+
+    /// EMA smoothing factor for nadir updates. 0 = freeze at init,
+    /// 1 = jump to observed-worst every call. 0.2 absorbs persistent
+    /// saturation within a handful of generations without reacting to
+    /// single noisy drops.
+    private let nadirAlpha: Double
 
     init(
         objectiveCount m: Int,
         sampleCount: Int = 8_000,
         seed: UInt64,
-        referencePoint: ContiguousArray<Double>? = nil
+        nadirAlpha: Double = 0.2
     ) {
         precondition(m > 0)
         self.objectiveCount = m
         self.sampleCount = max(256, sampleCount)
-        self.referencePoint = referencePoint ?? ContiguousArray(repeating: 0.0, count: m)
         self.baseSeed = seed
+        self.nadir = ContiguousArray(repeating: 0.0, count: m)
+        self.nadirAlpha = max(0, min(1, nadirAlpha))
+    }
+
+    /// Fold the observed per-axis minimum of `vectors` into the
+    /// tracked nadir via exponential moving average. Call once per
+    /// generation from the survivor-selection pool.
+    func updateNadir(from vectors: [[Double]]) {
+        guard !vectors.isEmpty else { return }
+        var observed = ContiguousArray<Double>(repeating: .infinity, count: objectiveCount)
+        for v in vectors {
+            for k in 0..<objectiveCount where v[k] < observed[k] {
+                observed[k] = v[k]
+            }
+        }
+        nadirLock.lock()
+        defer { nadirLock.unlock() }
+        for k in 0..<objectiveCount where observed[k].isFinite {
+            nadir[k] = (1 - nadirAlpha) * nadir[k] + nadirAlpha * observed[k]
+            // Clamp to [0, 1): the achievable region lies in [nadir, 1].
+            if nadir[k] < 0 { nadir[k] = 0 }
+            if nadir[k] >= 1 { nadir[k] = 0.99 }
+        }
+    }
+
+    /// Snapshot the current nadir for sampling. Copy semantics keep
+    /// the estimator lock-free in the hot path.
+    private func nadirSnapshot() -> ContiguousArray<Double> {
+        nadirLock.lock()
+        defer { nadirLock.unlock() }
+        return nadir
     }
 
     // MARK: - Per-individual contribution
@@ -75,16 +122,24 @@ struct HypervolumeEstimator: Sendable {
         precondition(vectors[0].count == objectiveCount, "objective count mismatch")
 
         let sampler = makeSampler(salt: callSalt)
+        let sampleNadir = nadirSnapshot()
         var contributions = ContiguousArray<Double>(repeating: 0.0, count: n)
         var sample = ContiguousArray<Double>(repeating: 0.0, count: objectiveCount)
         var dominators = ContiguousArray<Int>()
         dominators.reserveCapacity(min(n, 64))
 
-        let volumePerSample = 1.0 / Double(sampleCount)
+        // Volume of the sampling box = Π(1 - nadir[k]). "Contribution"
+        // units stay meaningful across generations because we rescale
+        // by this factor — a single individual covering half the
+        // achievable region gets the same share when the box is
+        // 0.2^13 vs 1.0^13.
+        var boxVolume = 1.0
+        for k in 0..<objectiveCount { boxVolume *= (1.0 - sampleNadir[k]) }
+        let volumePerSample = boxVolume / Double(sampleCount)
 
         for _ in 0..<sampleCount {
             for k in 0..<objectiveCount {
-                sample[k] = sampler.unit()
+                sample[k] = sampleNadir[k] + (1.0 - sampleNadir[k]) * sampler.unit()
             }
             dominators.removeAll(keepingCapacity: true)
             for i in 0..<n where dominatesSample(vectors[i], sample) {
@@ -109,16 +164,22 @@ struct HypervolumeEstimator: Sendable {
         precondition(vectors[0].count == objectiveCount, "objective count mismatch")
 
         let sampler = makeSampler(salt: callSalt)
+        let sampleNadir = nadirSnapshot()
+        var boxVolume = 1.0
+        for k in 0..<objectiveCount { boxVolume *= (1.0 - sampleNadir[k]) }
+
         var sample = ContiguousArray<Double>(repeating: 0.0, count: objectiveCount)
         var dominated = 0
         for _ in 0..<sampleCount {
-            for k in 0..<objectiveCount { sample[k] = sampler.unit() }
+            for k in 0..<objectiveCount {
+                sample[k] = sampleNadir[k] + (1.0 - sampleNadir[k]) * sampler.unit()
+            }
             for v in vectors where dominatesSample(v, sample) {
                 dominated += 1
                 break
             }
         }
-        return Double(dominated) / Double(sampleCount)
+        return boxVolume * Double(dominated) / Double(sampleCount)
     }
 
     // MARK: - HypE-lite survivor rule

@@ -33,6 +33,16 @@ final class BuboOptimizer {
     /// user feedback nudges weights across runs.
     let contextualCrossoverHead: GeneAttentionHead = GeneAttentionHead()
 
+    /// Per-instance surrogate model. Fitness-feature pairs are
+    /// normalized to `[0, 1]^16` via `ScheduleFeatureVector`, so
+    /// training samples from prior optimizations transfer meaningfully
+    /// to new workloads: similar plan shapes produce similar fitness
+    /// predictions regardless of which specific events they contain.
+    /// Different workloads land in feature-space regions the RBF hasn't
+    /// seen, triggering real evaluations — the surrogate's uncertainty
+    /// gate handles domain shift automatically.
+    let surrogate: RBFSurrogate = RBFSurrogate()
+
     // MARK: - State
 
     private(set) var isOptimizing = false
@@ -103,16 +113,19 @@ final class BuboOptimizer {
         // Quality-Diversity archive shared across every island so
         // productive genotypes discovered anywhere feed every
         // population.
+        // Quality-Diversity archive is per-run — its incumbents carry
+        // concrete gene IDs that only make sense for this workload's
+        // movable event set. Attempting to cross-wire archives from
+        // different optimize() calls would inject invalid chromosomes.
         let qdArchive = QualityDiversityArchive(resolution: 6)
 
         // Gradient refiner for elite fine-tuning. Pure value type;
         // safe to capture across threads.
         let gradientRefiner = ScheduleGradientRefiner()
 
-        // Surrogate model — predicts fitness for offspring whose
-        // features sit close to recently-evaluated samples. Real
-        // evaluator runs on warm-up samples and on uncertain queries.
-        let surrogate = RBFSurrogate()
+        // Surrogate reused across runs from the instance-level
+        // `self.surrogate` — see field doc for rationale.
+        let surrogate = self.surrogate
 
         // Canonical objective ordering for surrogate's objective-vector
         // prediction. Must match the order `MultiObjectiveContext`
@@ -136,7 +149,11 @@ final class BuboOptimizer {
         //       prediction back via `priorPrediction` so rolling MAE
         //       in telemetry actually tracks drift.
         let surrogateAssistedEvaluator: @Sendable (inout ScheduleChromosome) -> Void = { chromosome in
-            let features = ScheduleFeatureVector.extract(chromosome, context: adjustedContext).values
+            // `extractOrCache` populates `chromosome.cachedFeatures`
+            // so the next screen on this chromosome (possible after a
+            // no-op through crossover/elitism) skips the full aggregate
+            // pass. Invalidation happens inside `mutate` / `repair`.
+            let features = ScheduleFeatureVector.extractOrCache(&chromosome, context: adjustedContext).values
             switch surrogate.screen(features: features) {
             case .accept(let predicted, let predictedObjectives):
                 chromosome.fitness = predicted

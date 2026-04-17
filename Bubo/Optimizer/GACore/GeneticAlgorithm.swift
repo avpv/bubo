@@ -707,6 +707,14 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             let vectors = combined.map(mo.objectiveVectorOf)
             let activeRanker = mo.activeRanker
 
+            // Fold the observed per-axis minimum into the hypervolume
+            // estimator's nadir so the Monte Carlo sampling box
+            // tracks the achievable region. Without this, saturated
+            // objectives (score ≈ 1 across the population) leave the
+            // sampler wasting most of its budget in the empty volume
+            // below the nadir.
+            mo.hypervolume.updateNadir(from: vectors)
+
             // Hypervolume contribution breaks ties on the last accepted
             // front — objectively-grounded selection pressure that the
             // perpendicular-distance rule is blind to.

@@ -56,4 +56,19 @@ struct HypervolumeEstimatorTests {
         let b = hv.contributions(pop, callSalt: 1)
         for (x, y) in zip(a, b) { #expect(x == y) }
     }
+
+    @Test("updateNadir shrinks the sampling box toward observed worst")
+    func updateNadirShrinksBox() {
+        let hv = HypervolumeEstimator(objectiveCount: 2, sampleCount: 5_000, seed: 17, nadirAlpha: 1.0)
+        // Pre-update: single point at (0.5, 0.5) covers 25% of the unit square.
+        let before = hv.totalHypervolume([[0.5, 0.5]], callSalt: 1)
+        #expect(abs(before - 0.25) < 0.05)
+        // Observe a population with per-axis minimum (0.3, 0.3); nadir
+        // jumps there with alpha=1.0. Sampling box = [0.3, 1]^2 → 0.49
+        // area. Point (0.5, 0.5) covers (0.2/0.7)^2 of that box
+        // ≈ 0.0816 normalized; absolute = 0.49 · 0.0816 ≈ 0.04.
+        hv.updateNadir(from: [[0.3, 0.3], [0.9, 0.9]])
+        let after = hv.totalHypervolume([[0.5, 0.5]], callSalt: 2)
+        #expect(after < before)
+    }
 }

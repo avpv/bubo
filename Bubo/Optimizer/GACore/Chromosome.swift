@@ -112,6 +112,15 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
     /// rate wins, preserving pre-existing behaviour).
     var selfAdaptiveMutationRate: Double = 0
 
+    /// Cached 16-dim feature vector for surrogate / QD consumers.
+    /// Populated lazily on first extraction and invalidated on any
+    /// mutation (`mutate`) or repair that changes gene placement.
+    /// Surrogate screening hits this cache for every offspring
+    /// evaluation — eliminating the re-aggregation pass saves ~10-30µs
+    /// per offspring, multiplied by generations × populationSize this
+    /// is a meaningful slice of the per-run cost.
+    var cachedFeatures: ContiguousArray<Double>?
+
     /// Equality ignores needsEvaluation and caches — two chromosomes with the same genes and fitness are equal.
     static func == (lhs: ScheduleChromosome, rhs: ScheduleChromosome) -> Bool {
         lhs.genes == rhs.genes && lhs.fitness == rhs.fitness
@@ -379,6 +388,10 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
 
     mutating func mutate(rate: Double, context: OptimizerContext) {
         needsEvaluation = true
+        // Feature cache is a function of gene placement; mutation may
+        // change placement, invalidate eagerly. Surrogate screen will
+        // recompute on next access.
+        cachedFeatures = nil
         var changed = IndexSet()
         let cal = context.calendar
         let horizonStart = context.planningHorizon.start
@@ -433,12 +446,38 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                     clampToWorkingHours(newStart, duration: genes[i].duration, workingHours: context.workingHours, calendar: cal, floor: floor)
                 )
             case 1:
-                // Move to different day within horizon
+                // Move to different day within horizon.
+                //
+                // Constraint-aware: restrict day selection to days
+                // that are at or after `floor` (which already folds
+                // `earliestStart` and, via repair's dependency pass,
+                // the earliest day any included prerequisite could
+                // finish). Random days earlier than that would be
+                // immediately reshuffled by the next repair pass,
+                // costing a wasted fitness evaluation per mutation.
                 let mutStartDay = cal.startOfDay(for: horizonStart)
                 let mutLastDay = cal.startOfDay(for: context.planningHorizon.end.addingTimeInterval(-1))
                 let daysInHorizon = max(1, (cal.dateComponents([.day], from: mutStartDay, to: mutLastDay).day ?? 0) + 1)
                 guard daysInHorizon > 0 else { break }
-                let dayOffset = context.rng.int(in: 0..<daysInHorizon)
+
+                // Earliest eligible day: max of horizon start and the
+                // day holding `floor`. Also advance past `dependsOn`
+                // predecessors placed on this chromosome.
+                var earliestDay = cal.startOfDay(for: floor)
+                if let event, !event.dependsOn.isEmpty {
+                    for depId in event.dependsOn {
+                        if let depGene = genes.first(where: { $0.eventId == depId && $0.isIncluded }) {
+                            let depDay = cal.startOfDay(for: depGene.endTime)
+                            if depDay > earliestDay { earliestDay = depDay }
+                        }
+                    }
+                }
+                let startOffset = max(
+                    0,
+                    cal.dateComponents([.day], from: mutStartDay, to: earliestDay).day ?? 0
+                )
+                guard startOffset < daysInHorizon else { break }
+                let dayOffset = context.rng.int(in: startOffset..<daysInHorizon)
                 let newDay = cal.date(byAdding: .day, value: dayOffset, to: horizonStart)!
                 let hour: Int
                 if let preferred = event?.preferredHourRange, !preferred.isEmpty {
@@ -542,6 +581,9 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
     /// 3. Enforce `dependsOn` ordering: a gene may only start after every one
     ///    of its (included) prerequisites has finished.
     mutating func repair(context: OptimizerContext) {
+        // Repair moves genes; invalidate cached features.
+        cachedFeatures = nil
+
         let cal = context.calendar
         let horizonStart = context.planningHorizon.start
 

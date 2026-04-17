@@ -34,6 +34,13 @@ struct IslandConfiguration: Sendable {
     /// and relaxes when islands are still diverging productively.
     var adaptiveMigration: Bool
 
+    /// When true, each migration pair's direction is flipped so the
+    /// more-productive endpoint is the source and the less-productive
+    /// endpoint is the destination. Topology still determines *which*
+    /// islands exchange; this flag only controls *who sends to whom*.
+    /// Productivity is measured as `bestEver.rawFitness`.
+    var routeByProductivity: Bool
+
     /// Fast configs: 2 islands, frequent migration, no diversification.
     /// Adds modest exploration benefit without significant overhead.
     static let quick = IslandConfiguration(
@@ -44,7 +51,8 @@ struct IslandConfiguration: Sendable {
         emigrantSelection: .best,
         immigrantReplacement: .worst,
         diversifyIslands: false,
-        adaptiveMigration: false
+        adaptiveMigration: false,
+        routeByProductivity: false
     )
 
     static let `default` = IslandConfiguration(
@@ -55,7 +63,8 @@ struct IslandConfiguration: Sendable {
         emigrantSelection: .best,
         immigrantReplacement: .worst,
         diversifyIslands: true,
-        adaptiveMigration: true
+        adaptiveMigration: true,
+        routeByProductivity: true
     )
 
     /// Larger island count for deep weekly planning.
@@ -67,7 +76,8 @@ struct IslandConfiguration: Sendable {
         emigrantSelection: .best,
         immigrantReplacement: .worst,
         diversifyIslands: true,
-        adaptiveMigration: true
+        adaptiveMigration: true,
+        routeByProductivity: true
     )
 
     /// Validate configuration, clamping values to safe ranges.
@@ -593,7 +603,23 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         let n = islands.count
         guard n > 1 else { return }
 
-        let migrationPairs = makeMigrationPairs(islandCount: n)
+        var migrationPairs = makeMigrationPairs(islandCount: n)
+
+        // Productivity routing: for each pair, ensure the source is the
+        // more-productive endpoint so flow runs down the fitness
+        // gradient. Topology graph is preserved (the *same* islands
+        // exchange); only who sends to whom flips when the pair is
+        // oriented against the gradient.
+        if islandConfig.routeByProductivity {
+            migrationPairs = migrationPairs.map { pair in
+                let srcFit = islands[pair.source].bestEver?.rawFitness ?? 0
+                let dstFit = islands[pair.destination].bestEver?.rawFitness ?? 0
+                if dstFit > srcFit {
+                    return (source: pair.destination, destination: pair.source)
+                }
+                return pair
+            }
+        }
 
         // Snapshot emigrants before any replacement to avoid one migration
         // polluting the source for subsequent pairs in the same round.

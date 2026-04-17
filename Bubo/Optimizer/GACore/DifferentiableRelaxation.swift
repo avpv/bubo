@@ -111,6 +111,16 @@ struct ScheduleGradientRefiner: Sendable {
                 let originalStart = chromosome.genes[geneIdx].startTime
                 let h = config.stepSeconds
 
+                // Build the + and − probe chromosomes for finite
+                // difference. We deliberately skip `repair()` on the
+                // probes and instead mark `mutatedGeneIndices` so the
+                // evaluator's delta path re-scores only the affected
+                // day(s) via `DayPartitionedObjective.evaluateOneDay`.
+                // Any new overlap introduced by the step is scored
+                // via the ConstraintEngine penalty — the gradient
+                // direction will naturally reject it, which is the
+                // correct outcome (we don't want to push into
+                // infeasibility).
                 var plus = chromosome
                 plus.genes[geneIdx] = plus.genes[geneIdx].withStartTime(
                     clampToWorkingHours(
@@ -121,7 +131,8 @@ struct ScheduleGradientRefiner: Sendable {
                         floor: horizonStart
                     )
                 )
-                plus.repair(context: context)
+                plus.mutatedGeneIndices = IndexSet(integer: geneIdx)
+                plus.needsEvaluation = true
                 evaluate(&plus)
                 let fPlus = plus.rawFitness
 
@@ -135,7 +146,8 @@ struct ScheduleGradientRefiner: Sendable {
                         floor: horizonStart
                     )
                 )
-                minus.repair(context: context)
+                minus.mutatedGeneIndices = IndexSet(integer: geneIdx)
+                minus.needsEvaluation = true
                 evaluate(&minus)
                 let fMinus = minus.rawFitness
 

@@ -43,6 +43,23 @@ struct ScheduleFeatureVector: Sendable {
 }
 
 extension ScheduleFeatureVector {
+    /// Extract-or-reuse: returns the chromosome's cached feature
+    /// vector when present, computing and caching otherwise. The
+    /// chromosome must be passed `inout` because mutating the cache
+    /// is the whole point of this overload.
+    static func extractOrCache(
+        _ chromosome: inout ScheduleChromosome,
+        context: OptimizerContext
+    ) -> ScheduleFeatureVector {
+        if let cached = chromosome.cachedFeatures,
+           cached.count == Self.dimension {
+            return ScheduleFeatureVector(cached)
+        }
+        let vector = extract(chromosome, context: context)
+        chromosome.cachedFeatures = vector.values
+        return vector
+    }
+
     /// Extract a feature vector from a chromosome. Visits each gene
     /// once and aggregates per-day / per-time-band statistics.
     static func extract(_ chromosome: ScheduleChromosome, context: OptimizerContext) -> ScheduleFeatureVector {
