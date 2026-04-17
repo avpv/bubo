@@ -156,6 +156,12 @@ struct OptimizerContext: Sendable {
     /// reward statistics accumulate.
     let mutationBandit: MutationBandit?
 
+    /// Optional attention head for `CrossoverStrategy.contextual`. When set,
+    /// contextual crossover scores every gene pair through this head before
+    /// deciding which parent to inherit from. Shared across islands so the
+    /// head's learnable weights absorb experience from every population.
+    let contextualCrossoverHead: GeneAttentionHead?
+
     init(
         fixedEvents: [CalendarEvent] = [],
         movableEvents: [OptimizableEvent] = [],
@@ -168,7 +174,8 @@ struct OptimizerContext: Sendable {
         participantAvailability: [String: [DateInterval]] = [:],
         calendar: Calendar = .current,
         rng: GARandom = GARandom(),
-        mutationBandit: MutationBandit? = nil
+        mutationBandit: MutationBandit? = nil,
+        contextualCrossoverHead: GeneAttentionHead? = nil
     ) {
         self.fixedEvents = fixedEvents
         self.movableEvents = movableEvents
@@ -179,6 +186,7 @@ struct OptimizerContext: Sendable {
         self.calendar = calendar
         self.rng = rng
         self.mutationBandit = mutationBandit
+        self.contextualCrossoverHead = contextualCrossoverHead
     }
 }
 

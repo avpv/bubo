@@ -205,6 +205,22 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
     private var onProgress: ((IslandModelProgress) -> Void)?
     private let multiObjective: MultiObjectiveContext<C>?
 
+    /// Shared Quality-Diversity archive across islands. Every island's
+    /// evolved offspring are considered for insertion, and every island
+    /// may draw emitters from the same global pool.
+    let qdArchive: QualityDiversityArchive?
+
+    /// Shared gradient refiner. Wired per-island so every island can
+    /// fine-tune its elites on gradient-refine intervals.
+    let gradientRefiner: DifferentiableRefiner?
+
+    /// Optional federated mutation bandit. When non-nil, each island's
+    /// context gets its *own* per-island `MutationBandit` drawn from the
+    /// federation; the island loop triggers periodic merges at
+    /// `islandConfig.migrationInterval` boundaries so bandit state stays
+    /// shared but not serialized through a single lock.
+    let federatedBandit: FederatedMutationBandit?
+
     private(set) var bestEver: C?
     private(set) var convergenceGeneration: Int = 0
 
@@ -214,7 +230,10 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         context: OptimizerContext,
         evaluate: @escaping (inout C) -> Void,
         onProgress: ((IslandModelProgress) -> Void)? = nil,
-        multiObjective: MultiObjectiveContext<C>? = nil
+        multiObjective: MultiObjectiveContext<C>? = nil,
+        qdArchive: QualityDiversityArchive? = nil,
+        gradientRefiner: DifferentiableRefiner? = nil,
+        federatedBandit: FederatedMutationBandit? = nil
     ) {
         self.islandConfig = islandConfig
         self.baseConfig = baseConfig
@@ -222,6 +241,9 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         self.evaluate = evaluate
         self.onProgress = onProgress
         self.multiObjective = multiObjective
+        self.qdArchive = qdArchive
+        self.gradientRefiner = gradientRefiner
+        self.federatedBandit = federatedBandit
     }
 
     // MARK: - Run
@@ -267,7 +289,9 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
                 config: config,
                 context: islandContext,
                 evaluate: evaluate,
-                multiObjective: multiObjective
+                multiObjective: multiObjective,
+                qdArchive: qdArchive,
+                gradientRefiner: gradientRefiner
             )
             return Island(population: pop, ga: ga, context: islandContext)
         }
@@ -296,7 +320,8 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             participantAvailability: context.participantAvailability,
             calendar: context.calendar,
             rng: context.rng.split(),
-            mutationBandit: context.mutationBandit
+            mutationBandit: context.mutationBandit,
+            contextualCrossoverHead: context.contextualCrossoverHead
         )
     }
 
@@ -341,7 +366,9 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
                 config: config,
                 context: islandContext,
                 evaluate: evaluate,
-                multiObjective: multiObjective
+                multiObjective: multiObjective,
+                qdArchive: qdArchive,
+                gradientRefiner: gradientRefiner
             )
             return Island(population: pop, ga: ga, context: islandContext)
         }
@@ -435,6 +462,16 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             if isMigrationGeneration {
                 migrate(islands: islands, migrationSize: effectiveSize)
                 totalMigrations += 1
+
+                // Federated bandit merge coincides with migration
+                // boundaries: both share the rhythm of "islands have
+                // accumulated distinct experience, now exchange and
+                // continue." Uniform weighting across islands keeps the
+                // default behaviour symmetric; callers can weight by
+                // per-island best-fitness via a custom scheme if needed.
+                if let federated = federatedBandit {
+                    federated.merge()
+                }
             }
 
             // Update global best (by rawFitness — see per-island note above).

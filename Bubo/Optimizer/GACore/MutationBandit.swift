@@ -239,6 +239,48 @@ final class MutationBandit: @unchecked Sendable {
         return out
     }
 
+    // MARK: - Federated learning hooks
+
+    /// Export every arm's raw sufficient statistics. Used by
+    /// `FederatedMutationBandit` to merge bandit state across islands.
+    /// Returns a deep-copied snapshot so callers can mutate freely
+    /// without affecting the live bandit.
+    func rawArmsForFederation() -> [MutationOperator: ArmStatistics] {
+        lock.lock()
+        defer { lock.unlock() }
+        var out: [MutationOperator: ArmStatistics] = [:]
+        for (op, arm) in arms {
+            let ACopy = arm.A.map { Array($0) }
+            let bCopy = Array(arm.b)
+            out[op] = ArmStatistics(A: ACopy, b: bCopy, pulls: arm.pulls, rewardSum: arm.rewardSum)
+        }
+        return out
+    }
+
+    /// Overwrite every arm's A/b/pulls/rewardSum with blended statistics
+    /// produced by a federated merge. Missing operators are left
+    /// untouched; dimensionality is validated per-arm and skipped on
+    /// mismatch.
+    func applyFederatedBlend(
+        _ blended: [MutationOperator: (A: [[Double]], b: [Double], pulls: Int, rewardSum: Double)]
+    ) {
+        lock.lock()
+        defer { lock.unlock() }
+        for (op, incoming) in blended {
+            guard var arm = arms[op] else { continue }
+            guard incoming.A.count == Self.featureDim,
+                  incoming.A.allSatisfy({ $0.count == Self.featureDim }),
+                  incoming.b.count == Self.featureDim else {
+                continue
+            }
+            arm.A = incoming.A.map { Array($0) }
+            arm.b = Array(incoming.b)
+            arm.pulls = incoming.pulls
+            arm.rewardSum = incoming.rewardSum
+            arms[op] = arm
+        }
+    }
+
     // MARK: - Linear algebra (inline 4×4)
 
     /// Closed-form 4×4 inverse via Gauss–Jordan. Returns `nil` when the
