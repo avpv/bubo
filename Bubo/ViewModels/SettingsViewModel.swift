@@ -43,7 +43,15 @@ class SettingsViewModel {
         Task {
             let granted = await AppleCalendarService.shared.requestAccess()
 
-            calendarAuthStatus = AppleCalendarService.authorizationStatus
+            // Trust the grant result. `EKEventStore.authorizationStatus` can
+            // briefly still return `.notDetermined` right after the completion
+            // handler fires — TCC propagation to EventKit's class-level cache
+            // lags behind the continuation. If we read the static query here
+            // we occasionally flip the UI back to the Connect button even
+            // though the user just tapped Allow.
+            calendarAuthStatus = granted
+                ? .fullAccess
+                : AppleCalendarService.authorizationStatus
             isRequestingCalendarAccess = false
             if granted {
                 // The shared EKEventStore caches the pre-grant TCC state; rebuild
@@ -60,6 +68,14 @@ class SettingsViewModel {
     /// Connect button (e.g. via System Settings) are reflected in the UI.
     func refreshCalendarAuthStatus() {
         let current = AppleCalendarService.authorizationStatus
+        // Never downgrade a known grant to `.notDetermined` — the static
+        // query is occasionally stale (especially right after we grant
+        // Reminders access on the same shared store), and `.notDetermined`
+        // isn't reachable from `.fullAccess` without the user revoking
+        // via System Settings, which the OS reports as `.denied`.
+        if calendarAuthStatus == .fullAccess, current == .notDetermined {
+            return
+        }
         if calendarAuthStatus != current {
             calendarAuthStatus = current
         }
@@ -77,13 +93,22 @@ class SettingsViewModel {
         Task {
             let granted = await AppleRemindersService.shared.requestAccess()
 
-            remindersAuthStatus = AppleRemindersService.authorizationStatus
+            // Same race as the calendar flow — trust `granted` over the
+            // static query to avoid the UI bouncing back to Connect.
+            remindersAuthStatus = granted
+                ? .fullAccess
+                : AppleRemindersService.authorizationStatus
             isRequestingRemindersAccess = false
             if granted {
                 // Same cache issue as the calendar flow — the pre-grant store
                 // keeps returning stale TCC state until it's rebuilt.
                 AppleCalendarService.shared.rebuildStore()
                 loadRemindersLists()
+                // Granting Reminders reshapes the shared store's TCC view;
+                // re-check Calendar so we don't accidentally keep a stale
+                // `.fullAccess` if it was actually revoked meanwhile, but
+                // also don't drop a real grant on a stale `.notDetermined`.
+                refreshCalendarAuthStatus()
             }
         }
     }
@@ -91,6 +116,11 @@ class SettingsViewModel {
     /// Refreshes the cached Reminders authorization status from the system.
     func refreshRemindersAuthStatus() {
         let current = AppleRemindersService.authorizationStatus
+        // Mirror `refreshCalendarAuthStatus` — protect a known grant from
+        // being downgraded by a stale `.notDetermined` read.
+        if remindersAuthStatus == .fullAccess, current == .notDetermined {
+            return
+        }
         if remindersAuthStatus != current {
             remindersAuthStatus = current
         }
