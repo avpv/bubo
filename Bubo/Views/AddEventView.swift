@@ -121,56 +121,16 @@ struct AddEventView: View {
             }
 
             ScrollView {
-                // Each logical section lives on its own platter. Spacing
-                // between cards replaces the in-platter separators that used
-                // to mark section boundaries. Separators now live only
-                // WITHIN a section (e.g. between Location and Notes).
-                VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                // Apple Reminders-style inset grouped form: every field lives
+                // in its own card, sections are separated by `DS.Spacing.lg`,
+                // and uppercase headers (`SectionLabel`) name each group.
+                // Birman: один ритм — заголовок, карточка, пробел, следующий
+                // заголовок; никаких разделителей между секциями.
+                VStack(alignment: .leading, spacing: DS.Spacing.lg) {
 
-                    // Title — focused state is signalled only by the system
-                    // caret, no extra glow shadow.
-                    sectionBlock {
-                        TextField("Title", text: $title, prompt: Text("Meeting with Anna, Deep work, etc.").foregroundStyle(skin.resolvedTextSecondary))
-                            .textFieldStyle(.plain)
-                            .font(.headline)
-                            .focused($isTitleFocused)
-                            .defaultFocus($isTitleFocused, true)
-                            .padding(DS.Spacing.md)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .disabled(isExternal)
-                            .opacity(isExternal ? 0.6 : 1.0)
-                    }
+                    titleCard
 
-                    // Date & Time
-                    sectionBlock {
-                        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                            sectionLabel("Date & Time")
-
-                            Grid(alignment: .leading, horizontalSpacing: DS.Spacing.sm, verticalSpacing: DS.Spacing.md) {
-                                GridRow {
-                                    Text("Starts")
-                                        .foregroundStyle(skin.resolvedTextSecondary)
-                                        .gridColumnAlignment(.trailing)
-
-                                    DateTimePickerPills(date: $date)
-                                }
-
-                                if selectedEventType != .pomodoro {
-                                    GridRow {
-                                        Text("Ends")
-                                            .foregroundStyle(skin.resolvedTextSecondary)
-                                            .gridColumnAlignment(.trailing)
-
-                                        DateTimePickerPills(date: endDateBinding, range: date...)
-                                    }
-                                }
-                            }
-                        }
-                        .padding(DS.Spacing.md)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .disabled(isExternal)
-                        .opacity(isExternal ? 0.6 : 1.0)
-                    }
+                    dateTimeCard
 
                     // Find Best Time (optimizer suggestion)
                     if !isEditing, !isExternal, isTitleValid, let optimizerService {
@@ -203,125 +163,28 @@ struct AddEventView: View {
                         }
                     }
 
-                    // Calendar
                     if !isEditing {
-                        sectionBlock {
-                            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                                Toggle("Add to Calendar", isOn: $addToCalendar)
-
-                                if addToCalendar && !availableCalendars.isEmpty {
-                                    Picker("Calendar", selection: $selectedCalendarId) {
-                                        ForEach(availableCalendars) { cal in
-                                            Text(cal.title)
-                                                .tag(cal.id)
-                                        }
-                                    }
-                                    .pickerStyle(.menu)
-                                    .controlSize(.large)
-                                    .frame(height: DS.Size.controlHeight)
-                                }
-
-                                if !addToCalendar {
-                                    Text("Event will be stored locally in Bubo only")
-                                        .font(.caption)
-                                        .foregroundStyle(skin.resolvedTextSecondary)
-                                }
-                            }
-                            .padding(DS.Spacing.md)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        }
+                        calendarCard
                     }
 
-                    // More options — collapsed by default for new events
+                    // More options — collapsed by default for new events.
+                    // Birman: тихая ссылка-шеврон, а не очередная карточка;
+                    // чтобы не дублировать визуальный вес следующего блока.
                     if !isExternal {
-                        sectionBlock {
-                            Button {
-                                withAnimation(skin.resolvedMicroAnimation) {
-                                    showMoreOptions.toggle()
-                                }
-                            } label: {
-                                HStack(spacing: DS.Spacing.xs) {
-                                    Text("More options")
-                                        .font(.caption.weight(.medium))
-                                        .foregroundStyle(skinAccent)
-                                    Image(systemName: showMoreOptions ? "chevron.up" : "chevron.down")
-                                        .font(.caption2)
-                                        .foregroundStyle(skinAccent)
-                                    Spacer()
-                                }
-                            }
-                            .buttonStyle(.plain)
-                            .padding(DS.Spacing.md)
-                        }
+                        moreOptionsDisclosure
                     }
 
                     if showMoreOptions || isExternal {
-                        // Color
-                        sectionBlock {
-                            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                                sectionLabel("Color")
+                        colorCard
+                        contextCard
+                        detailsCard
 
-                                HStack(spacing: DS.Spacing.xs) {
-                                    ForEach(EventColorTag.allCases, id: \.self) { tag in
-                                        ColorDotButton(
-                                            tag: tag,
-                                            isActive: selectedColorTag == tag,
-                                            action: {
-                                                Haptics.tap()
-                                                selectedColorTag = selectedColorTag == tag ? nil : tag
-                                            }
-                                        )
-                                    }
-                                }
-                            }
-                            .padding(DS.Spacing.md)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .disabled(isExternal)
-                            .opacity(isExternal ? 0.6 : 1.0)
-                        }
-
-                        // Context (Project / Category)
-                        sectionBlock {
-                            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                                sectionLabel("Context")
-
-                                TextField("Project or category", text: $contextTag, prompt: Text("e.g. backend, design, personal").foregroundStyle(skin.resolvedTextSecondary))
-                                    .textFieldStyle(.plain)
-                            }
-                            .padding(DS.Spacing.md)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .disabled(isExternal)
-                            .opacity(isExternal ? 0.6 : 1.0)
-                        }
-
-                        // Details
-                        sectionBlock {
-                            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                                sectionLabel("Details")
-
-                                TextField("Location", text: $location, prompt: Text("Zoom link or room 302").foregroundStyle(skin.resolvedTextSecondary))
-                                    .textFieldStyle(.plain)
-                                    .focused($isLocationFocused)
-
-                                SkinSeparator()
-
-                                HStack(alignment: .top, spacing: DS.Spacing.sm) {
-                                    FormattableTextView(text: $description, prompt: "Add notes, agenda, or attachments", promptStyle: skin.resolvedTextSecondary)
-                                        .frame(minHeight: 60, maxHeight: 160)
-
-                                    EmojiPickerButton(text: $description)
-                                        .padding(.top, DS.Spacing.xxs)
-                                }
-                            }
-                            .padding(DS.Spacing.md)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .disabled(isExternal)
-                            .opacity(isExternal ? 0.6 : 1.0)
-                        }
-
-                        // Recurrence (only for standard events)
+                        // Recurrence (only for standard events). The
+                        // RecurrencePickerView brings its own internal
+                        // layout, so we frame it as a headerless section
+                        // card rather than splitting it into rows.
                         if !isPomodoroMode {
-                            sectionBlock {
+                            FormSection {
                                 RecurrencePickerView(rule: $recurrenceRule, eventDuration: $duration, eventStartDate: date)
                                     .padding(DS.Spacing.md)
                                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -330,75 +193,7 @@ struct AddEventView: View {
                             }
                         }
 
-                        // Reminders
-                        sectionBlock {
-                            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                                sectionLabel("Reminders")
-
-                                Toggle("Custom reminders", isOn: $useCustomReminders)
-
-                                if useCustomReminders {
-                                    ForEach(Array(reminderMinutes.sorted().enumerated()), id: \.element) { index, minutes in
-                                        HStack {
-                                            Label(DS.formatMinutes(minutes), systemImage: "bell.fill")
-                                            Spacer()
-                                            Button(role: .destructive) {
-                                                reminderMinutes.removeAll { $0 == minutes }
-                                            } label: {
-                                                Image(systemName: "trash")
-                                            }
-                                            .buttonStyle(.borderless)
-                                        }
-                                        SkinSeparator()
-                                    }
-
-                                    Grid(alignment: .leading, horizontalSpacing: DS.Spacing.sm) {
-                                        GridRow {
-                                            Text("\(DS.formatMinutes(newReminderValue))")
-                                                .frame(minWidth: 60, alignment: .leading)
-                                                .monospacedDigit()
-
-                                            Stepper("Reminder minutes", value: $newReminderValue, in: 1...120)
-                                                .labelsHidden()
-
-                                            Button {
-                                                if !reminderMinutes.contains(newReminderValue) {
-                                                    reminderMinutes.append(newReminderValue)
-                                                }
-                                            } label: {
-                                                Label("Add", systemImage: "plus")
-                                            }
-                                            .buttonStyle(.action(role: .primary, size: .compact))
-                                        }
-                                    }
-
-                                    let available = Self.presetReminders.filter { !reminderMinutes.contains($0) }
-                                    if !available.isEmpty {
-                                        HStack(spacing: DS.Spacing.xs) {
-                                            ForEach(available.prefix(5), id: \.self) { preset in
-                                                Button {
-                                                    Haptics.tap()
-                                                    reminderMinutes.append(preset)
-                                                } label: {
-                                                    Text(DS.formatMinutes(preset))
-                                                        .font(.caption)
-                                                }
-                                                .buttonStyle(.action(role: .secondary, size: .compact))
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    Label(
-                                            "Default: \(reminderService.defaultReminderMinutesList.map { DS.formatMinutes($0) }.joined(separator: ", "))",
-                                            systemImage: "bell.fill"
-                                        )
-                                        .font(.subheadline)
-                                        .foregroundStyle(skin.resolvedTextSecondary)
-                                }
-                            }
-                            .padding(DS.Spacing.md)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        }
+                        remindersCard
                     } // end showMoreOptions
                 }
                 .padding(.horizontal, DS.Spacing.lg)
@@ -498,14 +293,6 @@ struct AddEventView: View {
         }
     }
 
-    // MARK: - Section Label
-
-    /// Delegates to the shared `SectionLabel` view defined in DesignSystem so
-    /// every form surface uses the exact same treatment.
-    private func sectionLabel(_ text: String) -> some View {
-        SectionLabel(text: text)
-    }
-
     // MARK: - Section Block
 
     /// Wraps a form section in its own platter card. The form is a vertical
@@ -515,6 +302,261 @@ struct AddEventView: View {
         content()
             .skinPlatter(skin)
             .skinPlatterDepth(skin)
+    }
+
+    // MARK: - Reminders-style Cards
+    //
+    // Each card below maps one-to-one to an inset group in Apple Reminders'
+    // "New Reminder" / "Details" screens. Keeping them as computed views
+    // keeps `body` scan-readable.
+
+    /// Hero card with the title field — mirrors the "Title" row in Apple
+    /// Reminders' new-reminder sheet.
+    private var titleCard: some View {
+        FormSection {
+            TextField("Title", text: $title, prompt: Text("Meeting with Anna, Deep work, etc.").foregroundStyle(skin.resolvedTextSecondary))
+                .textFieldStyle(.plain)
+                .font(.headline)
+                .focused($isTitleFocused)
+                .defaultFocus($isTitleFocused, true)
+                .padding(DS.Spacing.md)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .disabled(isExternal)
+                .opacity(isExternal ? 0.6 : 1.0)
+        }
+    }
+
+    /// "Date & Time" card: Starts / Ends rows, each with a tinted icon tile
+    /// and the existing `DateTimePickerPills` as the trailing control.
+    private var dateTimeCard: some View {
+        FormSection(header: "Date & Time") {
+            FormRow(
+                icon: "calendar",
+                iconTint: skin.resolvedDestructiveColor,
+                title: "Starts",
+                trailing: { DateTimePickerPills(date: $date) }
+            )
+            if selectedEventType != .pomodoro {
+                FormDivider()
+                FormRow(
+                    icon: "clock",
+                    iconTint: DS.Colors.info,
+                    title: "Ends",
+                    trailing: { DateTimePickerPills(date: endDateBinding, range: date...) }
+                )
+            }
+        }
+        .disabled(isExternal)
+        .opacity(isExternal ? 0.6 : 1.0)
+    }
+
+    /// "Add to Calendar" card. Toggle row on top; calendar picker appears as
+    /// a second row when the toggle is on. Footnote explains the off-state.
+    private var calendarCard: some View {
+        FormSection(
+            footnote: addToCalendar ? nil : "Event will be stored locally in Bubo only."
+        ) {
+            FormToggleRow(
+                icon: "tray.full.fill",
+                iconTint: DS.Colors.calendarLabel,
+                title: "Add to Calendar",
+                isOn: $addToCalendar
+            )
+
+            if addToCalendar && !availableCalendars.isEmpty {
+                FormDivider()
+                FormRow(
+                    icon: "calendar.badge.plus",
+                    iconTint: skin.resolvedSuccessColor,
+                    title: "Calendar",
+                    trailing: {
+                        Picker("", selection: $selectedCalendarId) {
+                            ForEach(availableCalendars) { cal in
+                                Text(cal.title).tag(cal.id)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                        .fixedSize()
+                    }
+                )
+            }
+        }
+    }
+
+    /// Quiet "More options" chevron — not a full section card, just a
+    /// centered disclosure affordance.
+    private var moreOptionsDisclosure: some View {
+        Button {
+            withAnimation(skin.resolvedMicroAnimation) {
+                showMoreOptions.toggle()
+            }
+        } label: {
+            HStack(spacing: DS.Spacing.xs) {
+                Text("More options")
+                    .font(.caption.weight(.medium))
+                Image(systemName: showMoreOptions ? "chevron.up" : "chevron.down")
+                    .font(.caption2.weight(.semibold))
+            }
+            .foregroundStyle(skinAccent)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.vertical, DS.Spacing.xs)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// "Color" card: headline label above a row of `ColorDotButton`s.
+    private var colorCard: some View {
+        FormSection(header: "Color") {
+            HStack(spacing: DS.Spacing.xs) {
+                ForEach(EventColorTag.allCases, id: \.self) { tag in
+                    ColorDotButton(
+                        tag: tag,
+                        isActive: selectedColorTag == tag,
+                        action: {
+                            Haptics.tap()
+                            selectedColorTag = selectedColorTag == tag ? nil : tag
+                        }
+                    )
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(DS.Spacing.md)
+        }
+        .disabled(isExternal)
+        .opacity(isExternal ? 0.6 : 1.0)
+    }
+
+    /// "Context" card: single row with a tag icon and free-text input.
+    private var contextCard: some View {
+        FormSection(header: "Context") {
+            HStack(spacing: DS.Spacing.md) {
+                IconTile(systemImage: "tag.fill", tint: skin.resolvedTextSecondary)
+                TextField("Project or category", text: $contextTag, prompt: Text("e.g. backend, design, personal").foregroundStyle(skin.resolvedTextSecondary))
+                    .textFieldStyle(.plain)
+                    .font(.body)
+            }
+            .padding(.horizontal, DS.Spacing.md)
+            .frame(minHeight: DS.Size.backlogRowHeight)
+        }
+        .disabled(isExternal)
+        .opacity(isExternal ? 0.6 : 1.0)
+    }
+
+    /// "Details" card: location row + notes body with emoji picker.
+    private var detailsCard: some View {
+        FormSection(header: "Details") {
+            HStack(spacing: DS.Spacing.md) {
+                IconTile(systemImage: "location.fill", tint: DS.Colors.info)
+                TextField("Location", text: $location, prompt: Text("Zoom link or room 302").foregroundStyle(skin.resolvedTextSecondary))
+                    .textFieldStyle(.plain)
+                    .font(.body)
+                    .focused($isLocationFocused)
+            }
+            .padding(.horizontal, DS.Spacing.md)
+            .frame(minHeight: DS.Size.backlogRowHeight)
+
+            FormDivider()
+
+            HStack(alignment: .top, spacing: DS.Spacing.md) {
+                IconTile(systemImage: "note.text", tint: skin.resolvedTextSecondary)
+                    .padding(.top, DS.Spacing.xxs)
+
+                FormattableTextView(text: $description, prompt: "Add notes, agenda, or attachments", promptStyle: skin.resolvedTextSecondary)
+                    .frame(minHeight: 60, maxHeight: 160)
+
+                EmojiPickerButton(text: $description)
+                    .padding(.top, DS.Spacing.xxs)
+            }
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.sm)
+        }
+        .disabled(isExternal)
+        .opacity(isExternal ? 0.6 : 1.0)
+    }
+
+    /// "Reminders" card: custom-reminders toggle + (when on) per-reminder
+    /// rows + inline add control + preset pills.
+    @ViewBuilder
+    private var remindersCard: some View {
+        FormSection(header: "Reminders") {
+            FormToggleRow(
+                icon: "bell.fill",
+                iconTint: skin.resolvedWarningColor,
+                title: "Custom reminders",
+                subtitle: useCustomReminders
+                    ? nil
+                    : "Default: \(reminderService.defaultReminderMinutesList.map { DS.formatMinutes($0) }.joined(separator: ", "))",
+                isOn: $useCustomReminders
+            )
+
+            if useCustomReminders {
+                ForEach(Array(reminderMinutes.sorted().enumerated()), id: \.element) { _, minutes in
+                    FormDivider()
+                    FormRow(
+                        icon: "bell",
+                        iconTint: skin.resolvedWarningColor,
+                        title: DS.formatMinutes(minutes) + " before",
+                        trailing: {
+                            Button(role: .destructive) {
+                                reminderMinutes.removeAll { $0 == minutes }
+                            } label: {
+                                Image(systemName: "minus.circle.fill")
+                                    .foregroundStyle(skin.resolvedDestructiveColor)
+                            }
+                            .buttonStyle(.borderless)
+                        }
+                    )
+                }
+
+                FormDivider()
+                remindersAddRow
+            }
+        }
+    }
+
+    private var remindersAddRow: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            HStack(spacing: DS.Spacing.md) {
+                IconTile(systemImage: "plus", tint: skin.resolvedSuccessColor)
+                Text(DS.formatMinutes(newReminderValue))
+                    .font(.body)
+                    .monospacedDigit()
+                    .foregroundStyle(skin.resolvedTextPrimary)
+                    .frame(minWidth: 70, alignment: .leading)
+                Stepper("Reminder minutes", value: $newReminderValue, in: 1...120)
+                    .labelsHidden()
+                Spacer()
+                Button {
+                    if !reminderMinutes.contains(newReminderValue) {
+                        reminderMinutes.append(newReminderValue)
+                    }
+                } label: {
+                    Label("Add", systemImage: "plus")
+                }
+                .buttonStyle(.action(role: .primary, size: .compact))
+            }
+
+            let available = Self.presetReminders.filter { !reminderMinutes.contains($0) }
+            if !available.isEmpty {
+                HStack(spacing: DS.Spacing.xs) {
+                    ForEach(available.prefix(5), id: \.self) { preset in
+                        Button {
+                            Haptics.tap()
+                            reminderMinutes.append(preset)
+                        } label: {
+                            Text(DS.formatMinutes(preset))
+                                .font(.caption)
+                        }
+                        .buttonStyle(.action(role: .secondary, size: .compact))
+                    }
+                }
+                .padding(.leading, IconTile.size + DS.Spacing.md)
+            }
+        }
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.sm)
     }
 
     // MARK: - Draft Persistence

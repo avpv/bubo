@@ -44,127 +44,30 @@ struct EventDetailView: View {
             )
 
             ScrollView {
-                VStack(alignment: .leading, spacing: DS.Spacing.xl) {
-                    // Title
-                    HStack(spacing: DS.Spacing.sm) {
-                        Text(event.title)
-                            .font(.system(.title2, design: skin.resolvedFontDesign, weight: .bold))
-                            .accessibilityAddTraits(.isHeader)
+                // Reminders-style inset groups: one rhythm of radii, quiet
+                // section labels, colored icon tiles on every row.
+                VStack(alignment: .leading, spacing: DS.Spacing.lg) {
+                    titleCard
 
-                        if event.isRecurring {
-                            Image(systemName: "repeat")
-                                .font(.system(size: DS.Size.iconMedium, weight: .medium))
-                                .foregroundStyle(skin.resolvedTextSecondary)
-                                .contentTransition(.symbolEffect(.replace))
-                                .accessibilityLabel("Recurring event")
-                        }
+                    dateTimeSection(now: now)
+
+                    if let meetingURL = event.meetingLink, let serviceName = event.meetingServiceName {
+                        meetingSection(url: meetingURL, service: serviceName)
                     }
 
-                    VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                        // Date & Time group
-                        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                            Label(event.formattedDate, systemImage: "calendar")
-                                .font(.subheadline)
-                                .foregroundStyle(skin.resolvedTextSecondary)
-                                .accessibilityLabel("Date: \(event.formattedDate)")
-
-                            Label(event.formattedTimeRange, systemImage: "clock")
-                                .font(.subheadline)
-                                .foregroundStyle(skin.resolvedTextSecondary)
-                                .accessibilityLabel("Time: \(event.formattedTimeRange)")
-                        }
-
-                        // Live countdown with seconds — tap to open timer screen
-                        Button {
-                            Haptics.tap()
-                            onTimer?(event)
-                        } label: {
-                            countdownSection(now: now)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-
-                        // Meeting link — prominent Join button
-                        if let meetingURL = event.meetingLink, let serviceName = event.meetingServiceName {
-                            Button {
-                                Haptics.tap()
-                                NSWorkspace.shared.open(meetingURL)
-                            } label: {
-                                Label("Join \(serviceName)", systemImage: "video.fill")
-                                    .font(.subheadline)
-                                    .fontWeight(skin.resolvedHeadlineFontWeight)
-                                    .foregroundStyle(DS.contrastingForeground(for: skinAccent))
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, DS.Spacing.sm)
-                                    .background(
-                                        LinearGradient(
-                                            colors: [skinAccent, skin.resolvedSecondaryAccent],
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
-                                    )
-                                    .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
-                            }
-                            .buttonStyle(.plain)
-                        }
-
-                        // Location
-                        if let location = event.location, !location.isEmpty {
-                            Label(location, systemImage: "location.fill")
-                                .font(.subheadline)
-                                .foregroundStyle(skin.resolvedTextSecondary)
-                        }
+                    if let location = event.location, !location.isEmpty {
+                        locationSection(location)
                     }
-                    .padding(DS.Spacing.lg)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .skinPlatter(skin)
-                    .skinPlatterDepth(skin)
 
-                    // Description
                     if let description = event.description, !description.isEmpty {
-                        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                            Label("Notes", systemImage: "note.text")
-                                .font(.caption)
-                                .fontWeight(.medium)
-                                .foregroundStyle(skin.resolvedTextTertiary)
-                            MarkdownText(text: description)
-                                .font(.subheadline)
-                                .foregroundStyle(skin.resolvedTextSecondary)
-                                .lineSpacing(DS.Typography.bodyLineSpacing)
-                                .textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        .padding(DS.Spacing.lg)
-                        .skinPlatter(skin)
-                        .skinPlatterDepth(skin)
+                        notesSection(description)
                     }
 
-                    // Calendar name
-                    if let calName = event.calendarName {
-                        Label(calName, systemImage: "tray.full")
-                            .font(.caption)
-                            .foregroundStyle(DS.Colors.calendarLabel)
-                    }
-
-                    // Recurrence / Pomodoro info
-                    if let rule = event.recurrenceRule {
-                        recurrenceSection(rule)
-                    } else if event.eventType == .pomodoro {
-                        Label("Pomodoro", systemImage: "timer")
-                            .font(.caption)
-                            .fontWeight(.medium)
-                            .foregroundStyle(skin.resolvedTextTertiary)
-                    }
-
-                    // Active Reminders (Default + Custom)
-                    let activeReminders = reminderService.activeReminderMinutes(for: event)
-                    if !activeReminders.isEmpty {
-                        remindersSection(activeReminders)
-                    }
+                    organisationSection()
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(DS.Spacing.xl)
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.vertical, DS.Spacing.lg)
             }
             .frame(maxHeight: .infinity)
 
@@ -233,67 +136,108 @@ struct EventDetailView: View {
         } // TimelineView
     }
 
-    // MARK: - Countdown Section
+    // MARK: - Title Card
+    //
+    // Mirrors Apple Reminders' hero title card: big bold text in its own
+    // platter, with a recurrence glyph inline if applicable.
+
+    private var titleCard: some View {
+        HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.sm) {
+            Text(event.title)
+                .font(.system(.title2, design: skin.resolvedFontDesign, weight: .bold))
+                .foregroundStyle(skin.resolvedTextPrimary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityAddTraits(.isHeader)
+
+            if event.isRecurring {
+                Image(systemName: "repeat")
+                    .font(.system(size: DS.Size.iconMedium, weight: .medium))
+                    .foregroundStyle(skin.resolvedTextSecondary)
+                    .contentTransition(.symbolEffect(.replace))
+                    .accessibilityLabel("Recurring event")
+            }
+        }
+        .padding(DS.Spacing.lg)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .skinPlatter(skin)
+        .skinPlatterDepth(skin)
+    }
+
+    // MARK: - Date & Time Section
 
     @ViewBuilder
-    private func countdownSection(now: Date) -> some View {
-        let secondsUntilStart = Int(event.startDate.timeIntervalSince(now))
-        let secondsUntilEnd = Int(event.endDate.timeIntervalSince(now))
+    private func dateTimeSection(now: Date) -> some View {
+        FormSection(header: "Date & Time") {
+            FormRow(
+                icon: "calendar",
+                iconTint: skin.resolvedDestructiveColor,
+                title: "Date",
+                trailing: {
+                    Text(event.formattedDate)
+                        .monospacedDigit()
+                }
+            )
+            FormDivider()
+            FormRow(
+                icon: "clock",
+                iconTint: DS.Colors.info,
+                title: "Time",
+                trailing: {
+                    Text(event.formattedTimeRange)
+                        .monospacedDigit()
+                }
+            )
 
-        if secondsUntilStart > 0 {
-            // Event hasn't started yet
-            countdownDisplay(
-                label: "Starts in",
-                totalSeconds: secondsUntilStart,
-                color: DS.urgencyColor(minutesUntil: secondsUntilStart / 60, skin: skin)
-            )
-        } else if secondsUntilEnd > 0 {
-            // Event is in progress
-            countdownDisplay(
-                label: "Ends in",
-                totalSeconds: secondsUntilEnd,
-                color: skinAccent
-            )
-        } else {
-            // Event has ended
-            Label("Ended", systemImage: "checkmark.circle")
-                .font(.subheadline)
-                .foregroundStyle(skin.resolvedTextTertiary)
+            let secondsUntilStart = Int(event.startDate.timeIntervalSince(now))
+            let secondsUntilEnd = Int(event.endDate.timeIntervalSince(now))
+            if secondsUntilStart > 0 || secondsUntilEnd > 0 {
+                FormDivider()
+                countdownRow(
+                    secondsUntilStart: secondsUntilStart,
+                    secondsUntilEnd: secondsUntilEnd
+                )
+            } else {
+                FormDivider()
+                FormRow(
+                    icon: "checkmark.circle",
+                    iconTint: skin.resolvedTextTertiary,
+                    title: "Ended"
+                )
+            }
         }
     }
 
-    private func countdownDisplay(label: String, totalSeconds: Int, color: Color) -> some View {
-        let days = totalSeconds / 86400
-        let hours = (totalSeconds % 86400) / 3600
-        let minutes = (totalSeconds % 3600) / 60
-        let seconds = totalSeconds % 60
+    private func countdownRow(secondsUntilStart: Int, secondsUntilEnd: Int) -> some View {
+        let inProgress = secondsUntilStart <= 0
+        let total = inProgress ? secondsUntilEnd : secondsUntilStart
+        let label = inProgress ? "Ends in" : "Starts in"
+        let color = inProgress
+            ? skinAccent
+            : DS.urgencyColor(minutesUntil: total / 60, skin: skin)
 
-        return HStack(spacing: DS.Spacing.md) {
-            Image(systemName: "timer")
-                .font(.system(size: DS.Size.iconMedium))
-                .foregroundStyle(color)
+        let days = total / 86400
+        let hours = (total % 86400) / 3600
+        let minutes = (total % 3600) / 60
+        let seconds = total % 60
 
-            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                Text(label)
-                    .font(.caption2)
-                    .foregroundStyle(skin.resolvedTextTertiary)
-
+        return FormRow(
+            icon: "timer",
+            iconTint: color,
+            title: label,
+            isNavigable: true,
+            action: {
+                Haptics.tap()
+                onTimer?(event)
+            },
+            trailing: {
                 HStack(spacing: DS.Spacing.xs) {
-                    if days > 0 {
-                        countdownUnit(value: days, unit: "d")
-                    }
-                    countdownUnit(value: hours, unit: "h")
+                    if days > 0 { countdownUnit(value: days, unit: "d") }
+                    if days > 0 || hours > 0 { countdownUnit(value: hours, unit: "h") }
                     countdownUnit(value: minutes, unit: "m")
                     countdownUnit(value: seconds, unit: "s")
                 }
             }
-
-            Spacer()
-
-            Image(systemName: "chevron.right")
-                .font(.system(size: DS.Size.iconSmall, weight: .semibold))
-                .foregroundStyle(DS.Colors.textQuaternary)
-        }
+        )
     }
 
     private func countdownUnit(value: Int, unit: String) -> some View {
@@ -308,26 +252,117 @@ struct EventDetailView: View {
         }
     }
 
-    // MARK: - Recurrence Section
+    // MARK: - Meeting Section
 
-    @ViewBuilder
-    private func recurrenceSection(_ rule: RecurrenceRule) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            Label(
-                event.eventType == .pomodoro ? "Pomodoro" : "Repeats",
-                systemImage: event.eventType == .pomodoro ? "timer" : "repeat"
+    private func meetingSection(url: URL, service: String) -> some View {
+        FormSection {
+            FormRow(
+                icon: "video.fill",
+                iconTint: skin.resolvedSuccessColor,
+                title: "Join \(service)",
+                isNavigable: true,
+                action: {
+                    Haptics.tap()
+                    NSWorkspace.shared.open(url)
+                }
             )
-            .font(.caption)
-            .fontWeight(.medium)
-            .foregroundStyle(skin.resolvedTextTertiary)
+        }
+    }
 
-            Text(rule.displayText)
+    // MARK: - Location Section
+
+    private func locationSection(_ location: String) -> some View {
+        FormSection {
+            FormRow(
+                icon: "location.fill",
+                iconTint: DS.Colors.info,
+                title: location
+            )
+        }
+    }
+
+    // MARK: - Notes Section
+
+    private func notesSection(_ description: String) -> some View {
+        FormSection(header: "Notes") {
+            MarkdownText(text: description)
                 .font(.subheadline)
                 .foregroundStyle(skin.resolvedTextSecondary)
+                .lineSpacing(DS.Typography.bodyLineSpacing)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(DS.Spacing.md)
+        }
+    }
 
-            if event.eventType == .pomodoro {
-                let workMin = Int(event.endDate.timeIntervalSince(event.startDate) / 60)
-                let breakMin = max(rule.interval - workMin, 0)
+    // MARK: - Organisation Section
+
+    /// Groups calendar membership, recurrence/Pomodoro info and reminders
+    /// under a single "Organisation" heading — matches the Apple Reminders
+    /// Organisation card (List, Tags, Subtasks).
+    @ViewBuilder
+    private func organisationSection() -> some View {
+        let hasCalendar = event.calendarName != nil
+        let rule = event.recurrenceRule
+        let isPomodoro = event.eventType == .pomodoro
+        let activeReminders = reminderService.activeReminderMinutes(for: event)
+        let hasOrg = hasCalendar || rule != nil || isPomodoro || !activeReminders.isEmpty
+
+        if hasOrg {
+            FormSection(header: "Organisation") {
+                if let calName = event.calendarName {
+                    FormRow(
+                        icon: "tray.full.fill",
+                        iconTint: DS.Colors.calendarLabel,
+                        title: "Calendar",
+                        trailing: {
+                            Text(calName)
+                                .lineLimit(1)
+                        }
+                    )
+                }
+
+                if let rule {
+                    if hasCalendar { FormDivider() }
+                    recurrenceRow(rule)
+                } else if isPomodoro {
+                    if hasCalendar { FormDivider() }
+                    FormRow(
+                        icon: "timer",
+                        iconTint: skinAccent,
+                        title: "Pomodoro"
+                    )
+                }
+
+                if !activeReminders.isEmpty {
+                    if hasCalendar || rule != nil || isPomodoro { FormDivider() }
+                    remindersRow(activeReminders)
+                }
+            }
+        }
+    }
+
+    // MARK: - Recurrence Row
+
+    @ViewBuilder
+    private func recurrenceRow(_ rule: RecurrenceRule) -> some View {
+        let isPomo = event.eventType == .pomodoro
+        FormRow(
+            icon: isPomo ? "timer" : "repeat",
+            iconTint: isPomo ? skinAccent : skin.resolvedSuccessColor,
+            title: isPomo ? "Pomodoro" : "Repeats",
+            trailing: {
+                Text(rule.displayText)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+        )
+
+        if isPomo {
+            let workMin = Int(event.endDate.timeIntervalSince(event.startDate) / 60)
+            let breakMin = max(rule.interval - workMin, 0)
+            FormDivider()
+            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                 FlowLayout(spacing: DS.Spacing.xs) {
                     pomodoroBadge("\(workMin)\u{00A0}min work", icon: "brain.head.profile", color: skinAccent)
                     pomodoroBadge("\(breakMin)\u{00A0}min break", icon: "cup.and.saucer", color: skin.resolvedSuccessColor)
@@ -336,43 +371,54 @@ struct EventDetailView: View {
                     }
                 }
             }
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.sm)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
 
-            if rule.frequency == .weekly && !rule.weekdays.isEmpty {
-                HStack(spacing: DS.Spacing.xs) {
-                    ForEach(Weekday.allCases.filter { rule.weekdays.contains($0) }, id: \.self) { day in
-                        Text(day.shortName)
-                            .font(.caption2)
-                            .padding(.horizontal, DS.Spacing.md)
-                            .padding(.vertical, DS.Spacing.xs)
-                            .background(skinAccent.opacity(DS.Opacity.mediumFill))
-                            .clipShape(Capsule())
-                            .accessibilityLabel(day.fullName)
-                    }
+        if rule.frequency == .weekly && !rule.weekdays.isEmpty {
+            FormDivider()
+            HStack(spacing: DS.Spacing.xs) {
+                ForEach(Weekday.allCases.filter { rule.weekdays.contains($0) }, id: \.self) { day in
+                    Text(day.shortName)
+                        .font(.caption2)
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.xs)
+                        .background(skinAccent.opacity(DS.Opacity.mediumFill))
+                        .clipShape(Capsule())
+                        .accessibilityLabel(day.fullName)
                 }
+                Spacer()
             }
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.sm)
         }
     }
 
-    // MARK: - Reminders Section
+    // MARK: - Reminders Row
 
-    @ViewBuilder
-    private func remindersSection(_ reminders: [Int]) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            Label("Reminders", systemImage: "bell.fill")
-                .font(.caption)
-                .fontWeight(.medium)
-                .foregroundStyle(skin.resolvedTextTertiary)
-
-            HStack(spacing: DS.Spacing.xs) {
-                ForEach(reminders.sorted(), id: \.self) { min in
-                    Text(DS.formatMinutes(min))
-                        .font(.caption)
-                        .padding(.horizontal, DS.Spacing.md)
-                        .padding(.vertical, DS.Spacing.xs)
-                        .adaptiveBadgeFill(skin.resolvedTextSecondary)
-                        .clipShape(Capsule())
+    private func remindersRow(_ reminders: [Int]) -> some View {
+        FormRow(
+            icon: "bell.fill",
+            iconTint: skin.resolvedWarningColor,
+            title: "Reminders",
+            trailing: {
+                HStack(spacing: DS.Spacing.xs) {
+                    ForEach(reminders.sorted().prefix(3), id: \.self) { min in
+                        Text(DS.formatMinutes(min))
+                            .font(.caption)
+                            .padding(.horizontal, DS.Spacing.sm)
+                            .padding(.vertical, 2)
+                            .adaptiveBadgeFill(skin.resolvedTextSecondary)
+                            .clipShape(Capsule())
+                    }
+                    if reminders.count > 3 {
+                        Text("+\(reminders.count - 3)")
+                            .font(.caption2)
+                            .foregroundStyle(skin.resolvedTextTertiary)
+                    }
                 }
             }
-        }
+        )
     }
 }
