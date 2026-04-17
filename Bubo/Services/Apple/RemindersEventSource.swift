@@ -1,0 +1,77 @@
+import Foundation
+
+// MARK: - Fetched Reminder
+
+/// Value-type projection of an Apple Reminder that `RemindersSyncService`
+/// actually uses. Pulling only these two fields out of `EKReminder`
+/// keeps the sync service free of EventKit types, so it can be driven
+/// against a `FakeRemindersEventSource` in tests — the real
+/// `EKReminder` class can't be constructed without a `EKEventStore`.
+struct FetchedReminder: Sendable, Equatable {
+    let calendarItemId: String
+    let task: BacklogTask
+}
+
+// MARK: - Reminders Event Source
+
+/// Protocol abstraction over `AppleRemindersService` so
+/// `RemindersSyncService` can be driven with a fake in tests. Mirrors
+/// `CalendarEventSource` in shape — `hasAccess` as an instance property
+/// plus a handful of verbs. Notification names (`remindersDataChanged`,
+/// `authorizationDidChange`) stay on `AppleRemindersService` as static
+/// topics; tests post them directly to trigger observers.
+protocol RemindersEventSource: AnyObject {
+    var hasAccess: Bool { get }
+
+    /// Fetch incomplete reminders from the given lists (empty = all),
+    /// converted into the value-type `FetchedReminder`. The default
+    /// duration is applied to any reminder without an explicit estimate.
+    func fetchIncompleteTasks(
+        fromListIds: [String],
+        defaultDuration: Int
+    ) async -> [FetchedReminder]
+
+    /// Mark an existing reminder as completed. Idempotent — calling on
+    /// an already-completed reminder is a no-op in the concrete impl.
+    func completeReminder(calendarItemId: String) throws
+
+    /// Create a new reminder from a `BacklogTask`. Returns the
+    /// newly-assigned `calendarItemIdentifier` so the caller can store
+    /// it on the owning task and dedup on next import.
+    func createReminder(
+        from task: BacklogTask,
+        inListId: String?
+    ) throws -> String
+
+    /// Push field updates (title, priority, deadline, context) to an
+    /// existing reminder. Concrete implementations do field-level
+    /// diffing and return `true` only when a save actually happened.
+    @discardableResult
+    func updateReminder(calendarItemId: String, from task: BacklogTask) throws -> Bool
+
+    /// Push a due-date change (or clear). Same diff-then-save semantics
+    /// as `updateReminder`.
+    @discardableResult
+    func updateReminderDueDate(calendarItemId: String, date: Date?) throws -> Bool
+
+    func deleteReminder(calendarItemId: String) throws
+}
+
+// MARK: AppleRemindersService conformance
+
+extension AppleRemindersService: RemindersEventSource {
+    var hasAccess: Bool { AppleRemindersService.hasAccess }
+
+    func fetchIncompleteTasks(
+        fromListIds: [String],
+        defaultDuration: Int
+    ) async -> [FetchedReminder] {
+        let reminders = await fetchIncompleteReminders(fromListIds: fromListIds)
+        return reminders.map { reminder in
+            FetchedReminder(
+                calendarItemId: reminder.calendarItemIdentifier,
+                task: toBacklogTask(reminder, defaultDuration: defaultDuration)
+            )
+        }
+    }
+}
