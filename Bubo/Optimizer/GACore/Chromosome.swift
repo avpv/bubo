@@ -40,6 +40,17 @@ protocol Chromosome: Hashable {
     /// Genotypic distance to another chromosome, normalized to [0, 1].
     /// Used for diversity measurement, crowding, and fitness sharing.
     func distance(to other: Self) -> Double
+
+    /// Hook that the GA calls after every offspring's fitness is known so
+    /// chromosome-local mutation operator state can self-adapt on the
+    /// observed outcome. `improved` is true when the offspring's fitness
+    /// beat the baseline used for bandit reward (max parent fitness).
+    /// Default no-op; conforming types opt in by overriding.
+    ///
+    /// Used by `ScheduleChromosome` to update the CMA-ES-lite per-gene
+    /// sigma vector via the 1/5 success rule. Called once per offspring
+    /// per generation, so the cost is amortized by the mutation itself.
+    mutating func adaptOperatorState(improved: Bool)
 }
 
 extension Chromosome {
@@ -60,6 +71,10 @@ extension Chromosome {
     func distance(to other: Self) -> Double {
         self == other ? 0 : 1
     }
+
+    /// Default: no adaptive operator state. Permutation genomes
+    /// (PomodoroSequenceChromosome) rely on this.
+    mutating func adaptOperatorState(improved: Bool) {}
 }
 
 // MARK: - Schedule Chromosome
@@ -110,6 +125,20 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
     /// aggressively, and vice versa. 0 = disabled (the GA's externally-set
     /// rate wins, preserving pre-existing behaviour).
     var selfAdaptiveMutationRate: Double = 0
+
+    /// Per-gene standard deviation used by the CMA-ES-lite Gaussian shift
+    /// operator (replacing the fixed ±30 min uniform shift from Phase 1).
+    /// Each entry is in seconds and evolves via the 1/5 success rule:
+    /// after a mutation on gene `i`, the GA multiplies `perGeneSigma[i]`
+    /// by 1.2 if the resulting chromosome improved on its parent, else
+    /// 0.85. This lets the step size per gene shrink in regions where
+    /// fine-tuning works and grow where we need bigger jumps.
+    ///
+    /// `nil` on freshly-constructed chromosomes — the mutation operator
+    /// lazily initializes every entry to `CMAESConfig.initialSigmaSeconds`.
+    /// Crossover inherits the per-parent mean so well-adapted step sizes
+    /// propagate through the population.
+    var perGeneSigma: [TimeInterval]?
 
     /// Equality ignores needsEvaluation and caches — two chromosomes with the same genes and fitness are equal.
     static func == (lhs: ScheduleChromosome, rhs: ScheduleChromosome) -> Bool {
@@ -349,16 +378,20 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
     }
 
     /// Build a crossover child. Factored out so every crossover strategy
-    /// (singlePoint, twoPoint, uniform, dayBlock) propagates self-adaptive
-    /// parameters the same way: child.rate = mean(parents) jittered by ±5%.
-    /// Jitter keeps the rate-gene under selection pressure; without it the
-    /// whole population would converge on the mean almost immediately.
+    /// (singlePoint, twoPoint, uniform, dayBlock, linkageTree) propagates
+    /// self-adaptive parameters the same way: child inherits each parent's
+    /// mutation-rate and CMA-ES-lite sigma vector by arithmetic mean with
+    /// small jitter. Jitter keeps the rate- and sigma-genes under
+    /// selection pressure; without it the whole population would converge
+    /// on the mean almost immediately.
     static func makeChild(
         genes: [ScheduleGene],
         parents: (ScheduleChromosome, ScheduleChromosome),
         rng: GARandom
     ) -> ScheduleChromosome {
         var child = ScheduleChromosome(genes: genes, needsEvaluation: true)
+
+        // Self-adaptive mutation rate (Phase 1)
         let p1 = parents.0.selfAdaptiveMutationRate
         let p2 = parents.1.selfAdaptiveMutationRate
         if p1 > 0 || p2 > 0 {
@@ -366,7 +399,82 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
             let jitter = rng.double(in: -0.05...0.05) * mean
             child.selfAdaptiveMutationRate = min(0.8, max(0.01, mean + jitter))
         }
+
+        // CMA-ES-lite per-gene sigma: align by gene index length, take
+        // parent-wise mean where both are present, fall back to the single
+        // available parent, and leave nil when neither parent has been
+        // evaluated yet (lazy-init will seed on first mutation).
+        let s1 = parents.0.perGeneSigma
+        let s2 = parents.1.perGeneSigma
+        if s1 != nil || s2 != nil {
+            var sigmas = [TimeInterval](repeating: CMAESConfig.initialSigmaSeconds, count: genes.count)
+            for i in 0..<genes.count {
+                let v1 = s1.flatMap { i < $0.count ? $0[i] : nil }
+                let v2 = s2.flatMap { i < $0.count ? $0[i] : nil }
+                let base: TimeInterval
+                switch (v1, v2) {
+                case let (a?, b?): base = (a + b) / 2
+                case let (a?, nil): base = a
+                case let (nil, b?): base = b
+                default: base = CMAESConfig.initialSigmaSeconds
+                }
+                // Log-uniform jitter so the ratio stays balanced (avoids
+                // drift toward either floor when arithmetic jitter is
+                // repeatedly clipped).
+                let logJitter = rng.double(in: -0.1...0.1)
+                let jittered = base * exp(logJitter)
+                sigmas[i] = min(CMAESConfig.maxSigmaSeconds,
+                                max(CMAESConfig.minSigmaSeconds, jittered))
+            }
+            child.perGeneSigma = sigmas
+        }
+
         return child
+    }
+
+    // MARK: - CMA-ES-lite Sigma Adaptation
+
+    /// Ensure `perGeneSigma` is populated with the initial sigma. Called
+    /// lazily by the Gaussian shift operator so freshly-constructed
+    /// chromosomes pay nothing until they actually mutate.
+    mutating func lazyInitSigmas() {
+        if perGeneSigma == nil || perGeneSigma?.count != genes.count {
+            perGeneSigma = [TimeInterval](
+                repeating: CMAESConfig.initialSigmaSeconds,
+                count: genes.count
+            )
+        }
+    }
+
+    /// Update the per-gene sigma vector via the 1/5 success rule after a
+    /// mutation's outcome is known. Genes that were actually mutated
+    /// (captured in `mutatedGeneIndices`) get sigma grown on success
+    /// (`multiplier = 1.2`) and shrunk on failure (`0.85`); unmutated
+    /// genes are untouched. Clamped to [minSigma, maxSigma].
+    ///
+    /// Called from the GA loop once offspring are evaluated — it needs
+    /// the comparison against the parent, which the mutate step can't
+    /// see.
+    mutating func adaptSigmas(improved: Bool) {
+        guard let mutated = mutatedGeneIndices, !mutated.isEmpty else { return }
+        lazyInitSigmas()
+        guard var sigmas = perGeneSigma else { return }
+        let multiplier = improved
+            ? CMAESConfig.successMultiplier
+            : CMAESConfig.failureMultiplier
+        for idx in mutated where idx < sigmas.count {
+            let next = sigmas[idx] * multiplier
+            sigmas[idx] = min(CMAESConfig.maxSigmaSeconds,
+                              max(CMAESConfig.minSigmaSeconds, next))
+        }
+        perGeneSigma = sigmas
+    }
+
+    /// Adopt the generic `adaptOperatorState` hook from `Chromosome` so
+    /// the GA loop can drive sigma adaptation without a type-specific
+    /// cast. Forwards to `adaptSigmas(improved:)`.
+    mutating func adaptOperatorState(improved: Bool) {
+        adaptSigmas(improved: improved)
     }
 
     /// Strategy-aware crossover that delegates to the Crossover enum.
@@ -432,9 +540,16 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
 
             switch strategy {
             case 0:
-                // Small time shift: +-30 min
-                let shift = context.rng.double(in: -1800.0...1800.0)
-                let newStart = max(genes[i].startTime.addingTimeInterval(shift), floor)
+                // CMA-ES-lite Gaussian shift. Replaces the uniform ±30-min
+                // shift with N(0, σ_i) sampling, where σ_i is a per-gene
+                // step size adapted via the 1/5 success rule (see
+                // `adaptSigmas(improvedForGenes:)`). Gives the GA a smooth
+                // knob between fine-tuning (small σ) and local search
+                // (large σ) without a config change.
+                lazyInitSigmas()
+                let sigma = perGeneSigma?[i] ?? CMAESConfig.initialSigmaSeconds
+                let delta = context.rng.gaussian(mean: 0.0, stdDev: sigma)
+                let newStart = max(genes[i].startTime.addingTimeInterval(delta), floor)
                 genes[i] = genes[i].withStartTime(
                     clampToWorkingHours(newStart, duration: genes[i].duration, workingHours: context.workingHours, calendar: cal, floor: floor)
                 )
@@ -551,6 +666,22 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         let cal = context.calendar
         let horizonStart = context.planningHorizon.start
 
+        // Pass 0: AC-3-lite dependency-chain feasibility pruning.
+        //
+        // Propagate the dependency graph to derive each gene's true
+        // earliest-start (max over own earliestStart and every
+        // transitive prerequisite's endTime). When that floor plus the
+        // gene's duration exceeds its deadline, the gene is infeasible
+        // and placing it will only trigger hard-constraint penalties
+        // downstream. For *droppable* genes we flip `isIncluded = false`
+        // instead, which (a) lets the GA honour the drop permission
+        // rather than fighting it through repeated mutations, and (b)
+        // removes the infeasible gene from later overlap resolution so
+        // it doesn't displace feasible neighbours. Non-droppable genes
+        // stay flagged (they will still score poorly via the deadline
+        // objective, which the GA uses for gradient information).
+        applyDependencyFeasibilityPruning(context: context)
+
         // Pass 1: Clamp to working hours and planning horizon
         for i in genes.indices where genes[i].isIncluded {
             let event = context.movableEvents.first { $0.id == genes[i].eventId }
@@ -630,6 +761,83 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         }
 
         needsEvaluation = true
+    }
+
+    /// AC-3-lite dependency feasibility pruning.
+    ///
+    /// For every included gene, derive the tightest possible earliest-
+    /// start time by transitively closing over `dependsOn`:
+    ///   floor_i = max(event_i.earliestStart, floor_j + duration_j for j in deps(i))
+    /// We iterate to a fixed point (bounded by number of genes) — any
+    /// residual change after that implies a cycle, which we tolerate by
+    /// leaving affected genes as-is (their repair still runs later).
+    /// When `floor_i + duration_i > event_i.deadline`, the gene is
+    /// provably infeasible and we drop it when allowed (isDroppable).
+    /// Non-droppable infeasible genes stay flagged; the deadline
+    /// objective will carry the gradient.
+    private mutating func applyDependencyFeasibilityPruning(context: OptimizerContext) {
+        let horizonStart = context.planningHorizon.start
+        let eventById: [String: OptimizableEvent] = Dictionary(
+            uniqueKeysWithValues: context.movableEvents.map { ($0.id, $0) }
+        )
+
+        // Seed floors from events' own earliestStart and the horizon.
+        var floors: [String: Date] = [:]
+        for gene in genes where gene.isIncluded {
+            let event = eventById[gene.eventId]
+            let base = [horizonStart, event?.earliestStart].compactMap { $0 }.max() ?? horizonStart
+            floors[gene.eventId] = base
+        }
+
+        // Fixed-event prerequisites are immovable, so their end times are
+        // a stable floor source. Include them too — otherwise a gene
+        // depending on a fixed event wouldn't see the correct floor
+        // derivation.
+        var fixedEndById: [String: Date] = [:]
+        for event in context.fixedEvents {
+            fixedEndById[event.id] = event.endDate
+        }
+
+        // Propagate floors to a fixed point. `geneCount + 1` iterations
+        // is enough to resolve any acyclic dependency chain; a cycle
+        // would never converge so the bound also caps wasted work.
+        let maxIterations = genes.count + 1
+        var changed = true
+        var iter = 0
+        while changed && iter < maxIterations {
+            changed = false
+            iter += 1
+            for gene in genes where gene.isIncluded {
+                guard let event = eventById[gene.eventId] else { continue }
+                var floor = floors[gene.eventId] ?? horizonStart
+                for depId in event.dependsOn {
+                    // Prerequisite end time = dep's floor + dep's duration
+                    // (for included movable genes), or fixed event's end.
+                    if let depFloor = floors[depId],
+                       let depGene = genes.first(where: { $0.eventId == depId && $0.isIncluded }) {
+                        let depEnd = depFloor.addingTimeInterval(depGene.duration)
+                        if depEnd > floor { floor = depEnd }
+                    } else if let fixedEnd = fixedEndById[depId] {
+                        if fixedEnd > floor { floor = fixedEnd }
+                    }
+                }
+                if let current = floors[gene.eventId], floor > current {
+                    floors[gene.eventId] = floor
+                    changed = true
+                }
+            }
+        }
+
+        // Feasibility check + droppable pruning.
+        for i in genes.indices where genes[i].isIncluded {
+            guard let event = eventById[genes[i].eventId] else { continue }
+            let floor = floors[genes[i].eventId] ?? horizonStart
+            if let deadline = event.deadline,
+               floor.addingTimeInterval(genes[i].duration) > deadline,
+               event.isDroppable {
+                genes[i].isIncluded = false
+            }
+        }
     }
 
     /// Kahn's algorithm on the `dependsOn` graph among included genes, with

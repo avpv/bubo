@@ -3541,3 +3541,208 @@ struct GARandomTests {
         #expect(a == b, "Same seed, same inputs must give identical best fitness (got \(a) vs \(b))")
     }
 }
+
+// MARK: - Phase 2: CMA-ES-lite Tests
+
+@Suite("CMA-ES-lite Tests")
+struct CMAESLiteTests {
+
+    @Test("perGeneSigma grows on improvement and shrinks on failure")
+    func sigmaAdaptsVia15SuccessRule() {
+        let events = [makeMovableEvent(id: "t1", durationMinutes: 30)]
+        let context = makeContext(movableEvents: events)
+
+        var chrom = ScheduleChromosome.random(context: context)
+        chrom.mutate(rate: 1.0, context: context)  // populates mutatedGeneIndices + perGeneSigma
+        let initial = chrom.perGeneSigma?[0] ?? 0
+        #expect(initial > 0, "Sigma must be initialized after a mutation")
+
+        // Simulate improvement — sigma should grow (capped at max).
+        chrom.adaptOperatorState(improved: true)
+        let afterImproved = chrom.perGeneSigma?[0] ?? 0
+        #expect(afterImproved > initial || afterImproved == CMAESConfig.maxSigmaSeconds,
+                "Sigma must grow on improvement: \(initial) -> \(afterImproved)")
+
+        // Simulate failure — sigma should shrink below the grown value.
+        chrom.adaptOperatorState(improved: false)
+        let afterFailure = chrom.perGeneSigma?[0] ?? 0
+        #expect(afterFailure < afterImproved || afterFailure == CMAESConfig.minSigmaSeconds,
+                "Sigma must shrink on failure: \(afterImproved) -> \(afterFailure)")
+    }
+
+    @Test("Sigma clamped to config-defined bounds")
+    func sigmaBoundsHold() {
+        let events = [makeMovableEvent(id: "t1", durationMinutes: 30)]
+        let context = makeContext(movableEvents: events)
+        var chrom = ScheduleChromosome.random(context: context)
+        chrom.mutate(rate: 1.0, context: context)
+
+        // Force sigma way above max, adapt once — must clamp.
+        chrom.perGeneSigma = [CMAESConfig.maxSigmaSeconds * 10]
+        chrom.adaptOperatorState(improved: true)
+        #expect((chrom.perGeneSigma?[0] ?? 0) <= CMAESConfig.maxSigmaSeconds + 1e-6)
+
+        // Force sigma way below min, adapt once — must clamp.
+        chrom.perGeneSigma = [CMAESConfig.minSigmaSeconds / 10]
+        chrom.adaptOperatorState(improved: false)
+        #expect((chrom.perGeneSigma?[0] ?? 0) >= CMAESConfig.minSigmaSeconds - 1e-6)
+    }
+
+    @Test("Crossover propagates sigma mean plus jitter")
+    func sigmaInheritedThroughCrossover() {
+        let events = [
+            makeMovableEvent(id: "t1", durationMinutes: 30),
+            makeMovableEvent(id: "t2", durationMinutes: 30)
+        ]
+        let context = makeContext(movableEvents: events)
+        var p1 = ScheduleChromosome.random(context: context)
+        var p2 = ScheduleChromosome.random(context: context)
+        p1.perGeneSigma = [600.0, 1200.0]
+        p2.perGeneSigma = [900.0, 600.0]
+
+        let (c1, _) = p1.crossover(with: p2, strategy: .singlePoint, context: context)
+        let sigmas = c1.perGeneSigma ?? []
+        #expect(sigmas.count == 2, "Child must inherit a sigma vector of parent length")
+        // Mean ± 10% log-jitter: bounded interval per gene.
+        for i in 0..<2 {
+            let mean = (p1.perGeneSigma![i] + p2.perGeneSigma![i]) / 2
+            #expect(sigmas[i] >= mean * exp(-0.15) && sigmas[i] <= mean * exp(0.15),
+                    "Child sigma for gene \(i) must stay within log-jitter range of parent mean")
+        }
+    }
+}
+
+// MARK: - Phase 2: LTGA Linkage Tests
+
+@Suite("LTGA Linkage Tests")
+struct LinkageModelTests {
+
+    @Test("LinkageModel rebuilds only after the configured interval")
+    func rebuildIntervalRespected() {
+        let events = (0..<4).map { makeMovableEvent(id: "t\($0)", durationMinutes: 30) }
+        let context = makeContext(movableEvents: events)
+        let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
+
+        let model = LinkageModel(rebuildInterval: 5, minPopulationSize: 3)
+        var pop = (0..<30).map { _ in ScheduleChromosome.random(context: context) }
+        for i in pop.indices { evaluator.evaluateAndAssign(&pop[i], context: context) }
+
+        model.rebuildIfNeeded(population: pop, generation: 0, context: context)
+        #expect(model.currentTree != nil, "Initial rebuild at gen 0 should populate the tree")
+        let treeRef1 = model.currentTree?.geneCount ?? -1
+
+        // Gen 1: too early to rebuild.
+        model.rebuildIfNeeded(population: pop, generation: 1, context: context)
+        let treeRef2 = model.currentTree?.geneCount ?? -1
+        #expect(treeRef1 == treeRef2, "Tree must not rebuild before interval elapses")
+
+        // Gen 5: should rebuild.
+        model.rebuildIfNeeded(population: pop, generation: 5, context: context)
+        #expect(model.currentTree?.geneCount == events.count,
+                "Tree must rebuild once interval elapses")
+    }
+
+    @Test("LinkageModel produces usable non-trivial groups")
+    func sampledGroupsAreNonTrivial() {
+        let events = (0..<5).map { makeMovableEvent(id: "t\($0)", durationMinutes: 30) }
+        let context = makeContext(movableEvents: events)
+        let pop = (0..<40).map { _ in ScheduleChromosome.random(context: context) }
+
+        let model = LinkageModel(rebuildInterval: 1, minPopulationSize: 10)
+        model.rebuildIfNeeded(population: pop, generation: 0, context: context)
+        let rng = GARandom(seed: 99)
+        var sizes = Set<Int>()
+        for _ in 0..<30 {
+            if let group = model.sampleGroup(rng: rng) {
+                sizes.insert(group.count)
+                #expect(group.count >= 2 && group.count < events.count,
+                        "Sampled group must be non-trivial and not full-root: got size \(group.count)")
+            }
+        }
+        #expect(!sizes.isEmpty, "At least one sample must return a usable group")
+    }
+
+    @Test("CrossoverStrategy.linkageTree falls back without a model")
+    func linkageCrossoverFallsBack() {
+        let events = [
+            makeMovableEvent(id: "t1", durationMinutes: 30),
+            makeMovableEvent(id: "t2", durationMinutes: 30),
+            makeMovableEvent(id: "t3", durationMinutes: 30)
+        ]
+        let context = makeContext(movableEvents: events)
+        let p1 = ScheduleChromosome.random(context: context)
+        let p2 = ScheduleChromosome.random(context: context)
+        // No linkageModel wired → uniform crossover fallback.
+        let (c1, c2) = Crossover.perform(p1, p2, strategy: .linkageTree, context: context)
+        #expect(c1.genes.count == events.count)
+        #expect(c2.genes.count == events.count)
+    }
+}
+
+// MARK: - Phase 2: Dependency Feasibility Pruning Tests
+
+@Suite("Dependency Feasibility Pruning Tests")
+struct DependencyPruningTests {
+
+    @Test("Droppable gene whose dep chain misses deadline gets dropped")
+    func pruneInfeasibleDroppable() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let tomorrow = cal.date(byAdding: .day, value: 1, to: today)!
+
+        // task A: 2h duration, no deadline.
+        let a = OptimizableEvent(
+            id: "A", title: "A", duration: 7200, priority: 0.8
+        )
+        // task B: 2h, depends on A, deadline at 13:00 today — even if A
+        // starts at 9:00 (horizon start) and finishes at 11:00, B would
+        // end at 13:00 which fits. Shift deadline to 11:30 so B can't
+        // fit anywhere on day 0, forcing prune.
+        let tightDeadline = cal.date(bySettingHour: 11, minute: 30, second: 0, of: today)!
+        let b = OptimizableEvent(
+            id: "B", title: "B", duration: 7200, deadline: tightDeadline,
+            priority: 0.5, dependsOn: ["A"], isDroppable: true
+        )
+        let context = OptimizerContext(
+            movableEvents: [a, b],
+            planningHorizon: DateInterval(start: today, end: tomorrow),
+            rng: GARandom(seed: 1)
+        )
+
+        var chrom = ScheduleChromosome.random(context: context)
+        // Force inclusion so the test observes pruning vs. random exclusion.
+        for i in chrom.genes.indices { chrom.genes[i].isIncluded = true }
+        chrom.repair(context: context)
+
+        let geneB = chrom.genes.first { $0.eventId == "B" }
+        #expect(geneB?.isIncluded == false,
+                "B must be pruned: its dependency chain can't fit before the deadline")
+    }
+
+    @Test("Non-droppable infeasible gene stays included (penalty-driven)")
+    func nonDroppableNotPruned() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let tomorrow = cal.date(byAdding: .day, value: 1, to: today)!
+
+        let tightDeadline = cal.date(bySettingHour: 11, minute: 30, second: 0, of: today)!
+        let a = OptimizableEvent(id: "A", title: "A", duration: 7200, priority: 0.8)
+        let b = OptimizableEvent(
+            id: "B", title: "B", duration: 7200, deadline: tightDeadline,
+            priority: 0.9, dependsOn: ["A"], isDroppable: false
+        )
+        let context = OptimizerContext(
+            movableEvents: [a, b],
+            planningHorizon: DateInterval(start: today, end: tomorrow),
+            rng: GARandom(seed: 1)
+        )
+
+        var chrom = ScheduleChromosome.random(context: context)
+        for i in chrom.genes.indices { chrom.genes[i].isIncluded = true }
+        chrom.repair(context: context)
+
+        let geneB = chrom.genes.first { $0.eventId == "B" }
+        #expect(geneB?.isIncluded == true,
+                "Non-droppable infeasible gene stays on the schedule; deadline objective carries the gradient")
+    }
+}

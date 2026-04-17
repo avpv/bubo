@@ -156,6 +156,14 @@ struct OptimizerContext: Sendable {
     /// reward statistics accumulate.
     let mutationBandit: MutationBandit?
 
+    /// Optional shared linkage model. When set, `CrossoverStrategy.linkageTree`
+    /// samples gene groups from the model's tree; the GA loop calls
+    /// `rebuildIfNeeded` every generation so the tree tracks the current
+    /// population's MI structure. `nil` disables LTGA crossover (callers
+    /// that don't want the per-generation update cost, or that configure a
+    /// crossover strategy that doesn't need it).
+    let linkageModel: LinkageModel?
+
     init(
         fixedEvents: [CalendarEvent] = [],
         movableEvents: [OptimizableEvent] = [],
@@ -168,7 +176,8 @@ struct OptimizerContext: Sendable {
         participantAvailability: [String: [DateInterval]] = [:],
         calendar: Calendar = .current,
         rng: GARandom = GARandom(),
-        mutationBandit: MutationBandit? = nil
+        mutationBandit: MutationBandit? = nil,
+        linkageModel: LinkageModel? = nil
     ) {
         self.fixedEvents = fixedEvents
         self.movableEvents = movableEvents
@@ -179,6 +188,7 @@ struct OptimizerContext: Sendable {
         self.calendar = calendar
         self.rng = rng
         self.mutationBandit = mutationBandit
+        self.linkageModel = linkageModel
     }
 }
 
