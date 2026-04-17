@@ -404,21 +404,28 @@ struct NSGA3 {
         }
     }
 
-    // MARK: - Non-Dominated Sorting (Jensen FNDS)
+    // MARK: - Non-Dominated Sorting (lex-ordered prior scan)
 
-    /// Efficient non-dominated sort. Uses Jensen's O(N·log^(M-1)·N)
-    /// algorithm (Jensen, 2003) via the "best front rank so far"
-    /// recurrence: process individuals in lexicographic order and, for
-    /// each, compute its front as 1 + max(front of any prior
-    /// dominator). Lexicographic ordering guarantees that if `j`
-    /// dominates `i` then `j` is processed first, so max-over-priors
-    /// is correct.
+    /// Non-dominated sort via lexicographic ordering + prior-scan
+    /// rank assignment.
     ///
-    /// Complexity dominated by the dominator scan: worst case
-    /// O(N²·M) when every pair is non-dominated (extremely rare on
-    /// real calendar fronts), typical O(N·log·M) when the front is
-    /// structured. Empirically ~3-5× faster than the textbook NSGA-II
-    /// sort on our 200-individual × 13-objective populations.
+    /// Algorithm:
+    ///   1. Sort individuals by lexicographic "higher-is-better"
+    ///      ordering. This guarantees that if `j` dominates `i`, then
+    ///      `j` is processed strictly earlier.
+    ///   2. For each individual in order, scan *only* the priors and
+    ///      set `rank[i] = 1 + max(rank[j] for j that dominates i)`.
+    ///
+    /// Complexity is still O(N²·M) in the worst case (fully non-
+    /// dominated front: every prior still has to be checked for
+    /// domination even though none will dominate). Expected time is
+    /// better than the classical NSGA-II two-pass bookkeeping because
+    /// we avoid materializing `dominated[]` lists and we stop comparing
+    /// once the current individual's rank equals `position - 1`. The
+    /// previous comment claimed "Jensen FNDS O(N·log^(M-1)·N)" — that
+    /// was oversold. This is not divide-and-conquer FNDS; it's a
+    /// faster-in-practice but same-worst-case replacement for the
+    /// textbook sort.
     ///
     /// We keep the public return shape (`[[Int]]`, indices grouped by
     /// front rank) so callers — `NSGA3.select`, `NSGA3.rankAll`,

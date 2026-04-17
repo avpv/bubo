@@ -39,7 +39,7 @@ struct IslandConfiguration: Sendable {
     /// endpoint is the destination. Topology still determines *which*
     /// islands exchange; this flag only controls *who sends to whom*.
     /// Productivity is measured as `bestEver.rawFitness`.
-    var routeByProductivity: Bool
+    var routeByProductivity: Bool = false
 
     /// Fast configs: 2 islands, frequent migration, no diversification.
     /// Adds modest exploration benefit without significant overhead.

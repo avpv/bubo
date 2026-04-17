@@ -33,15 +33,43 @@ final class BuboOptimizer {
     /// user feedback nudges weights across runs.
     let contextualCrossoverHead: GeneAttentionHead = GeneAttentionHead()
 
-    /// Per-instance surrogate model. Fitness-feature pairs are
-    /// normalized to `[0, 1]^16` via `ScheduleFeatureVector`, so
-    /// training samples from prior optimizations transfer meaningfully
-    /// to new workloads: similar plan shapes produce similar fitness
-    /// predictions regardless of which specific events they contain.
-    /// Different workloads land in feature-space regions the RBF hasn't
-    /// seen, triggering real evaluations — the surrogate's uncertainty
-    /// gate handles domain shift automatically.
-    let surrogate: RBFSurrogate = RBFSurrogate()
+    /// Per-task-signature surrogate cache. The surrogate's training
+    /// set is workload-sensitive: even though features are normalized
+    /// to `[0, 1]^16`, a morning-heavy plan on a 5-event workload has
+    /// different fitness semantics than the same shape on a 20-event
+    /// workload because the underlying objectives scale with event
+    /// count. A naive instance-level shared surrogate cross-contaminates.
+    ///
+    /// Signature captures the coarse workload identity:
+    /// `hash(eventIDs, duration-bucketed, preference-weights)`. Two
+    /// optimizations on the same calendar reuse the surrogate;
+    /// substantially different workloads get a fresh one. `kCapacity`
+    /// bounds memory when many distinct workloads arrive (oldest
+    /// surrogate evicts on overflow).
+    private var surrogatesBySignature: [TaskSignature: RBFSurrogate] = [:]
+    private var surrogateLRU: [TaskSignature] = []
+    private let surrogateCacheCapacity = 8
+
+    /// Look up the surrogate for this context's task signature,
+    /// creating and caching one on miss. Evicts the oldest surrogate
+    /// when the cache is full (LRU).
+    private func surrogate(for context: OptimizerContext) -> RBFSurrogate {
+        let signature = TaskSignature(context: context)
+        if let existing = surrogatesBySignature[signature] {
+            // Move to the front of the LRU list.
+            surrogateLRU.removeAll { $0 == signature }
+            surrogateLRU.append(signature)
+            return existing
+        }
+        let fresh = RBFSurrogate()
+        surrogatesBySignature[signature] = fresh
+        surrogateLRU.append(signature)
+        while surrogateLRU.count > surrogateCacheCapacity {
+            let evicted = surrogateLRU.removeFirst()
+            surrogatesBySignature.removeValue(forKey: evicted)
+        }
+        return fresh
+    }
 
     // MARK: - State
 
@@ -123,9 +151,9 @@ final class BuboOptimizer {
         // safe to capture across threads.
         let gradientRefiner = ScheduleGradientRefiner()
 
-        // Surrogate reused across runs from the instance-level
-        // `self.surrogate` — see field doc for rationale.
-        let surrogate = self.surrogate
+        // Surrogate keyed by task signature — see
+        // `surrogate(for:)` doc for the persistence policy.
+        let surrogate = self.surrogate(for: adjustedContext)
 
         // Canonical objective ordering for surrogate's objective-vector
         // prediction. Must match the order `MultiObjectiveContext`
