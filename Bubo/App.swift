@@ -17,6 +17,7 @@ struct BuboApp: App {
     @State private var optimizerService: OptimizerService
     @State private var agentService = AgentService()
     @State private var remindersSyncService: RemindersSyncService
+    @State private var cloudServices: CloudServicesCoordinator
 
     /// Local-only container for Apple Calendar event cache. Stays out of
     /// CloudKit because EventKit already syncs iCloud calendars at the OS
@@ -135,17 +136,18 @@ struct BuboApp: App {
             cloudEnabled: cloudPreference
         ) { try Self.makeBacklogContainer(cloudEnabled: $0) }
 
-        // Surface CloudKit sync state to the UI and pull the settings /
-        // learning-data side of iCloud in one go. Events from the shared
-        // `NSPersistentCloudKitContainer` are posted globally, so we don't
-        // need to hand container references in — the monitor just needs
-        // to be alive before the first import/export fires.
+        // Surface CloudKit + KV sync state to the UI behind a single
+        // coordinator. Events from `NSPersistentCloudKitContainer` are
+        // posted globally, so we don't need to hand container references
+        // in — the coordinator just needs to be alive before the first
+        // import/export fires.
+        let cloudCoordinator = CloudServicesCoordinator()
         if cloudPreference {
-            CloudKitSyncMonitor.shared.start(
+            cloudCoordinator.start(
                 containerIdentifier: "iCloud.\(Bundle.main.bundleIdentifier ?? "")"
             )
-            CloudSyncService.shared.performInitialSync()
         }
+        _cloudServices = State(wrappedValue: cloudCoordinator)
 
         let s = ReminderSettings.load()
         _settings = State(wrappedValue: s)
@@ -380,6 +382,7 @@ struct BuboApp: App {
                 .environment(optimizerService)
                 .environment(agentService)
                 .environment(remindersSyncService)
+                .environment(cloudServices)
         }
         .windowToolbarStyle(.unified(showsTitle: true))
     }

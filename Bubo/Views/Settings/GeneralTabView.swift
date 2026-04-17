@@ -389,25 +389,17 @@ struct WallpaperSectionView: View {
 
 // MARK: - iCloud Sync Section
 
-/// Surfaces CloudKit account + sync state so the user can tell whether
-/// backlog sync is actually working. Reads live state from the shared
-/// `CloudKitSyncMonitor` (populated by
-/// `NSPersistentCloudKitContainer.eventChangedNotification` observers).
-///
-/// The enable toggle writes `BuboApp.cloudSyncPreferenceKey` in
-/// UserDefaults. The SwiftData backlog container is built once in
-/// `BuboApp.init` against that flag, so toggling it requires a restart
-/// before CloudKit mirroring actually turns on or off — the UI makes
-/// that explicit instead of silently pretending a live switch worked.
+/// Surfaces iCloud status through the `CloudServicesCoordinator` facade.
+/// The toggle writes `BuboApp.cloudSyncPreferenceKey` in UserDefaults;
+/// the SwiftData containers are built once per launch against that flag,
+/// so the UI shows a "restart required" hint when the toggle has
+/// diverged from the launch-time snapshot.
 struct CloudSyncStatusSection: View {
     @Environment(\.activeSkin) private var skin
-    @State private var monitor = CloudKitSyncMonitor.shared
-    @State private var kvSync = CloudSyncService.shared
+    @Environment(CloudServicesCoordinator.self) private var cloud
+    @Environment(ReminderService.self) private var reminderService
     @AppStorage(BuboApp.cloudSyncPreferenceKey) private var cloudSyncEnabled: Bool = false
 
-    /// Snapshot of the flag taken when the view first appeared. Used to
-    /// detect a pending toggle and show the "restart required" hint until
-    /// the app is relaunched.
     @State private var launchTimeCloudSyncEnabled: Bool = UserDefaults.standard
         .bool(forKey: BuboApp.cloudSyncPreferenceKey)
 
@@ -424,57 +416,26 @@ struct CloudSyncStatusSection: View {
                 .foregroundStyle(skin.resolvedWarningColor)
             }
 
-            LabeledContent("Backlog (CloudKit)") {
+            LabeledContent("Status") {
                 HStack(spacing: DS.Spacing.xxs) {
-                    if launchTimeCloudSyncEnabled, monitor.phase != .idle {
+                    if cloud.isRunning, cloud.cloudKit.phase != .idle {
                         ProgressView().controlSize(.small)
                     }
-                    Text(backlogStatusLabel)
+                    Text(cloud.summary)
                         .font(.caption)
                         .foregroundStyle(
-                            launchTimeCloudSyncEnabled && monitor.lastError != nil
+                            cloud.isWarning
                                 ? skin.resolvedWarningColor
                                 : skin.resolvedTextSecondary
                         )
                 }
             }
 
-            LabeledContent("Settings (iCloud KV)") {
-                Text(kvStatusLabel)
+            if let persistenceError = reminderService.lastPersistenceError {
+                Label(persistenceError, systemImage: "exclamationmark.triangle")
                     .font(.caption)
-                    .foregroundStyle(
-                        kvIsWarning
-                            ? skin.resolvedWarningColor
-                            : skin.resolvedTextSecondary
-                    )
+                    .foregroundStyle(skin.resolvedWarningColor)
             }
-        }
-    }
-
-    private var backlogStatusLabel: String {
-        guard launchTimeCloudSyncEnabled else { return "Disabled" }
-        return monitor.summary
-    }
-
-    private var kvStatusLabel: String {
-        if !launchTimeCloudSyncEnabled { return "Disabled" }
-        switch kvSync.status {
-        case .idle: return "Idle"
-        case .synced(let date):
-            return "Synced \(date.formatted(.relative(presentation: .named)))"
-        case .quotaWarning(let bytes):
-            let kb = bytes / 1024
-            return "Approaching quota (\(kb) KB / 1024 KB)"
-        case .error(let msg): return msg
-        case .unavailable: return "Not signed in to iCloud"
-        }
-    }
-
-    private var kvIsWarning: Bool {
-        guard launchTimeCloudSyncEnabled else { return false }
-        switch kvSync.status {
-        case .quotaWarning, .error, .unavailable: return true
-        default: return false
         }
     }
 }

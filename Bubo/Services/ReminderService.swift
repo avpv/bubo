@@ -24,12 +24,22 @@ class ReminderService {
     private var settings: ReminderSettings
     private var firedReminders: Set<String> = []
     private let eventCache: EventCache
-    /// Container for user-authored event state (local events, excluded
-    /// recurrences, reminder overrides). CloudKit-mirrored when enabled,
-    /// so every write goes through an upsert path and reads collapse
-    /// duplicates defensively — there's no `@Attribute(.unique)` safety
-    /// net on these models.
-    private let userEventsContainer: ModelContainer
+
+    /// Persistence stores. Split out of `ReminderService` so the service
+    /// can focus on scheduling / notifications / in-memory state while
+    /// each store owns CloudKit-safe upsert for its own model.
+    private let localEventStore: LocalEventStore
+    private let excludedOccurrenceStore: ExcludedOccurrenceStore
+    private let reminderOverrideStore: ReminderOverrideStore
+
+    /// Aggregated persistence error surfaced to the UI. Picks the first
+    /// non-nil error across the three stores so Settings can show one
+    /// warning instead of three.
+    var lastPersistenceError: String? {
+        localEventStore.lastError
+            ?? excludedOccurrenceStore.lastError
+            ?? reminderOverrideStore.lastError
+    }
     private nonisolated(unsafe) var settingsObserver: Any?
     private nonisolated(unsafe) var cloudImportObserver: Any?
     private var excludedOccurrences: Set<String> = []
@@ -109,8 +119,10 @@ class ReminderService {
         userEventsContainer: ModelContainer
     ) {
         self.settings = settings
-        self.userEventsContainer = userEventsContainer
         self.eventCache = EventCache(modelContainer: eventCacheContainer)
+        self.localEventStore = LocalEventStore(container: userEventsContainer)
+        self.excludedOccurrenceStore = ExcludedOccurrenceStore(container: userEventsContainer)
+        self.reminderOverrideStore = ReminderOverrideStore(container: userEventsContainer)
         requestNotificationPermission()
         loadLocalEvents()
         loadLocalRemindersOverrides()
@@ -489,74 +501,25 @@ class ReminderService {
         scheduleReminders(for: RecurrenceExpander.expand(event, excludedIds: excludedOccurrences))
     }
 
-    /// Upsert the in-memory `localEvents` into the persisted store. All
-    /// dedup + insert/update/delete bookkeeping lives in
-    /// `UpsertReconciler`; this method just translates between the
-    /// `CalendarEvent` domain type and the `PersistedLocalEvent` model.
+    /// Thin delegate to `LocalEventStore`. Filters to events that are
+    /// worth keeping in memory (upcoming or recurring) — the store itself
+    /// returns everything so other call sites can make their own choice.
     private func saveLocalEvents() {
-        let context = ModelContext(userEventsContainer)
-        let now = Date()
-        do {
-            try UpsertReconciler.reconcile(
-                context: context,
-                desired: localEvents,
-                desiredKey: \.id,
-                existingKey: \PersistedLocalEvent.eventId,
-                updatedAt: \PersistedLocalEvent.updatedAt,
-                apply: { row, event in row.apply(event, updatedAt: now) },
-                makeNew: { event in PersistedLocalEvent(from: event, updatedAt: now) }
-            )
-            try context.save()
-        } catch {
-            logger.error("Failed to save local events: \(error)")
-        }
+        localEventStore.save(localEvents)
     }
 
     private func loadLocalEvents() {
-        let context = ModelContext(userEventsContainer)
-        do {
-            let persisted = try context.fetch(FetchDescriptor<PersistedLocalEvent>())
-            // Collapse duplicates by keeping the row with the latest
-            // updatedAt. Ensures CloudKit-introduced doubles don't leak
-            // into the in-memory array between save-triggered reconciles.
-            let deduped = Dictionary(grouping: persisted, by: \.eventId)
-                .compactMap { $1.max(by: { $0.updatedAt < $1.updatedAt }) }
-            localEvents = deduped
-                .map { $0.toCalendarEvent() }
-                .filter { $0.isUpcoming || $0.recurrenceRule != nil }
-            loadExcludedOccurrences()
-        } catch {
-            logger.error("Failed to load local events: \(error)")
-        }
+        localEvents = localEventStore.loadAll()
+            .filter { $0.isUpcoming || $0.recurrenceRule != nil }
+        loadExcludedOccurrences()
     }
 
     private func saveExcludedOccurrences() {
-        let context = ModelContext(userEventsContainer)
-        let now = Date()
-        do {
-            try UpsertReconciler.reconcile(
-                context: context,
-                desired: Array(excludedOccurrences),
-                desiredKey: { $0 },
-                existingKey: \PersistedExcludedOccurrence.occurrenceId,
-                updatedAt: \PersistedExcludedOccurrence.updatedAt,
-                apply: { _, _ in /* no mutable fields besides the key itself */ },
-                makeNew: { id in PersistedExcludedOccurrence(occurrenceId: id, updatedAt: now) }
-            )
-            try context.save()
-        } catch {
-            logger.error("Failed to save excluded occurrences: \(error)")
-        }
+        excludedOccurrenceStore.save(excludedOccurrences)
     }
 
     private func loadExcludedOccurrences() {
-        let context = ModelContext(userEventsContainer)
-        do {
-            let persisted = try context.fetch(FetchDescriptor<PersistedExcludedOccurrence>())
-            excludedOccurrences = Set(persisted.map { $0.occurrenceId })
-        } catch {
-            logger.error("Failed to load excluded occurrences: \(error)")
-        }
+        excludedOccurrences = excludedOccurrenceStore.loadAll()
     }
 
     // MARK: - Local Reminder Overrides
@@ -576,50 +539,11 @@ class ReminderService {
     }
 
     private func saveLocalRemindersOverrides() {
-        let context = ModelContext(userEventsContainer)
-        let now = Date()
-        let items = localRemindersOverrides.map { (key: $0.key, value: $0.value) }
-        do {
-            try UpsertReconciler.reconcile(
-                context: context,
-                desired: items,
-                desiredKey: { $0.key },
-                existingKey: \PersistedReminderOverride.eventId,
-                updatedAt: \PersistedReminderOverride.updatedAt,
-                apply: { row, item in
-                    // Guard against a pointless `updatedAt` bump when the
-                    // user toggled something unrelated — CloudKit will
-                    // otherwise re-propagate the same row to every device.
-                    if row.minutes != item.value {
-                        row.minutes = item.value
-                        row.updatedAt = now
-                    }
-                },
-                makeNew: { item in
-                    PersistedReminderOverride(
-                        eventId: item.key, minutes: item.value, updatedAt: now
-                    )
-                }
-            )
-            try context.save()
-        } catch {
-            logger.error("Failed to save reminder overrides: \(error)")
-        }
+        reminderOverrideStore.save(localRemindersOverrides)
     }
 
     private func loadLocalRemindersOverrides() {
-        let context = ModelContext(userEventsContainer)
-        do {
-            let persisted = try context.fetch(FetchDescriptor<PersistedReminderOverride>())
-            // Collapse duplicates by latest updatedAt.
-            let deduped = Dictionary(grouping: persisted, by: \.eventId)
-                .compactMap { $1.max(by: { $0.updatedAt < $1.updatedAt }) }
-            localRemindersOverrides = Dictionary(
-                uniqueKeysWithValues: deduped.map { ($0.eventId, $0.minutes) }
-            )
-        } catch {
-            logger.error("Failed to load reminder overrides: \(error)")
-        }
+        localRemindersOverrides = reminderOverrideStore.loadAll()
     }
 
     // MARK: - CloudKit Reconcile
