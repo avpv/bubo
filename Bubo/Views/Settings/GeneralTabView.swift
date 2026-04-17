@@ -389,61 +389,64 @@ struct WallpaperSectionView: View {
 
 // MARK: - iCloud Sync Section
 
-/// Surfaces CloudKit account + sync state so the user can tell whether
-/// backlog sync is actually working. Reads live state from the shared
-/// `CloudKitSyncMonitor` (populated by
-/// `NSPersistentCloudKitContainer.eventChangedNotification` observers).
+/// Surfaces iCloud status through the `CloudServicesCoordinator` facade.
+/// All decision logic lives in `CloudSyncStatusSectionViewModel` — this
+/// view is a pure layout shell so it stops mixing `@AppStorage` reads
+/// with environment observation and UserDefaults snapshots.
 struct CloudSyncStatusSection: View {
     @Environment(\.activeSkin) private var skin
-    @State private var monitor = CloudKitSyncMonitor.shared
-    @State private var kvSync = CloudSyncService.shared
+    @Environment(CloudServicesCoordinator.self) private var cloud
+    @Environment(ReminderService.self) private var reminderService
+    @AppStorage(BuboApp.cloudSyncPreferenceKey) private var cloudSyncEnabled: Bool = false
+
+    /// Snapshot the flag at view init. If the user toggles during this
+    /// session, `isRestartPending` on the VM flips and the restart hint
+    /// appears; `launchTimeCloudSyncEnabled` itself doesn't change.
+    @State private var launchTimeCloudSyncEnabled: Bool =
+        CloudSyncStatusSectionViewModel.launchTimeCloudSyncEnabled()
+
+    private var viewModel: CloudSyncStatusSectionViewModel {
+        CloudSyncStatusSectionViewModel(
+            cloudSyncEnabled: cloudSyncEnabled,
+            launchTimeCloudSyncEnabled: launchTimeCloudSyncEnabled,
+            cloud: cloud,
+            persistenceError: reminderService.lastPersistenceError
+        )
+    }
 
     var body: some View {
         SettingsPlatter("iCloud Sync") {
-            LabeledContent("Backlog (CloudKit)") {
+            Toggle("Sync backlog & settings via iCloud", isOn: $cloudSyncEnabled)
+
+            if viewModel.isRestartPending {
+                Label(
+                    "Restart Bubo to apply the change.",
+                    systemImage: "arrow.triangle.2.circlepath"
+                )
+                .font(.caption)
+                .foregroundStyle(skin.resolvedWarningColor)
+            }
+
+            LabeledContent("Status") {
                 HStack(spacing: DS.Spacing.xxs) {
-                    if monitor.phase != .idle {
+                    if viewModel.isSyncInProgress {
                         ProgressView().controlSize(.small)
                     }
-                    Text(monitor.summary)
+                    Text(viewModel.statusText)
                         .font(.caption)
                         .foregroundStyle(
-                            monitor.lastError != nil
+                            viewModel.statusIsWarning
                                 ? skin.resolvedWarningColor
                                 : skin.resolvedTextSecondary
                         )
                 }
             }
 
-            LabeledContent("Settings (iCloud KV)") {
-                Text(kvStatusLabel)
+            if let persistenceError = viewModel.persistenceError {
+                Label(persistenceError, systemImage: "exclamationmark.triangle")
                     .font(.caption)
-                    .foregroundStyle(
-                        kvIsWarning
-                            ? skin.resolvedWarningColor
-                            : skin.resolvedTextSecondary
-                    )
+                    .foregroundStyle(skin.resolvedWarningColor)
             }
-        }
-    }
-
-    private var kvStatusLabel: String {
-        switch kvSync.status {
-        case .idle: return "Idle"
-        case .synced(let date):
-            return "Synced \(date.formatted(.relative(presentation: .named)))"
-        case .quotaWarning(let bytes):
-            let kb = bytes / 1024
-            return "Approaching quota (\(kb) KB / 1024 KB)"
-        case .error(let msg): return msg
-        case .unavailable: return "Not signed in to iCloud"
-        }
-    }
-
-    private var kvIsWarning: Bool {
-        switch kvSync.status {
-        case .quotaWarning, .error, .unavailable: return true
-        default: return false
         }
     }
 }

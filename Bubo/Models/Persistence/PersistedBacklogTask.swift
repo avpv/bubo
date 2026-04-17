@@ -5,7 +5,7 @@ import SwiftData
 
 /// SwiftData record for a backlog task.  Mirrors the in-memory `BacklogTask`
 /// struct field-for-field.  Stored locally by default; can opt into CloudKit
-/// sync via the `BuboBacklogCloudSyncEnabled` flag (see `BuboApp.makeContainer`).
+/// sync via the `BuboCloudSyncEnabled` flag (see `BuboApp.init`).
 /// All properties have defaults or are optional so the CloudKit mirror is
 /// happy when the flag is on.
 ///

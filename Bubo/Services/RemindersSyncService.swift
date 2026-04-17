@@ -76,6 +76,10 @@ final class RemindersSyncService {
 
     private var settings: ReminderSettings
     private let backlogService: BacklogService
+    /// Apple Reminders access abstracted behind a protocol so tests can
+    /// drive this service with `FakeRemindersEventSource`. Production
+    /// receives `AppleRemindersService.shared`.
+    private let remindersSource: any RemindersEventSource
 
     private nonisolated(unsafe) var syncTimer: Timer?
     private nonisolated(unsafe) var remindersChangedObserver: Any?
@@ -95,9 +99,14 @@ final class RemindersSyncService {
 
     private static let dismissedKey = "BuboDismissedReminderIds"
 
-    init(settings: ReminderSettings, backlogService: BacklogService) {
+    init(
+        settings: ReminderSettings,
+        backlogService: BacklogService,
+        remindersSource: any RemindersEventSource = AppleRemindersService.shared
+    ) {
         self.settings = settings
         self.backlogService = backlogService
+        self.remindersSource = remindersSource
         self.dismissedReminderIds = Self.loadDismissedIds()
 
         // Listen for external changes (user edits Reminders.app, iCloud sync).
@@ -239,7 +248,7 @@ final class RemindersSyncService {
             return
         }
 
-        guard AppleRemindersService.hasAccess else {
+        guard remindersSource.hasAccess else {
             syncError = "Reminders access not granted"
             return
         }
@@ -251,8 +260,9 @@ final class RemindersSyncService {
         syncError = nil
 
         activeSyncTask = Task {
-            let reminders = await AppleRemindersService.shared.fetchIncompleteReminders(
-                fromListIds: settings.selectedRemindersListIds
+            let fetched = await remindersSource.fetchIncompleteTasks(
+                fromListIds: settings.selectedRemindersListIds,
+                defaultDuration: settings.remindersDefaultDurationMinutes
             )
             guard !Task.isCancelled else { return }
 
@@ -268,23 +278,19 @@ final class RemindersSyncService {
                     task.reminderCalendarItemId.map { ($0, task) }
                 }
             )
-            let defaultDuration = settings.remindersDefaultDurationMinutes
-            let activeReminderIds = Set(reminders.map { "reminder_\($0.calendarItemIdentifier)" })
+            let activeReminderIds = Set(fetched.map { "reminder_\($0.calendarItemId)" })
             var added = 0
 
-            for reminder in reminders {
+            for item in fetched {
                 // Skip reminders that are already tracked by an exported Bubo
                 // task — matching on `calendarItemIdentifier` instead of the
                 // `reminder_`-prefixed import ID, because the owning task
                 // keeps its original Bubo-native ID.
-                if existingByReminderItemId[reminder.calendarItemIdentifier] != nil {
+                if existingByReminderItemId[item.calendarItemId] != nil {
                     continue
                 }
 
-                let remote = AppleRemindersService.shared.toBacklogTask(
-                    reminder,
-                    defaultDuration: defaultDuration
-                )
+                let remote = item.task
 
                 if let existing = existingById[remote.id] {
                     // Task is already in the backlog — check whether fields
@@ -411,7 +417,7 @@ final class RemindersSyncService {
 
         markSelfWrite()
         do {
-            try AppleRemindersService.shared.completeReminder(calendarItemId: calendarItemId)
+            try remindersSource.completeReminder(calendarItemId: calendarItemId)
         } catch {
             logger.error("Failed to complete reminder in Apple Reminders: \(error)")
         }
@@ -428,7 +434,7 @@ final class RemindersSyncService {
     /// reminder from a previous export run.
     private func handleTaskAdded(taskId: String) {
         guard settings.remindersExportEnabled,
-              AppleRemindersService.hasAccess else { return }
+              remindersSource.hasAccess else { return }
 
         // Already on the Reminders side — don't double-push.
         if taskId.hasPrefix("reminder_") { return }
@@ -439,7 +445,7 @@ final class RemindersSyncService {
 
         markSelfWrite()
         do {
-            let calendarItemId = try AppleRemindersService.shared.createReminder(
+            let calendarItemId = try remindersSource.createReminder(
                 from: task,
                 inListId: settings.remindersExportListId
             )
@@ -464,7 +470,7 @@ final class RemindersSyncService {
     /// an echo of a just-imported remote edit is a no-op — no redundant save,
     /// no extra `EKEventStoreChanged` fires.
     private func handleTaskUpdated(taskId: String) {
-        guard AppleRemindersService.hasAccess,
+        guard remindersSource.hasAccess,
               let task = backlogService.tasks.first(where: { $0.id == taskId }),
               let calendarItemId = calendarItemId(for: task) else {
             return
@@ -472,7 +478,7 @@ final class RemindersSyncService {
 
         markSelfWrite()
         do {
-            try AppleRemindersService.shared.updateReminder(
+            try remindersSource.updateReminder(
                 calendarItemId: calendarItemId,
                 from: task
             )
@@ -489,7 +495,7 @@ final class RemindersSyncService {
     /// When the task is un-scheduled, falls back to its remaining deadline
     /// (or clears the due date entirely if there's no deadline).
     private func handleTaskScheduleChanged(taskId: String) {
-        guard AppleRemindersService.hasAccess,
+        guard remindersSource.hasAccess,
               let task = backlogService.tasks.first(where: { $0.id == taskId }),
               let calendarItemId = calendarItemId(for: task) else {
             return
@@ -498,7 +504,7 @@ final class RemindersSyncService {
         let newDueDate = task.scheduledDate ?? task.deadline
         markSelfWrite()
         do {
-            try AppleRemindersService.shared.updateReminderDueDate(
+            try remindersSource.updateReminderDueDate(
                 calendarItemId: calendarItemId,
                 date: newDueDate
             )
@@ -521,14 +527,14 @@ final class RemindersSyncService {
 
         // Delete the linked reminder when opt-in is on.
         guard settings.remindersDeletionSync,
-              AppleRemindersService.hasAccess,
+              remindersSource.hasAccess,
               let calendarItemId = calendarItemId(for: removed) else {
             return
         }
 
         markSelfWrite()
         do {
-            try AppleRemindersService.shared.deleteReminder(calendarItemId: calendarItemId)
+            try remindersSource.deleteReminder(calendarItemId: calendarItemId)
         } catch {
             logger.error("Failed to delete reminder in Apple Reminders: \(error)")
         }
