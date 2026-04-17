@@ -321,11 +321,23 @@ struct MenuBarView: View {
                 await optimizerService.runWeekMockSimulator(reminderService: reminderService)
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: AppleCalendarService.authorizationDidChange)) { _ in
-            refreshPermissionSnapshots()
+        .onReceive(NotificationCenter.default.publisher(for: AppleCalendarService.authorizationDidChange)) { note in
+            // Trust the grant result if the service posted one — the
+            // static EKEventStore query can still return `.notDetermined`
+            // for a moment after the continuation resolves, leaving the
+            // banner stuck even though access was granted.
+            if let granted = note.userInfo?["granted"] as? Bool {
+                if calendarHasAccess != granted { calendarHasAccess = granted }
+            } else {
+                refreshPermissionSnapshots()
+            }
         }
-        .onReceive(NotificationCenter.default.publisher(for: AppleRemindersService.authorizationDidChange)) { _ in
-            refreshPermissionSnapshots()
+        .onReceive(NotificationCenter.default.publisher(for: AppleRemindersService.authorizationDidChange)) { note in
+            if let granted = note.userInfo?["granted"] as? Bool {
+                if remindersHasAccess != granted { remindersHasAccess = granted }
+            } else {
+                refreshPermissionSnapshots()
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: RemindersSyncService.didImportTasks)) { notification in
             guard let count = notification.object as? Int, count > 0 else { return }
@@ -1038,9 +1050,22 @@ struct MenuBarView: View {
     /// appear and whenever the services post `authorizationDidChange`, so
     /// the banner reflects access changes from both the in-app Connect
     /// button and System Settings while the popover is open.
+    ///
+    /// Never downgrades a known grant to `.notDetermined` — the static
+    /// EventKit query is occasionally stale right after a grant (TCC
+    /// propagation lag on the shared store), and `.notDetermined` isn't
+    /// reachable from `.fullAccess` without the user revoking via
+    /// System Settings, which the OS reports as `.denied`. Mirrors the
+    /// same guard in `SettingsViewModel.refreshRemindersAuthStatus`.
     private func refreshPermissionSnapshots() {
-        let calendar = AppleCalendarService.hasAccess
-        let reminders = AppleRemindersService.hasAccess
+        let calendarStatus = AppleCalendarService.authorizationStatus
+        let remindersStatus = AppleRemindersService.authorizationStatus
+        let calendar = (calendarHasAccess && calendarStatus == .notDetermined)
+            ? true
+            : calendarStatus == .fullAccess
+        let reminders = (remindersHasAccess && remindersStatus == .notDetermined)
+            ? true
+            : remindersStatus == .fullAccess
         if calendarHasAccess != calendar { calendarHasAccess = calendar }
         if remindersHasAccess != reminders { remindersHasAccess = reminders }
     }
