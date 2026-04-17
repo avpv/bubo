@@ -20,7 +20,7 @@ import Foundation
 /// transport and has its own lifecycle.
 @Observable
 @MainActor
-final class CloudKitSyncMonitor {
+final class CloudKitSyncMonitor: CloudKitSyncMonitoring {
 
     static let shared = CloudKitSyncMonitor()
 
@@ -32,6 +32,9 @@ final class CloudKitSyncMonitor {
 
     // MARK: - Public State
 
+    /// Nested account-status view, kept internal to the monitor because
+    /// no outside code ever pattern-matches on it — only `summary`
+    /// surfaces a string rendering, which is the protocol requirement.
     enum AccountStatus: Equatable {
         case unknown
         case available
@@ -59,15 +62,8 @@ final class CloudKitSyncMonitor {
         }
     }
 
-    enum SyncPhase: Equatable {
-        case idle
-        case setup
-        case importing
-        case exporting
-    }
-
     private(set) var accountStatus: AccountStatus = .unknown
-    private(set) var phase: SyncPhase = .idle
+    private(set) var phase: CloudKitSyncPhase = .idle
     private(set) var lastSyncDate: Date?
     private(set) var lastError: String?
 
@@ -200,7 +196,7 @@ final class CloudKitSyncMonitor {
         }
     }
 
-    private static func mapPhase(_ type: NSPersistentCloudKitContainer.EventType) -> SyncPhase {
+    private static func mapPhase(_ type: NSPersistentCloudKitContainer.EventType) -> CloudKitSyncPhase {
         switch type {
         case .setup: return .setup
         case .import: return .importing

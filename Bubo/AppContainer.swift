@@ -50,11 +50,11 @@ struct AppContainer {
 
     // MARK: - Construction
 
-    /// Build the full app graph. Reads the cloud-sync preference, opens
-    /// three resilient SwiftData containers, starts iCloud transports
-    /// when opted in, and wires the services together in dependency
-    /// order. All composition lives here so `BuboApp.init` is a
-    /// one-liner.
+    /// Build the full app graph for production. Reads the cloud-sync
+    /// preference, opens three resilient SwiftData containers backed by
+    /// real `.store` files, starts iCloud transports when opted in, and
+    /// delegates to `build(...)` for the pure wiring step. Called once
+    /// from `BuboApp.init`.
     static func make() -> AppContainer {
         let defaults = UserDefaults.standard
         let cloudPreference = defaults.object(forKey: cloudSyncPreferenceKey) as? Bool ?? false
@@ -81,8 +81,34 @@ struct AppContainer {
             )
         }
 
-        let settings = ReminderSettings.load()
+        return build(
+            settings: ReminderSettings.load(),
+            eventCacheContainer: eventCacheContainer,
+            userEventsContainer: userEventsContainer,
+            backlogContainer: backlogContainer,
+            cloudServices: cloudServices
+        )
+    }
 
+    /// Pure wiring step: given every leaf dependency, assemble the
+    /// service graph. Extracted out of `make()` so integration tests can
+    /// feed in-memory `ModelContainer`s, a fake `CloudServicesCoordinator`,
+    /// and assert the resulting graph without actually creating `.store`
+    /// files on disk.
+    ///
+    /// Defaults are only provided for the cheap-to-build side services
+    /// (`NetworkMonitor`, `AgentService`); anything touching persistence
+    /// or iCloud must be injected explicitly so tests can't accidentally
+    /// fall through to a real container.
+    static func build(
+        settings: ReminderSettings,
+        eventCacheContainer: ModelContainer,
+        userEventsContainer: ModelContainer,
+        backlogContainer: ModelContainer,
+        cloudServices: CloudServicesCoordinator,
+        networkMonitor: NetworkMonitor = NetworkMonitor(),
+        agentService: AgentService = AgentService()
+    ) -> AppContainer {
         let reminderService = ReminderService(
             settings: settings,
             eventCacheContainer: eventCacheContainer,
@@ -102,8 +128,8 @@ struct AppContainer {
 
         return AppContainer(
             settings: settings,
-            networkMonitor: NetworkMonitor(),
-            agentService: AgentService(),
+            networkMonitor: networkMonitor,
+            agentService: agentService,
             cloudServices: cloudServices,
             reminderService: reminderService,
             backlogService: backlogService,

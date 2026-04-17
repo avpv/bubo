@@ -390,24 +390,35 @@ struct WallpaperSectionView: View {
 // MARK: - iCloud Sync Section
 
 /// Surfaces iCloud status through the `CloudServicesCoordinator` facade.
-/// The toggle writes `BuboApp.cloudSyncPreferenceKey` in UserDefaults;
-/// the SwiftData containers are built once per launch against that flag,
-/// so the UI shows a "restart required" hint when the toggle has
-/// diverged from the launch-time snapshot.
+/// All decision logic lives in `CloudSyncStatusSectionViewModel` — this
+/// view is a pure layout shell so it stops mixing `@AppStorage` reads
+/// with environment observation and UserDefaults snapshots.
 struct CloudSyncStatusSection: View {
     @Environment(\.activeSkin) private var skin
     @Environment(CloudServicesCoordinator.self) private var cloud
     @Environment(ReminderService.self) private var reminderService
     @AppStorage(BuboApp.cloudSyncPreferenceKey) private var cloudSyncEnabled: Bool = false
 
-    @State private var launchTimeCloudSyncEnabled: Bool = UserDefaults.standard
-        .bool(forKey: BuboApp.cloudSyncPreferenceKey)
+    /// Snapshot the flag at view init. If the user toggles during this
+    /// session, `isRestartPending` on the VM flips and the restart hint
+    /// appears; `launchTimeCloudSyncEnabled` itself doesn't change.
+    @State private var launchTimeCloudSyncEnabled: Bool =
+        CloudSyncStatusSectionViewModel.launchTimeCloudSyncEnabled()
+
+    private var viewModel: CloudSyncStatusSectionViewModel {
+        CloudSyncStatusSectionViewModel(
+            cloudSyncEnabled: cloudSyncEnabled,
+            launchTimeCloudSyncEnabled: launchTimeCloudSyncEnabled,
+            cloud: cloud,
+            persistenceError: reminderService.lastPersistenceError
+        )
+    }
 
     var body: some View {
         SettingsPlatter("iCloud Sync") {
             Toggle("Sync backlog & settings via iCloud", isOn: $cloudSyncEnabled)
 
-            if cloudSyncEnabled != launchTimeCloudSyncEnabled {
+            if viewModel.isRestartPending {
                 Label(
                     "Restart Bubo to apply the change.",
                     systemImage: "arrow.triangle.2.circlepath"
@@ -418,20 +429,20 @@ struct CloudSyncStatusSection: View {
 
             LabeledContent("Status") {
                 HStack(spacing: DS.Spacing.xxs) {
-                    if cloud.isRunning, cloud.cloudKit.phase != .idle {
+                    if viewModel.isSyncInProgress {
                         ProgressView().controlSize(.small)
                     }
-                    Text(cloud.summary)
+                    Text(viewModel.statusText)
                         .font(.caption)
                         .foregroundStyle(
-                            cloud.isWarning
+                            viewModel.statusIsWarning
                                 ? skin.resolvedWarningColor
                                 : skin.resolvedTextSecondary
                         )
                 }
             }
 
-            if let persistenceError = reminderService.lastPersistenceError {
+            if let persistenceError = viewModel.persistenceError {
                 Label(persistenceError, systemImage: "exclamationmark.triangle")
                     .font(.caption)
                     .foregroundStyle(skin.resolvedWarningColor)

@@ -28,16 +28,21 @@ import SwiftData
 @MainActor
 final class CloudServicesCoordinator {
 
-    let cloudKit: CloudKitSyncMonitor
-    let keyValue: CloudSyncService
+    /// Both transports are injected by protocol so tests can drive the
+    /// coordinator with `FakeCloudKitSyncMonitor` + `FakeCloudKeyValueSync`
+    /// without touching `NSPersistentCloudKitContainer` or
+    /// `NSUbiquitousKeyValueStore`. Production defaults point at the
+    /// concrete `.shared` singletons.
+    let cloudKit: any CloudKitSyncMonitoring
+    let keyValue: any CloudKeyValueSyncing
 
     /// `true` once `start()` has been called successfully. Used by the UI
     /// to distinguish "sync disabled" from "sync enabled but idle".
     private(set) var isRunning: Bool = false
 
     init(
-        cloudKit: CloudKitSyncMonitor = .shared,
-        keyValue: CloudSyncService = .shared
+        cloudKit: any CloudKitSyncMonitoring = CloudKitSyncMonitor.shared,
+        keyValue: any CloudKeyValueSyncing = CloudSyncService.shared
     ) {
         self.cloudKit = cloudKit
         self.keyValue = keyValue
@@ -53,21 +58,51 @@ final class CloudServicesCoordinator {
 
     // MARK: - Aggregated Status
 
+    var summary: String {
+        Self.summary(
+            isRunning: isRunning,
+            cloudKitLastError: cloudKit.lastError,
+            cloudKitPhase: cloudKit.phase,
+            cloudKitSummary: cloudKit.summary,
+            kvStatus: keyValue.status
+        )
+    }
+
+    var isWarning: Bool {
+        Self.isWarning(
+            isRunning: isRunning,
+            cloudKitLastError: cloudKit.lastError,
+            kvStatus: keyValue.status
+        )
+    }
+
+    // MARK: - Pure Aggregation Logic (testable)
+
     /// One-line summary for the Settings "iCloud Sync" row. Picks the
     /// most interesting state across both transports — error beats
     /// progress beats idle — so the user sees the signal that actually
     /// matters without reading two separate rows.
-    var summary: String {
+    ///
+    /// Broken out as a pure static function so tests can exercise every
+    /// state combination without having to drive a real sync monitor.
+    /// The instance `summary` is a thin shim that feeds `self`-state in.
+    static func summary(
+        isRunning: Bool,
+        cloudKitLastError: String?,
+        cloudKitPhase: CloudKitSyncPhase,
+        cloudKitSummary: String,
+        kvStatus: CloudKeyValueSyncStatus
+    ) -> String {
         if !isRunning { return "Disabled" }
 
-        if let err = cloudKit.lastError { return err }
-        if case .error(let msg) = keyValue.status { return msg }
+        if let err = cloudKitLastError { return err }
+        if case .error(let msg) = kvStatus { return msg }
 
-        if cloudKit.phase != .idle { return cloudKit.summary }
+        if cloudKitPhase != .idle { return cloudKitSummary }
 
-        switch keyValue.status {
-        case .idle: return cloudKit.summary
-        case .synced: return cloudKit.summary
+        switch kvStatus {
+        case .idle: return cloudKitSummary
+        case .synced: return cloudKitSummary
         case .quotaWarning(let bytes):
             let kb = bytes / 1024
             return "KV approaching quota (\(kb) KB / 1024 KB)"
@@ -77,10 +112,15 @@ final class CloudServicesCoordinator {
     }
 
     /// Whether the aggregated state should be shown as a warning in UI.
-    var isWarning: Bool {
+    /// Same pure-logic rationale as `summary(isRunning:...)`.
+    static func isWarning(
+        isRunning: Bool,
+        cloudKitLastError: String?,
+        kvStatus: CloudKeyValueSyncStatus
+    ) -> Bool {
         guard isRunning else { return false }
-        if cloudKit.lastError != nil { return true }
-        switch keyValue.status {
+        if cloudKitLastError != nil { return true }
+        switch kvStatus {
         case .quotaWarning, .error, .unavailable: return true
         default: return false
         }

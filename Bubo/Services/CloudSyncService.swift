@@ -13,7 +13,7 @@ import Foundation
 ///   - DismissedReminderIds: set union (prevents re-import on any device)
 ///   - Everything else: last-writer-wins (cloud overwrites local)
 @Observable
-final class CloudSyncService {
+final class CloudSyncService: CloudKeyValueSyncing {
 
     static let shared = CloudSyncService()
 
@@ -25,15 +25,7 @@ final class CloudSyncService {
 
     // MARK: - Observable State
 
-    enum SyncStatus: Equatable {
-        case idle
-        case synced(Date)
-        case quotaWarning(usedBytes: Int)
-        case error(String)
-        case unavailable
-    }
-
-    private(set) var status: SyncStatus = .idle
+    private(set) var status: CloudKeyValueSyncStatus = .idle
     private(set) var lastSyncDate: Date?
     private(set) var estimatedStorageBytes: Int = 0
 
