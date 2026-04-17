@@ -96,11 +96,12 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
     /// Used by delta evaluation to skip recomputing unaffected local objectives.
     var mutatedGeneIndices: IndexSet?
 
-    /// The operator picked by the `MutationBandit` on the last `mutate()` call,
-    /// if any. The GA loop reads this post-evaluation to attribute the fitness
-    /// delta back to the operator, closing the UCB1 feedback loop. `nil` when
-    /// the bandit wasn't wired or when mutate() was skipped (no rate hit any
-    /// gene). Does not participate in equality/hashing.
+    /// The operator picked by the `MutationBandit` on the last `mutate()`
+    /// call. The GA loop reads this post-evaluation to attribute the
+    /// fitness delta back to the operator, closing the LinUCB feedback
+    /// loop. `nil` only on freshly-constructed chromosomes whose
+    /// `mutate()` has not yet run. Does not participate in
+    /// equality/hashing.
     var lastMutationOperator: MutationOperator?
 
     /// Self-adaptive mutation rate encoded directly in the genome. When > 0
@@ -110,6 +111,15 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
     /// aggressively, and vice versa. 0 = disabled (the GA's externally-set
     /// rate wins, preserving pre-existing behaviour).
     var selfAdaptiveMutationRate: Double = 0
+
+    /// Cached 16-dim feature vector for surrogate / QD consumers.
+    /// Populated lazily on first extraction and invalidated on any
+    /// mutation (`mutate`) or repair that changes gene placement.
+    /// Surrogate screening hits this cache for every offspring
+    /// evaluation — eliminating the re-aggregation pass saves ~10-30µs
+    /// per offspring, multiplied by generations × populationSize this
+    /// is a meaningful slice of the per-run cost.
+    var cachedFeatures: ContiguousArray<Double>?
 
     /// Equality ignores needsEvaluation and caches — two chromosomes with the same genes and fitness are equal.
     static func == (lhs: ScheduleChromosome, rhs: ScheduleChromosome) -> Bool {
@@ -378,6 +388,10 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
 
     mutating func mutate(rate: Double, context: OptimizerContext) {
         needsEvaluation = true
+        // Feature cache is a function of gene placement; mutation may
+        // change placement, invalidate eagerly. Surrogate screen will
+        // recompute on next access.
+        cachedFeatures = nil
         var changed = IndexSet()
         let cal = context.calendar
         let horizonStart = context.planningHorizon.start
@@ -397,13 +411,11 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
             effectiveRate = rate
         }
 
-        // If a bandit is wired, choose one operator for this entire call and
-        // use it for every gene that gets selected. The feedback loop works
-        // at call granularity (pre vs. post fitness), so per-gene operator
-        // variation would make the reward signal harder to attribute. Without
-        // a bandit, we keep the per-gene uniform-random behaviour so existing
-        // runs produce the same distribution of mutations.
-        let bandedOperator: MutationOperator? = context.mutationBandit?.select(rng: context.rng)
+        // Choose one operator for this entire call and use it for every
+        // gene that gets selected. The feedback loop works at call
+        // granularity (pre vs. post fitness), so per-gene operator
+        // variation would make the reward signal harder to attribute.
+        let bandedOperator = context.mutationBandit.select(rng: context.rng)
         lastMutationOperator = bandedOperator
 
         for i in genes.indices {
@@ -423,12 +435,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
             let event = context.movableEvents.first { $0.id == genes[i].eventId }
             let earliest = event?.earliestStart
             let floor = [horizonStart, earliest].compactMap { $0 }.max() ?? horizonStart
-            let strategy: Int
-            if let op = bandedOperator {
-                strategy = op.rawValue
-            } else {
-                strategy = context.rng.int(in: 0...3)
-            }
+            let strategy = bandedOperator.rawValue
 
             switch strategy {
             case 0:
@@ -439,12 +446,38 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                     clampToWorkingHours(newStart, duration: genes[i].duration, workingHours: context.workingHours, calendar: cal, floor: floor)
                 )
             case 1:
-                // Move to different day within horizon
+                // Move to different day within horizon.
+                //
+                // Constraint-aware: restrict day selection to days
+                // that are at or after `floor` (which already folds
+                // `earliestStart` and, via repair's dependency pass,
+                // the earliest day any included prerequisite could
+                // finish). Random days earlier than that would be
+                // immediately reshuffled by the next repair pass,
+                // costing a wasted fitness evaluation per mutation.
                 let mutStartDay = cal.startOfDay(for: horizonStart)
                 let mutLastDay = cal.startOfDay(for: context.planningHorizon.end.addingTimeInterval(-1))
                 let daysInHorizon = max(1, (cal.dateComponents([.day], from: mutStartDay, to: mutLastDay).day ?? 0) + 1)
                 guard daysInHorizon > 0 else { break }
-                let dayOffset = context.rng.int(in: 0..<daysInHorizon)
+
+                // Earliest eligible day: max of horizon start and the
+                // day holding `floor`. Also advance past `dependsOn`
+                // predecessors placed on this chromosome.
+                var earliestDay = cal.startOfDay(for: floor)
+                if let event, !event.dependsOn.isEmpty {
+                    for depId in event.dependsOn {
+                        if let depGene = genes.first(where: { $0.eventId == depId && $0.isIncluded }) {
+                            let depDay = cal.startOfDay(for: depGene.endTime)
+                            if depDay > earliestDay { earliestDay = depDay }
+                        }
+                    }
+                }
+                let startOffset = max(
+                    0,
+                    cal.dateComponents([.day], from: mutStartDay, to: earliestDay).day ?? 0
+                )
+                guard startOffset < daysInHorizon else { break }
+                let dayOffset = context.rng.int(in: startOffset..<daysInHorizon)
                 let newDay = cal.date(byAdding: .day, value: dayOffset, to: horizonStart)!
                 let hour: Int
                 if let preferred = event?.preferredHourRange, !preferred.isEmpty {
@@ -548,6 +581,9 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
     /// 3. Enforce `dependsOn` ordering: a gene may only start after every one
     ///    of its (included) prerequisites has finished.
     mutating func repair(context: OptimizerContext) {
+        // Repair moves genes; invalidate cached features.
+        cachedFeatures = nil
+
         let cal = context.calendar
         let horizonStart = context.planningHorizon.start
 

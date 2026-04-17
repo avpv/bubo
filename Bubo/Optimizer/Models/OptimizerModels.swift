@@ -150,11 +150,18 @@ struct OptimizerContext: Sendable {
     let calendar: Calendar
     let rng: GARandom
 
-    /// Optional adaptive operator selector. When set, `ScheduleChromosome.mutate`
-    /// consults it to pick a mutation operator per call instead of rolling
-    /// uniformly. Shared across every mutation in a single run so the arm
-    /// reward statistics accumulate.
-    let mutationBandit: MutationBandit?
+    /// Adaptive operator selector. `ScheduleChromosome.mutate` consults
+    /// this to pick a mutation operator per call instead of rolling
+    /// uniformly. Shared across every mutation in a single run so the
+    /// arm reward statistics accumulate.
+    let mutationBandit: MutationBandit
+
+    /// Attention head for `CrossoverStrategy.contextual`. Contextual
+    /// crossover scores every gene pair through this head before
+    /// deciding which parent to inherit from. Shared across islands so
+    /// the head's learnable weights absorb experience from every
+    /// population.
+    let contextualCrossoverHead: GeneAttentionHead
 
     init(
         fixedEvents: [CalendarEvent] = [],
@@ -168,7 +175,8 @@ struct OptimizerContext: Sendable {
         participantAvailability: [String: [DateInterval]] = [:],
         calendar: Calendar = .current,
         rng: GARandom = GARandom(),
-        mutationBandit: MutationBandit? = nil
+        mutationBandit: MutationBandit = MutationBandit(),
+        contextualCrossoverHead: GeneAttentionHead = GeneAttentionHead()
     ) {
         self.fixedEvents = fixedEvents
         self.movableEvents = movableEvents
@@ -179,6 +187,7 @@ struct OptimizerContext: Sendable {
         self.calendar = calendar
         self.rng = rng
         self.mutationBandit = mutationBandit
+        self.contextualCrossoverHead = contextualCrossoverHead
     }
 }
 
@@ -305,6 +314,15 @@ struct ScheduleScenario: Identifiable, Sendable {
     /// values are event IDs in recommended order.
     /// Populated by `planDayWithSequencing` — nil when sequencing wasn't applied.
     var taskSequenceByDay: [Date: [String]]?
+
+    /// Workload identity at the moment this scenario was produced.
+    /// `BuboOptimizer.acceptScenario` / `rejectScenario` /
+    /// `recordManualEdit` use this to route feedback into the
+    /// correct per-workload learner bundle, even after subsequent
+    /// optimizations on different workloads.
+    /// `nil` for scenarios produced outside `BuboOptimizer` (e.g.
+    /// hand-built fixtures).
+    var sourceSignature: TaskSignature?
 
     /// Genes actively placed in the schedule (excludes dropped droppable genes).
     var activeGenes: [ScheduleGene] { genes.filter { $0.isIncluded } }

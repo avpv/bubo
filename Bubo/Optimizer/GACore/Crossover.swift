@@ -14,6 +14,13 @@ enum CrossoverStrategy: Sendable {
     /// independent for each day, so children still explore the combinatorial
     /// space of day-sized recombinations.
     case dayBlock
+
+    /// Attention-weighted contextual crossover. Each gene's inheritance
+    /// decision is driven by a `GeneAttentionHead` that scores parent
+    /// placements using priority, deadline urgency, and structural fit.
+    /// Delegates to `ContextualCrossover.perform`; the head is read
+    /// unconditionally from `OptimizerContext.contextualCrossoverHead`.
+    case contextual(temperature: Double)
 }
 
 // MARK: - Crossover
@@ -37,6 +44,13 @@ enum Crossover {
             return uniformCrossover(parent1, parent2, swapProbability: prob, rng: context.rng)
         case .dayBlock:
             return dayBlockCrossover(parent1, parent2, context: context)
+        case .contextual(let temperature):
+            return ContextualCrossover.perform(
+                parent1, parent2,
+                context: context,
+                head: context.contextualCrossoverHead,
+                temperature: temperature
+            )
         }
     }
 

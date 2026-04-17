@@ -71,6 +71,12 @@ struct GAConfiguration: Sendable {
     /// tuning of `mutationRate` per workload.
     var selfAdaptiveRates: Bool
 
+    // Schedule-specific tunables (QD emission rate, gradient
+    // refinement interval) used to live here. They've moved into the
+    // hook closures that the host wires via `EvolutionHooks`, so
+    // the engine no longer needs to know about them. Keep this file
+    // strictly about the generic GA cycle.
+
     init(
         populationSize: Int,
         maxGenerations: Int,
@@ -126,7 +132,7 @@ struct GAConfiguration: Sendable {
         crossoverRate: 0.8,
         eliteCount: 3,
         selectionStrategy: .tournament(size: 3),
-        crossoverStrategy: .singlePoint,
+        crossoverStrategy: .contextual(temperature: 0.5),
         convergenceThreshold: 0.001,
         convergencePatience: 30,
         adaptiveMutation: true,
@@ -140,7 +146,8 @@ struct GAConfiguration: Sendable {
         memeticHillClimbSteps: 6,
         chcMaxRestarts: 1,
         chcRestartEliteFraction: 0.15,
-        chcRestartMutationRate: 0.35
+        chcRestartMutationRate: 0.35,
+        selfAdaptiveRates: true
     )
 
     static let quick = GAConfiguration(
@@ -150,7 +157,7 @@ struct GAConfiguration: Sendable {
         crossoverRate: 0.8,
         eliteCount: 2,
         selectionStrategy: .tournament(size: 3),
-        crossoverStrategy: .singlePoint,
+        crossoverStrategy: .contextual(temperature: 0.7),
         convergenceThreshold: 0.005,
         convergencePatience: 15,
         adaptiveMutation: false,
@@ -164,6 +171,7 @@ struct GAConfiguration: Sendable {
     /// Ultra-fast config for live preview and drag-to-schedule reflow.
     /// ~20 generations, ~100ms on modern hardware.
     /// Trades optimality for speed — good enough for preview, not final schedule.
+    /// Uses single-point crossover to skip attention-scoring overhead.
     static let instant = GAConfiguration(
         populationSize: 20,
         maxGenerations: 20,
@@ -189,7 +197,7 @@ struct GAConfiguration: Sendable {
         crossoverRate: 0.85,
         eliteCount: 5,
         selectionStrategy: .tournament(size: 5),
-        crossoverStrategy: .twoPoint,
+        crossoverStrategy: .contextual(temperature: 0.5),
         convergenceThreshold: 0.0005,
         convergencePatience: 50,
         adaptiveMutation: true,
@@ -209,8 +217,8 @@ struct GAConfiguration: Sendable {
 
     /// Per-island config for island model GA. Smaller populations per island
     /// since total individuals = populationSize * islandCount.
-    /// Uses 2-point crossover and moderate mutation as a base;
-    /// IslandModelGA diversifies parameters across islands.
+    /// Uses contextual crossover and gradient refinement; IslandModelGA
+    /// diversifies strategies across islands.
     static let island = GAConfiguration(
         populationSize: 60,
         maxGenerations: 400,
@@ -218,7 +226,7 @@ struct GAConfiguration: Sendable {
         crossoverRate: 0.85,
         eliteCount: 3,
         selectionStrategy: .tournament(size: 4),
-        crossoverStrategy: .twoPoint,
+        crossoverStrategy: .contextual(temperature: 0.5),
         convergenceThreshold: 0.0005,
         convergencePatience: 40,
         adaptiveMutation: true,
@@ -229,7 +237,8 @@ struct GAConfiguration: Sendable {
         adaptiveCrossover: true,
         memeticHillClimbInterval: 30,
         memeticHillClimbCandidates: 3,
-        memeticHillClimbSteps: 8
+        memeticHillClimbSteps: 8,
+        selfAdaptiveRates: true
     )
 }
 
@@ -250,32 +259,55 @@ struct GAProgress: Sendable {
 /// genomes used by `PomodoroSequenceChromosome`) pass `nil` and the
 /// engine falls back to scalar-fitness generational replacement.
 struct MultiObjectiveContext<C: Chromosome>: @unchecked Sendable {
-    let ranker: NSGA3
+    /// Adaptive NSGA-III ranker. Reference points grow around crowded
+    /// niches and prune vacant ones (Jain & Deb, 2014). There is no
+    /// static-ranker alternative — the adaptive variant subsumes the
+    /// fixed Das–Dennis grid as its initial state.
+    let adaptiveRanker: AdaptiveNSGA3
+
     let objectiveVectorOf: (C) -> [Double]
+
+    /// Hypervolume estimator used for last-front tiebreaking inside
+    /// survivor selection.
+    let hypervolume: HypervolumeEstimator
+
+    /// Ranker snapshot for the current generation. Taken from the
+    /// adaptive variant so reference-point evolution is observed by
+    /// every selection call.
+    var activeRanker: NSGA3 { adaptiveRanker.currentRanker }
 
     /// Produce the NSGA-III harness for the default 13-objective
     /// ScheduleChromosome evaluator. Reads `objectiveCache` directly so
     /// no extra evaluation runs during survivor selection.
     static func schedule(
         evaluator: FitnessEvaluator,
-        populationSize: Int
+        populationSize: Int,
+        hypervolumeSampleCount: Int = 8_000,
+        hypervolumeSeed: UInt64 = 0x5EED_F2_2026
     ) -> MultiObjectiveContext<ScheduleChromosome> {
         let names = evaluator.objectives.map(\.name)
         // Combined parent + offspring pool is 2·N, so feed NSGA-III that
         // many reference directions — each individual can be associated
         // with a distinct direction in dense regions of the simplex.
-        let ranker = NSGA3.forPopulation(
+        let base = NSGA3.forPopulation(
             objectiveCount: names.count,
             populationSize: max(2, populationSize * 2)
         )
+        let adaptive = AdaptiveNSGA3(base: base)
+        let hv = HypervolumeEstimator(
+            objectiveCount: names.count,
+            sampleCount: hypervolumeSampleCount,
+            seed: hypervolumeSeed
+        )
         return MultiObjectiveContext<ScheduleChromosome>(
-            ranker: ranker,
+            adaptiveRanker: adaptive,
             objectiveVectorOf: { chromosome in
                 if let cache = chromosome.objectiveCache, !cache.isEmpty {
                     return names.map { cache[$0] ?? 0.0 }
                 }
                 return names.map { _ in 0.0 }
-            }
+            },
+            hypervolume: hv
         )
     }
 }
@@ -291,6 +323,13 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
     private var onProgress: ((GAProgress) -> Void)?
     private let multiObjective: MultiObjectiveContext<C>?
 
+    /// Generic hook closures for QD archive feeding, gradient
+    /// refinement, telemetry — anything outside the engine's core
+    /// evolution logic. Closures are constructed by the caller and
+    /// captured by reference to schedule-specific state (archives,
+    /// refiners) without leaking those types into the engine.
+    let hooks: EvolutionHooks<C>
+
     private(set) var bestEver: C?
     private(set) var convergenceGeneration: Int = 0
 
@@ -299,23 +338,29 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         context: OptimizerContext,
         evaluate: @escaping (inout C) -> Void,
         onProgress: ((GAProgress) -> Void)? = nil,
-        multiObjective: MultiObjectiveContext<C>? = nil
+        multiObjective: MultiObjectiveContext<C>? = nil,
+        hooks: EvolutionHooks<C> = .noop
     ) {
         self.config = config
         self.context = context
         self.evaluate = evaluate
         self.onProgress = onProgress
         self.multiObjective = multiObjective
+        self.hooks = hooks
     }
 
     /// Run the full GA and return the final population (sorted by fitness).
-    func run() -> [C] {
+    /// Throws `CancellationError` when the enclosing `Task` is cancelled —
+    /// the caller receives whatever was evolved before cancellation via
+    /// `bestEver` / partial population observation.
+    func run() throws -> [C] {
         var population = createInitialPopulation()
-        return evolve(&population)
+        return try evolve(&population)
     }
 
-    /// Run the GA seeded with an existing population (for incremental re-optimization).
-    func runSeeded(with seed: [C]) -> [C] {
+    /// Run the GA seeded with an existing population. Same cancellation
+    /// semantics as `run()`.
+    func runSeeded(with seed: [C]) throws -> [C] {
         var population = Population<C>(
             individuals: seed,
             eliteCount: config.eliteCount
@@ -328,7 +373,7 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             population.individuals.append(individual)
         }
 
-        return evolve(&population)
+        return try evolve(&population)
     }
 
     // MARK: - Initial Population with Greedy Seeding
@@ -376,7 +421,7 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
 
     // MARK: - Core Evolution Loop
 
-    private func evolve(_ population: inout Population<C>) -> [C] {
+    private func evolve(_ population: inout Population<C>) throws -> [C] {
         // Repair initial population if enabled
         if config.enableRepair {
             for i in population.individuals.indices {
@@ -392,6 +437,12 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         var restartsPerformed = 0
 
         for generation in 0..<config.maxGenerations {
+            // Cooperative cancellation: UI-triggered task cancellation
+            // lands here. `bestEver` is already populated with whatever
+            // the current best is, so callers catching CancellationError
+            // can still surface a usable result.
+            try Task.checkCancellation()
+
             evolveOneGeneration(
                 &population,
                 config: config,
@@ -417,6 +468,12 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
                     steps: config.memeticHillClimbSteps
                 )
             }
+
+            // Generation-complete hook. The host wires gradient
+            // refinement, QD archive emitter injection, and any other
+            // schedule-specific operations here — the engine stays
+            // generic over `C`.
+            hooks.onGenerationComplete?(generation, &population, context)
 
             // Use rawFitness so fitness sharing (which deflates `fitness` for
             // crowded niches) can't demote the globally-best individual. Store
@@ -525,17 +582,15 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         // chosen during mutation reflects the current GA regime. Imbalance
         // is the std dev across objectives on the best individual — reads
         // the cached breakdown (delta-eval keeps it fresh).
-        if let bandit = context.mutationBandit {
-            let imbalance = objectiveImbalance(in: population)
-            let stagnation = config.convergencePatience > 0
-                ? min(1.0, Double(staleGenerations) / Double(max(1, config.convergencePatience)))
-                : 0.0
-            bandit.updateContext(BanditContext(
-                diversity: min(1.0, genotypicDiv / max(1e-6, config.diversityThreshold * 4)),
-                stagnation: stagnation,
-                imbalance: imbalance
-            ))
-        }
+        let imbalance = objectiveImbalance(in: population)
+        let stagnation = config.convergencePatience > 0
+            ? min(1.0, Double(staleGenerations) / Double(max(1, config.convergencePatience)))
+            : 0.0
+        context.mutationBandit.updateContext(BanditContext(
+            diversity: min(1.0, genotypicDiv / max(1e-6, config.diversityThreshold * 4)),
+            stagnation: stagnation,
+            imbalance: imbalance
+        ))
 
         // Immigration: inject random individuals when diversity collapses
         if diversityIsLow && config.immigrationRate > 0 {
@@ -637,22 +692,46 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         // Close the MutationBandit feedback loop. Reward is (rawFitness - baseline)
         // so arms get credit only for beating the better parent. LinUCB handles
         // the context attribution internally; we just supply the raw delta.
-        if let bandit = context.mutationBandit {
-            for i in offspring.indices {
-                guard let adaptive = offspring[i] as? any AdaptiveMutationChromosome,
-                      let op = adaptive.lastMutationOperator else { continue }
-                let reward = offspring[i].rawFitness - offspringBaselines[i]
-                bandit.record(op: op, reward: reward)
-            }
+        for i in offspring.indices {
+            guard let adaptive = offspring[i] as? any AdaptiveMutationChromosome,
+                  let op = adaptive.lastMutationOperator else { continue }
+            let reward = offspring[i].rawFitness - offspringBaselines[i]
+            context.mutationBandit.record(op: op, reward: reward)
         }
 
-        // Survivor selection: (μ+λ) combine, then NSGA-III if multi-
-        // objective vectors are available, else scalar generational.
+        // Survivor selection: (μ+λ) combine, then adaptive NSGA-III with
+        // HypE-lite last-front tiebreak when multi-objective vectors are
+        // available, else scalar generational.
         if let mo = multiObjective {
             let combined = population.individuals + offspring
             let vectors = combined.map(mo.objectiveVectorOf)
-            let result = mo.ranker.select(vectors, count: config.populationSize)
-            var nextIndividuals = result.selectedIndices.map { combined[$0] }
+            let activeRanker = mo.activeRanker
+
+            // Fold the observed per-axis minimum into the hypervolume
+            // estimator's nadir so the Monte Carlo sampling box
+            // tracks the achievable region. Without this, saturated
+            // objectives (score ≈ 1 across the population) leave the
+            // sampler wasting most of its budget in the empty volume
+            // below the nadir.
+            mo.hypervolume.updateNadir(from: vectors)
+
+            // Hypervolume contribution breaks ties on the last accepted
+            // front — objectively-grounded selection pressure that the
+            // perpendicular-distance rule is blind to.
+            let survivorIndices = mo.hypervolume.survivorsWithNSGA3(
+                vectors,
+                keeping: config.populationSize,
+                using: activeRanker
+            )
+            // Re-select via the ranker so the scalar-fitness rewrite has
+            // niche metadata available.
+            let result = activeRanker.select(vectors, count: config.populationSize)
+
+            var nextIndividuals = survivorIndices.map { combined[$0] }
+
+            // Feed the adaptive reference-point history.
+            mo.adaptiveRanker.observe(result, updateInterval: 10)
+
             // Rebuild a SelectionResult keyed by 0..<N (positions in the
             // trimmed survivor array) so scalar fitness rewrite works
             // generically over C. Without this remapping the scalarizer
@@ -660,7 +739,7 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             var frontOfLocal: [Int: Int] = [:]
             var nicheOfLocal: [Int: Int] = [:]
             var distLocal: [Int: Double] = [:]
-            for (localIdx, combinedIdx) in result.selectedIndices.enumerated() {
+            for (localIdx, combinedIdx) in survivorIndices.enumerated() {
                 frontOfLocal[localIdx] = result.frontOf[combinedIdx] ?? 0
                 nicheOfLocal[localIdx] = result.nicheOf[combinedIdx] ?? 0
                 distLocal[localIdx] = result.distanceToNiche[combinedIdx] ?? 0
@@ -676,6 +755,10 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         } else {
             population.replaceGeneration(with: offspring)
         }
+
+        // Offspring-evaluated hook — host wires QD archive feeding,
+        // surrogate calibration, telemetry. Engine stays generic.
+        hooks.onOffspringEvaluated?(generation, offspring, context)
     }
 
     // MARK: - Objective Imbalance (bandit context feature)

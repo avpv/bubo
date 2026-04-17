@@ -144,7 +144,7 @@ struct IslandModelGATests {
             }
         )
 
-        let result = islandGA.run()
+        let result = try! islandGA.run()
         #expect(!result.isEmpty)
         #expect(islandGA.bestEver != nil)
         #expect(islandGA.bestEver!.fitness > 0)
@@ -187,7 +187,7 @@ struct IslandModelGATests {
             }
         )
 
-        let result = islandGA.run()
+        let result = try! islandGA.run()
         for i in 0..<(result.count - 1) {
             #expect(result[i].fitness >= result[i + 1].fitness)
         }
@@ -217,7 +217,7 @@ struct IslandModelGATests {
             }
         )
 
-        let result = islandGA.run()
+        let result = try! islandGA.run()
         let best = islandGA.bestEver!
         // bestEver should be >= the best in the returned population
         // (hill climbing may have improved it)
@@ -263,7 +263,7 @@ struct IslandModelGATests {
             }
         )
 
-        let result = islandGA.run()
+        let result = try! islandGA.run()
         #expect(!result.isEmpty)
         #expect(islandGA.bestEver!.fitness > 0)
     }
@@ -307,7 +307,7 @@ struct IslandModelGATests {
             }
         )
 
-        let result = islandGA.run()
+        let result = try! islandGA.run()
         #expect(!result.isEmpty)
         #expect(islandGA.bestEver!.fitness > 0)
     }
@@ -355,7 +355,7 @@ struct MigrationTopologyTests {
             }
         )
 
-        let result = islandGA.run()
+        let result = try! islandGA.run()
         #expect(!result.isEmpty)
     }
 
@@ -396,7 +396,7 @@ struct MigrationTopologyTests {
             }
         )
 
-        let result = islandGA.run()
+        let result = try! islandGA.run()
         #expect(!result.isEmpty)
     }
 
@@ -437,7 +437,7 @@ struct MigrationTopologyTests {
             }
         )
 
-        let result = islandGA.run()
+        let result = try! islandGA.run()
         #expect(!result.isEmpty)
     }
 
@@ -479,7 +479,7 @@ struct MigrationTopologyTests {
             }
         )
 
-        let result = islandGA.run()
+        let result = try! islandGA.run()
         #expect(!result.isEmpty)
     }
 }
@@ -526,7 +526,7 @@ struct EmigrantSelectionTests {
             }
         )
 
-        let result = islandGA.run()
+        let result = try! islandGA.run()
         #expect(!result.isEmpty)
     }
 }
@@ -578,7 +578,7 @@ struct IslandProgressTests {
             }
         )
 
-        _ = islandGA.run()
+        _ = try! islandGA.run()
 
         #expect(!progressUpdates.isEmpty)
 
@@ -646,7 +646,7 @@ struct PomodoroSequenceIslandModelTests {
             }
         )
 
-        let result = islandGA.run()
+        let result = try! islandGA.run()
         #expect(!result.isEmpty)
 
         // Verify all results are valid permutations
@@ -747,7 +747,7 @@ struct IslandModelComparisonTests {
             context: context,
             evaluate: evaluateFn
         )
-        let singleBest = singleGA.run().first?.fitness ?? 0
+        let singleBest = try! singleGA.run().first?.fitness ?? 0
 
         let islandGA = IslandModelGA<ScheduleChromosome>(
             islandConfig: IslandConfiguration(
@@ -764,7 +764,7 @@ struct IslandModelComparisonTests {
             context: context,
             evaluate: evaluateFn
         )
-        let islandBest = islandGA.run().first?.fitness ?? 0
+        let islandBest = try! islandGA.run().first?.fitness ?? 0
 
         // Island model must find a feasible solution (fitness > 0.1 means constraint-valid)
         #expect(islandBest > 0.1, "Island model failed to find a feasible solution")
@@ -822,7 +822,7 @@ struct IslandModelSeededTests {
             evaluate: evaluateFn
         )
 
-        let result = islandGA.runSeeded(with: seeds)
+        let result = try! islandGA.runSeeded(with: seeds)
 
         #expect(!result.isEmpty)
         #expect(islandGA.bestEver != nil)
@@ -857,7 +857,7 @@ struct IslandModelSeededTests {
             evaluate: evaluateFn
         )
 
-        let result = islandGA.runSeeded(with: seeds)
+        let result = try! islandGA.runSeeded(with: seeds)
         #expect(!result.isEmpty)
     }
 
@@ -880,7 +880,7 @@ struct IslandModelSeededTests {
             evaluate: evaluateFn
         )
 
-        let result = islandGA.runSeeded(with: [seed])
+        let result = try! islandGA.runSeeded(with: [seed])
         #expect(!result.isEmpty)
         // With warm start, result should be at least as good as the seed
         #expect(islandGA.bestEver!.fitness >= seed.fitness - 0.001)
@@ -923,7 +923,7 @@ struct IslandModelSeededTests {
             evaluate: evaluateFn
         )
 
-        let result = islandGA.runSeeded(with: seeds)
+        let result = try! islandGA.runSeeded(with: seeds)
         let resultBest = result.first?.fitness ?? 0
 
         // GA with seeds should find something at least as good as the best seed
@@ -957,7 +957,7 @@ struct CrossIslandDiversityTests {
             }
         )
 
-        _ = islandGA.run()
+        _ = try! islandGA.run()
 
         #expect(lastProgress != nil)
         // crossIslandDiversity should be between 0 and 1
@@ -1015,7 +1015,7 @@ struct AdaptiveMigrationTests {
             }
         )
 
-        _ = islandGA.run()
+        _ = try! islandGA.run()
 
         // Should have some progress updates
         #expect(!intervals.isEmpty)
@@ -1056,7 +1056,7 @@ struct AdaptiveMigrationTests {
             }
         )
 
-        _ = islandGA.run()
+        _ = try! islandGA.run()
 
         // Without adaptive migration, all intervals should be the configured value
         for interval in intervals {
@@ -1085,7 +1085,7 @@ struct AdaptiveMigrationTests {
                 evaluate: evaluateFn
             )
 
-            let result = islandGA.run()
+            let result = try! islandGA.run()
             #expect(!result.isEmpty)
         }
     }

@@ -34,6 +34,13 @@ struct IslandConfiguration: Sendable {
     /// and relaxes when islands are still diverging productively.
     var adaptiveMigration: Bool
 
+    /// When true, each migration pair's direction is flipped so the
+    /// more-productive endpoint is the source and the less-productive
+    /// endpoint is the destination. Topology still determines *which*
+    /// islands exchange; this flag only controls *who sends to whom*.
+    /// Productivity is measured as `bestEver.rawFitness`.
+    var routeByProductivity: Bool = false
+
     /// Fast configs: 2 islands, frequent migration, no diversification.
     /// Adds modest exploration benefit without significant overhead.
     static let quick = IslandConfiguration(
@@ -44,7 +51,8 @@ struct IslandConfiguration: Sendable {
         emigrantSelection: .best,
         immigrantReplacement: .worst,
         diversifyIslands: false,
-        adaptiveMigration: false
+        adaptiveMigration: false,
+        routeByProductivity: false
     )
 
     static let `default` = IslandConfiguration(
@@ -55,7 +63,8 @@ struct IslandConfiguration: Sendable {
         emigrantSelection: .best,
         immigrantReplacement: .worst,
         diversifyIslands: true,
-        adaptiveMigration: true
+        adaptiveMigration: true,
+        routeByProductivity: true
     )
 
     /// Larger island count for deep weekly planning.
@@ -67,7 +76,8 @@ struct IslandConfiguration: Sendable {
         emigrantSelection: .best,
         immigrantReplacement: .worst,
         diversifyIslands: true,
-        adaptiveMigration: true
+        adaptiveMigration: true,
+        routeByProductivity: true
     )
 
     /// Validate configuration, clamping values to safe ranges.
@@ -205,6 +215,18 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
     private var onProgress: ((IslandModelProgress) -> Void)?
     private let multiObjective: MultiObjectiveContext<C>?
 
+    /// Generic hook bundle forwarded to every per-island `GeneticAlgorithm`.
+    /// Schedule-specific concerns (QD archive feeding, gradient
+    /// refinement) are wired here by the host without leaking schedule
+    /// types into the engine.
+    let hooks: EvolutionHooks<C>
+
+    /// Optional federated mutation bandit. When non-nil, each island
+    /// uses its own per-island `MutationBandit` from the federation;
+    /// the island loop triggers a merge on every migration boundary so
+    /// bandit state is shared without going through a single lock.
+    let federatedBandit: FederatedMutationBandit?
+
     private(set) var bestEver: C?
     private(set) var convergenceGeneration: Int = 0
 
@@ -214,7 +236,9 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         context: OptimizerContext,
         evaluate: @escaping (inout C) -> Void,
         onProgress: ((IslandModelProgress) -> Void)? = nil,
-        multiObjective: MultiObjectiveContext<C>? = nil
+        multiObjective: MultiObjectiveContext<C>? = nil,
+        hooks: EvolutionHooks<C> = .noop,
+        federatedBandit: FederatedMutationBandit? = nil
     ) {
         self.islandConfig = islandConfig
         self.baseConfig = baseConfig
@@ -222,12 +246,14 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         self.evaluate = evaluate
         self.onProgress = onProgress
         self.multiObjective = multiObjective
+        self.hooks = hooks
+        self.federatedBandit = federatedBandit
     }
 
     // MARK: - Run
 
     /// Run the island model GA and return the combined final population (sorted by fitness).
-    func run() -> [C] {
+    func run() throws -> [C] {
         precondition(islandConfig.islandCount >= 1, "IslandModelGA requires at least 1 island")
         precondition(islandConfig.migrationInterval >= 1, "migrationInterval must be >= 1")
         precondition(baseConfig.populationSize >= baseConfig.eliteCount + 2,
@@ -239,8 +265,8 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         //    thread-safe and deterministic under a fixed top-level seed.
         //    Greedy seeds are distributed per-island based on each island's config.
         let islandConfigs = makeIslandConfigs()
-        let islands = islandConfigs.map { config -> Island<C> in
-            let islandContext = makeIslandContext()
+        let islands = islandConfigs.enumerated().map { (idx, config) -> Island<C> in
+            let islandContext = makeIslandContext(islandIndex: idx)
             let greedyCount = max(0, Int(Double(config.populationSize) * config.greedySeedFraction))
             let randomCount = config.populationSize - greedyCount
 
@@ -267,12 +293,13 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
                 config: config,
                 context: islandContext,
                 evaluate: evaluate,
-                multiObjective: multiObjective
+                multiObjective: multiObjective,
+                hooks: hooks
             )
             return Island(population: pop, ga: ga, context: islandContext)
         }
 
-        return evolveIslands(islands)
+        return try evolveIslands(islands)
     }
 
     /// Build a fresh `OptimizerContext` for a single island, sharing everything
@@ -280,14 +307,21 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
     /// on the parent RNG in the order islands are created, so the sequence is
     /// deterministic — island 0 gets the first split, island 1 the second, etc.
     ///
-    /// The `MutationBandit` is intentionally *shared* across islands when
-    /// present: every pull on every island contributes to the same UCB arm
-    /// statistics, which accelerates convergence of the operator allocation.
-    /// Islands evolve in parallel, so the bandit's lock is the only concurrency
-    /// point; lock contention is negligible (one acquisition per mutate call,
-    /// ~microsecond cost versus ms-scale eval cost).
-    private func makeIslandContext() -> OptimizerContext {
-        OptimizerContext(
+    /// Build a per-island `OptimizerContext`. RNG is split for
+    /// thread-safe parallel evolution; reproducible under a fixed
+    /// top-level seed because `split()` advances deterministically in
+    /// island-creation order.
+    ///
+    /// Mutation bandit selection:
+    ///   • Federated wired → island `i` gets `federatedBandit.bandit(forIsland: i)`.
+    ///     Each island's bandit is independent in the hot path; merges
+    ///     happen on migration boundaries (see `evolveIslands`).
+    ///   • No federation → fall back to the shared `context.mutationBandit`
+    ///     so the legacy single-bandit path keeps working.
+    private func makeIslandContext(islandIndex: Int) -> OptimizerContext {
+        let bandit = federatedBandit?.bandit(forIsland: islandIndex)
+            ?? context.mutationBandit
+        return OptimizerContext(
             fixedEvents: context.fixedEvents,
             movableEvents: context.movableEvents,
             workingHours: context.workingHours,
@@ -296,7 +330,8 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             participantAvailability: context.participantAvailability,
             calendar: context.calendar,
             rng: context.rng.split(),
-            mutationBandit: context.mutationBandit
+            mutationBandit: bandit,
+            contextualCrossoverHead: context.contextualCrossoverHead
         )
     }
 
@@ -305,7 +340,7 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
     /// Run the island model GA seeded with existing individuals (for warm-start re-optimization).
     /// Seeds are distributed across islands round-robin so every island gets warm-start
     /// material. Remaining slots per island are filled with random individuals.
-    func runSeeded(with seed: [C]) -> [C] {
+    func runSeeded(with seed: [C]) throws -> [C] {
         precondition(islandConfig.islandCount >= 1, "IslandModelGA requires at least 1 island")
         precondition(islandConfig.migrationInterval >= 1, "migrationInterval must be >= 1")
         precondition(baseConfig.populationSize >= baseConfig.eliteCount + 2,
@@ -321,7 +356,7 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         }
 
         let islands = islandConfigs.enumerated().map { (idx, config) -> Island<C> in
-            let islandContext = makeIslandContext()
+            let islandContext = makeIslandContext(islandIndex: idx)
             var individuals = seedBuckets[idx]
 
             // Evaluate seeds that haven't been evaluated
@@ -341,18 +376,19 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
                 config: config,
                 context: islandContext,
                 evaluate: evaluate,
-                multiObjective: multiObjective
+                multiObjective: multiObjective,
+                hooks: hooks
             )
             return Island(population: pop, ga: ga, context: islandContext)
         }
 
-        return evolveIslands(islands)
+        return try evolveIslands(islands)
     }
 
     // MARK: - Core Evolution Loop
 
     /// Shared evolution loop for both `run()` and `runSeeded(with:)`.
-    private func evolveIslands(_ islands: [Island<C>]) -> [C] {
+    private func evolveIslands(_ islands: [Island<C>]) throws -> [C] {
         bestEver = islands.compactMap(\.bestEver).max(by: { $0.rawFitness < $1.rawFitness })
 
         let totalGenerations = baseConfig.maxGenerations
@@ -366,6 +402,12 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         var lastCrossDiversity: CrossIslandDiversity?
 
         for generation in 0..<totalGenerations {
+            // Cooperative cancellation — UI can stop a long `.thorough`
+            // run between generations. `bestEver` is already kept up to
+            // date so callers catching `CancellationError` get whatever
+            // was found before interruption.
+            try Task.checkCancellation()
+
             // Evolve each island for one generation in parallel.
             // Each Island is a reference type, so concurrent access to separate
             // instances is safe. parallelEvaluation=false avoids nested concurrentPerform.
@@ -435,6 +477,16 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             if isMigrationGeneration {
                 migrate(islands: islands, migrationSize: effectiveSize)
                 totalMigrations += 1
+
+                // Federated bandit merge coincides with migration
+                // boundaries: both share the rhythm of "islands have
+                // accumulated distinct experience, now exchange and
+                // continue." Uniform weighting across islands keeps the
+                // default behaviour symmetric; callers can weight by
+                // per-island best-fitness via a custom scheme if needed.
+                if let federated = federatedBandit {
+                    federated.merge()
+                }
             }
 
             // Update global best (by rawFitness — see per-island note above).
@@ -551,7 +603,23 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         let n = islands.count
         guard n > 1 else { return }
 
-        let migrationPairs = makeMigrationPairs(islandCount: n)
+        var migrationPairs = makeMigrationPairs(islandCount: n)
+
+        // Productivity routing: for each pair, ensure the source is the
+        // more-productive endpoint so flow runs down the fitness
+        // gradient. Topology graph is preserved (the *same* islands
+        // exchange); only who sends to whom flips when the pair is
+        // oriented against the gradient.
+        if islandConfig.routeByProductivity {
+            migrationPairs = migrationPairs.map { pair in
+                let srcFit = islands[pair.source].bestEver?.rawFitness ?? 0
+                let dstFit = islands[pair.destination].bestEver?.rawFitness ?? 0
+                if dstFit > srcFit {
+                    return (source: pair.destination, destination: pair.source)
+                }
+                return pair
+            }
+        }
 
         // Snapshot emigrants before any replacement to avoid one migration
         // polluting the source for subsequent pairs in the same round.
@@ -658,7 +726,7 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         mo: MultiObjectiveContext<C>
     ) -> [C] {
         let vectors = island.population.individuals.map(mo.objectiveVectorOf)
-        let ranking = mo.ranker.rankAll(vectors)
+        let ranking = mo.activeRanker.rankAll(vectors)
 
         // Sort candidates by (front ascending, distanceToNiche descending).
         // `.infinity` distances (boundary of the simplex) sort first — those
@@ -694,7 +762,7 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
 
         if let mo = multiObjective, islandConfig.immigrantReplacement == .worst {
             let vectors = individuals.map(mo.objectiveVectorOf)
-            let ranking = mo.ranker.rankAll(vectors)
+            let ranking = mo.activeRanker.rankAll(vectors)
 
             // Order individuals by dominated-rank descending, breaking ties
             // by crowdedness (smaller distanceToNiche = more crowded =
