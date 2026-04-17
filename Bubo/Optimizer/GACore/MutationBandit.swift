@@ -349,8 +349,7 @@ final class MutationBandit: @unchecked Sendable {
 /// generically without leaking the bandit surface into chromosomes that
 /// don't use it (e.g. `PomodoroSequenceChromosome`).
 protocol AdaptiveMutationChromosome: Chromosome {
-    /// The operator picked on the most recent `mutate` call, or nil if no
-    /// operator was applied (e.g. rate didn't hit any gene) or if the
-    /// bandit was not wired on the `OptimizerContext`.
+    /// The operator picked on the most recent `mutate` call, or nil on
+    /// a freshly-constructed chromosome whose `mutate()` has not yet run.
     var lastMutationOperator: MutationOperator? { get set }
 }

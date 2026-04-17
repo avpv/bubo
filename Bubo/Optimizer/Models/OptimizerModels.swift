@@ -150,17 +150,18 @@ struct OptimizerContext: Sendable {
     let calendar: Calendar
     let rng: GARandom
 
-    /// Optional adaptive operator selector. When set, `ScheduleChromosome.mutate`
-    /// consults it to pick a mutation operator per call instead of rolling
-    /// uniformly. Shared across every mutation in a single run so the arm
-    /// reward statistics accumulate.
-    let mutationBandit: MutationBandit?
+    /// Adaptive operator selector. `ScheduleChromosome.mutate` consults
+    /// this to pick a mutation operator per call instead of rolling
+    /// uniformly. Shared across every mutation in a single run so the
+    /// arm reward statistics accumulate.
+    let mutationBandit: MutationBandit
 
-    /// Optional attention head for `CrossoverStrategy.contextual`. When set,
-    /// contextual crossover scores every gene pair through this head before
-    /// deciding which parent to inherit from. Shared across islands so the
-    /// head's learnable weights absorb experience from every population.
-    let contextualCrossoverHead: GeneAttentionHead?
+    /// Attention head for `CrossoverStrategy.contextual`. Contextual
+    /// crossover scores every gene pair through this head before
+    /// deciding which parent to inherit from. Shared across islands so
+    /// the head's learnable weights absorb experience from every
+    /// population.
+    let contextualCrossoverHead: GeneAttentionHead
 
     init(
         fixedEvents: [CalendarEvent] = [],
@@ -174,8 +175,8 @@ struct OptimizerContext: Sendable {
         participantAvailability: [String: [DateInterval]] = [:],
         calendar: Calendar = .current,
         rng: GARandom = GARandom(),
-        mutationBandit: MutationBandit? = nil,
-        contextualCrossoverHead: GeneAttentionHead? = nil
+        mutationBandit: MutationBandit = MutationBandit(),
+        contextualCrossoverHead: GeneAttentionHead = GeneAttentionHead()
     ) {
         self.fixedEvents = fixedEvents
         self.movableEvents = movableEvents

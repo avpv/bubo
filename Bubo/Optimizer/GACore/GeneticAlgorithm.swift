@@ -71,39 +71,25 @@ struct GAConfiguration: Sendable {
     /// tuning of `mutationRate` per workload.
     var selfAdaptiveRates: Bool
 
-    // MARK: - SOTA-2026 Phase 2
-
-    /// When true, enable A-NSGA-III adaptive reference points. The
-    /// reference-point set grows around crowded niches and prunes
-    /// chronically-vacant directions over time (Jain & Deb, 2014).
-    /// Disabled by default; enable for irregular Pareto fronts where the
-    /// fixed Das–Dennis grid over-samples uninteresting regions.
-    var adaptiveReferencePoints: Bool
-
-    /// When true, use hypervolume-based tiebreaking on the last accepted
-    /// front inside NSGA-III survivor selection (HypE-lite). Costs ~2-5 ms
-    /// per generation (Monte Carlo hypervolume) but gives objectively-
-    /// grounded selection pressure where the reference-direction
-    /// tiebreaker is blind.
-    var hypervolumeTiebreak: Bool
-
-    /// When true, every offspring evaluation is screened through the
-    /// surrogate model on `OptimizerContext`; the real evaluator only runs
-    /// when the surrogate is uncertain. Typically halves the effective
-    /// evaluation cost after the surrogate warms up (~30-40 samples).
-    var useSurrogateScreening: Bool
+    // MARK: - SOTA-2026 Tunables
+    //
+    // The Phase-2 features (adaptive reference points, hypervolume
+    // tiebreak, QD archive, gradient refinement, surrogate screening,
+    // federated bandit) are "on when wired" — their presence is decided
+    // by the caller's wiring on `OptimizerContext` / `GeneticAlgorithm`,
+    // not by config flags. What remains in config are the *numeric*
+    // knobs: how often to refine, how much to inject, how many to
+    // refine.
 
     /// Fraction of offspring per generation drawn from the Quality-
-    /// Diversity archive (via `QualityDiversityArchive.drawEmitters`).
-    /// 0 disables archive-emission; 0.1-0.2 is the CMA-ME recipe for
-    /// steady archive injection.
+    /// Diversity archive. 0 means "never inject archive members."
+    /// 0.1-0.2 is the CMA-ME steady-injection recipe.
     var qdArchiveEmissionRate: Double
 
     /// Interval (in generations) between gradient-refinement passes on
-    /// the elite population. 0 disables the gradient refiner; values
-    /// > 0 invoke `DifferentiableRefiner` every N generations on the top
-    /// individuals. Costs ~2·passes·sampleFraction extra evaluations per
-    /// refined chromosome — enable only on thorough configs.
+    /// the elite population. 0 means "no gradient refinement this run."
+    /// Non-zero values require a `DifferentiableRefiner` wired on the
+    /// `GeneticAlgorithm` init.
     var gradientRefineInterval: Int
 
     /// Number of top individuals gradient-refined per invocation.
@@ -132,9 +118,6 @@ struct GAConfiguration: Sendable {
         chcRestartEliteFraction: Double = 0.15,
         chcRestartMutationRate: Double = 0.35,
         selfAdaptiveRates: Bool = false,
-        adaptiveReferencePoints: Bool = false,
-        hypervolumeTiebreak: Bool = false,
-        useSurrogateScreening: Bool = false,
         qdArchiveEmissionRate: Double = 0.0,
         gradientRefineInterval: Int = 0,
         gradientRefineCandidates: Int = 2
@@ -161,9 +144,6 @@ struct GAConfiguration: Sendable {
         self.chcRestartEliteFraction = chcRestartEliteFraction
         self.chcRestartMutationRate = chcRestartMutationRate
         self.selfAdaptiveRates = selfAdaptiveRates
-        self.adaptiveReferencePoints = adaptiveReferencePoints
-        self.hypervolumeTiebreak = hypervolumeTiebreak
-        self.useSurrogateScreening = useSurrogateScreening
         self.qdArchiveEmissionRate = qdArchiveEmissionRate
         self.gradientRefineInterval = gradientRefineInterval
         self.gradientRefineCandidates = gradientRefineCandidates
@@ -176,7 +156,7 @@ struct GAConfiguration: Sendable {
         crossoverRate: 0.8,
         eliteCount: 3,
         selectionStrategy: .tournament(size: 3),
-        crossoverStrategy: .singlePoint,
+        crossoverStrategy: .contextual(temperature: 0.5),
         convergenceThreshold: 0.001,
         convergencePatience: 30,
         adaptiveMutation: true,
@@ -190,7 +170,11 @@ struct GAConfiguration: Sendable {
         memeticHillClimbSteps: 6,
         chcMaxRestarts: 1,
         chcRestartEliteFraction: 0.15,
-        chcRestartMutationRate: 0.35
+        chcRestartMutationRate: 0.35,
+        selfAdaptiveRates: true,
+        qdArchiveEmissionRate: 0.1,
+        gradientRefineInterval: 50,
+        gradientRefineCandidates: 2
     )
 
     static let quick = GAConfiguration(
@@ -200,7 +184,7 @@ struct GAConfiguration: Sendable {
         crossoverRate: 0.8,
         eliteCount: 2,
         selectionStrategy: .tournament(size: 3),
-        crossoverStrategy: .singlePoint,
+        crossoverStrategy: .contextual(temperature: 0.7),
         convergenceThreshold: 0.005,
         convergencePatience: 15,
         adaptiveMutation: false,
@@ -214,6 +198,7 @@ struct GAConfiguration: Sendable {
     /// Ultra-fast config for live preview and drag-to-schedule reflow.
     /// ~20 generations, ~100ms on modern hardware.
     /// Trades optimality for speed — good enough for preview, not final schedule.
+    /// Uses single-point crossover to skip attention-scoring overhead.
     static let instant = GAConfiguration(
         populationSize: 20,
         maxGenerations: 20,
@@ -239,35 +224,6 @@ struct GAConfiguration: Sendable {
         crossoverRate: 0.85,
         eliteCount: 5,
         selectionStrategy: .tournament(size: 5),
-        crossoverStrategy: .twoPoint,
-        convergenceThreshold: 0.0005,
-        convergencePatience: 50,
-        adaptiveMutation: true,
-        diversityThreshold: 0.005,
-        immigrationRate: 0.15,
-        greedySeedFraction: 0.1,
-        enableRepair: true,
-        adaptiveCrossover: true,
-        memeticHillClimbInterval: 40,
-        memeticHillClimbCandidates: 5,
-        memeticHillClimbSteps: 10,
-        chcMaxRestarts: 2,
-        chcRestartEliteFraction: 0.15,
-        chcRestartMutationRate: 0.35,
-        selfAdaptiveRates: true
-    )
-
-    /// SOTA-2026 preset: every Phase-2 feature turned on. Use for offline
-    /// batch planning where latency isn't critical and quality matters
-    /// more. Roughly 2-3× slower than `thorough` but with markedly
-    /// better front coverage on the 13-objective evaluator.
-    static let sota2026 = GAConfiguration(
-        populationSize: 200,
-        maxGenerations: 500,
-        mutationRate: 0.1,
-        crossoverRate: 0.85,
-        eliteCount: 5,
-        selectionStrategy: .tournament(size: 5),
         crossoverStrategy: .contextual(temperature: 0.5),
         convergenceThreshold: 0.0005,
         convergencePatience: 50,
@@ -284,9 +240,6 @@ struct GAConfiguration: Sendable {
         chcRestartEliteFraction: 0.15,
         chcRestartMutationRate: 0.35,
         selfAdaptiveRates: true,
-        adaptiveReferencePoints: true,
-        hypervolumeTiebreak: true,
-        useSurrogateScreening: true,
         qdArchiveEmissionRate: 0.15,
         gradientRefineInterval: 35,
         gradientRefineCandidates: 3
@@ -294,8 +247,8 @@ struct GAConfiguration: Sendable {
 
     /// Per-island config for island model GA. Smaller populations per island
     /// since total individuals = populationSize * islandCount.
-    /// Uses 2-point crossover and moderate mutation as a base;
-    /// IslandModelGA diversifies parameters across islands.
+    /// Uses contextual crossover and gradient refinement; IslandModelGA
+    /// diversifies strategies across islands.
     static let island = GAConfiguration(
         populationSize: 60,
         maxGenerations: 400,
@@ -303,7 +256,7 @@ struct GAConfiguration: Sendable {
         crossoverRate: 0.85,
         eliteCount: 3,
         selectionStrategy: .tournament(size: 4),
-        crossoverStrategy: .twoPoint,
+        crossoverStrategy: .contextual(temperature: 0.5),
         convergenceThreshold: 0.0005,
         convergencePatience: 40,
         adaptiveMutation: true,
@@ -314,7 +267,11 @@ struct GAConfiguration: Sendable {
         adaptiveCrossover: true,
         memeticHillClimbInterval: 30,
         memeticHillClimbCandidates: 3,
-        memeticHillClimbSteps: 8
+        memeticHillClimbSteps: 8,
+        selfAdaptiveRates: true,
+        qdArchiveEmissionRate: 0.12,
+        gradientRefineInterval: 40,
+        gradientRefineCandidates: 2
     )
 }
 
@@ -335,25 +292,22 @@ struct GAProgress: Sendable {
 /// genomes used by `PomodoroSequenceChromosome`) pass `nil` and the
 /// engine falls back to scalar-fitness generational replacement.
 struct MultiObjectiveContext<C: Chromosome>: @unchecked Sendable {
-    /// Static ranker fallback — used when adaptive reference points are
-    /// disabled. Kept for test/bench parity with legacy runs.
-    let ranker: NSGA3
+    /// Adaptive NSGA-III ranker. Reference points grow around crowded
+    /// niches and prune vacant ones (Jain & Deb, 2014). There is no
+    /// static-ranker alternative — the adaptive variant subsumes the
+    /// fixed Das–Dennis grid as its initial state.
+    let adaptiveRanker: AdaptiveNSGA3
+
     let objectiveVectorOf: (C) -> [Double]
 
-    /// Optional adaptive ranker. When present, the GA calls
-    /// `adaptiveRanker.currentRanker` each generation instead of `ranker`
-    /// so reference-point evolution happens in the background. Enabled
-    /// via `GAConfiguration.adaptiveReferencePoints`.
-    let adaptiveRanker: AdaptiveNSGA3?
+    /// Hypervolume estimator used for last-front tiebreaking inside
+    /// survivor selection.
+    let hypervolume: HypervolumeEstimator
 
-    /// Optional hypervolume estimator. When present, the GA uses it for
-    /// last-front tiebreaking inside survivor selection.
-    let hypervolume: HypervolumeEstimator?
-
-    /// Returns the ranker that should be used for the current generation.
-    var activeRanker: NSGA3 {
-        adaptiveRanker?.currentRanker ?? ranker
-    }
+    /// Ranker snapshot for the current generation. Taken from the
+    /// adaptive variant so reference-point evolution is observed by
+    /// every selection call.
+    var activeRanker: NSGA3 { adaptiveRanker.currentRanker }
 
     /// Produce the NSGA-III harness for the default 13-objective
     /// ScheduleChromosome evaluator. Reads `objectiveCache` directly so
@@ -361,30 +315,32 @@ struct MultiObjectiveContext<C: Chromosome>: @unchecked Sendable {
     static func schedule(
         evaluator: FitnessEvaluator,
         populationSize: Int,
-        adaptiveReferencePoints: Bool = false,
-        hypervolume: HypervolumeEstimator? = nil
+        hypervolumeSampleCount: Int = 8_000,
+        hypervolumeSeed: UInt64 = 0x5EED_F2_2026
     ) -> MultiObjectiveContext<ScheduleChromosome> {
         let names = evaluator.objectives.map(\.name)
         // Combined parent + offspring pool is 2·N, so feed NSGA-III that
         // many reference directions — each individual can be associated
         // with a distinct direction in dense regions of the simplex.
-        let ranker = NSGA3.forPopulation(
+        let base = NSGA3.forPopulation(
             objectiveCount: names.count,
             populationSize: max(2, populationSize * 2)
         )
-        let adaptive = adaptiveReferencePoints
-            ? AdaptiveNSGA3(base: ranker)
-            : nil
+        let adaptive = AdaptiveNSGA3(base: base)
+        let hv = HypervolumeEstimator(
+            objectiveCount: names.count,
+            sampleCount: hypervolumeSampleCount,
+            seed: hypervolumeSeed
+        )
         return MultiObjectiveContext<ScheduleChromosome>(
-            ranker: ranker,
+            adaptiveRanker: adaptive,
             objectiveVectorOf: { chromosome in
                 if let cache = chromosome.objectiveCache, !cache.isEmpty {
                     return names.map { cache[$0] ?? 0.0 }
                 }
                 return names.map { _ in 0.0 }
             },
-            adaptiveRanker: adaptive,
-            hypervolume: hypervolume
+            hypervolume: hv
         )
     }
 }
@@ -673,17 +629,15 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         // chosen during mutation reflects the current GA regime. Imbalance
         // is the std dev across objectives on the best individual — reads
         // the cached breakdown (delta-eval keeps it fresh).
-        if let bandit = context.mutationBandit {
-            let imbalance = objectiveImbalance(in: population)
-            let stagnation = config.convergencePatience > 0
-                ? min(1.0, Double(staleGenerations) / Double(max(1, config.convergencePatience)))
-                : 0.0
-            bandit.updateContext(BanditContext(
-                diversity: min(1.0, genotypicDiv / max(1e-6, config.diversityThreshold * 4)),
-                stagnation: stagnation,
-                imbalance: imbalance
-            ))
-        }
+        let imbalance = objectiveImbalance(in: population)
+        let stagnation = config.convergencePatience > 0
+            ? min(1.0, Double(staleGenerations) / Double(max(1, config.convergencePatience)))
+            : 0.0
+        context.mutationBandit.updateContext(BanditContext(
+            diversity: min(1.0, genotypicDiv / max(1e-6, config.diversityThreshold * 4)),
+            stagnation: stagnation,
+            imbalance: imbalance
+        ))
 
         // Immigration: inject random individuals when diversity collapses
         if diversityIsLow && config.immigrationRate > 0 {
@@ -785,45 +739,37 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         // Close the MutationBandit feedback loop. Reward is (rawFitness - baseline)
         // so arms get credit only for beating the better parent. LinUCB handles
         // the context attribution internally; we just supply the raw delta.
-        if let bandit = context.mutationBandit {
-            for i in offspring.indices {
-                guard let adaptive = offspring[i] as? any AdaptiveMutationChromosome,
-                      let op = adaptive.lastMutationOperator else { continue }
-                let reward = offspring[i].rawFitness - offspringBaselines[i]
-                bandit.record(op: op, reward: reward)
-            }
+        for i in offspring.indices {
+            guard let adaptive = offspring[i] as? any AdaptiveMutationChromosome,
+                  let op = adaptive.lastMutationOperator else { continue }
+            let reward = offspring[i].rawFitness - offspringBaselines[i]
+            context.mutationBandit.record(op: op, reward: reward)
         }
 
-        // Survivor selection: (μ+λ) combine, then NSGA-III if multi-
-        // objective vectors are available, else scalar generational.
+        // Survivor selection: (μ+λ) combine, then adaptive NSGA-III with
+        // HypE-lite last-front tiebreak when multi-objective vectors are
+        // available, else scalar generational.
         if let mo = multiObjective {
             let combined = population.individuals + offspring
             let vectors = combined.map(mo.objectiveVectorOf)
             let activeRanker = mo.activeRanker
 
-            // When hypervolume tiebreak is enabled and we have the
-            // estimator, use HypE-lite survivors. Otherwise fall back to
-            // the canonical NSGA-III niching rule.
-            let survivorIndices: [Int]
-            let result: NSGA3.SelectionResult
-            if config.hypervolumeTiebreak, let hv = mo.hypervolume {
-                survivorIndices = hv.survivorsWithNSGA3(
-                    vectors,
-                    keeping: config.populationSize,
-                    using: activeRanker
-                )
-                // Rebuild a SelectionResult via the ranker so the scalar
-                // fitness rewrite has front/niche metadata available.
-                result = activeRanker.select(vectors, count: config.populationSize)
-            } else {
-                result = activeRanker.select(vectors, count: config.populationSize)
-                survivorIndices = result.selectedIndices
-            }
+            // Hypervolume contribution breaks ties on the last accepted
+            // front — objectively-grounded selection pressure that the
+            // perpendicular-distance rule is blind to.
+            let survivorIndices = mo.hypervolume.survivorsWithNSGA3(
+                vectors,
+                keeping: config.populationSize,
+                using: activeRanker
+            )
+            // Re-select via the ranker so the scalar-fitness rewrite has
+            // niche metadata available.
+            let result = activeRanker.select(vectors, count: config.populationSize)
 
             var nextIndividuals = survivorIndices.map { combined[$0] }
 
             // Feed the adaptive reference-point history.
-            mo.adaptiveRanker?.observe(result, updateInterval: 10)
+            mo.adaptiveRanker.observe(result, updateInterval: 10)
 
             // Rebuild a SelectionResult keyed by 0..<N (positions in the
             // trimmed survivor array) so scalar fitness rewrite works

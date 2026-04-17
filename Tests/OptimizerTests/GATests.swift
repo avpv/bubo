@@ -2871,7 +2871,7 @@ struct DeltaEvaluationTests {
             populationSize: pop.count
         )
         let vectors = pop.map(mo.objectiveVectorOf)
-        let result = mo.ranker.select(vectors, count: pop.count)
+        let result = mo.activeRanker.select(vectors, count: pop.count)
         NSGA3.applyScalarFitness(result, to: &pop)
         let strongIdx = pop.firstIndex(where: { $0.genes == strong.genes })!
         let weakIdx = pop.firstIndex(where: { $0.genes == weak.genes })!

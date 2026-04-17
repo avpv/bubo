@@ -367,8 +367,8 @@ struct ContextualCrossoverTests {
         #expect(c2.genes.count == p2.genes.count)
     }
 
-    @Test("Falling back to uniform when no head wired still produces offspring")
-    func missingHeadFallsBack() {
+    @Test("Default OptimizerContext auto-wires an attention head")
+    func defaultContextWiresHead() {
         let context = sota2026MakeContext(
             movableEvents: [
                 sota2026MakeEvent(id: "t1"),
@@ -476,23 +476,42 @@ struct ScheduleFeatureTests {
     }
 }
 
-// MARK: - GAConfiguration.sota2026
+// MARK: - Phase-2 Presets
 
-@Suite("SOTA-2026 Config Preset")
-struct SOTA2026ConfigTests {
+@Suite("Phase-2 Presets Bake In SOTA-2026 Features")
+struct Phase2PresetTests {
 
-    @Test("Preset has every Phase-2 feature turned on")
-    func presetEnablesAllFeatures() {
-        let c = GAConfiguration.sota2026
-        #expect(c.adaptiveReferencePoints)
-        #expect(c.hypervolumeTiebreak)
-        #expect(c.useSurrogateScreening)
+    @Test("Default preset uses contextual crossover and QD emission")
+    func defaultPresetConfigured() {
+        let c = GAConfiguration.default
         #expect(c.qdArchiveEmissionRate > 0)
         #expect(c.gradientRefineInterval > 0)
-        if case .contextual = c.crossoverStrategy {
-            #expect(true)
-        } else {
-            Issue.record("Expected .contextual crossover strategy")
-        }
+        if case .contextual = c.crossoverStrategy { #expect(true) }
+        else { Issue.record("Expected .contextual crossover strategy on .default") }
+    }
+
+    @Test("Thorough preset uses contextual crossover and QD emission")
+    func thoroughPresetConfigured() {
+        let c = GAConfiguration.thorough
+        #expect(c.qdArchiveEmissionRate > 0)
+        #expect(c.gradientRefineInterval > 0)
+        if case .contextual = c.crossoverStrategy { #expect(true) }
+        else { Issue.record("Expected .contextual crossover strategy on .thorough") }
+    }
+
+    @Test("Island preset uses contextual crossover and QD emission")
+    func islandPresetConfigured() {
+        let c = GAConfiguration.island
+        #expect(c.qdArchiveEmissionRate > 0)
+        #expect(c.gradientRefineInterval > 0)
+        if case .contextual = c.crossoverStrategy { #expect(true) }
+        else { Issue.record("Expected .contextual crossover strategy on .island") }
+    }
+
+    @Test("Instant preset keeps single-point crossover for preview latency")
+    func instantPresetStaysFast() {
+        let c = GAConfiguration.instant
+        if case .singlePoint = c.crossoverStrategy { #expect(true) }
+        else { Issue.record("Expected .singlePoint crossover on .instant") }
     }
 }

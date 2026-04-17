@@ -695,7 +695,7 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         mo: MultiObjectiveContext<C>
     ) -> [C] {
         let vectors = island.population.individuals.map(mo.objectiveVectorOf)
-        let ranking = mo.ranker.rankAll(vectors)
+        let ranking = mo.activeRanker.rankAll(vectors)
 
         // Sort candidates by (front ascending, distanceToNiche descending).
         // `.infinity` distances (boundary of the simplex) sort first — those
@@ -731,7 +731,7 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
 
         if let mo = multiObjective, islandConfig.immigrantReplacement == .worst {
             let vectors = individuals.map(mo.objectiveVectorOf)
-            let ranking = mo.ranker.rankAll(vectors)
+            let ranking = mo.activeRanker.rankAll(vectors)
 
             // Order individuals by dominated-rank descending, breaking ties
             // by crowdedness (smaller distanceToNiche = more crowded =

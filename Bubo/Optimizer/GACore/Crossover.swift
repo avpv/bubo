@@ -16,12 +16,10 @@ enum CrossoverStrategy: Sendable {
     case dayBlock
 
     /// Attention-weighted contextual crossover. Each gene's inheritance
-    /// decision is driven by a learnable `GeneAttentionHead` that scores
-    /// parent placements using priority, deadline urgency, and structural
-    /// fit. Delegates to `ContextualCrossover.perform` and requires the
-    /// host GA to pass a head via the `contextualCrossoverHead` wired on
-    /// `OptimizerContext`. Falls back to uniform crossover when no head
-    /// is available so the case is safe to set even without wiring.
+    /// decision is driven by a `GeneAttentionHead` that scores parent
+    /// placements using priority, deadline urgency, and structural fit.
+    /// Delegates to `ContextualCrossover.perform`; the head is read
+    /// unconditionally from `OptimizerContext.contextualCrossoverHead`.
     case contextual(temperature: Double)
 }
 
@@ -47,17 +45,10 @@ enum Crossover {
         case .dayBlock:
             return dayBlockCrossover(parent1, parent2, context: context)
         case .contextual(let temperature):
-            // Contextual crossover requires an attention head wired on the
-            // context. When missing we degrade to uniform — retaining the
-            // intended stochastic swap behaviour rather than silently
-            // short-circuiting to single point.
-            guard let head = context.contextualCrossoverHead else {
-                return uniformCrossover(parent1, parent2, swapProbability: 0.5, rng: context.rng)
-            }
             return ContextualCrossover.perform(
                 parent1, parent2,
                 context: context,
-                head: head,
+                head: context.contextualCrossoverHead,
                 temperature: temperature
             )
         }

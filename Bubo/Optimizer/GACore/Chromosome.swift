@@ -96,11 +96,12 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
     /// Used by delta evaluation to skip recomputing unaffected local objectives.
     var mutatedGeneIndices: IndexSet?
 
-    /// The operator picked by the `MutationBandit` on the last `mutate()` call,
-    /// if any. The GA loop reads this post-evaluation to attribute the fitness
-    /// delta back to the operator, closing the UCB1 feedback loop. `nil` when
-    /// the bandit wasn't wired or when mutate() was skipped (no rate hit any
-    /// gene). Does not participate in equality/hashing.
+    /// The operator picked by the `MutationBandit` on the last `mutate()`
+    /// call. The GA loop reads this post-evaluation to attribute the
+    /// fitness delta back to the operator, closing the LinUCB feedback
+    /// loop. `nil` only on freshly-constructed chromosomes whose
+    /// `mutate()` has not yet run. Does not participate in
+    /// equality/hashing.
     var lastMutationOperator: MutationOperator?
 
     /// Self-adaptive mutation rate encoded directly in the genome. When > 0
@@ -397,13 +398,11 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
             effectiveRate = rate
         }
 
-        // If a bandit is wired, choose one operator for this entire call and
-        // use it for every gene that gets selected. The feedback loop works
-        // at call granularity (pre vs. post fitness), so per-gene operator
-        // variation would make the reward signal harder to attribute. Without
-        // a bandit, we keep the per-gene uniform-random behaviour so existing
-        // runs produce the same distribution of mutations.
-        let bandedOperator: MutationOperator? = context.mutationBandit?.select(rng: context.rng)
+        // Choose one operator for this entire call and use it for every
+        // gene that gets selected. The feedback loop works at call
+        // granularity (pre vs. post fitness), so per-gene operator
+        // variation would make the reward signal harder to attribute.
+        let bandedOperator = context.mutationBandit.select(rng: context.rng)
         lastMutationOperator = bandedOperator
 
         for i in genes.indices {
@@ -423,12 +422,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
             let event = context.movableEvents.first { $0.id == genes[i].eventId }
             let earliest = event?.earliestStart
             let floor = [horizonStart, earliest].compactMap { $0 }.max() ?? horizonStart
-            let strategy: Int
-            if let op = bandedOperator {
-                strategy = op.rawValue
-            } else {
-                strategy = context.rng.int(in: 0...3)
-            }
+            let strategy = bandedOperator.rawValue
 
             switch strategy {
             case 0:

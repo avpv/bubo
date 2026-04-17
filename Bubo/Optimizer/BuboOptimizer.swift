@@ -51,10 +51,10 @@ final class BuboOptimizer {
         var prefs = context.preferences
         preferenceLearner.applyToPreferences(&prefs)
 
-        // Wire a fresh MutationBandit for this run. UCB1 stats don't carry
-        // over between optimizations because workload characteristics
-        // (fixed events, movable pool, preferences) differ per run, so a
-        // stale arm allocation would be actively misleading.
+        // Wire fresh per-run learners. Bandit/attention-head stats don't
+        // carry over between optimizations because workload
+        // characteristics (fixed events, movable pool, preferences)
+        // differ per run; stale weights would be actively misleading.
         let adjustedContext = OptimizerContext(
             fixedEvents: context.fixedEvents,
             movableEvents: context.movableEvents,
@@ -63,8 +63,7 @@ final class BuboOptimizer {
             preferences: prefs,
             participantAvailability: context.participantAvailability,
             calendar: context.calendar,
-            rng: context.rng,
-            mutationBandit: MutationBandit()
+            rng: context.rng
         )
 
         let evaluator = FitnessEvaluator.standard(preferences: prefs)
@@ -72,13 +71,22 @@ final class BuboOptimizer {
         let capturedIslandConfig = overrideIslandConfig ?? islandConfig
         let capturedScenarioCount = scenarioCount
 
-        // Wire the NSGA-III survivor selector for ScheduleChromosome. The
+        // Wire the adaptive NSGA-III harness for ScheduleChromosome. The
         // harness reads per-objective scores straight out of the chromosome
         // cache, so survivor selection imposes zero extra evaluation cost.
         let multiObjective = MultiObjectiveContext<ScheduleChromosome>.schedule(
             evaluator: evaluator,
             populationSize: config.populationSize
         )
+
+        // Quality-Diversity archive shared across every island so
+        // productive genotypes discovered anywhere feed every population.
+        let qdArchive = QualityDiversityArchive(resolution: 6)
+
+        // Gradient refiner for elite fine-tuning. Cost is bounded by
+        // `config.gradientRefineCandidates * passes`; presets set a
+        // sensible cadence via `gradientRefineInterval`.
+        let gradientRefiner = DifferentiableRefiner()
 
         // Run island model GA on background thread
         let (population, convergenceGen, duration) = await Task.detached(priority: .userInitiated) {
@@ -91,7 +99,9 @@ final class BuboOptimizer {
                 evaluate: { chromosome in
                     evaluator.evaluateAndAssign(&chromosome, context: adjustedContext)
                 },
-                multiObjective: multiObjective
+                multiObjective: multiObjective,
+                qdArchive: qdArchive,
+                gradientRefiner: gradientRefiner
             )
 
             let pop = islandGA.run()
