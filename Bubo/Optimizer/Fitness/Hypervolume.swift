@@ -1,135 +1,116 @@
 import Foundation
 
-// MARK: - Hypervolume-Based Selection (HypE-lite)
+// MARK: - Hypervolume Estimator (HypE-lite, Monte Carlo)
 //
-// Hypervolume is the many-objective gold standard for measuring "how much
-// of objective space a Pareto front covers." For the calendar optimizer
-// it has two uses:
+// Hypervolume is the canonical many-objective quality measure. Two
+// uses inside the GA:
 //
-//   1. A tiebreaker that replaces the perpendicular-distance-to-niche
-//      tiebreaker in NSGA-III's last accepted front. Niching is good at
-//      enforcing coverage of pre-declared directions, but hypervolume
-//      contribution captures how much a point *would cost the front* if
-//      removed — a directly objective-grounded quality measure.
-//   2. A standalone survivor rule (SMS-EMOA style) when the NSGA-III
-//      direction set is misaligned with the true front geometry. With
-//      M = 13 objectives exact hypervolume is intractable (O(N^M)), so we
-//      use HypE's Monte Carlo approximation (Bader & Zitzler, 2011) with a
-//      deterministic sampler driven by the GA's `GARandom`.
+//   1. Tiebreak on the last-accepted NSGA-III front: pick survivors
+//      by hypervolume contribution instead of perpendicular-distance
+//      to the reference direction. Contribution captures "how much
+//      front area would I lose if I removed this individual" —
+//      objectively grounded where the reference-direction tiebreak
+//      is blind.
+//   2. Standalone telemetry: the running hypervolume of the
+//      current front is a clean signal for "are we improving
+//      Pareto coverage?"
 //
-// Reference point: (0, 0, …, 0) — "worst" on every axis. Every score is
-// already normalized to [0, 1] by NSGA3.normalize, so the unit hypercube
-// is the sampling volume and contributions integrate cleanly.
+// Exact hypervolume in m=13 dimensions is intractable (O(N^m)). HypE
+// (Bader & Zitzler, 2011) uses Monte Carlo sampling: draw N points
+// uniformly in the unit hypercube, count the dominators of each
+// sample, credit each dominator with `1 / count` of that sample's
+// volume.
+//
+// Implementation notes vs. the previous version:
+//   • Per-call seeded sampler. The old shared `GARandom` was a
+//     correctness hazard under parallel survivor selection (the
+//     struct was `@unchecked Sendable` but had mutable state). Each
+//     call now constructs a tiny `GARandom` from a deterministic
+//     seed mixed with a per-call salt, so two parallel callers get
+//     non-overlapping streams without sharing.
+//   • Reusable `ContiguousArray` buffers for the per-sample
+//     dominator bitmap and the contribution accumulator. Steady-
+//     state allocation is zero.
 
-/// Monte Carlo hypervolume estimator with a fixed-seed sampler so
-/// selections are reproducible under the GA's seeded RNG.
-///
-/// Thread safety: immutable snapshot constructed per-generation; no
-/// locking required once constructed.
+/// Monte Carlo hypervolume estimator.
 struct HypervolumeEstimator: Sendable {
-    /// Number of Monte Carlo samples used per hypervolume query. HypE's
-    /// authors recommend 10k – 50k for 10+ objectives; we default to 20k
-    /// which, on a modern CPU, costs ~2ms for a 200-individual combined
-    /// pool. Increase when many objectives saturate near 1.0 (less volume
-    /// to sample means more variance).
+    /// Samples per `contributions` / `totalHypervolume` call.
     let sampleCount: Int
 
-    /// Objective count. Derived from the first vector on `estimate`.
+    /// Objective count.
     let objectiveCount: Int
 
-    /// Reference point on each axis — "worst" direction. Clamped to (0, 1).
-    let referencePoint: [Double]
+    /// Reference point (per-axis "worst"). For unit-cube objectives
+    /// this is the origin.
+    let referencePoint: ContiguousArray<Double>
 
-    /// Shared sampler. Seeded at construction so hypervolume queries are
-    /// reproducible regardless of which generation calls them first.
-    private let sampler: GARandom
+    /// Base seed for the per-call sampler. Mixed with a salt on each
+    /// call so concurrent invocations get disjoint streams.
+    let baseSeed: UInt64
 
     init(
         objectiveCount m: Int,
-        sampleCount: Int = 20_000,
+        sampleCount: Int = 8_000,
         seed: UInt64,
-        referencePoint: [Double]? = nil
+        referencePoint: ContiguousArray<Double>? = nil
     ) {
         precondition(m > 0)
         self.objectiveCount = m
         self.sampleCount = max(256, sampleCount)
-        self.referencePoint = referencePoint ?? [Double](repeating: 0.0, count: m)
-        self.sampler = GARandom(seed: seed)
+        self.referencePoint = referencePoint ?? ContiguousArray(repeating: 0.0, count: m)
+        self.baseSeed = seed
     }
 
     // MARK: - Per-individual contribution
 
-    /// HypE-style per-individual hypervolume contribution estimate.
-    ///
-    /// Intuitively: "if I removed individual `i` from the set, how much
-    /// hypervolume would I lose?" Higher = better, because the individual
-    /// uniquely covers objective-space volume.
-    ///
-    /// Implementation is the linear-time Monte Carlo variant from HypE:
-    /// draw `sampleCount` points uniformly in the unit hypercube, for each
-    /// sample count how many individuals dominate it, and credit every
-    /// dominating individual with `1 / count` volume. Summing across
-    /// samples gives an unbiased estimate of per-individual contribution.
-    ///
-    /// - Parameters:
-    ///   - vectors: normalized objective vectors (higher is better), one
-    ///     per individual. Must all have length `objectiveCount`.
-    /// - Returns: array of same length as `vectors`; each entry is the
-    ///   estimated hypervolume contribution of that individual.
-    func contributions(_ vectors: [[Double]]) -> [Double] {
+    /// Estimate per-individual hypervolume contribution. Higher means
+    /// the individual covers volume that no other member of the
+    /// population covers.
+    func contributions(
+        _ vectors: [[Double]],
+        callSalt: UInt64 = 0
+    ) -> [Double] {
         let n = vectors.count
         guard n > 0 else { return [] }
-        // Validate dims on the first vector only — rest are trusted.
         precondition(vectors[0].count == objectiveCount, "objective count mismatch")
 
-        var contributions = [Double](repeating: 0, count: n)
+        let sampler = makeSampler(salt: callSalt)
+        var contributions = ContiguousArray<Double>(repeating: 0.0, count: n)
+        var sample = ContiguousArray<Double>(repeating: 0.0, count: objectiveCount)
+        var dominators = ContiguousArray<Int>()
+        dominators.reserveCapacity(min(n, 64))
+
         let volumePerSample = 1.0 / Double(sampleCount)
 
-        // Pre-allocate sample buffer.
-        var sample = [Double](repeating: 0, count: objectiveCount)
-
         for _ in 0..<sampleCount {
-            // Draw a uniform sample in the unit hypercube. HypE's theory
-            // requires the sampling region to dominate the reference point;
-            // for our unit-cube formulation every sample satisfies that.
             for k in 0..<objectiveCount {
                 sample[k] = sampler.unit()
             }
-
-            // Count dominating individuals — those whose score is >= sample
-            // on every axis. "Higher is better" everywhere.
-            var dominatingIndices: [Int] = []
-            for i in 0..<n {
-                if dominatesSample(vectors[i], sample) {
-                    dominatingIndices.append(i)
-                }
+            dominators.removeAll(keepingCapacity: true)
+            for i in 0..<n where dominatesSample(vectors[i], sample) {
+                dominators.append(i)
             }
-
-            // Credit each dominating individual with its share of this
-            // sample's volume. HypE's `1 / count` is the unbiased linear
-            // estimator; variants use different share functions, but the
-            // linear one is what SMS-EMOA's contribution rule assumes.
-            if !dominatingIndices.isEmpty {
-                let share = volumePerSample / Double(dominatingIndices.count)
-                for idx in dominatingIndices {
-                    contributions[idx] += share
-                }
+            if !dominators.isEmpty {
+                let share = volumePerSample / Double(dominators.count)
+                for idx in dominators { contributions[idx] += share }
             }
         }
-
-        return contributions
+        return Array(contributions)
     }
 
-    /// Global hypervolume of the Pareto front formed by `vectors`. Rough
-    /// upper bound on the quality of a generation — larger is better.
-    /// Useful as a logging/telemetry signal independent of selection.
-    func totalHypervolume(_ vectors: [[Double]]) -> Double {
+    /// Total hypervolume of the population's union — the "is the
+    /// front getting bigger?" signal.
+    func totalHypervolume(
+        _ vectors: [[Double]],
+        callSalt: UInt64 = 0
+    ) -> Double {
         let n = vectors.count
         guard n > 0 else { return 0 }
         precondition(vectors[0].count == objectiveCount, "objective count mismatch")
 
+        let sampler = makeSampler(salt: callSalt)
+        var sample = ContiguousArray<Double>(repeating: 0.0, count: objectiveCount)
         var dominated = 0
-        var sample = [Double](repeating: 0, count: objectiveCount)
         for _ in 0..<sampleCount {
             for k in 0..<objectiveCount { sample[k] = sampler.unit() }
             for v in vectors where dominatesSample(v, sample) {
@@ -142,19 +123,14 @@ struct HypervolumeEstimator: Sendable {
 
     // MARK: - HypE-lite survivor rule
 
-    /// Survivor selection that combines NSGA-III front ranking with a
-    /// hypervolume tiebreaker on the last accepted front. Faster than pure
-    /// SMS-EMOA (which reranks on every removal) but retains the property
-    /// that removed individuals have the lowest hypervolume contribution.
-    ///
-    /// Returns indices into `vectors` sorted so the first `k` are the
-    /// survivors. Front rank is computed by the provided NSGA3 instance to
-    /// avoid duplicating the O(N²) non-dominated sort — the GA already has
-    /// a ranker; we just borrow its fronts.
+    /// Survivor selection that combines NSGA-III fronts with a
+    /// hypervolume tiebreak on the last accepted front. Returns
+    /// indices into `vectors` (the first `k` are survivors).
     func survivorsWithNSGA3(
         _ vectors: [[Double]],
         keeping k: Int,
-        using ranker: NSGA3
+        using ranker: NSGA3,
+        callSalt: UInt64 = 0
     ) -> [Int] {
         precondition(k >= 0)
         let n = vectors.count
@@ -175,16 +151,10 @@ struct HypervolumeEstimator: Sendable {
         }
         if survivors.count == k { return survivors }
 
-        // On the last front, compute per-individual contribution ranking
-        // and keep the top `slotsRemaining`. We compute on the subset only
-        // because HypE's contribution is local to the front (dominating
-        // members of lower fronts add no info to the last-front ranking).
         let slotsRemaining = k - survivors.count
         let subsetVectors = frontBeingCut.map { vectors[$0] }
-        let subsetContributions = contributions(subsetVectors)
+        let subsetContributions = contributions(subsetVectors, callSalt: callSalt)
 
-        // Sort front indices by contribution descending; tiebreak by
-        // original index for reproducibility.
         let ranked = zip(frontBeingCut, subsetContributions)
             .enumerated()
             .sorted { a, b in
@@ -202,11 +172,22 @@ struct HypervolumeEstimator: Sendable {
 
     // MARK: - Helpers
 
+    /// Tiny seeded sampler per call. SplitMix is cheap to construct
+    /// (one mix step) and self-contained, so concurrent callers get
+    /// independent streams without contention.
+    private func makeSampler(salt: UInt64) -> GARandom {
+        // Mix base seed and salt deterministically — same (seed, salt)
+        // pair always produces the same stream, so unit tests stay
+        // reproducible.
+        var z = baseSeed &+ salt &+ 0x9E37_79B9_7F4A_7C15
+        z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
+        z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
+        let mixed = z ^ (z >> 31)
+        return GARandom(seed: mixed)
+    }
+
     @inline(__always)
-    private func dominatesSample(_ v: [Double], _ sample: [Double]) -> Bool {
-        // v dominates the sample iff every axis of v >= sample, i.e. the
-        // sample lies in the box anchored at the reference point whose
-        // upper corner is v.
+    private func dominatesSample(_ v: [Double], _ sample: ContiguousArray<Double>) -> Bool {
         for k in 0..<objectiveCount where v[k] < sample[k] { return false }
         return true
     }

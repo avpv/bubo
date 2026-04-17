@@ -1,33 +1,22 @@
 import Foundation
 
-// MARK: - Quality-Diversity Archive (MAP-Elites / CMA-ME / PGA-ME hybrid)
+// MARK: - Quality-Diversity Archive (MAP-Elites)
 //
-// MAP-Elites bins the search space along a small number of "behaviour
-// descriptors" and keeps the best individual in each cell. Compared to
-// elitism (one best overall), MAP-Elites retains a *portfolio* of
-// solutions that span the behaviour space — useful for calendar
-// scheduling under user uncertainty: one cell may contain the
-// morning-heavy plan, another a deep-work-evening plan, etc.
+// MAP-Elites bins the search space along a small number of behaviour
+// descriptors and keeps the best individual in each cell (Mouret &
+// Clune, 2015). For Bubo's calendar optimizer the descriptor is a
+// 3-tuple: (focusMass, morningSkew, daySpread), read directly from
+// `ScheduleFeatureVector.behavior` so feature extraction is shared
+// with the surrogate model.
 //
-// This implementation blends three ideas:
-//
-//   • MAP-Elites (Mouret & Clune, 2015): the grid structure, always-
-//     replace-if-better update rule.
-//   • CMA-ME (Fontaine et al., 2020): "improvement emitters" that sample
-//     around archive elites and bias search toward cells the emitter is
-//     currently improving. We don't run a full CMA-ES emitter (that would
-//     require a separate covariance estimator per cell), but the
-//     *improvement signal* is recorded so the GA's selection can
-//     weight-draw from productive cells.
-//   • PGA-ME (Nilsson & Cully, 2021): gradient-informed offspring. We
-//     integrate with `DifferentiableRelaxation` via a callback so a
-//     fraction of archive-drawn emigrants get a gradient step before
-//     re-entering the population.
-//
-// Behaviour descriptor: a 3-tuple discretized into the cell index:
-//   (focus-block mass, meeting-morning skew, day-spread).
-// These are chosen because they (a) correlate with user-visible
-// differences between plans and (b) are cheap to compute from the genome.
+// On top of vanilla MAP-Elites this implementation tracks per-cell
+// improvement statistics so emitter sampling biases toward
+// historically-productive cells. That's a borrowing of CMA-ME's
+// "improvement emitter" intuition (Fontaine et al., 2020) — we don't
+// run a CMA-ES sampler per cell (that would require a covariance
+// matrix per archive entry; way too expensive for live calendar
+// planning), so the honest framing is "MAP-Elites with productivity-
+// weighted emitter sampling," not "CMA-ME."
 
 // MARK: - Behaviour Descriptor
 
@@ -53,46 +42,13 @@ struct BehaviorDescriptor: Hashable, Sendable {
         )
     }
 
-    /// Extract the descriptor directly from a schedule chromosome.
+    /// Extract the descriptor from a chromosome via the shared feature
+    /// extractor. There is no separate aggregation pass — the archive
+    /// reads the same bytes the surrogate uses, by index.
     static func from(_ chromosome: ScheduleChromosome, context: OptimizerContext) -> BehaviorDescriptor {
-        let cal = context.calendar
-        let horizonStart = cal.startOfDay(for: context.planningHorizon.start)
-        let horizonLastDay = cal.startOfDay(for: context.planningHorizon.end.addingTimeInterval(-1))
-        let daysInHorizon = max(
-            1,
-            (cal.dateComponents([.day], from: horizonStart, to: horizonLastDay).day ?? 0) + 1
-        )
-
-        var totalMinutes = 0.0
-        var focusMinutes = 0.0
-        var included = 0
-        var morning = 0
-        var days: Set<Date> = []
-
-        for gene in chromosome.genes where gene.isIncluded {
-            let minutes = gene.duration / 60.0
-            totalMinutes += minutes
-            if gene.isFocusBlock { focusMinutes += minutes }
-            included += 1
-            let hour = cal.component(.hour, from: gene.startTime)
-            if hour < 12 { morning += 1 }
-            days.insert(cal.startOfDay(for: gene.startTime))
-        }
-
-        let focusMass = totalMinutes > 0 ? focusMinutes / totalMinutes : 0
-        let morningSkew = included > 0 ? Double(morning) / Double(included) : 0
-        let daySpread = Double(days.count) / Double(daysInHorizon)
-
-        return BehaviorDescriptor(
-            focusMass: clamp(focusMass),
-            morningSkew: clamp(morningSkew),
-            daySpread: clamp(daySpread)
-        )
+        ScheduleFeatureVector.extract(chromosome, context: context).behavior
     }
 }
-
-@inline(__always)
-private func clamp(_ v: Double) -> Double { max(0, min(1, v)) }
 
 /// Discretized coordinate into the 3D archive grid.
 struct CellKey: Hashable, Sendable {
@@ -103,38 +59,39 @@ struct CellKey: Hashable, Sendable {
 
 // MARK: - Archive
 
-/// Quality-Diversity archive. Maintains the best-known chromosome per
-/// behaviour cell, plus statistics that drive CMA-ME-style emitter logic.
+/// MAP-Elites archive with productivity-weighted emitter sampling.
 ///
-/// Thread safety: mutations go through an `NSLock`. Multi-island GAs
-/// share one archive so good solutions discovered on any island are
-/// retained globally.
+/// Thread safety: mutations and reads go through an `NSLock`.
+/// Multi-island GAs share one archive so good solutions discovered on
+/// any island are retained globally.
 final class QualityDiversityArchive: @unchecked Sendable {
-    /// Archive cell entry. Tracks the current incumbent plus improvement
-    /// stats used by CMA-ME-style emitter selection.
+    /// Archive cell entry. Tracks the current incumbent plus
+    /// improvement statistics that drive emitter selection.
     struct Cell: Sendable {
         var incumbent: ScheduleChromosome
         /// Fitness at insertion time.
         var fitness: Double
         /// How many times this cell has been improved since creation.
-        /// Cells that keep improving are "productive" and emitters draw
-        /// from them more often.
+        /// Cells that keep improving are "productive" and get drawn
+        /// from more often.
         var improvementCount: Int
-        /// Most recent fitness delta (positive only). Used to weight
-        /// emitter probabilities by recent improvement magnitude.
+        /// Most recent fitness delta (positive only). Weights the
+        /// emitter draw by recent improvement magnitude.
         var lastDelta: Double
-        /// Generation at last improvement. Stale cells can be decayed.
+        /// Generation of the most recent improvement. Stale cells decay
+        /// in their emitter weight over time.
         var lastImprovedGen: Int
     }
 
-    /// Telemetry snapshot.
+    /// Telemetry snapshot for diagnostics and tests.
     struct Telemetry: Sendable {
         let cellCount: Int
         let totalAttempts: Int
         let totalImprovements: Int
         let averageFitness: Double
         let bestFitness: Double
-        let coverage: Double   // cellCount / resolution³
+        /// `cellCount / resolution³`.
+        let coverage: Double
     }
 
     /// Grid resolution per axis. Total cells = resolution³.
@@ -157,12 +114,12 @@ final class QualityDiversityArchive: @unchecked Sendable {
     /// Try to insert `chromosome` into its behaviour cell.
     ///
     /// Insertion rule:
-    ///   • New cell: always accept.
-    ///   • Existing cell: accept only if `chromosome.rawFitness` beats
-    ///     the incumbent by more than `epsilonMargin`. A margin avoids
+    ///   • Empty cell: always accept.
+    ///   • Existing cell: accept only if the new fitness beats the
+    ///     incumbent by more than `epsilonMargin`. The margin avoids
     ///     noise-level churn that would inflate `improvementCount`.
     ///
-    /// Returns whether the chromosome was inserted, and by how much it
+    /// Returns whether the chromosome was inserted and by how much it
     /// improved over the incumbent (0 for fresh cells).
     @discardableResult
     func consider(
@@ -191,7 +148,6 @@ final class QualityDiversityArchive: @unchecked Sendable {
             return (true, delta)
         }
 
-        // Fresh cell.
         cells[key] = Cell(
             incumbent: chromosome,
             fitness: fit,
@@ -202,9 +158,8 @@ final class QualityDiversityArchive: @unchecked Sendable {
         return (true, 0)
     }
 
-    /// Advance the archive's logical generation counter. Called once per
-    /// GA generation by the host loop so staleness-based decay has a
-    /// reference clock.
+    /// Advance the archive's logical generation counter. Called once
+    /// per GA generation so staleness-based decay has a reference clock.
     func tick() {
         lock.lock()
         defer { lock.unlock() }
@@ -213,9 +168,9 @@ final class QualityDiversityArchive: @unchecked Sendable {
 
     // MARK: - Query
 
-    /// Snapshot of every incumbent, sorted by descending fitness. Callers
-    /// use this to seed new populations or harvest a diverse Pareto-like
-    /// set at the end of evolution.
+    /// Snapshot of every incumbent, sorted by descending fitness.
+    /// Callers use this to seed new populations or harvest a diverse
+    /// Pareto-like set at the end of evolution.
     var incumbents: [ScheduleChromosome] {
         lock.lock()
         defer { lock.unlock() }
@@ -229,11 +184,11 @@ final class QualityDiversityArchive: @unchecked Sendable {
         return cells.count
     }
 
-    /// Sample an incumbent weighted by CMA-ME-style productivity.
-    ///
-    /// Weights are `max(1e-3, improvementCount + lastDelta · 100)`. Cells
-    /// that keep improving get more draws; fresh cells still have a nonzero
-    /// baseline so the archive stays mixable.
+    /// Sample an incumbent weighted by productivity:
+    ///   `weight = (improvementCount + lastDelta · 100) · staleDecay`
+    /// where `staleDecay = max(0.1, 1 - 0.02 · generationsSinceImprovement)`.
+    /// Cells that keep improving get more draws; stale cells decay
+    /// toward a 10% floor so the archive stays mixable.
     func sampleProductiveIncumbent(rng: GARandom) -> ScheduleChromosome? {
         lock.lock()
         defer { lock.unlock() }
@@ -260,8 +215,8 @@ final class QualityDiversityArchive: @unchecked Sendable {
         return weighted.last?.0
     }
 
-    /// Sample a uniformly random incumbent — useful for diversity injection
-    /// when the GA wants an unbiased mix rather than productivity-weighted.
+    /// Sample a uniformly random incumbent — useful for diversity
+    /// injection when the GA wants an unbiased mix.
     func sampleUniform(rng: GARandom) -> ScheduleChromosome? {
         lock.lock()
         defer { lock.unlock() }
@@ -291,8 +246,8 @@ final class QualityDiversityArchive: @unchecked Sendable {
     // MARK: - Population injection
 
     /// Return up to `count` incumbents drawn by productivity weighting.
-    /// Used by the GA to seed a fraction of the next generation with
-    /// diverse archive members — the "MAP-Elites emitter" step.
+    /// Used by the schedule-specific generation hook to inject archive
+    /// emitters into the next generation.
     func drawEmitters(count: Int, rng: GARandom) -> [ScheduleChromosome] {
         var out: [ScheduleChromosome] = []
         out.reserveCapacity(count)

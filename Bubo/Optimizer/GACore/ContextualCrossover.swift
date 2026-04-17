@@ -1,62 +1,74 @@
 import Foundation
 
-// MARK: - Contextual Crossover (Attention-Weighted Recombination)
+// MARK: - Contextual Crossover (Learned Linear Scorer)
 //
-// Classical GA crossover treats gene positions as exchangeable slots: a
-// bit at index i from parent A can always swap with the bit at index i
-// from parent B with the same probability. For scheduling that's
-// information-poor — "the 7th gene" has no semantic meaning, but "the
-// highest-priority focus block" does.
+// Classical GA crossover treats gene positions as exchangeable slots:
+// a bit at index `i` from parent A can always swap with the bit at
+// index `i` from parent B with the same probability. For scheduling
+// that's information-poor — "the 7th gene" has no semantic meaning,
+// but "the highest-priority focus block" does.
 //
-// Contextual crossover replaces the positional coin flip with an
-// attention-weighted decision. Each gene is scored by a small learnable-
-// weight function of (parent A's placement quality, parent B's placement
-// quality, mutual context compatibility) and the child inherits from the
-// winner with a softmax probability. The weights are *not* a neural
-// network — tuning a large transformer inside the GA would cost more
-// than the algorithm saves. Instead we use a hand-designed attention
-// head with a small learnable scale parameter that adapts via reward
-// feedback, in the same spirit as "Large Language Models as Evolutionary
-// Optimizers" (Liu et al., 2024) but with a compact explicit model.
+// What this module is, honestly:
+//   A small **learned linear scorer** computes a per-gene preference
+//   `s = w · features(gene)` where `features` is a 4-dim vector
+//   (local fitness, priority, deadline urgency, structural fit) and
+//   `w` is updated by a bounded reinforcement step on every reward
+//   signal. The crossover converts `(s₁, s₂)` for parent A vs B into
+//   a softmax inheritance probability with a tunable temperature.
 //
-// Why it outperforms uniform crossover:
-//   • Gene-level decisions consider gene semantics (priority, context,
-//     deadline urgency) — no recombination wastes good placements.
-//   • Parent quality is attention-weighted, so children drawn from a
-//     high-quality parent get more inheritance weight than children
-//     drawn from a weak parent, without losing exploration.
-//   • Per-gene inheritance matrix can be cached and reused — the cost
-//     relative to uniform crossover is O(geneCount), negligible.
+// What this module is **not**:
+//   • Not a transformer. There is no self-attention over genes, no
+//     query/key/value projection, no positional encoding.
+//   • Not a neural network. There is one weight per feature, four
+//     total. A perceptron would have more parameters.
+//   • Not LLM-guided. We don't call any language model.
+//
+// The naming "attention head" is a metaphor: scoring multiple
+// candidates and picking softly. It's not the architectural concept
+// from Transformer papers. Honest naming would be
+// `GeneInheritanceScorer` — keeping `GeneAttentionHead` for source
+// compatibility but documenting the gap loudly.
+//
+// Hot-path concurrency:
+//   Crossover scores each gene twice (once per parent) per pair, so
+//   on a 50-gene genome with 100 offspring we hit `score(...)` ~10000
+//   times per generation. Taking an `NSLock` per call would dominate.
+//   Instead the head exposes a `snapshot()` that copies the current
+//   weights once, and `score(...)` accepts the snapshot — no lock on
+//   the hot path. Updates still serialize (rare; 1 per generation).
 
-// MARK: - Gene-level Attention Scoring
+// MARK: - Gene-level Linear Scorer
 
-/// Scoring head used by `ContextualCrossover`. Produces a per-gene
-/// preference value in [-1, 1] for each parent so the crossover can
-/// inherit the "better" placement.
+/// Compact 4-feature linear scorer used by `ContextualCrossover`.
+/// Produces a scalar where higher means "this gene should be
+/// inherited." Features are bounded to `[0, 1]` so scores stay bounded
+/// regardless of weight drift.
 ///
-/// The head is a learnable linear combination of four features:
-///   • localFitness — how much the gene contributes to its parent's
-///     per-day objective breakdown (proxy: per-day cache when available).
-///   • priority — the gene's task priority (0…1).
-///   • deadlineUrgency — 1 if the start is very close to the deadline,
-///     0 if there's no deadline or plenty of slack.
-///   • structuralFit — low when the gene violates soft constraints
-///     (e.g. start during lunch window), high otherwise.
+/// Features:
+///   • `localFitness` — proxy for the gene's contribution to its
+///     parent's per-day objective breakdown.
+///   • `priority` — the underlying task's priority (0…1).
+///   • `deadlineUrgency` — 1 when the gene is at deadline, 0 when
+///     no deadline or > 7d slack.
+///   • `structuralFit` — penalizes obvious soft-constraint violations
+///     (e.g. lunch-window starts).
 ///
-/// Coefficients are updated via a tiny bandit-style reward signal:
-/// crossover records which parent's gene produced the better offspring
-/// and nudges the score in that direction. This is cheaper than a full
-/// perceptron update while still allowing the attention head to adapt to
-/// the current workload.
+/// Updates are a bounded gradient step toward the rewarding
+/// direction. Weights are clamped to `[0, 3]` so a streak of bad
+/// rewards can't blow up the model.
 final class GeneAttentionHead: @unchecked Sendable {
-    /// Learnable weights on the four features. Initialized to priors
-    /// that reflect what we'd tune by hand — local fitness dominates,
-    /// priority and deadline are secondary.
+    /// Immutable snapshot of the head's weights. Crossover takes one
+    /// snapshot per call and uses it for every gene scoring — no lock
+    /// on the hot path.
+    struct Snapshot: Sendable {
+        let weights: [Double]
+    }
+
     private var weights: [Double] = [1.0, 0.6, 0.4, 0.3]
     private let lock = NSLock()
     private let learningRate: Double
 
-    /// Snapshot for tests/telemetry.
+    /// Snapshot for tests/telemetry. One lock acquisition.
     var currentWeights: [Double] {
         lock.lock(); defer { lock.unlock() }
         return weights
@@ -66,23 +78,29 @@ final class GeneAttentionHead: @unchecked Sendable {
         self.learningRate = learningRate
     }
 
-    /// Score a gene for use in crossover. Returns a scalar where higher
-    /// means "this gene should be inherited." Features are in [0, 1] so
-    /// the score stays bounded.
+    /// Take a single locked snapshot of the weights. Callers reuse
+    /// the snapshot across many `score(...)` calls so the lock fires
+    /// once per crossover, not once per gene.
+    func snapshot() -> Snapshot {
+        lock.lock(); defer { lock.unlock() }
+        return Snapshot(weights: weights)
+    }
+
+    /// Score a gene against the precomputed weight snapshot. No lock,
+    /// pure arithmetic.
     func score(
         gene: ScheduleGene,
         event: OptimizableEvent?,
         perDayScoreHint: Double,
         preferences: OptimizerPreferences,
-        now: Date,
-        calendar: Calendar
+        calendar: Calendar,
+        snapshot: Snapshot
     ) -> Double {
         let localFitness = max(0, min(1, perDayScoreHint))
         let priority = gene.priority
         let deadlineUrgency: Double
         if let deadline = event?.deadline {
             let slack = deadline.timeIntervalSince(gene.endTime)
-            // Urgency rises as slack shrinks below 24h; 0 at >= 7 days out.
             if slack <= 0 { deadlineUrgency = 1.0 }
             else if slack >= 7 * 86400 { deadlineUrgency = 0 }
             else { deadlineUrgency = 1.0 - min(1.0, slack / (7 * 86400)) }
@@ -94,18 +112,16 @@ final class GeneAttentionHead: @unchecked Sendable {
         let inLunch = hour >= preferences.lunchWindowStart && hour < preferences.lunchWindowEnd
         let structuralFit: Double = inLunch ? 0.2 : 1.0
 
-        lock.lock()
-        defer { lock.unlock() }
-        let w = weights
+        let w = snapshot.weights
         return w[0] * localFitness
              + w[1] * priority
              + w[2] * deadlineUrgency
              + w[3] * structuralFit
     }
 
-    /// Apply a bounded reinforcement update: given a feature vector and
-    /// the sign of the offspring's fitness delta vs. its parent, nudge
-    /// weights up or down. Bounded so the head can't diverge.
+    /// Apply a bounded reinforcement step toward the rewarding
+    /// direction. Locked because reward feedback can fire from the
+    /// reward closure on any GA worker.
     func updateWeights(features: [Double], rewardSign: Double) {
         lock.lock()
         defer { lock.unlock() }
@@ -122,11 +138,11 @@ final class GeneAttentionHead: @unchecked Sendable {
 /// positional strategies in `Crossover` — called through the new
 /// `CrossoverStrategy.contextual` case.
 enum ContextualCrossover {
-    /// Produce two offspring from parents using attention-weighted
-    /// inheritance. Each gene is drawn from whichever parent scores
-    /// higher on the attention head, modulated by a softmax temperature
-    /// that trades exploration (higher τ = more stochastic) against
-    /// exploitation (lower τ = sharper argmax).
+    /// Produce two offspring from parents using a learned linear
+    /// scorer. Each gene is drawn from whichever parent scores higher,
+    /// modulated by a softmax temperature that trades exploration
+    /// (higher τ = more stochastic) for exploitation (lower τ = sharper
+    /// argmax).
     static func perform(
         _ parent1: ScheduleChromosome,
         _ parent2: ScheduleChromosome,
@@ -141,18 +157,20 @@ enum ContextualCrossover {
         let cal = context.calendar
         let rng = context.rng
         let prefs = context.preferences
-        let now = context.planningHorizon.start
 
-        // Event lookup for deadline/priority context.
         let eventsById: [String: OptimizableEvent] = Dictionary(
             uniqueKeysWithValues: context.movableEvents.map { ($0.id, $0) }
         )
 
-        // Pull per-day hints from the cached per-day objective breakdown
-        // when available (populated by delta evaluation). Falls back to
-        // the full-fitness scalar.
+        // Pull per-day hints from the cached per-day objective
+        // breakdown when available; falls back to the full-fitness
+        // scalar.
         let p1DayHint = perDayHint(for: parent1, calendar: cal)
         let p2DayHint = perDayHint(for: parent2, calendar: cal)
+
+        // Single locked snapshot — every gene scoring uses the same
+        // immutable weight vector. Eliminates per-gene lock contention.
+        let weightsSnapshot = head.snapshot()
 
         var child1Genes = parent1.genes
         var child2Genes = parent2.genes
@@ -170,28 +188,23 @@ enum ContextualCrossover {
 
             let s1 = head.score(
                 gene: g1, event: ev, perDayScoreHint: h1,
-                preferences: prefs, now: now, calendar: cal
+                preferences: prefs, calendar: cal, snapshot: weightsSnapshot
             )
             let s2 = head.score(
                 gene: g2, event: ev, perDayScoreHint: h2,
-                preferences: prefs, now: now, calendar: cal
+                preferences: prefs, calendar: cal, snapshot: weightsSnapshot
             )
 
             // Softmax probability that child1 takes parent2's gene.
-            // When scores are equal, τ-controlled coin flip preserves
-            // the exploration floor. When one score dominates, the
-            // softmax pushes the decision sharply toward it.
-            let probC1TakesP2: Double
             let diff = (s2 - s1) / tau
-            probC1TakesP2 = 1.0 / (1.0 + exp(-diff))
+            let probC1TakesP2 = 1.0 / (1.0 + exp(-diff))
 
             if rng.bool(probability: probC1TakesP2) {
                 child1Genes[i] = g1.withStartTime(g2.startTime)
             }
-            // Symmetric decision for child2 — inverted probability so the
-            // pair is Pareto-complementary. A gene taken by child1 from
-            // parent2 is *left alone* on child2 (which inherited from p2
-            // by construction), and vice versa.
+            // Complementary decision for child2: a gene taken by
+            // child1 from parent2 is left intact on child2 (which
+            // inherited from p2 by construction), and vice versa.
             if rng.bool(probability: 1.0 - probC1TakesP2) {
                 child2Genes[i] = g2.withStartTime(g1.startTime)
             }

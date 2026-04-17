@@ -180,104 +180,85 @@ final class AdaptiveNSGA3: @unchecked Sendable {
     }
 
     /// Adjust the reference-point set: split crowded points and prune
-    /// chronically vacant ones. Returns `(added, removed)` for telemetry.
-    /// Must be called with `lock` held.
+    /// chronically vacant ones. Returns `(added, removed)` for
+    /// telemetry. Must be called with `lock` held.
+    ///
+    /// Hash-based dedup replaces the previous O(N²) close-duplicate
+    /// scan. We round each coordinate to 6 decimal places and look up
+    /// the resulting tuple in a set; collisions on the hash imply
+    /// numerically-equal points (well below `1e-6` per axis).
     private func adjustReferencePoints() -> (added: Int, removed: Int) {
         let current = ranker.referencePoints.points
         guard let m = current.first?.count else { return (0, 0) }
 
-        // 1) Split crowded references.
-        var newPoints: [[Double]] = current
-        var added = 0
+        // Pair every existing point with its history so the rebuild
+        // step doesn't need to re-match against position.
+        var keepers: [(point: [Double], history: [Int])] = Array(zip(current, nicheHistory))
+            .map { ($0, $1) }
 
-        let centroid = [Double](repeating: 1.0 / Double(m), count: m)
-        for i in current.indices {
-            let history = nicheHistory[i]
-            guard meanCount(history) >= crowdedThreshold else { continue }
-            guard newPoints.count < maxReferencePoints else { break }
-
-            // Spawn an interior point halfway toward the centroid along this
-            // direction. This preserves the original direction while adding
-            // a distinct niche nearby (the new point is on the same ray, but
-            // closer to the centroid — receivers are associated by
-            // perpendicular distance so "nearer to centroid" actually
-            // splits the niche along its radial direction).
-            var interior = [Double](repeating: 0, count: m)
-            for k in 0..<m {
-                interior[k] = centroid[k] + (current[i][k] - centroid[k]) * splitShrink
-            }
-            // Renormalize onto the simplex (sum = 1, non-negative).
-            interior = normalizeToSimplex(interior)
-
-            // Avoid duplicate points (numerically close to an existing one).
-            if !hasCloseDuplicate(interior, in: newPoints, epsilon: 1e-6) {
-                newPoints.append(interior)
-                added += 1
-            }
-        }
-
-        // 2) Prune vacant references (but never below min count).
+        // 1) Prune vacant references first (never below min). We do
+        // pruning before splitting so the new points spawned by
+        // splitting can't be accidentally evicted by a stale empty
+        // history slot they inherited.
         var removed = 0
-        if newPoints.count > minReferencePoints {
-            // Budget: how many points we can remove before hitting the floor.
-            let maxRemovable = max(0, newPoints.count - minReferencePoints)
-            var survivors: [Int] = []
-            for i in current.indices {
-                let hist = nicheHistory[i]
-                // Vacant iff the running window is long enough *and* every
-                // observation in that window is zero. Empty history (fresh
-                // point) fails the count guard and is always kept.
+        if keepers.count > minReferencePoints {
+            let maxRemovable = keepers.count - minReferencePoints
+            keepers = keepers.compactMap { entry in
+                guard removed < maxRemovable else { return entry }
+                let hist = entry.history
                 let hasEnoughHistory = hist.count >= vacantWindow
                 let vacantStreak = hasEnoughHistory
                     && hist.prefix(vacantWindow).allSatisfy { $0 == 0 }
-                if vacantStreak && removed < maxRemovable {
+                if vacantStreak {
                     removed += 1
-                } else {
-                    survivors.append(i)
+                    return nil
                 }
+                return entry
             }
-            // Rebuild newPoints: keep survivors + whatever we just appended.
-            let appendedSuffix = Array(newPoints.suffix(added))
-            var rebuilt: [[Double]] = survivors.map { current[$0] }
-            rebuilt.append(contentsOf: appendedSuffix)
-            newPoints = rebuilt
+        }
+
+        // 2) Split crowded references. Hash-set tracks every point we
+        // already plan to keep so duplicates are O(1) to reject.
+        var seenKeys: Set<PointKey> = Set(keepers.map { PointKey($0.point) })
+        var added = 0
+
+        let centroid = [Double](repeating: 1.0 / Double(m), count: m)
+        // Iterate over a snapshot of `current` (the historic point set);
+        // crowdedness is measured against the surviving-keepers list
+        // via index lookup.
+        let historyByIndex: [PointKey: [Int]] = Dictionary(uniqueKeysWithValues:
+            zip(current, nicheHistory).map { (PointKey($0.0), $0.1) })
+        for original in current {
+            guard keepers.count + added < maxReferencePoints else { break }
+            let hist = historyByIndex[PointKey(original)] ?? []
+            guard meanCount(hist) >= crowdedThreshold else { continue }
+
+            // Spawn an interior point halfway toward the centroid
+            // along this direction. The new point sits on the same
+            // ray but closer to the centroid, splitting the niche
+            // along its radial axis (associate uses perpendicular
+            // distance, so a closer-to-centroid point captures part
+            // of the original niche).
+            var interior = [Double](repeating: 0, count: m)
+            for k in 0..<m {
+                interior[k] = centroid[k] + (original[k] - centroid[k]) * splitShrink
+            }
+            interior = normalizeToSimplex(interior)
+            let key = PointKey(interior)
+            guard !seenKeys.contains(key) else { continue }
+            seenKeys.insert(key)
+            // Fresh history: empty so the new point gets `vacantWindow`
+            // generations to attract solutions before being eligible
+            // for pruning.
+            keepers.append((interior, []))
+            added += 1
         }
 
         guard added > 0 || removed > 0 else { return (0, 0) }
 
-        let nextRefs = ReferencePoints(points: newPoints, dimension: m)
+        let nextRefs = ReferencePoints(points: keepers.map(\.point), dimension: m)
         ranker = NSGA3(referencePoints: nextRefs)
-
-        // Reset histories so freshly added points start from zero and
-        // surviving ones carry forward. We rebuild `nicheHistory` parallel
-        // to `newPoints`.
-        var nextHistory: [[Int]] = []
-        let previouslyKept = newPoints.count - added
-        // Keep histories for the first `previouslyKept` slots from the
-        // surviving originals. Because pruning happens before append, the
-        // first `previouslyKept` entries of `newPoints` are the survivors
-        // (in original order).
-        var survivingIdx = 0
-        for i in current.indices {
-            // Identify survivors by reference equality in the simplex space.
-            if survivingIdx < previouslyKept,
-               pointsAreClose(current[i], newPoints[survivingIdx], epsilon: 1e-9) {
-                nextHistory.append(nicheHistory[i])
-                survivingIdx += 1
-            }
-        }
-        // Fill any mismatch with fresh zero history (defensive fallback).
-        while nextHistory.count < previouslyKept {
-            nextHistory.append([Int](repeating: 0, count: memoryWindow))
-        }
-        // New points start with empty history — they haven't observed
-        // any generation yet, so they cannot be pruned until they
-        // accumulate vacantWindow consecutive zero observations.
-        for _ in 0..<added {
-            nextHistory.append([])
-        }
-        nicheHistory = nextHistory
-
+        nicheHistory = keepers.map(\.history)
         return (added, removed)
     }
 
@@ -287,21 +268,6 @@ final class AdaptiveNSGA3: @unchecked Sendable {
         guard !history.isEmpty else { return 0 }
         let sum = history.reduce(0, +)
         return Double(sum) / Double(history.count)
-    }
-
-    private func hasCloseDuplicate(_ p: [Double], in set: [[Double]], epsilon: Double) -> Bool {
-        for q in set where pointsAreClose(p, q, epsilon: epsilon) { return true }
-        return false
-    }
-
-    private func pointsAreClose(_ a: [Double], _ b: [Double], epsilon: Double) -> Bool {
-        guard a.count == b.count else { return false }
-        var sumSq = 0.0
-        for i in 0..<a.count {
-            let d = a[i] - b[i]
-            sumSq += d * d
-        }
-        return sumSq.squareRoot() < epsilon
     }
 
     private func normalizeToSimplex(_ p: [Double]) -> [Double] {
@@ -316,5 +282,23 @@ final class AdaptiveNSGA3: @unchecked Sendable {
             return [Double](repeating: 1.0 / Double(m), count: m)
         }
         return clipped.map { $0 / sum }
+    }
+}
+
+// MARK: - Hash-friendly point key
+
+/// `[Double]` is not Hashable, and using `Double` directly as a hash
+/// key is fragile under floating-point noise. `PointKey` quantizes
+/// each coordinate to 6 decimal places (well below the dedup epsilon
+/// of `1e-6`) and uses the resulting `Int64` tuple for the hash. Two
+/// points map to the same key iff they are within ~5e-7 per axis,
+/// which is exactly the equivalence relation the splitter needs.
+private struct PointKey: Hashable {
+    let q: [Int64]
+
+    init(_ p: [Double]) {
+        // 1e6 scale → 6-decimal-place precision. Reference points are
+        // in [0, 1], so quantized values fit easily in Int64.
+        self.q = p.map { Int64(($0 * 1_000_000.0).rounded()) }
     }
 }

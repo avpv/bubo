@@ -71,29 +71,11 @@ struct GAConfiguration: Sendable {
     /// tuning of `mutationRate` per workload.
     var selfAdaptiveRates: Bool
 
-    // MARK: - SOTA-2026 Tunables
-    //
-    // The Phase-2 features (adaptive reference points, hypervolume
-    // tiebreak, QD archive, gradient refinement, surrogate screening,
-    // federated bandit) are "on when wired" — their presence is decided
-    // by the caller's wiring on `OptimizerContext` / `GeneticAlgorithm`,
-    // not by config flags. What remains in config are the *numeric*
-    // knobs: how often to refine, how much to inject, how many to
-    // refine.
-
-    /// Fraction of offspring per generation drawn from the Quality-
-    /// Diversity archive. 0 means "never inject archive members."
-    /// 0.1-0.2 is the CMA-ME steady-injection recipe.
-    var qdArchiveEmissionRate: Double
-
-    /// Interval (in generations) between gradient-refinement passes on
-    /// the elite population. 0 means "no gradient refinement this run."
-    /// Non-zero values require a `DifferentiableRefiner` wired on the
-    /// `GeneticAlgorithm` init.
-    var gradientRefineInterval: Int
-
-    /// Number of top individuals gradient-refined per invocation.
-    var gradientRefineCandidates: Int
+    // Schedule-specific tunables (QD emission rate, gradient
+    // refinement interval) used to live here. They've moved into the
+    // hook closures that the host wires via `EvolutionHooks`, so
+    // the engine no longer needs to know about them. Keep this file
+    // strictly about the generic GA cycle.
 
     init(
         populationSize: Int,
@@ -117,10 +99,7 @@ struct GAConfiguration: Sendable {
         chcMaxRestarts: Int = 0,
         chcRestartEliteFraction: Double = 0.15,
         chcRestartMutationRate: Double = 0.35,
-        selfAdaptiveRates: Bool = false,
-        qdArchiveEmissionRate: Double = 0.0,
-        gradientRefineInterval: Int = 0,
-        gradientRefineCandidates: Int = 2
+        selfAdaptiveRates: Bool = false
     ) {
         self.populationSize = populationSize
         self.maxGenerations = maxGenerations
@@ -144,9 +123,6 @@ struct GAConfiguration: Sendable {
         self.chcRestartEliteFraction = chcRestartEliteFraction
         self.chcRestartMutationRate = chcRestartMutationRate
         self.selfAdaptiveRates = selfAdaptiveRates
-        self.qdArchiveEmissionRate = qdArchiveEmissionRate
-        self.gradientRefineInterval = gradientRefineInterval
-        self.gradientRefineCandidates = gradientRefineCandidates
     }
 
     static let `default` = GAConfiguration(
@@ -171,10 +147,7 @@ struct GAConfiguration: Sendable {
         chcMaxRestarts: 1,
         chcRestartEliteFraction: 0.15,
         chcRestartMutationRate: 0.35,
-        selfAdaptiveRates: true,
-        qdArchiveEmissionRate: 0.1,
-        gradientRefineInterval: 50,
-        gradientRefineCandidates: 2
+        selfAdaptiveRates: true
     )
 
     static let quick = GAConfiguration(
@@ -239,10 +212,7 @@ struct GAConfiguration: Sendable {
         chcMaxRestarts: 2,
         chcRestartEliteFraction: 0.15,
         chcRestartMutationRate: 0.35,
-        selfAdaptiveRates: true,
-        qdArchiveEmissionRate: 0.15,
-        gradientRefineInterval: 35,
-        gradientRefineCandidates: 3
+        selfAdaptiveRates: true
     )
 
     /// Per-island config for island model GA. Smaller populations per island
@@ -268,10 +238,7 @@ struct GAConfiguration: Sendable {
         memeticHillClimbInterval: 30,
         memeticHillClimbCandidates: 3,
         memeticHillClimbSteps: 8,
-        selfAdaptiveRates: true,
-        qdArchiveEmissionRate: 0.12,
-        gradientRefineInterval: 40,
-        gradientRefineCandidates: 2
+        selfAdaptiveRates: true
     )
 }
 
@@ -356,15 +323,12 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
     private var onProgress: ((GAProgress) -> Void)?
     private let multiObjective: MultiObjectiveContext<C>?
 
-    /// Optional QD archive. When present, the GA feeds every newly
-    /// evaluated offspring into the archive and optionally draws
-    /// emitters from it to diversify the next generation. Shared across
-    /// islands so all populations contribute.
-    let qdArchive: QualityDiversityArchive?
-
-    /// Optional gradient refiner. Invoked every
-    /// `config.gradientRefineInterval` generations on the top elites.
-    let gradientRefiner: DifferentiableRefiner?
+    /// Generic hook closures for QD archive feeding, gradient
+    /// refinement, telemetry — anything outside the engine's core
+    /// evolution logic. Closures are constructed by the caller and
+    /// captured by reference to schedule-specific state (archives,
+    /// refiners) without leaking those types into the engine.
+    let hooks: EvolutionHooks<C>
 
     private(set) var bestEver: C?
     private(set) var convergenceGeneration: Int = 0
@@ -375,16 +339,14 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         evaluate: @escaping (inout C) -> Void,
         onProgress: ((GAProgress) -> Void)? = nil,
         multiObjective: MultiObjectiveContext<C>? = nil,
-        qdArchive: QualityDiversityArchive? = nil,
-        gradientRefiner: DifferentiableRefiner? = nil
+        hooks: EvolutionHooks<C> = .noop
     ) {
         self.config = config
         self.context = context
         self.evaluate = evaluate
         self.onProgress = onProgress
         self.multiObjective = multiObjective
-        self.qdArchive = qdArchive
-        self.gradientRefiner = gradientRefiner
+        self.hooks = hooks
     }
 
     /// Run the full GA and return the final population (sorted by fitness).
@@ -497,30 +459,11 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
                 )
             }
 
-            // Gradient-refinement pass: fine-tune top elites via finite-
-            // difference gradients. Disabled by default — on when
-            // `gradientRefineInterval > 0` and the refiner is wired.
-            if config.gradientRefineInterval > 0,
-               let refiner = gradientRefiner,
-               generation > 0,
-               generation % config.gradientRefineInterval == 0 {
-                gradientRefineStep(
-                    population: &population,
-                    refiner: refiner,
-                    candidates: config.gradientRefineCandidates
-                )
-            }
-
-            // QD archive emitter injection: replace the worst individuals
-            // with archive-drawn emigrants so the GA periodically absorbs
-            // productive members from the global archive.
-            if config.qdArchiveEmissionRate > 0, let archive = qdArchive {
-                let emitterCount = max(1, Int(Double(config.populationSize) * config.qdArchiveEmissionRate))
-                let emitters = archive.drawEmitters(count: emitterCount, rng: context.rng)
-                if !emitters.isEmpty {
-                    injectArchiveEmitters(emitters, into: &population)
-                }
-            }
+            // Generation-complete hook. The host wires gradient
+            // refinement, QD archive emitter injection, and any other
+            // schedule-specific operations here — the engine stays
+            // generic over `C`.
+            hooks.onGenerationComplete?(generation, &population, context)
 
             // Use rawFitness so fitness sharing (which deflates `fitness` for
             // crowded niches) can't demote the globally-best individual. Store
@@ -795,19 +738,9 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             population.replaceGeneration(with: offspring)
         }
 
-        // Feed the QD archive from newly evaluated offspring. We feed
-        // only ScheduleChromosome-typed populations because the archive's
-        // behaviour descriptor is schedule-specific. Permutation genomes
-        // (PomodoroSequenceChromosome) skip archive feeding silently.
-        if let archive = qdArchive {
-            archive.tick()
-            for ind in offspring {
-                if let schedule = ind as? ScheduleChromosome {
-                    let descriptor = BehaviorDescriptor.from(schedule, context: context)
-                    archive.consider(schedule, descriptor: descriptor)
-                }
-            }
-        }
+        // Offspring-evaluated hook — host wires QD archive feeding,
+        // surrogate calibration, telemetry. Engine stays generic.
+        hooks.onOffspringEvaluated?(generation, offspring, context)
     }
 
     // MARK: - Objective Imbalance (bandit context feature)
@@ -912,85 +845,6 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             if refined.rawFitness > population.individuals[idx].rawFitness {
                 population.individuals[idx] = refined
             }
-        }
-    }
-
-    // MARK: - Gradient Refinement (DifferentiableRefiner hook)
-
-    /// Run a bounded gradient-refinement pass on the top `candidates`
-    /// ScheduleChromosome individuals. Non-schedule genomes (permutation
-    /// chromosomes) are skipped silently — the refiner operates on
-    /// time-valued genes specifically. Improvements are written back so
-    /// subsequent selection rounds see the refined fitness.
-    private func gradientRefineStep(
-        population: inout Population<C>,
-        refiner: DifferentiableRefiner,
-        candidates: Int
-    ) {
-        guard candidates > 0 else { return }
-        // Only meaningful for ScheduleChromosome populations. Permutation
-        // genomes have no continuous time axis to differentiate along.
-        guard C.self == ScheduleChromosome.self else { return }
-
-        let n = population.individuals.count
-        guard n > 0 else { return }
-
-        // Pick top-K by rawFitness so fitness-sharing deflation doesn't
-        // redirect the refiner toward sparse niches.
-        let topIndices = population.individuals.indices
-            .sorted { population.individuals[$0].rawFitness > population.individuals[$1].rawFitness }
-            .prefix(min(candidates, n))
-
-        // Bridge closure: the refiner needs `(inout ScheduleChromosome) -> Void`,
-        // our stored closure is `(inout C) -> Void`. The guard above fixes
-        // C == ScheduleChromosome so the forced casts are safe at runtime.
-        let evalBridge: (inout ScheduleChromosome) -> Void = { [self] c in
-            var widened = c as! C
-            self.evaluate(&widened)
-            c = widened as! ScheduleChromosome
-        }
-
-        for idx in topIndices {
-            guard var schedule = population.individuals[idx] as? ScheduleChromosome else { continue }
-            let refinedDelta = refiner.refine(
-                &schedule,
-                context: context,
-                evaluate: evalBridge
-            )
-            if refinedDelta > 0, let casted = schedule as? C {
-                population.individuals[idx] = casted
-            }
-        }
-    }
-
-    // MARK: - QD Emitter Injection
-
-    /// Replace the worst individuals in the population with archive-
-    /// drawn emitters. We evaluate each emitter (they may carry stale
-    /// fitness from a prior generation) and keep elites intact so the
-    /// current champion is never displaced by an archive injection.
-    private func injectArchiveEmitters(
-        _ emitters: [ScheduleChromosome],
-        into population: inout Population<C>
-    ) {
-        guard !emitters.isEmpty else { return }
-        let eliteCount = population.eliteCount
-        let n = population.individuals.count
-        guard n > eliteCount else { return }
-
-        let sortedByFitness = population.individuals.indices.sorted {
-            population.individuals[$0].rawFitness > population.individuals[$1].rawFitness
-        }
-        // Replacement pool: indices of the worst (non-elite) individuals.
-        let replaceable = Array(sortedByFitness.suffix(n - eliteCount).reversed())
-
-        var slot = 0
-        for emitter in emitters {
-            guard slot < replaceable.count else { break }
-            guard var casted = emitter as? C else { continue }
-            evaluate(&casted)
-            population.individuals[replaceable[slot]] = casted
-            slot += 1
         }
     }
 

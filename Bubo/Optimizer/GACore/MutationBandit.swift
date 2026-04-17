@@ -283,40 +283,86 @@ final class MutationBandit: @unchecked Sendable {
 
     // MARK: - Linear algebra (inline 4×4)
 
-    /// Closed-form 4×4 inverse via Gauss–Jordan. Returns `nil` when the
-    /// matrix is singular (never happens in practice thanks to λI).
+    /// Closed-form 4×4 inverse via cofactor expansion. Allocates one
+    /// 16-entry buffer (vs. Gauss–Jordan's 32-entry augmented matrix
+    /// plus per-row arithmetic) and produces results in ~80 fused
+    /// multiply-adds. Returns `nil` when the determinant is below
+    /// 1e-12 — never happens in practice thanks to ridge λI on every
+    /// arm matrix.
+    ///
+    /// The expansion is the standard 4×4 cofactor formula written out
+    /// linearly. It's verbose but every term is independent so the
+    /// optimizer schedules them aggressively.
     private static func invert4x4(_ m: [[Double]]) -> [[Double]]? {
         precondition(m.count == 4 && m.allSatisfy { $0.count == 4 })
-        // Build augmented 4×8 [M | I].
-        var a = [[Double]](repeating: [Double](repeating: 0, count: 8), count: 4)
-        for i in 0..<4 {
-            for j in 0..<4 { a[i][j] = m[i][j] }
-            a[i][4 + i] = 1.0
-        }
-        for col in 0..<4 {
-            // Partial pivot: find the row with the largest absolute value
-            // in this column and swap into place. Guards against zero or
-            // tiny pivots that would blow up the reduction.
-            var pivot = col
-            for r in (col + 1)..<4 where abs(a[r][col]) > abs(a[pivot][col]) {
-                pivot = r
-            }
-            if abs(a[pivot][col]) < 1e-12 { return nil }
-            if pivot != col { a.swapAt(col, pivot) }
-            // Scale pivot row to 1.
-            let div = a[col][col]
-            for j in 0..<8 { a[col][j] /= div }
-            // Eliminate other rows.
-            for r in 0..<4 where r != col {
-                let factor = a[r][col]
-                if factor == 0 { continue }
-                for j in 0..<8 { a[r][j] -= factor * a[col][j] }
-            }
-        }
+
+        // Unpack into named locals so the cofactor expressions read
+        // cleanly. Letters follow row-major (a..p).
+        let a = m[0][0], b = m[0][1], c = m[0][2], d = m[0][3]
+        let e = m[1][0], f = m[1][1], g = m[1][2], h = m[1][3]
+        let i = m[2][0], j = m[2][1], k = m[2][2], l = m[2][3]
+        let n = m[3][0], o = m[3][1], p = m[3][2], q = m[3][3]
+
+        // 2×2 minors of the bottom two rows; reused across the
+        // first-row cofactor terms.
+        let kp_lo = k * q - l * p
+        let jp_lo = j * q - l * o
+        let jo_kn = j * p - k * o
+        let ip_lo = i * q - l * n
+        let io_kn = i * p - k * n
+        let in_jm = i * o - j * n
+
+        // First-row cofactors (these also give the determinant).
+        let A11 =  f * kp_lo - g * jp_lo + h * jo_kn
+        let A12 = -(e * kp_lo - g * ip_lo + h * io_kn)
+        let A13 =  e * jp_lo - f * ip_lo + h * in_jm
+        let A14 = -(e * jo_kn - f * io_kn + g * in_jm)
+
+        let det = a * A11 + b * A12 + c * A13 + d * A14
+        if abs(det) < 1e-12 { return nil }
+        let invDet = 1.0 / det
+
+        // 2×2 minors involving rows 1, 2, 3 — needed for remaining
+        // cofactors.
+        let gp_ho = g * q - h * p
+        let fp_ho = f * q - h * o
+        let fo_gn = f * p - g * o
+        let ep_ho = e * q - h * n
+        let eo_gn = e * p - g * n
+        let en_fm = e * o - f * n
+
+        let A21 = -(b * kp_lo - c * jp_lo + d * jo_kn)
+        let A22 =  a * kp_lo - c * ip_lo + d * io_kn
+        let A23 = -(a * jp_lo - b * ip_lo + d * in_jm)
+        let A24 =  a * jo_kn - b * io_kn + c * in_jm
+
+        let A31 =  b * gp_ho - c * fp_ho + d * fo_gn
+        let A32 = -(a * gp_ho - c * ep_ho + d * eo_gn)
+        let A33 =  a * fp_ho - b * ep_ho + d * en_fm
+        let A34 = -(a * fo_gn - b * eo_gn + c * en_fm)
+
+        // 2×2 minors involving rows 1, 2 only — bottom row cofactors.
+        let gl_hk = g * l - h * k
+        let fl_hj = f * l - h * j
+        let fk_gj = f * k - g * j
+        let el_hi = e * l - h * i
+        let ek_gi = e * k - g * i
+        let ej_fi = e * j - f * i
+
+        let A41 = -(b * gl_hk - c * fl_hj + d * fk_gj)
+        let A42 =  a * gl_hk - c * el_hi + d * ek_gi
+        let A43 = -(a * fl_hj - b * el_hi + d * ej_fi)
+        let A44 =  a * fk_gj - b * ek_gi + c * ej_fi
+
         var inv = [[Double]](repeating: [Double](repeating: 0, count: 4), count: 4)
-        for i in 0..<4 {
-            for j in 0..<4 { inv[i][j] = a[i][4 + j] }
-        }
+        inv[0][0] = A11 * invDet; inv[0][1] = A21 * invDet
+        inv[0][2] = A31 * invDet; inv[0][3] = A41 * invDet
+        inv[1][0] = A12 * invDet; inv[1][1] = A22 * invDet
+        inv[1][2] = A32 * invDet; inv[1][3] = A42 * invDet
+        inv[2][0] = A13 * invDet; inv[2][1] = A23 * invDet
+        inv[2][2] = A33 * invDet; inv[2][3] = A43 * invDet
+        inv[3][0] = A14 * invDet; inv[3][1] = A24 * invDet
+        inv[3][2] = A34 * invDet; inv[3][3] = A44 * invDet
         return inv
     }
 

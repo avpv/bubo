@@ -71,37 +71,96 @@ final class BuboOptimizer {
         let capturedIslandConfig = overrideIslandConfig ?? islandConfig
         let capturedScenarioCount = scenarioCount
 
-        // Wire the adaptive NSGA-III harness for ScheduleChromosome. The
-        // harness reads per-objective scores straight out of the chromosome
-        // cache, so survivor selection imposes zero extra evaluation cost.
+        // Adaptive NSGA-III + HypE-lite survivor selector. Reads
+        // per-objective scores from the chromosome cache so survivor
+        // selection imposes zero extra evaluation cost.
         let multiObjective = MultiObjectiveContext<ScheduleChromosome>.schedule(
             evaluator: evaluator,
             populationSize: config.populationSize
         )
 
         // Quality-Diversity archive shared across every island so
-        // productive genotypes discovered anywhere feed every population.
+        // productive genotypes discovered anywhere feed every
+        // population.
         let qdArchive = QualityDiversityArchive(resolution: 6)
 
-        // Gradient refiner for elite fine-tuning. Cost is bounded by
-        // `config.gradientRefineCandidates * passes`; presets set a
-        // sensible cadence via `gradientRefineInterval`.
-        let gradientRefiner = DifferentiableRefiner()
+        // Gradient refiner for elite fine-tuning. Pure value type;
+        // safe to capture across threads.
+        let gradientRefiner = ScheduleGradientRefiner()
+
+        // Surrogate model — predicts fitness for offspring whose
+        // features sit close to recently-evaluated samples. Real
+        // evaluator runs on warm-up samples and on uncertain queries.
+        let surrogate = RBFSurrogate()
+
+        // Federated mutation bandit: per-island LinUCB with a merge
+        // every migration boundary. Replaces the single shared bandit
+        // so islands can specialize while still exchanging experience.
+        let federatedBandit = FederatedMutationBandit(islandCount: capturedIslandConfig.islandCount)
+
+        // Schedule-specific evolution hooks. Composed via the generic
+        // `EvolutionHooks` API so the engine never sees schedule types.
+        let surrogateAssistedEvaluator: @Sendable (inout ScheduleChromosome) -> Void = { chromosome in
+            let features = ScheduleFeatureVector.extract(chromosome, context: adjustedContext).values
+            switch surrogate.screen(features: features) {
+            case .accept(let predicted):
+                chromosome.fitness = predicted
+                chromosome.rawFitness = predicted
+                chromosome.needsEvaluation = false
+            case .realEvaluate:
+                evaluator.evaluateAndAssign(&chromosome, context: adjustedContext)
+                surrogate.record(features: features, fitness: chromosome.rawFitness)
+            }
+        }
+
+        let hooks = ScheduleEvolutionHooks.compose(
+            ScheduleEvolutionHooks.qualityDiversityFeeding(archive: qdArchive),
+            ScheduleEvolutionHooks.qualityDiversityEmission(archive: qdArchive, emissionRate: 0.12),
+            ScheduleEvolutionHooks.gradientRefinement(
+                refiner: gradientRefiner,
+                interval: 35,
+                candidates: 3,
+                evaluate: surrogateAssistedEvaluator
+            )
+        )
 
         // Run island model GA on background thread
         let (population, convergenceGen, duration) = await Task.detached(priority: .userInitiated) {
             let startTime = Date()
 
+            // Per-island federated bandit: each island gets its own
+            // bandit copy. The IslandModelGA loop merges the
+            // federation on every migration boundary.
+            let banditByIsland = (0..<capturedIslandConfig.islandCount).map { i in
+                federatedBandit.bandit(forIsland: i)
+            }
+            // Island 0's bandit doubles as the context bandit for the
+            // shared OptimizerContext that the island model uses
+            // before per-island contexts are created. Per-island
+            // contexts get their own bandits via a closure passed
+            // through the IslandModelGA wiring; here we set the
+            // base context to bandit 0 as a sensible default.
+            let federatedContext = OptimizerContext(
+                fixedEvents: adjustedContext.fixedEvents,
+                movableEvents: adjustedContext.movableEvents,
+                workingHours: adjustedContext.workingHours,
+                planningHorizon: adjustedContext.planningHorizon,
+                preferences: adjustedContext.preferences,
+                participantAvailability: adjustedContext.participantAvailability,
+                calendar: adjustedContext.calendar,
+                rng: adjustedContext.rng,
+                mutationBandit: banditByIsland[0],
+                contextualCrossoverHead: adjustedContext.contextualCrossoverHead
+            )
+
             let islandGA = IslandModelGA<ScheduleChromosome>(
                 islandConfig: capturedIslandConfig,
                 baseConfig: config,
-                context: adjustedContext,
-                evaluate: { chromosome in
-                    evaluator.evaluateAndAssign(&chromosome, context: adjustedContext)
-                },
+                context: federatedContext,
+                evaluate: surrogateAssistedEvaluator,
                 multiObjective: multiObjective,
-                qdArchive: qdArchive,
-                gradientRefiner: gradientRefiner
+                hooks: hooks,
+                federatedBandit: federatedBandit
             )
 
             let pop = islandGA.run()

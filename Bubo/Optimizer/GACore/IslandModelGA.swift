@@ -205,20 +205,16 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
     private var onProgress: ((IslandModelProgress) -> Void)?
     private let multiObjective: MultiObjectiveContext<C>?
 
-    /// Shared Quality-Diversity archive across islands. Every island's
-    /// evolved offspring are considered for insertion, and every island
-    /// may draw emitters from the same global pool.
-    let qdArchive: QualityDiversityArchive?
+    /// Generic hook bundle forwarded to every per-island `GeneticAlgorithm`.
+    /// Schedule-specific concerns (QD archive feeding, gradient
+    /// refinement) are wired here by the host without leaking schedule
+    /// types into the engine.
+    let hooks: EvolutionHooks<C>
 
-    /// Shared gradient refiner. Wired per-island so every island can
-    /// fine-tune its elites on gradient-refine intervals.
-    let gradientRefiner: DifferentiableRefiner?
-
-    /// Optional federated mutation bandit. When non-nil, each island's
-    /// context gets its *own* per-island `MutationBandit` drawn from the
-    /// federation; the island loop triggers periodic merges at
-    /// `islandConfig.migrationInterval` boundaries so bandit state stays
-    /// shared but not serialized through a single lock.
+    /// Optional federated mutation bandit. When non-nil, each island
+    /// uses its own per-island `MutationBandit` from the federation;
+    /// the island loop triggers a merge on every migration boundary so
+    /// bandit state is shared without going through a single lock.
     let federatedBandit: FederatedMutationBandit?
 
     private(set) var bestEver: C?
@@ -231,8 +227,7 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         evaluate: @escaping (inout C) -> Void,
         onProgress: ((IslandModelProgress) -> Void)? = nil,
         multiObjective: MultiObjectiveContext<C>? = nil,
-        qdArchive: QualityDiversityArchive? = nil,
-        gradientRefiner: DifferentiableRefiner? = nil,
+        hooks: EvolutionHooks<C> = .noop,
         federatedBandit: FederatedMutationBandit? = nil
     ) {
         self.islandConfig = islandConfig
@@ -241,8 +236,7 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         self.evaluate = evaluate
         self.onProgress = onProgress
         self.multiObjective = multiObjective
-        self.qdArchive = qdArchive
-        self.gradientRefiner = gradientRefiner
+        self.hooks = hooks
         self.federatedBandit = federatedBandit
     }
 
@@ -261,8 +255,8 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         //    thread-safe and deterministic under a fixed top-level seed.
         //    Greedy seeds are distributed per-island based on each island's config.
         let islandConfigs = makeIslandConfigs()
-        let islands = islandConfigs.map { config -> Island<C> in
-            let islandContext = makeIslandContext()
+        let islands = islandConfigs.enumerated().map { (idx, config) -> Island<C> in
+            let islandContext = makeIslandContext(islandIndex: idx)
             let greedyCount = max(0, Int(Double(config.populationSize) * config.greedySeedFraction))
             let randomCount = config.populationSize - greedyCount
 
@@ -290,8 +284,7 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
                 context: islandContext,
                 evaluate: evaluate,
                 multiObjective: multiObjective,
-                qdArchive: qdArchive,
-                gradientRefiner: gradientRefiner
+                hooks: hooks
             )
             return Island(population: pop, ga: ga, context: islandContext)
         }
@@ -304,14 +297,21 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
     /// on the parent RNG in the order islands are created, so the sequence is
     /// deterministic — island 0 gets the first split, island 1 the second, etc.
     ///
-    /// The `MutationBandit` is intentionally *shared* across islands when
-    /// present: every pull on every island contributes to the same UCB arm
-    /// statistics, which accelerates convergence of the operator allocation.
-    /// Islands evolve in parallel, so the bandit's lock is the only concurrency
-    /// point; lock contention is negligible (one acquisition per mutate call,
-    /// ~microsecond cost versus ms-scale eval cost).
-    private func makeIslandContext() -> OptimizerContext {
-        OptimizerContext(
+    /// Build a per-island `OptimizerContext`. RNG is split for
+    /// thread-safe parallel evolution; reproducible under a fixed
+    /// top-level seed because `split()` advances deterministically in
+    /// island-creation order.
+    ///
+    /// Mutation bandit selection:
+    ///   • Federated wired → island `i` gets `federatedBandit.bandit(forIsland: i)`.
+    ///     Each island's bandit is independent in the hot path; merges
+    ///     happen on migration boundaries (see `evolveIslands`).
+    ///   • No federation → fall back to the shared `context.mutationBandit`
+    ///     so the legacy single-bandit path keeps working.
+    private func makeIslandContext(islandIndex: Int) -> OptimizerContext {
+        let bandit = federatedBandit?.bandit(forIsland: islandIndex)
+            ?? context.mutationBandit
+        return OptimizerContext(
             fixedEvents: context.fixedEvents,
             movableEvents: context.movableEvents,
             workingHours: context.workingHours,
@@ -320,7 +320,7 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             participantAvailability: context.participantAvailability,
             calendar: context.calendar,
             rng: context.rng.split(),
-            mutationBandit: context.mutationBandit,
+            mutationBandit: bandit,
             contextualCrossoverHead: context.contextualCrossoverHead
         )
     }
@@ -346,7 +346,7 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         }
 
         let islands = islandConfigs.enumerated().map { (idx, config) -> Island<C> in
-            let islandContext = makeIslandContext()
+            let islandContext = makeIslandContext(islandIndex: idx)
             var individuals = seedBuckets[idx]
 
             // Evaluate seeds that haven't been evaluated
@@ -367,8 +367,7 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
                 context: islandContext,
                 evaluate: evaluate,
                 multiObjective: multiObjective,
-                qdArchive: qdArchive,
-                gradientRefiner: gradientRefiner
+                hooks: hooks
             )
             return Island(population: pop, ga: ga, context: islandContext)
         }
