@@ -315,6 +315,15 @@ struct ScheduleScenario: Identifiable, Sendable {
     /// Populated by `planDayWithSequencing` — nil when sequencing wasn't applied.
     var taskSequenceByDay: [Date: [String]]?
 
+    /// Workload identity at the moment this scenario was produced.
+    /// `BuboOptimizer.acceptScenario` / `rejectScenario` /
+    /// `recordManualEdit` use this to route feedback into the
+    /// correct per-workload learner bundle, even after subsequent
+    /// optimizations on different workloads.
+    /// `nil` for scenarios produced outside `BuboOptimizer` (e.g.
+    /// hand-built fixtures).
+    var sourceSignature: TaskSignature?
+
     /// Genes actively placed in the schedule (excludes dropped droppable genes).
     var activeGenes: [ScheduleGene] { genes.filter { $0.isIncluded } }
 

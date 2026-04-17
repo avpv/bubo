@@ -79,4 +79,73 @@ struct TaskSignatureTests {
         let signatures = Set(contexts.map { TaskSignature(context: $0) })
         #expect(signatures.count >= 95, "Got \(signatures.count) unique signatures out of 100")
     }
+
+    // MARK: - Adversarial collision constructions
+
+    /// Two workloads with the same total duration but different
+    /// per-event durations — their `totalDurationBucket` collides.
+    /// The signature must still distinguish them via `eventIDsHash`.
+    @Test("Equal total duration with different event mixes produces distinct signatures")
+    func sameTotalDurationDifferentMix() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let horizon = DateInterval(start: today, duration: 86400)
+        let a = OptimizerContext(
+            movableEvents: [
+                .init(id: "a-1", title: "a-1", duration: 3600, priority: 0.5),
+                .init(id: "a-2", title: "a-2", duration: 3600, priority: 0.5)
+            ],
+            workingHours: 9...18,
+            planningHorizon: horizon,
+            preferences: OptimizerPreferences()
+        )
+        let b = OptimizerContext(
+            movableEvents: [
+                .init(id: "b-1", title: "b-1", duration: 1800, priority: 0.5),
+                .init(id: "b-2", title: "b-2", duration: 5400, priority: 0.5)
+            ],
+            workingHours: 9...18,
+            planningHorizon: horizon,
+            preferences: OptimizerPreferences()
+        )
+        // Both have totalDuration = 7200; eventIDsHash must
+        // disambiguate.
+        #expect(TaskSignature(context: a) != TaskSignature(context: b))
+    }
+
+    /// Two workloads with the same event IDs but different
+    /// preference weights must produce different signatures.
+    @Test("Same events, different prefs → distinct signatures")
+    func sameEventsDifferentPrefs() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let horizon = DateInterval(start: today, duration: 86400)
+        let events: [OptimizableEvent] = [
+            .init(id: "shared-1", title: "x", duration: 1800, priority: 0.5),
+            .init(id: "shared-2", title: "y", duration: 1800, priority: 0.5)
+        ]
+        var prefsHigh = OptimizerPreferences()
+        prefsHigh.deadlineWeight = 5.0
+        var prefsLow = OptimizerPreferences()
+        prefsLow.deadlineWeight = 0.1
+
+        let a = OptimizerContext(movableEvents: events, workingHours: 9...18, planningHorizon: horizon, preferences: prefsHigh)
+        let b = OptimizerContext(movableEvents: events, workingHours: 9...18, planningHorizon: horizon, preferences: prefsLow)
+        #expect(TaskSignature(context: a) != TaskSignature(context: b))
+    }
+
+    /// Reordered event input must produce the same signature
+    /// (signature should be order-independent).
+    @Test("Event ordering doesn't affect signature")
+    func eventOrderInsensitive() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let horizon = DateInterval(start: today, duration: 86400)
+        let e1 = OptimizableEvent(id: "x", title: "x", duration: 1800, priority: 0.5)
+        let e2 = OptimizableEvent(id: "y", title: "y", duration: 3600, priority: 0.5)
+
+        let forward = OptimizerContext(movableEvents: [e1, e2], workingHours: 9...18, planningHorizon: horizon, preferences: OptimizerPreferences())
+        let reverse = OptimizerContext(movableEvents: [e2, e1], workingHours: 9...18, planningHorizon: horizon, preferences: OptimizerPreferences())
+        #expect(TaskSignature(context: forward) == TaskSignature(context: reverse))
+    }
 }

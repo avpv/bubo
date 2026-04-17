@@ -44,6 +44,13 @@ final class IncrementalReoptimizer: @unchecked Sendable {
             movableGenes.contains { $0.eventId == event.id }
         }
 
+        // Forward bandit/head from the caller's context so the
+        // reoptimizer doesn't fork a parallel learner state. When the
+        // caller is `BuboOptimizer.optimize`, this means the
+        // incremental reoptimizer shares the same per-workload bundle
+        // and learning carries through. When called directly with a
+        // raw context, the default-initialized learners on `context`
+        // are forwarded as-is.
         let adjustedContext = OptimizerContext(
             fixedEvents: context.fixedEvents + frozenGenesToEvents(frozenGenes),
             movableEvents: futureMovable,
@@ -51,7 +58,9 @@ final class IncrementalReoptimizer: @unchecked Sendable {
             planningHorizon: DateInterval(start: now, end: context.planningHorizon.end),
             preferences: context.preferences,
             participantAvailability: context.participantAvailability,
-            calendar: context.calendar
+            calendar: context.calendar,
+            mutationBandit: context.mutationBandit,
+            contextualCrossoverHead: context.contextualCrossoverHead
         )
 
         guard !futureMovable.isEmpty else { return nil }

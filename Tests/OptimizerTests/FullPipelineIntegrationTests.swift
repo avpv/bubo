@@ -81,8 +81,12 @@ struct FullPipelineIntegrationTests {
 
     @Test("Cancellation throws CancellationError mid-evolution; bestEver survives")
     func cooperativeCancellationDeterministic() async throws {
-        // Stand up a GA with a slow synthetic evaluator so the
-        // cancellation race is deterministic.
+        // Continuation-synchronized cancellation: the evaluator
+        // signals "first generation has begun" via a one-shot
+        // continuation. The test waits on that signal *then* cancels.
+        // This eliminates the timing race the sleep-based version
+        // had — under heavy CI load, `Thread.sleep(50ms)` could
+        // finish before `Task.detached` even started.
         let cal = Calendar.current
         let today = cal.startOfDay(for: Date())
         let context = OptimizerContext(
@@ -100,25 +104,38 @@ struct FullPipelineIntegrationTests {
         )
         let config = GAConfiguration(
             populationSize: 30,
-            maxGenerations: 1_000,    // huge so cancellation always fires first
+            maxGenerations: 100_000,       // huge so cancellation always fires first
             mutationRate: 0.1,
             crossoverRate: 0.8,
             eliteCount: 2,
             selectionStrategy: .tournament(size: 3),
             crossoverStrategy: .singlePoint,
-            convergenceThreshold: 0.0001,
-            convergencePatience: 1000,
+            convergenceThreshold: 0.0,     // disable convergence shortcut
+            convergencePatience: 100_000,
             adaptiveMutation: false,
             diversityThreshold: 0.01,
             immigrationRate: 0.0
         )
+
+        // One-shot signal: the first evaluator call resumes the
+        // continuation so the test knows evolution has begun.
+        let firstEvalSignal = AsyncStream<Void>.makeStream(of: Void.self, bufferingPolicy: .bufferingNewest(1))
+        let signalSent = NSLock()
+        nonisolated(unsafe) var alreadySignalled = false
+
         let ga = GeneticAlgorithm<ScheduleChromosome>(
             config: config,
             context: context,
             evaluate: { c in
-                // Slow evaluator: ~1ms each, 30 individuals × 1000
-                // generations = 30s if uninterrupted.
-                Thread.sleep(forTimeInterval: 0.001)
+                // Signal first call so the test cancels at a known
+                // point (not before evolution has produced a
+                // `bestEver`). All subsequent calls run normally.
+                signalSent.lock()
+                if !alreadySignalled {
+                    alreadySignalled = true
+                    firstEvalSignal.continuation.yield()
+                }
+                signalSent.unlock()
                 c.rawFitness = Double.random(in: 0..<1)
                 c.fitness = c.rawFitness
             }
@@ -127,10 +144,15 @@ struct FullPipelineIntegrationTests {
         let task = Task.detached(priority: .userInitiated) { () throws -> [ScheduleChromosome] in
             try ga.run()
         }
-        // Yield, give the GA a moment to run a few generations, then
-        // cancel. ~50ms is plenty for 30-individual evaluations to
-        // produce a `bestEver` before we stop.
-        try await Task.sleep(nanoseconds: 50_000_000)
+
+        // Wait for the GA to actually start producing evaluations
+        // before we cancel.
+        var iterator = firstEvalSignal.stream.makeAsyncIterator()
+        _ = await iterator.next()
+
+        // Give the GA a few more generations to populate `bestEver`
+        // beyond the single first-evaluation snapshot.
+        try await Task.sleep(nanoseconds: 30_000_000)
         task.cancel()
 
         do {
@@ -146,6 +168,10 @@ struct FullPipelineIntegrationTests {
     @Test("acceptScenario nudges the run's attention head weights up")
     @MainActor
     func acceptanceNudgesHeadWeights() async {
+        // Fresh optimizer each call so head weights start at the
+        // priors (well below the upper clamp). Otherwise repeated
+        // accept calls could saturate the head and the assertion
+        // `weightsBefore != weightsAfter` would mis-fire silently.
         let optimizer = BuboOptimizer()
         optimizer.gaConfig = .quick
         optimizer.islandConfig = .quick
@@ -159,15 +185,20 @@ struct FullPipelineIntegrationTests {
 
         let bundle = optimizer.learners(for: context)
         let weightsBefore = bundle.head.currentWeights
+        // Sanity: priors are far enough below the upper clamp (3.0)
+        // that a single positive update is observable.
+        #expect(weightsBefore.allSatisfy { $0 < 2.5 })
 
         optimizer.acceptScenario(scenario)
 
         let weightsAfter = bundle.head.currentWeights
-        #expect(weightsBefore != weightsAfter, "acceptScenario must change head weights")
-        // All four features were used with positive reward → all weights should
-        // have moved up (or stayed at the upper clamp 3.0).
+        // At least one weight must move up. If all four were already
+        // at the clamp, nothing would change — `weightsBefore`
+        // sanity check above rules that out.
+        let anyIncreased = zip(weightsBefore, weightsAfter).contains { $1 > $0 }
+        #expect(anyIncreased, "Positive reward must increase at least one head weight")
         for (old, new) in zip(weightsBefore, weightsAfter) {
-            #expect(new >= old, "positive reward should not decrease any weight")
+            #expect(new >= old, "Positive reward should not decrease any weight")
         }
     }
 
@@ -194,10 +225,13 @@ struct FullPipelineIntegrationTests {
             #expect(new <= old, "negative reward should not increase any weight")
         }
 
-        // recordManualEdit also routes through the bundle; verify the
-        // bandit pull count moves.
+        // recordManualEdit also routes through the bundle. Use the
+        // scenario-typed overload that resolves the bundle via
+        // `scenario.sourceSignature` — survives later optimizations
+        // on different workloads, unlike the legacy lastRunSignature
+        // path.
         let pullsBefore = bundle.bandit.snapshot.values.reduce(0) { $0 + $1.pulls }
-        optimizer.recordManualEdit(original: scenario.genes, edited: scenario.genes)
+        optimizer.recordManualEdit(scenario: scenario, edited: scenario.genes)
         let pullsAfter = bundle.bandit.snapshot.values.reduce(0) { $0 + $1.pulls }
         #expect(pullsAfter > pullsBefore)
     }
@@ -222,6 +256,45 @@ struct FullPipelineIntegrationTests {
         #expect(firstBundle.head === secondBundle.head, "Same signature must yield same head")
         #expect(firstBundle.surrogate === secondBundle.surrogate, "Same signature must yield same surrogate")
         #expect(secondBanditPulls > firstBanditPulls, "Second run must accumulate further pulls on the same bandit")
+    }
+
+    @Test("Stale-scenario feedback routes to the original workload's bundle")
+    @MainActor
+    func feedbackRoutesByScenarioSignatureNotLastRun() async {
+        let optimizer = BuboOptimizer()
+        optimizer.gaConfig = .quick
+        optimizer.islandConfig = .quick
+        let workloadA = makeWorkload(eventCount: 5)
+        let workloadB = makeWorkload(eventCount: 12)
+
+        // Run A, capture its scenario, then run B (lastRunSignature
+        // now points at B). Feedback on A's scenario must still find
+        // A's bundle via `sourceSignature`.
+        let resultA = await optimizer.optimize(context: workloadA)
+        guard let scenarioA = resultA.scenarios.first else {
+            Issue.record("Expected scenario from workload A")
+            return
+        }
+        _ = await optimizer.optimize(context: workloadB)
+
+        let bundleA = optimizer.learners(for: workloadA)
+        let bundleB = optimizer.learners(for: workloadB)
+        let banditAPullsBefore = bundleA.bandit.snapshot.values.reduce(0) { $0 + $1.pulls }
+        let banditBPullsBefore = bundleB.bandit.snapshot.values.reduce(0) { $0 + $1.pulls }
+        let headAWeightsBefore = bundleA.head.currentWeights
+        let headBWeightsBefore = bundleB.head.currentWeights
+
+        optimizer.acceptScenario(scenarioA)
+
+        let banditAPullsAfter = bundleA.bandit.snapshot.values.reduce(0) { $0 + $1.pulls }
+        let banditBPullsAfter = bundleB.bandit.snapshot.values.reduce(0) { $0 + $1.pulls }
+        #expect(banditAPullsAfter > banditAPullsBefore, "A's bandit must absorb the feedback")
+        #expect(banditBPullsAfter == banditBPullsBefore, "B's bandit must NOT see A's feedback")
+
+        let headAWeightsAfter = bundleA.head.currentWeights
+        let headBWeightsAfter = bundleB.head.currentWeights
+        #expect(headAWeightsBefore != headAWeightsAfter, "A's head must absorb the feedback")
+        #expect(headBWeightsBefore == headBWeightsAfter, "B's head must NOT see A's feedback")
     }
 
     @Test("Different workloads get distinct learner bundles")

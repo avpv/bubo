@@ -59,10 +59,13 @@ final class HypervolumeEstimator: @unchecked Sendable {
     private var nadir: ContiguousArray<Double>
     private let nadirLock = NSLock()
 
-    /// EMA smoothing factor for nadir updates. 0 = freeze at init,
-    /// 1 = jump to observed-worst every call. 0.2 absorbs persistent
-    /// saturation within a handful of generations without reacting to
-    /// single noisy drops.
+    /// EMA smoothing factor for nadir updates. `0` freezes at init,
+    /// `1` jumps to observed-worst every call. The default `0.2`
+    /// absorbs persistent saturation within ~5 generations
+    /// (`1 / α` is the EMA's effective half-life in update events)
+    /// without reacting to single noisy drops. Tune up for fast-
+    /// changing populations, down for high-noise fitness landscapes.
+    /// Configurable via the `nadirAlpha:` init parameter.
     private let nadirAlpha: Double
 
     init(

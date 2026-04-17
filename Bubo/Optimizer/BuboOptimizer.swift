@@ -38,8 +38,11 @@ final class BuboOptimizer {
     // routes via `lastRunSignature` so the user's response always
     // reaches the learners that produced the result.
 
-    /// Per-signature learner bundle.
-    struct WorkloadLearners {
+    /// Per-signature learner bundle. Class (not struct) so identity
+    /// equality (`===`) is unambiguous in tests and so callers reason
+    /// about "the same bundle" without thinking about value-type
+    /// semantics around its three reference-typed fields.
+    final class WorkloadLearners {
         let bandit: MutationBandit
         let head: GeneAttentionHead
         let surrogate: RBFSurrogate
@@ -53,7 +56,13 @@ final class BuboOptimizer {
 
     private var learnersBySignature: [TaskSignature: WorkloadLearners] = [:]
     private var learnerLRU: [TaskSignature] = []
-    private let learnerCacheCapacity = 8
+
+    /// Maximum number of distinct task signatures whose learner
+    /// bundles are kept in memory. Older bundles evict on overflow.
+    /// Default 8 covers most users (2-3 active calendars + a few
+    /// experimental ones); raise for power users juggling many
+    /// distinct task pools.
+    var maxCachedLearnerBundles: Int = 8
 
     /// Signature of the most recent optimize() invocation. Used by
     /// feedback methods to find the learner bundle to update.
@@ -71,7 +80,7 @@ final class BuboOptimizer {
         let fresh = WorkloadLearners()
         learnersBySignature[signature] = fresh
         learnerLRU.append(signature)
-        while learnerLRU.count > learnerCacheCapacity {
+        while learnerLRU.count > maxCachedLearnerBundles {
             let evicted = learnerLRU.removeFirst()
             learnersBySignature.removeValue(forKey: evicted)
         }
@@ -97,6 +106,19 @@ final class BuboOptimizer {
     /// Run a full optimization for the given context.
     /// Uses island model GA with multiple parallel populations and periodic migration.
     /// The GA runs on a background thread; progress updates are dispatched to main.
+    ///
+    /// Concurrency: launching multiple `optimize()` calls in parallel
+    /// on the same `BuboOptimizer` is safe. Calls for different
+    /// workload signatures use disjoint learner bundles. Calls for
+    /// the *same* signature share the bundle's bandit/head/surrogate
+    /// — every mutating operation on those classes is lock-protected
+    /// and individually idempotent (LinUCB updates are commutative,
+    /// surrogate sample appends are independent, head weight updates
+    /// commute within clamp), so concurrent updates produce a
+    /// well-defined post-state without serialization. The non-
+    /// determinism is bounded by the order of evaluation completions
+    /// and is the same kind of bounded variance the GA tolerates by
+    /// design.
     func optimize(
         context: OptimizerContext,
         overrideConfig: GAConfiguration? = nil,
@@ -284,13 +306,30 @@ final class BuboOptimizer {
 
         // Back on main thread — deposit every island individual into the
         // MAP-Elites archive and read diverse scenarios out of it.
+        // Note on the two coexisting archive flavours:
+        //   - `QualityDiversityArchive` (during-GA) bins on
+        //     focusMass / morningSkew / daySpread to drive *emitter*
+        //     selection inside evolution.
+        //   - `MAPElitesArchive` (post-GA, here) bins on
+        //     focusQuality / meetingDensity / inclusionRatio —
+        //     user-meaningful axes — to pick the *display* set of
+        //     scenarios. Different axes serve different consumers,
+        //     so the two coexist deliberately.
         var archive = MAPElitesArchive()
         archive.depositAll(population, context: adjustedContext)
+        // Stamp every scenario with the run's task signature so
+        // feedback methods can route updates to the correct
+        // per-workload learner bundle even after later runs on
+        // different workloads.
         let scenarios = archive.diverseScenarios(
             count: capturedScenarioCount,
             evaluator: evaluator,
             context: adjustedContext
-        )
+        ).map { scenario -> ScheduleScenario in
+            var stamped = scenario
+            stamped.sourceSignature = signature
+            return stamped
+        }
 
         let populationCount = population.prefix(10).count
         let metadata = OptimizationMetadata(
@@ -450,21 +489,32 @@ final class BuboOptimizer {
     // Feedback fans out to three learners:
     //   • `PreferenceLearner` — evolves per-objective weights via its
     //     meta-GA (unchanged, instance-level by design).
-    //   • The per-workload `MutationBandit` (bounded LinUCB reward per
-    //     operator) — reinforces operators that produced accepted
-    //     schedules on subsequent runs *of the same workload*.
-    //   • The per-workload `GeneAttentionHead` (small weight step) —
-    //     biases contextual crossover toward (or away from) the
-    //     patterns that led to user-visible success/failure.
+    //   • The per-workload `MutationBandit` — bounded LinUCB reward
+    //     per operator nudges arm estimates so operators that
+    //     produced accepted schedules get reinforced on subsequent
+    //     runs *of the same workload*.
+    //   • The per-workload `GeneAttentionHead` — a small weight step
+    //     biases contextual crossover toward / away from patterns
+    //     associated with accepted / rejected results.
     //
-    // Bandit/head updates route via `lastRunSignature` so feedback
-    // always reaches the learners that produced the result. If
-    // `lastRunSignature` is nil (no run since launch), bandit/head
-    // updates are no-ops and only `PreferenceLearner` records.
+    // Routing: feedback methods read `scenario.sourceSignature` and
+    // look up the matching learner bundle. This is robust under
+    // multiple optimizations on different workloads — a manual edit
+    // on a stale scenario from workload A correctly updates A's
+    // bundle even after runs B, C have happened since. Falls back
+    // to silent no-op for scenarios with no `sourceSignature` (e.g.
+    // hand-built fixtures).
     //
     // Update magnitude is intentionally small (~0.1) so one noisy
     // feedback event doesn't dominate learned state; many events
     // converge.
+    //
+    // Known limitation: `recordManualEdit` receives `original` and
+    // `edited` gene arrays but currently only uses the act of
+    // editing as a global "close but not right" signal. The
+    // semantic *diff* (which genes the user moved, by how much) is
+    // not yet pulled into per-operator credit assignment — a future
+    // refinement that would require lineage tracking per offspring.
 
     func acceptScenario(_ scenario: ScheduleScenario) {
         currentSchedule = scenario.genes
@@ -477,36 +527,54 @@ final class BuboOptimizer {
         propagateFeedbackReward(-0.1, scenario: scenario)
     }
 
-    func recordManualEdit(original: [ScheduleGene], edited: [ScheduleGene]) {
+    func recordManualEdit(scenario: ScheduleScenario, edited: [ScheduleGene]) {
         currentSchedule = edited
-        preferenceLearner.recordModification(original: original, edited: edited)
-        guard let signature = lastRunSignature,
-              let bundle = learnersBySignature[signature] else { return }
-        // Modification means "close but not right" — a mild negative
-        // on both bandit and head; PreferenceLearner handles the
-        // objective-weight refinement separately.
+        preferenceLearner.recordModification(original: scenario.genes, edited: edited)
+        guard let bundle = bundle(for: scenario) else { return }
         for op in MutationOperator.allCases {
             bundle.bandit.record(op: op, reward: -0.03)
         }
         bundle.head.updateWeights(features: [1, 1, 1, 1], rewardSign: -0.3)
     }
 
-    /// Apply a uniform reward signal to every bandit arm and a
-    /// scenario-magnitude-scaled nudge to the attention head — for
-    /// the workload of the most recent run. Uniform across operators
-    /// because we don't retain per-gene lineage; LinUCB's context
-    /// features already discriminate regimes, so "reinforce whatever
-    /// you were doing" averages out to the useful signal over many
-    /// feedback events.
-    private func propagateFeedbackReward(_ reward: Double, scenario: ScheduleScenario) {
+    /// Backwards-compatible overload accepting raw gene arrays. Use
+    /// the `scenario`-typed overload when you have a `ScheduleScenario`
+    /// in hand — it correctly routes feedback by `sourceSignature`.
+    /// This overload routes via `lastRunSignature` (correct only when
+    /// no later optimizations have happened).
+    func recordManualEdit(original: [ScheduleGene], edited: [ScheduleGene]) {
+        currentSchedule = edited
+        preferenceLearner.recordModification(original: original, edited: edited)
         guard let signature = lastRunSignature,
               let bundle = learnersBySignature[signature] else { return }
         for op in MutationOperator.allCases {
+            bundle.bandit.record(op: op, reward: -0.03)
+        }
+        bundle.head.updateWeights(features: [1, 1, 1, 1], rewardSign: -0.3)
+    }
+
+    /// Resolve the learner bundle a scenario refers to. Prefers
+    /// `scenario.sourceSignature` (set by `optimize()`). Falls back to
+    /// `lastRunSignature` for hand-built scenarios that have no
+    /// signature stamped.
+    private func bundle(for scenario: ScheduleScenario) -> WorkloadLearners? {
+        let key = scenario.sourceSignature ?? lastRunSignature
+        guard let key else { return nil }
+        return learnersBySignature[key]
+    }
+
+    /// Apply a uniform reward signal to every bandit arm and a
+    /// scenario-magnitude-scaled nudge to the attention head, for
+    /// the workload that produced the scenario. Uniform across
+    /// operators because we don't retain per-gene lineage; LinUCB's
+    /// context features already discriminate regimes, so "reinforce
+    /// whatever you were doing" averages out over many feedback
+    /// events.
+    private func propagateFeedbackReward(_ reward: Double, scenario: ScheduleScenario) {
+        guard let bundle = bundle(for: scenario) else { return }
+        for op in MutationOperator.allCases {
             bundle.bandit.record(op: op, reward: reward)
         }
-        // Head feedback: scale by scenario fitness — high-fitness
-        // accepted scenarios mean the head is doing well; weak
-        // scenarios that were accepted anyway carry less signal.
         let signedMagnitude = reward.signum() * max(0.3, scenario.fitness)
         bundle.head.updateWeights(features: [1, 1, 1, 1], rewardSign: signedMagnitude)
     }
