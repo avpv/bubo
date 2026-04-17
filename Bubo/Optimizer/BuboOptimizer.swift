@@ -20,53 +20,60 @@ final class BuboOptimizer {
     /// Number of scenarios to return per optimization.
     var scenarioCount: Int = 3
 
-    // MARK: - Learned State (persists across optimize() calls)
+    // MARK: - Per-Workload Learned State
+    //
+    // The bandit, attention head, and surrogate are all stateful
+    // workload-sensitive learners. A 5-event workload's good operator
+    // mix, gene-attention scoring, and fitness landscape are all
+    // qualitatively different from a 50-event workload's. Sharing
+    // any of them across substantially different workloads
+    // cross-contaminates.
+    //
+    // Resolution: bundle the three together as a `WorkloadLearners`
+    // record, key by `TaskSignature`, share a single LRU. Two
+    // optimizations on the same calendar reuse the bundle; different
+    // workloads get fresh learners. The LRU caps memory.
+    //
+    // Feedback (`acceptScenario` / `rejectScenario` / `recordManualEdit`)
+    // routes via `lastRunSignature` so the user's response always
+    // reaches the learners that produced the result.
 
-    /// Per-instance mutation bandit. Instance-level (not per-run) so
-    /// reinforcement from user feedback carries into subsequent
-    /// optimizations. LinUCB's contextual features (diversity,
-    /// stagnation, imbalance) already discriminate regimes, so
-    /// cross-workload bleed is bounded.
-    let mutationBandit: MutationBandit = MutationBandit()
+    /// Per-signature learner bundle.
+    struct WorkloadLearners {
+        let bandit: MutationBandit
+        let head: GeneAttentionHead
+        let surrogate: RBFSurrogate
 
-    /// Per-instance attention head. Same rationale as `mutationBandit`:
-    /// user feedback nudges weights across runs.
-    let contextualCrossoverHead: GeneAttentionHead = GeneAttentionHead()
+        init() {
+            self.bandit = MutationBandit()
+            self.head = GeneAttentionHead()
+            self.surrogate = RBFSurrogate()
+        }
+    }
 
-    /// Per-task-signature surrogate cache. The surrogate's training
-    /// set is workload-sensitive: even though features are normalized
-    /// to `[0, 1]^16`, a morning-heavy plan on a 5-event workload has
-    /// different fitness semantics than the same shape on a 20-event
-    /// workload because the underlying objectives scale with event
-    /// count. A naive instance-level shared surrogate cross-contaminates.
-    ///
-    /// Signature captures the coarse workload identity:
-    /// `hash(eventIDs, duration-bucketed, preference-weights)`. Two
-    /// optimizations on the same calendar reuse the surrogate;
-    /// substantially different workloads get a fresh one. `kCapacity`
-    /// bounds memory when many distinct workloads arrive (oldest
-    /// surrogate evicts on overflow).
-    private var surrogatesBySignature: [TaskSignature: RBFSurrogate] = [:]
-    private var surrogateLRU: [TaskSignature] = []
-    private let surrogateCacheCapacity = 8
+    private var learnersBySignature: [TaskSignature: WorkloadLearners] = [:]
+    private var learnerLRU: [TaskSignature] = []
+    private let learnerCacheCapacity = 8
 
-    /// Look up the surrogate for this context's task signature,
-    /// creating and caching one on miss. Evicts the oldest surrogate
-    /// when the cache is full (LRU).
-    private func surrogate(for context: OptimizerContext) -> RBFSurrogate {
+    /// Signature of the most recent optimize() invocation. Used by
+    /// feedback methods to find the learner bundle to update.
+    private(set) var lastRunSignature: TaskSignature?
+
+    /// Look up (or create) the learner bundle for `context`'s task
+    /// signature. Refreshes LRU position. Evicts oldest on overflow.
+    func learners(for context: OptimizerContext) -> WorkloadLearners {
         let signature = TaskSignature(context: context)
-        if let existing = surrogatesBySignature[signature] {
-            // Move to the front of the LRU list.
-            surrogateLRU.removeAll { $0 == signature }
-            surrogateLRU.append(signature)
+        if let existing = learnersBySignature[signature] {
+            learnerLRU.removeAll { $0 == signature }
+            learnerLRU.append(signature)
             return existing
         }
-        let fresh = RBFSurrogate()
-        surrogatesBySignature[signature] = fresh
-        surrogateLRU.append(signature)
-        while surrogateLRU.count > surrogateCacheCapacity {
-            let evicted = surrogateLRU.removeFirst()
-            surrogatesBySignature.removeValue(forKey: evicted)
+        let fresh = WorkloadLearners()
+        learnersBySignature[signature] = fresh
+        learnerLRU.append(signature)
+        while learnerLRU.count > learnerCacheCapacity {
+            let evicted = learnerLRU.removeFirst()
+            learnersBySignature.removeValue(forKey: evicted)
         }
         return fresh
     }
@@ -102,16 +109,20 @@ final class BuboOptimizer {
         var prefs = context.preferences
         preferenceLearner.applyToPreferences(&prefs)
 
-        // Wire fresh per-run learners. Bandit/attention-head stats don't
-        // carry over between optimizations because workload
-        // characteristics (fixed events, movable pool, preferences)
-        // differ per run; stale weights would be actively misleading.
-        //
+        // Resolve per-workload learners (bandit + head + surrogate)
+        // by task signature so learning persists across runs on the
+        // same calendar but different workloads stay isolated.
+        // `lastRunSignature` is recorded so feedback methods know
+        // which bundle to update.
+        let signature = TaskSignature(context: context)
+        let workloadLearners = learners(for: context)
+        lastRunSignature = signature
+
         // RNG is *split* from the caller's generator, not shared:
         // `GARandom` is a reference type, and two concurrent
-        // `optimize()` calls on the same BuboOptimizer would otherwise
-        // interleave draws from a single stream. The split keeps the
-        // caller's stream reproducible across concurrent runs.
+        // `optimize()` calls would otherwise interleave draws from
+        // a single stream. The split keeps the caller's stream
+        // reproducible across concurrent runs.
         let adjustedContext = OptimizerContext(
             fixedEvents: context.fixedEvents,
             movableEvents: context.movableEvents,
@@ -121,8 +132,8 @@ final class BuboOptimizer {
             participantAvailability: context.participantAvailability,
             calendar: context.calendar,
             rng: context.rng.split(),
-            mutationBandit: mutationBandit,
-            contextualCrossoverHead: contextualCrossoverHead
+            mutationBandit: workloadLearners.bandit,
+            contextualCrossoverHead: workloadLearners.head
         )
 
         let evaluator = FitnessEvaluator.standard(preferences: prefs)
@@ -151,9 +162,8 @@ final class BuboOptimizer {
         // safe to capture across threads.
         let gradientRefiner = ScheduleGradientRefiner()
 
-        // Surrogate keyed by task signature — see
-        // `surrogate(for:)` doc for the persistence policy.
-        let surrogate = self.surrogate(for: adjustedContext)
+        // Surrogate from the per-signature learner bundle.
+        let surrogate = workloadLearners.surrogate
 
         // Canonical objective ordering for surrogate's objective-vector
         // prediction. Must match the order `MultiObjectiveContext`
@@ -229,10 +239,11 @@ final class BuboOptimizer {
         )
 
         // Run island model GA on background thread. All islands share
-        // the instance-level `mutationBandit` and `contextualCrossoverHead`
-        // via `adjustedContext` so user feedback (recorded after the
-        // run via `recordAcceptance` / `recordRejection`) reaches the
-        // same objects on subsequent optimizations.
+        // the per-workload `bandit` and `head` from `workloadLearners`
+        // via `adjustedContext`. User feedback (`acceptScenario` /
+        // `rejectScenario`) routes via `lastRunSignature` so it
+        // updates the same bundle on subsequent optimizations of the
+        // same workload.
         //
         // `FederatedMutationBandit` remains available as an opt-in
         // optimization for callers that want per-island bandits with
@@ -436,20 +447,24 @@ final class BuboOptimizer {
 
     // MARK: - User Feedback (#24)
     //
-    // Feedback is fanned out to three learners:
+    // Feedback fans out to three learners:
     //   • `PreferenceLearner` — evolves per-objective weights via its
-    //     meta-GA (unchanged).
-    //   • `MutationBandit` — a bounded reward per operator nudges the
-    //     LinUCB estimates so operators that produced accepted
-    //     schedules get reinforced on subsequent runs.
-    //   • `GeneAttentionHead` — a small feature-weight step biases
-    //     contextual crossover toward (or away from) the patterns
-    //     that led to user-visible success/failure.
+    //     meta-GA (unchanged, instance-level by design).
+    //   • The per-workload `MutationBandit` (bounded LinUCB reward per
+    //     operator) — reinforces operators that produced accepted
+    //     schedules on subsequent runs *of the same workload*.
+    //   • The per-workload `GeneAttentionHead` (small weight step) —
+    //     biases contextual crossover toward (or away from) the
+    //     patterns that led to user-visible success/failure.
     //
-    // The bandit/head updates are intentionally small (~0.1 magnitude)
-    // so a single decision doesn't dominate learned state; many pieces
-    // of feedback converge meaningfully while one noisy accept
-    // doesn't derail the model.
+    // Bandit/head updates route via `lastRunSignature` so feedback
+    // always reaches the learners that produced the result. If
+    // `lastRunSignature` is nil (no run since launch), bandit/head
+    // updates are no-ops and only `PreferenceLearner` records.
+    //
+    // Update magnitude is intentionally small (~0.1) so one noisy
+    // feedback event doesn't dominate learned state; many events
+    // converge.
 
     func acceptScenario(_ scenario: ScheduleScenario) {
         currentSchedule = scenario.genes
@@ -465,36 +480,35 @@ final class BuboOptimizer {
     func recordManualEdit(original: [ScheduleGene], edited: [ScheduleGene]) {
         currentSchedule = edited
         preferenceLearner.recordModification(original: original, edited: edited)
+        guard let signature = lastRunSignature,
+              let bundle = learnersBySignature[signature] else { return }
         // Modification means "close but not right" — a mild negative
         // on both bandit and head; PreferenceLearner handles the
         // objective-weight refinement separately.
         for op in MutationOperator.allCases {
-            mutationBandit.record(op: op, reward: -0.03)
+            bundle.bandit.record(op: op, reward: -0.03)
         }
-        contextualCrossoverHead.updateWeights(
-            features: [1, 1, 1, 1],
-            rewardSign: -0.3
-        )
+        bundle.head.updateWeights(features: [1, 1, 1, 1], rewardSign: -0.3)
     }
 
     /// Apply a uniform reward signal to every bandit arm and a
-    /// scenario-magnitude-scaled nudge to the attention head.
-    /// Uniform across operators because we don't retain per-gene
-    /// lineage — LinUCB's context features already discriminate
-    /// regimes, so "reinforce whatever you were doing" averages out
-    /// to the useful signal over many feedback events.
+    /// scenario-magnitude-scaled nudge to the attention head — for
+    /// the workload of the most recent run. Uniform across operators
+    /// because we don't retain per-gene lineage; LinUCB's context
+    /// features already discriminate regimes, so "reinforce whatever
+    /// you were doing" averages out to the useful signal over many
+    /// feedback events.
     private func propagateFeedbackReward(_ reward: Double, scenario: ScheduleScenario) {
+        guard let signature = lastRunSignature,
+              let bundle = learnersBySignature[signature] else { return }
         for op in MutationOperator.allCases {
-            mutationBandit.record(op: op, reward: reward)
+            bundle.bandit.record(op: op, reward: reward)
         }
         // Head feedback: scale by scenario fitness — high-fitness
         // accepted scenarios mean the head is doing well; weak
         // scenarios that were accepted anyway carry less signal.
         let signedMagnitude = reward.signum() * max(0.3, scenario.fitness)
-        contextualCrossoverHead.updateWeights(
-            features: [1, 1, 1, 1],
-            rewardSign: signedMagnitude
-        )
+        bundle.head.updateWeights(features: [1, 1, 1, 1], rewardSign: signedMagnitude)
     }
 
     // MARK: - Scenario Comparison (#27)

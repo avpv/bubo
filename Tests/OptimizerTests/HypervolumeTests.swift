@@ -57,18 +57,20 @@ struct HypervolumeEstimatorTests {
         for (x, y) in zip(a, b) { #expect(x == y) }
     }
 
-    @Test("updateNadir shrinks the sampling box toward observed worst")
-    func updateNadirShrinksBox() {
+    @Test("Hypervolume returns box-relative fraction in [0, 1]")
+    func boxRelativeFractionInUnitInterval() {
         let hv = HypervolumeEstimator(objectiveCount: 2, sampleCount: 5_000, seed: 17, nadirAlpha: 1.0)
-        // Pre-update: single point at (0.5, 0.5) covers 25% of the unit square.
+        // Origin nadir → box is the unit square; (0.5, 0.5) dominates
+        // a quarter of it, so the box-relative fraction is ~0.25.
         let before = hv.totalHypervolume([[0.5, 0.5]], callSalt: 1)
         #expect(abs(before - 0.25) < 0.05)
-        // Observe a population with per-axis minimum (0.3, 0.3); nadir
-        // jumps there with alpha=1.0. Sampling box = [0.3, 1]^2 → 0.49
-        // area. Point (0.5, 0.5) covers (0.2/0.7)^2 of that box
-        // ≈ 0.0816 normalized; absolute = 0.49 · 0.0816 ≈ 0.04.
+
+        // Push nadir to (0.3, 0.3). Box becomes [0.3, 1]^2; (0.5, 0.5)
+        // dominates the sub-box [0.3, 0.5]^2, fraction ≈ (0.2/0.7)^2
+        // ≈ 0.082. Same point, different box → different fraction.
         hv.updateNadir(from: [[0.3, 0.3], [0.9, 0.9]])
         let after = hv.totalHypervolume([[0.5, 0.5]], callSalt: 2)
-        #expect(after < before)
+        #expect(after >= 0 && after <= 1)
+        #expect(abs(after - 0.082) < 0.05)
     }
 }

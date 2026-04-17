@@ -113,6 +113,13 @@ final class HypervolumeEstimator: @unchecked Sendable {
     /// Estimate per-individual hypervolume contribution. Higher means
     /// the individual covers volume that no other member of the
     /// population covers.
+    /// Per-individual hypervolume contribution **as a fraction of
+    /// the achievable box** `[nadir, 1]^M`. Returned values lie in
+    /// `[0, 1]` regardless of the live nadir, which keeps the
+    /// numerical scale stable for telemetry and tiebreaking even when
+    /// `updateNadir` shrinks the box. Relative ordering across
+    /// individuals is unchanged by the normalization (every
+    /// contribution shares the same divisor).
     func contributions(
         _ vectors: [[Double]],
         callSalt: UInt64 = 0
@@ -128,14 +135,7 @@ final class HypervolumeEstimator: @unchecked Sendable {
         var dominators = ContiguousArray<Int>()
         dominators.reserveCapacity(min(n, 64))
 
-        // Volume of the sampling box = Π(1 - nadir[k]). "Contribution"
-        // units stay meaningful across generations because we rescale
-        // by this factor — a single individual covering half the
-        // achievable region gets the same share when the box is
-        // 0.2^13 vs 1.0^13.
-        var boxVolume = 1.0
-        for k in 0..<objectiveCount { boxVolume *= (1.0 - sampleNadir[k]) }
-        let volumePerSample = boxVolume / Double(sampleCount)
+        let perSampleShare = 1.0 / Double(sampleCount)
 
         for _ in 0..<sampleCount {
             for k in 0..<objectiveCount {
@@ -146,7 +146,7 @@ final class HypervolumeEstimator: @unchecked Sendable {
                 dominators.append(i)
             }
             if !dominators.isEmpty {
-                let share = volumePerSample / Double(dominators.count)
+                let share = perSampleShare / Double(dominators.count)
                 for idx in dominators { contributions[idx] += share }
             }
         }
@@ -155,6 +155,13 @@ final class HypervolumeEstimator: @unchecked Sendable {
 
     /// Total hypervolume of the population's union — the "is the
     /// front getting bigger?" signal.
+    /// Total hypervolume of the population's union, **as a fraction
+    /// of the achievable box** `[nadir, 1]^M`. Returns a value in
+    /// `[0, 1]` — `0` means "no individual dominates any sample," `1`
+    /// means "every sample is dominated." Stable across nadir updates:
+    /// when the nadir shrinks the achievable region, the absolute
+    /// volume covered shrinks proportionally so the *fraction* stays
+    /// meaningful for "are we expanding our share of what's reachable?"
     func totalHypervolume(
         _ vectors: [[Double]],
         callSalt: UInt64 = 0
@@ -165,8 +172,6 @@ final class HypervolumeEstimator: @unchecked Sendable {
 
         let sampler = makeSampler(salt: callSalt)
         let sampleNadir = nadirSnapshot()
-        var boxVolume = 1.0
-        for k in 0..<objectiveCount { boxVolume *= (1.0 - sampleNadir[k]) }
 
         var sample = ContiguousArray<Double>(repeating: 0.0, count: objectiveCount)
         var dominated = 0
@@ -179,7 +184,7 @@ final class HypervolumeEstimator: @unchecked Sendable {
                 break
             }
         }
-        return boxVolume * Double(dominated) / Double(sampleCount)
+        return Double(dominated) / Double(sampleCount)
     }
 
     // MARK: - HypE-lite survivor rule
