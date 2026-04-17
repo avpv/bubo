@@ -14,7 +14,7 @@ import Foundation
 ///   - Cluster density (40%): how tightly meetings are packed
 ///   - Focus yield (35%): total free time in blocks >= 60 min created by clustering
 ///   - Fragmentation penalty (25%): penalizes scattered meetings across the day
-struct MeetingClusteringObjective: FitnessObjective {
+struct MeetingClusteringObjective: DayPartitionedObjective {
     let name = "MeetingClustering"
     var weight: Double
 
@@ -27,9 +27,14 @@ struct MeetingClusteringObjective: FitnessObjective {
     }
 
     func evaluate(chromosome: ScheduleChromosome, context: OptimizerContext) -> Double {
-        let cal = context.calendar
+        combinePerDay(evaluatePerDay(chromosome: chromosome, context: context))
+    }
 
-        // Collect all meetings (fixed + movable) grouped by day
+    func evaluatePerDay(
+        chromosome: ScheduleChromosome,
+        context: OptimizerContext
+    ) -> [Date: Double] {
+        let cal = context.calendar
         var meetingsByDay: [Date: [(start: Date, end: Date, isMovable: Bool)]] = [:]
 
         for event in context.fixedEvents {
@@ -42,50 +47,65 @@ struct MeetingClusteringObjective: FitnessObjective {
             meetingsByDay[day, default: []].append((gene.startTime, gene.endTime, true))
         }
 
-        guard !meetingsByDay.isEmpty else { return 1.0 }
-
-        var totalScore = 0.0
-        var dayCount = 0
-
+        var scores: [Date: Double] = [:]
         for (day, meetings) in meetingsByDay {
-            guard meetings.count >= 2 else {
-                totalScore += 1.0
-                dayCount += 1
-                continue
-            }
-
-            let sorted = meetings.sorted { $0.start < $1.start }
-
-            let densityScore = clusterDensity(sorted)
-            let focusScore = focusYield(
-                meetings: sorted,
-                day: day,
-                workingHours: context.workingHours,
-                calendar: cal
-            )
-            let fragmentationScore = 1.0 - fragmentationPenalty(sorted)
-            let windowScore = clusterWindowAlignment(
-                sorted,
-                preferredStart: context.preferences.preferredClusterWindowStart,
-                preferredEnd: context.preferences.preferredClusterWindowEnd,
-                day: day,
-                calendar: cal
-            )
-            let sizeScore = clusterSizeScore(
-                sorted,
-                maxPerCluster: context.preferences.maxMeetingsPerCluster
-            )
-
-            totalScore += densityScore * 0.30
-                + focusScore * 0.25
-                + fragmentationScore * 0.15
-                + windowScore * 0.15
-                + sizeScore * 0.15
-
-            dayCount += 1
+            scores[day] = scoreDay(day: day, meetings: meetings, context: context)
         }
+        return scores
+    }
 
-        return dayCount > 0 ? totalScore / Double(dayCount) : 0.5
+    func evaluateOneDay(
+        day: Date,
+        chromosome: ScheduleChromosome,
+        context: OptimizerContext
+    ) -> Double {
+        let cal = context.calendar
+        var meetings: [(start: Date, end: Date, isMovable: Bool)] = []
+        for event in context.fixedEvents where cal.startOfDay(for: event.startDate) == day {
+            guard isMeeting(event) else { continue }
+            meetings.append((event.startDate, event.endDate, event.isMovable))
+        }
+        for gene in chromosome.genes where !gene.isFocusBlock && gene.isIncluded && cal.startOfDay(for: gene.startTime) == day {
+            meetings.append((gene.startTime, gene.endTime, true))
+        }
+        return scoreDay(day: day, meetings: meetings, context: context)
+    }
+
+    /// Shared scoring so the bulk and single-day paths can't drift apart.
+    private func scoreDay(
+        day: Date,
+        meetings: [(start: Date, end: Date, isMovable: Bool)],
+        context: OptimizerContext
+    ) -> Double {
+        guard meetings.count >= 2 else { return 1.0 }
+        let cal = context.calendar
+        let sorted = meetings.sorted { $0.start < $1.start }
+
+        let densityScore = clusterDensity(sorted)
+        let focusScore = focusYield(
+            meetings: sorted,
+            day: day,
+            workingHours: context.workingHours,
+            calendar: cal
+        )
+        let fragmentationScore = 1.0 - fragmentationPenalty(sorted)
+        let windowScore = clusterWindowAlignment(
+            sorted,
+            preferredStart: context.preferences.preferredClusterWindowStart,
+            preferredEnd: context.preferences.preferredClusterWindowEnd,
+            day: day,
+            calendar: cal
+        )
+        let sizeScore = clusterSizeScore(
+            sorted,
+            maxPerCluster: context.preferences.maxMeetingsPerCluster
+        )
+
+        return densityScore * 0.30
+            + focusScore * 0.25
+            + fragmentationScore * 0.15
+            + windowScore * 0.15
+            + sizeScore * 0.15
     }
 
     // MARK: - Cluster Density

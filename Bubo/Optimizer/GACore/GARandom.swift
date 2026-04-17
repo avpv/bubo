@@ -108,6 +108,44 @@ final class GARandom: @unchecked Sendable {
         return range.lowerBound + Int(nextRaw() % span)
     }
 
+    // MARK: - Gaussian
+
+    /// Cache for the spare Box–Muller sample. Marsaglia polar method produces
+    /// two independent N(0,1) draws per iteration; we return the first and
+    /// stash the second so the next call is O(1). `nil` means the cache is
+    /// empty and the next `gaussian()` must do the rejection loop.
+    private var spareGaussian: Double?
+
+    /// Standard normal N(0, 1) sample via Marsaglia polar method. Roughly 1.27
+    /// uniform draws per Gaussian draw on average; faster than classical
+    /// Box–Muller because no trig calls. Needed by CMA-ES-style mutation and
+    /// Gaussian shift operators.
+    func gaussian() -> Double {
+        if let cached = spareGaussian {
+            spareGaussian = nil
+            return cached
+        }
+        // Rejection sampling inside the unit disk. `s` is guaranteed in (0, 1)
+        // on exit so the sqrt/log are well-defined.
+        var u: Double
+        var v: Double
+        var s: Double
+        repeat {
+            u = unit() * 2.0 - 1.0
+            v = unit() * 2.0 - 1.0
+            s = u * u + v * v
+        } while s >= 1.0 || s == 0.0
+        let factor = (-2.0 * log(s) / s).squareRoot()
+        spareGaussian = v * factor
+        return u * factor
+    }
+
+    /// Gaussian sample with configurable mean and standard deviation.
+    @inline(__always)
+    func gaussian(mean: Double, stdDev: Double) -> Double {
+        mean + stdDev * gaussian()
+    }
+
     // MARK: - Convenience
 
     /// `true` with probability `p`. Clamped so callers don't need to validate.
