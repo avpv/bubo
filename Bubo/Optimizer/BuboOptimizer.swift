@@ -17,8 +17,32 @@ final class BuboOptimizer {
     let preferenceLearner = PreferenceLearner()
     let reoptimizer = IncrementalReoptimizer()
 
+    /// Persistent store of accepted schedules used for warm-start
+    /// seeding on repeat workloads. Populated by `acceptScenario`; read
+    /// at the start of each `optimize` call via `ScheduleArchive.seeds(
+    /// matching:)`.
+    let scheduleArchive = ScheduleArchive()
+
+    /// Persistent meta-bandit over per-island configuration variations.
+    /// Lives at the optimizer level because its arm statistics span
+    /// runs, while IslandModelGA is rebuilt per call.
+    let islandMetaBandit = IslandConfigMetaBandit()
+
     /// Number of scenarios to return per optimization.
     var scenarioCount: Int = 3
+
+    /// When true, `optimize` generates more offspring than it keeps and
+    /// uses the surrogate filter to pick the best predictions. Off by
+    /// default because (as flagged during Phase 3 design) the filter's
+    /// prediction cost approaches the evaluator's cost on this
+    /// workload; callers with genuinely expensive evaluators can
+    /// flip this on.
+    var useSurrogateFilter: Bool = false
+
+    /// Overgeneration factor passed to the surrogate filter when
+    /// `useSurrogateFilter` is true. 2.0 means "generate 2N offspring,
+    /// evaluate the best N predicted".
+    var surrogateOvergenerationFactor: Double = 2.0
 
     // MARK: - State
 
@@ -61,6 +85,14 @@ final class BuboOptimizer {
         // cost is amortized across the rebuild interval (every 5
         // generations); when no island actually uses LTGA the tree
         // simply never gets sampled.
+        //
+        // SurrogateFilter is opt-in (see `useSurrogateFilter`) because
+        // on this codebase's cheap evaluator the filter rarely pays
+        // for itself. Workload-heavy callers flip it on; the default
+        // path stays zero-overhead.
+        let surrogate: SurrogateFilter? = useSurrogateFilter
+            ? SurrogateFilter(overgenerationFactor: surrogateOvergenerationFactor)
+            : nil
         let adjustedContext = OptimizerContext(
             fixedEvents: context.fixedEvents,
             movableEvents: context.movableEvents,
@@ -71,13 +103,15 @@ final class BuboOptimizer {
             calendar: context.calendar,
             rng: context.rng,
             mutationBandit: MutationBandit(),
-            linkageModel: LinkageModel()
+            linkageModel: LinkageModel(),
+            surrogate: surrogate
         )
 
         let evaluator = FitnessEvaluator.standard(preferences: prefs)
         let config = overrideConfig ?? gaConfig
         let capturedIslandConfig = overrideIslandConfig ?? islandConfig
         let capturedScenarioCount = scenarioCount
+        let capturedMetaBandit = islandMetaBandit
 
         // Wire the NSGA-III survivor selector for ScheduleChromosome. The
         // harness reads per-objective scores straight out of the chromosome
@@ -86,6 +120,15 @@ final class BuboOptimizer {
             evaluator: evaluator,
             populationSize: config.populationSize
         )
+
+        // Warm-start seeds from the persistent archive: if the user has
+        // previously accepted schedules for this exact workload (same
+        // movable-event id set), hand those to `runSeeded` so evolution
+        // begins near the known-good region instead of uniform random.
+        let warmStartSeeds = scheduleArchive.seeds(
+            matching: context.movableEvents,
+            limit: min(5, config.populationSize / 4)
+        ).map { ScheduleChromosome(genes: $0) }
 
         // Run island model GA on background thread
         let (population, convergenceGen, duration) = await Task.detached(priority: .userInitiated) {
@@ -98,10 +141,16 @@ final class BuboOptimizer {
                 evaluate: { chromosome in
                     evaluator.evaluateAndAssign(&chromosome, context: adjustedContext)
                 },
-                multiObjective: multiObjective
+                multiObjective: multiObjective,
+                metaBandit: capturedMetaBandit
             )
 
-            let pop = islandGA.run()
+            let pop: [ScheduleChromosome]
+            if !warmStartSeeds.isEmpty {
+                pop = islandGA.runSeeded(with: warmStartSeeds)
+            } else {
+                pop = islandGA.run()
+            }
             let elapsed = Date().timeIntervalSince(startTime)
             return (pop, islandGA.convergenceGeneration, elapsed)
         }.value
@@ -274,6 +323,7 @@ final class BuboOptimizer {
     func acceptScenario(_ scenario: ScheduleScenario) {
         currentSchedule = scenario.genes
         preferenceLearner.recordAcceptance(scenarioFitness: scenario.fitness)
+        scheduleArchive.record(genes: scenario.genes, fitness: scenario.fitness)
     }
 
     func rejectScenario(_ scenario: ScheduleScenario) {
@@ -567,6 +617,8 @@ final class BuboOptimizer {
 
     func reset() {
         preferenceLearner.reset()
+        scheduleArchive.reset()
+        islandMetaBandit.reset()
         currentSchedule = []
         lastResult = nil
         preferences = OptimizerPreferences()

@@ -3746,3 +3746,173 @@ struct DependencyPruningTests {
                 "Non-droppable infeasible gene stays on the schedule; deadline objective carries the gradient")
     }
 }
+
+// MARK: - Phase 3: Surrogate Filter Tests
+
+@Suite("Surrogate Filter Tests")
+struct SurrogateFilterTests {
+
+    @Test("Surrogate predicts via inverse-distance kNN")
+    func predictsWithKNN() {
+        let events = [makeMovableEvent(id: "t1", durationMinutes: 30)]
+        let context = makeContext(movableEvents: events)
+        let filter = SurrogateFilter(archiveCapacity: 50, kNeighbours: 3, overgenerationFactor: 2.0)
+
+        // Seed the filter with several evaluated chromosomes of varied fitness.
+        let rng = GARandom(seed: 7)
+        for _ in 0..<20 {
+            var c = ScheduleChromosome.random(context: context)
+            c.rawFitness = rng.double(in: 0...1)
+            filter.record(genes: c.genes, fitness: c.rawFitness)
+        }
+        #expect(filter.archiveSize == 20)
+
+        // Predict for a fresh candidate — must return a value in [0, 1].
+        let candidate = ScheduleChromosome.random(context: context)
+        let predicted = filter.predictFitness(for: candidate)
+        #expect(predicted != nil, "Surrogate must predict once the archive is populated")
+        #expect((0.0...1.0).contains(predicted ?? -1))
+    }
+
+    @Test("Surrogate returns nil when archive is empty")
+    func nilWhenEmpty() {
+        let events = [makeMovableEvent(id: "t1", durationMinutes: 30)]
+        let context = makeContext(movableEvents: events)
+        let filter = SurrogateFilter()
+        let candidate = ScheduleChromosome.random(context: context)
+        #expect(filter.predictFitness(for: candidate) == nil)
+    }
+
+    @Test("rankAndSelect returns targetCount indices when archive is warm")
+    func rankAndSelectTrimsProperly() {
+        let events = [makeMovableEvent(id: "t1", durationMinutes: 30)]
+        let context = makeContext(movableEvents: events)
+        let filter = SurrogateFilter(archiveCapacity: 50, kNeighbours: 3, overgenerationFactor: 2.0)
+
+        let rng = GARandom(seed: 3)
+        for _ in 0..<20 {
+            var c = ScheduleChromosome.random(context: context)
+            c.rawFitness = rng.double(in: 0...1)
+            filter.record(genes: c.genes, fitness: c.rawFitness)
+        }
+
+        let offspring = (0..<10).map { _ in ScheduleChromosome.random(context: context) }
+        let kept = filter.rankAndSelect(offspring, targetCount: 5)
+        #expect(kept.count == 5)
+        #expect(Set(kept).count == 5, "Selected indices must be unique")
+        #expect(kept.allSatisfy { $0 >= 0 && $0 < offspring.count })
+    }
+
+    @Test("rankAndSelect passes through when archive is too sparse")
+    func rankAndSelectPassesThrough() {
+        let events = [makeMovableEvent(id: "t1", durationMinutes: 30)]
+        let context = makeContext(movableEvents: events)
+        let filter = SurrogateFilter(kNeighbours: 5, overgenerationFactor: 2.0)
+        // No records — filter must pass through all candidates.
+        let offspring = (0..<6).map { _ in ScheduleChromosome.random(context: context) }
+        let kept = filter.rankAndSelect(offspring, targetCount: 3)
+        #expect(kept.count == offspring.count,
+                "Sparse archive must not prune: caller bootstraps with full eval")
+    }
+}
+
+// MARK: - Phase 3: Schedule Archive Tests
+
+@Suite("Schedule Archive Tests")
+struct ScheduleArchiveTests {
+
+    @Test("Workload fingerprint equals sorted event id multiset")
+    func fingerprintMatchesAcrossOrder() {
+        let a = makeMovableEvent(id: "alpha")
+        let b = makeMovableEvent(id: "beta")
+        let c = makeMovableEvent(id: "gamma")
+        let order1 = ScheduleArchive.workloadFingerprint(fromEvents: [a, b, c])
+        let order2 = ScheduleArchive.workloadFingerprint(fromEvents: [c, a, b])
+        #expect(order1 == order2)
+        #expect(order1 == ["alpha", "beta", "gamma"])
+    }
+
+    @Test("Recorded scenarios surface as seeds for matching workload")
+    func recordedSeedsReturn() {
+        // Use an isolated archive so this test doesn't pollute UserDefaults.
+        let archive = ScheduleArchive(maxEntries: 10)
+        defer { archive.reset() }
+
+        let events = [
+            makeMovableEvent(id: "t1", durationMinutes: 30),
+            makeMovableEvent(id: "t2", durationMinutes: 60)
+        ]
+        let context = makeContext(movableEvents: events)
+        let chrom = ScheduleChromosome.random(context: context)
+        archive.record(genes: chrom.genes, fitness: 0.8)
+
+        let seeds = archive.seeds(matching: events, limit: 3)
+        #expect(seeds.count == 1, "Recorded schedule must surface as a seed for matching workload")
+    }
+
+    @Test("Unrelated workload returns no seeds")
+    func unrelatedReturnsEmpty() {
+        let archive = ScheduleArchive(maxEntries: 10)
+        defer { archive.reset() }
+
+        let a = makeMovableEvent(id: "a")
+        let b = makeMovableEvent(id: "b")
+        let contextA = makeContext(movableEvents: [a])
+        let chrom = ScheduleChromosome.random(context: contextA)
+        archive.record(genes: chrom.genes, fitness: 0.7)
+
+        let seeds = archive.seeds(matching: [b])
+        #expect(seeds.isEmpty, "Archive must not leak seeds across unrelated workloads")
+    }
+}
+
+// MARK: - Phase 3: Island Config Meta-Bandit Tests
+
+@Suite("Island Config Meta-Bandit Tests")
+struct IslandConfigMetaBanditTests {
+
+    @Test("Meta-bandit prefers the higher-reward variation once it has pulls")
+    func banditExploitsAfterEnoughData() {
+        let bandit = IslandConfigMetaBandit(epsilon: 0.0, minPullsForExploit: 1)
+        defer { bandit.reset() }
+
+        // Feed the bandit deterministic rewards: variant A always 0.9,
+        // variant B always 0.3. With epsilon=0 and minPulls=1 it should
+        // lock onto variant A immediately.
+        for _ in 0..<5 {
+            bandit.record(key: "A", reward: 0.9)
+            bandit.record(key: "B", reward: 0.3)
+        }
+
+        let rng = GARandom(seed: 1)
+        let chosen = bandit.select(from: ["A", "B"], rng: rng)
+        #expect(chosen == "A", "Bandit with epsilon=0 must exploit higher-mean arm")
+    }
+
+    @Test("Meta-bandit cold-starts to first candidate when no history")
+    func banditColdStart() {
+        let bandit = IslandConfigMetaBandit(epsilon: 0.0, minPullsForExploit: 3)
+        defer { bandit.reset() }
+
+        let rng = GARandom(seed: 1)
+        let chosen = bandit.select(from: ["A", "B", "C"], rng: rng)
+        #expect(chosen == "A", "Cold start must fall back to first candidate deterministically")
+    }
+
+    @Test("Meta-bandit snapshot reports per-arm stats")
+    func banditSnapshotReflectsHistory() {
+        let bandit = IslandConfigMetaBandit()
+        defer { bandit.reset() }
+
+        bandit.record(key: "X", reward: 0.5)
+        bandit.record(key: "X", reward: 0.7)
+        bandit.record(key: "Y", reward: 0.2)
+
+        let snap = bandit.snapshot
+        let xEntry = snap.first(where: { $0.key == "X" })
+        let yEntry = snap.first(where: { $0.key == "Y" })
+        #expect(xEntry?.pulls == 2)
+        #expect(abs((xEntry?.meanReward ?? 0) - 0.6) < 1e-9)
+        #expect(yEntry?.pulls == 1)
+    }
+}
