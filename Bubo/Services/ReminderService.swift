@@ -64,6 +64,11 @@ class ReminderService {
     private let excludedOccurrenceStore: any ExcludedOccurrenceStoring
     private let reminderOverrideStore: any ReminderOverrideStoring
 
+    /// Calendar access abstracted for the same reason the stores are —
+    /// tests need to drive create/shift calls without a real EKEventStore.
+    /// Production receives `AppleCalendarService.shared`.
+    private let calendarSource: any CalendarEventSource
+
     private var excludedOccurrences: Set<String> = []
     private var localRemindersOverrides: [String: [Int]] = [:]
 
@@ -150,24 +155,28 @@ class ReminderService {
         )
     }
 
-    /// Designated initializer. Takes stores by protocol so tests can
-    /// drive the orchestrator with `InMemory*` doubles instead of
-    /// SwiftData containers.
+    /// Designated initializer. Takes stores and the calendar source by
+    /// protocol so tests can drive the orchestrator with `InMemory*`
+    /// doubles + `FakeCalendarEventSource` instead of SwiftData and
+    /// EventKit.
     init(
         settings: ReminderSettings,
         eventCacheContainer: ModelContainer,
         localEventStore: any LocalEventStoring,
         excludedOccurrenceStore: any ExcludedOccurrenceStoring,
-        reminderOverrideStore: any ReminderOverrideStoring
+        reminderOverrideStore: any ReminderOverrideStoring,
+        calendarSource: any CalendarEventSource = AppleCalendarService.shared
     ) {
         self.settings = settings
         self.localEventStore = localEventStore
         self.excludedOccurrenceStore = excludedOccurrenceStore
         self.reminderOverrideStore = reminderOverrideStore
+        self.calendarSource = calendarSource
         self.scheduler = NotificationScheduler(settings: settings)
         self.syncCoordinator = EventKitSyncCoordinator(
             eventCacheContainer: eventCacheContainer,
-            settings: settings
+            settings: settings,
+            calendarSource: calendarSource
         )
 
         // All stored properties exist — safe to wire up the closures
@@ -279,10 +288,10 @@ class ReminderService {
                         calendarName: occurrence.calendarName,
                         eventType: occurrence.eventType
                     )
-                    try AppleCalendarService.shared.createEvent(calEvent, calendarId: calendarId)
+                    try calendarSource.createEvent(calEvent, calendarId: calendarId)
                 }
             } else {
-                try AppleCalendarService.shared.createEvent(event, calendarId: calendarId)
+                try calendarSource.createEvent(event, calendarId: calendarId)
             }
             syncCoordinator.syncNow()
         } catch {
@@ -400,7 +409,7 @@ class ReminderService {
             updateLocalEvent(updated)
         } else {
             do {
-                try AppleCalendarService.shared.shiftEventTime(id: event.id, byMinutes: minutes)
+                try calendarSource.shiftEventTime(id: event.id, byMinutes: minutes)
             } catch {
                 logger.error("Failed to shift Apple Calendar event time: \(error)")
             }

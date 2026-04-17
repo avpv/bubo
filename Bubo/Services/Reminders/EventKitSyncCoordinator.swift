@@ -44,6 +44,11 @@ final class EventKitSyncCoordinator {
 
     private var settings: ReminderSettings
     private let eventCache: EventCache
+    /// Calendar access abstracted behind a protocol so tests can drive
+    /// the coordinator with `FakeCalendarEventSource` — EventKit requires
+    /// entitlements and user consent, neither of which XCTest can
+    /// provide. Production wires in `AppleCalendarService.shared`.
+    private let calendarSource: any CalendarEventSource
     /// Closure handing the coordinator the latest reminder overrides
     /// without forcing it to import or reference the override store
     /// directly. Decouples the two services. Mutable so the orchestrator
@@ -62,10 +67,12 @@ final class EventKitSyncCoordinator {
 
     init(
         eventCacheContainer: ModelContainer,
-        settings: ReminderSettings
+        settings: ReminderSettings,
+        calendarSource: any CalendarEventSource = AppleCalendarService.shared
     ) {
         self.eventCache = EventCache(modelContainer: eventCacheContainer)
         self.settings = settings
+        self.calendarSource = calendarSource
 
         // Auto-sync when Calendar.app data changes (edits, iCloud sync).
         // Debounced via `scheduleAppleCalendarRefresh` because
@@ -138,7 +145,7 @@ final class EventKitSyncCoordinator {
             return
         }
 
-        guard AppleCalendarService.hasAccess else {
+        guard calendarSource.hasAccess else {
             syncError = "Calendar access not granted"
             return
         }
@@ -152,8 +159,8 @@ final class EventKitSyncCoordinator {
         // `calendard` daemon, which often stops sending updates to
         // long-lived connections — especially while Calendar.app is
         // closed.
-        AppleCalendarService.shared.rebuildStore()
-        AppleCalendarService.shared.triggerRemoteRefresh()
+        calendarSource.rebuildStore()
+        calendarSource.triggerRemoteRefresh()
 
         let events = fetchAndApplyOverrides()
 
@@ -184,19 +191,19 @@ final class EventKitSyncCoordinator {
             guard !Task.isCancelled else { return }
             self?.fetchAndUpdate()
 
-            AppleCalendarService.shared.triggerRemoteRefresh()
+            calendarSource.triggerRemoteRefresh()
 
             try? await Task.sleep(for: .seconds(12))
             guard !Task.isCancelled else { return }
             self?.fetchAndUpdate()
 
-            AppleCalendarService.shared.triggerRemoteRefresh()
+            calendarSource.triggerRemoteRefresh()
 
             try? await Task.sleep(for: .seconds(30))
             guard !Task.isCancelled else { return }
             self?.fetchAndUpdate()
 
-            AppleCalendarService.shared.triggerRemoteRefresh()
+            calendarSource.triggerRemoteRefresh()
 
             try? await Task.sleep(for: .seconds(60))
             guard !Task.isCancelled else { return }
@@ -209,11 +216,11 @@ final class EventKitSyncCoordinator {
     /// the event set actually changed — otherwise the UI would churn
     /// every 4 / 12 / 30 / 60 seconds after every sync.
     private func fetchAndUpdate() {
-        guard settings.isCalendarSyncEnabled, AppleCalendarService.hasAccess else { return }
+        guard settings.isCalendarSyncEnabled, calendarSource.hasAccess else { return }
 
         // Flush EKEventStore's in-memory cache so we read the latest
         // state from `calendard` rather than its stale snapshot.
-        AppleCalendarService.shared.resetCache()
+        calendarSource.resetCache()
 
         let events = fetchAndApplyOverrides()
 
@@ -229,7 +236,7 @@ final class EventKitSyncCoordinator {
         let now = Date()
         let endDate = Calendar.current.date(byAdding: .day, value: Self.fetchWindowDays, to: now) ?? now
 
-        var events = AppleCalendarService.shared.fetchEvents(
+        var events = calendarSource.fetchEvents(
             from: now,
             to: endDate,
             onlyCalendarIds: settings.selectedCalendarIds

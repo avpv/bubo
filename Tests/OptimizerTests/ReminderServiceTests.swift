@@ -49,7 +49,8 @@ final class ReminderServiceTests: XCTestCase {
             eventCacheContainer: try makeEventCacheContainer(),
             localEventStore: local,
             excludedOccurrenceStore: excluded,
-            reminderOverrideStore: overrides
+            reminderOverrideStore: overrides,
+            calendarSource: FakeCalendarEventSource()
         )
         return (service, local, excluded, overrides)
     }
@@ -170,6 +171,69 @@ final class ReminderServiceTests: XCTestCase {
         XCTAssertFalse(service.isUsingCache)
         XCTAssertNil(service.syncError)
         XCTAssertNil(service.lastSyncDate)
+    }
+
+    // MARK: - Snooze Routing
+
+    private func makeServiceWithCalendarSource(
+        _ source: FakeCalendarEventSource
+    ) throws -> ReminderService {
+        ReminderService(
+            settings: ReminderSettings(),
+            eventCacheContainer: try makeEventCacheContainer(),
+            localEventStore: InMemoryLocalEventStore(),
+            excludedOccurrenceStore: InMemoryExcludedOccurrenceStore(),
+            reminderOverrideStore: InMemoryReminderOverrideStore(),
+            calendarSource: source
+        )
+    }
+
+    func testSnoozeOfAppleEventRoutesToCalendarSource() throws {
+        let fake = FakeCalendarEventSource()
+        let service = try makeServiceWithCalendarSource(fake)
+
+        // isLocalEvent is defined as `!id.hasPrefix("apple_")`, so an
+        // "apple_..." ID routes to the EventKit path.
+        let apple = CalendarEvent(
+            id: "apple_1",
+            title: "Meeting",
+            startDate: Date().addingTimeInterval(3600),
+            endDate: Date().addingTimeInterval(7200),
+            location: nil,
+            description: nil,
+            calendarName: nil,
+            eventType: .standard
+        )
+        service.snoozeReminder(for: apple, minutes: 15)
+
+        XCTAssertTrue(fake.invocations.contains(where: {
+            if case .shiftEventTime(let id, let by) = $0, id == "apple_1", by == 15 {
+                return true
+            }
+            return false
+        }), "Apple snooze should call shiftEventTime on calendar source")
+    }
+
+    func testSnoozeOfLocalEventUpdatesInMemoryEventOnly() throws {
+        let fake = FakeCalendarEventSource()
+        let service = try makeServiceWithCalendarSource(fake)
+
+        let local = CalendarEvent(
+            id: "local-1",
+            title: "Study",
+            startDate: Date().addingTimeInterval(3600),
+            endDate: Date().addingTimeInterval(7200),
+            location: nil,
+            description: nil,
+            calendarName: nil,
+            eventType: .standard
+        )
+        service.addLocalEvent(local)
+        service.snoozeReminder(for: local, minutes: 10)
+
+        XCTAssertFalse(fake.invocations.contains(where: {
+            if case .shiftEventTime = $0 { return true } else { return false }
+        }), "Local snooze must NOT call the calendar source")
     }
 
     // MARK: - Badge Count
