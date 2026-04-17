@@ -83,10 +83,29 @@ cat > "$APP/Info.plist" <<'PLIST'
 </plist>
 PLIST
 
-# Ad-hoc sign so the app runs locally without xattr workaround.
-# Use the ad-hoc entitlements (without iCloud entries that require
-# a provisioned Developer ID and would prevent launch).
-codesign --force --deep --entitlements "$PROJECT_DIR/Bubo/Bubo.adhoc.entitlements" --sign - "$PROJECT_DIR/Bubo.app"
+# Sign the app. Default is ad-hoc with the stripped-down entitlements
+# (no iCloud) — those require a provisioned Developer ID and would
+# prevent launch for anyone who just clones and builds.
+#
+# Opt-in path for iCloud: set DEVELOPER_ID_CERT to the certificate
+# Common Name ("Developer ID Application: ..."). Uses the full
+# entitlements file so CloudKit + ubiquity KV actually work. This is
+# the build you need to test cross-device sync locally — the ad-hoc
+# build physically can't talk to iCloud no matter what the code does.
+if [ -n "${DEVELOPER_ID_CERT:-}" ]; then
+  echo "Signing with Developer ID + full iCloud entitlements: $DEVELOPER_ID_CERT"
+  codesign --force --deep \
+    --options runtime \
+    --entitlements "$PROJECT_DIR/Bubo/Bubo.entitlements" \
+    --sign "$DEVELOPER_ID_CERT" \
+    "$PROJECT_DIR/Bubo.app"
+else
+  echo "Ad-hoc signing (iCloud disabled — set DEVELOPER_ID_CERT for cross-device sync)"
+  codesign --force --deep \
+    --entitlements "$PROJECT_DIR/Bubo/Bubo.adhoc.entitlements" \
+    --sign - \
+    "$PROJECT_DIR/Bubo.app"
+fi
 
 echo ""
 echo "Built: $PROJECT_DIR/Bubo.app"

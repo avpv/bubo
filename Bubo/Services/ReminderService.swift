@@ -489,41 +489,23 @@ class ReminderService {
         scheduleReminders(for: RecurrenceExpander.expand(event, excludedIds: excludedOccurrences))
     }
 
-    /// Diff-based upsert: update existing rows in place, insert missing
-    /// ones, delete rows that are no longer in `localEvents`, and collapse
-    /// duplicate rows that CloudKit may have introduced during its import
-    /// merge window. Rows keep their logical `eventId` as the dedup key —
-    /// `@Attribute(.unique)` can't coexist with CloudKit mirroring.
+    /// Upsert the in-memory `localEvents` into the persisted store. All
+    /// dedup + insert/update/delete bookkeeping lives in
+    /// `UpsertReconciler`; this method just translates between the
+    /// `CalendarEvent` domain type and the `PersistedLocalEvent` model.
     private func saveLocalEvents() {
         let context = ModelContext(userEventsContainer)
+        let now = Date()
         do {
-            let existing = try context.fetch(FetchDescriptor<PersistedLocalEvent>())
-            let grouped = Dictionary(grouping: existing, by: \.eventId)
-            let currentIds = Set(localEvents.map { $0.id })
-
-            // Collapse duplicates (keep latest updatedAt) and delete rows
-            // whose logical event has been removed in memory.
-            var survivorById: [String: PersistedLocalEvent] = [:]
-            for (id, rows) in grouped {
-                let sorted = rows.sorted { $0.updatedAt > $1.updatedAt }
-                for dup in sorted.dropFirst() { context.delete(dup) }
-                guard let keeper = sorted.first else { continue }
-                if currentIds.contains(id) {
-                    survivorById[id] = keeper
-                } else {
-                    context.delete(keeper)
-                }
-            }
-
-            let now = Date()
-            for event in localEvents {
-                if let persisted = survivorById[event.id] {
-                    persisted.apply(event, updatedAt: now)
-                } else {
-                    context.insert(PersistedLocalEvent(from: event, updatedAt: now))
-                }
-            }
-
+            try UpsertReconciler.reconcile(
+                context: context,
+                desired: localEvents,
+                desiredKey: \.id,
+                existingKey: \PersistedLocalEvent.eventId,
+                updatedAt: \PersistedLocalEvent.updatedAt,
+                apply: { row, event in row.apply(event, updatedAt: now) },
+                makeNew: { event in PersistedLocalEvent(from: event, updatedAt: now) }
+            )
             try context.save()
         } catch {
             logger.error("Failed to save local events: \(error)")
@@ -536,7 +518,7 @@ class ReminderService {
             let persisted = try context.fetch(FetchDescriptor<PersistedLocalEvent>())
             // Collapse duplicates by keeping the row with the latest
             // updatedAt. Ensures CloudKit-introduced doubles don't leak
-            // into the in-memory array.
+            // into the in-memory array between save-triggered reconciles.
             let deduped = Dictionary(grouping: persisted, by: \.eventId)
                 .compactMap { $1.max(by: { $0.updatedAt < $1.updatedAt }) }
             localEvents = deduped
@@ -548,33 +530,19 @@ class ReminderService {
         }
     }
 
-    /// Same upsert shape as `saveLocalEvents` — reconcile the persisted
-    /// set with the in-memory `excludedOccurrences` without wiping the
-    /// table (which would churn CloudKit).
     private func saveExcludedOccurrences() {
         let context = ModelContext(userEventsContainer)
+        let now = Date()
         do {
-            let existing = try context.fetch(FetchDescriptor<PersistedExcludedOccurrence>())
-            let grouped = Dictionary(grouping: existing, by: \.occurrenceId)
-
-            var survivors: Set<String> = []
-            for (id, rows) in grouped {
-                let sorted = rows.sorted { $0.updatedAt > $1.updatedAt }
-                for dup in sorted.dropFirst() { context.delete(dup) }
-                guard let keeper = sorted.first else { continue }
-                if excludedOccurrences.contains(id) {
-                    survivors.insert(id)
-                } else {
-                    // No longer excluded — drop the remaining row too.
-                    context.delete(keeper)
-                }
-            }
-
-            let now = Date()
-            for id in excludedOccurrences where !survivors.contains(id) {
-                context.insert(PersistedExcludedOccurrence(occurrenceId: id, updatedAt: now))
-            }
-
+            try UpsertReconciler.reconcile(
+                context: context,
+                desired: Array(excludedOccurrences),
+                desiredKey: { $0 },
+                existingKey: \PersistedExcludedOccurrence.occurrenceId,
+                updatedAt: \PersistedExcludedOccurrence.updatedAt,
+                apply: { _, _ in /* no mutable fields besides the key itself */ },
+                makeNew: { id in PersistedExcludedOccurrence(occurrenceId: id, updatedAt: now) }
+            )
             try context.save()
         } catch {
             logger.error("Failed to save excluded occurrences: \(error)")
@@ -607,43 +575,32 @@ class ReminderService {
         }
     }
 
-    /// Diff-based upsert mirroring `saveLocalEvents`. Avoids the
-    /// wipe-and-rebuild pattern, which would create a churn of CloudKit
-    /// deletes + re-inserts on every keystroke when sync is enabled.
     private func saveLocalRemindersOverrides() {
         let context = ModelContext(userEventsContainer)
+        let now = Date()
+        let items = localRemindersOverrides.map { (key: $0.key, value: $0.value) }
         do {
-            let existing = try context.fetch(FetchDescriptor<PersistedReminderOverride>())
-            let grouped = Dictionary(grouping: existing, by: \.eventId)
-
-            var survivorById: [String: PersistedReminderOverride] = [:]
-            for (id, rows) in grouped {
-                let sorted = rows.sorted { $0.updatedAt > $1.updatedAt }
-                for dup in sorted.dropFirst() { context.delete(dup) }
-                guard let keeper = sorted.first else { continue }
-                if localRemindersOverrides[id] != nil {
-                    survivorById[id] = keeper
-                } else {
-                    context.delete(keeper)
-                }
-            }
-
-            let now = Date()
-            for (eventId, minutes) in localRemindersOverrides {
-                if let persisted = survivorById[eventId] {
-                    if persisted.minutes != minutes {
-                        persisted.minutes = minutes
-                        persisted.updatedAt = now
+            try UpsertReconciler.reconcile(
+                context: context,
+                desired: items,
+                desiredKey: { $0.key },
+                existingKey: \PersistedReminderOverride.eventId,
+                updatedAt: \PersistedReminderOverride.updatedAt,
+                apply: { row, item in
+                    // Guard against a pointless `updatedAt` bump when the
+                    // user toggled something unrelated — CloudKit will
+                    // otherwise re-propagate the same row to every device.
+                    if row.minutes != item.value {
+                        row.minutes = item.value
+                        row.updatedAt = now
                     }
-                } else {
-                    context.insert(PersistedReminderOverride(
-                        eventId: eventId,
-                        minutes: minutes,
-                        updatedAt: now
-                    ))
+                },
+                makeNew: { item in
+                    PersistedReminderOverride(
+                        eventId: item.key, minutes: item.value, updatedAt: now
+                    )
                 }
-            }
-
+            )
             try context.save()
         } catch {
             logger.error("Failed to save reminder overrides: \(error)")
