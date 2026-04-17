@@ -393,22 +393,46 @@ struct WallpaperSectionView: View {
 /// backlog sync is actually working. Reads live state from the shared
 /// `CloudKitSyncMonitor` (populated by
 /// `NSPersistentCloudKitContainer.eventChangedNotification` observers).
+///
+/// The enable toggle writes `BuboApp.cloudSyncPreferenceKey` in
+/// UserDefaults. The SwiftData backlog container is built once in
+/// `BuboApp.init` against that flag, so toggling it requires a restart
+/// before CloudKit mirroring actually turns on or off — the UI makes
+/// that explicit instead of silently pretending a live switch worked.
 struct CloudSyncStatusSection: View {
     @Environment(\.activeSkin) private var skin
     @State private var monitor = CloudKitSyncMonitor.shared
     @State private var kvSync = CloudSyncService.shared
+    @AppStorage(BuboApp.cloudSyncPreferenceKey) private var cloudSyncEnabled: Bool = false
+
+    /// Snapshot of the flag taken when the view first appeared. Used to
+    /// detect a pending toggle and show the "restart required" hint until
+    /// the app is relaunched.
+    @State private var launchTimeCloudSyncEnabled: Bool = UserDefaults.standard
+        .bool(forKey: BuboApp.cloudSyncPreferenceKey)
 
     var body: some View {
         SettingsPlatter("iCloud Sync") {
+            Toggle("Sync backlog & settings via iCloud", isOn: $cloudSyncEnabled)
+
+            if cloudSyncEnabled != launchTimeCloudSyncEnabled {
+                Label(
+                    "Restart Bubo to apply the change.",
+                    systemImage: "arrow.triangle.2.circlepath"
+                )
+                .font(.caption)
+                .foregroundStyle(skin.resolvedWarningColor)
+            }
+
             LabeledContent("Backlog (CloudKit)") {
                 HStack(spacing: DS.Spacing.xxs) {
-                    if monitor.phase != .idle {
+                    if launchTimeCloudSyncEnabled, monitor.phase != .idle {
                         ProgressView().controlSize(.small)
                     }
-                    Text(monitor.summary)
+                    Text(backlogStatusLabel)
                         .font(.caption)
                         .foregroundStyle(
-                            monitor.lastError != nil
+                            launchTimeCloudSyncEnabled && monitor.lastError != nil
                                 ? skin.resolvedWarningColor
                                 : skin.resolvedTextSecondary
                         )
@@ -427,7 +451,13 @@ struct CloudSyncStatusSection: View {
         }
     }
 
+    private var backlogStatusLabel: String {
+        guard launchTimeCloudSyncEnabled else { return "Disabled" }
+        return monitor.summary
+    }
+
     private var kvStatusLabel: String {
+        if !launchTimeCloudSyncEnabled { return "Disabled" }
         switch kvSync.status {
         case .idle: return "Idle"
         case .synced(let date):
@@ -441,6 +471,7 @@ struct CloudSyncStatusSection: View {
     }
 
     private var kvIsWarning: Bool {
+        guard launchTimeCloudSyncEnabled else { return false }
         switch kvSync.status {
         case .quotaWarning, .error, .unavailable: return true
         default: return false
