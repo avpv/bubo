@@ -106,9 +106,12 @@ struct AppContainer {
         userEventsContainer: ModelContainer,
         backlogContainer: ModelContainer,
         cloudServices: CloudServicesCoordinator,
-        networkMonitor: NetworkMonitor = NetworkMonitor(),
-        agentService: AgentService = AgentService()
+        networkMonitor: NetworkMonitor? = nil,
+        agentService: AgentService? = nil
     ) -> AppContainer {
+        let networkMonitor = networkMonitor ?? NetworkMonitor()
+        let agentService = agentService ?? AgentService()
+
         let reminderService = ReminderService(
             settings: settings,
             eventCacheContainer: eventCacheContainer,

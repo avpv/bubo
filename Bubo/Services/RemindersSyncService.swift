@@ -326,7 +326,7 @@ final class RemindersSyncService {
             //
             // `silentlyComplete` bypasses the `taskCompleted` notification
             // so we don't round-trip the write back to Apple Reminders.
-            let activeCalendarItemIds = Set(reminders.map(\.calendarItemIdentifier))
+            let activeCalendarItemIds = Set(fetched.map(\.calendarItemId))
             let linkedActive = backlogService.tasks.filter { task in
                 guard task.status != .done else { return false }
                 // Frozen tasks are the user's "set aside" state — don't let an
