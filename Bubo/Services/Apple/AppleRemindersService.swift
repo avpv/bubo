@@ -63,8 +63,16 @@ final class AppleRemindersService {
             let granted = try await store.requestFullAccessToReminders()
             // Fire-and-forget signal so views that snapshot `hasAccess`
             // (e.g. the menu bar permission banner) can refresh without
-            // having to poll a static EventKit property.
-            NotificationCenter.default.post(name: Self.authorizationDidChange, object: nil)
+            // having to poll a static EventKit property. Carry the
+            // definitive `granted` result — `EKEventStore.authorizationStatus`
+            // can still return `.notDetermined` for a beat after the
+            // continuation resolves, and listeners that trust only the
+            // static query end up stuck on the stale pre-grant state.
+            NotificationCenter.default.post(
+                name: Self.authorizationDidChange,
+                object: nil,
+                userInfo: ["granted": granted]
+            )
             return granted
         } catch {
             logger.error("Failed to request full Reminders access: \(error)")

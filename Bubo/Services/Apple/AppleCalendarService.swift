@@ -61,7 +61,16 @@ class AppleCalendarService {
     func requestAccess() async -> Bool {
         do {
             let granted = try await store.requestFullAccessToEvents()
-            NotificationCenter.default.post(name: Self.authorizationDidChange, object: nil)
+            // Carry the grant result — the static authorizationStatus
+            // can lag the continuation, so listeners that only consult
+            // it get a stale `.notDetermined` right after a successful
+            // grant. See AppleRemindersService.requestAccess for the
+            // same pattern.
+            NotificationCenter.default.post(
+                name: Self.authorizationDidChange,
+                object: nil,
+                userInfo: ["granted": granted]
+            )
             return granted
         } catch {
             logger.error("Failed to request full access: \(error)")
