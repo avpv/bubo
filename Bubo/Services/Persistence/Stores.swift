@@ -50,3 +50,43 @@ protocol ReminderOverrideStoring: AnyObject {
     func loadAll() -> [String: [Int]]
     func save(_ desired: [String: [Int]])
 }
+
+// MARK: Backlog Tasks
+
+/// Persisted-store contract for backlog tasks. The mutation surface is
+/// richer than the other three stores because `BacklogService` needs
+/// targeted per-row writes (incremental persistence) rather than the
+/// diff-based "save the whole collection" pattern. Each mutation touches
+/// only the rows that actually changed — CloudKit-friendly and avoids
+/// rewriting the whole table on every keystroke.
+@MainActor
+protocol BacklogTaskStoring: AnyObject {
+    /// All persisted tasks, sorted by `sortOrder`.
+    func loadAll() -> [BacklogTask]
+
+    /// Insert or update a single task, setting its `sortOrder`. If a row
+    /// with the same `taskId` already exists, it's updated in place —
+    /// defensive against CloudKit merges landing a row just before a
+    /// local insert fires.
+    func upsert(_ task: BacklogTask, at sortOrder: Int)
+
+    /// Delete by `taskId`. No-op if no row matches.
+    func delete(id: String)
+
+    /// Rewrite `sortOrder` for rows at or after `fromIndex` to match the
+    /// in-memory array. Touched-rows-only.
+    func reorder(fromIndex: Int, tasks: [BacklogTask])
+
+    /// Full reconcile — align the persisted set to `tasks` exactly.
+    /// Collapses duplicates and deletes rows not in the live set. Safety
+    /// net for tests and future bulk import paths.
+    func replaceAll(with tasks: [BacklogTask])
+
+    /// Walk every persisted row in order, ask `merging` for the winning
+    /// snapshot (typically a `BacklogTask.merged(local:remote:)` call
+    /// against the caller's pre-import in-memory state), write back the
+    /// winner if it differs from disk, and return the merged list.
+    /// Single save at the end — used by the CloudKit post-import path
+    /// where cost-per-import matters.
+    func reconcile(merging: (_ disk: BacklogTask) -> BacklogTask) -> [BacklogTask]
+}

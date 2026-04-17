@@ -59,3 +59,72 @@ final class InMemoryReminderOverrideStore: ReminderOverrideStoring {
 
     func save(_ desired: [String: [Int]]) { overrides = desired }
 }
+
+@MainActor
+final class InMemoryBacklogTaskStore: BacklogTaskStoring {
+    private struct Row {
+        var task: BacklogTask
+        var sortOrder: Int
+    }
+
+    /// Keyed by taskId so `upsert` is O(1) and `delete` is unambiguous.
+    /// A sorted array is rebuilt from this for `loadAll`.
+    private var rows: [String: Row] = [:]
+
+    init(seed: [BacklogTask] = []) {
+        for (index, task) in seed.enumerated() {
+            rows[task.id] = Row(task: task, sortOrder: index)
+        }
+    }
+
+    func loadAll() -> [BacklogTask] {
+        rows.values
+            .sorted { $0.sortOrder < $1.sortOrder }
+            .map(\.task)
+    }
+
+    func upsert(_ task: BacklogTask, at sortOrder: Int) {
+        rows[task.id] = Row(task: task, sortOrder: sortOrder)
+    }
+
+    func delete(id: String) {
+        rows.removeValue(forKey: id)
+    }
+
+    func reorder(fromIndex: Int, tasks: [BacklogTask]) {
+        guard fromIndex >= 0, fromIndex < tasks.count else { return }
+        for (offset, task) in tasks[fromIndex...].enumerated() {
+            let expected = fromIndex + offset
+            if var row = rows[task.id] {
+                row.sortOrder = expected
+                rows[task.id] = row
+            }
+        }
+    }
+
+    func replaceAll(with tasks: [BacklogTask]) {
+        rows.removeAll()
+        for (index, task) in tasks.enumerated() {
+            rows[task.id] = Row(task: task, sortOrder: index)
+        }
+    }
+
+    func reconcile(merging: (_ disk: BacklogTask) -> BacklogTask) -> [BacklogTask] {
+        let sorted = rows.values.sorted { $0.sortOrder < $1.sortOrder }
+        var merged: [BacklogTask] = []
+        merged.reserveCapacity(sorted.count)
+        for row in sorted {
+            let winner = merging(row.task)
+            merged.append(winner)
+            if winner != row.task {
+                rows[winner.id] = Row(task: winner, sortOrder: row.sortOrder)
+                // If the merged ID differs from the disk ID (shouldn't
+                // in practice, merged rule never changes id), remove old.
+                if winner.id != row.task.id {
+                    rows.removeValue(forKey: row.task.id)
+                }
+            }
+        }
+        return merged
+    }
+}
