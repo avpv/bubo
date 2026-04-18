@@ -271,6 +271,14 @@ struct MultiObjectiveContext<C: Chromosome>: @unchecked Sendable {
     /// survivor selection.
     let hypervolume: HypervolumeEstimator
 
+    /// Optional MOEA/D-AWA state. When non-nil the engine's survivor
+    /// path delegates selection to MOEAD (decomposition-based for
+    /// many-objective problems) instead of NSGA-III. The adaptive
+    /// weight adjustment fires on its internal cadence. Setting this
+    /// is an opt-in for callers that have ≥8 objectives where
+    /// NSGA-III's reference-point niching degrades.
+    let moeadState: MOEADState?
+
     /// Ranker snapshot for the current generation. Taken from the
     /// adaptive variant so reference-point evolution is observed by
     /// every selection call.
@@ -283,7 +291,8 @@ struct MultiObjectiveContext<C: Chromosome>: @unchecked Sendable {
         evaluator: FitnessEvaluator,
         populationSize: Int,
         hypervolumeSampleCount: Int = 8_000,
-        hypervolumeSeed: UInt64 = 0x5EED_F2_2026
+        hypervolumeSeed: UInt64 = 0x5EED_F2_2026,
+        moeadState: MOEADState? = nil
     ) -> MultiObjectiveContext<ScheduleChromosome> {
         let names = evaluator.objectives.map(\.name)
         // Combined parent + offspring pool is 2·N, so feed NSGA-III that
@@ -307,7 +316,8 @@ struct MultiObjectiveContext<C: Chromosome>: @unchecked Sendable {
                 }
                 return names.map { _ in 0.0 }
             },
-            hypervolume: hv
+            hypervolume: hv,
+            moeadState: moeadState
         )
     }
 }
@@ -736,51 +746,58 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             }
         }
 
-        // Survivor selection: (μ+λ) combine, then adaptive NSGA-III with
-        // HypE-lite last-front tiebreak when multi-objective vectors are
-        // available, else scalar generational.
+        // Survivor selection: (μ+λ) combine, then delegate to either
+        // MOEA/D-AWA (when wired) or adaptive NSGA-III + HypE-lite
+        // last-front tiebreak. Scalar generational replacement is
+        // the no-multiobjective fallback.
         if let mo = multiObjective {
             let combined = population.individuals + offspring
             let vectors = combined.map(mo.objectiveVectorOf)
-            let activeRanker = mo.activeRanker
-
-            // Fold the observed per-axis minimum into the hypervolume
-            // estimator's nadir so the Monte Carlo sampling box
-            // tracks the achievable region. Without this, saturated
-            // objectives (score ≈ 1 across the population) leave the
-            // sampler wasting most of its budget in the empty volume
-            // below the nadir.
-            mo.hypervolume.updateNadir(from: vectors)
-
-            // Hypervolume contribution breaks ties on the last accepted
-            // front — objectively-grounded selection pressure that the
-            // perpendicular-distance rule is blind to.
-            let survivorIndices = mo.hypervolume.survivorsWithNSGA3(
-                vectors,
-                keeping: config.populationSize,
-                using: activeRanker
-            )
-            // Re-select via the ranker so the scalar-fitness rewrite has
-            // niche metadata available.
-            let result = activeRanker.select(vectors, count: config.populationSize)
-
-            var nextIndividuals = survivorIndices.map { combined[$0] }
-
-            // Feed the adaptive reference-point history.
-            mo.adaptiveRanker.observe(result, updateInterval: 10)
-
-            // Rebuild a SelectionResult keyed by 0..<N (positions in the
-            // trimmed survivor array) so scalar fitness rewrite works
-            // generically over C. Without this remapping the scalarizer
-            // would look up the original combined-pool indices and miss.
+            let survivorIndices: [Int]
             var frontOfLocal: [Int: Int] = [:]
             var nicheOfLocal: [Int: Int] = [:]
             var distLocal: [Int: Double] = [:]
-            for (localIdx, combinedIdx) in survivorIndices.enumerated() {
-                frontOfLocal[localIdx] = result.frontOf[combinedIdx] ?? 0
-                nicheOfLocal[localIdx] = result.nicheOf[combinedIdx] ?? 0
-                distLocal[localIdx] = result.distanceToNiche[combinedIdx] ?? 0
+
+            if let moead = mo.moeadState {
+                // MOEA/D-AWA survivor path. Tchebycheff scalarisation
+                // over Das–Dennis weights; AWA periodically relocates
+                // stagnant subproblems. All survivors are treated as
+                // front 0 with neutral niche metadata.
+                let candidates = vectors.enumerated().map { (idx, v) in
+                    (index: idx, objectives: v)
+                }
+                moead.updateIncumbents(candidates: candidates)
+                let chosen = moead.selectedIndices(from: candidates)
+                survivorIndices = Array(chosen.prefix(config.populationSize))
+                for localIdx in 0..<survivorIndices.count {
+                    frontOfLocal[localIdx] = 0
+                    nicheOfLocal[localIdx] = 0
+                    distLocal[localIdx] = 0
+                }
+            } else {
+                let activeRanker = mo.activeRanker
+                // Fold the observed per-axis minimum into the hypervolume
+                // estimator's nadir so the Monte Carlo sampling box
+                // tracks the achievable region.
+                mo.hypervolume.updateNadir(from: vectors)
+                let ranked = mo.hypervolume.survivorsWithNSGA3(
+                    vectors,
+                    keeping: config.populationSize,
+                    using: activeRanker
+                )
+                survivorIndices = ranked
+                // Re-select via the ranker so the scalar-fitness rewrite
+                // has niche metadata available.
+                let result = activeRanker.select(vectors, count: config.populationSize)
+                mo.adaptiveRanker.observe(result, updateInterval: 10)
+                for (localIdx, combinedIdx) in survivorIndices.enumerated() {
+                    frontOfLocal[localIdx] = result.frontOf[combinedIdx] ?? 0
+                    nicheOfLocal[localIdx] = result.nicheOf[combinedIdx] ?? 0
+                    distLocal[localIdx] = result.distanceToNiche[combinedIdx] ?? 0
+                }
             }
+
+            var nextIndividuals = survivorIndices.map { combined[$0] }
             let localResult = NSGA3.SelectionResult(
                 selectedIndices: Array(0..<nextIndividuals.count),
                 frontOf: frontOfLocal,

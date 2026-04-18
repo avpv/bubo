@@ -187,12 +187,21 @@ final class BuboOptimizer {
         let capturedIslandConfig = overrideIslandConfig ?? islandConfig
         let capturedScenarioCount = scenarioCount
 
-        // Adaptive NSGA-III + HypE-lite survivor selector. Reads
-        // per-objective scores from the chromosome cache so survivor
-        // selection imposes zero extra evaluation cost.
+        // Survivor selector: MOEA/D-AWA when explicitly enabled
+        // (beneficial at 8+ objectives), else adaptive NSGA-III
+        // with HypE-lite tiebreak. Both read per-objective scores
+        // from the chromosome cache so survivor selection imposes
+        // zero extra evaluation cost.
+        let moeadState: MOEADState? = schedulingFeatures.useMOEADAWASurvivor
+            ? MOEAD_AWA.forScheduleEvaluator(
+                evaluator: evaluator,
+                populationSize: max(2, config.populationSize * 2)
+            )
+            : nil
         let multiObjective = MultiObjectiveContext<ScheduleChromosome>.schedule(
             evaluator: evaluator,
-            populationSize: config.populationSize
+            populationSize: config.populationSize,
+            moeadState: moeadState
         )
 
         // Quality-Diversity archive shared across every island so
