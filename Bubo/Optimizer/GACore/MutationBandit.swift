@@ -407,6 +407,130 @@ final class MutationBandit: @unchecked Sendable {
     }
 }
 
+// MARK: - LNS Destroy Strategy
+
+/// Destroy heuristics available to `MutationOperator.lnsDay`. Each call to
+/// the LNS operator picks one strategy via `LNSStrategyBandit`, rips out
+/// the indicated subset, and lets the repair phase re-insert. The
+/// taxonomy follows Shaw (1998) and Ropke & Pisinger (2006): one wide
+/// destroy plus four narrower structure-aware ones.
+enum LNSDestroyStrategy: Int, CaseIterable, Sendable, Hashable {
+    /// Every gene sitting on one randomly-chosen day. Widest neighbourhood;
+    /// good for intra-day gridlock.
+    case day = 0
+
+    /// Top-K genes by priority descending. Surgical; retouches the
+    /// highest-value items without disturbing the rest.
+    case topPriority = 1
+
+    /// K uniformly-random genes. Pure exploration; pays off when the
+    /// other heuristics lock into local patterns.
+    case random = 2
+
+    /// Seed + siblings sharing its context tag (or priority band if the
+    /// seed has no tag). Shaw's "related removal".
+    case relatedContext = 3
+
+    /// Top-K genes by misfit score (overlaps + deadline miss + out-of-
+    /// hours). Classic worst-removal; removes the most broken genes.
+    case worstFit = 4
+}
+
+// MARK: - LNS Strategy Bandit (ALNS-style roulette)
+
+/// Adaptive selector over `LNSDestroyStrategy`. Weights update via
+/// exponential smoothing on observed fitness deltas, roulette selection
+/// picks strategies proportional to their current weight.
+///
+/// This is the Ropke & Pisinger ALNS weight scheme rather than LinUCB —
+/// the destroy-strategy feedback signal is coarser (one sample per LNS
+/// call, no useful per-context features yet), so a simpler multiplicative
+/// update converges faster than a contextual model would.
+///
+/// Weight update per call:
+///   `w_s ← (1-λ)·w_s + λ·max(ε, reward)`
+///
+/// where `reward = clamp(rawFitnessDelta, -0.5, 0.5)`, `λ = 0.1`, and
+/// `ε = 0.01` is a floor that keeps every strategy exploitable even
+/// after a run of bad luck.
+final class LNSStrategyBandit: @unchecked Sendable {
+    private var weights: [LNSDestroyStrategy: Double]
+    private var uses: [LNSDestroyStrategy: Int]
+    private let lock = NSLock()
+
+    /// Smoothing constant. Low values remember old rewards longer; we pick
+    /// 0.1 so ~10 samples are needed to override a strategy's prior.
+    let learningRate: Double
+
+    /// Per-strategy weight floor so roulette never hits zero mass.
+    let weightFloor: Double
+
+    init(learningRate: Double = 0.1, weightFloor: Double = 0.01) {
+        self.learningRate = learningRate
+        self.weightFloor = weightFloor
+        self.weights = Dictionary(uniqueKeysWithValues: LNSDestroyStrategy.allCases.map { ($0, 1.0) })
+        self.uses = Dictionary(uniqueKeysWithValues: LNSDestroyStrategy.allCases.map { ($0, 0) })
+    }
+
+    /// Pick a strategy with probability proportional to its current
+    /// weight. Fully deterministic under a fixed RNG — tie-breaking and
+    /// roulette sampling both route through `rng`.
+    func select(rng: GARandom) -> LNSDestroyStrategy {
+        lock.lock()
+        defer { lock.unlock() }
+        // Iterate in a stable order for reproducibility.
+        let ordered = LNSDestroyStrategy.allCases
+        let total = ordered.reduce(0.0) { $0 + max(weightFloor, weights[$1] ?? weightFloor) }
+        guard total > 0 else { return ordered[rng.int(in: 0..<ordered.count)] }
+        let r = rng.double(in: 0..<total)
+        var cumsum = 0.0
+        for s in ordered {
+            cumsum += max(weightFloor, weights[s] ?? weightFloor)
+            if r < cumsum { return s }
+        }
+        return ordered.last!
+    }
+
+    /// Update the weight for the strategy used on the most recent LNS
+    /// call. Reward is clipped before smoothing so one lucky (or
+    /// pathological) call can't dominate the running mean. Non-positive
+    /// rewards push the strategy toward `weightFloor` but don't drop it
+    /// out of the roulette.
+    func record(strategy: LNSDestroyStrategy, reward: Double) {
+        let clipped = max(-0.5, min(0.5, reward))
+        lock.lock()
+        defer { lock.unlock() }
+        uses[strategy, default: 0] += 1
+        let current = weights[strategy] ?? 1.0
+        // Map reward [-0.5, 0.5] → contribution [0, 1]; negative rewards
+        // contribute near-zero (plus floor), positive push weight up.
+        let contribution = max(weightFloor, clipped + 0.5)
+        weights[strategy] = (1.0 - learningRate) * current + learningRate * contribution
+    }
+
+    // MARK: - Telemetry
+
+    struct StrategyTelemetry: Sendable {
+        let weight: Double
+        let uses: Int
+    }
+
+    /// Snapshot for tests, logging, and island merges. Exposes current
+    /// weights and pull counts without leaking the mutex-guarded state.
+    var snapshot: [LNSDestroyStrategy: StrategyTelemetry] {
+        lock.lock()
+        defer { lock.unlock() }
+        var out: [LNSDestroyStrategy: StrategyTelemetry] = [:]
+        for s in LNSDestroyStrategy.allCases {
+            out[s] = StrategyTelemetry(
+                weight: weights[s] ?? 1.0,
+                uses: uses[s] ?? 0
+            )
+        }
+        return out
+    }
+}
+
 // MARK: - Adaptive Mutation Chromosome
 
 /// Refinement of `Chromosome` for genomes that cooperate with `MutationBandit`.

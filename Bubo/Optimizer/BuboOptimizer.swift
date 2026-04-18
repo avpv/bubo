@@ -41,14 +41,16 @@ final class BuboOptimizer {
     /// Per-signature learner bundle. Class (not struct) so identity
     /// equality (`===`) is unambiguous in tests and so callers reason
     /// about "the same bundle" without thinking about value-type
-    /// semantics around its three reference-typed fields.
+    /// semantics around its four reference-typed fields.
     final class WorkloadLearners {
         let bandit: MutationBandit
+        let lnsBandit: LNSStrategyBandit
         let head: GeneAttentionHead
         let surrogate: RBFSurrogate
 
         init() {
             self.bandit = MutationBandit()
+            self.lnsBandit = LNSStrategyBandit()
             self.head = GeneAttentionHead()
             self.surrogate = RBFSurrogate()
         }
@@ -155,6 +157,7 @@ final class BuboOptimizer {
             calendar: context.calendar,
             rng: context.rng.split(),
             mutationBandit: workloadLearners.bandit,
+            lnsStrategyBandit: workloadLearners.lnsBandit,
             contextualCrossoverHead: workloadLearners.head
         )
 

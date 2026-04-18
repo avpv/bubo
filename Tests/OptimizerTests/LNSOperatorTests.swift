@@ -310,6 +310,107 @@ struct LNSOperatorTests {
         }
     }
 
+    @Test("LNS records lastDestroyStrategy so the strategy bandit can learn")
+    func lnsRecordsLastDestroyStrategy() {
+        let events = (0..<4).map { makeEvent(id: "e\($0)") }
+        let context = contextForcingOperator(.lnsDay, movableEvents: events)
+
+        var chrom = ScheduleChromosome.greedy(context: context)
+        chrom.mutate(rate: 0.3, context: context)
+
+        #expect(chrom.lastMutationOperator == .lnsDay)
+        #expect(chrom.lastDestroyStrategy != nil,
+                "LNS must expose which destroy strategy it used")
+    }
+
+    @Test("LNSStrategyBandit shifts weights toward rewarded strategies")
+    func strategyBanditLearns() {
+        let bandit = LNSStrategyBandit(learningRate: 0.3)
+        // Fake 30 rounds of positive reward for `.worstFit` and negative
+        // for everything else. After the smoothing EMA converges, roulette
+        // should strongly favour `.worstFit`.
+        for _ in 0..<30 {
+            bandit.record(strategy: .worstFit, reward: 0.5)
+            for s in LNSDestroyStrategy.allCases where s != .worstFit {
+                bandit.record(strategy: s, reward: -0.5)
+            }
+        }
+        let snap = bandit.snapshot
+        let worstWeight = snap[.worstFit]?.weight ?? 0
+        for s in LNSDestroyStrategy.allCases where s != .worstFit {
+            let other = snap[s]?.weight ?? 0
+            #expect(worstWeight > other,
+                    "worstFit weight (\(worstWeight)) should beat \(s) weight (\(other))")
+        }
+    }
+
+    @Test("LNSStrategyBandit select honours learned weights")
+    func strategyBanditSelectionFavoursLearned() {
+        let bandit = LNSStrategyBandit(learningRate: 0.3)
+        for _ in 0..<30 {
+            bandit.record(strategy: .day, reward: 0.5)
+            for s in LNSDestroyStrategy.allCases where s != .day {
+                bandit.record(strategy: s, reward: -0.5)
+            }
+        }
+        let rng = GARandom(seed: 2024)
+        var counts: [LNSDestroyStrategy: Int] = [:]
+        for _ in 0..<500 {
+            let pick = bandit.select(rng: rng)
+            counts[pick, default: 0] += 1
+        }
+        let dayCount = counts[.day] ?? 0
+        for s in LNSDestroyStrategy.allCases where s != .day {
+            let otherCount = counts[s] ?? 0
+            #expect(dayCount > otherCount,
+                    ".day picked \(dayCount) times should beat \(s) picked \(otherCount) times")
+        }
+    }
+
+    @Test("CP repair produces feasible placements for a tight workload")
+    func cpRepairFeasibleTight() {
+        // A deliberately tight workload: 4 one-hour tasks on a 1-day
+        // horizon where a fixed meeting eats two hours. Greedy first-fit
+        // would fail on some orderings; CP BnB must find a feasible
+        // arrangement (or drop droppables) without leaving overlaps.
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let fixStart = cal.date(bySettingHour: 11, minute: 0, second: 0, of: today)!
+        let fixed = CalendarEvent(
+            id: "meeting",
+            title: "Meeting",
+            startDate: fixStart,
+            endDate: fixStart.addingTimeInterval(7200),
+            location: nil,
+            description: nil,
+            calendarName: "Test",
+            eventType: .standard
+        )
+        let events = (0..<4).map { makeEvent(id: "e\($0)", durationMinutes: 60) }
+        let context = contextForcingOperator(
+            .lnsDay,
+            movableEvents: events,
+            fixedEvents: [fixed],
+            horizonDays: 1,
+            seed: 555
+        )
+
+        var chrom = ScheduleChromosome.greedy(context: context)
+        chrom.mutate(rate: 1.0, context: context)
+
+        let placed = chrom.genes.filter { $0.isIncluded }
+        for g in placed {
+            // No overlap with the fixed meeting.
+            let overlapsFixed = g.startTime < fixed.endDate && g.endTime > fixed.startDate
+            #expect(!overlapsFixed)
+        }
+        for i in 0..<placed.count {
+            for j in (i + 1)..<placed.count {
+                #expect(!overlaps(placed[i], placed[j]))
+            }
+        }
+    }
+
     @Test("LNS keeps placed genes inside the planning horizon and working hours")
     func lnsRespectsHorizonAndHours() {
         let events = (0..<4).map { makeEvent(id: "e\($0)", durationMinutes: 60) }
