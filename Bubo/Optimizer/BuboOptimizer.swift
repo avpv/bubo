@@ -551,6 +551,9 @@ final class BuboOptimizer {
             runnerUps: runnerUps,
             context: lastOptimizationContext
         )
+        // Training pipeline: append to replay buffer; may trigger a
+        // training cycle once the accept cadence threshold is hit.
+        trainingRecordAccept(accepted: scenario, runnerUps: runnerUps)
     }
 
     func rejectScenario(_ scenario: ScheduleScenario) {
@@ -567,6 +570,10 @@ final class BuboOptimizer {
                 confidence: 1.0
             ))
         }
+        trainingRecordReject(
+            rejected: scenario,
+            allScenarios: lastResult?.scenarios ?? []
+        )
     }
 
     func recordManualEdit(scenario: ScheduleScenario, edited: [ScheduleGene]) {
