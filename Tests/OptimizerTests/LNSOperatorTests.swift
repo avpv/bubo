@@ -515,6 +515,63 @@ struct LNSOperatorTests {
         }
     }
 
+    @Test("Priority-weighted drop penalty keeps high-priority genes when something must go")
+    func cpRepairPrefersDroppingLowPriority() {
+        // A 1-day horizon blocked by a 7-hour fixed event (9-16), leaving
+        // 2 hours free (16-18). Three 1-hour droppable tasks compete for
+        // those slots: one high-priority, two low. The priority-weighted
+        // drop penalty should keep the high-priority task every time the
+        // BnB finds a complete plan.
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let fixStart = cal.date(bySettingHour: 9, minute: 0, second: 0, of: today)!
+        let fixed = CalendarEvent(
+            id: "block",
+            title: "Block",
+            startDate: fixStart,
+            endDate: fixStart.addingTimeInterval(7 * 3600),
+            location: nil,
+            description: nil,
+            calendarName: "Test",
+            eventType: .standard
+        )
+        let high = OptimizableEvent(
+            id: "important",
+            title: "Important",
+            duration: 3600,
+            priority: 0.95,
+            isDroppable: true
+        )
+        let low1 = OptimizableEvent(
+            id: "minor1",
+            title: "Minor 1",
+            duration: 3600,
+            priority: 0.15,
+            isDroppable: true
+        )
+        let low2 = OptimizableEvent(
+            id: "minor2",
+            title: "Minor 2",
+            duration: 3600,
+            priority: 0.15,
+            isDroppable: true
+        )
+        let context = contextForcingOperator(
+            .lnsDay,
+            movableEvents: [high, low1, low2],
+            fixedEvents: [fixed],
+            horizonDays: 1,
+            seed: 8181
+        )
+
+        var chrom = ScheduleChromosome.greedy(context: context)
+        chrom.mutate(rate: 1.0, context: context)
+
+        let byId = Dictionary(uniqueKeysWithValues: chrom.genes.map { ($0.eventId, $0) })
+        #expect(byId["important"]?.isIncluded == true,
+                "high-priority task should survive when BnB has to drop something")
+    }
+
     @Test("LNS keeps placed genes inside the planning horizon and working hours")
     func lnsRespectsHorizonAndHours() {
         let events = (0..<4).map { makeEvent(id: "e\($0)", durationMinutes: 60) }
