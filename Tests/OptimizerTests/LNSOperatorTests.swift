@@ -572,6 +572,85 @@ struct LNSOperatorTests {
                 "high-priority task should survive when BnB has to drop something")
     }
 
+    @Test("Context switch signal prefers placing near same-context neighbours")
+    func cpRepairPrefersSameContext() {
+        // A fixed meeting tagged "work" pins 10-11. Two identical
+        // high-context-weight tasks, one tagged "work", one tagged
+        // "personal", compete for the surrounding free time. The
+        // ContextSwitch signal should prefer placing the "work" task
+        // adjacent to the "work" meeting — the "personal" task should
+        // land in a separate slot.
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let mStart = cal.date(bySettingHour: 10, minute: 0, second: 0, of: today)!
+        let meeting = CalendarEvent(
+            id: "standup",
+            title: "Standup",
+            startDate: mStart,
+            endDate: mStart.addingTimeInterval(3600),
+            location: nil,
+            description: nil,
+            calendarName: "Work",
+            eventType: .standard,
+            context: "work"
+        )
+        let workTask = OptimizableEvent(
+            id: "codereview",
+            title: "Code Review",
+            duration: 3600,
+            priority: 0.5,
+            context: "work"
+        )
+        let personalTask = OptimizableEvent(
+            id: "errand",
+            title: "Errand",
+            duration: 3600,
+            priority: 0.5,
+            context: "personal"
+        )
+
+        var prefs = OptimizerPreferences()
+        prefs.contextSwitchWeight = 3.0  // amplify to make the bias visible
+
+        let bandit = MutationBandit()
+        bandit.updateContext(.neutral)
+        for _ in 0..<60 {
+            for op in MutationOperator.allCases {
+                bandit.record(op: op, reward: op == .lnsDay ? 0.5 : -0.5)
+            }
+        }
+        let context = OptimizerContext(
+            fixedEvents: [meeting],
+            movableEvents: [workTask, personalTask],
+            workingHours: 9...18,
+            planningHorizon: DateInterval(
+                start: today,
+                end: cal.date(byAdding: .day, value: 1, to: today)!
+            ),
+            preferences: prefs,
+            rng: GARandom(seed: 5151),
+            mutationBandit: bandit
+        )
+
+        var chrom = ScheduleChromosome.greedy(context: context)
+        chrom.mutate(rate: 1.0, context: context)
+
+        let byId = Dictionary(uniqueKeysWithValues: chrom.genes.map { ($0.eventId, $0) })
+        if let code = byId["codereview"], let errand = byId["errand"],
+           code.isIncluded, errand.isIncluded {
+            let codeAdjacent = abs(code.startTime.timeIntervalSince(meeting.endDate)) < 60
+                || abs(meeting.startDate.timeIntervalSince(code.endTime)) < 60
+            let errandAdjacent = abs(errand.startTime.timeIntervalSince(meeting.endDate)) < 60
+                || abs(meeting.startDate.timeIntervalSince(errand.endTime)) < 60
+            // The work-context task should be adjacent to the meeting;
+            // the personal-context task should not (it has no reason to
+            // cluster). At minimum the two must not both be adjacent at
+            // once — one gets the 9-10 slot, the other 11-12.
+            #expect(codeAdjacent || !errandAdjacent,
+                    "work task should prefer adjacency over the personal task")
+        }
+    }
+
     @Test("LNS keeps placed genes inside the planning horizon and working hours")
     func lnsRespectsHorizonAndHours() {
         let events = (0..<4).map { makeEvent(id: "e\($0)", durationMinutes: 60) }

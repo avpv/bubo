@@ -426,49 +426,56 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         return nil
     }
 
+    /// Occupied time interval carrying the gene/event metadata that the
+    /// LNS cost proxy needs to score richer objectives (ContextSwitch,
+    /// BreakPlacement, WeekBalance). Only `enumerateFeasibleSlots` and
+    /// `cpRepair` use this shape — other repair paths keep the simpler
+    /// `(start: Date, end: Date)` tuple to avoid a cross-cutting refactor.
+    fileprivate struct OccupiedInterval {
+        let start: Date
+        let end: Date
+        /// The event's context tag (e.g. project name). `nil` when the
+        /// source is a fixed calendar event with no tag.
+        let context: String?
+        /// `true` when the occupying item is a focus block — used by the
+        /// focus-block continuity signal to skip focus-within-focus
+        /// rewards.
+        let isFocusBlock: Bool
+    }
+
     /// Enumerate the top-K feasible start slots for one gene against a
     /// given occupied set, sorted by a cost proxy that approximates the
     /// GA's real fitness. Used by the CP branch-and-bound repair as the
     /// per-gene domain.
     ///
-    /// Cost proxy weights seven per-slot signals, each mapping to one or
-    /// more of the 13 GA objectives, so BnB pruning steers the search
-    /// toward placements the full fitness evaluator will also like:
+    /// Cost proxy weights eleven per-slot signals, each mapping to one or
+    /// more of the 13 GA objectives. The full signal list, with the GA
+    /// objective it proxies:
     ///
-    /// 1. **Preferred-hour fit** — linear penalty outside `preferredHours`
-    ///    scaled by distance to the range; covers TaskPlacement and
-    ///    PomodoroFit.
-    /// 2. **Energy alignment** — reads `preferences.personalEnergyCurve`
-    ///    (or static Gaussian around `peakEnergyHour`) and penalizes
-    ///    high-energy-cost tasks placed in low-energy hours; covers
-    ///    EnergyBalance.
-    /// 3. **Buffer gap** — penalizes slots whose gap to the next occupied
-    ///    interval is below the user's `defaultBufferMinutes` (or
-    ///    `heavyMeetingBufferMinutes` for energyCost > 0.7); covers
-    ///    Buffer and BreakPlacement.
-    /// 4. **Deadline slack** — bonus proportional to buffer before the
-    ///    deadline; zero when no deadline. Covers Deadline explicitly
-    ///    rather than indirectly through earliness.
-    /// 5. **Focus-block continuity** — bonus when a focus-block gene
-    ///    lands in a slot whose neighbouring gap is ≥
-    ///    `idealFocusBlockMinutes`, rewarding layouts that actually
-    ///    yield deep-work windows. Covers FocusBlock.
-    /// 6. **Meeting clustering** — bonus for non-focus-block genes placed
-    ///    inside `[preferredClusterWindowStart, preferredClusterWindowEnd)`.
-    ///    Covers MeetingClustering.
-    /// 7. **Earliness** — small tie-breaker favouring earlier placements;
-    ///    aligns with WeekBalance tendencies.
+    ///   1. Preferred-hour fit        → TaskPlacement, PomodoroFit
+    ///   2. Energy alignment          → EnergyBalance
+    ///   3. Buffer gap                → Buffer
+    ///   4. Deadline slack            → Deadline
+    ///   5. Focus-block continuity    → FocusBlock
+    ///   6. Meeting clustering        → MeetingClustering
+    ///   7. Earliness                 → tie-breaker
+    ///   8. Context switch            → ContextSwitch       (requires rich occupied)
+    ///   9. Pomodoro alignment        → PomodoroFit
+    ///  10. Break placement           → BreakPlacement      (requires rich occupied)
+    ///  11. Week balance              → WeekBalance         (requires rich occupied)
     ///
-    /// Signals are weighted by the user's OptimizerPreferences so the
-    /// proxy adapts to individual emphasis. The cost is a search
-    /// heuristic, not a fitness substitute — the real evaluator
-    /// recomputes after mutation. The proxy's job is only to keep BnB
-    /// pruning from exploring obviously worse branches.
+    /// Signals 8, 10, 11 lean on `OccupiedInterval.context` and same-day
+    /// density; the others work from time-only information. All weights
+    /// scale with matching user `OptimizerPreferences` so the proxy
+    /// adapts to individual emphasis. The cost is a search heuristic,
+    /// not a fitness substitute — the real evaluator recomputes after
+    /// mutation. The proxy's job is to keep BnB pruning on the right
+    /// side of the fitness landscape while committing to placements.
     private static func enumerateFeasibleSlots(
         duration: TimeInterval,
         topK: Int,
         preferredHours: ClosedRange<Int>?,
-        occupied: [(start: Date, end: Date)],
+        occupied: [OccupiedInterval],
         horizon: DateInterval,
         workingHours: ClosedRange<Int>,
         calendar: Calendar,
@@ -478,6 +485,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         placedGenes: [ScheduleGene],
         energyCost: Double,
         isFocusBlock: Bool,
+        geneContext: String?,
         preferences: OptimizerPreferences
     ) -> [(slot: Date, cost: Double)] {
         let horizonStartDay = calendar.startOfDay(for: horizon.start)
@@ -494,8 +502,6 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         let ceiling = deadline.map { min($0, horizon.end) } ?? horizon.end
         let horizonSecs = max(1, horizon.end.timeIntervalSince(horizon.start))
 
-        // Pre-compute buffer threshold for this gene. Heavy meetings get
-        // a bigger required buffer; the GA objective uses the same split.
         let requiredBufferSecs = TimeInterval(
             (energyCost > 0.7
                 ? preferences.heavyMeetingBufferMinutes
@@ -503,7 +509,9 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
             ) * 60
         )
         let idealFocusSecs = TimeInterval(preferences.idealFocusBlockMinutes * 60)
+        let minBreakSecs = TimeInterval(preferences.minBreakMinutes * 60)
         let clusterWindow = preferences.preferredClusterWindowStart..<preferences.preferredClusterWindowEnd
+        let maxPerDay = max(1, preferences.maxMeetingsPerDay)
 
         var candidates: [(slot: Date, cost: Double)] = []
         candidates.reserveCapacity(64)
@@ -522,6 +530,14 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
             let snappedFloor = Date(timeIntervalSinceReferenceDate: (floorSecs / 900).rounded(.up) * 900)
             var candidate = max(dayFloor, snappedFloor)
 
+            // Pre-compute same-day occupied count once per day — used by
+            // the WeekBalance signal for every candidate on this day.
+            let dayStart = calendar.startOfDay(for: day)
+            let nextDay = calendar.date(byAdding: .day, value: 1, to: dayStart) ?? dayStart
+            let sameDayCount = occupied.reduce(0) {
+                $0 + (($1.start >= dayStart && $1.start < nextDay) ? 1 : 0)
+            }
+
             while candidate <= latestStart {
                 let candidateEnd = candidate.addingTimeInterval(duration)
                 if candidateEnd > ceiling { break }
@@ -537,8 +553,9 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 }
 
                 let hour = calendar.component(.hour, from: candidate)
+                let minute = calendar.component(.minute, from: candidate)
 
-                // Signal 1: preferred-hour fit.
+                // 1. Preferred-hour fit.
                 let prefPenalty: Double
                 if let p = preferredHours {
                     if p.contains(hour) {
@@ -551,7 +568,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                     prefPenalty = 0.0
                 }
 
-                // Signal 2: energy alignment.
+                // 2. Energy alignment.
                 let energyLevel: Double
                 if let curve = preferences.personalEnergyCurve, curve.count == 24, hour >= 0, hour < 24 {
                     energyLevel = max(0, min(1, curve[hour]))
@@ -561,30 +578,29 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 }
                 let energyMisalign = energyCost * (1.0 - energyLevel)
 
-                // Signal 3: buffer gap to the next occupied interval.
+                // 3. Buffer gap (defaultBufferMinutes).
                 var bufferPenalty = 0.0
                 var gapAfter: TimeInterval = .infinity
-                if let next = occupied.first(where: { $0.start >= candidateEnd }) {
-                    gapAfter = next.start.timeIntervalSince(candidateEnd)
-                    if requiredBufferSecs > 0 && gapAfter < requiredBufferSecs {
-                        bufferPenalty = 1.0 - gapAfter / requiredBufferSecs
-                    }
+                var nextInterval: OccupiedInterval? = nil
+                for occ in occupied where occ.start >= candidateEnd {
+                    nextInterval = occ
+                    gapAfter = occ.start.timeIntervalSince(candidateEnd)
+                    break
+                }
+                if requiredBufferSecs > 0 && gapAfter < requiredBufferSecs {
+                    bufferPenalty = 1.0 - gapAfter / requiredBufferSecs
                 }
 
-                // Signal 4: deadline slack (reward).
+                // 4. Deadline slack.
                 var deadlineBonus = 0.0
                 if let dl = deadline {
                     let slack = max(0, dl.timeIntervalSince(candidateEnd))
-                    // 24h slack → ~0.63 bonus; 1h slack → ~0.04; 0 → 0.
                     deadlineBonus = 1.0 - exp(-slack / (24.0 * 3600.0))
                 }
 
-                // Signal 5: focus-block continuity (reward for focus genes
-                // that land with a deep-work-sized gap on either side).
+                // 5. Focus-block continuity.
                 var focusBonus = 0.0
                 if isFocusBlock, idealFocusSecs > 0 {
-                    // Gap before = distance from previous occupied end to
-                    // candidate. Gap after was computed above.
                     let gapBefore: TimeInterval
                     if let prev = occupied.last(where: { $0.end <= candidate }) {
                         gapBefore = candidate.timeIntervalSince(prev.end)
@@ -592,35 +608,56 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                         gapBefore = .infinity
                     }
                     let combinedGap = duration + min(gapBefore, 3600) + min(gapAfter, 3600)
-                    if combinedGap >= idealFocusSecs {
-                        focusBonus = 1.0
-                    } else {
-                        focusBonus = combinedGap / idealFocusSecs
+                    focusBonus = combinedGap >= idealFocusSecs ? 1.0 : combinedGap / idealFocusSecs
+                }
+
+                // 6. Meeting clustering.
+                let clusterBonus: Double = (!isFocusBlock && clusterWindow.contains(hour)) ? 1.0 : 0.0
+
+                // 7. Earliness tie-breaker.
+                let earliness = min(1.0, max(0.0, candidate.timeIntervalSince(horizon.start) / horizonSecs))
+
+                // 8. Context switch. Penalty when either neighbour has a
+                // different context tag from the current gene. nil
+                // contexts don't participate (unknown context should not
+                // force a false-positive penalty).
+                var contextSwitch = 0.0
+                if let myCtx = geneContext {
+                    if let next = nextInterval, let nCtx = next.context, nCtx != myCtx {
+                        contextSwitch += 0.5
+                    }
+                    if let prev = occupied.last(where: { $0.end <= candidate }),
+                       let pCtx = prev.context, pCtx != myCtx {
+                        contextSwitch += 0.5
                     }
                 }
 
-                // Signal 6: meeting clustering. Non-focus-block genes get
-                // a bonus when placed inside the user's cluster window.
-                // This is a proxy for MeetingClustering — the full
-                // objective considers neighbours too, but hour-in-window
-                // is the dominant term in practice.
-                var clusterBonus = 0.0
-                if !isFocusBlock && clusterWindow.contains(hour) {
-                    clusterBonus = 1.0
+                // 9. Pomodoro alignment. Bonus for :00 / :30 starts over
+                // :15 / :45. Cheap O(1) proxy for PomodoroFit.
+                let pomodoroBonus: Double = (minute == 0 || minute == 30) ? 1.0 : 0.0
+
+                // 10. Break placement. Uses `minBreakMinutes` (cognitive
+                // break) which is distinct from `defaultBufferMinutes`
+                // (calendar safety). If gap to next item is below the
+                // minimum break threshold, penalize.
+                var breakPenalty = 0.0
+                if minBreakSecs > 0 && gapAfter < minBreakSecs {
+                    breakPenalty = 1.0 - gapAfter / minBreakSecs
                 }
 
-                // Signal 7: earliness tie-breaker.
-                let earliness = min(1.0, max(0.0, candidate.timeIntervalSince(horizon.start) / horizonSecs))
+                // 11. Week balance. Avoid overstuffing a single day.
+                let weekPenalty = min(1.0, Double(sameDayCount) / Double(maxPerDay))
 
-                // Weighted combination. Penalties are additive; bonuses
-                // are subtracted. Each weighted by the matching user
-                // preference so the proxy tracks emphasis.
                 let cost = prefPenalty * 1.0
                          + energyMisalign * preferences.energyCurveWeight
                          + bufferPenalty * preferences.bufferWeight
+                         + breakPenalty * preferences.breakWeight
+                         + contextSwitch * preferences.contextSwitchWeight
+                         + weekPenalty * preferences.weekBalanceWeight * 0.2
                          - deadlineBonus * preferences.deadlineWeight * 0.3
                          - focusBonus * preferences.focusBlockWeight * 0.3
                          - clusterBonus * preferences.meetingClusteringWeight * 0.2
+                         - pomodoroBonus * preferences.pomodoroFitWeight * 0.1
                          + earliness * 0.1
                 candidates.append((candidate, cost))
                 candidate = candidate.addingTimeInterval(900)
@@ -1032,13 +1069,31 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
     /// — heavy enough to prefer placement but finite, so infeasible-only
     /// instances can still converge.
     ///
-    /// Not a full CP-SAT — Swift has no native CP solver — but stacks
-    /// the techniques that actually drive CP-SAT performance on this
-    /// style of scheduling: explicit per-variable domains, forward
-    /// checking, dom/deg ordering, branch-and-bound over the Cartesian
-    /// product with cost pruning. Typical runs explore 20–100 nodes on
-    /// D ≤ 15 workloads, a 2–5× reduction over the previous fixed-order
-    /// BnB at the same budget.
+    /// Additionally:
+    /// - **Nogood cache**: when forward checking fails after placing
+    ///   variable V at slot S with a given prefix of previously-placed
+    ///   variables, the `(prefix-hash, V, S)` triple is recorded. Later
+    ///   branches reaching the same prefix skip the bad candidate
+    ///   without re-running FC. Not full conflict analysis (no
+    ///   generalisation across prefixes), but catches the repeated
+    ///   dead-end pattern that shows up when symmetries aren't fully
+    ///   broken.
+    /// - **Restart loop**: up to three attempts with geometric segment
+    ///   budgets (256, 512, 1024) and per-attempt reshuffled candidate
+    ///   orderings. Best solution and nogoods persist across restarts.
+    ///   The first attempt dominates on easy instances; later ones
+    ///   kick in only when the initial cost landscape misled greedy
+    ///   descent.
+    ///
+    /// Not a full CP-SAT — Swift has no native CP solver, and building
+    /// one that matches OR-Tools would mean reimplementing thousands of
+    /// lines of conflict analysis, LP relaxation, and presolve. The
+    /// pragmatic bound for this codebase is a SwiftPM binding to
+    /// OR-Tools via its C++ API. What we have here stacks the
+    /// techniques that matter most for scheduling LNS repair at
+    /// millisecond budgets: per-variable domains, forward checking,
+    /// dom/deg ordering, LP-style bounds, symmetry breaking, nogood
+    /// caching, restarts.
     private mutating func cpRepair(
         destroyed: Set<Int>,
         context: OptimizerContext
@@ -1049,10 +1104,30 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         var baseOccupied: [(start: Date, end: Date)] = context.fixedEvents.map {
             ($0.startDate, $0.endDate)
         }
+        // Parallel rich-metadata list, used only by the domain-cost
+        // proxy so it can score ContextSwitch, BreakPlacement, and
+        // WeekBalance. Forward checking and overlap-time comparisons
+        // keep using the lean tuple list above — the metadata wouldn't
+        // change any of those decisions.
+        var baseOccupiedRich: [OccupiedInterval] = context.fixedEvents.map {
+            OccupiedInterval(
+                start: $0.startDate,
+                end: $0.endDate,
+                context: $0.context,
+                isFocusBlock: false
+            )
+        }
         for (j, gene) in genes.enumerated() where gene.isIncluded && !destroyed.contains(j) {
             baseOccupied.append((gene.startTime, gene.endTime))
+            baseOccupiedRich.append(OccupiedInterval(
+                start: gene.startTime,
+                end: gene.endTime,
+                context: gene.context,
+                isFocusBlock: gene.isFocusBlock
+            ))
         }
         baseOccupied.sort { $0.start < $1.start }
+        baseOccupiedRich.sort { $0.start < $1.start }
 
         let eventById: [String: OptimizableEvent] = Dictionary(
             uniqueKeysWithValues: context.movableEvents.map { ($0.id, $0) }
@@ -1114,7 +1189,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 duration: genes[idx].duration,
                 topK: domainSize,
                 preferredHours: event?.preferredHourRange,
-                occupied: baseOccupied,
+                occupied: baseOccupiedRich,
                 horizon: horizon,
                 workingHours: context.workingHours,
                 calendar: cal,
@@ -1124,6 +1199,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 placedGenes: genes,
                 energyCost: genes[idx].energyCost,
                 isFocusBlock: genes[idx].isFocusBlock,
+                geneContext: genes[idx].context,
                 preferences: context.preferences
             )
         }
@@ -1176,9 +1252,41 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         // Search state. Mutable; captured by the nested dfs.
         var expansions = 0
         let maxExpansions = 2000
+        // Per-segment budget for restart-style search: dfs checks this
+        // in addition to `maxExpansions`, so the outer restart loop can
+        // cap each attempt to its slice of the total budget.
+        var expansionsThisSegment = 0
+        var segmentLimit = 256
         var currentPlacements: [Int: Date] = [:]
         var currentOccupied = baseOccupied
         var currentDrops: Set<Int> = []
+
+        // Nogood cache: remembers (path-signature, var, slot) triples
+        // that led to a forward-checking dead-end. Before trying a
+        // candidate we check whether the SAME path prefix + candidate
+        // has already failed; if so we skip it without re-running FC.
+        // Not full conflict analysis (no implication-graph generalisation)
+        // but catches the common "search rediscovers the same dead-end
+        // via a symmetric permutation" waste. Hash collisions are benign
+        // — worst case we skip a candidate we shouldn't have, wasting
+        // one FC call on a later path.
+        struct NogoodKey: Hashable {
+            let pathHash: Int
+            let idx: Int
+            let slot: Date
+        }
+        var nogoods: Set<NogoodKey> = []
+        func currentPathHash() -> Int {
+            var hasher = Hasher()
+            for key in currentPlacements.keys.sorted() {
+                hasher.combine(key)
+                hasher.combine(currentPlacements[key]!)
+            }
+            for drop in currentDrops.sorted() {
+                hasher.combine(-drop - 1)
+            }
+            return hasher.finalize()
+        }
         var currentCost = 0.0
         var bestPlacements: [Int: Date] = [:]
         var bestDrops: Set<Int> = []
@@ -1320,12 +1428,8 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
 
         func dfs() {
             if expansions >= maxExpansions { return }
+            if expansionsThisSegment >= segmentLimit { return }
             if currentCost >= bestCost { return }
-            // LP-style admissible lower bound: prune whenever the best
-            // conceivable remaining cost can't improve on bestCost.
-            // Tighter than `currentCost >= bestCost` since the LB is
-            // always >= 0, and cuts a surprising number of branches on
-            // tight instances where several genes share one scarce slot.
             if currentCost + remainingLowerBound() >= bestCost { return }
 
             // Complete: every destroyed gene assigned or dropped.
@@ -1337,6 +1441,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 return
             }
             expansions += 1
+            expansionsThisSegment += 1
 
             guard let chosenIdx = pickNextVariable() else {
                 // No ready variable: either a cycle or inDegree bookkeeping
@@ -1377,15 +1482,22 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 symSlotFloor = nil
             }
 
+            // Compute path hash ONCE for this depth; same value for every
+            // candidate we try below because the partial assignment
+            // hasn't changed yet.
+            let pathHash = currentPathHash()
+
             // Try placement candidates from the (possibly-pruned) domain.
             for (slot, slotCost) in (remainingDomains[chosenIdx] ?? []) {
                 if expansions >= maxExpansions { return }
                 if slot < floor { continue }
                 if let symFloor = symSlotFloor, slot < symFloor { continue }
+                // Nogood check: skip if this exact (path-prefix, var, slot)
+                // has already been proven dead-end earlier in the search.
+                let ngKey = NogoodKey(pathHash: pathHash, idx: chosenIdx, slot: slot)
+                if nogoods.contains(ngKey) { continue }
+
                 let end = slot.addingTimeInterval(duration)
-                // Extra overlap guard — FC should have eliminated these,
-                // but defense-in-depth keeps the solver correct even if
-                // the forward-check contract regresses.
                 let hasOverlap = currentOccupied.contains { occ in
                     slot < occ.end && end > occ.start
                 }
@@ -1394,9 +1506,6 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 let newCost = currentCost + slotCost
                 if newCost >= bestCost { continue }
 
-                // Snapshot mutable CP state; dictionary copies are O(|D|)
-                // but with D ≤ 15 and per-domain ≤ 6 this is negligible
-                // (≤ 100 tuple copies per node).
                 let domainsSnap = remainingDomains
                 let inDegreeSnap = livedInDegree
                 let savedCost = currentCost
@@ -1408,8 +1517,13 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                     livedInDegree[dep, default: 0] -= 1
                 }
 
-                if forwardCheck(placedIdx: chosenIdx, placedSlot: slot, placedEnd: end) {
+                let fcOK = forwardCheck(placedIdx: chosenIdx, placedSlot: slot, placedEnd: end)
+                if fcOK {
                     dfs()
+                } else {
+                    // Remember this dead-end so future paths reaching the
+                    // same prefix skip straight past the failing candidate.
+                    nogoods.insert(ngKey)
                 }
 
                 currentCost = savedCost
@@ -1448,7 +1562,45 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
             }
         }
 
-        dfs()
+        // Restart loop. Up to three attempts, each capped by a growing
+        // segment budget (256, 512, 1024). Between attempts we
+        // reshuffle per-gene candidate orderings so the next pass dives
+        // into a genuinely different region of the search tree. Best
+        // solution (`bestPlacements`, `bestCost`, `bestFound`) and the
+        // nogood cache persist across restarts, so accumulated learning
+        // isn't thrown away.
+        //
+        // Not full Luby — geometric is simpler and good enough at the
+        // ms-scale budget we run on. The first segment dominates when
+        // the problem is easy; later ones kick in only for
+        // pathologically hard instances where the initial cost ordering
+        // led greedy descent into a bad basin.
+        let initialDomains = domains
+        let rng = context.rng
+        var attempt = 0
+        while expansions < maxExpansions && attempt < 3 {
+            if attempt > 0 {
+                // Reshuffle all domains; reset mutable search state.
+                for idx in initialDomains.keys {
+                    var shuffled = initialDomains[idx] ?? []
+                    rng.shuffle(&shuffled)
+                    domains[idx] = shuffled
+                }
+            }
+            remainingDomains = domains
+            livedInDegree = initialInDegree
+            currentPlacements.removeAll(keepingCapacity: true)
+            currentOccupied = baseOccupied
+            currentDrops.removeAll(keepingCapacity: true)
+            currentCost = 0
+            expansionsThisSegment = 0
+
+            dfs()
+
+            attempt += 1
+            segmentLimit = min(segmentLimit * 2, maxExpansions - expansions)
+            if segmentLimit <= 0 { break }
+        }
 
         // Budget exhausted with no complete solution → fall back to
         // regret insertion. Guarantees forward progress regardless of
