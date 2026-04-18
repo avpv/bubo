@@ -131,7 +131,7 @@ extension BuboOptimizer {
 
     /// Record an event's scheduled-vs-actual duration. Called by
     /// the host when an event finishes. Merges into both the live
-    /// buffer store (via `sotaRecordEventDuration`) and the replay
+    /// buffer store (via `recordEventDurationSample`) and the replay
     /// buffer so training cycles can re-fit.
     func trainingRecordDurationSample(
         title: String,
@@ -149,7 +149,7 @@ extension BuboOptimizer {
             actualDuration: actualDuration
         )
         state.replayBuffer.append(.durationSample(event))
-        sotaRecordEventDuration(
+        recordEventDurationSample(
             title: title,
             context: scenarioContext,
             scheduledDuration: scheduledDuration,
@@ -170,7 +170,7 @@ extension BuboOptimizer {
         guard let ctx = lastOptimizationContext else {
             return nil
         }
-        let bundle = sotaLearners(for: ctx)
+        let bundle = advancedLearners(for: ctx)
         // Restore persisted state once per process.
         if !state.restoredOnce {
             if let path = TrainingPersistence.defaultSnapshotPath() {
@@ -192,7 +192,7 @@ extension BuboOptimizer {
     func restoreTrainingState(for context: OptimizerContext) {
         let state = trainingStateStore.load(key: ObjectIdentifier(self))
         guard !state.restoredOnce else { return }
-        let bundle = sotaLearners(for: context)
+        let bundle = advancedLearners(for: context)
         if let path = TrainingPersistence.defaultSnapshotPath() {
             TrainingCoordinator.restore(into: bundle, from: path)
         }

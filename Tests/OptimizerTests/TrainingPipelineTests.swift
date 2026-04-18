@@ -165,7 +165,7 @@ struct TrainingCoordinatorTests {
         let events = (0..<3).map { OptimizerTestFixtures.makeEvent(id: "E\($0)") }
         let ctx = OptimizerTestFixtures.makeContext(movableEvents: events)
         let evaluator = FitnessEvaluator.standard(preferences: ctx.preferences)
-        let bundle = BuboOptimizer.SOTALearnerBundle()
+        let bundle = BuboOptimizer.AdvancedLearnerBundle()
 
         let result = coordinator.train(
             bundle: bundle,
@@ -191,7 +191,7 @@ struct TrainingCoordinatorTests {
             ),
             replayBuffer: buffer
         )
-        let bundle = BuboOptimizer.SOTALearnerBundle()
+        let bundle = BuboOptimizer.AdvancedLearnerBundle()
         let result = coordinator.train(
             bundle: bundle,
             syntheticContext: nil,
@@ -229,7 +229,7 @@ struct TrainingCoordinatorTests {
             replayBuffer: buffer,
             metrics: metrics
         )
-        let bundle = BuboOptimizer.SOTALearnerBundle()
+        let bundle = BuboOptimizer.AdvancedLearnerBundle()
         _ = coordinator.train(
             bundle: bundle,
             syntheticContext: nil,

@@ -1,8 +1,8 @@
 import Foundation
 
-// MARK: - SOTA Feature Flags (integration layer)
+// MARK: - Advanced Optimizer Feature Flags (integration layer)
 //
-// A single source of truth for which SOTA-2026 additions are active
+// A single source of truth for which advanced additions are active
 // in the current `BuboOptimizer` run. Defaults enable the subset that
 // is safe, low-risk, and strictly additive (temporal warm-start,
 // DPO, chance-constrained buffers, symmetry breaker, multi-fidelity
@@ -10,13 +10,13 @@ import Foundation
 // repair, migration bandit, CMA-ME QD emitter) default off — enable
 // per workload when ready.
 //
-// This file extends `BuboOptimizer` with SOTA-aware orchestration
+// This file extends `BuboOptimizer` with advanced-aware orchestration
 // methods and the per-workload learner fields needed to drive them.
 // `optimize(context:)` remains the stable entry point; new
 // capabilities ride on top via the existing EvolutionHooks API and
 // BuboOptimizer's feedback surface, keeping the patch focused.
 
-struct SOTAFeatureFlags: Sendable {
+struct AdvancedFeatureFlags: Sendable {
     /// Wave 1: lex-fitness hierarchy used when ranking scenarios for
     /// the user. Precedence / Conflict dominate soft objectives.
     var useLexicographicRanking: Bool = true
@@ -90,11 +90,11 @@ struct SOTAFeatureFlags: Sendable {
 // MARK: - Extended learner bundle
 
 extension BuboOptimizer {
-    /// SOTA-2026 extension pack bundled per workload signature. Wired
-    /// into `optimize()` via `sotaLearners(for:)`. Held separately
+    /// Advanced extension pack bundled per workload signature. Wired
+    /// into `optimize()` via `advancedLearners(for:)`. Held separately
     /// from the legacy `WorkloadLearners` to keep blast radius small
     /// until integration has settled.
-    final class SOTALearnerBundle: @unchecked Sendable {
+    final class AdvancedLearnerBundle: @unchecked Sendable {
         let tabu: TabuMemory
         let dpo: DPOWeightLearner
         let embedder: CalendarEmbedder
@@ -119,13 +119,13 @@ extension BuboOptimizer {
 
 // MARK: - State accessors (kept off the @Observable surface)
 
-/// SOTA state that shouldn't notify SwiftUI subscribers on every
+/// Advanced optimizer state that shouldn't notify SwiftUI subscribers on every
 /// update. Held in a detached class so it survives across
 /// `@Observable` instance replacements without triggering re-renders.
-final class SOTAState: @unchecked Sendable {
-    var bundlesBySignature: [TaskSignature: BuboOptimizer.SOTALearnerBundle] = [:]
+final class AdvancedOptimizerState: @unchecked Sendable {
+    var bundlesBySignature: [TaskSignature: BuboOptimizer.AdvancedLearnerBundle] = [:]
     var bundleLRU: [TaskSignature] = []
-    var flags: SOTAFeatureFlags = SOTAFeatureFlags()
+    var flags: AdvancedFeatureFlags = AdvancedFeatureFlags()
     /// Last active learning pair surfaced after `optimize()`. The host
     /// UI can read this to display "help the model: which do you
     /// prefer?" prompts.
@@ -135,39 +135,39 @@ final class SOTAState: @unchecked Sendable {
     let proactiveReactive = ProactiveReactivePolicy()
 }
 
-/// File-scoped SOTA state store. Swift disallows stored properties
+/// File-scoped Advanced optimizer state store. Swift disallows stored properties
 /// in extensions, so we keep the per-optimizer state keyed by
 /// `ObjectIdentifier` at module scope.
-fileprivate let sotaStateStore = SOTAStateStore()
+fileprivate let advancedStateStore = AdvancedOptimizerStateStore()
 
 extension BuboOptimizer {
 
-    /// Public SOTA feature flags. Mutations take effect on the next
+    /// Public advanced feature flags. Mutations take effect on the next
     /// `optimize()` call.
-    var sotaFeatures: SOTAFeatureFlags {
-        get { sotaStateStore.load(key: ObjectIdentifier(self)).flags }
+    var advancedFeatures: AdvancedFeatureFlags {
+        get { advancedStateStore.load(key: ObjectIdentifier(self)).flags }
         set {
-            let state = sotaStateStore.load(key: ObjectIdentifier(self))
+            let state = advancedStateStore.load(key: ObjectIdentifier(self))
             state.flags = newValue
         }
     }
 
     /// Public read-only accessor for the last active-learning pair.
     var lastActiveLearningPair: (ScheduleScenario, ScheduleScenario)? {
-        sotaStateStore.load(key: ObjectIdentifier(self)).lastActiveLearningPair
+        advancedStateStore.load(key: ObjectIdentifier(self)).lastActiveLearningPair
     }
 
-    // MARK: - SOTA learner bundle routing
+    // MARK: - Advanced learner bundle routing
 
-    func sotaLearners(for context: OptimizerContext) -> SOTALearnerBundle {
+    func advancedLearners(for context: OptimizerContext) -> AdvancedLearnerBundle {
         let signature = TaskSignature(context: context)
-        let state = sotaStateStore.load(key: ObjectIdentifier(self))
+        let state = advancedStateStore.load(key: ObjectIdentifier(self))
         if let existing = state.bundlesBySignature[signature] {
             state.bundleLRU.removeAll { $0 == signature }
             state.bundleLRU.append(signature)
             return existing
         }
-        let fresh = SOTALearnerBundle()
+        let fresh = AdvancedLearnerBundle()
         state.bundlesBySignature[signature] = fresh
         state.bundleLRU.append(signature)
         while state.bundleLRU.count > maxCachedLearnerBundles {
@@ -177,32 +177,32 @@ extension BuboOptimizer {
         return fresh
     }
 
-    func sotaBundle(for scenario: ScheduleScenario) -> SOTALearnerBundle? {
+    func advancedBundle(for scenario: ScheduleScenario) -> AdvancedLearnerBundle? {
         guard let key = scenario.sourceSignature ?? lastRunSignature else { return nil }
-        return sotaStateStore.load(key: ObjectIdentifier(self))
+        return advancedStateStore.load(key: ObjectIdentifier(self))
             .bundlesBySignature[key]
     }
 
-    var sotaProactiveReactive: ProactiveReactivePolicy {
-        sotaStateStore.load(key: ObjectIdentifier(self)).proactiveReactive
+    var proactiveReactivePolicy: ProactiveReactivePolicy {
+        advancedStateStore.load(key: ObjectIdentifier(self)).proactiveReactive
     }
 
     fileprivate func setLastActiveLearningPair(_ pair: (ScheduleScenario, ScheduleScenario)?) {
-        sotaStateStore.load(key: ObjectIdentifier(self))
+        advancedStateStore.load(key: ObjectIdentifier(self))
             .lastActiveLearningPair = pair
     }
 
     // MARK: - Feedback fan-out
 
-    /// Extends `acceptScenario` to also route the event through SOTA
+    /// Extends `acceptScenario` to also route the event through the advanced
     /// learners. Called in addition to the legacy feedback path.
-    func sotaOnAccept(
+    func recordAdvancedAcceptance(
         accepted: ScheduleScenario,
         runnerUps: [ScheduleScenario],
         context: OptimizerContext?
     ) {
-        guard let bundle = sotaBundle(for: accepted) else { return }
-        if sotaFeatures.useDPOWeightLearning {
+        guard let bundle = advancedBundle(for: accepted) else { return }
+        if advancedFeatures.useDPOWeightLearning {
             for loser in runnerUps {
                 bundle.dpo.observe(pair: DPOPreferencePair(
                     winnerScores: accepted.objectiveBreakdown,
@@ -211,10 +211,10 @@ extension BuboOptimizer {
                 ))
             }
         }
-        if sotaFeatures.useTemporalWarmStart, let context {
+        if advancedFeatures.useTemporalWarmStart, let context {
             bundle.warmStart.record(genes: accepted.genes, context: context)
         }
-        if sotaFeatures.useCalendarEmbedding, let context {
+        if advancedFeatures.useCalendarEmbedding, let context {
             // Push accepted/rejected embeddings apart — a coarse
             // contrastive signal. Accept and the top runner-up
             // implicitly disagree, so we nudge them away.
@@ -230,13 +230,13 @@ extension BuboOptimizer {
 
     /// Explicit preference pair feedback — used when the UI shows the
     /// active-learning pair and the user picks a side.
-    func sotaRecordPreference(
+    func recordPreferencePair(
         winner: ScheduleScenario,
         loser: ScheduleScenario,
         context: OptimizerContext? = nil
     ) {
-        guard let bundle = sotaBundle(for: winner) else { return }
-        if sotaFeatures.useDPOWeightLearning {
+        guard let bundle = advancedBundle(for: winner) else { return }
+        if advancedFeatures.useDPOWeightLearning {
             bundle.dpo.observe(pair: DPOPreferencePair(
                 winnerScores: winner.objectiveBreakdown,
                 loserScores: loser.objectiveBreakdown,
@@ -247,14 +247,14 @@ extension BuboOptimizer {
 
     /// Record an (actual, scheduled) duration pair for buffer fitting.
     /// Wire into the host app's event-finish handler.
-    func sotaRecordEventDuration(
+    func recordEventDurationSample(
         title: String,
         context scenarioContext: String?,
         scheduledDuration: TimeInterval,
         actualDuration: TimeInterval,
         workloadContext: OptimizerContext
     ) {
-        let bundle = sotaLearners(for: workloadContext)
+        let bundle = advancedLearners(for: workloadContext)
         bundle.bufferStore.record(
             title: title,
             context: scenarioContext,
@@ -272,10 +272,10 @@ extension BuboOptimizer {
         _ disturbance: ScheduleDisturbance,
         context: OptimizerContext
     ) -> [ScheduleGene] {
-        guard sotaFeatures.useProactiveReactive else {
+        guard advancedFeatures.useProactiveReactive else {
             return currentSchedule
         }
-        let recovery = sotaProactiveReactive.react(
+        let recovery = proactiveReactivePolicy.react(
             disturbance: disturbance,
             currentSchedule: currentSchedule,
             context: context
@@ -288,26 +288,26 @@ extension BuboOptimizer {
     // MARK: - DPO-driven weight application
 
     /// Apply DPO-learned weights on top of user preferences, routed
-    /// by workload signature. Called by the SOTA-aware
-    /// `applySOTAPrelude` below.
-    fileprivate func sotaApplyDPOWeights(
+    /// by workload signature. Called by the prelude-aware
+    /// `applyAdvancedPrelude` below.
+    fileprivate func applyDPOLearnedWeights(
         to prefs: inout OptimizerPreferences,
         context: OptimizerContext
     ) {
-        guard sotaFeatures.useDPOWeightLearning else { return }
-        let bundle = sotaLearners(for: context)
+        guard advancedFeatures.useDPOWeightLearning else { return }
+        let bundle = advancedLearners(for: context)
         bundle.dpo.applyTo(preferences: &prefs)
     }
 
     /// Pull a recommended buffer from historical fits and merge into
     /// preferences. Best-effort: falls back silently if samples are
     /// below `minSamples`.
-    fileprivate func sotaApplyChanceBuffers(
+    fileprivate func applyChanceConstrainedBuffers(
         to prefs: inout OptimizerPreferences,
         context: OptimizerContext
     ) {
-        guard sotaFeatures.useChanceConstrainedBuffers else { return }
-        let bundle = sotaLearners(for: context)
+        guard advancedFeatures.useChanceConstrainedBuffers else { return }
+        let bundle = advancedLearners(for: context)
         // Use the median event duration across the workload as a
         // representative query — individual per-event buffers would
         // need per-event preferences, which the current schema
@@ -330,29 +330,29 @@ extension BuboOptimizer {
         prefs.defaultBufferMinutes = Int(median.rounded())
     }
 
-    /// Called by `optimize()` before the GA starts to apply SOTA
+    /// Called by `optimize()` before the GA starts to apply advanced
     /// prelude steps: DPO weights, chance buffers. Safe no-op when
     /// feature flags are off.
-    func sotaApplyPrelude(
+    func applyAdvancedPrelude(
         prefs: inout OptimizerPreferences,
         context: OptimizerContext
     ) {
-        sotaApplyDPOWeights(to: &prefs, context: context)
-        sotaApplyChanceBuffers(to: &prefs, context: context)
+        applyDPOLearnedWeights(to: &prefs, context: context)
+        applyChanceConstrainedBuffers(to: &prefs, context: context)
     }
 
-    /// Build extra seed chromosomes from SOTA sources. Called by
+    /// Build extra seed chromosomes from advanced sources. Called by
     /// optimize() to seed the initial population alongside greedy /
     /// random individuals.
-    func sotaExtraSeeds(context: OptimizerContext) -> [ScheduleChromosome] {
+    func buildAdvancedSeeds(context: OptimizerContext) -> [ScheduleChromosome] {
         var seeds: [ScheduleChromosome] = []
-        if sotaFeatures.useTemporalWarmStart {
-            let bundle = sotaLearners(for: context)
+        if advancedFeatures.useTemporalWarmStart {
+            let bundle = advancedLearners(for: context)
             if let warm = bundle.warmStart.seed(context: context) {
                 seeds.append(warm)
             }
         }
-        if sotaFeatures.useGNNWarmStart {
+        if advancedFeatures.useGNNWarmStart {
             seeds.append(GNNWarmStart.seedChromosome(context: context))
         }
         return seeds
@@ -360,7 +360,7 @@ extension BuboOptimizer {
 
     /// Post-processing on final scenarios: lex ranking, path
     /// relinking, diffusion polish, active-learning pair surfacing.
-    func sotaPostProcess(
+    func postProcessScenarios(
         scenarios: [ScheduleScenario],
         context: OptimizerContext,
         evaluator: FitnessEvaluator
@@ -369,8 +369,8 @@ extension BuboOptimizer {
         var current = scenarios
 
         // Active learning pair surfacing.
-        if sotaFeatures.useActiveLearningPair {
-            let bundle = sotaLearners(for: context)
+        if advancedFeatures.useActiveLearningPair {
+            let bundle = advancedLearners(for: context)
             if let pair = ScenarioPairActiveSelector.bestPair(
                 scenarios: current, learner: bundle.dpo
             ) {
@@ -380,8 +380,8 @@ extension BuboOptimizer {
 
         // Feed the online objective clusterer with per-scenario
         // objective scores so the EMA correlation matrix updates.
-        if sotaFeatures.useObjectiveClustering {
-            let bundle = sotaLearners(for: context)
+        if advancedFeatures.useObjectiveClustering {
+            let bundle = advancedLearners(for: context)
             let names = evaluator.objectives.map(\.name)
             let rows: [[Double]] = current.map { scenario in
                 names.map { scenario.objectiveBreakdown[$0] ?? 0 }
@@ -392,7 +392,7 @@ extension BuboOptimizer {
         }
 
         // Lex ranking.
-        if sotaFeatures.useLexicographicRanking {
+        if advancedFeatures.useLexicographicRanking {
             let extractor = LexicographicExtractor(evaluator: evaluator)
             let cmp = LexicographicComparator()
             current.sort { a, b in
@@ -405,7 +405,7 @@ extension BuboOptimizer {
         // Path Relinking between the top scenarios. Lifted children
         // are inserted only when they strictly improve and stamped
         // with the same signature so feedback routing still works.
-        if sotaFeatures.usePathRelinking, current.count >= 2 {
+        if advancedFeatures.usePathRelinking, current.count >= 2 {
             let signature = current.first?.sourceSignature
             let evalClosure: (inout ScheduleChromosome) -> Void = { chromo in
                 evaluator.evaluateAndAssign(&chromo, context: context)
@@ -433,7 +433,7 @@ extension BuboOptimizer {
         }
 
         // Diffusion polish of the #1 scenario.
-        if sotaFeatures.useDiffusionPolish, let top = current.first {
+        if advancedFeatures.useDiffusionPolish, let top = current.first {
             let evalClosure: (inout ScheduleChromosome) -> Void = { chromo in
                 evaluator.evaluateAndAssign(&chromo, context: context)
             }
@@ -463,19 +463,19 @@ extension BuboOptimizer {
 
 // MARK: - Private state store
 
-/// Per-BuboOptimizer SOTA state, keyed by instance identity. Using a
+/// Per-BuboOptimizer Advanced optimizer state, keyed by instance identity. Using a
 /// dictionary keyed on `ObjectIdentifier` avoids mutating the main
-/// `@Observable` class on every SOTA state change — a naive stored
+/// `@Observable` class on every Advanced optimizer state change — a naive stored
 /// property would trigger UI re-renders for every learner update.
-fileprivate final class SOTAStateStore: @unchecked Sendable {
-    private var store: [ObjectIdentifier: SOTAState] = [:]
+fileprivate final class AdvancedOptimizerStateStore: @unchecked Sendable {
+    private var store: [ObjectIdentifier: AdvancedOptimizerState] = [:]
     private let lock = NSLock()
 
-    func load(key: ObjectIdentifier) -> SOTAState {
+    func load(key: ObjectIdentifier) -> AdvancedOptimizerState {
         lock.lock()
         defer { lock.unlock() }
         if let existing = store[key] { return existing }
-        let fresh = SOTAState()
+        let fresh = AdvancedOptimizerState()
         store[key] = fresh
         return fresh
     }

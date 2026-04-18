@@ -97,7 +97,7 @@ final class BuboOptimizer {
     /// The current schedule genes (movable events placement).
     var currentSchedule: [ScheduleGene] = []
 
-    /// Captured from the most recent `optimize()` call — used by SOTA
+    /// Captured from the most recent `optimize()` call — used by advanced
     /// feedback methods to record accepted/rejected outcomes into the
     /// temporal warm-start store and buffer fit. Cleared by `reset()`.
     private(set) var lastOptimizationContext: OptimizerContext?
@@ -137,9 +137,9 @@ final class BuboOptimizer {
         // Apply learned preferences, merging with (not replacing) user preferences
         var prefs = context.preferences
         preferenceLearner.applyToPreferences(&prefs)
-        // SOTA prelude: DPO weight overlay + chance-constrained buffer fit.
+        // Advanced prelude: DPO weight overlay + chance-constrained buffer fit.
         // Both are safe no-ops when their feature flags are off.
-        sotaApplyPrelude(prefs: &prefs, context: context)
+        applyAdvancedPrelude(prefs: &prefs, context: context)
 
         // Resolve per-workload learners (bandit + head + surrogate)
         // by task signature so learning persists across runs on the
@@ -168,7 +168,7 @@ final class BuboOptimizer {
             lnsStrategyBandit: workloadLearners.lnsBandit,
             contextualCrossoverHead: workloadLearners.head
         )
-        // Stash for SOTA feedback callbacks (acceptScenario etc).
+        // Stash for advanced feedback callbacks (acceptScenario etc).
         lastOptimizationContext = adjustedContext
 
         let evaluator = FitnessEvaluator.standard(preferences: prefs)
@@ -343,10 +343,10 @@ final class BuboOptimizer {
             stamped.sourceSignature = signature
             return stamped
         }
-        // SOTA post-processing: lex ranking, active-learning pair
+        // Advanced post-processing: lex ranking, active-learning pair
         // surfacing, path relinking, diffusion polish. Each step
         // checks its own feature flag and no-ops when disabled.
-        scenarios = sotaPostProcess(
+        scenarios = postProcessScenarios(
             scenarios: scenarios,
             context: adjustedContext,
             evaluator: evaluator
@@ -541,12 +541,12 @@ final class BuboOptimizer {
         currentSchedule = scenario.genes
         preferenceLearner.recordAcceptance(scenarioFitness: scenario.fitness)
         propagateFeedbackReward(+0.1, scenario: scenario)
-        // SOTA fan-out: route the accept into DPO + temporal warm-start
+        // Advanced fan-out: route the accept into DPO + temporal warm-start
         // using whichever other scenarios from the last run act as
         // implicit runner-ups.
         let runnerUps: [ScheduleScenario] = (lastResult?.scenarios ?? [])
             .filter { $0.id != scenario.id }
-        sotaOnAccept(
+        recordAdvancedAcceptance(
             accepted: scenario,
             runnerUps: runnerUps,
             context: lastOptimizationContext
@@ -562,8 +562,8 @@ final class BuboOptimizer {
         // Model a rejection as a preference against the rejected vs.
         // the top-fitness alternative. Cheap source of DPO signal.
         if let best = lastResult?.scenarios.first, best.id != scenario.id,
-           let bundle = sotaBundle(for: scenario),
-           sotaFeatures.useDPOWeightLearning {
+           let bundle = advancedBundle(for: scenario),
+           advancedFeatures.useDPOWeightLearning {
             bundle.dpo.observe(pair: DPOPreferencePair(
                 winnerScores: best.objectiveBreakdown,
                 loserScores: scenario.objectiveBreakdown,

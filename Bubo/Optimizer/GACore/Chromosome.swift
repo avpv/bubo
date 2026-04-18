@@ -1989,7 +1989,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
             occupied.sort { $0.start < $1.start }
         }
 
-        // SOTA-2026 п.16: canonicalize equivalent gene groups after
+        // Canonicalize equivalent gene groups after
         // structural repair. Stable sort makes the cache fingerprint
         // robust to order-preserving mutations. Safe to run
         // unconditionally — no-op when the order is already canonical.
