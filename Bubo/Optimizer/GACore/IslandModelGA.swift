@@ -331,6 +331,10 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             calendar: context.calendar,
             rng: context.rng.split(),
             mutationBandit: bandit,
+            // Share one strategy bandit across islands so ALNS weight
+            // updates accumulate globally — same sharing pattern as the
+            // non-federated mutationBandit path.
+            lnsStrategyBandit: context.lnsStrategyBandit,
             contextualCrossoverHead: context.contextualCrossoverHead
         )
     }
