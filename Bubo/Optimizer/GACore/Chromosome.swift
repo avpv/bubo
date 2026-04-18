@@ -85,6 +85,13 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
     /// mutation) are rescored — unaffected days are read from this cache.
     var perDayObjectiveCache: [String: [Date: Double]]?
 
+    /// Per-component breakdown for `ComponentPartitionedObjective`
+    /// instances. Outer key = objective name; inner key = component
+    /// index from `ScheduleConflictGraph.componentOf`. Components that
+    /// don't contain any mutated gene keep their cached score across
+    /// delta evaluations.
+    var perComponentObjectiveCache: [String: [Int: Double]]?
+
     /// For each gene position, the day it sat on the last time this chromosome
     /// was fully evaluated. Used to spot "a gene moved from day X to day Y"
     /// and mark both X and Y as dirty, so per-day delta evaluation doesn't

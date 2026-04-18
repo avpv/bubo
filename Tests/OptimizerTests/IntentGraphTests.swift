@@ -332,4 +332,60 @@ final class IntentGraphTests: XCTestCase {
         XCTAssertEqual(IntentGraph.phase(for: .speed(.quick)), .config)
         XCTAssertEqual(IntentGraph.phase(for: .autoApply), .output)
     }
+
+    // MARK: - Kahn-style Sort
+
+    func testKahnTopoSortEmitsPrerequisitesFirst() {
+        // prioritizeDeadlines requires includeBacklog; Kahn must emit
+        // includeBacklog first even though phases are close.
+        let graph = IntentGraph.build(from: [.prioritizeDeadlines()])
+        let sorted = graph.sortedIntents()
+        let includeIdx = sorted.firstIndex {
+            if case .includeBacklog = $0 { return true }
+            return false
+        }
+        let prioritizeIdx = sorted.firstIndex {
+            if case .prioritizeDeadlines = $0 { return true }
+            return false
+        }
+        XCTAssertNotNil(includeIdx)
+        XCTAssertNotNil(prioritizeIdx)
+        if let a = includeIdx, let b = prioritizeIdx {
+            XCTAssertLessThan(a, b, "requires edge forces prereq before dependent")
+        }
+    }
+
+    func testReachabilityIncludesTransitiveDependencies() {
+        // prioritizeDeadlines → includeBacklog (requires). Transitive
+        // reachability from includeBacklog should include prioritizeDeadlines
+        // because requires-edges are normalised to prereq→dependent.
+        let graph = IntentGraph.build(from: [.prioritizeDeadlines()])
+        let r = graph.reachability()
+        let backlogReach = r["includeBacklog"] ?? []
+        XCTAssertTrue(backlogReach.contains("prioritizeDeadlines"))
+    }
+
+    // MARK: - SCC Detection
+
+    func testEmptyGraphHasNoSCCs() {
+        let graph = IntentGraph.build(from: [.lowEnergy, .protectLunch()])
+        XCTAssertTrue(graph.stronglyConnectedComponents().isEmpty)
+    }
+
+    func testArtificialCycleIsDetected() {
+        var graph = IntentGraph.build(from: [
+            .horizon(.today), .focusBlock(minutes: 60)
+        ])
+        // Force a cycle: focusBlock depends on horizon AND horizon depends on focusBlock.
+        graph.addEdge(from: .horizon(.today), to: .focusBlock(minutes: 60), kind: .dependsOn)
+        graph.addEdge(from: .focusBlock(minutes: 60), to: .horizon(.today), kind: .dependsOn)
+
+        let sccs = graph.stronglyConnectedComponents()
+        XCTAssertFalse(sccs.isEmpty, "Should detect the artificial cycle")
+        // Both nodes must live in the same SCC.
+        let cycle = sccs.first ?? []
+        let cycleSet = Set(cycle)
+        XCTAssertTrue(cycleSet.contains("horizon.today"))
+        XCTAssertTrue(cycleSet.contains("focusBlock"))
+    }
 }

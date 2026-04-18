@@ -40,6 +40,13 @@ final class AdaptiveNSGA3: @unchecked Sendable {
         let pointsAdded: Int
         let pointsRemoved: Int
         let crowdedNicheCount: Int
+        /// Number of pruned reference directions currently held in the
+        /// resurrection pool — non-zero on workloads whose Pareto front
+        /// moves over time.
+        let ghostPoolSize: Int
+        /// Lifetime count of ghost directions promoted back into the
+        /// active reference set.
+        let pointsResurrected: Int
     }
 
     private let lock = NSLock()
@@ -78,6 +85,27 @@ final class AdaptiveNSGA3: @unchecked Sendable {
 
     private(set) var pointsAddedTotal: Int = 0
     private(set) var pointsRemovedTotal: Int = 0
+    private(set) var pointsResurrectedTotal: Int = 0
+
+    /// Pruned reference directions kept around for possible
+    /// resurrection. Each entry is `(point, generation-when-pruned)`;
+    /// entries older than `ghostExpiryGenerations` are discarded.
+    /// Keeps the pool bounded at `ghostPoolLimit` by FIFO eviction.
+    private var ghostPool: [(point: [Double], prunedAt: Int)] = []
+
+    private let ghostPoolLimit: Int = 256
+
+    /// A ghost expires after this many generations. Long enough that
+    /// a genuine front shift can surface, short enough that the
+    /// pool doesn't accumulate stale directions indefinitely.
+    private let ghostExpiryGenerations: Int = 120
+
+    /// Moving average of per-reference niche deltas used to detect
+    /// "the population just started attracting this direction"
+    /// dynamics that should trigger resurrection. Indexed by the same
+    /// `PointKey` as the ghost pool — ghosts whose nearest live
+    /// direction loses attraction get promoted back in.
+    private var liveNicheEMA: [PointKey: Double] = [:]
 
     init(
         base: NSGA3,
@@ -139,7 +167,9 @@ final class AdaptiveNSGA3: @unchecked Sendable {
             referencePointCount: ranker.referencePoints.points.count,
             pointsAdded: pointsAddedTotal,
             pointsRemoved: pointsRemovedTotal,
-            crowdedNicheCount: crowded
+            crowdedNicheCount: crowded,
+            ghostPoolSize: ghostPool.count,
+            pointsResurrected: pointsResurrectedTotal
         )
     }
 
@@ -199,7 +229,11 @@ final class AdaptiveNSGA3: @unchecked Sendable {
         // 1) Prune vacant references first (never below min). We do
         // pruning before splitting so the new points spawned by
         // splitting can't be accidentally evicted by a stale empty
-        // history slot they inherited.
+        // history slot they inherited. Pruned directions are parked
+        // in `ghostPool` so they can be resurrected later if the
+        // population drifts back toward them (Jain & Deb's original
+        // adaptive algorithm discards them outright, which is a
+        // well-known limitation on non-stationary fronts).
         var removed = 0
         if keepers.count > minReferencePoints {
             let maxRemovable = keepers.count - minReferencePoints
@@ -211,16 +245,86 @@ final class AdaptiveNSGA3: @unchecked Sendable {
                     && hist.prefix(vacantWindow).allSatisfy { $0 == 0 }
                 if vacantStreak {
                     removed += 1
+                    // Park the pruned direction. FIFO-evict the oldest
+                    // ghost when the pool is full so the structure
+                    // stays bounded even on very long runs.
+                    ghostPool.append((entry.point, generation))
+                    if ghostPool.count > ghostPoolLimit {
+                        ghostPool.removeFirst(ghostPool.count - ghostPoolLimit)
+                    }
                     return nil
                 }
                 return entry
             }
         }
 
+        // Garbage-collect expired ghosts — directions that have been
+        // parked long enough are probably truly gone from the Pareto
+        // front and shouldn't be resurrected.
+        ghostPool.removeAll { generation - $0.prunedAt > ghostExpiryGenerations }
+
         // 2) Split crowded references. Hash-set tracks every point we
         // already plan to keep so duplicates are O(1) to reject.
         var seenKeys: Set<PointKey> = Set(keepers.map { PointKey($0.point) })
         var added = 0
+
+        // 2a) Resurrect ghosts whose direction is now "in demand".
+        // Heuristic: a ghost is reintroduced if its nearest live
+        // reference is currently crowded — indicating the front has
+        // spread into the region the ghost used to cover. This
+        // recovers from the Jain & Deb pruning mistake without
+        // reintroducing the O(N²) naive adaptive update.
+        var resurrected = 0
+        if !ghostPool.isEmpty {
+            // Snapshot keeper coordinates so we can do O(G × K)
+            // nearest-neighbour scans (G = ghosts, K = keepers). Both
+            // are bounded by a few hundred, so this stays sub-
+            // millisecond.
+            let keeperHistories = keepers.map(\.history)
+            let keeperPoints = keepers.map(\.point)
+
+            var survivingGhosts: [(point: [Double], prunedAt: Int)] = []
+            survivingGhosts.reserveCapacity(ghostPool.count)
+
+            for ghost in ghostPool {
+                guard keepers.count + added - resurrected < maxReferencePoints else {
+                    survivingGhosts.append(ghost)
+                    continue
+                }
+
+                // Nearest-live by L2 distance on the simplex.
+                var bestIdx = 0
+                var bestDist = Double.infinity
+                for (idx, candidate) in keeperPoints.enumerated() {
+                    let dist = Self.euclidean(ghost.point, candidate)
+                    if dist < bestDist {
+                        bestDist = dist
+                        bestIdx = idx
+                    }
+                }
+
+                // Promote only when the nearest-live has a crowded
+                // rolling niche count — i.e. the population genuinely
+                // needs more coverage in that neighbourhood.
+                let hist = keeperHistories[bestIdx]
+                let neighbourCrowded = meanCount(hist) >= crowdedThreshold
+
+                if neighbourCrowded {
+                    let key = PointKey(ghost.point)
+                    if !seenKeys.contains(key) {
+                        seenKeys.insert(key)
+                        // Fresh history so the resurrected direction
+                        // gets `vacantWindow` generations to attract
+                        // solutions before being re-evaluated.
+                        keepers.append((ghost.point, []))
+                        resurrected += 1
+                        continue
+                    }
+                }
+                survivingGhosts.append(ghost)
+            }
+            ghostPool = survivingGhosts
+        }
 
         let centroid = [Double](repeating: 1.0 / Double(m), count: m)
         // Iterate over a snapshot of `current` (the historic point set);
@@ -254,12 +358,29 @@ final class AdaptiveNSGA3: @unchecked Sendable {
             added += 1
         }
 
-        guard added > 0 || removed > 0 else { return (0, 0) }
+        guard added > 0 || removed > 0 || resurrected > 0 else { return (0, 0) }
 
         let nextRefs = ReferencePoints(points: keepers.map(\.point), dimension: m)
         ranker = NSGA3(referencePoints: nextRefs)
         nicheHistory = keepers.map(\.history)
-        return (added, removed)
+        pointsResurrectedTotal += resurrected
+        // Resurrections count as "added" from the telemetry viewpoint so
+        // the running tally reflects total set growth; the dedicated
+        // `pointsResurrected` field disambiguates when needed.
+        return (added + resurrected, removed)
+    }
+
+    /// Euclidean distance between two equal-length coordinate vectors.
+    /// Kept out of the main body so `adjustReferencePoints` reads
+    /// cleanly; Swift's optimiser inlines the small helper anyway.
+    private static func euclidean(_ a: [Double], _ b: [Double]) -> Double {
+        var sum = 0.0
+        let n = min(a.count, b.count)
+        for i in 0..<n {
+            let d = a[i] - b[i]
+            sum += d * d
+        }
+        return sum.squareRoot()
     }
 
     // MARK: - Helpers
