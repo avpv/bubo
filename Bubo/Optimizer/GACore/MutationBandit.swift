@@ -2,9 +2,9 @@ import Foundation
 
 // MARK: - Mutation Operators
 
-/// The four mutation strategies currently implemented in
+/// The mutation strategies currently implemented in
 /// `ScheduleChromosome.mutate`. Named explicitly so the bandit can address
-/// them by identity rather than by "int 0..3", which would be error-prone as
+/// them by identity rather than by raw int, which would be error-prone as
 /// the set grows.
 enum MutationOperator: Int, CaseIterable, Sendable, Hashable {
     /// Small ±30-minute shift around the current start time. Fastest op;
@@ -24,6 +24,15 @@ enum MutationOperator: Int, CaseIterable, Sendable, Hashable {
     /// and place there. Most expensive per invocation; typically the highest
     /// average reward once the schedule is near-feasible.
     case guided = 3
+
+    /// Large Neighborhood Search: destroy a coherent subset of the schedule
+    /// (a whole day, or the top-K highest-priority genes) and greedily
+    /// re-insert each into the best feasible slot. Unlike the other
+    /// operators, LNS runs once per `mutate()` call instead of per gene —
+    /// the destroy/repair pair is the atomic unit, and per-gene gating
+    /// would fragment the reward signal. Expected to dominate late in the
+    /// run when shift/snap/guided can't escape locally-good arrangements.
+    case lnsDay = 4
 }
 
 // MARK: - Bandit Context
