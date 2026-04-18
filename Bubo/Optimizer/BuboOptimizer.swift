@@ -273,7 +273,7 @@ final class BuboOptimizer {
             }
         }
 
-        let hooks = ScheduleEvolutionHooks.compose(
+        var hookComponents: [EvolutionHooks<ScheduleChromosome>] = [
             ScheduleEvolutionHooks.qualityDiversityFeeding(archive: qdArchive),
             ScheduleEvolutionHooks.qualityDiversityEmission(archive: qdArchive, emissionRate: 0.12),
             ScheduleEvolutionHooks.gradientRefinement(
@@ -281,7 +281,25 @@ final class BuboOptimizer {
                 interval: 35,
                 candidates: 3,
                 evaluate: surrogateAssistedEvaluator
+            ),
+        ]
+        if schedulingFeatures.useCMAMEEmitter {
+            // CMA-ME samples around the population's current best.
+            // 5% emission rate keeps cost modest while still
+            // letting the covariance-adapted Gaussian probe locally.
+            hookComponents.append(
+                ScheduleEvolutionHooks.cmaMEEmission(
+                    archive: qdArchive,
+                    emissionRate: 0.05,
+                    templateProvider: { population in
+                        population.individuals.max(by: { $0.rawFitness < $1.rawFitness })
+                    },
+                    evaluate: surrogateAssistedEvaluator
+                )
             )
+        }
+        let hooks = ScheduleEvolutionHooks.compose(
+            contentsOf: hookComponents
         )
 
         // Run island model GA on background thread. All islands share
