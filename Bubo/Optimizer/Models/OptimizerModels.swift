@@ -156,6 +156,12 @@ struct OptimizerContext: Sendable {
     /// arm reward statistics accumulate.
     let mutationBandit: MutationBandit
 
+    /// Adaptive destroy-strategy selector for `MutationOperator.lnsDay`.
+    /// Roulette-selects one of five ALNS destroy heuristics per LNS call;
+    /// weights learn from per-call fitness deltas. Shared across islands
+    /// same as `mutationBandit` so strategy rewards accumulate globally.
+    let lnsStrategyBandit: LNSStrategyBandit
+
     /// Attention head for `CrossoverStrategy.contextual`. Contextual
     /// crossover scores every gene pair through this head before
     /// deciding which parent to inherit from. Shared across islands so
@@ -192,6 +198,7 @@ struct OptimizerContext: Sendable {
         calendar: Calendar = .current,
         rng: GARandom = GARandom(),
         mutationBandit: MutationBandit = MutationBandit(),
+        lnsStrategyBandit: LNSStrategyBandit = LNSStrategyBandit(),
         contextualCrossoverHead: GeneAttentionHead = GeneAttentionHead(),
         conflictGraphHolder: ConflictGraphHolder? = nil
     ) {
@@ -204,6 +211,7 @@ struct OptimizerContext: Sendable {
         self.calendar = calendar
         self.rng = rng
         self.mutationBandit = mutationBandit
+        self.lnsStrategyBandit = lnsStrategyBandit
         self.contextualCrossoverHead = contextualCrossoverHead
         // Production entry points construct a shared holder so every
         // context copy hits the same cache; tests and one-shot

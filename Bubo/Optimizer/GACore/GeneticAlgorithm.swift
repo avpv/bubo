@@ -709,6 +709,16 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
                   let op = adaptive.lastMutationOperator else { continue }
             let reward = offspring[i].rawFitness - offspringBaselines[i]
             context.mutationBandit.record(op: op, reward: reward)
+
+            // Second feedback channel: when the LNS operator fired, also
+            // reward the destroy strategy it used. Only `ScheduleChromosome`
+            // exposes this — guarding on the concrete type avoids polluting
+            // `AdaptiveMutationChromosome` with an LNS-only property.
+            if op == .lnsDay,
+               let schedule = offspring[i] as? ScheduleChromosome,
+               let strategy = schedule.lastDestroyStrategy {
+                context.lnsStrategyBandit.record(strategy: strategy, reward: reward)
+            }
         }
 
         // Survivor selection: (μ+λ) combine, then adaptive NSGA-III with

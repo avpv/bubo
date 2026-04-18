@@ -60,6 +60,7 @@ final class IncrementalReoptimizer: @unchecked Sendable {
             participantAvailability: context.participantAvailability,
             calendar: context.calendar,
             mutationBandit: context.mutationBandit,
+            lnsStrategyBandit: context.lnsStrategyBandit,
             contextualCrossoverHead: context.contextualCrossoverHead
         )
 
