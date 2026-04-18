@@ -156,6 +156,13 @@ final class BuboOptimizer {
         // `optimize()` calls would otherwise interleave draws from
         // a single stream. The split keeps the caller's stream
         // reproducible across concurrent runs.
+        let preliminarySuite = obtainLearnerSuite(for: context)
+        let tabuToInject: TabuMemory? = schedulingFeatures.useTabuMemory
+            ? preliminarySuite.tabu
+            : nil
+        let cpSATToInject: CPSATRepairer? = schedulingFeatures.useCPSATRepair
+            ? CPSATRepairer()
+            : nil
         let adjustedContext = OptimizerContext(
             fixedEvents: context.fixedEvents,
             movableEvents: context.movableEvents,
@@ -167,7 +174,10 @@ final class BuboOptimizer {
             rng: context.rng.split(),
             mutationBandit: workloadLearners.bandit,
             lnsStrategyBandit: workloadLearners.lnsBandit,
-            contextualCrossoverHead: workloadLearners.head
+            contextualCrossoverHead: workloadLearners.head,
+            tabuMemory: tabuToInject,
+            cpSATRepairer: cpSATToInject,
+            cpSATWindowThreshold: schedulingFeatures.cpSATWindowThreshold
         )
         // Stash for learner-feedback callbacks (acceptScenario etc).
         lastOptimizationContext = adjustedContext
@@ -285,6 +295,15 @@ final class BuboOptimizer {
         // optimization for callers that want per-island bandits with
         // periodic merging — not wired by default because it fights
         // with the persistent-feedback path.
+        // Collect warm-start seeds from the learner suite so the
+        // initial population starts inside the basin of recent
+        // accepted solutions and respects GNN-derived priorities.
+        let extraSeeds: [ScheduleChromosome] = collectWarmStartSeeds(context: adjustedContext)
+        let learnerSuite = obtainLearnerSuite(for: adjustedContext)
+        let migrationBandit = schedulingFeatures.useMigrationBandit
+            ? learnerSuite.migrationBandit
+            : nil
+
         let (population, convergenceGen, duration) = await Task.detached(priority: .userInitiated) {
             let startTime = Date()
 
@@ -294,7 +313,9 @@ final class BuboOptimizer {
                 context: adjustedContext,
                 evaluate: surrogateAssistedEvaluator,
                 multiObjective: multiObjective,
-                hooks: hooks
+                hooks: hooks,
+                extraSeeds: extraSeeds,
+                migrationBandit: migrationBandit
             )
 
             // Cooperative cancellation: `islandGA.run()` throws
