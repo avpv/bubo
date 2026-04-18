@@ -20,7 +20,15 @@ import Foundation
 
 // MARK: - Behaviour Descriptor
 
-/// 3-dimensional descriptor used as the archive's cell key.
+/// 4-dimensional descriptor used as the archive's cell key.
+///
+/// `precedenceTightness` is the fourth axis (added for SOTA-2026 graph
+/// improvements): the fraction of direct `dependsOn` edges whose
+/// dependent is placed within one working day of the prerequisite's
+/// end. Together with the classical three axes it captures how
+/// "graph-respecting" a schedule is, so the emitter can keep diverse
+/// tightness regimes alive rather than collapsing to whichever one
+/// the soft `PrecedenceObjective` happens to like first.
 struct BehaviorDescriptor: Hashable, Sendable {
     /// Focus-block minutes as a fraction of total duration. [0, 1].
     let focusMass: Double
@@ -28,6 +36,12 @@ struct BehaviorDescriptor: Hashable, Sendable {
     let morningSkew: Double
     /// Unique days used / horizon days. [0, 1].
     let daySpread: Double
+    /// Fraction of direct precedence pairs placed "tightly" (gap within
+    /// one working day). 1.0 = every chain packed; 0.0 = every chain
+    /// sprawls. Schedules without precedence edges clamp to 0 and
+    /// collapse onto one slice of the axis — no harm, just a reduced
+    /// bin count for unconstrained workloads.
+    let precedenceTightness: Double
 
     /// Quantize to a fixed-size grid cell — the MAP-Elites archive key.
     func cell(resolution: Int) -> CellKey {
@@ -35,26 +49,38 @@ struct BehaviorDescriptor: Hashable, Sendable {
         let f = Int((focusMass * Double(r)).rounded(.down))
         let m = Int((morningSkew * Double(r)).rounded(.down))
         let d = Int((daySpread * Double(r)).rounded(.down))
+        let p = Int((precedenceTightness * Double(r)).rounded(.down))
         return CellKey(
             focus: min(r - 1, max(0, f)),
             morning: min(r - 1, max(0, m)),
-            day: min(r - 1, max(0, d))
+            day: min(r - 1, max(0, d)),
+            precedence: min(r - 1, max(0, p))
         )
     }
 
     /// Extract the descriptor from a chromosome via the shared feature
-    /// extractor. There is no separate aggregation pass — the archive
-    /// reads the same bytes the surrogate uses, by index.
+    /// extractor. Precedence-tightness is computed against the
+    /// context's conflict graph when available — absent graph = 0, so
+    /// callers that don't wire up `ScheduleConflictGraph` see the
+    /// archive behave like the 3D version.
     static func from(_ chromosome: ScheduleChromosome, context: OptimizerContext) -> BehaviorDescriptor {
-        ScheduleFeatureVector.extract(chromosome, context: context).behavior
+        let base = ScheduleFeatureVector.extract(chromosome, context: context).behavior
+        let tightness = context.conflictGraph?.precedenceTightness(for: chromosome) ?? 0
+        return BehaviorDescriptor(
+            focusMass: base.focusMass,
+            morningSkew: base.morningSkew,
+            daySpread: base.daySpread,
+            precedenceTightness: max(0, min(1, tightness))
+        )
     }
 }
 
-/// Discretized coordinate into the 3D archive grid.
+/// Discretized coordinate into the 4D archive grid.
 struct CellKey: Hashable, Sendable {
     let focus: Int
     let morning: Int
     let day: Int
+    let precedence: Int
 }
 
 // MARK: - Archive
@@ -232,7 +258,11 @@ final class QualityDiversityArchive: @unchecked Sendable {
         let fitnesses = cells.values.map(\.fitness)
         let avg = fitnesses.isEmpty ? 0 : fitnesses.reduce(0, +) / Double(fitnesses.count)
         let best = fitnesses.max() ?? 0
-        let capacity = resolution * resolution * resolution
+        // 4D archive: capacity = resolution⁴. Use Int64 to stay safe
+        // at higher resolutions (6⁴ = 1296, 8⁴ = 4096, both fit
+        // Int, but large res values on-device would overflow Int32).
+        let r = Int64(resolution)
+        let capacity = r * r * r * r
         return Telemetry(
             cellCount: cells.count,
             totalAttempts: totalAttempts,

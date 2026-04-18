@@ -32,9 +32,16 @@ enum MutationOperator: Int, CaseIterable, Sendable, Hashable {
 // bandit uses them as features in a LinUCB model so operator choice varies
 // with whatever regime the GA is in.
 
-/// Vector of situational features the bandit conditions on. A 4th constant
+/// Vector of situational features the bandit conditions on. A constant
 /// "1" coefficient is appended internally as the intercept term — callers
-/// construct a `BanditContext` with the three semantic features only.
+/// construct a `BanditContext` with the semantic features only.
+///
+/// The graph-derived features (`precedenceViolationRate`, `conflictDensity`,
+/// `avgChainDepth`) were added for SOTA-2026 so the bandit can pick an
+/// operator conditioned on how "graph-constrained" the current landscape
+/// is. All three default to 0 so existing callers keep the original 4-dim
+/// behaviour without code changes; the actual feature dimension is 6 plus
+/// the intercept for the LinUCB model.
 struct BanditContext: Sendable {
     /// Population diversity in [0, 1]. Low = converged.
     let diversity: Double
@@ -45,20 +52,52 @@ struct BanditContext: Sendable {
     /// scores on the best individual, rescaled so 1 ≈ "one objective is
     /// dominating everything else" and 0 ≈ "all objectives equally-met".
     let imbalance: Double
+    /// Fraction of `dependsOn` pairs currently violated on the best
+    /// individual in [0, 1]. High values should bias the bandit toward
+    /// the guided (gap-finding) operator so the GA spends more
+    /// evaluations on fixing precedence rather than exploring.
+    let precedenceViolationRate: Double
+    /// Density of the conflict graph in [0, 1]. Dense landscapes reward
+    /// tiny shifts (low neighbourhood rate) while sparse ones tolerate
+    /// full day-moves — this feature lets LinUCB learn that mapping.
+    let conflictDensity: Double
+    /// Normalised average precedence chain depth in [0, 1]. Proxy for
+    /// "how far apart can dependents legally move?" — long chains make
+    /// global moves disruptive, so the bandit should prefer local ops.
+    let avgChainDepth: Double
 
-    static let neutral = BanditContext(diversity: 0.5, stagnation: 0.0, imbalance: 0.0)
+    static let neutral = BanditContext(
+        diversity: 0.5, stagnation: 0.0, imbalance: 0.0,
+        precedenceViolationRate: 0, conflictDensity: 0, avgChainDepth: 0
+    )
+
+    init(
+        diversity: Double,
+        stagnation: Double,
+        imbalance: Double,
+        precedenceViolationRate: Double = 0,
+        conflictDensity: Double = 0,
+        avgChainDepth: Double = 0
+    ) {
+        self.diversity = diversity
+        self.stagnation = stagnation
+        self.imbalance = imbalance
+        self.precedenceViolationRate = precedenceViolationRate
+        self.conflictDensity = conflictDensity
+        self.avgChainDepth = avgChainDepth
+    }
 
     /// Feature vector with intercept. Lives here so both select and record
     /// produce byte-identical `x` values for the same context.
     var featureVector: [Double] {
-        // Clamp at construction in case a caller supplies out-of-range
-        // inputs (defensive — fitness diversity can numerically exceed 1
-        // in pathological populations).
         [
             1.0,
             max(0, min(1, diversity)),
             max(0, min(1, stagnation)),
-            max(0, min(1, imbalance))
+            max(0, min(1, imbalance)),
+            max(0, min(1, precedenceViolationRate)),
+            max(0, min(1, conflictDensity)),
+            max(0, min(1, avgChainDepth))
         ]
     }
 }
@@ -118,7 +157,13 @@ final class MutationBandit: @unchecked Sendable {
     let regularizationLambda: Double
 
     /// Feature dimension (= `BanditContext.featureVector.count`).
-    static let featureDim = 4
+    /// Bumped from 4 to 7 when the graph-derived features were added:
+    /// the extra columns are `precedenceViolationRate`, `conflictDensity`,
+    /// and `avgChainDepth`. LinUCB's closed-form update scales fine at
+    /// this size because `invertNxN` below is Gauss–Jordan on a 7×7 — a
+    /// few hundred flops per `select`, comparable to the old handrolled
+    /// 4×4 cofactor expansion.
+    static let featureDim = 7
 
     init(explorationAlpha: Double = 1.5, regularizationLambda: Double = 1.0) {
         self.explorationAlpha = explorationAlpha
@@ -154,7 +199,7 @@ final class MutationBandit: @unchecked Sendable {
 
         for op in MutationOperator.allCases {
             guard let arm = arms[op] else { continue }
-            guard let aInv = Self.invert4x4(arm.A) else { continue }
+            guard let aInv = Self.invertNxN(arm.A) else { continue }
             let theta = Self.matvec(aInv, arm.b)
             let mean = Self.dot(theta, x)
             let xAinvX = max(0, Self.quadForm(x, aInv))
@@ -229,7 +274,7 @@ final class MutationBandit: @unchecked Sendable {
         for (op, arm) in arms {
             let mean = arm.pulls > 0 ? arm.rewardSum / Double(arm.pulls) : 0
             let theta: [Double]
-            if let aInv = Self.invert4x4(arm.A) {
+            if let aInv = Self.invertNxN(arm.A) {
                 theta = Self.matvec(aInv, arm.b)
             } else {
                 theta = [Double](repeating: 0, count: Self.featureDim)
@@ -281,88 +326,79 @@ final class MutationBandit: @unchecked Sendable {
         }
     }
 
-    // MARK: - Linear algebra (inline 4×4)
+    // MARK: - Linear algebra (generic N×N)
 
-    /// Closed-form 4×4 inverse via cofactor expansion. Allocates one
-    /// 16-entry buffer (vs. Gauss–Jordan's 32-entry augmented matrix
-    /// plus per-row arithmetic) and produces results in ~80 fused
-    /// multiply-adds. Returns `nil` when the determinant is below
-    /// 1e-12 — never happens in practice thanks to ridge λI on every
-    /// arm matrix.
+    /// Gauss–Jordan inverse of an N×N matrix with partial pivoting.
+    /// Returns `nil` on (near-)singular input — ridge regularisation
+    /// on every arm matrix means this path is cold in practice.
     ///
-    /// The expansion is the standard 4×4 cofactor formula written out
-    /// linearly. It's verbose but every term is independent so the
-    /// optimizer schedules them aggressively.
-    private static func invert4x4(_ m: [[Double]]) -> [[Double]]? {
-        precondition(m.count == 4 && m.allSatisfy { $0.count == 4 })
+    /// Replaces the old handrolled 4×4 cofactor expansion because the
+    /// LinUCB feature vector grew past 4 when graph features were
+    /// added. At N = 7 the cost is ~350 multiplications per call,
+    /// still in the microsecond range so bandit `select` keeps its
+    /// latency profile.
+    private static func invertNxN(_ m: [[Double]]) -> [[Double]]? {
+        let n = m.count
+        precondition(n > 0 && m.allSatisfy { $0.count == n })
 
-        // Unpack into named locals so the cofactor expressions read
-        // cleanly. Letters follow row-major (a..p).
-        let a = m[0][0], b = m[0][1], c = m[0][2], d = m[0][3]
-        let e = m[1][0], f = m[1][1], g = m[1][2], h = m[1][3]
-        let i = m[2][0], j = m[2][1], k = m[2][2], l = m[2][3]
-        let n = m[3][0], o = m[3][1], p = m[3][2], q = m[3][3]
+        // Augmented matrix [A | I]. Flat-stored row major so the inner
+        // loops don't chase nested array indirections.
+        var a = [Double](repeating: 0, count: n * n * 2)
+        let stride = 2 * n
+        for i in 0..<n {
+            for j in 0..<n {
+                a[i * stride + j] = m[i][j]
+            }
+            a[i * stride + n + i] = 1
+        }
 
-        // 2×2 minors of the bottom two rows; reused across the
-        // first-row cofactor terms.
-        let kp_lo = k * q - l * p
-        let jp_lo = j * q - l * o
-        let jo_kn = j * p - k * o
-        let ip_lo = i * q - l * n
-        let io_kn = i * p - k * n
-        let in_jm = i * o - j * n
+        // Forward elimination with partial pivoting.
+        for i in 0..<n {
+            // Pivot: pick the row with largest |a[row][i]|.
+            var pivotRow = i
+            var pivotMag = abs(a[i * stride + i])
+            for r in (i + 1)..<n {
+                let mag = abs(a[r * stride + i])
+                if mag > pivotMag {
+                    pivotMag = mag
+                    pivotRow = r
+                }
+            }
+            if pivotMag < 1e-12 { return nil }
 
-        // First-row cofactors (these also give the determinant).
-        let A11 =  f * kp_lo - g * jp_lo + h * jo_kn
-        let A12 = -(e * kp_lo - g * ip_lo + h * io_kn)
-        let A13 =  e * jp_lo - f * ip_lo + h * in_jm
-        let A14 = -(e * jo_kn - f * io_kn + g * in_jm)
+            if pivotRow != i {
+                // Swap rows i and pivotRow in both halves.
+                for j in 0..<stride {
+                    let tmp = a[i * stride + j]
+                    a[i * stride + j] = a[pivotRow * stride + j]
+                    a[pivotRow * stride + j] = tmp
+                }
+            }
 
-        let det = a * A11 + b * A12 + c * A13 + d * A14
-        if abs(det) < 1e-12 { return nil }
-        let invDet = 1.0 / det
+            // Normalise pivot row.
+            let pivot = a[i * stride + i]
+            let invPivot = 1.0 / pivot
+            for j in 0..<stride {
+                a[i * stride + j] *= invPivot
+            }
 
-        // 2×2 minors involving rows 1, 2, 3 — needed for remaining
-        // cofactors.
-        let gp_ho = g * q - h * p
-        let fp_ho = f * q - h * o
-        let fo_gn = f * p - g * o
-        let ep_ho = e * q - h * n
-        let eo_gn = e * p - g * n
-        let en_fm = e * o - f * n
+            // Eliminate column i from all other rows.
+            for r in 0..<n where r != i {
+                let factor = a[r * stride + i]
+                guard factor != 0 else { continue }
+                for j in 0..<stride {
+                    a[r * stride + j] -= factor * a[i * stride + j]
+                }
+            }
+        }
 
-        let A21 = -(b * kp_lo - c * jp_lo + d * jo_kn)
-        let A22 =  a * kp_lo - c * ip_lo + d * io_kn
-        let A23 = -(a * jp_lo - b * ip_lo + d * in_jm)
-        let A24 =  a * jo_kn - b * io_kn + c * in_jm
-
-        let A31 =  b * gp_ho - c * fp_ho + d * fo_gn
-        let A32 = -(a * gp_ho - c * ep_ho + d * eo_gn)
-        let A33 =  a * fp_ho - b * ep_ho + d * en_fm
-        let A34 = -(a * fo_gn - b * eo_gn + c * en_fm)
-
-        // 2×2 minors involving rows 1, 2 only — bottom row cofactors.
-        let gl_hk = g * l - h * k
-        let fl_hj = f * l - h * j
-        let fk_gj = f * k - g * j
-        let el_hi = e * l - h * i
-        let ek_gi = e * k - g * i
-        let ej_fi = e * j - f * i
-
-        let A41 = -(b * gl_hk - c * fl_hj + d * fk_gj)
-        let A42 =  a * gl_hk - c * el_hi + d * ek_gi
-        let A43 = -(a * fl_hj - b * el_hi + d * ej_fi)
-        let A44 =  a * fk_gj - b * ek_gi + c * ej_fi
-
-        var inv = [[Double]](repeating: [Double](repeating: 0, count: 4), count: 4)
-        inv[0][0] = A11 * invDet; inv[0][1] = A21 * invDet
-        inv[0][2] = A31 * invDet; inv[0][3] = A41 * invDet
-        inv[1][0] = A12 * invDet; inv[1][1] = A22 * invDet
-        inv[1][2] = A32 * invDet; inv[1][3] = A42 * invDet
-        inv[2][0] = A13 * invDet; inv[2][1] = A23 * invDet
-        inv[2][2] = A33 * invDet; inv[2][3] = A43 * invDet
-        inv[3][0] = A14 * invDet; inv[3][1] = A24 * invDet
-        inv[3][2] = A34 * invDet; inv[3][3] = A44 * invDet
+        // Extract right half as the inverse.
+        var inv = [[Double]](repeating: [Double](repeating: 0, count: n), count: n)
+        for i in 0..<n {
+            for j in 0..<n {
+                inv[i][j] = a[i * stride + n + j]
+            }
+        }
         return inv
     }
 

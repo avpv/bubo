@@ -21,6 +21,15 @@ enum CrossoverStrategy: Sendable {
     /// Delegates to `ContextualCrossover.perform`; the head is read
     /// unconditionally from `OptimizerContext.contextualCrossoverHead`.
     case contextual(temperature: Double)
+
+    /// Graph-aware subtree crossover: inherits whole weakly-connected
+    /// components of the `ScheduleConflictGraph` from one parent or the
+    /// other. Keeps `dependsOn` chains and participant-coupled events
+    /// together so the child doesn't need a heavy repair pass to
+    /// reassemble a cut dependency. Falls back to day-block when no
+    /// conflict graph is available so the strategy stays safe on
+    /// contexts that predate the graph infrastructure.
+    case graphSubtree
 }
 
 // MARK: - Crossover
@@ -51,7 +60,76 @@ enum Crossover {
                 head: context.contextualCrossoverHead,
                 temperature: temperature
             )
+        case .graphSubtree:
+            return graphSubtreeCrossover(parent1, parent2, context: context)
         }
+    }
+
+    // MARK: - Graph-Aware Subtree Crossover
+
+    /// Inherit whole weakly-connected components from one parent or
+    /// the other. For each component the conflict graph exposes,
+    /// flip a coin: child1 gets parent1's gene placements for that
+    /// component iff the coin comes up heads, else it gets parent2's.
+    /// child2 takes the complement. Genes not covered by the graph
+    /// (empty graph, or singletons that the union-find left isolated)
+    /// fall through to parent1's placement by default — identical to
+    /// the uniform-base behaviour on those indices.
+    ///
+    /// Why this helps: positional crossover cuts arbitrarily through
+    /// `dependsOn` chains — roughly half of offspring will violate
+    /// precedence on the cut edge and spend the next repair/eval
+    /// cycle shifting back toward one of the parents. Component-
+    /// level inheritance moves the recombination unit from "one gene"
+    /// to "one structural cluster", so constraint violations are
+    /// restricted to cross-component interactions that the constraint
+    /// engine already handles cheaply.
+    private static func graphSubtreeCrossover(
+        _ p1: ScheduleChromosome,
+        _ p2: ScheduleChromosome,
+        context: OptimizerContext
+    ) -> (ScheduleChromosome, ScheduleChromosome) {
+        guard p1.genes.count == p2.genes.count, p1.genes.count > 1 else {
+            return (p1, p2)
+        }
+
+        let graph = context.ensureConflictGraph()
+        // Degenerate graph → fall back to day-block, which is the
+        // next-cheapest "structural" crossover.
+        guard graph.componentCount > 1 else {
+            return dayBlockCrossover(p1, p2, context: context)
+        }
+
+        let rng = context.rng
+
+        // Coin per component: true = child1 inherits this component's
+        // genes from parent2; child2 inherits the complement. Using
+        // one coin per component keeps the expected Hamming distance
+        // between children balanced at 0.5 × gene count in
+        // expectation, matching uniform crossover's variance while
+        // preserving structural integrity.
+        var takeFromP2 = [Bool](repeating: false, count: graph.componentCount)
+        for i in 0..<graph.componentCount {
+            takeFromP2[i] = rng.bool(probability: 0.5)
+        }
+
+        var child1Genes = p1.genes
+        var child2Genes = p2.genes
+
+        for i in p1.genes.indices {
+            let eventId = p1.genes[i].eventId
+            guard let componentId = graph.componentOf[eventId] else { continue }
+            if takeFromP2[componentId] {
+                child1Genes[i] = p1.genes[i].withStartTime(p2.genes[i].startTime)
+            } else {
+                child2Genes[i] = p2.genes[i].withStartTime(p1.genes[i].startTime)
+            }
+        }
+
+        return (
+            ScheduleChromosome.makeChild(genes: child1Genes, parents: (p1, p2), rng: rng),
+            ScheduleChromosome.makeChild(genes: child2Genes, parents: (p2, p1), rng: rng)
+        )
     }
 
     // MARK: - Two-Point Crossover

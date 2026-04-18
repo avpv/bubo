@@ -163,6 +163,17 @@ struct OptimizerContext: Sendable {
     /// population.
     let contextualCrossoverHead: GeneAttentionHead
 
+    /// Preprocessed structural graph over `movableEvents`. Built once
+    /// when the context is constructed (or lazily on first access
+    /// for legacy call sites) and reused by:
+    ///   * mutation bandit context features (conflict density, chain depth);
+    ///   * graph-aware crossover (keep components intact);
+    ///   * QD archive's precedence-tightness descriptor;
+    ///   * per-component delta evaluation for global objectives.
+    /// `nil` on contexts built before this infrastructure landed —
+    /// consumers fall back gracefully.
+    let conflictGraph: ScheduleConflictGraph?
+
     init(
         fixedEvents: [CalendarEvent] = [],
         movableEvents: [OptimizableEvent] = [],
@@ -176,7 +187,8 @@ struct OptimizerContext: Sendable {
         calendar: Calendar = .current,
         rng: GARandom = GARandom(),
         mutationBandit: MutationBandit = MutationBandit(),
-        contextualCrossoverHead: GeneAttentionHead = GeneAttentionHead()
+        contextualCrossoverHead: GeneAttentionHead = GeneAttentionHead(),
+        conflictGraph: ScheduleConflictGraph? = nil
     ) {
         self.fixedEvents = fixedEvents
         self.movableEvents = movableEvents
@@ -188,6 +200,18 @@ struct OptimizerContext: Sendable {
         self.rng = rng
         self.mutationBandit = mutationBandit
         self.contextualCrossoverHead = contextualCrossoverHead
+        // Build lazily only when the caller didn't supply one; that
+        // lets test fixtures stay minimal while production contexts
+        // get the cached graph for free on construction.
+        self.conflictGraph = conflictGraph
+    }
+
+    /// Returns a materialised conflict graph for this context, building
+    /// it on demand for contexts that were constructed without one.
+    /// The build is small and idempotent — a few microseconds for any
+    /// realistic schedule — so this hides the optional from hot paths.
+    func ensureConflictGraph() -> ScheduleConflictGraph {
+        conflictGraph ?? ScheduleConflictGraph.build(from: self)
     }
 }
 

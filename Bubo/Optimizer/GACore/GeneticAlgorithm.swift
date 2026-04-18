@@ -586,10 +586,22 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         let stagnation = config.convergencePatience > 0
             ? min(1.0, Double(staleGenerations) / Double(max(1, config.convergencePatience)))
             : 0.0
+        // Graph-derived context features. Only meaningful for
+        // `ScheduleChromosome` populations whose context exposes a
+        // conflict graph; non-schedule GAs (Pomodoro sequencing) just
+        // leave the graph fields at zero, preserving their existing
+        // bandit behaviour.
+        let graphFeatures = Self.graphBanditFeatures(
+            in: population,
+            context: context
+        )
         context.mutationBandit.updateContext(BanditContext(
             diversity: min(1.0, genotypicDiv / max(1e-6, config.diversityThreshold * 4)),
             stagnation: stagnation,
-            imbalance: imbalance
+            imbalance: imbalance,
+            precedenceViolationRate: graphFeatures.precedenceViolationRate,
+            conflictDensity: graphFeatures.conflictDensity,
+            avgChainDepth: graphFeatures.avgChainDepth
         ))
 
         // Immigration: inject random individuals when diversity collapses
@@ -759,6 +771,73 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         // Offspring-evaluated hook — host wires QD archive feeding,
         // surrogate calibration, telemetry. Engine stays generic.
         hooks.onOffspringEvaluated?(generation, offspring, context)
+    }
+
+    // MARK: - Graph Bandit Features
+
+    /// Graph-derived bandit context features summarised into a tuple so
+    /// the caller can splat them into `BanditContext`. Non-schedule
+    /// chromosomes return zeros — the bandit then behaves like the
+    /// pre-graph implementation on those workloads.
+    fileprivate struct GraphBanditFeatures {
+        var precedenceViolationRate: Double = 0
+        var conflictDensity: Double = 0
+        var avgChainDepth: Double = 0
+    }
+
+    /// Compute graph features for the bandit context. Looks up the
+    /// best individual (by rawFitness) and, when the chromosome is a
+    /// `ScheduleChromosome`, queries the conflict graph for structural
+    /// metrics. Static so the schedule-specific branch can be read by
+    /// `evolveOneGeneration` without dragging the cast into the hot
+    /// method body.
+    fileprivate static func graphBanditFeatures(
+        in population: Population<C>,
+        context: OptimizerContext
+    ) -> GraphBanditFeatures {
+        guard let best = population.individuals.max(by: { $0.rawFitness < $1.rawFitness }) else {
+            return GraphBanditFeatures()
+        }
+        // The GA is generic over chromosome type, so we dip into the
+        // schedule-specific representation only when the cast succeeds.
+        // Pomodoro and other chromosome flavours get a neutral feature
+        // set — no behavioural change.
+        guard let scheduleBest = best as? ScheduleChromosome else {
+            return GraphBanditFeatures()
+        }
+        let graph = context.ensureConflictGraph()
+        guard graph.eventIds.count > 0 else { return GraphBanditFeatures() }
+
+        // Precedence violation rate: fraction of direct dependency
+        // edges with gap < 0 on the best individual. Zero by
+        // construction once repair runs successfully, so this mostly
+        // signals "the GA is trying to crack a very tight packing
+        // problem" during early generations.
+        var geneByEvent: [String: ScheduleGene] = [:]
+        for gene in scheduleBest.genes where gene.isIncluded {
+            geneByEvent[gene.eventId] = gene
+        }
+        var violations = 0
+        var pairs = 0
+        for (prereq, dependents) in graph.directPrecedes {
+            guard let prereqGene = geneByEvent[prereq] else { continue }
+            for dep in dependents {
+                guard let depGene = geneByEvent[dep] else { continue }
+                pairs += 1
+                if depGene.startTime < prereqGene.endTime {
+                    violations += 1
+                }
+            }
+        }
+        let precedenceViolationRate = pairs > 0
+            ? Double(violations) / Double(pairs)
+            : 0
+
+        return GraphBanditFeatures(
+            precedenceViolationRate: precedenceViolationRate,
+            conflictDensity: graph.conflictDensity,
+            avgChainDepth: graph.averageChainDepth
+        )
     }
 
     // MARK: - Objective Imbalance (bandit context feature)

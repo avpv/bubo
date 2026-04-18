@@ -32,12 +32,16 @@ struct ScheduleFeatureVector: Sendable {
         self.values = values
     }
 
-    /// QD behaviour-axis slice. Reads `values[0..<3]`.
+    /// QD behaviour-axis slice. Reads `values[0..<3]`; the fourth
+    /// precedence-tightness axis needs the conflict graph to compute
+    /// so it's populated by `BehaviorDescriptor.from(_:context:)`
+    /// rather than here.
     var behavior: BehaviorDescriptor {
         BehaviorDescriptor(
             focusMass: values[0],
             morningSkew: values[1],
-            daySpread: values[2]
+            daySpread: values[2],
+            precedenceTightness: 0
         )
     }
 }
