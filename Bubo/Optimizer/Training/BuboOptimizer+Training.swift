@@ -170,7 +170,7 @@ extension BuboOptimizer {
         guard let ctx = lastOptimizationContext else {
             return nil
         }
-        let bundle = advancedLearners(for: ctx)
+        let bundle = obtainLearnerSuite(for: ctx)
         // Restore persisted state once per process.
         if !state.restoredOnce {
             if let path = TrainingPersistence.defaultSnapshotPath() {
@@ -192,7 +192,7 @@ extension BuboOptimizer {
     func restoreTrainingState(for context: OptimizerContext) {
         let state = trainingStateStore.load(key: ObjectIdentifier(self))
         guard !state.restoredOnce else { return }
-        let bundle = advancedLearners(for: context)
+        let bundle = obtainLearnerSuite(for: context)
         if let path = TrainingPersistence.defaultSnapshotPath() {
             TrainingCoordinator.restore(into: bundle, from: path)
         }

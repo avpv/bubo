@@ -65,7 +65,7 @@ final class TrainingCoordinator: @unchecked Sendable {
     /// (timer, idle hook, post-accept handler).
     ///
     /// Parameters:
-    ///   • `bundle`: the advanced learner bundle to update.
+    ///   • `bundle`: the adaptive learner suite to update.
     ///   • `syntheticContext` + `syntheticEvaluator`: optional; when
     ///     provided and the replay buffer is cold, the coordinator
     ///     synthesises preference pairs from this evaluator/context
@@ -74,7 +74,7 @@ final class TrainingCoordinator: @unchecked Sendable {
     ///     skip persistence.
     @discardableResult
     func train(
-        bundle: BuboOptimizer.AdvancedLearnerBundle,
+        bundle: BuboOptimizer.AdaptiveLearnerSuite,
         syntheticContext: OptimizerContext? = nil,
         syntheticEvaluator: FitnessEvaluator? = nil,
         snapshotPath: String? = TrainingPersistence.defaultSnapshotPath()
@@ -154,7 +154,7 @@ final class TrainingCoordinator: @unchecked Sendable {
 
     // MARK: - Per-trainer
 
-    private func trainDPO(bundle: BuboOptimizer.AdvancedLearnerBundle) -> TrainingRound? {
+    private func trainDPO(bundle: BuboOptimizer.AdaptiveLearnerSuite) -> TrainingRound? {
         let pairs = replayBuffer.preferencePairs()
         guard pairs.count >= config.dpoMinimumPairs else { return nil }
 
@@ -219,7 +219,7 @@ final class TrainingCoordinator: @unchecked Sendable {
         return Double(correct) / Double(pairs.count)
     }
 
-    private func trainBranchingBandit(bundle: BuboOptimizer.AdvancedLearnerBundle) -> TrainingRound? {
+    private func trainBranchingBandit(bundle: BuboOptimizer.AdaptiveLearnerSuite) -> TrainingRound? {
         let events = replayBuffer.branchingDecisions()
         guard events.count >= config.branchingMinimumEvents else { return nil }
         let bandit = bundle.branchingBandit
@@ -267,7 +267,7 @@ final class TrainingCoordinator: @unchecked Sendable {
         )
     }
 
-    private func trainBufferStore(bundle: BuboOptimizer.AdvancedLearnerBundle) -> TrainingRound? {
+    private func trainBufferStore(bundle: BuboOptimizer.AdaptiveLearnerSuite) -> TrainingRound? {
         let samples = replayBuffer.durationSamples()
         guard samples.count >= config.bufferMinimumSamples else { return nil }
         // Buffer store is a running Welford accumulator — "training"
@@ -299,7 +299,7 @@ final class TrainingCoordinator: @unchecked Sendable {
     // MARK: - Persistence
 
     private func persist(
-        bundle: BuboOptimizer.AdvancedLearnerBundle,
+        bundle: BuboOptimizer.AdaptiveLearnerSuite,
         to path: String
     ) {
         let snapshot = TrainingSnapshot(
@@ -316,7 +316,7 @@ final class TrainingCoordinator: @unchecked Sendable {
     /// Load a persisted snapshot into the given bundle. Call once
     /// after bundle construction so learned state survives restarts.
     static func restore(
-        into bundle: BuboOptimizer.AdvancedLearnerBundle,
+        into bundle: BuboOptimizer.AdaptiveLearnerSuite,
         from path: String = TrainingPersistence.defaultSnapshotPath() ?? ""
     ) {
         guard !path.isEmpty,

@@ -1,22 +1,23 @@
 import Foundation
 
-// MARK: - Advanced Optimizer Feature Flags (integration layer)
+// MARK: - Adaptive Scheduling Feature Toggles (integration layer)
 //
-// A single source of truth for which advanced additions are active
-// in the current `BuboOptimizer` run. Defaults enable the subset that
-// is safe, low-risk, and strictly additive (temporal warm-start,
-// DPO, chance-constrained buffers, symmetry breaker, multi-fidelity
-// funnel). Heavier changes (MOEA/D-AWA survivor selector, CP-SAT
-// repair, migration bandit, CMA-ME QD emitter) default off — enable
-// per workload when ready.
+// A single source of truth for which adaptive / learning-backed
+// additions are active in the current `BuboOptimizer` run. Defaults
+// enable the subset that is safe, low-risk, and strictly additive
+// (temporal warm-start, DPO, chance-constrained buffers, symmetry
+// breaker, multi-fidelity funnel). Heavier changes (MOEA/D-AWA
+// survivor selector, CP-SAT repair, migration bandit, CMA-ME QD
+// emitter) default off — enable per workload when ready.
 //
-// This file extends `BuboOptimizer` with advanced-aware orchestration
-// methods and the per-workload learner fields needed to drive them.
-// `optimize(context:)` remains the stable entry point; new
-// capabilities ride on top via the existing EvolutionHooks API and
-// BuboOptimizer's feedback surface, keeping the patch focused.
+// This file extends `BuboOptimizer` with the orchestration methods
+// that call those adaptive subsystems and owns the per-workload
+// learner fields needed to drive them. `optimize(context:)` remains
+// the stable entry point; new capabilities ride on top via the
+// existing EvolutionHooks API and BuboOptimizer's feedback surface,
+// keeping the patch focused.
 
-struct AdvancedFeatureFlags: Sendable {
+struct SchedulingFeatureToggles: Sendable {
     /// Wave 1: lex-fitness hierarchy used when ranking scenarios for
     /// the user. Precedence / Conflict dominate soft objectives.
     var useLexicographicRanking: Bool = true
@@ -90,11 +91,11 @@ struct AdvancedFeatureFlags: Sendable {
 // MARK: - Extended learner bundle
 
 extension BuboOptimizer {
-    /// Advanced extension pack bundled per workload signature. Wired
-    /// into `optimize()` via `advancedLearners(for:)`. Held separately
+    /// Adaptive learners bundled per workload signature. Wired
+    /// into `optimize()` via `obtainLearnerSuite(for:)`. Held separately
     /// from the legacy `WorkloadLearners` to keep blast radius small
     /// until integration has settled.
-    final class AdvancedLearnerBundle: @unchecked Sendable {
+    final class AdaptiveLearnerSuite: @unchecked Sendable {
         let tabu: TabuMemory
         let dpo: DPOWeightLearner
         let embedder: CalendarEmbedder
@@ -119,13 +120,13 @@ extension BuboOptimizer {
 
 // MARK: - State accessors (kept off the @Observable surface)
 
-/// Advanced optimizer state that shouldn't notify SwiftUI subscribers on every
+/// Learner-state container that shouldn't notify SwiftUI subscribers on every
 /// update. Held in a detached class so it survives across
 /// `@Observable` instance replacements without triggering re-renders.
-final class AdvancedOptimizerState: @unchecked Sendable {
-    var bundlesBySignature: [TaskSignature: BuboOptimizer.AdvancedLearnerBundle] = [:]
+final class OptimizerLearningState: @unchecked Sendable {
+    var bundlesBySignature: [TaskSignature: BuboOptimizer.AdaptiveLearnerSuite] = [:]
     var bundleLRU: [TaskSignature] = []
-    var flags: AdvancedFeatureFlags = AdvancedFeatureFlags()
+    var flags: SchedulingFeatureToggles = SchedulingFeatureToggles()
     /// Last active learning pair surfaced after `optimize()`. The host
     /// UI can read this to display "help the model: which do you
     /// prefer?" prompts.
@@ -135,39 +136,39 @@ final class AdvancedOptimizerState: @unchecked Sendable {
     let proactiveReactive = ProactiveReactivePolicy()
 }
 
-/// File-scoped Advanced optimizer state store. Swift disallows stored properties
+/// File-scoped Learner-state container store. Swift disallows stored properties
 /// in extensions, so we keep the per-optimizer state keyed by
 /// `ObjectIdentifier` at module scope.
-fileprivate let advancedStateStore = AdvancedOptimizerStateStore()
+fileprivate let learningStateRegistry = OptimizerLearningStateRegistry()
 
 extension BuboOptimizer {
 
-    /// Public advanced feature flags. Mutations take effect on the next
+    /// Scheduling feature toggles. Mutations take effect on the next
     /// `optimize()` call.
-    var advancedFeatures: AdvancedFeatureFlags {
-        get { advancedStateStore.load(key: ObjectIdentifier(self)).flags }
+    var schedulingFeatures: SchedulingFeatureToggles {
+        get { learningStateRegistry.load(key: ObjectIdentifier(self)).flags }
         set {
-            let state = advancedStateStore.load(key: ObjectIdentifier(self))
+            let state = learningStateRegistry.load(key: ObjectIdentifier(self))
             state.flags = newValue
         }
     }
 
     /// Public read-only accessor for the last active-learning pair.
     var lastActiveLearningPair: (ScheduleScenario, ScheduleScenario)? {
-        advancedStateStore.load(key: ObjectIdentifier(self)).lastActiveLearningPair
+        learningStateRegistry.load(key: ObjectIdentifier(self)).lastActiveLearningPair
     }
 
-    // MARK: - Advanced learner bundle routing
+    // MARK: - Learner-suite routing
 
-    func advancedLearners(for context: OptimizerContext) -> AdvancedLearnerBundle {
+    func obtainLearnerSuite(for context: OptimizerContext) -> AdaptiveLearnerSuite {
         let signature = TaskSignature(context: context)
-        let state = advancedStateStore.load(key: ObjectIdentifier(self))
+        let state = learningStateRegistry.load(key: ObjectIdentifier(self))
         if let existing = state.bundlesBySignature[signature] {
             state.bundleLRU.removeAll { $0 == signature }
             state.bundleLRU.append(signature)
             return existing
         }
-        let fresh = AdvancedLearnerBundle()
+        let fresh = AdaptiveLearnerSuite()
         state.bundlesBySignature[signature] = fresh
         state.bundleLRU.append(signature)
         while state.bundleLRU.count > maxCachedLearnerBundles {
@@ -177,32 +178,32 @@ extension BuboOptimizer {
         return fresh
     }
 
-    func advancedBundle(for scenario: ScheduleScenario) -> AdvancedLearnerBundle? {
+    func lookupLearnerSuite(for scenario: ScheduleScenario) -> AdaptiveLearnerSuite? {
         guard let key = scenario.sourceSignature ?? lastRunSignature else { return nil }
-        return advancedStateStore.load(key: ObjectIdentifier(self))
+        return learningStateRegistry.load(key: ObjectIdentifier(self))
             .bundlesBySignature[key]
     }
 
     var proactiveReactivePolicy: ProactiveReactivePolicy {
-        advancedStateStore.load(key: ObjectIdentifier(self)).proactiveReactive
+        learningStateRegistry.load(key: ObjectIdentifier(self)).proactiveReactive
     }
 
     fileprivate func setLastActiveLearningPair(_ pair: (ScheduleScenario, ScheduleScenario)?) {
-        advancedStateStore.load(key: ObjectIdentifier(self))
+        learningStateRegistry.load(key: ObjectIdentifier(self))
             .lastActiveLearningPair = pair
     }
 
     // MARK: - Feedback fan-out
 
-    /// Extends `acceptScenario` to also route the event through the advanced
+    /// Extends `acceptScenario` to also route the event through the adaptive
     /// learners. Called in addition to the legacy feedback path.
-    func recordAdvancedAcceptance(
+    func propagateAcceptFeedback(
         accepted: ScheduleScenario,
         runnerUps: [ScheduleScenario],
         context: OptimizerContext?
     ) {
-        guard let bundle = advancedBundle(for: accepted) else { return }
-        if advancedFeatures.useDPOWeightLearning {
+        guard let bundle = lookupLearnerSuite(for: accepted) else { return }
+        if schedulingFeatures.useDPOWeightLearning {
             for loser in runnerUps {
                 bundle.dpo.observe(pair: DPOPreferencePair(
                     winnerScores: accepted.objectiveBreakdown,
@@ -211,10 +212,10 @@ extension BuboOptimizer {
                 ))
             }
         }
-        if advancedFeatures.useTemporalWarmStart, let context {
+        if schedulingFeatures.useTemporalWarmStart, let context {
             bundle.warmStart.record(genes: accepted.genes, context: context)
         }
-        if advancedFeatures.useCalendarEmbedding, let context {
+        if schedulingFeatures.useCalendarEmbedding, let context {
             // Push accepted/rejected embeddings apart — a coarse
             // contrastive signal. Accept and the top runner-up
             // implicitly disagree, so we nudge them away.
@@ -235,8 +236,8 @@ extension BuboOptimizer {
         loser: ScheduleScenario,
         context: OptimizerContext? = nil
     ) {
-        guard let bundle = advancedBundle(for: winner) else { return }
-        if advancedFeatures.useDPOWeightLearning {
+        guard let bundle = lookupLearnerSuite(for: winner) else { return }
+        if schedulingFeatures.useDPOWeightLearning {
             bundle.dpo.observe(pair: DPOPreferencePair(
                 winnerScores: winner.objectiveBreakdown,
                 loserScores: loser.objectiveBreakdown,
@@ -254,7 +255,7 @@ extension BuboOptimizer {
         actualDuration: TimeInterval,
         workloadContext: OptimizerContext
     ) {
-        let bundle = advancedLearners(for: workloadContext)
+        let bundle = obtainLearnerSuite(for: workloadContext)
         bundle.bufferStore.record(
             title: title,
             context: scenarioContext,
@@ -272,7 +273,7 @@ extension BuboOptimizer {
         _ disturbance: ScheduleDisturbance,
         context: OptimizerContext
     ) -> [ScheduleGene] {
-        guard advancedFeatures.useProactiveReactive else {
+        guard schedulingFeatures.useProactiveReactive else {
             return currentSchedule
         }
         let recovery = proactiveReactivePolicy.react(
@@ -289,13 +290,13 @@ extension BuboOptimizer {
 
     /// Apply DPO-learned weights on top of user preferences, routed
     /// by workload signature. Called by the prelude-aware
-    /// `applyAdvancedPrelude` below.
+    /// `adjustPreferencesFromLearners` below.
     fileprivate func applyDPOLearnedWeights(
         to prefs: inout OptimizerPreferences,
         context: OptimizerContext
     ) {
-        guard advancedFeatures.useDPOWeightLearning else { return }
-        let bundle = advancedLearners(for: context)
+        guard schedulingFeatures.useDPOWeightLearning else { return }
+        let bundle = obtainLearnerSuite(for: context)
         bundle.dpo.applyTo(preferences: &prefs)
     }
 
@@ -306,8 +307,8 @@ extension BuboOptimizer {
         to prefs: inout OptimizerPreferences,
         context: OptimizerContext
     ) {
-        guard advancedFeatures.useChanceConstrainedBuffers else { return }
-        let bundle = advancedLearners(for: context)
+        guard schedulingFeatures.useChanceConstrainedBuffers else { return }
+        let bundle = obtainLearnerSuite(for: context)
         // Use the median event duration across the workload as a
         // representative query — individual per-event buffers would
         // need per-event preferences, which the current schema
@@ -330,10 +331,10 @@ extension BuboOptimizer {
         prefs.defaultBufferMinutes = Int(median.rounded())
     }
 
-    /// Called by `optimize()` before the GA starts to apply advanced
+    /// Called by `optimize()` before the GA starts to apply the learner-
     /// prelude steps: DPO weights, chance buffers. Safe no-op when
     /// feature flags are off.
-    func applyAdvancedPrelude(
+    func adjustPreferencesFromLearners(
         prefs: inout OptimizerPreferences,
         context: OptimizerContext
     ) {
@@ -341,18 +342,19 @@ extension BuboOptimizer {
         applyChanceConstrainedBuffers(to: &prefs, context: context)
     }
 
-    /// Build extra seed chromosomes from advanced sources. Called by
+    /// Collect warm-start seed chromosomes (temporal replay +
+    /// GNN-driven greedy). Called by
     /// optimize() to seed the initial population alongside greedy /
     /// random individuals.
-    func buildAdvancedSeeds(context: OptimizerContext) -> [ScheduleChromosome] {
+    func collectWarmStartSeeds(context: OptimizerContext) -> [ScheduleChromosome] {
         var seeds: [ScheduleChromosome] = []
-        if advancedFeatures.useTemporalWarmStart {
-            let bundle = advancedLearners(for: context)
+        if schedulingFeatures.useTemporalWarmStart {
+            let bundle = obtainLearnerSuite(for: context)
             if let warm = bundle.warmStart.seed(context: context) {
                 seeds.append(warm)
             }
         }
-        if advancedFeatures.useGNNWarmStart {
+        if schedulingFeatures.useGNNWarmStart {
             seeds.append(GNNWarmStart.seedChromosome(context: context))
         }
         return seeds
@@ -360,7 +362,7 @@ extension BuboOptimizer {
 
     /// Post-processing on final scenarios: lex ranking, path
     /// relinking, diffusion polish, active-learning pair surfacing.
-    func postProcessScenarios(
+    func refineAndRankScenarios(
         scenarios: [ScheduleScenario],
         context: OptimizerContext,
         evaluator: FitnessEvaluator
@@ -369,8 +371,8 @@ extension BuboOptimizer {
         var current = scenarios
 
         // Active learning pair surfacing.
-        if advancedFeatures.useActiveLearningPair {
-            let bundle = advancedLearners(for: context)
+        if schedulingFeatures.useActiveLearningPair {
+            let bundle = obtainLearnerSuite(for: context)
             if let pair = ScenarioPairActiveSelector.bestPair(
                 scenarios: current, learner: bundle.dpo
             ) {
@@ -380,8 +382,8 @@ extension BuboOptimizer {
 
         // Feed the online objective clusterer with per-scenario
         // objective scores so the EMA correlation matrix updates.
-        if advancedFeatures.useObjectiveClustering {
-            let bundle = advancedLearners(for: context)
+        if schedulingFeatures.useObjectiveClustering {
+            let bundle = obtainLearnerSuite(for: context)
             let names = evaluator.objectives.map(\.name)
             let rows: [[Double]] = current.map { scenario in
                 names.map { scenario.objectiveBreakdown[$0] ?? 0 }
@@ -392,7 +394,7 @@ extension BuboOptimizer {
         }
 
         // Lex ranking.
-        if advancedFeatures.useLexicographicRanking {
+        if schedulingFeatures.useLexicographicRanking {
             let extractor = LexicographicExtractor(evaluator: evaluator)
             let cmp = LexicographicComparator()
             current.sort { a, b in
@@ -405,7 +407,7 @@ extension BuboOptimizer {
         // Path Relinking between the top scenarios. Lifted children
         // are inserted only when they strictly improve and stamped
         // with the same signature so feedback routing still works.
-        if advancedFeatures.usePathRelinking, current.count >= 2 {
+        if schedulingFeatures.usePathRelinking, current.count >= 2 {
             let signature = current.first?.sourceSignature
             let evalClosure: (inout ScheduleChromosome) -> Void = { chromo in
                 evaluator.evaluateAndAssign(&chromo, context: context)
@@ -433,7 +435,7 @@ extension BuboOptimizer {
         }
 
         // Diffusion polish of the #1 scenario.
-        if advancedFeatures.useDiffusionPolish, let top = current.first {
+        if schedulingFeatures.useDiffusionPolish, let top = current.first {
             let evalClosure: (inout ScheduleChromosome) -> Void = { chromo in
                 evaluator.evaluateAndAssign(&chromo, context: context)
             }
@@ -463,19 +465,19 @@ extension BuboOptimizer {
 
 // MARK: - Private state store
 
-/// Per-BuboOptimizer Advanced optimizer state, keyed by instance identity. Using a
+/// Per-BuboOptimizer Learner-state container, keyed by instance identity. Using a
 /// dictionary keyed on `ObjectIdentifier` avoids mutating the main
-/// `@Observable` class on every Advanced optimizer state change — a naive stored
+/// `@Observable` class on every Learner-state container change — a naive stored
 /// property would trigger UI re-renders for every learner update.
-fileprivate final class AdvancedOptimizerStateStore: @unchecked Sendable {
-    private var store: [ObjectIdentifier: AdvancedOptimizerState] = [:]
+fileprivate final class OptimizerLearningStateRegistry: @unchecked Sendable {
+    private var store: [ObjectIdentifier: OptimizerLearningState] = [:]
     private let lock = NSLock()
 
-    func load(key: ObjectIdentifier) -> AdvancedOptimizerState {
+    func load(key: ObjectIdentifier) -> OptimizerLearningState {
         lock.lock()
         defer { lock.unlock() }
         if let existing = store[key] { return existing }
-        let fresh = AdvancedOptimizerState()
+        let fresh = OptimizerLearningState()
         store[key] = fresh
         return fresh
     }
