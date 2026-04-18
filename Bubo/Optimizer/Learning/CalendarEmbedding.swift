@@ -188,6 +188,122 @@ final class CalendarEmbedder: @unchecked Sendable {
         return sums.map { $0 / Double(rows.count) }
     }
 
+    // MARK: - Triplet loss training
+
+    /// One contrastive training step using a triplet (anchor,
+    /// positive, negative) of chromosomes. Margin-based loss:
+    ///   L = max(0, ||emb(anchor) - emb(positive)||² -
+    ///              ||emb(anchor) - emb(negative)||² + margin)
+    /// Updates the projection matrix via finite-difference gradient
+    /// on a random subset of weights — keeps cost per call O(W·k)
+    /// where k = candidatesPerStep, avoiding full O(W) FD which
+    /// would scan 160 weights per pair.
+    @discardableResult
+    func trainTriplet(
+        anchor: ScheduleChromosome,
+        positive: ScheduleChromosome,
+        negative: ScheduleChromosome,
+        context: OptimizerContext,
+        margin: Double = 0.5,
+        learningRate: Double = 0.05,
+        candidatesPerStep: Int = 12
+    ) -> TripletStepResult {
+        let preLoss = currentTripletLoss(
+            anchor: anchor, positive: positive, negative: negative,
+            context: context, margin: margin
+        )
+        guard preLoss > 0 else {
+            return TripletStepResult(preLoss: 0, postLoss: 0, weightUpdates: 0)
+        }
+
+        // Stochastic finite-difference: sample k weights, perturb
+        // each by ±epsilon, take a step in the gradient direction.
+        let epsilon = 1e-3
+        var updates = 0
+
+        lock.lock()
+        // Snapshot dimensions; we mutate `projection` cell-by-cell
+        // outside the lock between forward passes (single-thread
+        // assumption during training is the safe bet).
+        let rowCount = projection.count
+        let colCount = projection.first?.count ?? 0
+        lock.unlock()
+
+        guard rowCount > 0, colCount > 0 else {
+            return TripletStepResult(preLoss: preLoss, postLoss: preLoss, weightUpdates: 0)
+        }
+
+        let totalWeights = rowCount * colCount
+        let actualCandidates = min(candidatesPerStep, totalWeights)
+        var sampledIndices = Set<Int>()
+        let rng = context.rng
+        while sampledIndices.count < actualCandidates {
+            sampledIndices.insert(rng.int(in: 0..<totalWeights))
+        }
+
+        for idx in sampledIndices {
+            let r = idx / colCount
+            let c = idx % colCount
+
+            lock.lock()
+            let original = projection[r][c]
+            projection[r][c] = original + epsilon
+            lock.unlock()
+            let lossPlus = currentTripletLoss(
+                anchor: anchor, positive: positive, negative: negative,
+                context: context, margin: margin
+            )
+
+            lock.lock()
+            projection[r][c] = original - epsilon
+            lock.unlock()
+            let lossMinus = currentTripletLoss(
+                anchor: anchor, positive: positive, negative: negative,
+                context: context, margin: margin
+            )
+
+            // Numerical gradient: descend it.
+            let gradient = (lossPlus - lossMinus) / (2 * epsilon)
+            lock.lock()
+            let updated = original - learningRate * gradient
+            projection[r][c] = max(-3, min(3, updated))
+            lock.unlock()
+            updates += 1
+        }
+
+        let postLoss = currentTripletLoss(
+            anchor: anchor, positive: positive, negative: negative,
+            context: context, margin: margin
+        )
+        return TripletStepResult(
+            preLoss: preLoss,
+            postLoss: postLoss,
+            weightUpdates: updates
+        )
+    }
+
+    /// Returns the triplet loss under the current weights.
+    func currentTripletLoss(
+        anchor: ScheduleChromosome,
+        positive: ScheduleChromosome,
+        negative: ScheduleChromosome,
+        context: OptimizerContext,
+        margin: Double = 0.5
+    ) -> Double {
+        let a = embed(chromosome: anchor, context: context)
+        let p = embed(chromosome: positive, context: context)
+        let n = embed(chromosome: negative, context: context)
+        let dPos = a.distance(to: p)
+        let dNeg = a.distance(to: n)
+        return max(0, dPos * dPos - dNeg * dNeg + margin)
+    }
+
+    struct TripletStepResult: Sendable {
+        let preLoss: Double
+        let postLoss: Double
+        let weightUpdates: Int
+    }
+
     private static func extractGeneFeatures(
         chromosome: ScheduleChromosome,
         context: OptimizerContext

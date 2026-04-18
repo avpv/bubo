@@ -211,6 +211,47 @@ final class ChanceConstrainedBufferStore: @unchecked Sendable {
         defer { lock.unlock() }
         distributions.removeAll()
     }
+
+    // MARK: - Persistence
+
+    /// Snapshot every fitted distribution as flat persistence rows.
+    /// Caller serialises via TrainingPersistence.
+    func exportSnapshot() -> [PersistedChanceBufferStore.Entry] {
+        lock.lock()
+        defer { lock.unlock() }
+        return distributions.map { (sig, dist) in
+            PersistedChanceBufferStore.Entry(
+                titleKey: sig.title,
+                contextKey: sig.context,
+                scheduledDurationBucket: sig.scheduledDurationBucket,
+                count: dist.count,
+                meanLog: dist.meanLog,
+                m2Log: dist.m2Log
+            )
+        }
+    }
+
+    /// Replace in-memory distributions from snapshot rows. Idempotent.
+    func importSnapshot(_ entries: [PersistedChanceBufferStore.Entry]) {
+        lock.lock()
+        defer { lock.unlock() }
+        distributions.removeAll()
+        for entry in entries {
+            // EventSignature normalises title via its init; round-trip
+            // through it so future record() calls hash identically.
+            let scheduled = TimeInterval(entry.scheduledDurationBucket * 15 * 60)
+            let sig = EventSignature(
+                title: entry.titleKey,
+                context: entry.contextKey,
+                scheduledDuration: scheduled
+            )
+            distributions[sig] = DurationDistribution(
+                count: entry.count,
+                meanLog: entry.meanLog,
+                m2Log: entry.m2Log
+            )
+        }
+    }
 }
 
 // MARK: - Normal inverse CDF

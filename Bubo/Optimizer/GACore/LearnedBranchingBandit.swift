@@ -195,4 +195,49 @@ final class LearnedBranchingBandit: @unchecked Sendable {
         meanReward.removeAll()
         totalDecisions = 0
     }
+
+    // MARK: - Persistence
+
+    /// Flatten the (regime, policy) statistics for serialisation.
+    /// Only entries with at least one observation are exported.
+    func exportSnapshot() -> [PersistedBranchingBanditState.Entry] {
+        lock.lock()
+        defer { lock.unlock() }
+        var out: [PersistedBranchingBanditState.Entry] = []
+        out.reserveCapacity(counts.count)
+        for (key, count) in counts {
+            let armCount = BranchingPolicy.allCases.count
+            let armIdx = key % armCount
+            let regime = key / armCount
+            let policy = BranchingPolicy.allCases[armIdx].rawValue
+            out.append(PersistedBranchingBanditState.Entry(
+                regime: regime,
+                policy: policy,
+                count: count,
+                meanReward: meanReward[key] ?? 0
+            ))
+        }
+        return out
+    }
+
+    /// Replace state from a snapshot. Caller is expected to call
+    /// before any observe() so totals stay coherent.
+    func importSnapshot(_ entries: [PersistedBranchingBanditState.Entry]) {
+        lock.lock()
+        defer { lock.unlock() }
+        counts.removeAll()
+        meanReward.removeAll()
+        let armCount = BranchingPolicy.allCases.count
+        var totalObs = 0
+        for entry in entries {
+            guard let armIdx = BranchingPolicy.allCases.firstIndex(where: {
+                $0.rawValue == entry.policy
+            }) else { continue }
+            let key = entry.regime * armCount + armIdx
+            counts[key] = entry.count
+            meanReward[key] = entry.meanReward
+            totalObs += entry.count
+        }
+        totalDecisions = totalObs
+    }
 }

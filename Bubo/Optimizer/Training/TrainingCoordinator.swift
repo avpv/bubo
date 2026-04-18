@@ -304,8 +304,8 @@ final class TrainingCoordinator: @unchecked Sendable {
     ) {
         let snapshot = TrainingSnapshot(
             dpo: TrainingPersistence.capture(dpo: bundle.dpo),
-            buffers: nil,   // ChanceConstrainedBufferStore capture can be added when exposed
-            branching: nil,
+            buffers: TrainingPersistence.capture(buffers: bundle.bufferStore),
+            branching: TrainingPersistence.capture(branching: bundle.branchingBandit),
             savedAt: Date()
         )
         TrainingPersistence.save(snapshot: snapshot, to: path)
@@ -323,6 +323,12 @@ final class TrainingCoordinator: @unchecked Sendable {
               let snapshot = TrainingPersistence.load(from: path) else { return }
         if let dpo = snapshot.dpo {
             TrainingPersistence.restore(dpo: bundle.dpo, from: dpo)
+        }
+        if let buffers = snapshot.buffers {
+            TrainingPersistence.restore(buffers: bundle.bufferStore, from: buffers)
+        }
+        if let branching = snapshot.branching {
+            TrainingPersistence.restore(branching: bundle.branchingBandit, from: branching)
         }
     }
 }

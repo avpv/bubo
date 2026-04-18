@@ -39,16 +39,17 @@ struct GNNNodeFeatures: Sendable {
 }
 
 /// Weights for one GNN round. Input/output dimensions must match the
-/// number of node features (6). Kept as simple value type for thread
-/// safety.
-struct MessagePassingWeights: Sendable {
+/// number of node features (6). Mutable to support online learning;
+/// the trainer rewrites readout / message rows when the GNN's seed
+/// produces high-fitness chromosomes.
+struct MessagePassingWeights: Sendable, Codable {
     /// Message transformation: `m_ij = M · x_j` (row-major, 6×6).
-    let message: [[Double]]
+    var message: [[Double]]
     /// Update: new h_i = tanh(U · [x_i ; agg_j m_ij] ) — concatenation
     /// implemented by layering the 6×12 matrix.
-    let update: [[Double]]
+    var update: [[Double]]
     /// Readout scalar projection: r_i = R · x_i (length 6).
-    let readout: [Double]
+    var readout: [Double]
 
     /// Heuristic weights. No learning; the values are picked to
     /// propagate "urgency" outward from deadline-bearing nodes and
@@ -239,6 +240,15 @@ enum GNNWarmStart {
         return ordered
     }
 
+    /// Build features for a single chromosome — exposed so the
+    /// trainer can credit-assign by gene without redoing graph work.
+    static func featuresFor(
+        context: OptimizerContext
+    ) -> [String: GNNNodeFeatures] {
+        let graph = context.ensureConflictGraph()
+        return buildFeatures(context: context, graph: graph)
+    }
+
     /// Greedy slot-by-slot placement respecting `orderedIds`.
     private static func greedyAssign(
         orderedIds: [String],
@@ -301,5 +311,108 @@ enum GNNWarmStart {
         var chromo = ScheduleChromosome(genes: genes, needsEvaluation: true)
         chromo.repair(context: context)
         return chromo
+    }
+}
+
+// MARK: - Online GNN Trainer
+//
+// Holds mutable MessagePassingWeights and updates them from observed
+// seed-vs-baseline fitness deltas. Update rule:
+//   • Run the readout on each event's hidden vector.
+//   • Identify the top-K events by readout score (those the GNN
+//     recommended schedule earliest).
+//   • If the seeded chromosome's fitness beat the random baseline,
+//     reinforce: nudge readout weights toward those events' feature
+//     vectors (Hebbian +).
+//   • If it underperformed, do the opposite.
+//
+// Conservative update: only the readout vector trains online here —
+// message and update matrices stay heuristic. They could be trained
+// too with a deeper credit-assignment loop, but readout is the
+// dominant lever for "which event surfaces first" and gives the
+// largest behavioural change per learning step.
+
+final class GNNWarmStartTrainer: @unchecked Sendable {
+    struct Configuration: Sendable {
+        let learningRate: Double
+        let topKConsidered: Int
+        let weightCap: Double
+        static let `default` = Configuration(
+            learningRate: 0.05,
+            topKConsidered: 3,
+            weightCap: 2.5
+        )
+    }
+
+    let config: Configuration
+    private let lock = NSLock()
+    private var weightsSnapshot: MessagePassingWeights
+
+    init(initialWeights: MessagePassingWeights = .heuristic, config: Configuration = .default) {
+        self.weightsSnapshot = initialWeights
+        self.config = config
+    }
+
+    var weights: MessagePassingWeights {
+        lock.lock(); defer { lock.unlock() }
+        return weightsSnapshot
+    }
+
+    func setWeights(_ newWeights: MessagePassingWeights) {
+        lock.lock(); defer { lock.unlock() }
+        weightsSnapshot = newWeights
+    }
+
+    /// Seed builder using current weights. Convenience wrapper.
+    func seedChromosome(context: OptimizerContext) -> ScheduleChromosome {
+        GNNWarmStart.seedChromosome(context: context, weights: weights)
+    }
+
+    /// Observe the outcome of one GNN seed run vs. a random baseline
+    /// fitness. The reward `seedFitness − baselineFitness` drives
+    /// the readout update.
+    func observe(
+        context: OptimizerContext,
+        seedFitness: Double,
+        baselineFitness: Double
+    ) {
+        let reward = seedFitness - baselineFitness
+        guard abs(reward) > 1e-4 else { return }
+
+        // Recompute final hidden states for every event under
+        // current weights.
+        let snapshot = weights
+        let scores = GNNWarmStart.priorityScores(context: context, weights: snapshot)
+        let features = GNNWarmStart.featuresFor(context: context)
+        let topIds = scores.sorted { $0.value > $1.value }
+            .prefix(config.topKConsidered)
+            .map(\.key)
+
+        // Aggregate top-K feature vectors as the credit-assignment
+        // direction. Hebbian step: readout += η · sign(reward) · mean(feats).
+        guard !topIds.isEmpty else { return }
+        var avg = [Double](repeating: 0, count: 6)
+        var counted = 0
+        for id in topIds {
+            guard let f = features[id] else { continue }
+            let arr = f.asArray
+            for i in 0..<min(avg.count, arr.count) { avg[i] += arr[i] }
+            counted += 1
+        }
+        guard counted > 0 else { return }
+        for i in 0..<avg.count { avg[i] /= Double(counted) }
+
+        let signedRate = config.learningRate * (reward >= 0 ? 1.0 : -1.0)
+        lock.lock()
+        defer { lock.unlock() }
+        for i in 0..<min(weightsSnapshot.readout.count, avg.count) {
+            let updated = weightsSnapshot.readout[i] + signedRate * avg[i]
+            weightsSnapshot.readout[i] = max(-config.weightCap, min(config.weightCap, updated))
+        }
+    }
+
+    func reset(to initial: MessagePassingWeights = .heuristic) {
+        lock.lock(); defer { lock.unlock() }
+        weightsSnapshot = initial
     }
 }

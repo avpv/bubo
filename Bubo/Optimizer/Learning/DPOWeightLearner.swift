@@ -202,6 +202,19 @@ final class DPOWeightLearner: @unchecked Sendable {
         priorWeights = prior
     }
 
+    /// Replace the live weight vector wholesale. Used by training-
+    /// pipeline restore to rehydrate from a persisted snapshot
+    /// without losing the observation count. Bypasses the regulariser
+    /// and the hard-tier floor — the snapshot is assumed valid.
+    func setWeights(_ newWeights: [String: Double], observedPairs: Int? = nil) {
+        lock.lock()
+        defer { lock.unlock() }
+        weights = newWeights
+        if let obs = observedPairs {
+            self.observedPairs = obs
+        }
+    }
+
     func reset() {
         lock.lock()
         defer { lock.unlock() }

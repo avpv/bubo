@@ -103,8 +103,10 @@ extension BuboOptimizer {
         let bufferStore: ChanceConstrainedBufferStore
         let branchingBandit: LearnedBranchingBandit
         let objectiveClusterer: ObjectiveCorrelationClusterer
+        let gnnTrainer: GNNWarmStartTrainer
+        let migrationBandit: MigrationTopologyBandit
 
-        init() {
+        init(islandCount: Int = 4) {
             self.tabu = TabuMemory()
             self.dpo = DPOWeightLearner(
                 priorWeights: PreferenceLearner.defaultWeights
@@ -114,6 +116,8 @@ extension BuboOptimizer {
             self.bufferStore = ChanceConstrainedBufferStore()
             self.branchingBandit = LearnedBranchingBandit()
             self.objectiveClusterer = ObjectiveCorrelationClusterer()
+            self.gnnTrainer = GNNWarmStartTrainer()
+            self.migrationBandit = MigrationTopologyBandit(islandCount: max(2, islandCount))
         }
     }
 }
@@ -216,14 +220,44 @@ extension BuboOptimizer {
             bundle.warmStart.record(genes: accepted.genes, context: context)
         }
         if schedulingFeatures.useCalendarEmbedding, let context {
-            // Push accepted/rejected embeddings apart — a coarse
-            // contrastive signal. Accept and the top runner-up
-            // implicitly disagree, so we nudge them away.
+            // Real triplet loss: anchor = accepted, positive = the
+            // closest runner-up by fitness (similar enough to
+            // confuse), negative = the worst runner-up (clearly
+            // different in appeal). We do one SGD step per loser
+            // pair so the embedding learns the user's actual
+            // preference manifold, not just a coarse "different"
+            // signal.
             let acceptedChromo = ScheduleChromosome(genes: accepted.genes, needsEvaluation: false)
-            for loser in runnerUps.prefix(2) {
-                let loserChromo = ScheduleChromosome(genes: loser.genes, needsEvaluation: false)
-                bundle.embedder.observeDissimilar(
-                    acceptedChromo, loserChromo, context: context
+            let rankedRunnerUps = runnerUps.sorted { $0.fitness > $1.fitness }
+            if rankedRunnerUps.count >= 2 {
+                let positive = ScheduleChromosome(genes: rankedRunnerUps.first!.genes, needsEvaluation: false)
+                let negative = ScheduleChromosome(genes: rankedRunnerUps.last!.genes, needsEvaluation: false)
+                _ = bundle.embedder.trainTriplet(
+                    anchor: acceptedChromo,
+                    positive: positive,
+                    negative: negative,
+                    context: context
+                )
+            }
+        }
+        if schedulingFeatures.useGNNWarmStart, let _ = context {
+            // Credit the GNN seeder for accepts that beat the
+            // population's median runner-up fitness. The trainer's
+            // online update rule reinforces or weakens readout
+            // weights based on whether the GNN-seeded chromosome
+            // produced the accepted outcome.
+            let runnersFit = runnerUps.map(\.fitness).sorted()
+            let baseline: Double
+            if runnersFit.isEmpty {
+                baseline = accepted.fitness * 0.95
+            } else {
+                baseline = runnersFit[runnersFit.count / 2]
+            }
+            if let context {
+                bundle.gnnTrainer.observe(
+                    context: context,
+                    seedFitness: accepted.fitness,
+                    baselineFitness: baseline
                 )
             }
         }
@@ -345,17 +379,18 @@ extension BuboOptimizer {
     /// Collect warm-start seed chromosomes (temporal replay +
     /// GNN-driven greedy). Called by
     /// optimize() to seed the initial population alongside greedy /
-    /// random individuals.
+    /// random individuals. The GNN seed uses the current trained
+    /// weights so each run benefits from accumulated feedback.
     func collectWarmStartSeeds(context: OptimizerContext) -> [ScheduleChromosome] {
         var seeds: [ScheduleChromosome] = []
+        let bundle = obtainLearnerSuite(for: context)
         if schedulingFeatures.useTemporalWarmStart {
-            let bundle = obtainLearnerSuite(for: context)
             if let warm = bundle.warmStart.seed(context: context) {
                 seeds.append(warm)
             }
         }
         if schedulingFeatures.useGNNWarmStart {
-            seeds.append(GNNWarmStart.seedChromosome(context: context))
+            seeds.append(bundle.gnnTrainer.seedChromosome(context: context))
         }
         return seeds
     }

@@ -98,13 +98,41 @@ enum TrainingPersistence {
         dpo: DPOWeightLearner,
         from persisted: PersistedDPOWeights
     ) {
-        // DPOWeightLearner doesn't expose bulk-set today; we work
-        // around by constructing a fresh learner's prior and
-        // observing synthetic (win - loss) deltas matching the saved
-        // weights. A future revision could add a direct setter.
-        // For now we treat the persisted weights as the new prior;
-        // the learner resets to that state on reset().
-        dpo.updatePrior(persisted.weights)
-        dpo.reset()
+        // Direct rehydration via setWeights: persisted state becomes
+        // the live state without going through the regulariser.
+        // Pair count is preserved so SGD step sizes remain stable.
+        dpo.setWeights(persisted.weights, observedPairs: persisted.observedPairs)
+    }
+
+    // MARK: - Chance-buffer roundtrip
+
+    static func capture(buffers: ChanceConstrainedBufferStore) -> PersistedChanceBufferStore {
+        PersistedChanceBufferStore(
+            entries: buffers.exportSnapshot(),
+            savedAt: Date()
+        )
+    }
+
+    static func restore(
+        buffers: ChanceConstrainedBufferStore,
+        from persisted: PersistedChanceBufferStore
+    ) {
+        buffers.importSnapshot(persisted.entries)
+    }
+
+    // MARK: - Branching bandit roundtrip
+
+    static func capture(branching: LearnedBranchingBandit) -> PersistedBranchingBanditState {
+        PersistedBranchingBanditState(
+            entries: branching.exportSnapshot(),
+            savedAt: Date()
+        )
+    }
+
+    static func restore(
+        branching: LearnedBranchingBandit,
+        from persisted: PersistedBranchingBanditState
+    ) {
+        branching.importSnapshot(persisted.entries)
     }
 }
