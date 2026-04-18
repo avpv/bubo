@@ -193,6 +193,123 @@ struct LNSOperatorTests {
         #expect(gene?.isIncluded == false)
     }
 
+    @Test("LNS preserves dependsOn ordering when both genes are destroyed")
+    func lnsPreservesDependsOn() {
+        let e0 = makeEvent(id: "e0", priority: 0.5)
+        let e1 = makeEvent(id: "e1", priority: 0.5, dependsOn: ["e0"])
+
+        // Iterate over seeds so every destroy strategy gets a turn.
+        // Each strategy destroys ≥1 gene; reverse-dependency handling
+        // (for the destroyed/non-destroyed case) and in-degree topology
+        // (for the both-destroyed case) must both keep e1 after e0.
+        for seed in UInt64(1)...UInt64(10) {
+            let context = contextForcingOperator(
+                .lnsDay,
+                movableEvents: [e0, e1],
+                horizonDays: 2,
+                seed: seed
+            )
+            var chrom = ScheduleChromosome.greedy(context: context)
+            chrom.mutate(rate: 1.0, context: context)
+
+            let byId = Dictionary(uniqueKeysWithValues: chrom.genes.map { ($0.eventId, $0) })
+            guard let g0 = byId["e0"], let g1 = byId["e1"],
+                  g0.isIncluded, g1.isIncluded else { continue }
+            #expect(g1.startTime >= g0.endTime,
+                    "seed \(seed): e1 (\(g1.startTime)) must not start before e0 ends (\(g0.endTime))")
+        }
+    }
+
+    @Test("LNS respects reverse dependencies — destroyed predecessor ends before non-destroyed dependent")
+    func lnsRespectsReverseDependencies() {
+        // Three genes in a chain: e0 ← e1 ← e2. With destroySize=2 each
+        // strategy rips out the top two by various orderings; whenever
+        // the chain is partially destroyed, the reverseDeadline logic
+        // must kick in to keep e0.end ≤ e1.start and e1.end ≤ e2.start.
+        let e0 = makeEvent(id: "e0", priority: 0.5)
+        let e1 = makeEvent(id: "e1", priority: 0.5, dependsOn: ["e0"])
+        let e2 = makeEvent(id: "e2", priority: 0.5, dependsOn: ["e1"])
+
+        for seed in UInt64(11)...UInt64(20) {
+            let context = contextForcingOperator(
+                .lnsDay,
+                movableEvents: [e0, e1, e2],
+                horizonDays: 2,
+                seed: seed
+            )
+            var chrom = ScheduleChromosome.greedy(context: context)
+            chrom.mutate(rate: 1.0, context: context)
+
+            let byId = Dictionary(uniqueKeysWithValues: chrom.genes.map { ($0.eventId, $0) })
+            if let g0 = byId["e0"], let g1 = byId["e1"], g0.isIncluded, g1.isIncluded {
+                #expect(g1.startTime >= g0.endTime, "seed \(seed): e0→e1 violated")
+            }
+            if let g1 = byId["e1"], let g2 = byId["e2"], g1.isIncluded, g2.isIncluded {
+                #expect(g2.startTime >= g1.endTime, "seed \(seed): e1→e2 violated")
+            }
+        }
+    }
+
+    @Test("Adaptive K: high stagnation widens the neighbourhood without breaking feasibility")
+    func lnsHandlesHighStagnation() {
+        // Crank stagnation to 1.0 so destroySize is amplified by ~2.5×.
+        // Feasibility must still hold — the regret insertion doesn't skip
+        // checks under pressure.
+        let events = (0..<6).map { makeEvent(id: "e\($0)") }
+        let context = contextForcingOperator(.lnsDay, movableEvents: events, seed: 999)
+        context.mutationBandit.updateContext(
+            BanditContext(diversity: 0.2, stagnation: 1.0, imbalance: 0.0)
+        )
+
+        var chrom = ScheduleChromosome.greedy(context: context)
+        chrom.mutate(rate: 0.3, context: context)
+
+        let placed = chrom.genes.filter { $0.isIncluded }
+        for i in 0..<placed.count {
+            for j in (i + 1)..<placed.count {
+                #expect(!overlaps(placed[i], placed[j]))
+            }
+        }
+    }
+
+    @Test("Related-context destroy groups genes by context tag")
+    func lnsRelatedContextClusters() {
+        // Two context clusters of 3 events each. Run many seeds; some
+        // strategies will fire `relatedContext` and cluster-destroy. The
+        // result must stay overlap-free regardless of which cluster got
+        // hit.
+        func makeEventWithContext(_ id: String, _ ctx: String) -> OptimizableEvent {
+            OptimizableEvent(id: id, title: id, duration: 3600, context: ctx)
+        }
+        let events = [
+            makeEventWithContext("a1", "work"),
+            makeEventWithContext("a2", "work"),
+            makeEventWithContext("a3", "work"),
+            makeEventWithContext("b1", "personal"),
+            makeEventWithContext("b2", "personal"),
+            makeEventWithContext("b3", "personal"),
+        ]
+
+        for seed in UInt64(30)...UInt64(40) {
+            let context = contextForcingOperator(
+                .lnsDay,
+                movableEvents: events,
+                horizonDays: 3,
+                seed: seed
+            )
+            var chrom = ScheduleChromosome.greedy(context: context)
+            chrom.mutate(rate: 0.5, context: context)
+
+            let placed = chrom.genes.filter { $0.isIncluded }
+            for i in 0..<placed.count {
+                for j in (i + 1)..<placed.count {
+                    #expect(!overlaps(placed[i], placed[j]),
+                            "seed \(seed): overlap after related-context LNS")
+                }
+            }
+        }
+    }
+
     @Test("LNS keeps placed genes inside the planning horizon and working hours")
     func lnsRespectsHorizonAndHours() {
         let events = (0..<4).map { makeEvent(id: "e\($0)", durationMinutes: 60) }

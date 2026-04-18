@@ -336,6 +336,90 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         return nil
     }
 
+    /// Symmetric counterpart to `findFirstFreeSlot`: walks the horizon in
+    /// reverse and returns the *latest* feasible start time that still
+    /// respects working hours, the deadline, the earliestStart/dependency
+    /// floor, and every interval in `occupied`. Used by the LNS regret
+    /// insertion to measure each gene's placement window — the smaller
+    /// the gap between earliest and latest, the tighter the gene and the
+    /// higher its regret if deferred.
+    ///
+    /// Returns `nil` when no 15-minute-aligned slot fits anywhere. Same
+    /// semantics as `findFirstFreeSlot`: dependency satisfaction is
+    /// checked against `placedGenes`, the caller supplies `occupied`
+    /// minus any genes that are themselves about to move.
+    private static func findLastFreeSlot(
+        duration: TimeInterval,
+        preferredHours: ClosedRange<Int>?,
+        occupied: [(start: Date, end: Date)],
+        horizon: DateInterval,
+        workingHours: ClosedRange<Int>,
+        calendar: Calendar,
+        earliestStart: Date?,
+        deadline: Date?,
+        dependsOn: [String],
+        placedGenes: [ScheduleGene],
+        genesByEvent: [String: Int]
+    ) -> Date? {
+        let horizonStartDay = calendar.startOfDay(for: horizon.start)
+        let horizonLastDay = calendar.startOfDay(for: horizon.end.addingTimeInterval(-1))
+        let daysInHorizon = max(1, (calendar.dateComponents([.day], from: horizonStartDay, to: horizonLastDay).day ?? 0) + 1)
+
+        var floor = earliestStart ?? horizon.start
+        if floor < horizon.start { floor = horizon.start }
+        for depId in dependsOn {
+            if let depGene = placedGenes.first(where: { $0.eventId == depId && $0.isIncluded }) {
+                floor = max(floor, depGene.endTime)
+            }
+        }
+
+        let ceiling = deadline.map { min($0, horizon.end) } ?? horizon.end
+
+        // Walk days in reverse, searching for the latest feasible start.
+        for dayOffset in stride(from: daysInHorizon - 1, through: 0, by: -1) {
+            guard let day = calendar.date(byAdding: .day, value: dayOffset, to: horizonStartDay) else { continue }
+            let hourRange = preferredHours ?? workingHours
+            guard let dayWorkStart = calendar.date(bySettingHour: hourRange.lowerBound, minute: 0, second: 0, of: day),
+                  let dayWorkEnd = calendar.date(bySettingHour: min(hourRange.upperBound, workingHours.upperBound), minute: 0, second: 0, of: day) else { continue }
+
+            let dayFloor = max(dayWorkStart, floor)
+            let dayEnd = min(dayWorkEnd, ceiling)
+            let latestStartOnDay = dayEnd.addingTimeInterval(-duration)
+            if latestStartOnDay < dayFloor { continue }
+
+            // Snap latestStartOnDay down to a 15-min grid so we match
+            // findFirstFreeSlot's stepping and the two functions agree on
+            // boundary cases.
+            let secs = latestStartOnDay.timeIntervalSinceReferenceDate
+            let snapped = Date(timeIntervalSinceReferenceDate: (secs / 900).rounded(.down) * 900)
+            var candidate = min(latestStartOnDay, snapped)
+
+            while candidate >= dayFloor {
+                let candidateEnd = candidate.addingTimeInterval(duration)
+                if candidateEnd <= ceiling {
+                    let hasOverlap = occupied.contains { occ in
+                        candidate < occ.end && candidateEnd > occ.start
+                    }
+                    if !hasOverlap {
+                        return candidate
+                    }
+                }
+
+                // Step back before the blocker so we skip its span in
+                // one jump; otherwise retreat by 15 minutes.
+                if let blocker = occupied.first(where: { candidate < $0.end && candidateEnd > $0.start }) {
+                    let prevEnd = blocker.start.addingTimeInterval(-duration)
+                    let s = prevEnd.timeIntervalSinceReferenceDate
+                    candidate = Date(timeIntervalSinceReferenceDate: (s / 900).rounded(.down) * 900)
+                } else {
+                    candidate = candidate.addingTimeInterval(-900)
+                }
+            }
+        }
+
+        return nil
+    }
+
     // MARK: - Crossover (Order-based)
 
     func crossover(with other: ScheduleChromosome, context: OptimizerContext) -> (ScheduleChromosome, ScheduleChromosome) {
@@ -529,73 +613,219 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
 
     // MARK: - LNS (Large Neighborhood Search) Operator
 
-    /// Destroy a coherent subset of the schedule and greedily re-insert every
-    /// destroyed gene into the best feasible slot.
-    ///
-    /// Two destroy strategies are mixed (60/40):
-    /// - **Day destroy** (wider): remove every included gene sitting on one
-    ///   randomly-chosen day. Good when the intra-day layout is gridlocked
-    ///   and small shifts can't escape.
-    /// - **Top-K destroy** (surgical): remove the top-K genes by priority.
-    ///   Good when a few high-value tasks are in bad slots but the overall
-    ///   shape is fine. K scales with the effective mutation rate so an
-    ///   aggressive rate → bigger neighbourhood.
-    ///
-    /// Repair places the destroyed genes in priority-desc / deadline-asc /
-    /// duration-asc order — tighter-constrained genes claim scarce slots
-    /// first. Dependency floors within the destroyed subset resolve
-    /// naturally because each newly-placed gene is written back to
-    /// `self.genes` before the next lookup, and `findFirstFreeSlot` reads
-    /// predecessor end times from that array. Residual dependency
-    /// violations (rare: a dependent sorted before its predecessor) fall
-    /// to the main `repair()` pass the GA runs next.
-    ///
-    /// Complexity per call: O(D · N) where D = destroyed count, N = total
-    /// genes, dominated by per-gene `findFirstFreeSlot` scans. For a 50-event
-    /// week this is ~100 µs, cheaper than a full fitness evaluation and
-    /// roughly the cost of the `guided` operator multiplied by D.
-    private mutating func applyLNS(rate: Double, context: OptimizerContext) -> IndexSet? {
-        let cal = context.calendar
-        let horizon = context.planningHorizon
+    /// Destroy heuristic family. Each call picks one strategy uniformly.
+    /// Mirrors the Shaw / Ropke & Pisinger taxonomy: a wide destroy plus
+    /// several narrower, structure-aware destroys so the neighbourhood
+    /// distribution covers both coarse and surgical moves.
+    private enum DestroyStrategy: CaseIterable {
+        /// Every gene sitting on one randomly-chosen day.
+        case day
+        /// Top-K genes by priority descending.
+        case topPriority
+        /// K uniformly-random genes.
+        case random
+        /// Seed + genes sharing its context tag (or priority band if the
+        /// seed has no tag). Named "related" after Shaw (1998).
+        case relatedContext
+        /// Genes with the worst placement fit: most overlaps, deadline
+        /// misses, out-of-hours. Classic "worst removal".
+        case worstFit
+    }
 
+    /// Destroy a coherent subset of the schedule and re-insert every
+    /// destroyed gene via regret-based insertion under topological
+    /// precedence.
+    ///
+    /// **Destroy**: one of five strategies (`day`, `topPriority`, `random`,
+    /// `relatedContext`, `worstFit`) picked uniformly per call.
+    ///
+    /// **Adaptive K**: destroy size scales with both the effective mutation
+    /// rate *and* the bandit's stagnation signal. When the GA is stuck
+    /// (`stagnation ≈ 1`), K inflates by up to 2.5×, widening the search
+    /// neighbourhood exactly when small local moves stop paying off.
+    ///
+    /// **Repair**: regret-k (k=2) insertion with topological precedence.
+    /// At each step we compute, for every ready gene (all destroyed
+    /// predecessors already re-placed), its earliest and latest feasible
+    /// slot; the "tightest" gene (smallest earliest↔latest window) is
+    /// placed at its earliest slot. Ties are broken by priority desc.
+    /// This beats pure priority-order greedy because it commits scarce
+    /// slots before windows close.
+    ///
+    /// **Reverse dependencies**: when a destroyed gene Y has a non-destroyed
+    /// dependent X already placed at time T, Y's effective deadline becomes
+    /// `min(Y.deadline, X.startTime)` — otherwise we could place Y after
+    /// X and silently break the ordering.
+    ///
+    /// Complexity per call: O(D² · N) where D = destroyed count, N = total
+    /// genes, from recomputing every ready gene's earliest/latest window on
+    /// each placement. With D ≤ 15 and N ≤ 200 this stays under 1 ms on
+    /// typical hardware — cheaper than a full fitness evaluation.
+    private mutating func applyLNS(rate: Double, context: OptimizerContext) -> IndexSet? {
         let includedIndices = genes.indices.filter { genes[$0].isIncluded }
         guard !includedIndices.isEmpty else { return nil }
 
-        // Destroy size for top-K branch. Scales with rate so high rates
-        // take bigger bites; clamped to [2, min(10, included.count)] so a
-        // single call never touches more than ~10 genes (beyond that the
-        // repair pass degrades to the same quality as `random()`).
-        let targetSize = Int((Double(includedIndices.count) * max(0.15, rate * 2.0)).rounded())
-        let destroySize = max(2, min(min(10, includedIndices.count), targetSize))
+        // Adaptive K: base size from rate, amplified by stagnation. The
+        // bandit already exposes `stagnation` as part of `BanditContext`;
+        // reading it here gives the operator the same regime awareness
+        // arm selection uses, without plumbing it through every call.
+        let stagnation = context.mutationBandit.lastContext.stagnation
+        let baseK = Int((Double(includedIndices.count) * max(0.15, rate * 2.0)).rounded())
+        let adaptiveK = Int((Double(baseK) * (1.0 + 1.5 * stagnation)).rounded())
+        let destroySize = max(2, min(min(15, includedIndices.count), adaptiveK))
 
-        // Pick the destroy set.
-        var destroyedIndices: [Int] = []
-        let useDayDestroy = context.rng.bool(probability: 0.6)
-        if useDayDestroy {
-            let byDay = Dictionary(grouping: includedIndices) {
-                cal.startOfDay(for: genes[$0].startTime)
-            }
-            let days = Array(byDay.keys)
-            if !days.isEmpty {
-                let chosenDay = days[context.rng.int(in: 0..<days.count)]
-                destroyedIndices = byDay[chosenDay] ?? []
-            }
-        }
+        let strategies = DestroyStrategy.allCases
+        let strategy = strategies[context.rng.int(in: 0..<strategies.count)]
+
+        var destroyedIndices = destroy(
+            strategy: strategy,
+            includedIndices: includedIndices,
+            destroySize: destroySize,
+            context: context
+        )
+        // Fallback to top-priority if the chosen strategy returned nothing
+        // (e.g. `day` on an empty-day seed). Guarantees forward progress.
         if destroyedIndices.isEmpty {
-            destroyedIndices = includedIndices
-                .sorted { genes[$0].priority > genes[$1].priority }
-                .prefix(destroySize)
-                .map { $0 }
+            destroyedIndices = destroy(
+                strategy: .topPriority,
+                includedIndices: includedIndices,
+                destroySize: destroySize,
+                context: context
+            )
         }
         guard !destroyedIndices.isEmpty else { return nil }
 
-        // Occupied = fixed events + every still-placed gene. Destroyed
-        // genes are excluded so their old slot is free for re-insertion.
-        let destroyedSet = Set(destroyedIndices)
+        return regretRepair(destroyed: Set(destroyedIndices), context: context)
+    }
+
+    /// Execute one destroy strategy, returning the indices to rip out.
+    /// Each branch is self-contained and produces up to `destroySize`
+    /// indices from `includedIndices`. Non-mutating — destruction happens
+    /// implicitly later by excluding these from the occupied set.
+    private func destroy(
+        strategy: DestroyStrategy,
+        includedIndices: [Int],
+        destroySize: Int,
+        context: OptimizerContext
+    ) -> [Int] {
+        switch strategy {
+        case .day:
+            let byDay = Dictionary(grouping: includedIndices) {
+                context.calendar.startOfDay(for: genes[$0].startTime)
+            }
+            let days = Array(byDay.keys)
+            guard !days.isEmpty else { return [] }
+            let chosen = days[context.rng.int(in: 0..<days.count)]
+            return byDay[chosen] ?? []
+
+        case .topPriority:
+            return includedIndices
+                .sorted { genes[$0].priority > genes[$1].priority }
+                .prefix(destroySize)
+                .map { $0 }
+
+        case .random:
+            // Fisher–Yates partial shuffle: O(k) instead of full shuffle.
+            var pool = includedIndices
+            var picked: [Int] = []
+            picked.reserveCapacity(destroySize)
+            for _ in 0..<min(destroySize, pool.count) {
+                let j = context.rng.int(in: 0..<pool.count)
+                picked.append(pool[j])
+                pool.swapAt(j, pool.count - 1)
+                pool.removeLast()
+            }
+            return picked
+
+        case .relatedContext:
+            // Seed a random gene; pull in siblings sharing its context
+            // tag. If the seed has no tag, fall back to priority within
+            // ±0.1 of the seed — gives "related by importance" behaviour.
+            let seedIdx = includedIndices[context.rng.int(in: 0..<includedIndices.count)]
+            let seedGene = genes[seedIdx]
+            let candidates: [Int]
+            if let seedCtx = seedGene.context {
+                candidates = includedIndices.filter { genes[$0].context == seedCtx }
+            } else {
+                let seedP = seedGene.priority
+                candidates = includedIndices.filter { abs(genes[$0].priority - seedP) <= 0.1 }
+            }
+            var ordered = [seedIdx]
+            for idx in candidates where idx != seedIdx {
+                ordered.append(idx)
+                if ordered.count >= destroySize { break }
+            }
+            return ordered
+
+        case .worstFit:
+            let eventById: [String: OptimizableEvent] = Dictionary(
+                uniqueKeysWithValues: context.movableEvents.map { ($0.id, $0) }
+            )
+            let cal = context.calendar
+            var scored: [(idx: Int, score: Double)] = []
+            scored.reserveCapacity(includedIndices.count)
+            for i in includedIndices {
+                let gi = genes[i]
+                var s = 0.0
+                // Overlap with fixed events
+                for f in context.fixedEvents where gi.startTime < f.endDate && f.startDate < gi.endTime {
+                    s += 1.0
+                }
+                // Overlap with other movable genes (halved to avoid
+                // double-counting when both ends sit on an overlap pair)
+                for j in includedIndices where j != i {
+                    let gj = genes[j]
+                    if gi.startTime < gj.endTime && gj.startTime < gi.endTime {
+                        s += 0.5
+                    }
+                }
+                // Deadline miss
+                if let dl = eventById[gi.eventId]?.deadline, gi.endTime > dl {
+                    s += 2.0
+                }
+                // Start outside working hours
+                let hour = cal.component(.hour, from: gi.startTime)
+                if hour < context.workingHours.lowerBound || hour > context.workingHours.upperBound {
+                    s += 0.5
+                }
+                scored.append((i, s))
+            }
+            scored.sort { a, b in
+                if a.score != b.score { return a.score > b.score }
+                return genes[a.idx].priority > genes[b.idx].priority
+            }
+            return scored.prefix(destroySize).map { $0.idx }
+        }
+    }
+
+    /// Regret-based insertion under topological precedence.
+    ///
+    /// Builds a ready queue of destroyed genes whose prerequisites have
+    /// all been re-placed (or were never destroyed). At each step,
+    /// computes the earliest and latest feasible slot for every ready
+    /// gene, picks the one with the smallest window — that's the gene
+    /// most at risk of losing its slot — and places it at its earliest
+    /// feasible start. Placement unlocks any dependents.
+    ///
+    /// Reverse-dependency deadlines (destroyed predecessor of a
+    /// still-placed dependent) are folded into the per-gene `deadline`
+    /// override so `findFirstFreeSlot` enforces them without new
+    /// parameters.
+    ///
+    /// Residual dependency cycles (data bug) short-circuit: if the ready
+    /// queue empties while destroyed genes remain unplaced, we append the
+    /// rest in priority order — same fallback as `topoOrderedIndices`.
+    private mutating func regretRepair(
+        destroyed: Set<Int>,
+        context: OptimizerContext
+    ) -> IndexSet? {
+        let cal = context.calendar
+        let horizon = context.planningHorizon
+
         var occupied: [(start: Date, end: Date)] = context.fixedEvents.map {
             ($0.startDate, $0.endDate)
         }
-        for (j, gene) in genes.enumerated() where gene.isIncluded && !destroyedSet.contains(j) {
+        for (j, gene) in genes.enumerated() where gene.isIncluded && !destroyed.contains(j) {
             occupied.append((gene.startTime, gene.endTime))
         }
         occupied.sort { $0.start < $1.start }
@@ -607,58 +837,170 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
             uniqueKeysWithValues: genes.enumerated().map { ($1.eventId, $0) }
         )
 
-        // Repair order: priority desc, then earlier deadline, then shorter
-        // duration. Mirrors the greedy initializer so LNS explores the
-        // same "tight-first" placement neighbourhood the GA starts from.
-        let repairOrder = destroyedIndices.sorted { a, b in
-            if genes[a].priority != genes[b].priority {
-                return genes[a].priority > genes[b].priority
+        // Topological in-degree over the destroyed subset only.
+        // Dependencies satisfied by non-destroyed predecessors are
+        // already reflected in `occupied`.
+        var inDegree: [Int: Int] = [:]
+        var destroyedDependents: [Int: [Int]] = [:]
+        for i in destroyed { inDegree[i] = 0 }
+        for i in destroyed {
+            guard let event = eventById[genes[i].eventId] else { continue }
+            for depId in event.dependsOn {
+                if let depIdx = genesByEvent[depId], destroyed.contains(depIdx) {
+                    destroyedDependents[depIdx, default: []].append(i)
+                    inDegree[i, default: 0] += 1
+                }
             }
-            let da = eventById[genes[a].eventId]?.deadline
-            let db = eventById[genes[b].eventId]?.deadline
-            if let da, let db { return da < db }
-            if da != nil { return true }
-            if db != nil { return false }
-            return genes[a].duration < genes[b].duration
         }
 
-        var changed = IndexSet()
-        for idx in repairOrder {
-            let event = eventById[genes[idx].eventId]
-            let slot = Self.findFirstFreeSlot(
-                duration: genes[idx].duration,
-                preferredHours: event?.preferredHourRange,
-                occupied: occupied,
-                horizon: horizon,
-                workingHours: context.workingHours,
-                calendar: cal,
-                earliestStart: event?.earliestStart,
-                deadline: event?.deadline,
-                dependsOn: event?.dependsOn ?? [],
-                placedGenes: genes,
-                genesByEvent: genesByEvent
-            )
+        // Reverse-dependency ceilings. If destroyed gene Y has a
+        // non-destroyed dependent X already placed at startTime T, Y must
+        // finish by T.
+        var reverseDeadline: [Int: Date] = [:]
+        for (j, g) in genes.enumerated() where g.isIncluded && !destroyed.contains(j) {
+            guard let ev = eventById[g.eventId] else { continue }
+            for depId in ev.dependsOn {
+                guard let depIdx = genesByEvent[depId], destroyed.contains(depIdx) else { continue }
+                let cur = reverseDeadline[depIdx] ?? .distantFuture
+                if g.startTime < cur { reverseDeadline[depIdx] = g.startTime }
+            }
+        }
 
-            if let slot {
-                if genes[idx].startTime != slot {
-                    genes[idx] = genes[idx].withStartTime(slot)
-                    changed.insert(idx)
+        var ready = Set(destroyed.filter { (inDegree[$0] ?? 0) == 0 })
+        var changed = IndexSet()
+
+        while !ready.isEmpty {
+            // Regret pass: for every ready gene, compute earliest slot
+            // (primary placement) and latest slot (window ceiling). The
+            // gene with the smallest earliest↔latest window goes first.
+            var best: (idx: Int, slot: Date, window: TimeInterval)? = nil
+            var fallbackIdx: Int? = nil
+
+            for idx in ready {
+                let event = eventById[genes[idx].eventId]
+                // Effective deadline = min(original, reverse-dep ceiling).
+                // Kept inline rather than via nested function so there's no
+                // ambiguity about self-capture in the mutating context.
+                let origDL = event?.deadline
+                let revDL = reverseDeadline[idx]
+                let deadline: Date?
+                if let o = origDL, let r = revDL { deadline = min(o, r) }
+                else if let o = origDL { deadline = o }
+                else if let r = revDL { deadline = r }
+                else { deadline = nil }
+                let earliest = Self.findFirstFreeSlot(
+                    duration: genes[idx].duration,
+                    preferredHours: event?.preferredHourRange,
+                    occupied: occupied,
+                    horizon: horizon,
+                    workingHours: context.workingHours,
+                    calendar: cal,
+                    earliestStart: event?.earliestStart,
+                    deadline: deadline,
+                    dependsOn: event?.dependsOn ?? [],
+                    placedGenes: genes,
+                    genesByEvent: genesByEvent
+                )
+                guard let earliestSlot = earliest else {
+                    if fallbackIdx == nil { fallbackIdx = idx }
+                    continue
                 }
-                occupied.append((slot, slot.addingTimeInterval(genes[idx].duration)))
-                occupied.sort { $0.start < $1.start }
-            } else if genes[idx].isDroppable {
-                // No feasible slot anywhere in the horizon → drop. The
-                // main repair pass would arrive at the same verdict; doing
-                // it here means the fitness evaluator sees the correct
-                // inclusion flag without a second pass.
-                if genes[idx].isIncluded {
-                    genes[idx].isIncluded = false
-                    changed.insert(idx)
+                let latestSlot = Self.findLastFreeSlot(
+                    duration: genes[idx].duration,
+                    preferredHours: event?.preferredHourRange,
+                    occupied: occupied,
+                    horizon: horizon,
+                    workingHours: context.workingHours,
+                    calendar: cal,
+                    earliestStart: event?.earliestStart,
+                    deadline: deadline,
+                    dependsOn: event?.dependsOn ?? [],
+                    placedGenes: genes,
+                    genesByEvent: genesByEvent
+                ) ?? earliestSlot
+
+                let window = max(0, latestSlot.timeIntervalSince(earliestSlot))
+                if let b = best {
+                    // Smaller window = tighter = place first. Tie-break
+                    // by priority desc so high-priority genes win head-
+                    // to-head with same-tightness genes.
+                    let windowTight = window < b.window
+                    let windowTie = window == b.window
+                    let higherPriority = genes[idx].priority > genes[b.idx].priority
+                    if windowTight || (windowTie && higherPriority) {
+                        best = (idx, earliestSlot, window)
+                    }
+                } else {
+                    best = (idx, earliestSlot, window)
                 }
             }
-            // else: non-droppable with no slot → leave in place. The main
-            // repair pass runs next and will either find a slot or leave
-            // the overlap for ConstraintEngine to penalise.
+
+            let chosenIdx: Int
+            let chosenSlot: Date?
+            if let b = best {
+                chosenIdx = b.idx
+                chosenSlot = b.slot
+            } else if let fb = fallbackIdx {
+                chosenIdx = fb
+                chosenSlot = nil
+            } else {
+                break
+            }
+
+            if let slot = chosenSlot {
+                if genes[chosenIdx].startTime != slot {
+                    genes[chosenIdx] = genes[chosenIdx].withStartTime(slot)
+                    changed.insert(chosenIdx)
+                }
+                occupied.append((slot, slot.addingTimeInterval(genes[chosenIdx].duration)))
+                occupied.sort { $0.start < $1.start }
+            } else if genes[chosenIdx].isDroppable {
+                if genes[chosenIdx].isIncluded {
+                    genes[chosenIdx].isIncluded = false
+                    changed.insert(chosenIdx)
+                }
+            }
+            // else: non-droppable with no slot — leave in place; main
+            // repair pass handles it.
+
+            ready.remove(chosenIdx)
+            for dep in destroyedDependents[chosenIdx] ?? [] {
+                let next = (inDegree[dep] ?? 0) - 1
+                inDegree[dep] = next
+                if next == 0 { ready.insert(dep) }
+            }
+        }
+
+        // Cycle fallback: any destroyed genes still carrying inDegree > 0
+        // are part of a cycle. Place them in priority order without
+        // precedence checks; `repair()` downstream will arbitrate.
+        let stranded = destroyed.filter { (inDegree[$0] ?? 0) > 0 }
+        if !stranded.isEmpty {
+            let inPriorityOrder = stranded.sorted { genes[$0].priority > genes[$1].priority }
+            for idx in inPriorityOrder {
+                let event = eventById[genes[idx].eventId]
+                let slot = Self.findFirstFreeSlot(
+                    duration: genes[idx].duration,
+                    preferredHours: event?.preferredHourRange,
+                    occupied: occupied,
+                    horizon: horizon,
+                    workingHours: context.workingHours,
+                    calendar: cal,
+                    earliestStart: event?.earliestStart,
+                    deadline: event?.deadline,
+                    dependsOn: [],
+                    placedGenes: genes,
+                    genesByEvent: genesByEvent
+                )
+                if let slot {
+                    if genes[idx].startTime != slot {
+                        genes[idx] = genes[idx].withStartTime(slot)
+                        changed.insert(idx)
+                    }
+                    occupied.append((slot, slot.addingTimeInterval(genes[idx].duration)))
+                    occupied.sort { $0.start < $1.start }
+                }
+            }
         }
 
         return changed.isEmpty ? nil : changed

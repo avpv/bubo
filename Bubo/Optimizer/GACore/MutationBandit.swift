@@ -148,6 +148,16 @@ final class MutationBandit: @unchecked Sendable {
         lock.unlock()
     }
 
+    /// Read-only snapshot of the latest context. Exposed so operators that
+    /// want to scale their neighbourhood with the same stagnation /
+    /// diversity signal the bandit selects on can read it directly
+    /// instead of threading the signal through `OptimizerContext`.
+    var lastContext: BanditContext {
+        lock.lock()
+        defer { lock.unlock() }
+        return currentContext
+    }
+
     // MARK: - Select
 
     /// Pick the operator with the highest LinUCB score for the current
