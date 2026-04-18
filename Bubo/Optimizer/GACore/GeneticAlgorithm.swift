@@ -320,6 +320,15 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
     let config: GAConfiguration
     let context: OptimizerContext
     private let evaluate: (inout C) -> Void
+
+    /// Optional batch evaluator. When present, offspring are scored
+    /// with this closure in one shot instead of the per-chromosome
+    /// loop. Lets the caller install a multi-fidelity funnel
+    /// (surrogate tier + promoted tier-2 full evaluation) without
+    /// per-individual overhead. When nil the engine falls back to
+    /// the per-chromosome `evaluate` closure.
+    private let batchEvaluate: ((inout [C]) -> Void)?
+
     private var onProgress: ((GAProgress) -> Void)?
     private let multiObjective: MultiObjectiveContext<C>?
 
@@ -339,11 +348,13 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         evaluate: @escaping (inout C) -> Void,
         onProgress: ((GAProgress) -> Void)? = nil,
         multiObjective: MultiObjectiveContext<C>? = nil,
-        hooks: EvolutionHooks<C> = .noop
+        hooks: EvolutionHooks<C> = .noop,
+        batchEvaluate: ((inout [C]) -> Void)? = nil
     ) {
         self.config = config
         self.context = context
         self.evaluate = evaluate
+        self.batchEvaluate = batchEvaluate
         self.onProgress = onProgress
         self.multiObjective = multiObjective
         self.hooks = hooks
@@ -689,9 +700,13 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             }
         }
 
-        // Fitness evaluation: parallel when running standalone,
-        // sequential when called from IslandModelGA (which parallelizes at island level).
-        if parallelEvaluation && offspring.count > 1 {
+        // Fitness evaluation: prefer the batch path when wired so
+        // the multi-fidelity funnel can rank-then-promote across the
+        // whole offspring array. Per-chromosome fallback preserves
+        // parallelism via concurrentPerform.
+        if let batchEvaluate {
+            batchEvaluate(&offspring)
+        } else if parallelEvaluation && offspring.count > 1 {
             DispatchQueue.concurrentPerform(iterations: offspring.count) { i in
                 self.evaluate(&offspring[i])
             }

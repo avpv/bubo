@@ -241,6 +241,13 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
     /// back after each migration round.
     let migrationBandit: MigrationTopologyBandit?
 
+    /// Optional batch evaluator propagated into every per-island
+    /// `GeneticAlgorithm`. Enables the multi-fidelity funnel path
+    /// where a surrogate ranks the offspring array and only the top
+    /// fraction gets a real evaluation. nil = each inner GA evaluates
+    /// offspring one-by-one using its per-chromosome `evaluate`.
+    let batchEvaluate: ((inout [C]) -> Void)?
+
     private(set) var bestEver: C?
     private(set) var convergenceGeneration: Int = 0
 
@@ -254,7 +261,8 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         hooks: EvolutionHooks<C> = .noop,
         federatedBandit: FederatedMutationBandit? = nil,
         extraSeeds: [C] = [],
-        migrationBandit: MigrationTopologyBandit? = nil
+        migrationBandit: MigrationTopologyBandit? = nil,
+        batchEvaluate: ((inout [C]) -> Void)? = nil
     ) {
         self.islandConfig = islandConfig
         self.baseConfig = baseConfig
@@ -266,6 +274,7 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         self.federatedBandit = federatedBandit
         self.extraSeeds = extraSeeds
         self.migrationBandit = migrationBandit
+        self.batchEvaluate = batchEvaluate
     }
 
     // MARK: - Run
@@ -328,7 +337,8 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
                 context: islandContext,
                 evaluate: evaluate,
                 multiObjective: multiObjective,
-                hooks: hooks
+                hooks: hooks,
+                batchEvaluate: batchEvaluate
             )
             return Island(population: pop, ga: ga, context: islandContext)
         }
@@ -415,7 +425,8 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
                 context: islandContext,
                 evaluate: evaluate,
                 multiObjective: multiObjective,
-                hooks: hooks
+                hooks: hooks,
+                batchEvaluate: batchEvaluate
             )
             return Island(population: pop, ga: ga, context: islandContext)
         }

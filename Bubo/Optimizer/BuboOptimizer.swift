@@ -322,6 +322,25 @@ final class BuboOptimizer {
             ? learnerSuite.migrationBandit
             : nil
 
+        // Multi-fidelity funnel: when enabled, wrap the per-chromo
+        // surrogate-assisted evaluator into a batch screen +
+        // tier-2 promotion. Declared as a `@Sendable` closure so it
+        // can cross the Task.detached boundary without the
+        // evaluator's inout state leaking.
+        let multiFidelityBatch: (@Sendable (inout [ScheduleChromosome]) -> Void)?
+        if schedulingFeatures.useMultiFidelityFunnel {
+            let funnel = MultiFidelityEvaluator(
+                surrogate: workloadLearners.surrogate,
+                evaluator: evaluator
+            )
+            let adjustedCtxLocal = adjustedContext
+            multiFidelityBatch = { batch in
+                _ = funnel.evaluateBatch(&batch, context: adjustedCtxLocal)
+            }
+        } else {
+            multiFidelityBatch = nil
+        }
+
         let (population, convergenceGen, duration) = await Task.detached(priority: .userInitiated) {
             let startTime = Date()
 
@@ -333,7 +352,8 @@ final class BuboOptimizer {
                 multiObjective: multiObjective,
                 hooks: hooks,
                 extraSeeds: extraSeeds,
-                migrationBandit: migrationBandit
+                migrationBandit: migrationBandit,
+                batchEvaluate: multiFidelityBatch
             )
 
             // Cooperative cancellation: `islandGA.run()` throws
