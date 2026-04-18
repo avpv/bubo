@@ -367,6 +367,110 @@ struct LNSOperatorTests {
         }
     }
 
+    @Test("Cost proxy biases BnB toward high-energy slots for high-energy tasks")
+    func cpRepairRespectsEnergyCurve() {
+        // Build a context whose personalEnergyCurve peaks at 14:00 and
+        // troughs at 9:00. A high-energyCost task should land in the
+        // afternoon when the BnB has room to choose — not stuck at the
+        // earliest feasible slot.
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let end = cal.date(byAdding: .day, value: 1, to: today)!
+        // Curve: flat 0.1 except a peak from 13-16.
+        var curve = [Double](repeating: 0.1, count: 24)
+        for h in 13...16 { curve[h] = 1.0 }
+        var prefs = OptimizerPreferences()
+        prefs.personalEnergyCurve = curve
+        prefs.energyCurveWeight = 2.0
+
+        // One high-energy task with no preferred range and no deadline,
+        // lots of free time. If BnB respects energy, it places after 13.
+        let heavy = OptimizableEvent(
+            id: "deep",
+            title: "Deep Work",
+            duration: 3600,
+            priority: 0.5,
+            energyCost: 1.0
+        )
+        let bandit = MutationBandit()
+        bandit.updateContext(.neutral)
+        for _ in 0..<60 {
+            for op in MutationOperator.allCases {
+                bandit.record(op: op, reward: op == .lnsDay ? 0.5 : -0.5)
+            }
+        }
+        let context = OptimizerContext(
+            movableEvents: [heavy],
+            workingHours: 9...18,
+            planningHorizon: DateInterval(start: today, end: end),
+            preferences: prefs,
+            rng: GARandom(seed: 4242),
+            mutationBandit: bandit
+        )
+
+        // Seed the task in a low-energy slot to force LNS to relocate.
+        var chrom = ScheduleChromosome.greedy(context: context)
+        if let idx = chrom.genes.firstIndex(where: { $0.eventId == "deep" }) {
+            chrom.genes[idx].startTime = cal.date(bySettingHour: 9, minute: 0, second: 0, of: today)!
+        }
+        chrom.mutate(rate: 1.0, context: context)
+
+        if let deep = chrom.genes.first(where: { $0.eventId == "deep" && $0.isIncluded }) {
+            let hour = cal.component(.hour, from: deep.startTime)
+            #expect(hour >= 11, "deep-work task should be placed in high-energy window, got hour \(hour)")
+        }
+    }
+
+    @Test("Forward checking keeps schedules feasible under tight dependency chains")
+    func cpRepairForwardChecksDependencies() {
+        // Three tasks with a dependency chain a→b→c, each 2 hours, on a
+        // 1-day horizon with a 2-hour fixed meeting at 13-15. Total free
+        // time: 9-13 (4h) + 15-18 (3h) = 7h, dependency-ordered 2+2+2 =
+        // 6h. One feasible layout exists; forward checking has to find
+        // it without thrashing.
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let fixStart = cal.date(bySettingHour: 13, minute: 0, second: 0, of: today)!
+        let fixed = CalendarEvent(
+            id: "block",
+            title: "Block",
+            startDate: fixStart,
+            endDate: fixStart.addingTimeInterval(7200),
+            location: nil,
+            description: nil,
+            calendarName: "Test",
+            eventType: .standard
+        )
+        let a = makeEvent(id: "a", durationMinutes: 120, priority: 0.9)
+        let b = makeEvent(id: "b", durationMinutes: 120, priority: 0.9, dependsOn: ["a"])
+        let c = makeEvent(id: "c", durationMinutes: 120, priority: 0.9, dependsOn: ["b"])
+        let context = contextForcingOperator(
+            .lnsDay,
+            movableEvents: [a, b, c],
+            fixedEvents: [fixed],
+            horizonDays: 1,
+            seed: 7654
+        )
+
+        var chrom = ScheduleChromosome.greedy(context: context)
+        chrom.mutate(rate: 1.0, context: context)
+
+        let byId = Dictionary(uniqueKeysWithValues: chrom.genes.map { ($0.eventId, $0) })
+        #expect(byId["a"]?.isIncluded == true, "a should stay scheduled")
+        #expect(byId["b"]?.isIncluded == true, "b should stay scheduled")
+        #expect(byId["c"]?.isIncluded == true, "c should stay scheduled")
+
+        if let ga = byId["a"], let gb = byId["b"], let gc = byId["c"],
+           ga.isIncluded, gb.isIncluded, gc.isIncluded {
+            #expect(gb.startTime >= ga.endTime, "b must not start before a ends")
+            #expect(gc.startTime >= gb.endTime, "c must not start before b ends")
+            for g in [ga, gb, gc] {
+                let overlap = g.startTime < fixed.endDate && g.endTime > fixed.startDate
+                #expect(!overlap, "gene \(g.eventId) overlaps the fixed block")
+            }
+        }
+    }
+
     @Test("CP repair produces feasible placements for a tight workload")
     func cpRepairFeasibleTight() {
         // A deliberately tight workload: 4 one-hour tasks on a 1-day
