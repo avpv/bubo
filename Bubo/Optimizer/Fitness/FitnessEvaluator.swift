@@ -253,6 +253,7 @@ final class FitnessEvaluator: @unchecked Sendable {
                 // to full for day-partitioned objectives, which is still cheap
                 // because they individually only scan per-day events.
                 chromosome.perDayObjectiveCache = nil
+                chromosome.perComponentObjectiveCache = nil
                 chromosome.geneDaysSnapshot = nil
                 chromosome.mutatedGeneIndices = nil
                 chromosome.needsEvaluation = false
@@ -269,6 +270,7 @@ final class FitnessEvaluator: @unchecked Sendable {
         chromosome.rawFitness = result.fitness
         chromosome.objectiveCache = result.objectiveCache
         chromosome.perDayObjectiveCache = result.perDayCache
+        chromosome.perComponentObjectiveCache = result.perComponentCache
         chromosome.geneDaysSnapshot = result.geneDaysSnapshot
         chromosome.mutatedGeneIndices = nil
         chromosome.needsEvaluation = false
@@ -287,6 +289,7 @@ final class FitnessEvaluator: @unchecked Sendable {
         let fitness: Double
         let objectiveCache: [String: Double]
         let perDayCache: [String: [Date: Double]]
+        let perComponentCache: [String: [Int: Double]]
         let geneDaysSnapshot: [Date]
     }
 
@@ -321,6 +324,7 @@ final class FitnessEvaluator: @unchecked Sendable {
                 fitness: fitness,
                 objectiveCache: chromosome.objectiveCache ?? [:],
                 perDayCache: chromosome.perDayObjectiveCache ?? [:],
+                perComponentCache: chromosome.perComponentObjectiveCache ?? [:],
                 geneDaysSnapshot: currentGeneDays
             )
         }
@@ -335,6 +339,7 @@ final class FitnessEvaluator: @unchecked Sendable {
                 fitness: 0.1,
                 objectiveCache: [:],
                 perDayCache: [:],
+                perComponentCache: [:],
                 geneDaysSnapshot: currentGeneDays
             )
         }
@@ -374,8 +379,31 @@ final class FitnessEvaluator: @unchecked Sendable {
             dirtyDays = nil
         }
 
+        // Component-level dirtiness: which structural components of
+        // the conflict graph contain a mutated gene. Any component not
+        // in this set keeps its cached per-component score for every
+        // `ComponentPartitionedObjective`. Nil when we lack the prior
+        // cache or the mutation hint — the objective then falls back
+        // to a full evaluate.
+        let canDeltaPerComponent = chromosome.perComponentObjectiveCache != nil
+            && (chromosome.mutatedGeneIndices?.isEmpty == false)
+        let dirtyComponents: Set<Int>?
+        if canDeltaPerComponent, let mutated = chromosome.mutatedGeneIndices {
+            let graph = context.ensureConflictGraph()
+            var dirty = Set<Int>()
+            for idx in mutated where idx < chromosome.genes.count {
+                if let cid = graph.componentOf[chromosome.genes[idx].eventId] {
+                    dirty.insert(cid)
+                }
+            }
+            dirtyComponents = dirty
+        } else {
+            dirtyComponents = nil
+        }
+
         var scalarCache: [String: Double] = [:]
         var perDayCache: [String: [Date: Double]] = [:]
+        var perComponentCache: [String: [Int: Double]] = [:]
         var weightedSum = 0.0
 
         for objective in objectives {
@@ -394,6 +422,20 @@ final class FitnessEvaluator: @unchecked Sendable {
                 let combined = partitioned.combinePerDay(newPerDay)
                 score = max(0, min(1, combined))
                 perDayCache[objective.name] = newPerDay
+            } else if let componentPartitioned = objective as? ComponentPartitionedObjective {
+                // Component-partitioned: rescore only components that
+                // contain a mutated gene; unchanged components keep
+                // their cached score.
+                let newPerComponent = evaluatePerComponentWithDelta(
+                    objective: componentPartitioned,
+                    chromosome: chromosome,
+                    context: context,
+                    previousPerComponent: chromosome.perComponentObjectiveCache?[objective.name],
+                    dirtyComponents: dirtyComponents
+                )
+                let combined = componentPartitioned.combineComponents(newPerComponent)
+                score = max(0, min(1, combined))
+                perComponentCache[objective.name] = newPerComponent
             } else {
                 // Non-partitioned: always recompute. No safe way to know
                 // which genes this objective depends on without a full
@@ -414,8 +456,56 @@ final class FitnessEvaluator: @unchecked Sendable {
             fitness: fitness,
             objectiveCache: scalarCache,
             perDayCache: perDayCache,
+            perComponentCache: perComponentCache,
             geneDaysSnapshot: currentGeneDays
         )
+    }
+
+    /// For a `ComponentPartitionedObjective`, compute the new per-
+    /// component map by reusing prior scores for clean components and
+    /// asking the objective to rescore only dirty ones. When no prior
+    /// cache or no hint exists, falls back to a full component sweep.
+    private func evaluatePerComponentWithDelta(
+        objective: ComponentPartitionedObjective,
+        chromosome: ScheduleChromosome,
+        context: OptimizerContext,
+        previousPerComponent: [Int: Double]?,
+        dirtyComponents: Set<Int>?
+    ) -> [Int: Double] {
+        let graph = context.ensureConflictGraph()
+        let components = graph.allComponents()
+        guard !components.isEmpty else { return [:] }
+
+        guard let prev = previousPerComponent, let dirty = dirtyComponents else {
+            // No prior / no hint → full per-component sweep.
+            var fresh: [Int: Double] = [:]
+            fresh.reserveCapacity(components.count)
+            for (cid, members) in components.enumerated() {
+                fresh[cid] = objective.evaluateComponent(
+                    members: members, chromosome: chromosome, context: context
+                )
+            }
+            return fresh
+        }
+
+        var next: [Int: Double] = [:]
+        next.reserveCapacity(components.count)
+        for (cid, members) in components.enumerated() {
+            if dirty.contains(cid) {
+                next[cid] = objective.evaluateComponent(
+                    members: members, chromosome: chromosome, context: context
+                )
+            } else if let cached = prev[cid] {
+                next[cid] = cached
+            } else {
+                // Component wasn't cached before (fresh run or newly
+                // reachable) — compute it.
+                next[cid] = objective.evaluateComponent(
+                    members: members, chromosome: chromosome, context: context
+                )
+            }
+        }
+        return next
     }
 
     /// For a `DayPartitionedObjective`, compute the new per-day map by

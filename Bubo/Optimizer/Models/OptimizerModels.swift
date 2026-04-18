@@ -163,16 +163,21 @@ struct OptimizerContext: Sendable {
     /// population.
     let contextualCrossoverHead: GeneAttentionHead
 
-    /// Preprocessed structural graph over `movableEvents`. Built once
-    /// when the context is constructed (or lazily on first access
-    /// for legacy call sites) and reused by:
+    /// Preprocessed structural graph over `movableEvents`. Held via a
+    /// reference-type cache so every copy of the context (Swift value
+    /// semantics) points at the same built graph — fitness evaluators,
+    /// mutation operators, and QD descriptors all pay the build cost
+    /// exactly once per run.
+    ///
+    /// Uses by consumers:
     ///   * mutation bandit context features (conflict density, chain depth);
     ///   * graph-aware crossover (keep components intact);
     ///   * QD archive's precedence-tightness descriptor;
     ///   * per-component delta evaluation for global objectives.
-    /// `nil` on contexts built before this infrastructure landed —
-    /// consumers fall back gracefully.
-    let conflictGraph: ScheduleConflictGraph?
+    ///
+    /// Stays `nil` on legacy code paths that don't yet pass a holder;
+    /// `ensureConflictGraph()` builds on demand in that case.
+    let conflictGraphHolder: ConflictGraphHolder?
 
     init(
         fixedEvents: [CalendarEvent] = [],
@@ -188,7 +193,7 @@ struct OptimizerContext: Sendable {
         rng: GARandom = GARandom(),
         mutationBandit: MutationBandit = MutationBandit(),
         contextualCrossoverHead: GeneAttentionHead = GeneAttentionHead(),
-        conflictGraph: ScheduleConflictGraph? = nil
+        conflictGraphHolder: ConflictGraphHolder? = nil
     ) {
         self.fixedEvents = fixedEvents
         self.movableEvents = movableEvents
@@ -200,18 +205,22 @@ struct OptimizerContext: Sendable {
         self.rng = rng
         self.mutationBandit = mutationBandit
         self.contextualCrossoverHead = contextualCrossoverHead
-        // Build lazily only when the caller didn't supply one; that
-        // lets test fixtures stay minimal while production contexts
-        // get the cached graph for free on construction.
-        self.conflictGraph = conflictGraph
+        // Production entry points construct a shared holder so every
+        // context copy hits the same cache; tests and one-shot
+        // contexts omit it and pay the build cost on first access.
+        self.conflictGraphHolder = conflictGraphHolder
     }
 
-    /// Returns a materialised conflict graph for this context, building
-    /// it on demand for contexts that were constructed without one.
-    /// The build is small and idempotent — a few microseconds for any
-    /// realistic schedule — so this hides the optional from hot paths.
+    /// Returns a materialised conflict graph for this context. Goes
+    /// through the shared holder when available (built once per run)
+    /// and falls back to building inline when no holder was supplied.
+    /// The holder path is the fast path — expect tests to hit the
+    /// inline fallback and production to hit the cache.
     func ensureConflictGraph() -> ScheduleConflictGraph {
-        conflictGraph ?? ScheduleConflictGraph.build(from: self)
+        if let holder = conflictGraphHolder {
+            return holder.get(for: self)
+        }
+        return ScheduleConflictGraph.build(from: self)
     }
 }
 

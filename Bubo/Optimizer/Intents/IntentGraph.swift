@@ -193,6 +193,9 @@ struct IntentGraph: Sendable {
     /// breaks topological sort. Returned components are lists of node
     /// IDs in the cycle.
     func stronglyConnectedComponents() -> [[String]] {
+        // Normalise both edge kinds into the prereq→dependent
+        // convention so SCC detection runs on the same DAG the
+        // topological sort is meant to see.
         var adj: [String: [String]] = [:]
         for edge in edges {
             switch edge.kind {
@@ -203,42 +206,89 @@ struct IntentGraph: Sendable {
             default: continue
             }
         }
+
+        // Iterative Tarjan using an explicit work stack so very deep
+        // cycles can't blow the call stack. Each work-stack frame
+        // remembers the vertex being processed and the next
+        // successor index to explore — effectively a saved
+        // continuation of the recursive version.
         var index = 0
         var indices: [String: Int] = [:]
         var lowlink: [String: Int] = [:]
         var onStack: Set<String> = []
-        var stack: [String] = []
+        var tarjanStack: [String] = []
         var result: [[String]] = []
 
-        func strongConnect(_ v: String) {
-            indices[v] = index
-            lowlink[v] = index
-            index += 1
-            stack.append(v)
-            onStack.insert(v)
-
-            for w in adj[v] ?? [] {
-                if indices[w] == nil {
-                    strongConnect(w)
-                    lowlink[v] = min(lowlink[v] ?? 0, lowlink[w] ?? 0)
-                } else if onStack.contains(w) {
-                    lowlink[v] = min(lowlink[v] ?? 0, indices[w] ?? 0)
-                }
-            }
-
-            if lowlink[v] == indices[v] {
-                var component: [String] = []
-                while let w = stack.popLast() {
-                    onStack.remove(w)
-                    component.append(w)
-                    if w == v { break }
-                }
-                if component.count > 1 { result.append(component) }
-            }
+        struct Frame {
+            let vertex: String
+            var successors: [String]
+            var cursor: Int
         }
+        var work: [Frame] = []
 
-        for nodeId in nodes.keys where indices[nodeId] == nil {
-            strongConnect(nodeId)
+        for root in nodes.keys where indices[root] == nil {
+            // Open a fresh frame for `root`.
+            indices[root] = index
+            lowlink[root] = index
+            index += 1
+            tarjanStack.append(root)
+            onStack.insert(root)
+            work.append(Frame(vertex: root, successors: adj[root] ?? [], cursor: 0))
+
+            while !work.isEmpty {
+                var frame = work.removeLast()
+                var recursed = false
+
+                // Advance through remaining successors.
+                while frame.cursor < frame.successors.count {
+                    let w = frame.successors[frame.cursor]
+                    frame.cursor += 1
+                    if indices[w] == nil {
+                        // Simulate recursive call: save the current
+                        // frame (now at cursor past `w`), push a new
+                        // frame for `w`.
+                        indices[w] = index
+                        lowlink[w] = index
+                        index += 1
+                        tarjanStack.append(w)
+                        onStack.insert(w)
+                        work.append(frame)
+                        work.append(Frame(vertex: w, successors: adj[w] ?? [], cursor: 0))
+                        recursed = true
+                        break
+                    } else if onStack.contains(w) {
+                        lowlink[frame.vertex] = min(
+                            lowlink[frame.vertex] ?? 0,
+                            indices[w] ?? 0
+                        )
+                    }
+                }
+
+                if recursed { continue }
+
+                // All successors of `frame.vertex` exhausted. Fold its
+                // lowlink into the parent (if any) and pop a component
+                // when this vertex is a root.
+                let v = frame.vertex
+                if lowlink[v] == indices[v] {
+                    var component: [String] = []
+                    while let w = tarjanStack.popLast() {
+                        onStack.remove(w)
+                        component.append(w)
+                        if w == v { break }
+                    }
+                    if component.count > 1 { result.append(component) }
+                }
+                // Propagate lowlink back to the caller, which is the
+                // top of `work` (if it exists).
+                if let parentIdx = work.indices.last {
+                    let parent = work[parentIdx].vertex
+                    lowlink[parent] = min(
+                        lowlink[parent] ?? 0,
+                        lowlink[v] ?? 0
+                    )
+                }
+            }
         }
         return result
     }

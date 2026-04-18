@@ -37,7 +37,7 @@ enum MutationOperator: Int, CaseIterable, Sendable, Hashable {
 /// construct a `BanditContext` with the semantic features only.
 ///
 /// The graph-derived features (`precedenceViolationRate`, `conflictDensity`,
-/// `avgChainDepth`) were added for SOTA-2026 so the bandit can pick an
+/// `maxChainDepth`) were added for SOTA-2026 so the bandit can pick an
 /// operator conditioned on how "graph-constrained" the current landscape
 /// is. All three default to 0 so existing callers keep the original 4-dim
 /// behaviour without code changes; the actual feature dimension is 6 plus
@@ -61,14 +61,14 @@ struct BanditContext: Sendable {
     /// tiny shifts (low neighbourhood rate) while sparse ones tolerate
     /// full day-moves — this feature lets LinUCB learn that mapping.
     let conflictDensity: Double
-    /// Normalised average precedence chain depth in [0, 1]. Proxy for
+    /// Normalised maximum precedence chain depth in [0, 1]. Proxy for
     /// "how far apart can dependents legally move?" — long chains make
     /// global moves disruptive, so the bandit should prefer local ops.
-    let avgChainDepth: Double
+    let maxChainDepth: Double
 
     static let neutral = BanditContext(
         diversity: 0.5, stagnation: 0.0, imbalance: 0.0,
-        precedenceViolationRate: 0, conflictDensity: 0, avgChainDepth: 0
+        precedenceViolationRate: 0, conflictDensity: 0, maxChainDepth: 0
     )
 
     init(
@@ -77,14 +77,14 @@ struct BanditContext: Sendable {
         imbalance: Double,
         precedenceViolationRate: Double = 0,
         conflictDensity: Double = 0,
-        avgChainDepth: Double = 0
+        maxChainDepth: Double = 0
     ) {
         self.diversity = diversity
         self.stagnation = stagnation
         self.imbalance = imbalance
         self.precedenceViolationRate = precedenceViolationRate
         self.conflictDensity = conflictDensity
-        self.avgChainDepth = avgChainDepth
+        self.maxChainDepth = maxChainDepth
     }
 
     /// Feature vector with intercept. Lives here so both select and record
@@ -97,7 +97,7 @@ struct BanditContext: Sendable {
             max(0, min(1, imbalance)),
             max(0, min(1, precedenceViolationRate)),
             max(0, min(1, conflictDensity)),
-            max(0, min(1, avgChainDepth))
+            max(0, min(1, maxChainDepth))
         ]
     }
 }
@@ -159,7 +159,7 @@ final class MutationBandit: @unchecked Sendable {
     /// Feature dimension (= `BanditContext.featureVector.count`).
     /// Bumped from 4 to 7 when the graph-derived features were added:
     /// the extra columns are `precedenceViolationRate`, `conflictDensity`,
-    /// and `avgChainDepth`. LinUCB's closed-form update scales fine at
+    /// and `maxChainDepth`. LinUCB's closed-form update scales fine at
     /// this size because `invertNxN` below is Gauss–Jordan on a 7×7 — a
     /// few hundred flops per `select`, comparable to the old handrolled
     /// 4×4 cofactor expansion.

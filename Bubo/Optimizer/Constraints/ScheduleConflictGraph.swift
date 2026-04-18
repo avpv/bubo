@@ -78,16 +78,21 @@ struct ScheduleConflictGraph: Sendable {
         return min(1.0, Double(conflictEdgeCount) / maxEdges)
     }
 
-    /// Average chain depth across precedence graph. Reported as a
-    /// normalised ratio over `N` so bandit features stay in [0, 1].
-    var averageChainDepth: Double {
+    /// Deepest precedence chain (the maximum number of transitive
+    /// descendants any single event has), normalised to `[0, 1]` by
+    /// dividing by `eventIds.count` so bandit features stay in range.
+    /// "Max" not "average" because the GA cares about the worst-case
+    /// chain length when deciding whether a global day-move can
+    /// legally reshuffle dependents — a bandit that learned on the
+    /// wrong summary statistic would make the wrong choice.
+    var maxChainDepth: Double {
         let n = eventIds.count
         guard n > 0 else { return 0 }
-        var maxDepth = 0
+        var deepest = 0
         for id in eventIds {
-            maxDepth = max(maxDepth, (precedes[id] ?? []).count)
+            deepest = max(deepest, (precedes[id] ?? []).count)
         }
-        return min(1.0, Double(maxDepth) / Double(n))
+        return min(1.0, Double(deepest) / Double(n))
     }
 
     // MARK: - Build
@@ -302,5 +307,54 @@ struct ScheduleConflictGraph: Sendable {
         }
         guard total > 0 else { return 0 }
         return Double(tight) / Double(total)
+    }
+}
+
+// MARK: - Holder (lazy cache)
+
+/// Reference-type wrapper so `OptimizerContext` (a struct) can share a
+/// single built graph across every copy. `ensureConflictGraph()` goes
+/// through this holder, so fitness evaluators and mutation operators
+/// pay the build cost exactly once per run instead of once per
+/// chromosome evaluation.
+///
+/// Thread-safe: the GA evaluates offspring in parallel via
+/// `DispatchQueue.concurrentPerform`, so several threads may race to
+/// be the first caller. `NSLock` keeps the "build once" invariant
+/// without blocking readers once the graph is cached.
+final class ConflictGraphHolder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var cached: ScheduleConflictGraph?
+
+    init(preloaded: ScheduleConflictGraph? = nil) {
+        self.cached = preloaded
+    }
+
+    /// Build-or-fetch the cached graph. Callers pass the context they
+    /// want built from — the holder itself doesn't store one so it
+    /// stays light and doesn't retain fixed/movable event arrays.
+    func get(for context: OptimizerContext) -> ScheduleConflictGraph {
+        lock.lock()
+        if let cached {
+            lock.unlock()
+            return cached
+        }
+        lock.unlock()
+
+        // Build outside the lock so concurrent callers don't serialize
+        // on the actual computation. Two threads may build the graph
+        // twice on first access; the "double-checked" store below
+        // picks whichever arrives first. Both threads return the same
+        // logical graph, so the duplicate is harmless.
+        let built = ScheduleConflictGraph.build(from: context)
+
+        lock.lock()
+        if let existing = cached {
+            lock.unlock()
+            return existing
+        }
+        cached = built
+        lock.unlock()
+        return built
     }
 }

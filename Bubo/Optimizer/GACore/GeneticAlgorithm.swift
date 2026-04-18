@@ -601,7 +601,7 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             imbalance: imbalance,
             precedenceViolationRate: graphFeatures.precedenceViolationRate,
             conflictDensity: graphFeatures.conflictDensity,
-            avgChainDepth: graphFeatures.avgChainDepth
+            maxChainDepth: graphFeatures.maxChainDepth
         ))
 
         // Immigration: inject random individuals when diversity collapses
@@ -782,7 +782,7 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
     fileprivate struct GraphBanditFeatures {
         var precedenceViolationRate: Double = 0
         var conflictDensity: Double = 0
-        var avgChainDepth: Double = 0
+        var maxChainDepth: Double = 0
     }
 
     /// Compute graph features for the bandit context. Looks up the
@@ -836,7 +836,7 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         return GraphBanditFeatures(
             precedenceViolationRate: precedenceViolationRate,
             conflictDensity: graph.conflictDensity,
-            avgChainDepth: graph.averageChainDepth
+            maxChainDepth: graph.maxChainDepth
         )
     }
 

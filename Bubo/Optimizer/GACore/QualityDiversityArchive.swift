@@ -65,7 +65,7 @@ struct BehaviorDescriptor: Hashable, Sendable {
     /// archive behave like the 3D version.
     static func from(_ chromosome: ScheduleChromosome, context: OptimizerContext) -> BehaviorDescriptor {
         let base = ScheduleFeatureVector.extract(chromosome, context: context).behavior
-        let tightness = context.conflictGraph?.precedenceTightness(for: chromosome) ?? 0
+        let tightness = context.ensureConflictGraph().precedenceTightness(for: chromosome)
         return BehaviorDescriptor(
             focusMass: base.focusMass,
             morningSkew: base.morningSkew,

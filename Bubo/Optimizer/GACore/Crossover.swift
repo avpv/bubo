@@ -116,12 +116,16 @@ enum Crossover {
         var child1Genes = p1.genes
         var child2Genes = p2.genes
 
+        // For components flagged "swap": child1 gets parent2's placement
+        // and child2 gets parent1's. Components not flagged keep the
+        // init defaults (child1 = p1, child2 = p2). This mirrors the
+        // dayBlock pattern so the Pareto-paired invariant holds: every
+        // time slot ends up in exactly one child.
         for i in p1.genes.indices {
             let eventId = p1.genes[i].eventId
             guard let componentId = graph.componentOf[eventId] else { continue }
             if takeFromP2[componentId] {
                 child1Genes[i] = p1.genes[i].withStartTime(p2.genes[i].startTime)
-            } else {
                 child2Genes[i] = p2.genes[i].withStartTime(p1.genes[i].startTime)
             }
         }
