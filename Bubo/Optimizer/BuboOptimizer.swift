@@ -97,6 +97,11 @@ final class BuboOptimizer {
     /// The current schedule genes (movable events placement).
     var currentSchedule: [ScheduleGene] = []
 
+    /// Captured from the most recent `optimize()` call — used by SOTA
+    /// feedback methods to record accepted/rejected outcomes into the
+    /// temporal warm-start store and buffer fit. Cleared by `reset()`.
+    private(set) var lastOptimizationContext: OptimizerContext?
+
     // MARK: - Configuration
 
     var gaConfig: GAConfiguration = .default
@@ -132,6 +137,9 @@ final class BuboOptimizer {
         // Apply learned preferences, merging with (not replacing) user preferences
         var prefs = context.preferences
         preferenceLearner.applyToPreferences(&prefs)
+        // SOTA prelude: DPO weight overlay + chance-constrained buffer fit.
+        // Both are safe no-ops when their feature flags are off.
+        sotaApplyPrelude(prefs: &prefs, context: context)
 
         // Resolve per-workload learners (bandit + head + surrogate)
         // by task signature so learning persists across runs on the
@@ -160,6 +168,8 @@ final class BuboOptimizer {
             lnsStrategyBandit: workloadLearners.lnsBandit,
             contextualCrossoverHead: workloadLearners.head
         )
+        // Stash for SOTA feedback callbacks (acceptScenario etc).
+        lastOptimizationContext = adjustedContext
 
         let evaluator = FitnessEvaluator.standard(preferences: prefs)
         let config = overrideConfig ?? gaConfig
@@ -324,7 +334,7 @@ final class BuboOptimizer {
         // feedback methods can route updates to the correct
         // per-workload learner bundle even after later runs on
         // different workloads.
-        let scenarios = archive.diverseScenarios(
+        var scenarios = archive.diverseScenarios(
             count: capturedScenarioCount,
             evaluator: evaluator,
             context: adjustedContext
@@ -333,6 +343,14 @@ final class BuboOptimizer {
             stamped.sourceSignature = signature
             return stamped
         }
+        // SOTA post-processing: lex ranking, active-learning pair
+        // surfacing, path relinking, diffusion polish. Each step
+        // checks its own feature flag and no-ops when disabled.
+        scenarios = sotaPostProcess(
+            scenarios: scenarios,
+            context: adjustedContext,
+            evaluator: evaluator
+        )
 
         let populationCount = population.prefix(10).count
         let metadata = OptimizationMetadata(
@@ -523,11 +541,32 @@ final class BuboOptimizer {
         currentSchedule = scenario.genes
         preferenceLearner.recordAcceptance(scenarioFitness: scenario.fitness)
         propagateFeedbackReward(+0.1, scenario: scenario)
+        // SOTA fan-out: route the accept into DPO + temporal warm-start
+        // using whichever other scenarios from the last run act as
+        // implicit runner-ups.
+        let runnerUps: [ScheduleScenario] = (lastResult?.scenarios ?? [])
+            .filter { $0.id != scenario.id }
+        sotaOnAccept(
+            accepted: scenario,
+            runnerUps: runnerUps,
+            context: lastOptimizationContext
+        )
     }
 
     func rejectScenario(_ scenario: ScheduleScenario) {
         preferenceLearner.recordRejection(scenarioFitness: scenario.fitness)
         propagateFeedbackReward(-0.1, scenario: scenario)
+        // Model a rejection as a preference against the rejected vs.
+        // the top-fitness alternative. Cheap source of DPO signal.
+        if let best = lastResult?.scenarios.first, best.id != scenario.id,
+           let bundle = sotaBundle(for: scenario),
+           sotaFeatures.useDPOWeightLearning {
+            bundle.dpo.observe(pair: DPOPreferencePair(
+                winnerScores: best.objectiveBreakdown,
+                loserScores: scenario.objectiveBreakdown,
+                confidence: 1.0
+            ))
+        }
     }
 
     func recordManualEdit(scenario: ScheduleScenario, edited: [ScheduleGene]) {
@@ -867,5 +906,6 @@ final class BuboOptimizer {
         currentSchedule = []
         lastResult = nil
         preferences = OptimizerPreferences()
+        lastOptimizationContext = nil
     }
 }
