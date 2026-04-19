@@ -154,13 +154,16 @@ struct IntentCompiler {
             let violations = ConstraintEngine.standard.violations(for: chromo, context: context)
             let timeFmt = DateFormatter()
             timeFmt.dateFormat = "E HH:mm"
-            let genePlacement = best.activeGenes.prefix(1).map { g in
+            let geneStr = best.activeGenes.prefix(1).map { g in
                 "\(g.title)@\(timeFmt.string(from: g.startTime))-\(timeFmt.string(from: g.endTime))"
             }.joined()
-            let fixedSample = allFixed.prefix(3).map { e in
-                "\(e.title.prefix(16))@\(timeFmt.string(from: e.startDate))-\(timeFmt.string(from: e.endDate))"
+            let overlapping: [CalendarEvent] = best.activeGenes.flatMap { g in
+                allFixed.filter { e in e.startDate < g.endTime && e.endDate > g.startTime }
+            }
+            let overlapStr = overlapping.prefix(3).map { e in
+                "\(e.title.prefix(20))@\(timeFmt.string(from: e.startDate))-\(timeFmt.string(from: e.endDate)) local=\(e.isLocalEvent) id=\(e.id.prefix(8))"
             }.joined(separator: " | ")
-            let reason = "fitness=\(String(format: "%.3f", best.fitness)) gene=[\(genePlacement)] fixedN=\(allFixed.count) fixed=[\(fixedSample)] viol=[\(violations.joined(separator: ", "))]"
+            let reason = "fitness=\(String(format: "%.3f", best.fitness)) gene=[\(geneStr)] fixedN=\(allFixed.count) overlapN=\(overlapping.count) overlaps=[\(overlapStr)] viol=[\(violations.joined(separator: ", "))]"
             return .infeasible(reason: reason, snapshot: snapshot, resolutions: capacityResolutions)
         }
 
