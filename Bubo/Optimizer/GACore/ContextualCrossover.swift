@@ -281,13 +281,17 @@ enum ContextualCrossover {
             timeRank[gene.eventId] = rank
         }
 
-        // Dense rank over backlog indices: the gene's position among
-        // the currently-included tagged genes when sorted by
-        // `backlogIndex`. Comparing time rank against a sparse
-        // `backlogIndex` directly would penalise perfectly-ordered
-        // schedules just because some backlog tasks were dropped.
-        let byIndex = tagged.sorted {
-            (backlogIndex[$0.eventId] ?? Int.max) < (backlogIndex[$1.eventId] ?? Int.max)
+        // Dense rank over the composite (priority DESC, backlogIndex ASC)
+        // order — rank 0 is the task that *should* start first. Priority
+        // leads so a HIGH task at the bottom of the backlog still ranks
+        // ahead of LOW tasks at the top; drag order only breaks ties.
+        // Using a dense rank over included tagged genes keeps the signal
+        // consistent when some backlog tasks are dropped.
+        let byIndex = tagged.sorted { lhs, rhs in
+            if lhs.priority != rhs.priority {
+                return lhs.priority > rhs.priority
+            }
+            return (backlogIndex[lhs.eventId] ?? Int.max) < (backlogIndex[rhs.eventId] ?? Int.max)
         }
         var desiredRank: [String: Int] = [:]
         desiredRank.reserveCapacity(byIndex.count)

@@ -2,16 +2,19 @@ import Foundation
 
 // MARK: - #15 Backlog Order Objective
 
-/// Rewards schedules that place backlog tasks in the same time-order the user
-/// has them in the backlog list. Only tasks carrying a `backlogIndex`
-/// participate — calendar-derived events and non-backlog optimisables are
-/// ignored.
+/// Rewards schedules that place backlog tasks in the user's preferred
+/// order over time. Only tasks carrying a `backlogIndex` participate —
+/// calendar-derived events and non-backlog optimisables are ignored.
 ///
-/// The other objectives (priority, deadline, energy, …) decide the macro
-/// shape of the day; this one is the tiebreaker that stops the GA from
-/// shuffling identical tasks into arbitrary time slots just because every
-/// permutation scores the same on every other axis. Weight is intentionally
-/// small — strong preferences (deadlines, peak energy) must still dominate.
+/// Desired order is (priority DESC, backlogIndex ASC): HIGH-priority tasks
+/// should be scheduled before lower-priority ones regardless of where they
+/// sit in the drag list, and within a single priority tier the drag order
+/// breaks ties. Without the priority component the GA would slavishly
+/// follow drag order and schedule a HIGH task at position 4 after three
+/// LOW tasks at positions 1–3.
+///
+/// Weight is intentionally small — strong preferences (deadlines, peak
+/// energy) must still dominate the macro shape of the day.
 ///
 /// Scoring: Kendall-style inversion count **across every included backlog
 /// gene**, globally — not scoped per day. An earlier attempt was day-
@@ -36,29 +39,43 @@ struct BacklogOrderObjective: FitnessObjective {
         let indexById = context.backlogIndexMap()
         guard !indexById.isEmpty else { return 1.0 }
 
-        // Collect (backlogIndex, startTime) for every included gene that
-        // belongs to a backlog event. Dropped droppable genes don't
-        // participate — a dropped task has no placement to order.
-        var placements: [(backlogIndex: Int, start: Date)] = []
+        // Collect (priority, backlogIndex, startTime) for every included
+        // gene that belongs to a backlog event. Dropped droppable genes
+        // don't participate — a dropped task has no placement to order.
+        var placements: [(priority: Double, backlogIndex: Int, start: Date)] = []
         placements.reserveCapacity(indexById.count)
         for gene in chromosome.genes where gene.isIncluded {
             if let idx = indexById[gene.eventId] {
-                placements.append((idx, gene.startTime))
+                placements.append((gene.priority, idx, gene.startTime))
             }
         }
         // With fewer than two placements there is no pair to invert — any
-        // arrangement trivially matches backlog order.
+        // arrangement trivially matches desired order.
         guard placements.count >= 2 else { return 1.0 }
 
-        // Sort by time, then count inversions against the backlog-index
-        // sequence. An inversion is a pair where the earlier-started task
-        // has a higher backlog index than the later-started one, i.e. the
-        // user's drag order was violated.
-        let byStart = placements
-            .sorted { $0.start < $1.start }
-            .map { $0.backlogIndex }
+        // Assign each placement a dense rank in (priority DESC, backlogIndex
+        // ASC) order — rank 0 is the task that *should* start first.
+        let n = placements.count
+        let desiredOrder = placements.enumerated().sorted { lhs, rhs in
+            if lhs.element.priority != rhs.element.priority {
+                return lhs.element.priority > rhs.element.priority
+            }
+            return lhs.element.backlogIndex < rhs.element.backlogIndex
+        }
+        var desiredRank = [Int](repeating: 0, count: n)
+        for (rank, entry) in desiredOrder.enumerated() {
+            desiredRank[entry.offset] = rank
+        }
 
-        let n = byStart.count
+        // Sort by actual start time and count inversions in the desired-
+        // rank sequence. An inversion is a pair where the earlier-started
+        // task has a higher desired rank (should have started later) than
+        // the later-started one — i.e. the user's priority/drag order was
+        // violated.
+        let byStart = placements.enumerated()
+            .sorted { $0.element.start < $1.element.start }
+            .map { desiredRank[$0.offset] }
+
         let maxPairs = n * (n - 1) / 2
         guard maxPairs > 0 else { return 1.0 }
 
