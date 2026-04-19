@@ -37,6 +37,7 @@ struct CommandPalette: View {
     @State private var dryRunTask: Task<Void, Never>? = nil
     @State private var showPowerMode = false
     @State private var composedRequest: OptimizationRequest? = nil
+    @State private var lastExecutedRequest: OptimizationRequest? = nil
     @State private var conflicts: [IntentConflictDetector.Conflict] = []
     @State private var appliedNotice: String? = nil
     @FocusState private var isSearchFocused: Bool
@@ -681,10 +682,8 @@ struct CommandPalette: View {
                 VStack(spacing: DS.Spacing.xs) {
                     ForEach(resolutions) { res in
                         Button(res.title) {
-                            var newReq = composedRequest ?? OptimizationRequest()
+                            var newReq = lastExecutedRequest ?? composedRequest ?? OptimizationRequest()
                             newReq.merge(res.modifier)
-                            composedRequest = newReq
-                            showPowerMode = true
                             runRequest(newReq)
                         }
                         .buttonStyle(.action(role: .secondary, size: .compact))
@@ -692,7 +691,7 @@ struct CommandPalette: View {
                 }
                 .padding(.top, DS.Spacing.sm)
             }
-            
+
             Button("Undo") {
                 optimizerService.undoLast(reminderService: reminderService)
                 let resolutions = [
@@ -724,10 +723,8 @@ struct CommandPalette: View {
                 VStack(spacing: DS.Spacing.xs) {
                     ForEach(resolutions) { res in
                         Button(res.title) {
-                            var newReq = composedRequest ?? OptimizationRequest()
+                            var newReq = lastExecutedRequest ?? composedRequest ?? OptimizationRequest()
                             newReq.merge(res.modifier)
-                            composedRequest = newReq
-                            showPowerMode = true
                             runRequest(newReq)
                         }
                         .buttonStyle(.action(role: .secondary, size: .compact))
@@ -778,6 +775,7 @@ struct CommandPalette: View {
         Haptics.tap()
         var working = request
         if let seedEvent { working = working.withEventContext(seedEvent) }
+        lastExecutedRequest = request
 
         phase = .working(working.findSlotOnly ? "Scheduling\u{2026}" : "Optimizing\u{2026}")
 
