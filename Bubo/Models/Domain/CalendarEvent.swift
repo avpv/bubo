@@ -113,6 +113,15 @@ struct CalendarEvent: Identifiable, Codable, Hashable, Sendable {
     /// Set to `true` for user-created meetings that can be rescheduled.
     var isMovable: Bool = false
 
+    /// Resolved pomodoro shape (work / break / rounds / long break) for
+    /// pomodoro-type events. Populated by `OptimizerService.applyScenario`
+    /// from `PomodoroConfigResolver.resolveShape` using the event's actual
+    /// start hour. `TimerScreenView` reads it to drive the rounded timer,
+    /// and `PomodoroHistoryService` records it on completion for future
+    /// resolver runs. `nil` for standard events and legacy pomodoros
+    /// created before this field existed.
+    var pomodoroConfig: PomodoroConfig? = nil
+
     // MARK: - Static formatters (avoid re-creation per call)
 
     private static let timeFormatter: DateFormatter = {

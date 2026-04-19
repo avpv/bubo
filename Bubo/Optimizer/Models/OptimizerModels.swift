@@ -98,6 +98,10 @@ struct ScheduleGene: Codable, Hashable, Sendable {
     let storyPoints: Int?
     let isDroppable: Bool           // whether the GA may exclude this gene
     var isIncluded: Bool            // whether this gene is active in the schedule
+    /// Pomodoro shape when the event represents a pomodoro session.
+    /// Flows `OptimizableEvent` → gene → `applyScenario` so the service
+    /// can re-resolve or persist the chosen shape onto the `CalendarEvent`.
+    let pomodoroConfig: PomodoroConfig?
 
     var endTime: Date { startTime.addingTimeInterval(duration) }
 
@@ -112,7 +116,8 @@ struct ScheduleGene: Codable, Hashable, Sendable {
         isFocusBlock: Bool,
         storyPoints: Int? = nil,
         isDroppable: Bool = false,
-        isIncluded: Bool = true
+        isIncluded: Bool = true,
+        pomodoroConfig: PomodoroConfig? = nil
     ) {
         self.eventId = eventId
         self.title = title
@@ -125,6 +130,7 @@ struct ScheduleGene: Codable, Hashable, Sendable {
         self.storyPoints = storyPoints
         self.isDroppable = isDroppable
         self.isIncluded = isIncluded
+        self.pomodoroConfig = pomodoroConfig
     }
 
     /// Create a copy with a new start time (preserves all other fields).
@@ -140,7 +146,8 @@ struct ScheduleGene: Codable, Hashable, Sendable {
             isFocusBlock: isFocusBlock,
             storyPoints: storyPoints,
             isDroppable: isDroppable,
-            isIncluded: isIncluded
+            isIncluded: isIncluded,
+            pomodoroConfig: pomodoroConfig
         )
     }
 }
@@ -446,10 +453,11 @@ struct ScheduleScenario: Identifiable, Sendable {
                 location: nil,
                 description: nil,
                 calendarName: "Optimizer",
-                eventType: .standard
+                eventType: gene.pomodoroConfig != nil ? .pomodoro : .standard
             )
             event.isMovable = true
             event.isTask = gene.storyPoints != nil
+            event.pomodoroConfig = gene.pomodoroConfig
             event.storyPoints = gene.storyPoints
             return event
         }

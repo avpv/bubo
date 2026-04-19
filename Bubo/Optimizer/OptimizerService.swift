@@ -300,6 +300,7 @@ final class OptimizerService {
             }
         }
 
+        let cal = Calendar.current
         for (i, gene) in scenario.activeGenes.enumerated() {
             let title: String
             if let override = titleOverride, !override.isEmpty {
@@ -307,7 +308,31 @@ final class OptimizerService {
             } else {
                 title = gene.title
             }
-            let event = CalendarEvent(
+
+            // Post-GA shape refinement: the gene already has a config (picked
+            // pre-GA with `currentHour`), but the slot it actually landed in
+            // may sit hours from that assumption. Re-resolve the inner shape
+            // with the real start hour, keeping the gene's duration as the
+            // hard budget. Changes only work/break/rounds/longBreak —
+            // `gene.endTime` stays intact.
+            var pomodoroConfig = gene.pomodoroConfig
+            if let originalConfig = gene.pomodoroConfig {
+                let budget = max(
+                    PomodoroResolverTuning.default.workBounds.lowerBound,
+                    Int(gene.duration / 60)
+                )
+                var signals = PomodoroResolveSignals()
+                signals.startHour = cal.component(.hour, from: gene.startTime)
+                signals.learnedConfig = pomodoroHistory.learnedConfig(forHour: signals.startHour)
+                    ?? originalConfig
+                pomodoroConfig = PomodoroConfigResolver.resolveShape(
+                    totalMinutes: budget,
+                    startHour: signals.startHour,
+                    signals: signals
+                )
+            }
+
+            var event = CalendarEvent(
                 id: gene.eventId,
                 title: title,
                 startDate: gene.startTime,
@@ -318,6 +343,7 @@ final class OptimizerService {
                 eventType: gene.isFocusBlock ? .pomodoro : .standard,
                 colorTag: colorOverride ?? (gene.isFocusBlock ? .blue : .green)
             )
+            event.pomodoroConfig = pomodoroConfig
             reminderService.addLocalEvent(event)
             createdEventIds.append(event.id)
 

@@ -111,6 +111,7 @@ extension ScheduleGene {
         event.isMovable = isMovable
         event.isTask = isTask
         event.storyPoints = storyPoints
+        event.pomodoroConfig = pomodoroConfig
         return event
     }
 }

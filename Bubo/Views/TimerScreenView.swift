@@ -7,6 +7,10 @@ struct TimerScreenView: View {
     var isPinned: Bool = false
     var onRepeat: ((CalendarEvent) -> Void)? = nil
     var onScheduleNext: ((CalendarEvent) -> Void)? = nil
+    /// Called once when the view goes away, if the event had a pomodoro
+    /// shape. Lets `MenuBarView` route the outcome into
+    /// `PomodoroHistoryService` without pulling the service into a view.
+    var onSessionEnded: ((PomodoroHistoryEntry) -> Void)? = nil
 
     var wallpaper: WallpaperDefinition = WallpaperCatalog.none
     var customPhotoPath: String = ""
@@ -15,6 +19,7 @@ struct TimerScreenView: View {
 
 
     @State private var pulseRing = false
+    @State private var appearedAt: Date?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.navigateHome) private var navigateHome
@@ -81,11 +86,44 @@ struct TimerScreenView: View {
             .frame(width: DS.Popover.width, height: DS.Popover.timerHeight)
         }
         .onAppear {
+            appearedAt = Date()
             guard !reduceMotion else { return }
             withAnimation(.easeInOut(duration: 2).repeatForever(autoreverses: true)) {
                 pulseRing = true
             }
         }
+        .onDisappear { reportSessionOutcome() }
+    }
+
+    /// Convert the view's time-on-screen into a history entry. The real
+    /// "did the user see it through" signal isn't available yet (multi
+    /// -round UI is a follow-up), so we approximate: session is counted
+    /// as completed when the viewer stayed for ≥85% of the planned
+    /// duration, otherwise abandoned. That's already a better signal
+    /// than "we never recorded anything".
+    private func reportSessionOutcome() {
+        guard
+            let config = event.pomodoroConfig,
+            let openedAt = appearedAt,
+            let onSessionEnded
+        else { return }
+
+        let startReference = max(event.startDate, openedAt)
+        let elapsed = Date().timeIntervalSince(startReference)
+        let actualMinutes = max(0, Int(elapsed / 60))
+        let completionRatio = totalDuration > 0
+            ? elapsed / totalDuration
+            : 0
+        let completed = completionRatio >= 0.85
+        let cal = Calendar.current
+        let entry = PomodoroHistoryEntry(
+            startedAt: event.startDate,
+            startHour: cal.component(.hour, from: event.startDate),
+            config: config,
+            actualMinutes: actualMinutes,
+            completed: completed
+        )
+        onSessionEnded(entry)
     }
 
     private func timerContent(now: Date) -> some View {

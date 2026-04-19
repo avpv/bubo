@@ -219,7 +219,8 @@ final class TemporalWarmStart: @unchecked Sendable {
             isFocusBlock: event.isFocusBlock,
             storyPoints: event.storyPoints,
             isDroppable: event.isDroppable,
-            isIncluded: true
+            isIncluded: true,
+            pomodoroConfig: event.pomodoroConfig
         )
     }
 
@@ -235,7 +236,8 @@ final class TemporalWarmStart: @unchecked Sendable {
             isFocusBlock: event.isFocusBlock,
             storyPoints: event.storyPoints,
             isDroppable: event.isDroppable,
-            isIncluded: true
+            isIncluded: true,
+            pomodoroConfig: event.pomodoroConfig
         )
     }
 
