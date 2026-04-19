@@ -152,7 +152,15 @@ struct IntentCompiler {
         if let best = filteredResult.scenarios.first, best.fitness < 0.1 {
             let chromo = ScheduleChromosome(genes: best.genes, needsEvaluation: false)
             let violations = ConstraintEngine.standard.violations(for: chromo, context: context)
-            let reason = "Not enough room — fitness=\(String(format: "%.3f", best.fitness)) active=\(best.activeGenes.count) dropped=\(best.droppedCount) violations=[\(violations.joined(separator: ", "))]"
+            let timeFmt = DateFormatter()
+            timeFmt.dateFormat = "E HH:mm"
+            let genePlacement = best.activeGenes.prefix(1).map { g in
+                "\(g.title)@\(timeFmt.string(from: g.startTime))-\(timeFmt.string(from: g.endTime))"
+            }.joined()
+            let fixedSample = allFixed.prefix(3).map { e in
+                "\(e.title.prefix(16))@\(timeFmt.string(from: e.startDate))-\(timeFmt.string(from: e.endDate))"
+            }.joined(separator: " | ")
+            let reason = "fitness=\(String(format: "%.3f", best.fitness)) gene=[\(genePlacement)] fixedN=\(allFixed.count) fixed=[\(fixedSample)] viol=[\(violations.joined(separator: ", "))]"
             return .infeasible(reason: reason, snapshot: snapshot, resolutions: capacityResolutions)
         }
 
