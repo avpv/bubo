@@ -723,19 +723,14 @@ private extension IntentCompiler {
         }
     }
 
-    /// Build a contiguous pack of schedulable backlog tasks for an
-    /// `.focusBurst` / `.pomodoroSession` session. Returns at most
-    /// `maxTasks` tasks; filters by context when supplied. The caller
-    /// keeps responsibility for handling an empty return (no backlog).
+    /// Delegates to `BacklogTaskCohesion.buildPack`, which owns the
+    /// full filter-then-cohesion policy for focus-burst packing.
     private func pickBacklogPack(maxTasks: Int, contextFilter: String?) -> [BacklogTask] {
-        var candidates = backlogService.schedulable
-        if let contextFilter, !contextFilter.isEmpty {
-            let normalized = contextFilter.lowercased()
-            candidates = candidates.filter {
-                $0.context?.lowercased() == normalized
-            }
-        }
-        return Array(candidates.prefix(max(1, maxTasks)))
+        BacklogTaskCohesion.buildPack(
+            from: backlogService.schedulable,
+            maxTasks: maxTasks,
+            contextFilter: contextFilter
+        )
     }
 
     /// User-facing title for a packed session.
