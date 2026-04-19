@@ -160,7 +160,7 @@ final class SubgraphRegistry {
             description: "Long uninterrupted focus with pomodoro",
             intents: [
                 .focusBlock(minutes: 180, period: .morning),
-                .pomodoroSession(preset: .deepWork),
+                .pomodoroSession,
                 .minimizeContextSwitching(weight: 2.0),
                 .maxMeetings(perDay: 1),
             ],

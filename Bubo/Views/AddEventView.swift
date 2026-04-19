@@ -636,7 +636,7 @@ struct AddEventView: View {
         isFindingBestTime = true
 
         let request = OptimizationRequest(
-            .pomodoroSession(preset: .classic),
+            .pomodoroSession,
             .findSlotsForBacklog,
             .horizon(.today), .speed(.quick), .scenarios(count: 3),
             name: "Pomodoro Slot"

@@ -521,6 +521,7 @@ struct IntentGraph: Sendable {
         case .focusBlock: return "focusBlock"
         case .createBlock(let t, _, _, _): return "createBlock.\(t)"
         case .pomodoroSession: return "pomodoroSession"
+        case .focusBurst: return "focusBurst"
         case .prioritizeDeadlines: return "prioritizeDeadlines"
         case .prioritizeFocus: return "prioritizeFocus"
         case .minimizeContextSwitching: return "minimizeContextSwitching"
@@ -624,7 +625,7 @@ struct IntentGraph: Sendable {
         case .includeBacklog, .includeBacklogTasks, .limitToTopTasks, .findSlotsForBacklog:
             return .tasks
         // Create
-        case .focusBlock, .createBlock, .pomodoroSession:
+        case .focusBlock, .createBlock, .pomodoroSession, .focusBurst:
             return .create
         // Transform
         case .splitLong, .addBuffer, .capTotal, .mergeAdjacent:
@@ -705,7 +706,7 @@ struct IntentGraph: Sendable {
             return [.prioritizeDeadlines()]
         case .batchMeetings:
             return [.protectLunch()]
-        case .pomodoroSession:
+        case .pomodoroSession, .focusBurst:
             return [.prioritizeFocus()]
         case .splitLong:
             return [.addBuffer(minutes: 5)]
@@ -792,7 +793,7 @@ struct IntentGraph: Sendable {
         // Tasks
         .includeBacklog, .findSlotsForBacklog,
         // Create
-        .focusBlock(minutes: 120), .pomodoroSession(),
+        .focusBlock(minutes: 120), .pomodoroSession,
         // Transforms
         .splitLong(maxMinutes: 90), .addBuffer(minutes: 10),
         .capTotal(minutesPerDay: 360),

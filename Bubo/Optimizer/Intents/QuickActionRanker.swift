@@ -242,7 +242,7 @@ struct QuickActionRanker {
                 id: "pomodoro",
                 label: "Pomodoro",
                 icon: "timer",
-                request: .pomodoroBlock(),
+                request: .pomodoroBlock,
                 signal: .noFocusToday
             )
         }

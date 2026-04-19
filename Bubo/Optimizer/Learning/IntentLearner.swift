@@ -221,6 +221,7 @@ final class IntentLearner {
         case .focusBlock: return "focusBlock"
         case .createBlock: return "createBlock"
         case .pomodoroSession: return "pomodoroSession"
+        case .focusBurst: return "focusBurst"
         case .prioritizeDeadlines: return "prioritizeDeadlines"
         case .prioritizeFocus: return "prioritizeFocus"
         case .minimizeContextSwitching: return "minimizeContextSwitching"
@@ -305,7 +306,8 @@ final class IntentLearner {
             "horizon.tomorrow": .horizon(.tomorrow),
             "horizon.week": .horizon(.week),
             "focusBlock": .focusBlock(minutes: 120),
-            "pomodoroSession": .pomodoroSession(),
+            "pomodoroSession": .pomodoroSession,
+            "focusBurst": .focusBurst(),
             "prioritizeDeadlines": .prioritizeDeadlines(),
             "prioritizeFocus": .prioritizeFocus(),
             "minimizeContextSwitching": .minimizeContextSwitching(),

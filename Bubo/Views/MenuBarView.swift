@@ -172,6 +172,9 @@ struct MenuBarView: View {
                             // which never matched the actual preset name
                             // "Pomodoro session" → palette opened empty).
                             paletteContext = PaletteContext(seedRecipeId: IntentPresets.Name.pomodoroSession)
+                        },
+                        onSessionEnded: { entry in
+                            optimizerService.pomodoroHistory.record(entry)
                         }
                     )
                     .transition(

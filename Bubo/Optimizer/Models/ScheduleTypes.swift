@@ -67,27 +67,6 @@ enum Period: String, Codable, Hashable, CaseIterable, Sendable {
     }
 }
 
-// MARK: - Pomodoro Preset
-
-enum PomodoroPreset: String, Codable, Hashable, CaseIterable, Sendable {
-    case classic
-    case deepWork
-
-    var config: PomodoroConfig {
-        switch self {
-        case .classic: return .classic
-        case .deepWork: return .deepWork
-        }
-    }
-
-    var totalMinutes: Int {
-        switch self {
-        case .classic: return 130
-        case .deepWork: return 130
-        }
-    }
-}
-
 // MARK: - Weight Key
 
 enum WeightKey: String, Codable, Hashable, CaseIterable, Sendable {
@@ -128,7 +107,25 @@ struct EventSpec: Codable, Hashable, Sendable {
     var context: String? = nil
     var period: Period? = nil
     var focus: Bool = false
-    var pomodoro: PomodoroPreset? = nil
+    /// Marks the spec as a pomodoro session that `IntentCompiler` must
+    /// resolve into a concrete `pomodoroConfig` using live signals.
+    var autoPomodoro: Bool = false
+    /// When set, `resolveAutoPomodoros` packs up to this many backlog
+    /// tasks into the session (focus-burst behaviour). `nil` keeps the
+    /// single-task `.pomodoroSession` path. Upper bound matches the
+    /// resolver's `roundBounds.upperBound`.
+    var autoFocusBurstMax: Int? = nil
+    /// Concrete pomodoro shape (work / break / rounds / long break).
+    /// Populated by `PomodoroConfigResolver` during compilation — no fixed
+    /// preset catalogue.
+    var pomodoroConfig: PomodoroConfig? = nil
+    /// Backlog task ids consumed by this spec, in per-round order. Drives
+    /// the strict "one pomodoro = these tasks" binding: `IntentCompiler`
+    /// fills it during resolution, `collectBacklogTasks` filters those
+    /// ids out, and `OptimizerService.applyScenario` uses it to populate
+    /// `CalendarEvent.pomodoroTaskSequence` and call `markScheduled` for
+    /// every task in the list.
+    var reservedTaskIds: [String] = []
     var participants: [String] = []
     var creation: CreationMode = .fixed
     var chainGap: Int? = nil
@@ -149,7 +146,10 @@ struct EventSpec: Codable, Hashable, Sendable {
         context = try? c.decode(String.self, forKey: .context)
         period = try? c.decode(Period.self, forKey: .period)
         focus = (try? c.decode(Bool.self, forKey: .focus)) ?? false
-        pomodoro = try? c.decode(PomodoroPreset.self, forKey: .pomodoro)
+        autoPomodoro = (try? c.decode(Bool.self, forKey: .autoPomodoro)) ?? false
+        autoFocusBurstMax = try? c.decode(Int.self, forKey: .autoFocusBurstMax)
+        pomodoroConfig = try? c.decode(PomodoroConfig.self, forKey: .pomodoroConfig)
+        reservedTaskIds = (try? c.decode([String].self, forKey: .reservedTaskIds)) ?? []
         participants = (try? c.decode([String].self, forKey: .participants)) ?? []
         creation = (try? c.decode(CreationMode.self, forKey: .creation)) ?? .fixed
         chainGap = try? c.decode(Int.self, forKey: .chainGap)
@@ -170,7 +170,10 @@ struct EventSpec: Codable, Hashable, Sendable {
         context: String? = nil,
         period: Period? = nil,
         focus: Bool = false,
-        pomodoro: PomodoroPreset? = nil,
+        autoPomodoro: Bool = false,
+        autoFocusBurstMax: Int? = nil,
+        pomodoroConfig: PomodoroConfig? = nil,
+        reservedTaskIds: [String] = [],
         participants: [String] = [],
         creation: CreationMode = .fixed,
         chainGap: Int? = nil,
@@ -189,7 +192,10 @@ struct EventSpec: Codable, Hashable, Sendable {
         self.context = context
         self.period = period
         self.focus = focus
-        self.pomodoro = pomodoro
+        self.autoPomodoro = autoPomodoro
+        self.autoFocusBurstMax = autoFocusBurstMax
+        self.pomodoroConfig = pomodoroConfig
+        self.reservedTaskIds = reservedTaskIds
         self.participants = participants
         self.creation = creation
         self.chainGap = chainGap

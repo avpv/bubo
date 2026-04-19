@@ -46,6 +46,12 @@ final class OptimizerService {
     /// Energy check-in service for adaptive energy curve.
     var energyCheckInService: EnergyCheckInService?
 
+    /// Pomodoro outcome log — records completed/abandoned sessions so
+    /// `PomodoroConfigResolver` can blend past choices into new shapes.
+    /// Created on first use; shared with `IntentCompiler` and
+    /// `TimerScreenView`.
+    let pomodoroHistory = PomodoroHistoryService()
+
     // MARK: - Optimizer Settings (persisted)
 
     var workingHoursStart: Int {
@@ -165,6 +171,7 @@ final class OptimizerService {
         )
         compiler.subgraphRegistry = subgraphRegistry
         compiler.energyCheckInService = energyCheckInService
+        compiler.pomodoroHistory = pomodoroHistory
         let result = await compiler.execute(request, defaultWorkingHours: workingHours)
 
         switch result {
@@ -231,6 +238,7 @@ final class OptimizerService {
         )
         compiler.subgraphRegistry = subgraphRegistry
         compiler.energyCheckInService = energyCheckInService
+        compiler.pomodoroHistory = pomodoroHistory
         let result = await compiler.execute(request, defaultWorkingHours: workingHours)
         switch result {
         case .success(let r), .partialSuccess(let r, _, _):
@@ -250,6 +258,7 @@ final class OptimizerService {
         )
         compiler.subgraphRegistry = subgraphRegistry
         compiler.energyCheckInService = energyCheckInService
+        compiler.pomodoroHistory = pomodoroHistory
         
         let req = OptimizationRequest(.horizon(.week), .includeBacklog)
         let result = await compiler.execute(req, defaultWorkingHours: workingHours)
@@ -291,6 +300,7 @@ final class OptimizerService {
             }
         }
 
+        let cal = Calendar.current
         for (i, gene) in scenario.activeGenes.enumerated() {
             let title: String
             if let override = titleOverride, !override.isEmpty {
@@ -298,7 +308,41 @@ final class OptimizerService {
             } else {
                 title = gene.title
             }
-            let event = CalendarEvent(
+
+            // Post-GA shape refinement: the gene already has a config (picked
+            // pre-GA with `currentHour`), but the slot it actually landed in
+            // may sit hours from that assumption. Re-resolve the inner shape
+            // with the real start hour, keeping the gene's duration as the
+            // hard budget. Changes only work/break/rounds/longBreak —
+            // `gene.endTime` stays intact.
+            var pomodoroConfig = gene.pomodoroConfig
+            if let originalConfig = gene.pomodoroConfig {
+                let budget = max(
+                    PomodoroResolverTuning.default.workBounds.lowerBound,
+                    Int(gene.duration / 60)
+                )
+                var signals = PomodoroResolveSignals()
+                signals.startHour = cal.component(.hour, from: gene.startTime)
+                signals.learnedConfig = pomodoroHistory.learnedConfig(forHour: signals.startHour)
+                    ?? originalConfig
+                pomodoroConfig = PomodoroConfigResolver.resolveShape(
+                    totalMinutes: budget,
+                    startHour: signals.startHour,
+                    signals: signals
+                )
+            }
+
+            // Snapshot the backlog tasks bound to this gene so the timer
+            // can show `taskSequence[round].title` and the backlog
+            // service can link every consumed task to the same event.
+            let sequence: [CalendarEvent.TaskSequenceEntry] = gene.reservedTaskIds.compactMap { id in
+                guard let task = backlogService?.tasks.first(where: { $0.id == id }) else {
+                    return nil
+                }
+                return CalendarEvent.TaskSequenceEntry(taskId: id, title: task.title)
+            }
+
+            var event = CalendarEvent(
                 id: gene.eventId,
                 title: title,
                 startDate: gene.startTime,
@@ -309,15 +353,28 @@ final class OptimizerService {
                 eventType: gene.isFocusBlock ? .pomodoro : .standard,
                 colorTag: colorOverride ?? (gene.isFocusBlock ? .blue : .green)
             )
+            event.pomodoroConfig = pomodoroConfig
+            event.pomodoroTaskSequence = sequence
             reminderService.addLocalEvent(event)
             createdEventIds.append(event.id)
 
-            // Link backlog tasks to their scheduled events
-            backlogService?.markScheduled(
-                id: gene.eventId,
-                eventId: event.id,
-                date: gene.startTime
-            )
+            // Link backlog tasks to their scheduled events. For focus
+            // bursts every task in the pack points at the same pomodoro.
+            if gene.reservedTaskIds.isEmpty {
+                backlogService?.markScheduled(
+                    id: gene.eventId,
+                    eventId: event.id,
+                    date: gene.startTime
+                )
+            } else {
+                for taskId in gene.reservedTaskIds {
+                    backlogService?.markScheduled(
+                        id: taskId,
+                        eventId: event.id,
+                        date: gene.startTime
+                    )
+                }
+            }
         }
 
         // Save undo snapshot

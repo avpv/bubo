@@ -21,6 +21,10 @@ struct IntentCompiler {
     let backlogService: BacklogService
     var subgraphRegistry: SubgraphRegistry?
     var energyCheckInService: EnergyCheckInService?
+    /// Closes the learning loop for `PomodoroConfigResolver`. When present,
+    /// resolved session shapes blend with the median of recent completed
+    /// sessions at a similar time of day.
+    var pomodoroHistory: PomodoroHistoryService?
 
     // MARK: - Execute
 
@@ -45,6 +49,10 @@ struct IntentCompiler {
         for intent in orderedIntents {
             apply(intent, to: &config)
         }
+
+        // Phase 1.5: Resolve any `.auto` pomodoro specs now that the full
+        // intent context is known (peak energy, backlog state, working hours).
+        resolveAutoPomodoros(in: &config)
 
         // Phase 2: Collect events (filtered by sources)
         let syntheticEvents = resolveSyntheticEvents(config)
@@ -75,6 +83,19 @@ struct IntentCompiler {
             ? reminderService.allEvents.filter { $0.isLocalEvent }
             : []
         var allFixed = calendarFixed + localAsFixed
+
+        // Tasks that an `autoPomodoro` spec reserved (see
+        // `resolveAutoPomodoros`) may still be present in
+        // `reminderService.allEvents` from a previous scheduling run. Drop
+        // those copies so the synthetic pomodoro is the sole event carrying
+        // that id — otherwise `ScheduleConflictGraph` would see fixed
+        // +movable duplicates and crash its union-find build.
+        let reservedPomodoroIds = Set(
+            config.syntheticEvents.compactMap { $0.autoPomodoro ? $0.specId : nil }
+        )
+        if !reservedPomodoroIds.isEmpty {
+            allFixed = allFixed.filter { !reservedPomodoroIds.contains($0.id) }
+        }
 
         // Phase 3.5: Add backlog tasks (capped to available time)
         // The cap is generous (120%) because the GA can drop droppable tasks
@@ -307,11 +328,28 @@ private extension IntentCompiler {
                 title: title, minutes: minutes, period: period, focus: focus
             ))
             config.findSlotsOnly = true
-        case .pomodoroSession(let preset):
+        case .pomodoroSession:
+            // Placeholder minutes — resolveAutoPomodoros(&config) rewrites
+            // both `minutes` and `pomodoroConfig` once signals are known.
             config.syntheticEvents.append(EventSpec(
-                title: "Pomodoro", minutes: preset.totalMinutes,
-                priority: 0.8, energy: 0.6, focus: true, pomodoro: preset
+                title: "Pomodoro", minutes: 120,
+                priority: 0.8, energy: 0.6, focus: true, autoPomodoro: true
             ))
+            config.findSlotsOnly = true
+        case .focusBurst(let maxTasks, let contextFilter):
+            // Packed pomodoro — marker tells resolveAutoPomodoros to
+            // consume up to `maxTasks` backlog rows (optionally filtered
+            // by context) instead of just the top one. Title, minutes,
+            // and `reservedTaskIds` are rewritten once the backlog pack
+            // is chosen.
+            var spec = EventSpec(
+                title: "Focus burst", minutes: 120,
+                priority: 0.8, energy: 0.6, focus: true,
+                autoPomodoro: true,
+                autoFocusBurstMax: max(1, min(maxTasks, 8))
+            )
+            spec.context = contextFilter
+            config.syntheticEvents.append(spec)
             config.findSlotsOnly = true
 
         // Weight adjustments
@@ -612,6 +650,177 @@ private extension IntentCompiler {
             return todayEnd.timeIntervalSince(cursor) >= TimeInterval(minutes * 60)
         }
     }
+
+    // MARK: - Auto Pomodoro Resolution
+
+    /// Replace any `.auto` pomodoro spec in `config.syntheticEvents` with a
+    /// concrete `PomodoroConfig` produced by `PomodoroConfigResolver`. Called
+    /// after the intent loop so every signal (peak energy, working hours,
+    /// backlog, calendar) is already settled.
+    func resolveAutoPomodoros(in config: inout ResolvedConfig) {
+        guard config.syntheticEvents.contains(where: { $0.autoPomodoro }) else {
+            return
+        }
+
+        for i in config.syntheticEvents.indices where config.syntheticEvents[i].autoPomodoro {
+            var spec = config.syntheticEvents[i]
+
+            // Pick the backlog pack: 1 task for .pomodoroSession, up to
+            // `autoFocusBurstMax` for .focusBurst. Optional `spec.context`
+            // narrows the pack to tasks in the same project/tag.
+            let maxTasks = spec.autoFocusBurstMax ?? 1
+            let pack = pickBacklogPack(maxTasks: maxTasks, contextFilter: spec.context)
+
+            // Phase A (pre-GA): resolver decides duration + shape.
+            // Signals are built per-spec so the estimate reflects the
+            // pack's total work, not just the top task.
+            var signals = buildPomodoroSignals(config)
+            if !pack.isEmpty {
+                signals.taskEstimateMinutes = pack.reduce(0) { $0 + $1.durationMinutes }
+                signals.taskStoryPoints = pack.compactMap(\.storyPoints).max()
+                if let firstDeadline = pack.compactMap(\.deadline).min() {
+                    let cal = Calendar.current
+                    let days = cal.dateComponents(
+                        [.day],
+                        from: cal.startOfDay(for: Date()),
+                        to: cal.startOfDay(for: firstDeadline)
+                    ).day
+                    signals.deadlineDaysAway = days
+                }
+            }
+
+            let duration = PomodoroConfigResolver.resolveDuration(signals: signals)
+            var shape = PomodoroConfigResolver.resolveShape(
+                totalMinutes: duration,
+                startHour: signals.startHour,
+                signals: signals
+            )
+
+            // Clamp the shape to the pack size when packing — one task
+            // per work round keeps the per-round labelling meaningful.
+            if !pack.isEmpty, shape.rounds > pack.count {
+                shape = PomodoroConfig(
+                    workMinutes: shape.workMinutes,
+                    breakMinutes: shape.breakMinutes,
+                    rounds: pack.count,
+                    longBreakMinutes: pack.count >= 3 ? shape.longBreakMinutes : 0
+                )
+            }
+
+            spec.pomodoroConfig = shape
+            spec.minutes = shape.totalMinutes
+
+            // Bind the chosen tasks to the spec.
+            if let first = pack.first {
+                spec.specId = first.id
+                spec.storyPoints = first.storyPoints
+                spec.deadline = first.deadline
+                spec.reservedTaskIds = pack.map(\.id)
+                spec.title = focusTitle(for: pack)
+            }
+
+            config.syntheticEvents[i] = spec
+        }
+    }
+
+    /// Delegates to `BacklogTaskCohesion.buildPack`, which owns the
+    /// full filter-then-cohesion policy for focus-burst packing.
+    private func pickBacklogPack(maxTasks: Int, contextFilter: String?) -> [BacklogTask] {
+        BacklogTaskCohesion.buildPack(
+            from: backlogService.schedulable,
+            maxTasks: maxTasks,
+            contextFilter: contextFilter
+        )
+    }
+
+    /// User-facing title for a packed session.
+    /// - 1 task → the task's own title.
+    /// - 2 tasks → "A + B".
+    /// - 3+ tasks → "A + 2 more".
+    private func focusTitle(for pack: [BacklogTask]) -> String {
+        let titles = pack.map { $0.title.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        switch titles.count {
+        case 0: return "Focus burst"
+        case 1: return titles[0]
+        case 2: return "\(titles[0]) + \(titles[1])"
+        default: return "\(titles[0]) + \(titles.count - 1) more"
+        }
+    }
+
+    private func buildPomodoroSignals(_ config: ResolvedConfig) -> PomodoroResolveSignals {
+        var signals = PomodoroResolveSignals()
+
+        let cal = Calendar.current
+        let now = Date()
+        signals.startHour = cal.component(.hour, from: now)
+        signals.peakEnergyHour = config.peakEnergyHour
+        signals.isLowEnergy = (config.weights[.energyCurve] ?? 0) >= 1.8
+        signals.wantsDeepWork = (config.weights[.focusBlock] ?? 0) >= 2.0
+
+        signals.availableMinutes = largestFreeGapMinutes(config: config, now: now)
+        signals.learnedConfig = pomodoroHistory?.learnedConfig(forHour: signals.startHour)
+
+        if let task = topBacklogCandidate() {
+            signals.taskEstimateMinutes = task.durationMinutes
+            signals.taskStoryPoints = task.storyPoints
+            if let deadline = task.deadline {
+                let days = cal.dateComponents([.day], from: cal.startOfDay(for: now), to: cal.startOfDay(for: deadline)).day
+                signals.deadlineDaysAway = days
+            }
+        }
+
+        return signals
+    }
+
+    /// Largest continuous free window in minutes across the full planning
+    /// horizon (today, tomorrow, or the next 7 days). Returns `nil` when
+    /// the scan produces no usable window so the resolver falls back to
+    /// its own target-duration logic.
+    private func largestFreeGapMinutes(config: ResolvedConfig, now: Date) -> Int? {
+        let days: Int
+        switch config.horizon {
+        case .today:    days = 1
+        case .tomorrow: days = 2   // today + tomorrow
+        case .week:     days = 7
+        }
+
+        let cal = Calendar.current
+        var largest: TimeInterval = 0
+        for offset in 0..<days {
+            guard
+                let base = cal.date(byAdding: .day, value: offset, to: now),
+                let dayStart = cal.date(bySettingHour: config.workingHours.lowerBound, minute: 0, second: 0, of: base),
+                let dayEnd = cal.date(bySettingHour: config.workingHours.upperBound, minute: 0, second: 0, of: base)
+            else { continue }
+
+            let scanStart = offset == 0 ? max(now, dayStart) : dayStart
+            guard scanStart < dayEnd else { continue }
+
+            let events = reminderService.allEvents
+                .filter { $0.endDate > scanStart && $0.startDate < dayEnd }
+                .sorted { $0.startDate < $1.startDate }
+
+            var cursor = scanStart
+            for event in events {
+                let gap = event.startDate.timeIntervalSince(cursor)
+                if gap > largest { largest = gap }
+                cursor = max(cursor, event.endDate)
+            }
+            let tail = dayEnd.timeIntervalSince(cursor)
+            if tail > largest { largest = tail }
+        }
+
+        let minutes = Int(largest / 60)
+        return minutes > 0 ? minutes : nil
+    }
+
+    /// Highest-priority schedulable backlog task — the most likely target for
+    /// the pomodoro session. Uses the service's natural ordering so it
+    /// matches what `collectBacklogTasks` would pick.
+    private func topBacklogCandidate() -> BacklogTask? {
+        backlogService.schedulable.first
+    }
 }
 
 // MARK: - Event Collection
@@ -633,9 +842,10 @@ private extension IntentCompiler {
                     requiredParticipants: spec.participants,
                     preferredHourRange: spec.period?.hourRange,
                     isFocusBlock: spec.focus,
-                    pomodoroConfig: spec.pomodoro?.config,
+                    pomodoroConfig: spec.pomodoroConfig,
                     storyPoints: spec.storyPoints,
-                    dependsOn: spec.dependsOn
+                    dependsOn: spec.dependsOn,
+                    reservedTaskIds: spec.reservedTaskIds
                 )
             }
         }
@@ -673,7 +883,8 @@ private extension IntentCompiler {
                     requiredParticipants: event.requiredParticipants,
                     preferredHourRange: period.hourRange,
                     isFocusBlock: event.isFocusBlock, pomodoroConfig: event.pomodoroConfig,
-                    storyPoints: event.storyPoints, dependsOn: event.dependsOn
+                    storyPoints: event.storyPoints, dependsOn: event.dependsOn,
+                    reservedTaskIds: event.reservedTaskIds
                 )
             }
         }
@@ -684,7 +895,16 @@ private extension IntentCompiler {
 
     func collectBacklogTasks(_ config: ResolvedConfig) -> [OptimizableEvent] {
         guard config.includeBacklog else { return [] }
-        let candidates = backlogService.schedulable
+        // Tasks consumed by an auto-pomodoro spec (see
+        // `resolveAutoPomodoros`) must not be scheduled a second time as
+        // standalone backlog events — the synthetic pomodoro already
+        // carries the task's id, title, and shape.
+        let reservedBySynthetic = Set(
+            config.syntheticEvents.compactMap { spec in
+                spec.autoPomodoro ? spec.specId : nil
+            }
+        )
+        let candidates = backlogService.schedulable.filter { !reservedBySynthetic.contains($0.id) }
         var filtered: [BacklogTask]
         if let ids = config.backlogTaskIds {
             filtered = candidates.filter { ids.contains($0.id) }

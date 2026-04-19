@@ -22,6 +22,9 @@ final class PersistedBacklogTask {
     var deadline: Date?
     var storyPoints: Int?
     var context: String?
+    /// `EventColorTag.rawValue` — optional + defaulted nil so CloudKit
+    /// migration is a no-op for pre-existing rows.
+    var colorTagRaw: String?
     /// JSON-encoded `[String]`.
     var dependsOnData: Data?
     var preferredPeriodRaw: String?
@@ -64,6 +67,7 @@ final class PersistedBacklogTask {
         self.deadline = task.deadline
         self.storyPoints = task.storyPoints
         self.context = task.context
+        self.colorTagRaw = task.colorTag?.rawValue
         self.dependsOnData = try? JSONEncoder().encode(task.dependsOn)
         self.preferredPeriodRaw = task.preferredPeriod?.rawValue
         self.statusRaw = task.status.rawValue
@@ -91,6 +95,7 @@ final class PersistedBacklogTask {
             deadline: deadline,
             storyPoints: storyPoints,
             context: context,
+            colorTag: colorTagRaw.flatMap { EventColorTag(rawValue: $0) },
             dependsOn: deps,
             preferredPeriod: preferredPeriodRaw.flatMap { Period(rawValue: $0) },
             isRecurring: isRecurring,

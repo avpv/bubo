@@ -76,7 +76,11 @@ enum IntentConflictDetector {
             switch intent {
             case .focusBlock(let m, _): neededMinutes = m
             case .createBlock(_, let m, _, _): neededMinutes = m
-            case .pomodoroSession(let p): neededMinutes = p.totalMinutes
+            // Resolver decides actual duration from signals at compile time;
+            // for the pre-flight window check use a conservative upper bound
+            // that matches the resolver's default target.
+            case .pomodoroSession: neededMinutes = 120
+            case .focusBurst: neededMinutes = 180
             default: continue
             }
 

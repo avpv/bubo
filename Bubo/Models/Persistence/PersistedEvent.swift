@@ -38,6 +38,14 @@ final class PersistedLocalEvent {
     var taskStatusRaw: String = "todo"
     var completedAt: Date?
     var dependsOn: [String] = []
+    /// JSON-encoded `PomodoroConfig`. Optional + defaulted so CloudKit
+    /// migration is a no-op for pre-existing rows; newly-stored pomodoro
+    /// events carry the resolver's chosen shape here.
+    var pomodoroConfigData: Data?
+    /// JSON-encoded `[CalendarEvent.TaskSequenceEntry]` — per-round task
+    /// list for `.focusBurst` sessions. Nil for single-task pomodoros
+    /// and for every non-pomodoro event.
+    var pomodoroTaskSequenceData: Data?
     var updatedAt: Date = Date()
 
     init() {}
@@ -67,6 +75,10 @@ final class PersistedLocalEvent {
         self.taskStatusRaw = event.taskStatus.rawValue
         self.completedAt = event.completedAt
         self.dependsOn = event.dependsOn
+        self.pomodoroConfigData = event.pomodoroConfig.flatMap { try? JSONEncoder().encode($0) }
+        self.pomodoroTaskSequenceData = event.pomodoroTaskSequence.isEmpty
+            ? nil
+            : try? JSONEncoder().encode(event.pomodoroTaskSequence)
         self.updatedAt = updatedAt
     }
 
@@ -95,6 +107,12 @@ final class PersistedLocalEvent {
         event.taskStatus = TaskStatus(rawValue: taskStatusRaw) ?? .todo
         event.completedAt = completedAt
         event.dependsOn = dependsOn
+        event.pomodoroConfig = pomodoroConfigData.flatMap {
+            try? JSONDecoder().decode(PomodoroConfig.self, from: $0)
+        }
+        event.pomodoroTaskSequence = pomodoroTaskSequenceData.flatMap {
+            try? JSONDecoder().decode([CalendarEvent.TaskSequenceEntry].self, from: $0)
+        } ?? []
         return event
     }
 }
@@ -128,6 +146,13 @@ final class PersistedCachedEvent {
     var taskStatusRaw: String = "todo"
     var completedAt: Date?
     var dependsOn: [String] = []
+    /// JSON-encoded `PomodoroConfig`. Mirrors the field on
+    /// `PersistedLocalEvent` so a pomodoro brought back from the cache
+    /// still knows its shape.
+    var pomodoroConfigData: Data?
+    /// JSON-encoded `[CalendarEvent.TaskSequenceEntry]` — focus-burst
+    /// task pack for this cached event.
+    var pomodoroTaskSequenceData: Data?
     var cachedAt: Date
 
     init(from event: CalendarEvent, cachedAt: Date = Date()) {
@@ -150,6 +175,10 @@ final class PersistedCachedEvent {
         self.taskStatusRaw = event.taskStatus.rawValue
         self.completedAt = event.completedAt
         self.dependsOn = event.dependsOn
+        self.pomodoroConfigData = event.pomodoroConfig.flatMap { try? JSONEncoder().encode($0) }
+        self.pomodoroTaskSequenceData = event.pomodoroTaskSequence.isEmpty
+            ? nil
+            : try? JSONEncoder().encode(event.pomodoroTaskSequence)
         self.cachedAt = cachedAt
     }
 
@@ -178,6 +207,12 @@ final class PersistedCachedEvent {
         event.taskStatus = TaskStatus(rawValue: taskStatusRaw) ?? .todo
         event.completedAt = completedAt
         event.dependsOn = dependsOn
+        event.pomodoroConfig = pomodoroConfigData.flatMap {
+            try? JSONDecoder().decode(PomodoroConfig.self, from: $0)
+        }
+        event.pomodoroTaskSequence = pomodoroTaskSequenceData.flatMap {
+            try? JSONDecoder().decode([CalendarEvent.TaskSequenceEntry].self, from: $0)
+        } ?? []
         return event
     }
 }

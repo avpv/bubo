@@ -19,6 +19,11 @@ struct OptimizableEvent: Identifiable, Codable, Hashable, Sendable {
     let storyPoints: Int?           // effort estimate (1, 2, 3, 5, 8, 13)
     let dependsOn: [String]         // IDs of tasks that must finish first
     let isDroppable: Bool           // GA can exclude this event if it doesn't fit
+    /// Backlog task ids bound to this optimizable event (ordered).
+    /// Non-empty only for pomodoro sessions produced by `.pomodoroSession`
+    /// or `.focusBurst` — one entry per work round when the session is
+    /// filled with backlog work.
+    let reservedTaskIds: [String]
     /// Position in the user's backlog at the moment the event was collected.
     /// Populated only for events coming from `BacklogService` via
     /// `collectBacklogTasks`; stays `nil` for calendar-derived events.
@@ -44,6 +49,7 @@ struct OptimizableEvent: Identifiable, Codable, Hashable, Sendable {
         storyPoints: Int? = nil,
         dependsOn: [String] = [],
         isDroppable: Bool = false,
+        reservedTaskIds: [String] = [],
         backlogIndex: Int? = nil
     ) {
         self.id = id
@@ -61,6 +67,7 @@ struct OptimizableEvent: Identifiable, Codable, Hashable, Sendable {
         self.storyPoints = storyPoints
         self.dependsOn = dependsOn
         self.isDroppable = isDroppable
+        self.reservedTaskIds = reservedTaskIds
         self.backlogIndex = backlogIndex
     }
 }
@@ -73,8 +80,14 @@ struct PomodoroConfig: Codable, Hashable, Sendable {
     let rounds: Int
     let longBreakMinutes: Int
 
-    static let classic = PomodoroConfig(workMinutes: 25, breakMinutes: 5, rounds: 4, longBreakMinutes: 15)
-    static let deepWork = PomodoroConfig(workMinutes: 50, breakMinutes: 10, rounds: 2, longBreakMinutes: 20)
+    /// Wall-clock minutes from first round start to end of long break.
+    /// The last round has no trailing short break, so we have
+    /// `rounds` works + `rounds - 1` short breaks + optional long break.
+    var totalMinutes: Int {
+        workMinutes * rounds
+            + breakMinutes * max(0, rounds - 1)
+            + longBreakMinutes
+    }
 }
 
 // MARK: - Schedule Gene
@@ -92,6 +105,13 @@ struct ScheduleGene: Codable, Hashable, Sendable {
     let storyPoints: Int?
     let isDroppable: Bool           // whether the GA may exclude this gene
     var isIncluded: Bool            // whether this gene is active in the schedule
+    /// Pomodoro shape when the event represents a pomodoro session.
+    /// Flows `OptimizableEvent` → gene → `applyScenario` so the service
+    /// can re-resolve or persist the chosen shape onto the `CalendarEvent`.
+    let pomodoroConfig: PomodoroConfig?
+    /// Backlog task ids bound to this gene (ordered per work round).
+    /// Non-empty only for auto-pomodoro / focus-burst events.
+    let reservedTaskIds: [String]
 
     var endTime: Date { startTime.addingTimeInterval(duration) }
 
@@ -106,7 +126,9 @@ struct ScheduleGene: Codable, Hashable, Sendable {
         isFocusBlock: Bool,
         storyPoints: Int? = nil,
         isDroppable: Bool = false,
-        isIncluded: Bool = true
+        isIncluded: Bool = true,
+        pomodoroConfig: PomodoroConfig? = nil,
+        reservedTaskIds: [String] = []
     ) {
         self.eventId = eventId
         self.title = title
@@ -119,6 +141,8 @@ struct ScheduleGene: Codable, Hashable, Sendable {
         self.storyPoints = storyPoints
         self.isDroppable = isDroppable
         self.isIncluded = isIncluded
+        self.pomodoroConfig = pomodoroConfig
+        self.reservedTaskIds = reservedTaskIds
     }
 
     /// Create a copy with a new start time (preserves all other fields).
@@ -134,7 +158,9 @@ struct ScheduleGene: Codable, Hashable, Sendable {
             isFocusBlock: isFocusBlock,
             storyPoints: storyPoints,
             isDroppable: isDroppable,
-            isIncluded: isIncluded
+            isIncluded: isIncluded,
+            pomodoroConfig: pomodoroConfig,
+            reservedTaskIds: reservedTaskIds
         )
     }
 }
@@ -440,10 +466,11 @@ struct ScheduleScenario: Identifiable, Sendable {
                 location: nil,
                 description: nil,
                 calendarName: "Optimizer",
-                eventType: .standard
+                eventType: gene.pomodoroConfig != nil ? .pomodoro : .standard
             )
             event.isMovable = true
             event.isTask = gene.storyPoints != nil
+            event.pomodoroConfig = gene.pomodoroConfig
             event.storyPoints = gene.storyPoints
             return event
         }

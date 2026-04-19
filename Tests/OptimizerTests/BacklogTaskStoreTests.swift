@@ -145,4 +145,24 @@ final class BacklogTaskStoreTests: XCTestCase {
             XCTAssertEqual(reloaded[0].title, "New")
         }
     }
+
+    // MARK: - Color tag persistence
+
+    func testColorTagSurvivesUpsertRoundtrip() throws {
+        try runContract { store in
+            var t = self.task("a")
+            t.colorTag = .blue
+            store.upsert(t, at: 0)
+
+            let loaded = store.loadAll()
+            XCTAssertEqual(loaded.first?.colorTag, .blue)
+        }
+    }
+
+    func testMissingColorTagDecodesAsNil() throws {
+        try runContract { store in
+            store.upsert(self.task("a"), at: 0)
+            XCTAssertNil(store.loadAll().first?.colorTag)
+        }
+    }
 }

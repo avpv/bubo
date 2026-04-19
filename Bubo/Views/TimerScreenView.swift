@@ -7,6 +7,10 @@ struct TimerScreenView: View {
     var isPinned: Bool = false
     var onRepeat: ((CalendarEvent) -> Void)? = nil
     var onScheduleNext: ((CalendarEvent) -> Void)? = nil
+    /// Called once when the view goes away, if the event had a pomodoro
+    /// shape. Lets `MenuBarView` route the outcome into
+    /// `PomodoroHistoryService` without pulling the service into a view.
+    var onSessionEnded: ((PomodoroHistoryEntry) -> Void)? = nil
 
     var wallpaper: WallpaperDefinition = WallpaperCatalog.none
     var customPhotoPath: String = ""
@@ -15,6 +19,7 @@ struct TimerScreenView: View {
 
 
     @State private var pulseRing = false
+    @State private var appearedAt: Date?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.navigateHome) private var navigateHome
@@ -40,11 +45,20 @@ struct TimerScreenView: View {
     }
 
     private func activeSeconds(_ now: Date) -> Int {
-        isInProgress(now) ? secondsUntilEnd(now) : secondsUntilStart(now)
+        if let phase = currentPhase(now), isInProgress(now) {
+            return max(0, Int(phase.phaseEnd.timeIntervalSince(now)))
+        }
+        return isInProgress(now) ? secondsUntilEnd(now) : secondsUntilStart(now)
     }
 
     private func ringProgress(_ now: Date) -> Double {
         if hasEnded(now) { return 1.0 }
+        if let phase = currentPhase(now), isInProgress(now) {
+            let total = phase.duration
+            guard total > 0 else { return 0 }
+            let elapsed = total - phase.phaseEnd.timeIntervalSince(now)
+            return min(max(elapsed / total, 0), 1.0)
+        }
         if isInProgress(now) {
             guard totalDuration > 0 else { return 0 }
             let elapsed = totalDuration - Double(secondsUntilEnd(now))
@@ -53,6 +67,13 @@ struct TimerScreenView: View {
         let cap = 86400.0
         let clamped = min(Double(secondsUntilStart(now)), cap)
         return clamped / cap
+    }
+
+    /// Active pomodoro phase for `now`, or `nil` when the event has no
+    /// `pomodoroConfig` (recurrence-based pomodoros and plain events
+    /// keep the legacy single-countdown behaviour).
+    private func currentPhase(_ now: Date) -> CalendarEvent.PomodoroPhase? {
+        event.currentPomodoroPhase(at: now)
     }
 
     private func accentColor(_ now: Date) -> Color {
@@ -81,11 +102,48 @@ struct TimerScreenView: View {
             .frame(width: DS.Popover.width, height: DS.Popover.timerHeight)
         }
         .onAppear {
+            appearedAt = Date()
             guard !reduceMotion else { return }
             withAnimation(.easeInOut(duration: 2).repeatForever(autoreverses: true)) {
                 pulseRing = true
             }
         }
+        .onDisappear { reportSessionOutcome() }
+    }
+
+    /// Record the session outcome using the phase model so the history
+    /// reflects what actually happened: `completedRounds` comes from the
+    /// pomodoro phase at exit time (not an on-screen-time heuristic).
+    /// A session counts as completed when every work round finished.
+    private func reportSessionOutcome() {
+        guard
+            let config = event.pomodoroConfig,
+            let onSessionEnded
+        else { return }
+
+        let now = Date()
+        // Minutes actually elapsed inside the session (clamped to the
+        // event window). For a session that hasn't started yet nothing
+        // is recorded.
+        let sessionElapsed = now.timeIntervalSince(event.startDate)
+        guard sessionElapsed > 0 else { return }
+
+        let actualMinutes = max(
+            0,
+            Int(min(sessionElapsed, totalDuration) / 60)
+        )
+        let phase = event.currentPomodoroPhase(at: now)
+        let completedRounds = phase?.completedRounds ?? 0
+        let completed = completedRounds >= config.rounds
+        let cal = Calendar.current
+        let entry = PomodoroHistoryEntry(
+            startedAt: event.startDate,
+            startHour: cal.component(.hour, from: event.startDate),
+            config: config,
+            actualMinutes: actualMinutes,
+            completed: completed
+        )
+        onSessionEnded(entry)
     }
 
     private func timerContent(now: Date) -> some View {
@@ -192,29 +250,47 @@ struct TimerScreenView: View {
                     }
                     .staggeredEntrance(index: 0)
 
-                    // Pomodoro segment indicator — round number and work/break status
-                    if let segment = event.pomodoroSegment {
-                        HStack(spacing: DS.Spacing.sm) {
-                            Image(systemName: segment.iconName)
-                                .font(.system(size: DS.Size.iconMedium, weight: .medium))
-                                .foregroundStyle(pomodoroSegmentColor(segment))
+                    // Pomodoro segment indicator — round number and work/break status.
+                    // Prefers the pomodoroConfig-driven phase for single-event
+                    // sessions; falls back to the id-suffix path used by
+                    // recurrence-expanded pomodoros.
+                    if let display = pomodoroDisplayInfo(now: now) {
+                        VStack(spacing: DS.Spacing.sm) {
+                            HStack(spacing: DS.Spacing.sm) {
+                                Image(systemName: display.segment.iconName)
+                                    .font(.system(size: DS.Size.iconMedium, weight: .medium))
+                                    .foregroundStyle(pomodoroSegmentColor(display.segment))
 
-                            Text(segment.label)
-                                .font(.system(.subheadline, design: skin.resolvedFontDesign, weight: .semibold))
-                                .foregroundStyle(pomodoroSegmentColor(segment))
+                                Text(display.segment.label)
+                                    .font(.system(.subheadline, design: skin.resolvedFontDesign, weight: .semibold))
+                                    .foregroundStyle(pomodoroSegmentColor(display.segment))
 
-                            if let round = event.pomodoroRoundNumber, let total = event.pomodoroTotalRounds {
-                                Text("·")
-                                    .foregroundStyle(skin.resolvedTextTertiary)
-                                Text("Round \(round) of \(total)")
-                                    .font(.system(.subheadline, design: skin.resolvedFontDesign, weight: .medium))
-                                    .foregroundStyle(skin.resolvedTextSecondary)
+                                if let round = display.round, let total = display.total {
+                                    Text("·")
+                                        .foregroundStyle(skin.resolvedTextTertiary)
+                                    Text("Round \(round) of \(total)")
+                                        .font(.system(.subheadline, design: skin.resolvedFontDesign, weight: .medium))
+                                        .foregroundStyle(skin.resolvedTextSecondary)
+                                }
+                            }
+                            .padding(.horizontal, DS.Spacing.md)
+                            .padding(.vertical, DS.Spacing.sm)
+                            .adaptiveBadgeFill(pomodoroSegmentColor(display.segment))
+                            .clipShape(Capsule())
+
+                            // Round progress dots — visible only when we know
+                            // the total (i.e. pomodoroConfig path).
+                            if let total = display.total, let done = display.completed {
+                                HStack(spacing: DS.Spacing.xs) {
+                                    ForEach(0..<total, id: \.self) { idx in
+                                        Circle()
+                                            .fill(idx < done ? skin.accentColor : skin.resolvedTextTertiary.opacity(0.3))
+                                            .frame(width: DS.Size.iconSmall / 2, height: DS.Size.iconSmall / 2)
+                                    }
+                                }
+                                .accessibilityLabel("Completed \(done) of \(total) rounds")
                             }
                         }
-                        .padding(.horizontal, DS.Spacing.md)
-                        .padding(.vertical, DS.Spacing.sm)
-                        .adaptiveBadgeFill(pomodoroSegmentColor(segment))
-                        .clipShape(Capsule())
                         .staggeredEntrance(index: 1)
                     }
 
@@ -224,6 +300,23 @@ struct TimerScreenView: View {
                             .font(.system(.headline, design: skin.resolvedFontDesign, weight: .semibold))
                             .lineLimit(2)
                             .truncationMode(.tail)
+
+                        // Focus-burst subtitle: the task tied to the
+                        // current work round, so the user always sees
+                        // "what I'm actually doing right now" even when
+                        // the main title is a compound "A + B + C".
+                        if let currentTask = currentBurstTask(now: now) {
+                            HStack(spacing: DS.Spacing.xs) {
+                                Image(systemName: "play.circle.fill")
+                                    .font(.system(size: DS.Size.iconSmall))
+                                    .foregroundStyle(skin.accentColor)
+                                Text(currentTask.title)
+                                    .font(.system(.subheadline, design: skin.resolvedFontDesign, weight: .medium))
+                                    .foregroundStyle(skin.resolvedTextPrimary)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                            }
+                        }
 
                         HStack(spacing: DS.Spacing.md) {
                             Label(event.formattedDate, systemImage: "calendar")
@@ -301,6 +394,66 @@ struct TimerScreenView: View {
         }
     }
 
+    // MARK: - Focus Burst
+
+    /// Task tied to the current work round in a focus-burst session.
+    /// Returns `nil` when the event has no task sequence, the timer is
+    /// in a break / long break / done phase, or the round index is out
+    /// of bounds of the sequence (the resolver caps rounds to pack
+    /// size, but a stale persisted event could have a mismatch).
+    private func currentBurstTask(now: Date) -> CalendarEvent.TaskSequenceEntry? {
+        guard !event.pomodoroTaskSequence.isEmpty else { return nil }
+        guard let phase = currentPhase(now) else { return nil }
+        guard case .work(let round, _) = phase.kind else { return nil }
+        let idx = round - 1
+        guard event.pomodoroTaskSequence.indices.contains(idx) else { return nil }
+        return event.pomodoroTaskSequence[idx]
+    }
+
+    // MARK: - Pomodoro Display
+
+    /// Segment + optional round / total / completed tuple for the header
+    /// capsule and the rounds-dots indicator.
+    private struct PomodoroDisplayInfo {
+        let segment: CalendarEvent.PomodoroSegment
+        let round: Int?
+        let total: Int?
+        /// Rounds fully finished by `now`. Non-nil only on the
+        /// pomodoroConfig path, where we can compute it deterministically.
+        let completed: Int?
+    }
+
+    private func pomodoroDisplayInfo(now: Date) -> PomodoroDisplayInfo? {
+        if let phase = currentPhase(now) {
+            switch phase.kind {
+            case .work(let round, let total):
+                return PomodoroDisplayInfo(
+                    segment: .work, round: round, total: total,
+                    completed: phase.completedRounds
+                )
+            case .shortBreak(let afterRound):
+                return PomodoroDisplayInfo(
+                    segment: .shortBreak, round: afterRound, total: phase.totalRounds,
+                    completed: phase.completedRounds
+                )
+            case .longBreak:
+                return PomodoroDisplayInfo(
+                    segment: .longBreak, round: nil, total: phase.totalRounds,
+                    completed: phase.completedRounds
+                )
+            case .done:
+                return nil
+            }
+        }
+        guard let segment = event.pomodoroSegment else { return nil }
+        return PomodoroDisplayInfo(
+            segment: segment,
+            round: event.pomodoroRoundNumber,
+            total: event.pomodoroTotalRounds,
+            completed: nil
+        )
+    }
+
     // MARK: - Pomodoro Colors
 
     private func pomodoroSegmentColor(_ segment: CalendarEvent.PomodoroSegment) -> Color {
@@ -315,6 +468,14 @@ struct TimerScreenView: View {
 
     private func statusLabel(_ now: Date) -> String {
         if hasEnded(now) { return "Ended" }
+        if isInProgress(now), let phase = currentPhase(now) {
+            switch phase.kind {
+            case .work(let round, let total): return "Work \(round) / \(total)"
+            case .shortBreak:                 return "Break"
+            case .longBreak:                  return "Long break"
+            case .done:                       return "Ended"
+            }
+        }
         if isInProgress(now) { return "Ends in" }
         return "Starts in"
     }

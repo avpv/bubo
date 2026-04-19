@@ -15,6 +15,7 @@ struct IntentPresets {
     // with the preset's actual `name:`. Birman: одно место правды для строк.
     enum Name {
         static let pomodoroSession = "Pomodoro session"
+        static let focusBurst = "Focus burst"
     }
 
     // MARK: - Quick Actions (shown prominently in palette)
@@ -22,7 +23,8 @@ struct IntentPresets {
     static let quickActions: [OptimizationRequest] = [
         .organizeDay,
         .findFocus(),
-        .pomodoroBlock(),
+        .pomodoroBlock,
+        .focusBurstBlock(),
         .deadlineMode,
         .planWeek,
         .lowEnergyDay,
@@ -46,7 +48,8 @@ struct IntentPresets {
         Category(id: "focus", name: "Focus", presets: [
             .findFocus(),
             .deepWork(),
-            .pomodoroBlock(),
+            .pomodoroBlock,
+            .focusBurstBlock(),
         ]),
         Category(id: "deadlines", name: "Deadlines", presets: [
             .deadlineMode,
@@ -129,14 +132,25 @@ extension OptimizationRequest {
         )
     }
 
-    static func pomodoroBlock(preset: PomodoroPreset = .classic) -> OptimizationRequest {
+    static let pomodoroBlock = OptimizationRequest(
+        .pomodoroSession,
+        .horizon(.today), .findSlotsForBacklog,
+        .speed(.quick), .scenarios(count: 1),
+        // Stable name constant — see IntentPresets.Name. Keeps the
+        // post-Pomodoro `seedRecipeId` lookup in MenuBarView in sync.
+        name: IntentPresets.Name.pomodoroSession
+    )
+
+    /// Pack up to N related backlog tasks into one pomodoro: each work
+    /// round hosts a different task, breaks sit between them, and the
+    /// timer labels each round with the current task's name.
+    static func focusBurstBlock(maxTasks: Int = 4, contextFilter: String? = nil) -> OptimizationRequest {
         OptimizationRequest(
-            .pomodoroSession(preset: preset),
+            .focusBurst(maxTasks: maxTasks, contextFilter: contextFilter),
             .horizon(.today), .findSlotsForBacklog,
+            .minimizeContextSwitching(weight: 2.0),
             .speed(.quick), .scenarios(count: 1),
-            // Stable name constant — see IntentPresets.Name. Keeps the
-            // post-Pomodoro `seedRecipeId` lookup in MenuBarView in sync.
-            name: IntentPresets.Name.pomodoroSession
+            name: IntentPresets.Name.focusBurst
         )
     }
 

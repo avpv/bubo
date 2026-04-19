@@ -13,6 +13,11 @@ struct BacklogTask: Identifiable, Codable, Hashable, Sendable {
     var deadline: Date?
     var storyPoints: Int?
     var context: String?               // project / category
+    /// Optional color tag — same vocabulary as `CalendarEvent.colorTag`,
+    /// shown as a colored dot in the backlog row and used by
+    /// `BacklogTaskCohesion` as a secondary grouping signal so the
+    /// optimizer can pack tasks the user has already grouped visually.
+    var colorTag: EventColorTag?
     var dependsOn: [String] = []       // other task IDs
     var preferredPeriod: Period?        // morning / afternoon / evening
     var status: BacklogStatus = .pending
@@ -52,6 +57,7 @@ struct BacklogTask: Identifiable, Codable, Hashable, Sendable {
         deadline: Date? = nil,
         storyPoints: Int? = nil,
         context: String? = nil,
+        colorTag: EventColorTag? = nil,
         dependsOn: [String] = [],
         preferredPeriod: Period? = nil,
         isRecurring: Bool = false,
@@ -65,6 +71,7 @@ struct BacklogTask: Identifiable, Codable, Hashable, Sendable {
         self.deadline = deadline
         self.storyPoints = storyPoints
         self.context = context
+        self.colorTag = colorTag
         self.dependsOn = dependsOn
         self.preferredPeriod = preferredPeriod
         self.isRecurring = isRecurring
