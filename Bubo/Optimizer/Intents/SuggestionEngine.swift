@@ -82,7 +82,11 @@ final class SuggestionEngine {
         let cal = Calendar.current
         let hour = cal.component(.hour, from: now)
         let events = reminderService.allEvents
-        let todayEnd = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now))!
+        let startOfDay = cal.startOfDay(for: now)
+        // Fallback to 24h after start-of-day if Calendar arithmetic fails
+        // (DST/calendar edge cases) — avoids a startup crash from `!`.
+        let todayEnd = cal.date(byAdding: .day, value: 1, to: startOfDay)
+            ?? startOfDay.addingTimeInterval(86400)
         let todayEvents = events.filter { $0.startDate >= now && $0.startDate < todayEnd }
         let meetings = todayEvents.filter { !$0.isLocalEvent }
         let hasFocusToday = todayEvents.contains(where: { $0.eventType == .pomodoro })

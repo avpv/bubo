@@ -308,8 +308,7 @@ struct BackgroundPhotoSection: View {
 
         // Copy to App Support so it persists
         let fileManager = FileManager.default
-        let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let photosDir = appSupport.appendingPathComponent("Bubo/Photos", isDirectory: true)
+        let photosDir = URL.applicationSupportDirectory.appendingPathComponent("Bubo/Photos", isDirectory: true)
         try? fileManager.createDirectory(at: photosDir, withIntermediateDirectories: true)
 
         let destination = photosDir.appendingPathComponent("background.\(url.pathExtension)")

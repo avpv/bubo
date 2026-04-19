@@ -303,8 +303,10 @@ class CustomSkinLoader {
     private let fileManager = FileManager.default
 
     private var skinsDirectory: URL {
-        let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        return appSupport.appendingPathComponent("Bubo/Skins", isDirectory: true)
+        // `URL.applicationSupportDirectory` is guaranteed to exist by the
+        // platform, unlike `urls(for:in:).first` which the type system claims
+        // is optional and therefore force-unwraps were a latent crash.
+        URL.applicationSupportDirectory.appendingPathComponent("Bubo/Skins", isDirectory: true)
     }
 
     init() {
