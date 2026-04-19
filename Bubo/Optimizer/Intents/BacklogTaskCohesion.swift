@@ -18,6 +18,9 @@ enum BacklogTaskCohesion {
     /// hard-coded numbers scattered across call sites.
     struct Weights: Equatable, Sendable {
         var sameContext: Double       = 3.0
+        /// Visual grouping the user already made — strong signal even
+        /// when the project / context fields are empty.
+        var sameColorTag: Double      = 2.0
         var samePeriod: Double        = 1.5
         var samePriority: Double      = 1.0
         var comparableDuration: Double = 0.5
@@ -46,6 +49,10 @@ enum BacklogTaskCohesion {
         if let ac = a.context, let bc = b.context,
            !ac.isEmpty, !bc.isEmpty, ac.caseInsensitiveCompare(bc) == .orderedSame {
             s += weights.sameContext
+        }
+
+        if let at = a.colorTag, let bt = b.colorTag, at == bt {
+            s += weights.sameColorTag
         }
 
         if let ap = a.preferredPeriod, let bp = b.preferredPeriod, ap == bp {

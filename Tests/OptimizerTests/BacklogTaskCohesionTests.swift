@@ -59,6 +59,29 @@ final class BacklogTaskCohesionTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(BacklogTaskCohesion.score(a, b, weights: w), 10.0)
     }
 
+    // MARK: Color tag
+
+    func testSameColorTagAddsItsWeight() {
+        let a = task("A", colorTag: .blue, duration: 25)
+        let b = task("B", colorTag: .blue, duration: 200)
+        // colorTag=2.0, priority both .medium=1.0, duration ratio 0.125 → skip,
+        // both nil deadlines → 0.5. Total = 3.5.
+        XCTAssertEqual(BacklogTaskCohesion.score(a, b), 3.5, accuracy: 0.001)
+    }
+
+    func testColorTagBeatsLooseSignalsInPick() {
+        // anchor and `tagged` share only color; `untagged` shares nothing.
+        let anchor = task("A", colorTag: .red)
+        let tagged = task("tagged", colorTag: .red, priority: .low,
+                          duration: 240, deadline: day(+90))
+        let untagged = task("untagged", priority: .low,
+                            duration: 240, deadline: day(+90))
+        let pack = BacklogTaskCohesion.pick(
+            from: [anchor, untagged, tagged], anchor: anchor, maxCohort: 2
+        )
+        XCTAssertEqual(pack.map(\.title), ["A", "tagged"])
+    }
+
     // MARK: Pick
 
     func testPickReturnsOnlyAnchorWhenMaxIsOne() {
@@ -174,6 +197,7 @@ final class BacklogTaskCohesionTests: XCTestCase {
     private func task(
         _ title: String,
         context: String? = nil,
+        colorTag: EventColorTag? = nil,
         period: Period? = nil,
         priority: TaskPriority = .medium,
         duration: Int = 60,
@@ -183,7 +207,8 @@ final class BacklogTaskCohesionTests: XCTestCase {
             id: title, title: title,
             durationMinutes: duration, priority: priority,
             deadline: deadline, storyPoints: nil,
-            context: context, preferredPeriod: period
+            context: context, colorTag: colorTag,
+            preferredPeriod: period
         )
     }
 
