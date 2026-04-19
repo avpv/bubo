@@ -84,6 +84,81 @@ final class BacklogTaskTests: XCTestCase {
         XCTAssertGreaterThan(event.energyCost, 0.3)
     }
 
+    // MARK: - Oversized Task Auto-Chunking
+
+    func testSplitOversizedLeavesFittingTaskAlone() {
+        let event = OptimizableEvent(
+            id: "short",
+            title: "Short task",
+            duration: TimeInterval(5 * 3600),
+            isDroppable: true
+        )
+        let result = IntentCompiler.splitOversizedBacklogTasks([event], workingHours: 9...18)
+        XCTAssertEqual(result.count, 1)
+        XCTAssertEqual(result[0].id, "short")
+        XCTAssertEqual(result[0].duration, TimeInterval(5 * 3600))
+    }
+
+    func testSplitOversizedSplitsLongTaskIntoEqualParts() {
+        // 12h task with a 9h working window → ceil(12/9) = 2 parts of 6h each.
+        let event = OptimizableEvent(
+            id: "big",
+            title: "Big task",
+            duration: TimeInterval(12 * 3600),
+            priority: 0.9,
+            context: "Deep work",
+            isDroppable: true,
+            backlogIndex: 3
+        )
+        let result = IntentCompiler.splitOversizedBacklogTasks([event], workingHours: 9...18)
+
+        XCTAssertEqual(result.count, 2)
+        XCTAssertEqual(result[0].id, "big_p0")
+        XCTAssertEqual(result[1].id, "big_p1")
+        XCTAssertEqual(result[0].title, "Big task (1/2)")
+        XCTAssertEqual(result[1].title, "Big task (2/2)")
+        XCTAssertEqual(result[0].duration, TimeInterval(6 * 3600))
+        XCTAssertEqual(result[1].duration, TimeInterval(6 * 3600))
+        // Order enforced by sequential dependsOn chain.
+        XCTAssertTrue(result[0].dependsOn.isEmpty)
+        XCTAssertEqual(result[1].dependsOn, ["big_p0"])
+        // Priority / context / droppability / backlog position propagate.
+        XCTAssertEqual(result[0].priority, 0.9)
+        XCTAssertEqual(result[1].context, "Deep work")
+        XCTAssertTrue(result[0].isDroppable)
+        XCTAssertTrue(result[1].isDroppable)
+        XCTAssertEqual(result[0].backlogIndex, 3)
+        XCTAssertEqual(result[1].backlogIndex, 3)
+    }
+
+    func testSplitOversizedPreservesExistingDependsOnOnFirstPart() {
+        let event = OptimizableEvent(
+            id: "chain",
+            title: "Chained task",
+            duration: TimeInterval(20 * 3600),
+            dependsOn: ["upstream"]
+        )
+        let result = IntentCompiler.splitOversizedBacklogTasks([event], workingHours: 9...18)
+
+        // ceil(20/9) = 3 parts.
+        XCTAssertEqual(result.count, 3)
+        XCTAssertEqual(result[0].dependsOn, ["upstream"])
+        XCTAssertEqual(result[1].dependsOn, ["chain_p0"])
+        XCTAssertEqual(result[2].dependsOn, ["chain_p1"])
+    }
+
+    func testSplitOversizedIsNoOpWhenWindowIsDegenerate() {
+        let event = OptimizableEvent(
+            id: "x",
+            title: "x",
+            duration: TimeInterval(10 * 3600)
+        )
+        // upperBound == lowerBound → no positive window, bail out.
+        let result = IntentCompiler.splitOversizedBacklogTasks([event], workingHours: 9...9)
+        XCTAssertEqual(result.count, 1)
+        XCTAssertEqual(result[0].id, "x")
+    }
+
     // MARK: - Codable
 
     func testTaskCodable() throws {
