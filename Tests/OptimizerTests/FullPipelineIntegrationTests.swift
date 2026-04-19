@@ -316,4 +316,105 @@ struct FullPipelineIntegrationTests {
         #expect(smallBundle.head !== largeBundle.head)
         #expect(smallBundle.surrogate !== largeBundle.surrogate)
     }
+
+    // MARK: Archive fidelity — scenario fitness reflects real evaluation
+
+    /// Regression: a single droppable task on an otherwise free day must
+    /// never surface as infeasible. The user-facing "Not enough room"
+    /// dialog fires when `scenarios[0].fitness < 0.1`, which can only
+    /// legitimately mean a hard constraint was violated. For this
+    /// trivial workload, the greedy seed places the task in the first
+    /// free slot (fitness ≥ 0.1), and every chromosome in the archive
+    /// must agree with that ground truth. When the multi-fidelity
+    /// funnel or surrogate-assisted evaluator stamp `rawFitness` with a
+    /// prediction, the archive can otherwise emit a phantom-low scenario.
+    @Test("Single droppable task on a free day always yields feasible scenario")
+    @MainActor
+    func singleDroppableOnFreeDayIsFeasible() async {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let horizonStart = cal.date(bySettingHour: 10, minute: 30, second: 0, of: today)!
+        let horizonEnd = cal.date(byAdding: .day, value: 1, to: today)!
+
+        let task = OptimizableEvent(
+            id: "solo-task",
+            title: "Тест",
+            duration: 3600,
+            priority: 0.5,
+            energyCost: 0.5,
+            isDroppable: true
+        )
+
+        let context = OptimizerContext(
+            fixedEvents: [],
+            movableEvents: [task],
+            workingHours: 10...20,
+            planningHorizon: DateInterval(start: horizonStart, end: horizonEnd),
+            preferences: OptimizerPreferences(),
+            rng: GARandom(seed: 0xFEEDA7)
+        )
+
+        let optimizer = BuboOptimizer()
+        optimizer.gaConfig = .quick
+        optimizer.islandConfig = .quick
+        optimizer.scenarioCount = 1
+
+        // Run several times on the same workload signature so the
+        // per-signature surrogate accumulates enough samples to pass
+        // warmup and start stamping `rawFitness` with predictions.
+        // The bug only surfaces once the surrogate is active.
+        var lastResult: OptimizerResult?
+        for _ in 0..<4 {
+            lastResult = await optimizer.optimize(context: context)
+        }
+        guard let result = lastResult, let scenario = result.scenarios.first else {
+            Issue.record("Expected at least one scenario")
+            return
+        }
+
+        // Feasibility invariant: no hard-constraint violations means
+        // `FitnessEvaluator.evaluate` returns at least 0.1. A stamped
+        // phantom below that value means the archive held a surrogate
+        // prediction instead of ground truth.
+        #expect(
+            scenario.fitness >= 0.1,
+            "Scenario fitness \(scenario.fitness) < 0.1 — archive emitted a chromosome whose rawFitness didn't survive real evaluation"
+        )
+        #expect(
+            scenario.constraintViolations.isEmpty,
+            "Valid placement should have no constraint violations, got: \(scenario.constraintViolations)"
+        )
+    }
+
+    /// Complementary invariant on the direct evaluator: any chromosome
+    /// the archive emits must have a fitness equal to what the real
+    /// evaluator returns for that exact gene layout. Catches the case
+    /// where `ScheduleScenario.fitness` is a stamped prediction that
+    /// disagrees with the evaluator's verdict on the same genes.
+    @Test("Emitted scenario fitness matches evaluator's ground-truth score")
+    @MainActor
+    func scenarioFitnessMatchesGroundTruth() async {
+        let optimizer = BuboOptimizer()
+        optimizer.gaConfig = .quick
+        optimizer.islandConfig = .quick
+        optimizer.scenarioCount = 3
+        let context = makeWorkload(eventCount: 5)
+
+        // Warm the per-signature surrogate the same way the real app
+        // does — repeated runs on one workload.
+        for _ in 0..<3 {
+            _ = await optimizer.optimize(context: context)
+        }
+        let result = await optimizer.optimize(context: context)
+
+        let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
+        for scenario in result.scenarios {
+            let chromosome = ScheduleChromosome(genes: scenario.genes, needsEvaluation: true)
+            let groundTruth = evaluator.evaluate(chromosome: chromosome, context: context)
+            #expect(
+                abs(scenario.fitness - groundTruth) < 0.05,
+                "Scenario fitness \(scenario.fitness) disagrees with ground-truth \(groundTruth) by more than 0.05"
+            )
+        }
+    }
 }
