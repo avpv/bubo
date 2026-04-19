@@ -257,6 +257,11 @@ final class FitnessEvaluator: @unchecked Sendable {
                 chromosome.geneDaysSnapshot = nil
                 chromosome.mutatedGeneIndices = nil
                 chromosome.needsEvaluation = false
+                // Cache entries are only stored after a real evaluation
+                // (see the `cache.store` call below), so hits are always
+                // ground truth — promote the flag for downstream
+                // boundary checks.
+                chromosome.isFitnessReal = true
                 return
             }
         }
@@ -274,6 +279,7 @@ final class FitnessEvaluator: @unchecked Sendable {
         chromosome.geneDaysSnapshot = result.geneDaysSnapshot
         chromosome.mutatedGeneIndices = nil
         chromosome.needsEvaluation = false
+        chromosome.isFitnessReal = true
 
         if let cache = cache {
             let key = ChromosomeFingerprint(chromosome.genes)

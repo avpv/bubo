@@ -252,6 +252,11 @@ final class BuboOptimizer {
                 chromosome.fitness = predicted
                 chromosome.rawFitness = predicted
                 chromosome.needsEvaluation = false
+                // Surrogate prediction — mark as phantom so downstream
+                // boundary checks (MAP-Elites archival, scenario
+                // emission) can force a real evaluation before the
+                // value is trusted externally.
+                chromosome.isFitnessReal = false
                 if let vec = predictedObjectives, vec.count == objectiveNames.count {
                     var cache: [String: Double] = [:]
                     cache.reserveCapacity(objectiveNames.count)
@@ -398,21 +403,26 @@ final class BuboOptimizer {
         //     scenarios. Different axes serve different consumers,
         //     so the two coexist deliberately.
         //
-        // Force real evaluation on every candidate before archival.
-        // During evolution the multi-fidelity funnel and the
-        // surrogate-assisted per-chromosome evaluator both stamp
-        // `rawFitness` with surrogate predictions that can disagree
-        // with ground truth — in particular, a feasible chromosome
-        // can receive a prediction below 0.1 because its neighbours
-        // in feature space include infeasible training samples. The
-        // archive then picks a "best" cell whose rawFitness is a
-        // phantom, and `IntentCompiler` surfaces a spurious "Not
-        // enough room" dialog for a trivially-schedulable workload.
-        // Costs one extra evaluator call per island elite (≤ 10
-        // chromosomes on `.quick`); worth it to guarantee the
-        // scenario fitness the UI sees is the real one.
+        // Force real evaluation on every candidate whose `rawFitness`
+        // is a surrogate prediction, before archival. During evolution
+        // the multi-fidelity funnel and the surrogate-assisted
+        // per-chromosome evaluator both stamp `rawFitness` with
+        // predictions that can disagree with ground truth — in
+        // particular, a feasible chromosome can receive a prediction
+        // below 0.1 because its neighbours in feature space include
+        // infeasible training samples. The archive would then pick a
+        // "best" cell whose rawFitness is a phantom, and
+        // `IntentCompiler` would surface a spurious "Not enough room"
+        // dialog for a trivially-schedulable workload.
+        //
+        // Writers set `isFitnessReal` to reflect which path produced
+        // the score; here we only pay for a fresh evaluation on
+        // chromosomes that are still phantom. In the common `.quick`
+        // case with a warmed surrogate this skips a majority of the
+        // combined population, so the check is strictly cheaper than
+        // a blind re-eval of every individual.
         var verifiedPopulation = population
-        for i in verifiedPopulation.indices {
+        for i in verifiedPopulation.indices where !verifiedPopulation[i].isFitnessReal {
             verifiedPopulation[i].needsEvaluation = true
             evaluator.evaluateAndAssign(&verifiedPopulation[i], context: adjustedContext)
         }

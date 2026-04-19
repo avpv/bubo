@@ -71,6 +71,23 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
     var fitness: Double = 0.0
     var rawFitness: Double = 0.0
 
+    /// True iff `fitness`/`rawFitness` were produced by the real
+    /// `FitnessEvaluator` (or an equally-faithful evaluator like
+    /// `StabilityEvaluator`). False when the value is a surrogate
+    /// prediction from `MultiFidelityEvaluator` tier-1 or the
+    /// surrogate-assisted per-chromosome screen. Anything the GA emits
+    /// externally — archived scenarios, metadata, `bestEver` at
+    /// shutdown — must have this flag true; callers that need that
+    /// guarantee should force `FitnessEvaluator.evaluateAndAssign`
+    /// when the flag is false.
+    ///
+    /// The invariant is deliberately one-way: a surrogate write sets
+    /// it to false, a real write sets it to true, and no code reads
+    /// the flag during selection/elitism — the multi-fidelity funnel
+    /// intentionally ranks on mixed signals to amortize evaluation
+    /// cost. The flag is a boundary contract, not a ranking input.
+    var isFitnessReal: Bool = false
+
     /// Tracks whether this chromosome needs fitness re-evaluation.
     /// Set to true on creation, crossover, and mutation; cleared after evaluation.
     var needsEvaluation: Bool = true
@@ -730,6 +747,13 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
 
     mutating func mutate(rate: Double, context: OptimizerContext) {
         needsEvaluation = true
+        // Gene placement is changing; any previously-recorded fitness
+        // is stale, so the flag must revert until a fresh evaluation
+        // produces a new score. Without this, a real-evaluated parent
+        // whose genes get mutated could keep `isFitnessReal = true`
+        // while its fitness now refers to the pre-mutation layout —
+        // silently poisoning downstream boundary checks.
+        isFitnessReal = false
         // Feature cache is a function of gene placement; mutation may
         // change placement, invalidate eagerly. Surrogate screen will
         // recompute on next access.
@@ -2208,6 +2232,9 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         SymmetryBreaker.canonicalize(&self)
 
         needsEvaluation = true
+        // Repair may have moved genes; fitness reflects the previous
+        // layout. Mark phantom until the next real evaluation.
+        isFitnessReal = false
     }
 
     /// Kahn's algorithm on the `dependsOn` graph among included genes, with

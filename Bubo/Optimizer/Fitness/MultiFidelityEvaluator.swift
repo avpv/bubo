@@ -205,6 +205,11 @@ final class MultiFidelityEvaluator: @unchecked Sendable {
                 chromosomes[i].fitness = screen.predictedFitness
                 chromosomes[i].rawFitness = screen.predictedFitness
                 chromosomes[i].needsEvaluation = false
+                // Surrogate-stamped fitness. Marking the chromosome
+                // phantom lets the GA's output boundary (MAP-Elites
+                // archival in BuboOptimizer) force a real evaluation
+                // before the value becomes user-visible.
+                chromosomes[i].isFitnessReal = false
                 if let vec = screen.predictedObjectives {
                     chromosomes[i].objectiveCache = assembleObjectiveCache(
                         from: vec, evaluator: evaluator

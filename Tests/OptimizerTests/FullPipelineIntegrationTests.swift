@@ -411,10 +411,54 @@ struct FullPipelineIntegrationTests {
         for scenario in result.scenarios {
             let chromosome = ScheduleChromosome(genes: scenario.genes, needsEvaluation: true)
             let groundTruth = evaluator.evaluate(chromosome: chromosome, context: context)
+            // Tolerance is tight because scenarios go through the
+            // pre-archival real-eval pass in `BuboOptimizer.optimize`;
+            // the only legitimate drift is FP jitter between the
+            // delta path (`evaluateAndAssign`) and the plain path
+            // (`evaluate`).
             #expect(
-                abs(scenario.fitness - groundTruth) < 0.05,
-                "Scenario fitness \(scenario.fitness) disagrees with ground-truth \(groundTruth) by more than 0.05"
+                abs(scenario.fitness - groundTruth) < 0.01,
+                "Scenario fitness \(scenario.fitness) disagrees with ground-truth \(groundTruth) by more than 0.01"
             )
         }
+    }
+
+    /// Direct invariant on the `isFitnessReal` flag: `FitnessEvaluator`
+    /// writes should set the flag to true, and a surrogate-stamped
+    /// chromosome that later passes through the real evaluator should
+    /// be promoted back to real. Catches regressions where a writer
+    /// forgets to update the flag.
+    @Test("FitnessEvaluator.evaluateAndAssign sets isFitnessReal = true")
+    @MainActor
+    func evaluatorPromotesChromosomeToReal() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let context = OptimizerContext(
+            movableEvents: [
+                OptimizableEvent(id: "t", title: "t", duration: 1800, priority: 0.5)
+            ],
+            workingHours: 9...18,
+            planningHorizon: DateInterval(start: today, duration: 86400),
+            preferences: OptimizerPreferences()
+        )
+        let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
+
+        // Freshly-constructed chromosome defaults to isFitnessReal=false.
+        var chromosome = ScheduleChromosome.random(context: context)
+        #expect(chromosome.isFitnessReal == false, "Fresh chromosome must default to phantom so the archive guard kicks in")
+
+        evaluator.evaluateAndAssign(&chromosome, context: context)
+        #expect(chromosome.isFitnessReal == true, "evaluateAndAssign must promote the chromosome to real")
+
+        // Simulate a surrogate stamp overwriting rawFitness — the flag
+        // must revert to false so a downstream boundary will re-evaluate.
+        chromosome.rawFitness = 0.05
+        chromosome.isFitnessReal = false
+        chromosome.needsEvaluation = true
+
+        evaluator.evaluateAndAssign(&chromosome, context: context)
+        #expect(chromosome.isFitnessReal == true, "Real evaluation after a surrogate overwrite must restore the flag")
+        #expect(chromosome.rawFitness >= 0.1 || !evaluator.constraintEngine.isValid(chromosome, context: context),
+                "A valid chromosome must not end up with phantom fitness after real eval")
     }
 }
