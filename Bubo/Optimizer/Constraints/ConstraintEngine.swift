@@ -15,6 +15,7 @@ struct ConstraintEngine {
             DeadlineConstraint(),
             EarliestStartConstraint(),
             TaskDependencyConstraint(),
+            AtomicGroupConstraint(),
             MaxMeetingsPerDayConstraint(),
             LunchWindowConstraint(),
         ])

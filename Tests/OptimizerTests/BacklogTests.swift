@@ -129,6 +129,10 @@ final class BacklogTaskTests: XCTestCase {
         XCTAssertTrue(result[1].isDroppable)
         XCTAssertEqual(result[0].backlogIndex, 3)
         XCTAssertEqual(result[1].backlogIndex, 3)
+        // Atomic group: both parts share the source task id so
+        // AtomicGroupConstraint treats them as one drop-or-keep unit.
+        XCTAssertEqual(result[0].groupId, "big")
+        XCTAssertEqual(result[1].groupId, "big")
     }
 
     func testSplitOversizedPreservesExistingDependsOnOnFirstPart() {

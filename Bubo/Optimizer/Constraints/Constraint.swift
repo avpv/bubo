@@ -249,3 +249,49 @@ struct TaskDependencyConstraint: ScheduleConstraint {
         return totalViolation
     }
 }
+
+// MARK: - Atomic Group Constraint (Hard)
+
+/// Events sharing a non-nil `groupId` must all be included together or all be
+/// dropped together. Produced by `IntentCompiler.splitOversizedBacklogTasks`
+/// so the GA can't schedule chunks 1 and 3 of a long task while dropping
+/// chunk 2 — a half-done task is strictly worse than a fully-dropped one,
+/// but the existing `TaskInclusion` penalty alone can't guarantee that.
+struct AtomicGroupConstraint: ScheduleConstraint {
+    let name = "AtomicGroup"
+    let isHard = true
+
+    func penalty(for chromosome: ScheduleChromosome, context: OptimizerContext) -> Double {
+        // Build a (groupId → [eventId]) map once per evaluation. Events
+        // without a `groupId` are ignored — this constraint only speaks to
+        // explicitly-grouped splits.
+        var groups: [String: [String]] = [:]
+        for event in context.movableEvents {
+            guard let gid = event.groupId else { continue }
+            groups[gid, default: []].append(event.id)
+        }
+        guard !groups.isEmpty else { return 0 }
+
+        let inclusion: [String: Bool] = Dictionary(
+            chromosome.genes.map { ($0.eventId, $0.isIncluded) },
+            uniquingKeysWith: { first, _ in first }
+        )
+
+        var totalViolation = 0.0
+        for (_, memberIds) in groups {
+            var included = 0
+            var excluded = 0
+            for id in memberIds {
+                if inclusion[id] == true { included += 1 } else { excluded += 1 }
+            }
+            // Penalty scales with the minority count — number of flips
+            // needed to make the group uniform. Hits the hard-constraint
+            // multiplier in `ConstraintEngine`, so any split group is
+            // strongly pushed to all-in or all-out.
+            if included > 0 && excluded > 0 {
+                totalViolation += Double(min(included, excluded))
+            }
+        }
+        return totalViolation
+    }
+}

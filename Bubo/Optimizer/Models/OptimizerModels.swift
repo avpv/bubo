@@ -32,6 +32,12 @@ struct OptimizableEvent: Identifiable, Codable, Hashable, Sendable {
     /// dragged them into — the GA actively prefers matching visual order
     /// instead of relying on a single stable-sort pass in the greedy seed.
     let backlogIndex: Int?
+    /// Atomic-group tag: events sharing a non-nil `groupId` must be
+    /// included-or-dropped together (enforced by `AtomicGroupConstraint`).
+    /// Populated by `IntentCompiler.splitOversizedBacklogTasks` when a
+    /// long backlog task is chunked across days, so the GA can't place
+    /// chunk 1 and 3 while dropping 2 — leaving a task half-scheduled.
+    let groupId: String?
 
     init(
         id: String = UUID().uuidString,
@@ -50,7 +56,8 @@ struct OptimizableEvent: Identifiable, Codable, Hashable, Sendable {
         dependsOn: [String] = [],
         isDroppable: Bool = false,
         reservedTaskIds: [String] = [],
-        backlogIndex: Int? = nil
+        backlogIndex: Int? = nil,
+        groupId: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -69,6 +76,7 @@ struct OptimizableEvent: Identifiable, Codable, Hashable, Sendable {
         self.isDroppable = isDroppable
         self.reservedTaskIds = reservedTaskIds
         self.backlogIndex = backlogIndex
+        self.groupId = groupId
     }
 }
 

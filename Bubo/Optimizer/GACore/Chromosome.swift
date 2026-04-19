@@ -304,6 +304,31 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
             ))
         }
 
+        // Atomic-group uniformity: if any member of a `groupId` group was
+        // dropped (couldn't fit), drop the whole group. Matches
+        // `AtomicGroupConstraint` so the seed starts feasible rather than
+        // handing the GA a mid-split chromosome it then has to repair.
+        let groupOf: [String: String] = Dictionary(
+            context.movableEvents.compactMap { ev in ev.groupId.map { (ev.id, $0) } },
+            uniquingKeysWith: { first, _ in first }
+        )
+        if !groupOf.isEmpty {
+            var droppedGroups: Set<String> = []
+            for gene in result where !gene.isIncluded {
+                if let gid = groupOf[gene.eventId] { droppedGroups.insert(gid) }
+            }
+            if !droppedGroups.isEmpty {
+                result = result.map { gene in
+                    guard let gid = groupOf[gene.eventId], droppedGroups.contains(gid) else {
+                        return gene
+                    }
+                    var flipped = gene
+                    flipped.isIncluded = false
+                    return flipped
+                }
+            }
+        }
+
         return ScheduleChromosome(genes: result, needsEvaluation: true)
     }
 

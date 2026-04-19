@@ -1072,6 +1072,10 @@ private extension IntentCompiler {
             guard event.duration > maxDuration else { return [event] }
             let parts = Int(ceil(event.duration / maxDuration))
             let partDuration = event.duration / Double(parts)
+            // All chunks of the same task share `groupId` so
+            // `AtomicGroupConstraint` treats the split as one unit — the GA
+            // can't schedule chunk 1 and 3 while dropping 2.
+            let group = event.groupId ?? event.id
             return (0..<parts).map { i in
                 OptimizableEvent(
                     id: "\(event.id)_p\(i)",
@@ -1090,7 +1094,8 @@ private extension IntentCompiler {
                     dependsOn: i == 0 ? event.dependsOn : ["\(event.id)_p\(i - 1)"],
                     isDroppable: event.isDroppable,
                     reservedTaskIds: event.reservedTaskIds,
-                    backlogIndex: event.backlogIndex
+                    backlogIndex: event.backlogIndex,
+                    groupId: group
                 )
             }
         }
