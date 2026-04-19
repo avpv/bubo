@@ -740,7 +740,14 @@ private extension IntentCompiler {
                             preferredHourRange: event.preferredHourRange,
                             isFocusBlock: event.isFocusBlock,
                             storyPoints: event.storyPoints,
-                            dependsOn: i == 0 ? event.dependsOn : ["\(event.id)_p\(i - 1)"]
+                            dependsOn: i == 0 ? event.dependsOn : ["\(event.id)_p\(i - 1)"],
+                            // Preserve backlog order: every split part inherits
+                            // the parent's backlog position so
+                            // `BacklogOrderObjective` keeps a signal after the
+                            // transform. Without this, splitting any task
+                            // wipes `backlogIndex` across the whole request
+                            // and the objective silently flatlines at 1.0.
+                            backlogIndex: event.backlogIndex
                         )
                     }
                 }
@@ -757,7 +764,8 @@ private extension IntentCompiler {
                         isFocusBlock: event.isFocusBlock,
                         storyPoints: event.storyPoints,
                         dependsOn: event.dependsOn,
-                        isDroppable: event.isDroppable
+                        isDroppable: event.isDroppable,
+                        backlogIndex: event.backlogIndex
                     )
                 }
 
@@ -780,6 +788,17 @@ private extension IntentCompiler {
 
                 for event in matching {
                     if var pending = pendingMerge {
+                        // When two backlog tasks merge, inherit the earliest
+                        // backlog position so the merged super-event still
+                        // carries a sensible order for the objective. nil if
+                        // neither side was from the backlog.
+                        let mergedIdx: Int?
+                        switch (pending.backlogIndex, event.backlogIndex) {
+                        case let (.some(a), .some(b)): mergedIdx = min(a, b)
+                        case let (.some(a), .none): mergedIdx = a
+                        case let (.none, .some(b)): mergedIdx = b
+                        case (.none, .none): mergedIdx = nil
+                        }
                         pending = OptimizableEvent(
                             id: pending.id,
                             title: pending.title,
@@ -790,7 +809,8 @@ private extension IntentCompiler {
                             energyCost: max(pending.energyCost, event.energyCost),
                             preferredHourRange: pending.preferredHourRange,
                             isFocusBlock: pending.isFocusBlock || event.isFocusBlock,
-                            storyPoints: pending.storyPoints
+                            storyPoints: pending.storyPoints,
+                            backlogIndex: mergedIdx
                         )
                         pendingMerge = pending
                     } else {
