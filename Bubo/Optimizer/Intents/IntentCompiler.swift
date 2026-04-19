@@ -104,6 +104,7 @@ struct IntentCompiler {
         if config.includeBacklog {
             var backlogTasks = collectBacklogTasks(config)
             backlogTasks = applyTransforms(config.transforms, to: backlogTasks)
+            backlogTasks = Self.splitOversizedBacklogTasks(backlogTasks, workingHours: workingHours)
             totalBacklogCount = backlogTasks.count
 
             // When rescheduling, remove old calendar events for these tasks
@@ -1050,6 +1051,56 @@ private extension IntentCompiler {
         }
 
         return result
+    }
+
+    /// Safety net for backlog tasks whose duration is larger than a single
+    /// working day can hold. Each oversized task is split into equal-sized
+    /// chunks that each fit in one day's working window, with a sequential
+    /// `dependsOn` chain so the GA schedules them in order across
+    /// consecutive days. Runs after user-configured `.splitLong`
+    /// transforms, so an explicit narrower split keeps its own naming and
+    /// this pass is a no-op on its output.
+    nonisolated static func splitOversizedBacklogTasks(
+        _ events: [OptimizableEvent],
+        workingHours: ClosedRange<Int>
+    ) -> [OptimizableEvent] {
+        let windowHours = workingHours.upperBound - workingHours.lowerBound
+        guard windowHours > 0 else { return events }
+        let maxDuration = TimeInterval(windowHours * 3600)
+
+        return events.flatMap { event -> [OptimizableEvent] in
+            guard event.duration > maxDuration else { return [event] }
+            let parts = Int(ceil(event.duration / maxDuration))
+            let partDuration = event.duration / Double(parts)
+            // All chunks of the same task share `groupId` so
+            // `AtomicGroupConstraint` (soft) nudges the GA toward
+            // including-or-dropping the group as a unit — partial plans
+            // are still allowed when the full group doesn't fit, just
+            // discounted.
+            let group = event.groupId ?? event.id
+            return (0..<parts).map { i in
+                OptimizableEvent(
+                    id: "\(event.id)_p\(i)",
+                    title: "\(event.title) (\(i + 1)/\(parts))",
+                    duration: partDuration,
+                    deadline: event.deadline,
+                    priority: event.priority,
+                    context: event.context,
+                    energyCost: event.energyCost,
+                    requiredParticipants: event.requiredParticipants,
+                    preferredHourRange: event.preferredHourRange,
+                    isFocusBlock: event.isFocusBlock,
+                    pomodoroConfig: event.pomodoroConfig,
+                    earliestStart: event.earliestStart,
+                    storyPoints: event.storyPoints,
+                    dependsOn: i == 0 ? event.dependsOn : ["\(event.id)_p\(i - 1)"],
+                    isDroppable: event.isDroppable,
+                    reservedTaskIds: event.reservedTaskIds,
+                    backlogIndex: event.backlogIndex,
+                    groupId: group
+                )
+            }
+        }
     }
 
     func collectLocalEventsForHorizon(_ horizon: Horizon) -> [OptimizableEvent] {

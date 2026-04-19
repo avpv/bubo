@@ -249,3 +249,56 @@ struct TaskDependencyConstraint: ScheduleConstraint {
         return totalViolation
     }
 }
+
+// MARK: - Atomic Group Constraint (Soft)
+
+/// Events sharing a non-nil `groupId` should be included-or-dropped together.
+/// Produced by `IntentCompiler.splitOversizedBacklogTasks` when a long backlog
+/// task is chunked across days — without this, the GA could include chunks
+/// 1 and 3 while dropping 2, leaving a half-scheduled task.
+///
+/// Soft so the GA can still settle on a partial plan when the full group
+/// genuinely doesn't fit (rather than silently dropping everything and
+/// hiding the task from the user). The penalty is small relative to the
+/// value lost by dropping a chunk via `TaskInclusion`, so the preference
+/// ordering is: `all-in > partial > all-out` only when `all-in` is
+/// infeasible; otherwise `all-in > all-out > partial`.
+struct AtomicGroupConstraint: ScheduleConstraint {
+    let name = "AtomicGroup"
+    let isHard = false
+
+    func penalty(for chromosome: ScheduleChromosome, context: OptimizerContext) -> Double {
+        // Build a (groupId → [eventId]) map once per evaluation. Events
+        // without a `groupId` are ignored — this constraint only speaks to
+        // explicitly-grouped splits.
+        var groups: [String: [String]] = [:]
+        for event in context.movableEvents {
+            guard let gid = event.groupId else { continue }
+            groups[gid, default: []].append(event.id)
+        }
+        guard !groups.isEmpty else { return 0 }
+
+        let inclusion: [String: Bool] = Dictionary(
+            chromosome.genes.map { ($0.eventId, $0.isIncluded) },
+            uniquingKeysWith: { first, _ in first }
+        )
+
+        var totalViolation = 0.0
+        for (_, memberIds) in groups {
+            var included = 0
+            var excluded = 0
+            for id in memberIds {
+                if inclusion[id] == true { included += 1 } else { excluded += 1 }
+            }
+            // Penalty scales with the minority count — number of flips
+            // needed to make the group uniform. As a soft constraint this
+            // enters `FitnessEvaluator.evaluate` as `softPenalty * 0.01`
+            // in a multiplicative factor, so a 1-chunk mismatch trims
+            // ~1% off the score — a real but survivable nudge.
+            if included > 0 && excluded > 0 {
+                totalViolation += Double(min(included, excluded))
+            }
+        }
+        return totalViolation
+    }
+}

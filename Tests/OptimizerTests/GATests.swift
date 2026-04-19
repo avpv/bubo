@@ -836,6 +836,79 @@ struct ConstraintTests {
         let penalty = constraint.penalty(for: chromosome, context: context)
         #expect(penalty > 0)
     }
+
+    @Test("AtomicGroupConstraint flags mixed include/exclude within a group")
+    func atomicGroupPenalizesMixedInclusion() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let start = cal.date(bySettingHour: 10, minute: 0, second: 0, of: today)!
+
+        let ev1 = OptimizableEvent(id: "big_p0", title: "Big (1/2)", duration: 3600, isDroppable: true, groupId: "big")
+        let ev2 = OptimizableEvent(id: "big_p1", title: "Big (2/2)", duration: 3600, isDroppable: true, groupId: "big")
+        let g1 = ScheduleGene(eventId: "big_p0", title: ev1.title, startTime: start, duration: 3600, context: nil, energyCost: 0.5, priority: 0.5, isFocusBlock: false, storyPoints: nil, isDroppable: true, isIncluded: true)
+        let g2 = ScheduleGene(eventId: "big_p1", title: ev2.title, startTime: start.addingTimeInterval(3600), duration: 3600, context: nil, energyCost: 0.5, priority: 0.5, isFocusBlock: false, storyPoints: nil, isDroppable: true, isIncluded: false)
+
+        let chromosome = ScheduleChromosome(genes: [g1, g2])
+        let context = makeContext(movableEvents: [ev1, ev2])
+
+        let constraint = AtomicGroupConstraint()
+        #expect(constraint.penalty(for: chromosome, context: context) > 0)
+    }
+
+    @Test("AtomicGroupConstraint is clean when a group is all-in or all-out")
+    func atomicGroupCleanWhenUniform() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let start = cal.date(bySettingHour: 10, minute: 0, second: 0, of: today)!
+
+        let ev1 = OptimizableEvent(id: "g_p0", title: "g (1/2)", duration: 3600, isDroppable: true, groupId: "g")
+        let ev2 = OptimizableEvent(id: "g_p1", title: "g (2/2)", duration: 3600, isDroppable: true, groupId: "g")
+
+        func gene(id: String, hour: Int, included: Bool) -> ScheduleGene {
+            ScheduleGene(
+                eventId: id, title: id,
+                startTime: cal.date(bySettingHour: hour, minute: 0, second: 0, of: today)!,
+                duration: 3600, context: nil, energyCost: 0.5, priority: 0.5,
+                isFocusBlock: false, storyPoints: nil, isDroppable: true, isIncluded: included
+            )
+        }
+
+        let allIn = ScheduleChromosome(genes: [gene(id: "g_p0", hour: 10, included: true), gene(id: "g_p1", hour: 11, included: true)])
+        let allOut = ScheduleChromosome(genes: [gene(id: "g_p0", hour: 10, included: false), gene(id: "g_p1", hour: 11, included: false)])
+        let context = makeContext(movableEvents: [ev1, ev2])
+        _ = start
+
+        let constraint = AtomicGroupConstraint()
+        #expect(constraint.penalty(for: allIn, context: context) == 0)
+        #expect(constraint.penalty(for: allOut, context: context) == 0)
+    }
+
+    @Test("AtomicGroupConstraint is soft — partial plans survive, just discounted")
+    func atomicGroupIsSoft() {
+        // Hard constraints kick fitness below 0.1; a soft one only trims
+        // the score. Verifying the flag directly is the cleanest way to
+        // lock the semantics in place — the penalty math is covered by
+        // the other tests in this section.
+        #expect(AtomicGroupConstraint().isHard == false)
+    }
+
+    @Test("AtomicGroupConstraint ignores events without a groupId")
+    func atomicGroupIgnoresUngrouped() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let start = cal.date(bySettingHour: 10, minute: 0, second: 0, of: today)!
+
+        let ev1 = OptimizableEvent(id: "a", title: "A", duration: 3600, isDroppable: true)
+        let ev2 = OptimizableEvent(id: "b", title: "B", duration: 3600, isDroppable: true)
+        let g1 = ScheduleGene(eventId: "a", title: "A", startTime: start, duration: 3600, context: nil, energyCost: 0.5, priority: 0.5, isFocusBlock: false, storyPoints: nil, isDroppable: true, isIncluded: true)
+        let g2 = ScheduleGene(eventId: "b", title: "B", startTime: start.addingTimeInterval(3600), duration: 3600, context: nil, energyCost: 0.5, priority: 0.5, isFocusBlock: false, storyPoints: nil, isDroppable: true, isIncluded: false)
+
+        let chromosome = ScheduleChromosome(genes: [g1, g2])
+        let context = makeContext(movableEvents: [ev1, ev2])
+
+        let constraint = AtomicGroupConstraint()
+        #expect(constraint.penalty(for: chromosome, context: context) == 0)
+    }
 }
 
 // MARK: - Objective Tests

@@ -84,6 +84,85 @@ final class BacklogTaskTests: XCTestCase {
         XCTAssertGreaterThan(event.energyCost, 0.3)
     }
 
+    // MARK: - Oversized Task Auto-Chunking
+
+    func testSplitOversizedLeavesFittingTaskAlone() {
+        let event = OptimizableEvent(
+            id: "short",
+            title: "Short task",
+            duration: TimeInterval(5 * 3600),
+            isDroppable: true
+        )
+        let result = IntentCompiler.splitOversizedBacklogTasks([event], workingHours: 9...18)
+        XCTAssertEqual(result.count, 1)
+        XCTAssertEqual(result[0].id, "short")
+        XCTAssertEqual(result[0].duration, TimeInterval(5 * 3600))
+    }
+
+    func testSplitOversizedSplitsLongTaskIntoEqualParts() {
+        // 12h task with a 9h working window → ceil(12/9) = 2 parts of 6h each.
+        let event = OptimizableEvent(
+            id: "big",
+            title: "Big task",
+            duration: TimeInterval(12 * 3600),
+            priority: 0.9,
+            context: "Deep work",
+            isDroppable: true,
+            backlogIndex: 3
+        )
+        let result = IntentCompiler.splitOversizedBacklogTasks([event], workingHours: 9...18)
+
+        XCTAssertEqual(result.count, 2)
+        XCTAssertEqual(result[0].id, "big_p0")
+        XCTAssertEqual(result[1].id, "big_p1")
+        XCTAssertEqual(result[0].title, "Big task (1/2)")
+        XCTAssertEqual(result[1].title, "Big task (2/2)")
+        XCTAssertEqual(result[0].duration, TimeInterval(6 * 3600))
+        XCTAssertEqual(result[1].duration, TimeInterval(6 * 3600))
+        // Order enforced by sequential dependsOn chain.
+        XCTAssertTrue(result[0].dependsOn.isEmpty)
+        XCTAssertEqual(result[1].dependsOn, ["big_p0"])
+        // Priority / context / droppability / backlog position propagate.
+        XCTAssertEqual(result[0].priority, 0.9)
+        XCTAssertEqual(result[1].context, "Deep work")
+        XCTAssertTrue(result[0].isDroppable)
+        XCTAssertTrue(result[1].isDroppable)
+        XCTAssertEqual(result[0].backlogIndex, 3)
+        XCTAssertEqual(result[1].backlogIndex, 3)
+        // Atomic group: both parts share the source task id so
+        // AtomicGroupConstraint treats them as one drop-or-keep unit.
+        XCTAssertEqual(result[0].groupId, "big")
+        XCTAssertEqual(result[1].groupId, "big")
+    }
+
+    func testSplitOversizedPreservesExistingDependsOnOnFirstPart() {
+        let event = OptimizableEvent(
+            id: "chain",
+            title: "Chained task",
+            duration: TimeInterval(20 * 3600),
+            dependsOn: ["upstream"]
+        )
+        let result = IntentCompiler.splitOversizedBacklogTasks([event], workingHours: 9...18)
+
+        // ceil(20/9) = 3 parts.
+        XCTAssertEqual(result.count, 3)
+        XCTAssertEqual(result[0].dependsOn, ["upstream"])
+        XCTAssertEqual(result[1].dependsOn, ["chain_p0"])
+        XCTAssertEqual(result[2].dependsOn, ["chain_p1"])
+    }
+
+    func testSplitOversizedIsNoOpWhenWindowIsDegenerate() {
+        let event = OptimizableEvent(
+            id: "x",
+            title: "x",
+            duration: TimeInterval(10 * 3600)
+        )
+        // upperBound == lowerBound → no positive window, bail out.
+        let result = IntentCompiler.splitOversizedBacklogTasks([event], workingHours: 9...9)
+        XCTAssertEqual(result.count, 1)
+        XCTAssertEqual(result[0].id, "x")
+    }
+
     // MARK: - Codable
 
     func testTaskCodable() throws {
@@ -185,6 +264,73 @@ final class BacklogServiceTests: XCTestCase {
 
     private func activeIds() -> [String] {
         service.tasks.filter { $0.status != .done }.map(\.id)
+    }
+
+    // MARK: markScheduled
+
+    func testMarkScheduledSingleEventKeepsListAndPrimaryInSync() {
+        addTask("single")
+        service.markScheduled(id: "task-single", eventId: "evt-1", date: Date())
+
+        let updated = service.tasks.first { $0.id == "task-single" }
+        XCTAssertEqual(updated?.status, .scheduled)
+        XCTAssertEqual(updated?.scheduledEventId, "evt-1")
+        XCTAssertEqual(updated?.scheduledEventIds, ["evt-1"])
+    }
+
+    func testMarkScheduledMultiEventPersistsEveryChunkId() {
+        // Mirrors the auto-chunk path: one BacklogTask, N CalendarEvents,
+        // one `markScheduled` call with the full list.
+        addTask("big")
+        let ids = ["big_p0", "big_p1", "big_p2"]
+        service.markScheduled(id: "task-big", eventIds: ids, date: Date())
+
+        let updated = service.tasks.first { $0.id == "task-big" }
+        XCTAssertEqual(updated?.scheduledEventIds, ids)
+        XCTAssertEqual(updated?.scheduledEventId, "big_p0")
+        XCTAssertEqual(updated?.status, .scheduled)
+    }
+
+    func testMarkScheduledNoOpWhenEventIdsEmpty() {
+        addTask("ghost")
+        service.markScheduled(id: "task-ghost", eventIds: [], date: Date())
+
+        let updated = service.tasks.first { $0.id == "task-ghost" }
+        XCTAssertEqual(updated?.status, .pending)
+        XCTAssertNil(updated?.scheduledEventId)
+        XCTAssertTrue(updated?.scheduledEventIds.isEmpty ?? false)
+    }
+
+    func testUnscheduleClearsBothPrimaryAndList() {
+        addTask("clear")
+        service.markScheduled(id: "task-clear", eventIds: ["a", "b"], date: Date())
+        service.unschedule(id: "task-clear")
+
+        let updated = service.tasks.first { $0.id == "task-clear" }
+        XCTAssertEqual(updated?.status, .pending)
+        XCTAssertNil(updated?.scheduledEventId)
+        XCTAssertTrue(updated?.scheduledEventIds.isEmpty ?? false)
+    }
+
+    func testPersistedTaskRoundTripsEventIds() throws {
+        // Make sure the new `scheduledEventIdsData` column survives an
+        // encode/decode pass and legacy rows (no list) still produce a
+        // non-empty list derived from the singular id.
+        addTask("rt")
+        service.markScheduled(id: "task-rt", eventIds: ["e0", "e1", "e2"], date: Date())
+
+        let source = service.tasks.first { $0.id == "task-rt" }!
+        let persisted = PersistedBacklogTask(from: source, sortOrder: 0)
+        let restored = persisted.toBacklogTask()
+        XCTAssertEqual(restored.scheduledEventIds, ["e0", "e1", "e2"])
+        XCTAssertEqual(restored.scheduledEventId, "e0")
+
+        // Legacy path: a row saved before this field existed has
+        // `scheduledEventIdsData == nil` but still points at a single
+        // event through the legacy column.
+        persisted.scheduledEventIdsData = nil
+        let legacy = persisted.toBacklogTask()
+        XCTAssertEqual(legacy.scheduledEventIds, ["e0"])
     }
 
     // MARK: indexOfTask

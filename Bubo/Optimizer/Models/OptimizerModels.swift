@@ -32,6 +32,12 @@ struct OptimizableEvent: Identifiable, Codable, Hashable, Sendable {
     /// dragged them into — the GA actively prefers matching visual order
     /// instead of relying on a single stable-sort pass in the greedy seed.
     let backlogIndex: Int?
+    /// Atomic-group tag: events sharing a non-nil `groupId` must be
+    /// included-or-dropped together (enforced by `AtomicGroupConstraint`).
+    /// Populated by `IntentCompiler.splitOversizedBacklogTasks` when a
+    /// long backlog task is chunked across days, so the GA can't place
+    /// chunk 1 and 3 while dropping 2 — leaving a task half-scheduled.
+    let groupId: String?
 
     init(
         id: String = UUID().uuidString,
@@ -50,7 +56,8 @@ struct OptimizableEvent: Identifiable, Codable, Hashable, Sendable {
         dependsOn: [String] = [],
         isDroppable: Bool = false,
         reservedTaskIds: [String] = [],
-        backlogIndex: Int? = nil
+        backlogIndex: Int? = nil,
+        groupId: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -69,6 +76,7 @@ struct OptimizableEvent: Identifiable, Codable, Hashable, Sendable {
         self.isDroppable = isDroppable
         self.reservedTaskIds = reservedTaskIds
         self.backlogIndex = backlogIndex
+        self.groupId = groupId
     }
 }
 
@@ -112,6 +120,11 @@ struct ScheduleGene: Codable, Hashable, Sendable {
     /// Backlog task ids bound to this gene (ordered per work round).
     /// Non-empty only for auto-pomodoro / focus-burst events.
     let reservedTaskIds: [String]
+    /// Atomic-group tag inherited from `OptimizableEvent.groupId`. Populated
+    /// only for chunks of a split backlog task. Used by `applyScenario` so
+    /// all chunks of one parent task link back to the same `BacklogTask.id`
+    /// rather than each chunk looking up a non-existent "taskId_pN" row.
+    let groupId: String?
 
     var endTime: Date { startTime.addingTimeInterval(duration) }
 
@@ -128,7 +141,8 @@ struct ScheduleGene: Codable, Hashable, Sendable {
         isDroppable: Bool = false,
         isIncluded: Bool = true,
         pomodoroConfig: PomodoroConfig? = nil,
-        reservedTaskIds: [String] = []
+        reservedTaskIds: [String] = [],
+        groupId: String? = nil
     ) {
         self.eventId = eventId
         self.title = title
@@ -143,6 +157,7 @@ struct ScheduleGene: Codable, Hashable, Sendable {
         self.isIncluded = isIncluded
         self.pomodoroConfig = pomodoroConfig
         self.reservedTaskIds = reservedTaskIds
+        self.groupId = groupId
     }
 
     /// Create a copy with a new start time (preserves all other fields).
@@ -160,7 +175,8 @@ struct ScheduleGene: Codable, Hashable, Sendable {
             isDroppable: isDroppable,
             isIncluded: isIncluded,
             pomodoroConfig: pomodoroConfig,
-            reservedTaskIds: reservedTaskIds
+            reservedTaskIds: reservedTaskIds,
+            groupId: groupId
         )
     }
 }

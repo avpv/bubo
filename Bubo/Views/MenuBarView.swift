@@ -525,7 +525,15 @@ struct MenuBarView: View {
         var cursor = start
         for task in toReschedule {
             let oldEventId = task.scheduledEventId
-            if let old = oldEventId { reminderService.removeLocalEvent(id: old) }
+            // Manual reschedule collapses multi-chunk layouts back into a
+            // single slot, so every prior chunk has to be cleared — not
+            // just the primary one `scheduledEventId` points at.
+            for eid in task.scheduledEventIds {
+                reminderService.removeLocalEvent(id: eid)
+            }
+            if let old = oldEventId, !task.scheduledEventIds.contains(old) {
+                reminderService.removeLocalEvent(id: old)
+            }
 
             let dur = TimeInterval(task.durationMinutes * 60)
             let newEventId = "task-\(task.id)"
@@ -653,6 +661,11 @@ struct MenuBarView: View {
             eventType: .standard,
             colorTag: .green
         )
+        // Clean up any prior chunks so the drag collapses a multi-slot
+        // layout into the single new slot rather than leaving orphans.
+        for eid in task.scheduledEventIds where eid != eventId {
+            reminderService.removeLocalEvent(id: eid)
+        }
         reminderService.addLocalEvent(event)
         backlog.markScheduled(id: task.id, eventId: eventId, date: slotStart)
 

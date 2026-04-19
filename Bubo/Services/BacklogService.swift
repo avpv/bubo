@@ -237,6 +237,7 @@ final class BacklogService {
             tasks[index].completedAt = now
             tasks[index].createdAt = now
             tasks[index].scheduledEventId = nil
+            tasks[index].scheduledEventIds = []
             tasks[index].scheduledDate = nil
             if let next = RecurrenceEngine.nextOccurrence(
                 after: now,
@@ -261,6 +262,7 @@ final class BacklogService {
         tasks[index].status = .frozen
         // Drop schedule linkage so the calendar slot is freed.
         tasks[index].scheduledEventId = nil
+        tasks[index].scheduledEventIds = []
         tasks[index].scheduledDate = nil
         store.upsert(tasks[index], at: index)
         NotificationCenter.default.post(name: Self.taskUpdated, object: id)
@@ -315,10 +317,23 @@ final class BacklogService {
         store.upsert(tasks[index], at: index)
     }
 
+    /// Single-event convenience: most paths in the app schedule a backlog
+    /// task into exactly one calendar slot.
     func markScheduled(id: String, eventId: String, date: Date) {
-        guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
+        markScheduled(id: id, eventIds: [eventId], date: date)
+    }
+
+    /// List form for auto-chunked long tasks, where the GA produces multiple
+    /// `CalendarEvent`s (one per chunk). The primary `scheduledEventId` is
+    /// set to the first entry so legacy readers keep working; the full list
+    /// flows through `scheduledEventIds` so unschedule/reschedule can find
+    /// every slice. `eventIds` must be non-empty.
+    func markScheduled(id: String, eventIds: [String], date: Date) {
+        guard let index = tasks.firstIndex(where: { $0.id == id }),
+              let primary = eventIds.first else { return }
         tasks[index].status = .scheduled
-        tasks[index].scheduledEventId = eventId
+        tasks[index].scheduledEventId = primary
+        tasks[index].scheduledEventIds = eventIds
         tasks[index].scheduledDate = date
         store.upsert(tasks[index], at: index)
         NotificationCenter.default.post(name: Self.taskScheduleChanged, object: id)
@@ -328,6 +343,7 @@ final class BacklogService {
         guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
         tasks[index].status = .pending
         tasks[index].scheduledEventId = nil
+        tasks[index].scheduledEventIds = []
         tasks[index].scheduledDate = nil
         store.upsert(tasks[index], at: index)
         NotificationCenter.default.post(name: Self.taskScheduleChanged, object: id)
@@ -366,6 +382,7 @@ final class BacklogService {
                scheduled < today {
                 tasks[i].status = .pending
                 tasks[i].scheduledEventId = nil
+                tasks[i].scheduledEventIds = []
                 tasks[i].scheduledDate = nil
                 changedIndexes.append(i)
             }
