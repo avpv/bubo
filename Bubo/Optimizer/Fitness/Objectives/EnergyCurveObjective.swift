@@ -27,8 +27,17 @@ struct EnergyCurveObjective: FitnessObjective {
             let day = cal.startOfDay(for: gene.startTime)
             eventsByDay[day, default: []].append((gene.startTime, gene.endTime, gene.energyCost))
         }
+        // Keep dropped droppable genes' days in the denominator so
+        // excluding the last gene on a day doesn't silently shrink the
+        // day count. Each dropped-only day contributes 0 to the average —
+        // see `DayPartitionedObjective.includeDroppedGeneDays` for the
+        // same reasoning applied to the day-partitioned objectives.
+        var droppedDays: Set<Date> = []
+        for gene in chromosome.genes where gene.isDroppable && !gene.isIncluded {
+            droppedDays.insert(cal.startOfDay(for: gene.startTime))
+        }
 
-        guard !eventsByDay.isEmpty else { return 1.0 }
+        guard !(eventsByDay.isEmpty && droppedDays.isEmpty) else { return 1.0 }
 
         let peakHour = context.preferences.peakEnergyHour
         let decayRate = context.preferences.energyDecayRate
@@ -97,6 +106,12 @@ struct EnergyCurveObjective: FitnessObjective {
             let smoothnessScore = 1.0 / (1.0 + Double(heavyBackToBack) * 0.3)
 
             totalScore += burnoutScore * 0.4 + normalizedAlignment * 0.4 + smoothnessScore * 0.2
+            dayCount += 1
+        }
+
+        // Dropped-only days (no included gene on that day) contribute 0
+        // to the numerator but still count in the denominator.
+        for day in droppedDays where eventsByDay[day] == nil {
             dayCount += 1
         }
 

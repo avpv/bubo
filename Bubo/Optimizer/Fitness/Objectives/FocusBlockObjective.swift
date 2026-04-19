@@ -43,6 +43,7 @@ struct FocusBlockObjective: DayPartitionedObjective {
         for (day, events) in eventsByDay {
             scores[day] = scoreDay(day, events: events, context: context)
         }
+        includeDroppedGeneDays(&scores, chromosome: chromosome, calendar: cal)
         return scores
     }
 

@@ -514,6 +514,85 @@ struct TaskPlacementObjectiveTests {
         #expect(dropScore <= keepScore,
                 "dropScore=\(dropScore) must not exceed keepScore=\(keepScore)")
     }
+
+    @Test("Dropping an only-event-on-day gene must not raise day-partitioned objectives")
+    func droppingLastGeneOnDayDoesNotRaiseDayPartitioned() {
+        // The five day-partitioned objectives (FocusBlock, BreakPlacement,
+        // Buffer, ContextSwitch, MeetingClustering) previously averaged
+        // only over *populated* days. Dropping the only gene on a middling
+        // day erased that day from the denominator, so the arithmetic
+        // mean went up purely from the missing data point. `planWeek`
+        // with four backlog tasks spread across four separate days
+        // reproducibly "lost" the task whose day scored below the mean.
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+
+        func task(id: String) -> OptimizableEvent {
+            OptimizableEvent(
+                id: id,
+                title: id,
+                duration: 3600,
+                priority: 0.5,
+                context: id == "bad" ? "personal" : "work",
+                isDroppable: true
+            )
+        }
+        let events = ["a", "b", "c", "bad"].map(task(id:))
+
+        let ctx = OptimizerContext(
+            movableEvents: events,
+            workingHours: 9...18,
+            planningHorizon: DateInterval(start: today, duration: 7 * 24 * 3600)
+        )
+
+        func gene(_ e: OptimizableEvent, dayOffset: Int, hour: Int, included: Bool) -> ScheduleGene {
+            let day = cal.date(byAdding: .day, value: dayOffset, to: today)!
+            return ScheduleGene(
+                eventId: e.id,
+                title: e.title,
+                startTime: cal.date(bySettingHour: hour, minute: 0, second: 0, of: day)!,
+                duration: e.duration,
+                context: e.context,
+                energyCost: 0.5,
+                priority: e.priority,
+                isFocusBlock: false,
+                storyPoints: nil,
+                isDroppable: true,
+                isIncluded: included
+            )
+        }
+
+        // Four tasks on four consecutive working days. `bad` sits on day 3
+        // alone, so dropping it erases day 3 from eventsByDay.
+        let keepAll = ScheduleChromosome(genes: [
+            gene(events[0], dayOffset: 0, hour: 10, included: true),
+            gene(events[1], dayOffset: 1, hour: 10, included: true),
+            gene(events[2], dayOffset: 2, hour: 10, included: true),
+            gene(events[3], dayOffset: 3, hour: 10, included: true),
+        ])
+        let dropBad = ScheduleChromosome(genes: [
+            gene(events[0], dayOffset: 0, hour: 10, included: true),
+            gene(events[1], dayOffset: 1, hour: 10, included: true),
+            gene(events[2], dayOffset: 2, hour: 10, included: true),
+            gene(events[3], dayOffset: 3, hour: 10, included: false),
+        ])
+
+        let objectives: [any FitnessObjective] = [
+            FocusBlockObjective(weight: 1.0),
+            BreakObjective(weight: 1.2),
+            BufferObjective(weight: 0.6),
+            ContextSwitchObjective(weight: 0.7),
+            MeetingClusteringObjective(weight: 0.8),
+            EnergyCurveObjective(weight: 0.9),
+        ]
+
+        for objective in objectives {
+            let keep = objective.evaluate(chromosome: keepAll, context: ctx)
+            let drop = objective.evaluate(chromosome: dropBad, context: ctx)
+            #expect(drop <= keep + 1e-9,
+                    "\(objective.name): drop=\(drop) must not exceed keep=\(keep)")
+        }
+    }
 }
 
 // MARK: - Duration-aware Start Sampling Tests

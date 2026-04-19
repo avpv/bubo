@@ -51,6 +51,7 @@ struct MeetingClusteringObjective: DayPartitionedObjective {
         for (day, meetings) in meetingsByDay {
             scores[day] = scoreDay(day: day, meetings: meetings, context: context)
         }
+        includeDroppedGeneDays(&scores, chromosome: chromosome, calendar: cal)
         return scores
     }
 

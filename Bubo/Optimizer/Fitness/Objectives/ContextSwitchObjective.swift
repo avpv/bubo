@@ -36,6 +36,7 @@ struct ContextSwitchObjective: DayPartitionedObjective {
         for (day, events) in eventsByDay {
             scores[day] = scoreDay(events: events)
         }
+        includeDroppedGeneDays(&scores, chromosome: chromosome, calendar: cal)
         return scores
     }
 

@@ -46,6 +46,7 @@ struct BreakObjective: DayPartitionedObjective {
         for (day, events) in eventsByDay {
             perDay[day] = scoreDay(day: day, events: events, preferences: context.preferences, calendar: cal)
         }
+        includeDroppedGeneDays(&perDay, chromosome: chromosome, calendar: cal)
         return perDay
     }
 

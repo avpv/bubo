@@ -60,6 +60,32 @@ extension DayPartitionedObjective {
         guard !perDay.isEmpty else { return 1.0 }
         return perDay.values.reduce(0, +) / Double(perDay.count)
     }
+
+    /// Add days touched by dropped droppable genes to the per-day map with
+    /// a 0 score so the denominator stays stable across drops. Without this,
+    /// excluding the only gene on a day silently erased that day from the
+    /// map — and every structural objective (focus, breaks, buffers,
+    /// context-switches, clustering) rewards fewer events on the calendar,
+    /// so erasing a middling day from the denominator mechanically raised
+    /// the average. That arithmetic loophole was enough to push `planWeek`
+    /// into "3 of 4" territory when the backlog actually fit the window.
+    ///
+    /// Days that already carry an included-gene score are left alone — the
+    /// within-day reduction in events is measured by the objective's own
+    /// scoring. Only the cross-day "disappeared from the map" case is what
+    /// this helper closes.
+    func includeDroppedGeneDays(
+        _ perDay: inout [Date: Double],
+        chromosome: ScheduleChromosome,
+        calendar: Calendar
+    ) {
+        for gene in chromosome.genes where gene.isDroppable && !gene.isIncluded {
+            let day = calendar.startOfDay(for: gene.startTime)
+            if perDay[day] == nil {
+                perDay[day] = 0.0
+            }
+        }
+    }
 }
 
 // MARK: - Component-Partitioned Objective
@@ -566,6 +592,12 @@ final class FitnessEvaluator: @unchecked Sendable {
                 )
             }
         }
+
+        // Keep dropped droppable genes' days in the denominator with score
+        // 0 so toggling `isIncluded` off a gene can't mechanically raise
+        // the average by shrinking the day count. Mirrors the same helper
+        // applied by each objective's full `evaluatePerDay`.
+        objective.includeDroppedGeneDays(&next, chromosome: chromosome, calendar: cal)
 
         return next
     }
