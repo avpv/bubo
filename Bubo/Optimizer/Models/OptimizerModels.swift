@@ -120,6 +120,11 @@ struct ScheduleGene: Codable, Hashable, Sendable {
     /// Backlog task ids bound to this gene (ordered per work round).
     /// Non-empty only for auto-pomodoro / focus-burst events.
     let reservedTaskIds: [String]
+    /// Atomic-group tag inherited from `OptimizableEvent.groupId`. Populated
+    /// only for chunks of a split backlog task. Used by `applyScenario` so
+    /// all chunks of one parent task link back to the same `BacklogTask.id`
+    /// rather than each chunk looking up a non-existent "taskId_pN" row.
+    let groupId: String?
 
     var endTime: Date { startTime.addingTimeInterval(duration) }
 
@@ -136,7 +141,8 @@ struct ScheduleGene: Codable, Hashable, Sendable {
         isDroppable: Bool = false,
         isIncluded: Bool = true,
         pomodoroConfig: PomodoroConfig? = nil,
-        reservedTaskIds: [String] = []
+        reservedTaskIds: [String] = [],
+        groupId: String? = nil
     ) {
         self.eventId = eventId
         self.title = title
@@ -151,6 +157,7 @@ struct ScheduleGene: Codable, Hashable, Sendable {
         self.isIncluded = isIncluded
         self.pomodoroConfig = pomodoroConfig
         self.reservedTaskIds = reservedTaskIds
+        self.groupId = groupId
     }
 
     /// Create a copy with a new start time (preserves all other fields).
@@ -168,7 +175,8 @@ struct ScheduleGene: Codable, Hashable, Sendable {
             isDroppable: isDroppable,
             isIncluded: isIncluded,
             pomodoroConfig: pomodoroConfig,
-            reservedTaskIds: reservedTaskIds
+            reservedTaskIds: reservedTaskIds,
+            groupId: groupId
         )
     }
 }

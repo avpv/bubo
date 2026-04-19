@@ -34,6 +34,11 @@ final class PersistedBacklogTask {
     var modifiedAt: Date?
     var scheduledDate: Date?
     var scheduledEventId: String?
+    /// JSON-encoded `[String]`. Holds every chunk event id for auto-chunked
+    /// long tasks; nil on legacy rows (decoded as an empty list, which the
+    /// service back-fills from `scheduledEventId` the next time the task is
+    /// scheduled).
+    var scheduledEventIdsData: Data?
     var reminderCalendarItemId: String?
     /// Recurrence flags added in v1.11. Default false / nil keeps legacy rows
     /// working unchanged — an older record simply decodes to a non-recurring task.
@@ -76,6 +81,9 @@ final class PersistedBacklogTask {
         self.modifiedAt = task.modifiedAt
         self.scheduledDate = task.scheduledDate
         self.scheduledEventId = task.scheduledEventId
+        self.scheduledEventIdsData = task.scheduledEventIds.isEmpty
+            ? nil
+            : (try? JSONEncoder().encode(task.scheduledEventIds))
         self.reminderCalendarItemId = task.reminderCalendarItemId
         self.isRecurring = task.isRecurring
         self.recurrenceTag = task.recurrenceTag
@@ -107,6 +115,15 @@ final class PersistedBacklogTask {
         task.modifiedAt = modifiedAt
         task.scheduledDate = scheduledDate
         task.scheduledEventId = scheduledEventId
+        // Legacy rows predate `scheduledEventIdsData` — fall back to the
+        // singular `scheduledEventId` so the task still reports at least one
+        // slot. The service refreshes the list on the next schedule pass.
+        if let data = scheduledEventIdsData,
+           let decoded = try? JSONDecoder().decode([String].self, from: data) {
+            task.scheduledEventIds = decoded
+        } else if let legacyId = scheduledEventId {
+            task.scheduledEventIds = [legacyId]
+        }
         task.reminderCalendarItemId = reminderCalendarItemId
         return task
     }

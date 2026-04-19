@@ -40,9 +40,18 @@ struct BacklogTask: Identifiable, Codable, Hashable, Sendable {
     /// Used to determine carry-over: if scheduledDate < today, task is overdue.
     var scheduledDate: Date?
 
-    /// The calendar event ID created when this task was placed in the schedule.
-    /// nil = unscheduled (sitting in backlog).
+    /// The primary calendar event ID for this task. For tasks not split by
+    /// `splitOversizedBacklogTasks`, this is the one and only event id; for
+    /// tasks split into N chunks, it's the id of chunk 0 and `scheduledEventIds`
+    /// holds all N. nil = unscheduled (sitting in backlog).
     var scheduledEventId: String?
+
+    /// All calendar event ids created for this task. Always contains
+    /// `scheduledEventId` as the first element when the task is scheduled.
+    /// Stores >1 entry only for auto-chunked long tasks, where each chunk
+    /// lands on a different day; lets the UI/cleanup paths find every
+    /// scheduled slice without string-matching on "_pN" suffixes.
+    var scheduledEventIds: [String] = []
 
     /// The Apple Reminders `calendarItemIdentifier` for tasks exported from Bubo.
     /// For tasks imported from Reminders, the ID is derived from the `reminder_` prefix.
@@ -164,6 +173,7 @@ extension BacklogTask {
                 ?? local.completedAt
                 ?? remote.completedAt
             winner.scheduledEventId = nil
+            winner.scheduledEventIds = []
             winner.scheduledDate = nil
             // Re-stamp so the monotonic promotion propagates back out to
             // the losing device on the next sync.

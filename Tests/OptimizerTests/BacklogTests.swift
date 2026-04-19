@@ -266,6 +266,73 @@ final class BacklogServiceTests: XCTestCase {
         service.tasks.filter { $0.status != .done }.map(\.id)
     }
 
+    // MARK: markScheduled
+
+    func testMarkScheduledSingleEventKeepsListAndPrimaryInSync() {
+        addTask("single")
+        service.markScheduled(id: "task-single", eventId: "evt-1", date: Date())
+
+        let updated = service.tasks.first { $0.id == "task-single" }
+        XCTAssertEqual(updated?.status, .scheduled)
+        XCTAssertEqual(updated?.scheduledEventId, "evt-1")
+        XCTAssertEqual(updated?.scheduledEventIds, ["evt-1"])
+    }
+
+    func testMarkScheduledMultiEventPersistsEveryChunkId() {
+        // Mirrors the auto-chunk path: one BacklogTask, N CalendarEvents,
+        // one `markScheduled` call with the full list.
+        addTask("big")
+        let ids = ["big_p0", "big_p1", "big_p2"]
+        service.markScheduled(id: "task-big", eventIds: ids, date: Date())
+
+        let updated = service.tasks.first { $0.id == "task-big" }
+        XCTAssertEqual(updated?.scheduledEventIds, ids)
+        XCTAssertEqual(updated?.scheduledEventId, "big_p0")
+        XCTAssertEqual(updated?.status, .scheduled)
+    }
+
+    func testMarkScheduledNoOpWhenEventIdsEmpty() {
+        addTask("ghost")
+        service.markScheduled(id: "task-ghost", eventIds: [], date: Date())
+
+        let updated = service.tasks.first { $0.id == "task-ghost" }
+        XCTAssertEqual(updated?.status, .pending)
+        XCTAssertNil(updated?.scheduledEventId)
+        XCTAssertTrue(updated?.scheduledEventIds.isEmpty ?? false)
+    }
+
+    func testUnscheduleClearsBothPrimaryAndList() {
+        addTask("clear")
+        service.markScheduled(id: "task-clear", eventIds: ["a", "b"], date: Date())
+        service.unschedule(id: "task-clear")
+
+        let updated = service.tasks.first { $0.id == "task-clear" }
+        XCTAssertEqual(updated?.status, .pending)
+        XCTAssertNil(updated?.scheduledEventId)
+        XCTAssertTrue(updated?.scheduledEventIds.isEmpty ?? false)
+    }
+
+    func testPersistedTaskRoundTripsEventIds() throws {
+        // Make sure the new `scheduledEventIdsData` column survives an
+        // encode/decode pass and legacy rows (no list) still produce a
+        // non-empty list derived from the singular id.
+        addTask("rt")
+        service.markScheduled(id: "task-rt", eventIds: ["e0", "e1", "e2"], date: Date())
+
+        let source = service.tasks.first { $0.id == "task-rt" }!
+        let persisted = PersistedBacklogTask(from: source, sortOrder: 0)
+        let restored = persisted.toBacklogTask()
+        XCTAssertEqual(restored.scheduledEventIds, ["e0", "e1", "e2"])
+        XCTAssertEqual(restored.scheduledEventId, "e0")
+
+        // Legacy path: a row saved before this field existed has
+        // `scheduledEventIdsData == nil` but still points at a single
+        // event through the legacy column.
+        persisted.scheduledEventIdsData = nil
+        let legacy = persisted.toBacklogTask()
+        XCTAssertEqual(legacy.scheduledEventIds, ["e0"])
+    }
+
     // MARK: indexOfTask
 
     func testIndexOfTaskReturnsCurrentPosition() {

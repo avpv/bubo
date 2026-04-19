@@ -293,10 +293,31 @@ final class OptimizerService {
 
         optimizer.acceptScenario(scenario)
 
-        // Remove old calendar events for tasks being rescheduled
-        for gene in scenario.activeGenes {
-            if reminderService.localEvents.contains(where: { $0.id == gene.eventId }) {
-                reminderService.removeLocalEvent(id: gene.eventId)
+        // Remove old calendar events for tasks being rescheduled. Two
+        // sources feed the removal set: direct id matches (the typical
+        // case where the new gene reuses the old event id) and every
+        // previously-scheduled chunk of each task being re-optimized.
+        // The second source matters when a task changes shape between
+        // runs — e.g., was a single event, is now split into `_p0`+`_p1`,
+        // or vice versa — so we don't orphan the prior chunks.
+        var idsToRemove = Set(scenario.activeGenes.map { $0.eventId })
+        if let backlogService {
+            let taskIds = Set(
+                scenario.activeGenes.flatMap { gene -> [String] in
+                    gene.reservedTaskIds.isEmpty
+                        ? [gene.groupId ?? gene.eventId]
+                        : gene.reservedTaskIds
+                }
+            )
+            for taskId in taskIds {
+                guard let task = backlogService.tasks.first(where: { $0.id == taskId }) else { continue }
+                idsToRemove.formUnion(task.scheduledEventIds)
+                if let primary = task.scheduledEventId { idsToRemove.insert(primary) }
+            }
+        }
+        for id in idsToRemove {
+            if reminderService.localEvents.contains(where: { $0.id == id }) {
+                reminderService.removeLocalEvent(id: id)
             }
         }
 
@@ -357,24 +378,41 @@ final class OptimizerService {
             event.pomodoroTaskSequence = sequence
             reminderService.addLocalEvent(event)
             createdEventIds.append(event.id)
+        }
 
-            // Link backlog tasks to their scheduled events. For focus
-            // bursts every task in the pack points at the same pomodoro.
-            if gene.reservedTaskIds.isEmpty {
+        // Link backlog tasks to their scheduled events. Two shapes flow
+        // through the same call:
+        //   • Focus bursts: one gene carries N backlog tasks via
+        //     `reservedTaskIds`. Each task points at the same pomodoro
+        //     event.
+        //   • Auto-chunked long tasks: N genes share a `groupId` equal
+        //     to the parent backlog task id. The parent task links to
+        //     every chunk's event id so unschedule/rescheduling can find
+        //     them all. Plain backlog events fall through this same path
+        //     as degenerate one-chunk groups.
+        let focusGenes = scenario.activeGenes.filter { !$0.reservedTaskIds.isEmpty }
+        let regularGenes = scenario.activeGenes.filter { $0.reservedTaskIds.isEmpty }
+
+        for gene in focusGenes {
+            for taskId in gene.reservedTaskIds {
                 backlogService?.markScheduled(
-                    id: gene.eventId,
-                    eventId: event.id,
+                    id: taskId,
+                    eventIds: [gene.eventId],
                     date: gene.startTime
                 )
-            } else {
-                for taskId in gene.reservedTaskIds {
-                    backlogService?.markScheduled(
-                        id: taskId,
-                        eventId: event.id,
-                        date: gene.startTime
-                    )
-                }
             }
+        }
+
+        let groupedByTask = Dictionary(grouping: regularGenes, by: { $0.groupId ?? $0.eventId })
+        for (taskId, genes) in groupedByTask {
+            let ordered = genes.sorted { $0.startTime < $1.startTime }
+            let eventIds = ordered.map { $0.eventId }
+            let earliest = ordered.first?.startTime ?? Date()
+            backlogService?.markScheduled(
+                id: taskId,
+                eventIds: eventIds,
+                date: earliest
+            )
         }
 
         // Save undo snapshot
