@@ -250,16 +250,22 @@ struct TaskDependencyConstraint: ScheduleConstraint {
     }
 }
 
-// MARK: - Atomic Group Constraint (Hard)
+// MARK: - Atomic Group Constraint (Soft)
 
-/// Events sharing a non-nil `groupId` must all be included together or all be
-/// dropped together. Produced by `IntentCompiler.splitOversizedBacklogTasks`
-/// so the GA can't schedule chunks 1 and 3 of a long task while dropping
-/// chunk 2 — a half-done task is strictly worse than a fully-dropped one,
-/// but the existing `TaskInclusion` penalty alone can't guarantee that.
+/// Events sharing a non-nil `groupId` should be included-or-dropped together.
+/// Produced by `IntentCompiler.splitOversizedBacklogTasks` when a long backlog
+/// task is chunked across days — without this, the GA could include chunks
+/// 1 and 3 while dropping 2, leaving a half-scheduled task.
+///
+/// Soft so the GA can still settle on a partial plan when the full group
+/// genuinely doesn't fit (rather than silently dropping everything and
+/// hiding the task from the user). The penalty is small relative to the
+/// value lost by dropping a chunk via `TaskInclusion`, so the preference
+/// ordering is: `all-in > partial > all-out` only when `all-in` is
+/// infeasible; otherwise `all-in > all-out > partial`.
 struct AtomicGroupConstraint: ScheduleConstraint {
     let name = "AtomicGroup"
-    let isHard = true
+    let isHard = false
 
     func penalty(for chromosome: ScheduleChromosome, context: OptimizerContext) -> Double {
         // Build a (groupId → [eventId]) map once per evaluation. Events
@@ -285,9 +291,10 @@ struct AtomicGroupConstraint: ScheduleConstraint {
                 if inclusion[id] == true { included += 1 } else { excluded += 1 }
             }
             // Penalty scales with the minority count — number of flips
-            // needed to make the group uniform. Hits the hard-constraint
-            // multiplier in `ConstraintEngine`, so any split group is
-            // strongly pushed to all-in or all-out.
+            // needed to make the group uniform. As a soft constraint this
+            // enters `FitnessEvaluator.evaluate` as `softPenalty * 0.01`
+            // in a multiplicative factor, so a 1-chunk mismatch trims
+            // ~1% off the score — a real but survivable nudge.
             if included > 0 && excluded > 0 {
                 totalViolation += Double(min(included, excluded))
             }

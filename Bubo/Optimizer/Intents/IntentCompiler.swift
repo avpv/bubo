@@ -1073,8 +1073,10 @@ private extension IntentCompiler {
             let parts = Int(ceil(event.duration / maxDuration))
             let partDuration = event.duration / Double(parts)
             // All chunks of the same task share `groupId` so
-            // `AtomicGroupConstraint` treats the split as one unit — the GA
-            // can't schedule chunk 1 and 3 while dropping 2.
+            // `AtomicGroupConstraint` (soft) nudges the GA toward
+            // including-or-dropping the group as a unit — partial plans
+            // are still allowed when the full group doesn't fit, just
+            // discounted.
             let group = event.groupId ?? event.id
             return (0..<parts).map { i in
                 OptimizableEvent(

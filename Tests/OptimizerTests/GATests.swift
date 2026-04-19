@@ -883,6 +883,15 @@ struct ConstraintTests {
         #expect(constraint.penalty(for: allOut, context: context) == 0)
     }
 
+    @Test("AtomicGroupConstraint is soft — partial plans survive, just discounted")
+    func atomicGroupIsSoft() {
+        // Hard constraints kick fitness below 0.1; a soft one only trims
+        // the score. Verifying the flag directly is the cleanest way to
+        // lock the semantics in place — the penalty math is covered by
+        // the other tests in this section.
+        #expect(AtomicGroupConstraint().isHard == false)
+    }
+
     @Test("AtomicGroupConstraint ignores events without a groupId")
     func atomicGroupIgnoresUngrouped() {
         let cal = Calendar.current
