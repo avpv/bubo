@@ -646,10 +646,18 @@ private extension IntentCompiler {
             startHour: signals.startHour,
             signals: signals
         )
+        // Name the session after the task the optimizer is most likely to
+        // schedule into it — the user's view of "what I'm doing right now"
+        // stays the task name, not a generic "Pomodoro" label. Falls
+        // through to the spec's existing title when the backlog is empty.
+        let taskTitle = topBacklogCandidate()?.title.trimmingCharacters(in: .whitespaces)
 
         for i in config.syntheticEvents.indices where config.syntheticEvents[i].autoPomodoro {
             config.syntheticEvents[i].pomodoroConfig = shape
             config.syntheticEvents[i].minutes = shape.totalMinutes
+            if let title = taskTitle, !title.isEmpty {
+                config.syntheticEvents[i].title = title
+            }
         }
     }
 
