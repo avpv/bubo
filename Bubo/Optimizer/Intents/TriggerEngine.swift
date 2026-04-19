@@ -82,6 +82,11 @@ final class TriggerEngine {
     // MARK: - Scheduled Triggers
 
     private func scheduleDaily(subgraph: Subgraph, hour: Int, registry: SubgraphRegistry) {
+        // Reject malformed hours up front — a saved subgraph with a stale or
+        // out-of-range hour would otherwise schedule a timer with a near-zero
+        // interval and immediately re-execute on startup.
+        guard (0...23).contains(hour) else { return }
+
         let cal = Calendar.current
         let now = Date()
 
@@ -91,11 +96,12 @@ final class TriggerEngine {
            today > now {
             nextFire = today
         } else {
-            let tomorrow = cal.date(byAdding: .day, value: 1, to: now)!
+            let tomorrow = cal.date(byAdding: .day, value: 1, to: now)
+                ?? now.addingTimeInterval(86400)
             nextFire = cal.date(bySettingHour: hour, minute: 0, second: 0, of: tomorrow) ?? tomorrow
         }
 
-        let interval = nextFire.timeIntervalSince(now)
+        let interval = max(1, nextFire.timeIntervalSince(now))
         let timerId = "daily-\(subgraph.id)"
 
         // Fire once at the target time, then repeat every 24h
@@ -119,6 +125,11 @@ final class TriggerEngine {
     }
 
     private func scheduleWeekly(subgraph: Subgraph, day: Int, registry: SubgraphRegistry) {
+        // Weekday is 1...7 (Sunday-first). A bad value would loop without
+        // matching, leaving `nextFire` in the past so the timer fires on the
+        // next runloop and immediately re-executes the subgraph.
+        guard (1...7).contains(day) else { return }
+
         let cal = Calendar.current
         let now = Date()
 
@@ -128,7 +139,8 @@ final class TriggerEngine {
             if cal.component(.weekday, from: search) == day && search > now {
                 break
             }
-            search = cal.date(byAdding: .day, value: 1, to: search)!
+            search = cal.date(byAdding: .day, value: 1, to: search)
+                ?? search.addingTimeInterval(86400)
         }
 
         // Default to 9:00 for weekly triggers
