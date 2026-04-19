@@ -20,8 +20,19 @@ struct PomodoroFitObjective: FitnessObjective {
         var evaluatedCount = 0
 
         for pomEvent in pomodoroEvents {
-            guard let gene = chromosome.genes.first(where: { $0.eventId == pomEvent.id && $0.isIncluded }),
-                  let config = pomEvent.pomodoroConfig else { continue }
+            // Keep dropped pomodoro tasks in the denominator with score 0.
+            // Averaging only over included genes let the GA drop a pomodoro
+            // with a sub-mean fit and mechanically raise this objective —
+            // exactly the back-door that pushed planWeek to schedule
+            // "3 of 4" backlog tasks.
+            let includedGene = chromosome.genes.first(where: { $0.eventId == pomEvent.id && $0.isIncluded })
+            guard let gene = includedGene else {
+                if chromosome.genes.contains(where: { $0.eventId == pomEvent.id }) {
+                    evaluatedCount += 1
+                }
+                continue
+            }
+            guard let config = pomEvent.pomodoroConfig else { continue }
             evaluatedCount += 1
 
             var score = 0.0

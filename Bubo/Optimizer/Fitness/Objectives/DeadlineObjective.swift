@@ -20,8 +20,20 @@ struct DeadlineObjective: FitnessObjective {
         var evaluatedCount = 0
 
         for event in eventsWithDeadlines {
-            guard let gene = chromosome.genes.first(where: { $0.eventId == event.id && $0.isIncluded }),
-                  let deadline = event.deadline else { continue }
+            // Dropped droppable tasks count in the denominator with a 0 score.
+            // Without this, excluding a deadline task whose `earlyScore` sat
+            // below the mean mechanically raised the objective — handing the
+            // GA a back-door incentive to drop precisely the tasks whose
+            // deadlines matter. Dropping a deadline task is strictly worse
+            // than scheduling it, even at the buzzer.
+            let includedGene = chromosome.genes.first(where: { $0.eventId == event.id && $0.isIncluded })
+            guard let gene = includedGene else {
+                if chromosome.genes.contains(where: { $0.eventId == event.id }) {
+                    evaluatedCount += 1
+                }
+                continue
+            }
+            guard let deadline = event.deadline else { continue }
             evaluatedCount += 1
 
             let timeUntilDeadline = deadline.timeIntervalSince(gene.endTime)

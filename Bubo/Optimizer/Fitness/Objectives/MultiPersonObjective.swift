@@ -20,7 +20,15 @@ struct MultiPersonObjective: FitnessObjective {
         var evaluatedCount = 0
 
         for event in eventsWithParticipants {
-            guard let gene = chromosome.genes.first(where: { $0.eventId == event.id && $0.isIncluded }) else {
+            // Dropped multi-person events count in the denominator with 0
+            // so excluding a meeting the GA couldn't fit doesn't raise the
+            // objective. With weight 5.0 on this objective, the averaging
+            // loophole was one of the loudest "drop a task" signals.
+            let includedGene = chromosome.genes.first(where: { $0.eventId == event.id && $0.isIncluded })
+            guard let gene = includedGene else {
+                if chromosome.genes.contains(where: { $0.eventId == event.id }) {
+                    evaluatedCount += 1
+                }
                 continue
             }
             evaluatedCount += 1

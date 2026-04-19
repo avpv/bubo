@@ -126,6 +126,507 @@ struct ChromosomeTests {
         }
         #expect(changed)
     }
+
+    @Test("Random seed spreads today placements across the remaining workday")
+    func randomSeedSpreadsTodayPlacementsAcrossRemainingWorkday() {
+        // Reproduces the bug where a mid-afternoon `horizon.start` pinned
+        // every `dayOffset == 0` random draw to exactly `horizon.start`,
+        // stacking every same-day gene on a single instant.
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let startAt14_30 = cal.date(bySettingHour: 14, minute: 30, second: 0, of: today)!
+        let weekEnd = cal.date(byAdding: .day, value: 7, to: startAt14_30)!
+
+        let event = makeMovableEvent(id: "t1", durationMinutes: 60)
+        let ctx = OptimizerContext(
+            fixedEvents: [],
+            movableEvents: [event],
+            workingHours: 9...18,
+            planningHorizon: DateInterval(start: startAt14_30, end: weekEnd),
+            preferences: OptimizerPreferences()
+        )
+
+        var todayPlacements: [Date] = []
+        for _ in 0..<200 {
+            let chromo = ScheduleChromosome.random(context: ctx)
+            let gene = chromo.genes[0]
+            if cal.isDate(gene.startTime, inSameDayAs: startAt14_30) {
+                todayPlacements.append(gene.startTime)
+            }
+            // Never placed before the horizon start.
+            #expect(gene.startTime >= startAt14_30)
+        }
+
+        // Some (not all) seeds should land today — today still has ~2.5h of
+        // workday left, and the remaining horizon spans another 7 days.
+        #expect(!todayPlacements.isEmpty)
+
+        // Critical invariant: same-day placements must NOT all collapse to
+        // exactly `horizon.start`. Before the fix this set had cardinality 1.
+        let distinct = Set(todayPlacements).count
+        #expect(distinct >= 2)
+    }
+
+    @Test("Random seed skips today when past the last feasible start")
+    func randomSeedSkipsTodayWhenAfterHours() {
+        // horizon.start is 19:30 — past the workday's last feasible start
+        // (17:00 for a 1h task). Every seed must place tomorrow or later.
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let startAt19_30 = cal.date(bySettingHour: 19, minute: 30, second: 0, of: today)!
+        let horizonEnd = cal.date(byAdding: .day, value: 3, to: startAt19_30)!
+
+        let event = makeMovableEvent(id: "t1", durationMinutes: 60)
+        let ctx = OptimizerContext(
+            fixedEvents: [],
+            movableEvents: [event],
+            workingHours: 9...18,
+            planningHorizon: DateInterval(start: startAt19_30, end: horizonEnd),
+            preferences: OptimizerPreferences()
+        )
+
+        for _ in 0..<50 {
+            let chromo = ScheduleChromosome.random(context: ctx)
+            let start = chromo.genes[0].startTime
+            #expect(!cal.isDate(start, inSameDayAs: startAt19_30))
+            #expect(start >= startAt19_30)
+        }
+    }
+
+    @Test("Mutation spreads same-day placements across remaining workday")
+    func mutationSpreadsTodayPlacements() {
+        // Even with a mid-afternoon `horizon.start`, repeated `mutate` calls
+        // (which cycle through every operator including the "move to a
+        // different day" branch) must not stack every today-placement on a
+        // single instant.
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let startAt14_30 = cal.date(bySettingHour: 14, minute: 30, second: 0, of: today)!
+        let weekEnd = cal.date(byAdding: .day, value: 7, to: startAt14_30)!
+
+        let event = makeMovableEvent(id: "t1", durationMinutes: 60)
+        let ctx = OptimizerContext(
+            fixedEvents: [],
+            movableEvents: [event],
+            workingHours: 9...18,
+            planningHorizon: DateInterval(start: startAt14_30, end: weekEnd),
+            preferences: OptimizerPreferences()
+        )
+
+        var todayPlacements: Set<Date> = []
+        for _ in 0..<400 {
+            var chromo = ScheduleChromosome.random(context: ctx)
+            chromo.mutate(rate: 1.0, context: ctx)
+            let start = chromo.genes[0].startTime
+            #expect(start >= startAt14_30)
+            if cal.isDate(start, inSameDayAs: startAt14_30) {
+                todayPlacements.insert(start)
+            }
+        }
+
+        // Before the fix, every same-day mutation collapsed to exactly
+        // `startAt14_30`. A healthy spread should cover multiple 15-min
+        // slots in the 14:30–17:00 window.
+        #expect(todayPlacements.count >= 2)
+    }
+}
+
+// MARK: - Task Placement Objective Tests
+
+@Suite("Task Placement Objective Tests")
+struct TaskPlacementObjectiveTests {
+
+    @Test("Dropping a poorly-placed droppable task must not increase the score")
+    func droppingDoesNotIncreaseScore() {
+        // Reproduces the per-included-only averaging loophole: previously,
+        // excluding a task whose placement scored below the mean mechanically
+        // raised the objective, giving the GA a back-door incentive to drop.
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+
+        func peakSlot(hour: Int, title: String, id: String) -> OptimizableEvent {
+            OptimizableEvent(
+                id: id,
+                title: title,
+                duration: 3600,
+                priority: 0.8,
+                preferredHourRange: hour...hour,
+                isDroppable: true
+            )
+        }
+
+        // Three tasks placed in their preferred peak slots + one placed far
+        // from its preferred slot so its per-task score is low.
+        let events = [
+            peakSlot(hour: 10, title: "A", id: "a"),
+            peakSlot(hour: 11, title: "B", id: "b"),
+            peakSlot(hour: 14, title: "C", id: "c"),
+            peakSlot(hour: 15, title: "D", id: "d"),
+        ]
+        let ctx = OptimizerContext(
+            movableEvents: events,
+            workingHours: 9...18,
+            planningHorizon: DateInterval(start: today, duration: 7 * 24 * 3600)
+        )
+
+        func gene(_ event: OptimizableEvent, hour: Int, included: Bool) -> ScheduleGene {
+            ScheduleGene(
+                eventId: event.id,
+                title: event.title,
+                startTime: cal.date(bySettingHour: hour, minute: 0, second: 0, of: today)!,
+                duration: event.duration,
+                context: event.context,
+                energyCost: event.energyCost,
+                priority: event.priority,
+                isFocusBlock: false,
+                storyPoints: nil,
+                isDroppable: true,
+                isIncluded: included
+            )
+        }
+
+        // Keep-all: three well-placed + one badly-placed (D at 09:00 vs
+        // preferred 15:00) — a fourth gene drags the per-task mean down.
+        let keepAll = ScheduleChromosome(genes: [
+            gene(events[0], hour: 10, included: true),
+            gene(events[1], hour: 11, included: true),
+            gene(events[2], hour: 14, included: true),
+            gene(events[3], hour: 9, included: true),
+        ])
+
+        // Drop-bad: identical except D is excluded. With the old per-
+        // included averaging this scored *higher*, even though the user
+        // loses a task.
+        let dropBad = ScheduleChromosome(genes: [
+            gene(events[0], hour: 10, included: true),
+            gene(events[1], hour: 11, included: true),
+            gene(events[2], hour: 14, included: true),
+            gene(events[3], hour: 9, included: false),
+        ])
+
+        let objective = TaskPlacementObjective(weight: 1.0)
+        let keepScore = objective.evaluate(chromosome: keepAll, context: ctx)
+        let dropScore = objective.evaluate(chromosome: dropBad, context: ctx)
+
+        // Dropping must never mathematically help this objective — at best
+        // it's neutral (the dropped gene contributes 0 but still counts in
+        // the denominator).
+        #expect(dropScore <= keepScore,
+                "dropScore=\(dropScore) must not exceed keepScore=\(keepScore)")
+    }
+
+    @Test("Dropping a deadline task must not raise DeadlineObjective")
+    func droppingDeadlineTaskDoesNotRaiseDeadlineObjective() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        // Deadline tomorrow evening — plenty of room, so earliness ratios
+        // vary, giving the averaging loophole something to exploit.
+        let tomorrow = cal.date(byAdding: .day, value: 1, to: today)!
+        let deadline = cal.date(bySettingHour: 18, minute: 0, second: 0, of: tomorrow)!
+
+        func deadlineEvent(id: String) -> OptimizableEvent {
+            OptimizableEvent(
+                id: id,
+                title: id,
+                duration: 3600,
+                deadline: deadline,
+                priority: 0.7,
+                isDroppable: true
+            )
+        }
+
+        let events = ["a", "b", "c", "d"].map(deadlineEvent(id:))
+        let ctx = OptimizerContext(
+            movableEvents: events,
+            workingHours: 9...18,
+            planningHorizon: DateInterval(start: today, duration: 7 * 24 * 3600)
+        )
+
+        func gene(_ event: OptimizableEvent, hour: Int, dayOffset: Int, included: Bool) -> ScheduleGene {
+            let base = cal.date(byAdding: .day, value: dayOffset, to: today)!
+            return ScheduleGene(
+                eventId: event.id,
+                title: event.title,
+                startTime: cal.date(bySettingHour: hour, minute: 0, second: 0, of: base)!,
+                duration: event.duration,
+                context: nil,
+                energyCost: 0.5,
+                priority: event.priority,
+                isFocusBlock: false,
+                storyPoints: nil,
+                isDroppable: true,
+                isIncluded: included
+            )
+        }
+
+        // Three tasks scheduled early (high earlyScore), one crammed right
+        // before the deadline (low earlyScore). Old averaging would reward
+        // excluding the cramming one.
+        let keepAll = ScheduleChromosome(genes: [
+            gene(events[0], hour: 9,  dayOffset: 0, included: true),
+            gene(events[1], hour: 10, dayOffset: 0, included: true),
+            gene(events[2], hour: 11, dayOffset: 0, included: true),
+            gene(events[3], hour: 17, dayOffset: 1, included: true),
+        ])
+        let dropCrammer = ScheduleChromosome(genes: [
+            gene(events[0], hour: 9,  dayOffset: 0, included: true),
+            gene(events[1], hour: 10, dayOffset: 0, included: true),
+            gene(events[2], hour: 11, dayOffset: 0, included: true),
+            gene(events[3], hour: 17, dayOffset: 1, included: false),
+        ])
+
+        let objective = DeadlineObjective(weight: 3.0)
+        let keepScore = objective.evaluate(chromosome: keepAll, context: ctx)
+        let dropScore = objective.evaluate(chromosome: dropCrammer, context: ctx)
+
+        #expect(dropScore <= keepScore,
+                "dropScore=\(dropScore) must not exceed keepScore=\(keepScore)")
+    }
+
+    @Test("Dropping a multi-person event must not raise MultiPersonObjective")
+    func droppingMultiPersonEventDoesNotRaiseObjective() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+
+        // Two meetings requiring a colleague whose free-slots window sits
+        // at 09–11 today. Meeting A lands inside it (full availability).
+        // Meeting B is parked at 16:00 today — outside every free slot.
+        let alice09to11 = DateInterval(
+            start: cal.date(bySettingHour: 9, minute: 0, second: 0, of: today)!,
+            end: cal.date(bySettingHour: 11, minute: 0, second: 0, of: today)!
+        )
+
+        let good = OptimizableEvent(
+            id: "good",
+            title: "Good",
+            duration: 3600,
+            priority: 0.6,
+            requiredParticipants: ["alice"],
+            isDroppable: true
+        )
+        let bad = OptimizableEvent(
+            id: "bad",
+            title: "Bad",
+            duration: 3600,
+            priority: 0.6,
+            requiredParticipants: ["alice"],
+            isDroppable: true
+        )
+
+        let ctx = OptimizerContext(
+            movableEvents: [good, bad],
+            workingHours: 9...18,
+            planningHorizon: DateInterval(start: today, duration: 7 * 24 * 3600),
+            participantAvailability: ["alice": [alice09to11]]
+        )
+
+        func gene(_ event: OptimizableEvent, hour: Int, included: Bool) -> ScheduleGene {
+            ScheduleGene(
+                eventId: event.id,
+                title: event.title,
+                startTime: cal.date(bySettingHour: hour, minute: 0, second: 0, of: today)!,
+                duration: event.duration,
+                context: nil,
+                energyCost: 0.5,
+                priority: event.priority,
+                isFocusBlock: false,
+                storyPoints: nil,
+                isDroppable: true,
+                isIncluded: included
+            )
+        }
+
+        let keepAll = ScheduleChromosome(genes: [
+            gene(good, hour: 10, included: true),
+            gene(bad, hour: 16, included: true),
+        ])
+        let dropBad = ScheduleChromosome(genes: [
+            gene(good, hour: 10, included: true),
+            gene(bad, hour: 16, included: false),
+        ])
+
+        let objective = MultiPersonObjective(weight: 5.0)
+        let keepScore = objective.evaluate(chromosome: keepAll, context: ctx)
+        let dropScore = objective.evaluate(chromosome: dropBad, context: ctx)
+
+        #expect(dropScore <= keepScore,
+                "dropScore=\(dropScore) must not exceed keepScore=\(keepScore)")
+    }
+
+    @Test("Dropping a pomodoro task must not raise PomodoroFitObjective")
+    func droppingPomodoroDoesNotRaiseObjective() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+
+        let config = PomodoroConfig(workMinutes: 25, breakMinutes: 5, rounds: 2, longBreakMinutes: 15)
+
+        func pomEvent(id: String) -> OptimizableEvent {
+            OptimizableEvent(
+                id: id,
+                title: id,
+                duration: TimeInterval((config.workMinutes * config.rounds + config.breakMinutes + config.longBreakMinutes) * 60),
+                priority: 0.6,
+                pomodoroConfig: config,
+                isDroppable: true
+            )
+        }
+
+        let good = pomEvent(id: "good")
+        let badlyTimed = pomEvent(id: "bad")
+        let ctx = OptimizerContext(
+            movableEvents: [good, badlyTimed],
+            workingHours: 9...18,
+            planningHorizon: DateInterval(start: today, duration: 7 * 24 * 3600)
+        )
+
+        func gene(_ event: OptimizableEvent, hour: Int, included: Bool) -> ScheduleGene {
+            ScheduleGene(
+                eventId: event.id,
+                title: event.title,
+                startTime: cal.date(bySettingHour: hour, minute: 0, second: 0, of: today)!,
+                duration: event.duration,
+                context: nil,
+                energyCost: 0.5,
+                priority: event.priority,
+                isFocusBlock: true,
+                storyPoints: nil,
+                isDroppable: true,
+                isIncluded: included,
+                pomodoroConfig: event.pomodoroConfig
+            )
+        }
+
+        // `good` sits right at peak energy (10:00), `badlyTimed` is far
+        // from peak (17:00) — its per-event score pulls the mean down.
+        let keepAll = ScheduleChromosome(genes: [
+            gene(good, hour: 10, included: true),
+            gene(badlyTimed, hour: 17, included: true),
+        ])
+        let dropBad = ScheduleChromosome(genes: [
+            gene(good, hour: 10, included: true),
+            gene(badlyTimed, hour: 17, included: false),
+        ])
+
+        let objective = PomodoroFitObjective(weight: 0.8)
+        let keepScore = objective.evaluate(chromosome: keepAll, context: ctx)
+        let dropScore = objective.evaluate(chromosome: dropBad, context: ctx)
+
+        #expect(dropScore <= keepScore,
+                "dropScore=\(dropScore) must not exceed keepScore=\(keepScore)")
+    }
+}
+
+// MARK: - Duration-aware Start Sampling Tests
+
+@Suite("Duration-aware Start Sampling Tests")
+struct DurationAwareStartSamplingTests {
+
+    @Test("Half-hour and 90-minute tasks never end past working hours")
+    func fractionalDurationsRespectWorkEnd() {
+        // Previously `Int(duration / 3600)` truncated fractional durations
+        // to 0 or 1, letting the sampler start a 30-min task at workEnd
+        // (ending 30 min past it) or a 90-min task at workEnd − 1h (ending
+        // 30 min past it).
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let workEnd = cal.date(bySettingHour: 18, minute: 0, second: 0, of: today)!
+
+        func run(durationMinutes: Int) {
+            let event = OptimizableEvent(
+                id: "t",
+                title: "T",
+                duration: TimeInterval(durationMinutes * 60)
+            )
+            let ctx = OptimizerContext(
+                movableEvents: [event],
+                workingHours: 9...18,
+                planningHorizon: DateInterval(start: today, duration: 24 * 3600)
+            )
+            for _ in 0..<100 {
+                let chromo = ScheduleChromosome.random(context: ctx)
+                let end = chromo.genes[0].startTime.addingTimeInterval(event.duration)
+                #expect(end <= workEnd,
+                        "duration=\(durationMinutes)min ended at \(end), past workEnd \(workEnd)")
+            }
+        }
+
+        run(durationMinutes: 30)
+        run(durationMinutes: 90)
+    }
+}
+
+// MARK: - Task Inclusion Convexity Tests
+
+@Suite("Task Inclusion Convexity Tests")
+struct TaskInclusionConvexityTests {
+
+    @Test("Dropping one of four tasks costs meaningfully more than linear")
+    func oneOfFourDropExceedsLinearLoss() {
+        // Convex shaping keeps the GA from cashing in the cost of a single
+        // drop against the collective upside of the structural objectives
+        // (FocusBlock, ContextSwitch, Buffer, EnergyCurve, Break) — each
+        // of which rewards fewer events on the calendar. With a linear
+        // ratio, a 1-of-4 drop cost ~0.25, and the structural cluster
+        // (summed weights ≈ 4) could buy that back with a realistic 0.06
+        // per-objective gain. Convex shaping pushes the cost above that.
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+
+        func event(id: String) -> OptimizableEvent {
+            OptimizableEvent(
+                id: id,
+                title: id,
+                duration: 3600,
+                priority: 0.5,
+                isDroppable: true
+            )
+        }
+        let events = ["a", "b", "c", "d"].map(event(id:))
+        let ctx = OptimizerContext(
+            movableEvents: events,
+            workingHours: 9...18,
+            planningHorizon: DateInterval(start: today, duration: 7 * 24 * 3600)
+        )
+
+        func gene(_ e: OptimizableEvent, hour: Int, included: Bool) -> ScheduleGene {
+            ScheduleGene(
+                eventId: e.id,
+                title: e.title,
+                startTime: cal.date(bySettingHour: hour, minute: 0, second: 0, of: today)!,
+                duration: e.duration,
+                context: nil,
+                energyCost: 0.5,
+                priority: e.priority,
+                isFocusBlock: false,
+                storyPoints: nil,
+                isDroppable: true,
+                isIncluded: included
+            )
+        }
+
+        let keepAll = ScheduleChromosome(genes: [
+            gene(events[0], hour: 9,  included: true),
+            gene(events[1], hour: 11, included: true),
+            gene(events[2], hour: 13, included: true),
+            gene(events[3], hour: 15, included: true),
+        ])
+        let dropOne = ScheduleChromosome(genes: [
+            gene(events[0], hour: 9,  included: true),
+            gene(events[1], hour: 11, included: true),
+            gene(events[2], hour: 13, included: true),
+            gene(events[3], hour: 15, included: false),
+        ])
+
+        let obj = TaskInclusionObjective(weight: 4.0)
+        let keep = obj.evaluate(chromosome: keepAll, context: ctx)
+        let drop = obj.evaluate(chromosome: dropOne, context: ctx)
+
+        #expect(keep == 1.0)
+        // Convex: drop-loss must exceed the linear baseline of 0.25.
+        // pow(0.75, 1.5) ≈ 0.6495 → loss ≈ 0.35, comfortably over 0.30.
+        #expect(keep - drop > 0.30,
+                "drop-loss too small: keep=\(keep), drop=\(drop), loss=\(keep - drop)")
+    }
 }
 
 // MARK: - Population Tests

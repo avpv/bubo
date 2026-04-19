@@ -863,15 +863,45 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                     cal.dateComponents([.day], from: mutStartDay, to: earliestDay).day ?? 0
                 )
                 guard startOffset < daysInHorizon else { break }
-                let dayOffset = context.rng.int(in: startOffset..<daysInHorizon)
-                let newDay = cal.date(byAdding: .day, value: dayOffset, to: horizonStart)!
-                let hour: Int
-                if let preferred = event?.preferredHourRange, !preferred.isEmpty {
-                    hour = context.rng.int(in: preferred)
-                } else {
-                    hour = context.rng.int(in: context.workingHours)
+
+                // Per-day feasible hour range. Mirrors `randomStartTime`:
+                // clock-time of `floor` carries into day 0, so rolling a
+                // raw `hourRange.lowerBound` would land before `floor` and
+                // the old `max(..., floor)` clamp stacked every such draw
+                // on a single instant. Sampling inside `[lower, dayUpper]`
+                // keeps mutations spread across the day.
+                let hourRange = event?.preferredHourRange ?? context.workingHours
+                // Round up: a 90-min task needs two full working hours of
+                // runway, not one. Truncation here let the sampler pick
+                // `workEnd - 1h` as a start, so the task ended past working
+                // hours and tripped the WorkingHours hard constraint.
+                let durationHours = Int((genes[i].duration / 3600).rounded(.up))
+                let maxStartHour = max(hourRange.lowerBound, hourRange.upperBound - durationHours)
+
+                func windowFor(offset: Int) -> (lower: Date, upper: Date)? {
+                    guard let dayStart = cal.date(byAdding: .day, value: offset, to: mutStartDay),
+                          let dayLower = cal.date(bySettingHour: hourRange.lowerBound, minute: 0, second: 0, of: dayStart),
+                          let dayUpper = cal.date(bySettingHour: maxStartHour, minute: 0, second: 0, of: dayStart)
+                    else { return nil }
+                    let lower = max(dayLower, floor)
+                    return lower <= dayUpper ? (lower, dayUpper) : nil
                 }
-                let rawStart = max(cal.date(bySettingHour: hour, minute: context.rng.int(in: 0...3) * 15, second: 0, of: newDay)!, floor)
+
+                var window = windowFor(offset: context.rng.int(in: startOffset..<daysInHorizon))
+                if window == nil {
+                    for alt in startOffset..<daysInHorizon {
+                        if let w = windowFor(offset: alt) {
+                            window = w
+                            break
+                        }
+                    }
+                }
+                guard let (lower, upper) = window else { break }
+
+                let slotSeconds: TimeInterval = 15 * 60
+                let span = max(0, Int(upper.timeIntervalSince(lower) / slotSeconds))
+                let step = context.rng.int(in: 0...span)
+                let rawStart = lower.addingTimeInterval(TimeInterval(step) * slotSeconds)
                 genes[i] = genes[i].withStartTime(
                     clampToWorkingHours(rawStart, duration: genes[i].duration, workingHours: context.workingHours, calendar: cal, floor: floor)
                 )
@@ -2493,28 +2523,62 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         let horizonStartDay = calendar.startOfDay(for: horizon.start)
         let horizonLastDay = calendar.startOfDay(for: horizon.end.addingTimeInterval(-1))
         let daysInHorizon = max(1, (calendar.dateComponents([.day], from: horizonStartDay, to: horizonLastDay).day ?? 0) + 1)
-        let dayOffset = rng.int(in: 0..<daysInHorizon)
-        let day = calendar.date(byAdding: .day, value: dayOffset, to: horizon.start)!
 
         let hourRange = event.preferredHourRange ?? workingHours
-        let maxStartHour = max(hourRange.lowerBound, hourRange.upperBound - Int(event.duration / 3600))
-        let hour = rng.int(in: hourRange.lowerBound...max(hourRange.lowerBound, maxStartHour))
-        let minute = rng.int(in: 0...3) * 15
+        // Round up: a 90-min task needs two full hours of runway. Truncation
+        // here (`Int(1.5) == 1`) let the sampler start a task at
+        // `workEnd - 1h`, pushing its end past working hours and tripping
+        // the WorkingHours hard constraint.
+        let durationHours = Int((event.duration / 3600).rounded(.up))
+        let maxStartHour = max(hourRange.lowerBound, hourRange.upperBound - durationHours)
+        let floor = [horizon.start, event.earliestStart].compactMap { $0 }.max() ?? horizon.start
 
-        var result = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day)
-            ?? horizon.start
-
-        // Respect earliestStart — don't place before it
-        if let earliest = event.earliestStart, result < earliest {
-            result = earliest
+        // Compute the earliest feasible start on a given day offset, or nil
+        // when no 15-minute slot between `floor` and `maxStartHour` exists
+        // on that day. Keeps today (offset 0) usable when horizon.start is
+        // mid-afternoon, but skips it entirely when the floor is already
+        // past the last feasible starting hour.
+        func earliestSlot(onOffset offset: Int) -> Date? {
+            guard let day = calendar.date(byAdding: .day, value: offset, to: horizonStartDay),
+                  let dayLower = calendar.date(bySettingHour: hourRange.lowerBound, minute: 0, second: 0, of: day),
+                  let dayUpper = calendar.date(bySettingHour: maxStartHour, minute: 0, second: 0, of: day)
+            else { return nil }
+            let lower = max(dayLower, floor)
+            return lower <= dayUpper ? lower : nil
         }
 
-        // Never place before the planning horizon start (e.g. in the past)
-        if result < horizon.start {
-            result = horizon.start
+        // Pick a day that can host the event. Without this probe, a
+        // `horizon.start` of (say) 17:30 would pin every `offset == 0`
+        // draw to exactly `horizon.start` — after the old `bySettingHour`
+        // then `max(result, horizon.start)` clamp — piling every random
+        // seed's same-day placements onto a single instant. That stacked
+        // conflict surface pushes the GA to either drop a task or shift
+        // the first event to tomorrow even when later slots today fit.
+        var dayOffset = rng.int(in: 0..<daysInHorizon)
+        if earliestSlot(onOffset: dayOffset) == nil {
+            var found: Int?
+            for alt in 0..<daysInHorizon where earliestSlot(onOffset: alt) != nil {
+                found = alt
+                break
+            }
+            dayOffset = found ?? dayOffset
         }
 
-        return result
+        guard let day = calendar.date(byAdding: .day, value: dayOffset, to: horizonStartDay),
+              let dayLower = calendar.date(bySettingHour: hourRange.lowerBound, minute: 0, second: 0, of: day),
+              let dayUpper = calendar.date(bySettingHour: maxStartHour, minute: 0, second: 0, of: day)
+        else {
+            return floor
+        }
+
+        let lower = max(dayLower, floor)
+        // Sample uniformly in 15-minute steps across [lower, dayUpper]. When
+        // the range collapses (e.g. no horizon day can host the event), we
+        // fall through to `lower` — still at or after the floor.
+        let slotSeconds: TimeInterval = 15 * 60
+        let span = max(0, Int(dayUpper.timeIntervalSince(lower) / slotSeconds))
+        let offset = rng.int(in: 0...span)
+        return lower.addingTimeInterval(TimeInterval(offset) * slotSeconds)
     }
 }
 
