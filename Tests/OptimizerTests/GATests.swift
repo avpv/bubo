@@ -126,6 +126,72 @@ struct ChromosomeTests {
         }
         #expect(changed)
     }
+
+    @Test("Random seed spreads today placements across the remaining workday")
+    func randomSeedSpreadsTodayPlacementsAcrossRemainingWorkday() {
+        // Reproduces the bug where a mid-afternoon `horizon.start` pinned
+        // every `dayOffset == 0` random draw to exactly `horizon.start`,
+        // stacking every same-day gene on a single instant.
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let startAt14_30 = cal.date(bySettingHour: 14, minute: 30, second: 0, of: today)!
+        let weekEnd = cal.date(byAdding: .day, value: 7, to: startAt14_30)!
+
+        let event = makeMovableEvent(id: "t1", durationMinutes: 60)
+        let ctx = OptimizerContext(
+            fixedEvents: [],
+            movableEvents: [event],
+            workingHours: 9...18,
+            planningHorizon: DateInterval(start: startAt14_30, end: weekEnd),
+            preferences: OptimizerPreferences()
+        )
+
+        var todayPlacements: [Date] = []
+        for _ in 0..<200 {
+            let chromo = ScheduleChromosome.random(context: ctx)
+            let gene = chromo.genes[0]
+            if cal.isDate(gene.startTime, inSameDayAs: startAt14_30) {
+                todayPlacements.append(gene.startTime)
+            }
+            // Never placed before the horizon start.
+            #expect(gene.startTime >= startAt14_30)
+        }
+
+        // Some (not all) seeds should land today — today still has ~2.5h of
+        // workday left, and the remaining horizon spans another 7 days.
+        #expect(!todayPlacements.isEmpty)
+
+        // Critical invariant: same-day placements must NOT all collapse to
+        // exactly `horizon.start`. Before the fix this set had cardinality 1.
+        let distinct = Set(todayPlacements).count
+        #expect(distinct >= 2)
+    }
+
+    @Test("Random seed skips today when past the last feasible start")
+    func randomSeedSkipsTodayWhenAfterHours() {
+        // horizon.start is 19:30 — past the workday's last feasible start
+        // (17:00 for a 1h task). Every seed must place tomorrow or later.
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let startAt19_30 = cal.date(bySettingHour: 19, minute: 30, second: 0, of: today)!
+        let horizonEnd = cal.date(byAdding: .day, value: 3, to: startAt19_30)!
+
+        let event = makeMovableEvent(id: "t1", durationMinutes: 60)
+        let ctx = OptimizerContext(
+            fixedEvents: [],
+            movableEvents: [event],
+            workingHours: 9...18,
+            planningHorizon: DateInterval(start: startAt19_30, end: horizonEnd),
+            preferences: OptimizerPreferences()
+        )
+
+        for _ in 0..<50 {
+            let chromo = ScheduleChromosome.random(context: ctx)
+            let start = chromo.genes[0].startTime
+            #expect(!cal.isDate(start, inSameDayAs: startAt19_30))
+            #expect(start >= startAt19_30)
+        }
+    }
 }
 
 // MARK: - Population Tests
