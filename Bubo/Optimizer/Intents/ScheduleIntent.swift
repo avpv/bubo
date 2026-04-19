@@ -32,8 +32,10 @@ indirect enum ScheduleIntent: Codable, Hashable, Sendable {
     /// Create a generic event block.
     case createBlock(title: String, minutes: Int, period: Period? = nil, focus: Bool = false)
 
-    /// Create a pomodoro session.
-    case pomodoroSession(preset: PomodoroPreset = .classic)
+    /// Create a pomodoro session. Defaults to `.auto` so the optimizer
+    /// derives work/break/rounds/longBreak from live signals (available
+    /// slot, task estimate, energy curve, deadline).
+    case pomodoroSession(preset: PomodoroPreset = .auto)
 
     // MARK: - Weight Adjustments
 

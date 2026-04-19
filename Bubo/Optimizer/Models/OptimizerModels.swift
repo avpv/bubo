@@ -73,6 +73,15 @@ struct PomodoroConfig: Codable, Hashable, Sendable {
     let rounds: Int
     let longBreakMinutes: Int
 
+    /// Wall-clock minutes from first round start to end of long break.
+    /// The last round has no trailing short break, so we have
+    /// `rounds` works + `rounds - 1` short breaks + optional long break.
+    var totalMinutes: Int {
+        workMinutes * rounds
+            + breakMinutes * max(0, rounds - 1)
+            + longBreakMinutes
+    }
+
     static let classic = PomodoroConfig(workMinutes: 25, breakMinutes: 5, rounds: 4, longBreakMinutes: 15)
     static let deepWork = PomodoroConfig(workMinutes: 50, breakMinutes: 10, rounds: 2, longBreakMinutes: 20)
 }

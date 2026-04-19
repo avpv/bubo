@@ -129,7 +129,7 @@ extension OptimizationRequest {
         )
     }
 
-    static func pomodoroBlock(preset: PomodoroPreset = .classic) -> OptimizationRequest {
+    static func pomodoroBlock(preset: PomodoroPreset = .auto) -> OptimizationRequest {
         OptimizationRequest(
             .pomodoroSession(preset: preset),
             .horizon(.today), .findSlotsForBacklog,

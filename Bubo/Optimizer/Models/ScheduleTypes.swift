@@ -70,22 +70,23 @@ enum Period: String, Codable, Hashable, CaseIterable, Sendable {
 // MARK: - Pomodoro Preset
 
 enum PomodoroPreset: String, Codable, Hashable, CaseIterable, Sendable {
+    /// Optimizer-resolved configuration. `config` returns a safe fallback
+    /// (classic) for any call site that reads it outside of IntentCompiler,
+    /// which performs the real resolution via `PomodoroConfigResolver` using
+    /// live signals (available slot, task estimate, energy, deadline).
+    case auto
     case classic
     case deepWork
 
     var config: PomodoroConfig {
         switch self {
+        case .auto: return .classic
         case .classic: return .classic
         case .deepWork: return .deepWork
         }
     }
 
-    var totalMinutes: Int {
-        switch self {
-        case .classic: return 130
-        case .deepWork: return 130
-        }
-    }
+    var totalMinutes: Int { config.totalMinutes }
 }
 
 // MARK: - Weight Key
@@ -129,6 +130,10 @@ struct EventSpec: Codable, Hashable, Sendable {
     var period: Period? = nil
     var focus: Bool = false
     var pomodoro: PomodoroPreset? = nil
+    /// Takes precedence over `pomodoro?.config` when set. Written by
+    /// `PomodoroConfigResolver` after it resolves a `.auto` preset into
+    /// concrete work/break/rounds/longBreak values.
+    var pomodoroConfig: PomodoroConfig? = nil
     var participants: [String] = []
     var creation: CreationMode = .fixed
     var chainGap: Int? = nil
@@ -150,6 +155,7 @@ struct EventSpec: Codable, Hashable, Sendable {
         period = try? c.decode(Period.self, forKey: .period)
         focus = (try? c.decode(Bool.self, forKey: .focus)) ?? false
         pomodoro = try? c.decode(PomodoroPreset.self, forKey: .pomodoro)
+        pomodoroConfig = try? c.decode(PomodoroConfig.self, forKey: .pomodoroConfig)
         participants = (try? c.decode([String].self, forKey: .participants)) ?? []
         creation = (try? c.decode(CreationMode.self, forKey: .creation)) ?? .fixed
         chainGap = try? c.decode(Int.self, forKey: .chainGap)
@@ -171,6 +177,7 @@ struct EventSpec: Codable, Hashable, Sendable {
         period: Period? = nil,
         focus: Bool = false,
         pomodoro: PomodoroPreset? = nil,
+        pomodoroConfig: PomodoroConfig? = nil,
         participants: [String] = [],
         creation: CreationMode = .fixed,
         chainGap: Int? = nil,
@@ -190,6 +197,7 @@ struct EventSpec: Codable, Hashable, Sendable {
         self.period = period
         self.focus = focus
         self.pomodoro = pomodoro
+        self.pomodoroConfig = pomodoroConfig
         self.participants = participants
         self.creation = creation
         self.chainGap = chainGap
