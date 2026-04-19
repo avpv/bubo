@@ -252,6 +252,11 @@ final class BuboOptimizer {
                 chromosome.fitness = predicted
                 chromosome.rawFitness = predicted
                 chromosome.needsEvaluation = false
+                // Surrogate prediction — mark as phantom so downstream
+                // boundary checks (MAP-Elites archival, scenario
+                // emission) can force a real evaluation before the
+                // value is trusted externally.
+                chromosome.isFitnessReal = false
                 if let vec = predictedObjectives, vec.count == objectiveNames.count {
                     var cache: [String: Double] = [:]
                     cache.reserveCapacity(objectiveNames.count)
@@ -397,8 +402,32 @@ final class BuboOptimizer {
         //     user-meaningful axes — to pick the *display* set of
         //     scenarios. Different axes serve different consumers,
         //     so the two coexist deliberately.
+        //
+        // Force real evaluation on every candidate whose `rawFitness`
+        // is a surrogate prediction, before archival. During evolution
+        // the multi-fidelity funnel and the surrogate-assisted
+        // per-chromosome evaluator both stamp `rawFitness` with
+        // predictions that can disagree with ground truth — in
+        // particular, a feasible chromosome can receive a prediction
+        // below 0.1 because its neighbours in feature space include
+        // infeasible training samples. The archive would then pick a
+        // "best" cell whose rawFitness is a phantom, and
+        // `IntentCompiler` would surface a spurious "Not enough room"
+        // dialog for a trivially-schedulable workload.
+        //
+        // Writers set `isFitnessReal` to reflect which path produced
+        // the score; here we only pay for a fresh evaluation on
+        // chromosomes that are still phantom. In the common `.quick`
+        // case with a warmed surrogate this skips a majority of the
+        // combined population, so the check is strictly cheaper than
+        // a blind re-eval of every individual.
+        var verifiedPopulation = population
+        for i in verifiedPopulation.indices where !verifiedPopulation[i].isFitnessReal {
+            verifiedPopulation[i].needsEvaluation = true
+            evaluator.evaluateAndAssign(&verifiedPopulation[i], context: adjustedContext)
+        }
         var archive = MAPElitesArchive()
-        archive.depositAll(population, context: adjustedContext)
+        archive.depositAll(verifiedPopulation, context: adjustedContext)
         // Stamp every scenario with the run's task signature so
         // feedback methods can route updates to the correct
         // per-workload learner bundle even after later runs on
@@ -421,13 +450,13 @@ final class BuboOptimizer {
             evaluator: evaluator
         )
 
-        let populationCount = population.prefix(10).count
+        let populationCount = verifiedPopulation.prefix(10).count
         let metadata = OptimizationMetadata(
             generations: convergenceGen,
             totalDuration: duration,
-            bestFitness: population.first?.fitness ?? 0,
+            bestFitness: verifiedPopulation.first?.fitness ?? 0,
             averageFitness: populationCount > 0
-                ? population.prefix(10).reduce(0) { $0 + $1.fitness } / Double(populationCount)
+                ? verifiedPopulation.prefix(10).reduce(0) { $0 + $1.fitness } / Double(populationCount)
                 : 0,
             convergenceGeneration: convergenceGen
         )

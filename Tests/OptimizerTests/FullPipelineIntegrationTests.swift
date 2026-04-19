@@ -316,4 +316,149 @@ struct FullPipelineIntegrationTests {
         #expect(smallBundle.head !== largeBundle.head)
         #expect(smallBundle.surrogate !== largeBundle.surrogate)
     }
+
+    // MARK: Archive fidelity — scenario fitness reflects real evaluation
+
+    /// Regression: a single droppable task on an otherwise free day must
+    /// never surface as infeasible. The user-facing "Not enough room"
+    /// dialog fires when `scenarios[0].fitness < 0.1`, which can only
+    /// legitimately mean a hard constraint was violated. For this
+    /// trivial workload, the greedy seed places the task in the first
+    /// free slot (fitness ≥ 0.1), and every chromosome in the archive
+    /// must agree with that ground truth. When the multi-fidelity
+    /// funnel or surrogate-assisted evaluator stamp `rawFitness` with a
+    /// prediction, the archive can otherwise emit a phantom-low scenario.
+    @Test("Single droppable task on a free day always yields feasible scenario")
+    @MainActor
+    func singleDroppableOnFreeDayIsFeasible() async {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let horizonStart = cal.date(bySettingHour: 10, minute: 30, second: 0, of: today)!
+        let horizonEnd = cal.date(byAdding: .day, value: 1, to: today)!
+
+        let task = OptimizableEvent(
+            id: "solo-task",
+            title: "Тест",
+            duration: 3600,
+            priority: 0.5,
+            energyCost: 0.5,
+            isDroppable: true
+        )
+
+        let context = OptimizerContext(
+            fixedEvents: [],
+            movableEvents: [task],
+            workingHours: 10...20,
+            planningHorizon: DateInterval(start: horizonStart, end: horizonEnd),
+            preferences: OptimizerPreferences(),
+            rng: GARandom(seed: 0xFEEDA7)
+        )
+
+        let optimizer = BuboOptimizer()
+        optimizer.gaConfig = .quick
+        optimizer.islandConfig = .quick
+        optimizer.scenarioCount = 1
+
+        // Run several times on the same workload signature so the
+        // per-signature surrogate accumulates enough samples to pass
+        // warmup and start stamping `rawFitness` with predictions.
+        // The bug only surfaces once the surrogate is active.
+        var lastResult: OptimizerResult?
+        for _ in 0..<4 {
+            lastResult = await optimizer.optimize(context: context)
+        }
+        guard let result = lastResult, let scenario = result.scenarios.first else {
+            Issue.record("Expected at least one scenario")
+            return
+        }
+
+        // Feasibility invariant: no hard-constraint violations means
+        // `FitnessEvaluator.evaluate` returns at least 0.1. A stamped
+        // phantom below that value means the archive held a surrogate
+        // prediction instead of ground truth.
+        #expect(
+            scenario.fitness >= 0.1,
+            "Scenario fitness \(scenario.fitness) < 0.1 — archive emitted a chromosome whose rawFitness didn't survive real evaluation"
+        )
+        #expect(
+            scenario.constraintViolations.isEmpty,
+            "Valid placement should have no constraint violations, got: \(scenario.constraintViolations)"
+        )
+    }
+
+    /// Complementary invariant on the direct evaluator: any chromosome
+    /// the archive emits must have a fitness equal to what the real
+    /// evaluator returns for that exact gene layout. Catches the case
+    /// where `ScheduleScenario.fitness` is a stamped prediction that
+    /// disagrees with the evaluator's verdict on the same genes.
+    @Test("Emitted scenario fitness matches evaluator's ground-truth score")
+    @MainActor
+    func scenarioFitnessMatchesGroundTruth() async {
+        let optimizer = BuboOptimizer()
+        optimizer.gaConfig = .quick
+        optimizer.islandConfig = .quick
+        optimizer.scenarioCount = 3
+        let context = makeWorkload(eventCount: 5)
+
+        // Warm the per-signature surrogate the same way the real app
+        // does — repeated runs on one workload.
+        for _ in 0..<3 {
+            _ = await optimizer.optimize(context: context)
+        }
+        let result = await optimizer.optimize(context: context)
+
+        let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
+        for scenario in result.scenarios {
+            let chromosome = ScheduleChromosome(genes: scenario.genes, needsEvaluation: true)
+            let groundTruth = evaluator.evaluate(chromosome: chromosome, context: context)
+            // Tolerance is tight because scenarios go through the
+            // pre-archival real-eval pass in `BuboOptimizer.optimize`;
+            // the only legitimate drift is FP jitter between the
+            // delta path (`evaluateAndAssign`) and the plain path
+            // (`evaluate`).
+            #expect(
+                abs(scenario.fitness - groundTruth) < 0.01,
+                "Scenario fitness \(scenario.fitness) disagrees with ground-truth \(groundTruth) by more than 0.01"
+            )
+        }
+    }
+
+    /// Direct invariant on the `isFitnessReal` flag: `FitnessEvaluator`
+    /// writes should set the flag to true, and a surrogate-stamped
+    /// chromosome that later passes through the real evaluator should
+    /// be promoted back to real. Catches regressions where a writer
+    /// forgets to update the flag.
+    @Test("FitnessEvaluator.evaluateAndAssign sets isFitnessReal = true")
+    @MainActor
+    func evaluatorPromotesChromosomeToReal() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let context = OptimizerContext(
+            movableEvents: [
+                OptimizableEvent(id: "t", title: "t", duration: 1800, priority: 0.5)
+            ],
+            workingHours: 9...18,
+            planningHorizon: DateInterval(start: today, duration: 86400),
+            preferences: OptimizerPreferences()
+        )
+        let evaluator = FitnessEvaluator.standard(preferences: context.preferences)
+
+        // Freshly-constructed chromosome defaults to isFitnessReal=false.
+        var chromosome = ScheduleChromosome.random(context: context)
+        #expect(chromosome.isFitnessReal == false, "Fresh chromosome must default to phantom so the archive guard kicks in")
+
+        evaluator.evaluateAndAssign(&chromosome, context: context)
+        #expect(chromosome.isFitnessReal == true, "evaluateAndAssign must promote the chromosome to real")
+
+        // Simulate a surrogate stamp overwriting rawFitness — the flag
+        // must revert to false so a downstream boundary will re-evaluate.
+        chromosome.rawFitness = 0.05
+        chromosome.isFitnessReal = false
+        chromosome.needsEvaluation = true
+
+        evaluator.evaluateAndAssign(&chromosome, context: context)
+        #expect(chromosome.isFitnessReal == true, "Real evaluation after a surrogate overwrite must restore the flag")
+        #expect(chromosome.rawFitness >= 0.1 || !evaluator.constraintEngine.isValid(chromosome, context: context),
+                "A valid chromosome must not end up with phantom fitness after real eval")
+    }
 }

@@ -95,6 +95,10 @@ final class IncrementalReoptimizer: @unchecked Sendable {
                 )
                 chromosome.fitness = score
                 chromosome.rawFitness = score
+                // StabilityEvaluator is a ground-truth evaluator
+                // (wraps the real FitnessEvaluator + a penalty term);
+                // the resulting score is not a surrogate prediction.
+                chromosome.isFitnessReal = true
             }
         )
 

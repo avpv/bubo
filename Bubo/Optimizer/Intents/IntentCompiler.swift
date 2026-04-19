@@ -143,12 +143,14 @@ struct IntentCompiler {
             metadata: result.metadata
         )
 
+        let capacityResolutions = buildCapacityResolutions(config)
+
         if filteredResult.scenarios.isEmpty {
-            return .infeasible(reason: "Could not find a valid placement", snapshot: snapshot)
+            return .infeasible(reason: "Could not find a valid placement", snapshot: snapshot, resolutions: capacityResolutions)
         }
 
         if let best = filteredResult.scenarios.first, best.fitness < 0.1 {
-            return .infeasible(reason: "Not enough room in this time window", snapshot: snapshot)
+            return .infeasible(reason: "Not enough room in this time window", snapshot: snapshot, resolutions: capacityResolutions)
         }
 
         // Phase 7: Detect dropped tasks and report partial success
@@ -162,26 +164,35 @@ struct IntentCompiler {
             } else {
                 warnings.append("Planned \(planned) of \(total) tasks")
             }
-            
-            var resolutions: [ActionableResolution] = []
-            let currentEnd = config.workingHours.upperBound
-            if currentEnd < 23 {
-                resolutions.append(ActionableResolution(
-                    title: "Extend day to \(min(24, currentEnd + 2)):00",
-                    modifier: OptimizationRequest(.workingHours(start: config.workingHours.lowerBound, end: min(24, currentEnd + 2)))
-                ))
-            }
-            if config.horizon == .today && !config.overflowToTomorrow {
-                resolutions.append(ActionableResolution(
-                    title: "Allow overflow to tomorrow",
-                    modifier: OptimizationRequest(.overflowToTomorrow)
-                ))
-            }
 
-            return .partialSuccess(filteredResult, warnings: warnings, resolutions: resolutions)
+            return .partialSuccess(filteredResult, warnings: warnings, resolutions: capacityResolutions)
         }
 
         return .success(filteredResult)
+    }
+
+    /// Suggestions offered when the horizon is too tight: extend the day,
+    /// allow overflow, or push to tomorrow.
+    private func buildCapacityResolutions(_ config: ResolvedConfig) -> [ActionableResolution] {
+        var resolutions: [ActionableResolution] = []
+        let currentEnd = config.workingHours.upperBound
+        if currentEnd < 23 {
+            resolutions.append(ActionableResolution(
+                title: "Extend day to \(min(24, currentEnd + 2)):00",
+                modifier: OptimizationRequest(.workingHours(start: config.workingHours.lowerBound, end: min(24, currentEnd + 2)))
+            ))
+        }
+        if config.horizon == .today && !config.overflowToTomorrow {
+            resolutions.append(ActionableResolution(
+                title: "Allow overflow to tomorrow",
+                modifier: OptimizationRequest(.overflowToTomorrow)
+            ))
+            resolutions.append(ActionableResolution(
+                title: "Schedule tomorrow instead",
+                modifier: OptimizationRequest(.horizon(.tomorrow))
+            ))
+        }
+        return resolutions
     }
 }
 
