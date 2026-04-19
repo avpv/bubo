@@ -21,29 +21,39 @@ struct NoOverlapConstraint: ScheduleConstraint {
     let isHard = true
 
     func penalty(for chromosome: ScheduleChromosome, context: OptimizerContext) -> Double {
-        var allEvents: [(start: Date, end: Date)] = []
+        // Only count overlaps where at least one side is a movable gene the
+        // chromosome placed. Fixed-vs-fixed clashes come from the user's
+        // calendar and are outside the GA's control — penalising them makes
+        // `fitness < 0.1` unreachable for every chromosome (including "drop
+        // all"), which surfaces as a false "Not enough room" modal.
+        let movable = chromosome.genes
+            .filter { $0.isIncluded }
+            .map { (start: $0.startTime, end: $0.endTime) }
 
-        // Add fixed events
-        for event in context.fixedEvents {
-            allEvents.append((event.startDate, event.endDate))
-        }
-        // Add only included movable events from chromosome
-        for gene in chromosome.genes where gene.isIncluded {
-            allEvents.append((gene.startTime, gene.endTime))
-        }
-
-        allEvents.sort { $0.start < $1.start }
-        guard allEvents.count > 1 else { return 0 }
+        guard !movable.isEmpty else { return 0 }
 
         var overlapMinutes = 0.0
-        for i in 0..<(allEvents.count - 1) {
-            for j in (i + 1)..<allEvents.count {
-                guard allEvents[j].start < allEvents[i].end else { break }
-                let overlapEnd = min(allEvents[i].end, allEvents[j].end)
-                let overlapStart = allEvents[j].start
+
+        // movable vs fixed
+        for m in movable {
+            for f in context.fixedEvents {
+                let overlapStart = max(m.start, f.startDate)
+                let overlapEnd = min(m.end, f.endDate)
                 overlapMinutes += max(0, overlapEnd.timeIntervalSince(overlapStart)) / 60.0
             }
         }
+
+        // movable vs movable
+        for i in 0..<movable.count {
+            for j in (i + 1)..<movable.count {
+                let a = movable[i]
+                let b = movable[j]
+                let overlapStart = max(a.start, b.start)
+                let overlapEnd = min(a.end, b.end)
+                overlapMinutes += max(0, overlapEnd.timeIntervalSince(overlapStart)) / 60.0
+            }
+        }
+
         return overlapMinutes
     }
 }

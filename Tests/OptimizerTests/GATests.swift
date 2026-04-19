@@ -198,6 +198,23 @@ struct ConstraintTests {
         #expect(penalty == 0)
     }
 
+    @Test("NoOverlapConstraint ignores clashes between fixed events")
+    func noOverlapIgnoresFixedVsFixed() {
+        // Two overlapping fixed events come from the user's calendar and
+        // are outside the GA's control. Penalising the chromosome for
+        // them makes `fitness < 0.1` unreachable for every candidate —
+        // even "drop all droppable" — which surfaces as a false
+        // "Not enough room" modal.
+        let fixed1 = makeFixedEvent(id: "f1", title: "Meeting A", startHour: 10, durationMinutes: 60)
+        let fixed2 = makeFixedEvent(id: "f2", title: "Meeting B", startHour: 10, durationMinutes: 60)
+        let chromosome = ScheduleChromosome(genes: [])
+        let context = makeContext(fixedEvents: [fixed1, fixed2])
+
+        let constraint = NoOverlapConstraint()
+        let penalty = constraint.penalty(for: chromosome, context: context)
+        #expect(penalty == 0)
+    }
+
     @Test("WorkingHoursConstraint penalizes events outside hours")
     func workingHoursConstraint() {
         let cal = Calendar.current
