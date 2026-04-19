@@ -84,6 +84,19 @@ struct IntentCompiler {
             : []
         var allFixed = calendarFixed + localAsFixed
 
+        // Tasks that an `autoPomodoro` spec reserved (see
+        // `resolveAutoPomodoros`) may still be present in
+        // `reminderService.allEvents` from a previous scheduling run. Drop
+        // those copies so the synthetic pomodoro is the sole event carrying
+        // that id — otherwise `ScheduleConflictGraph` would see fixed
+        // +movable duplicates and crash its union-find build.
+        let reservedPomodoroIds = Set(
+            config.syntheticEvents.compactMap { $0.autoPomodoro ? $0.specId : nil }
+        )
+        if !reservedPomodoroIds.isEmpty {
+            allFixed = allFixed.filter { !reservedPomodoroIds.contains($0.id) }
+        }
+
         // Phase 3.5: Add backlog tasks (capped to available time)
         // The cap is generous (120%) because the GA can drop droppable tasks
         // that don't fit via the isIncluded gene mechanism.
@@ -646,17 +659,26 @@ private extension IntentCompiler {
             startHour: signals.startHour,
             signals: signals
         )
-        // Name the session after the task the optimizer is most likely to
-        // schedule into it — the user's view of "what I'm doing right now"
-        // stays the task name, not a generic "Pomodoro" label. Falls
-        // through to the spec's existing title when the backlog is empty.
-        let taskTitle = topBacklogCandidate()?.title.trimmingCharacters(in: .whitespaces)
 
+        // Consume the top backlog task into the pomodoro: the spec takes
+        // over the task's id, title, story points, and deadline, so the
+        // resulting gene / CalendarEvent is strictly the same item the
+        // user intends to work on. `collectBacklogTasks` then skips the
+        // task (same id is reserved here) so the GA doesn't try to
+        // schedule it a second time. Falls through when the backlog is
+        // empty — the spec keeps its generic "Pomodoro" title.
+        let task = topBacklogCandidate()
         for i in config.syntheticEvents.indices where config.syntheticEvents[i].autoPomodoro {
             config.syntheticEvents[i].pomodoroConfig = shape
             config.syntheticEvents[i].minutes = shape.totalMinutes
-            if let title = taskTitle, !title.isEmpty {
-                config.syntheticEvents[i].title = title
+            if let task {
+                let title = task.title.trimmingCharacters(in: .whitespaces)
+                if !title.isEmpty {
+                    config.syntheticEvents[i].title = title
+                }
+                config.syntheticEvents[i].specId = task.id
+                config.syntheticEvents[i].storyPoints = task.storyPoints
+                config.syntheticEvents[i].deadline = task.deadline
             }
         }
     }
@@ -806,7 +828,16 @@ private extension IntentCompiler {
 
     func collectBacklogTasks(_ config: ResolvedConfig) -> [OptimizableEvent] {
         guard config.includeBacklog else { return [] }
-        let candidates = backlogService.schedulable
+        // Tasks consumed by an auto-pomodoro spec (see
+        // `resolveAutoPomodoros`) must not be scheduled a second time as
+        // standalone backlog events — the synthetic pomodoro already
+        // carries the task's id, title, and shape.
+        let reservedBySynthetic = Set(
+            config.syntheticEvents.compactMap { spec in
+                spec.autoPomodoro ? spec.specId : nil
+            }
+        )
+        let candidates = backlogService.schedulable.filter { !reservedBySynthetic.contains($0.id) }
         var filtered: [BacklogTask]
         if let ids = config.backlogTaskIds {
             filtered = candidates.filter { ids.contains($0.id) }
