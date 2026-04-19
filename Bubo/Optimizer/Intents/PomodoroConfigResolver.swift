@@ -1,14 +1,60 @@
 import Foundation
 
+// MARK: - Pomodoro Resolver Tuning
+
+/// Every magic number the resolver reaches for, in one place. Makes the
+/// policy inspectable, unit-testable, and overridable — the numbers aren't
+/// gone, they're just named and justified.
+///
+/// Birman: "произвольные числа надо просто огруглять" — all minute-valued
+/// fields are multiples of 5 and stay inside `workBounds` / `breakBounds`.
+struct PomodoroResolverTuning: Equatable, Sendable {
+
+    // Hard bounds on the session shape.
+    var workBounds: ClosedRange<Int>       = 15...60
+    var breakBounds: ClosedRange<Int>      = 3...15
+    var roundBounds: ClosedRange<Int>      = 1...8
+    var longBreakOptions: [Int]            = [0, 15, 20, 30]
+
+    // Base work-minute choice by energy context.
+    var lowEnergyWork: Int                 = 15
+    var defaultWork: Int                   = 25
+    var nearPeakWork: Int                  = 45
+    var farFromPeakWork: Int               = 20
+
+    /// Hours-from-peak → work bucket edges. `[1, 3]` means distance ≤ 1 is
+    /// "near", ≤ 3 is "regular", else "far".
+    var peakDistanceBuckets: [Int]         = [1, 3]
+
+    /// Story-points threshold at which work is pushed toward deep-work mode.
+    var deepTaskStoryPoints: Int           = 8
+
+    /// Break minutes shaved off when the deadline is today/overdue.
+    var tightDeadlineBreakPenalty: Int     = 2
+
+    /// Default target session length when no task estimate is given.
+    var defaultTargetMinutes: Int          = 120
+
+    /// Slack added to a task estimate when choosing the target. Never more
+    /// than one cycle to avoid stealing time from the next block.
+    var taskEstimateSlackPercent: Int      = 10
+
+    /// How strongly learned history blends into the computed work value.
+    /// 0 = ignore history, 1 = trust history fully. 0.3 keeps history as a
+    /// nudge rather than a dictate.
+    var historyBlend: Double               = 0.3
+
+    /// Round count at/above which a long break is added.
+    var longBreakRoundThreshold: Int       = 3
+
+    static let `default` = PomodoroResolverTuning()
+}
+
 // MARK: - Pomodoro Resolve Signals
 
 /// Everything `PomodoroConfigResolver` needs to produce a `PomodoroConfig`.
 /// All fields are optional: the resolver degrades gracefully when a signal is
-/// missing (e.g. the user has no backlog task or no energy data yet).
-///
-/// Birman: "пусть потеет машина" — do not force the user to fill 4 numbers
-/// when the app already knows the slot size, the task, the time of day and
-/// the user's energy curve.
+/// missing (e.g. the user has no backlog task or no history yet).
 struct PomodoroResolveSignals: Equatable, Sendable {
     /// Largest continuous free window available for the session, in minutes.
     /// Hard ceiling on `totalMinutes` — the resolver will never return a
@@ -16,7 +62,7 @@ struct PomodoroResolveSignals: Equatable, Sendable {
     var availableMinutes: Int?
 
     /// Estimated work the backlog task actually needs, in minutes. Used to
-    /// trim rounds: a 40-minute task doesn't need 4×25.
+    /// trim rounds: a 40-minute task doesn't need 4 × 25.
     var taskEstimateMinutes: Int?
 
     /// Story points of the task, 1…13. Higher = deeper cognitive load → prefer
@@ -27,9 +73,10 @@ struct PomodoroResolveSignals: Equatable, Sendable {
     /// Tight deadlines bias toward more rounds and shorter breaks.
     var deadlineDaysAway: Int?
 
-    /// Wall-clock hour the user will likely start the session. Defaults to
-    /// the current hour if unknown.
-    var currentHour: Int = 10
+    /// Hour the session is expected to start. Defaults to the current hour
+    /// during pre-GA compilation; `resolveShape` re-reads this with the
+    /// actual placed-slot hour post-GA.
+    var startHour: Int = 10
 
     /// User's peak-energy hour if known (e.g. from `.morningPerson` or an
     /// explicit `.peakEnergy(hour:)` intent).
@@ -43,166 +90,182 @@ struct PomodoroResolveSignals: Equatable, Sendable {
     /// true, resolver leans toward longer work intervals.
     var wantsDeepWork: Bool = false
 
-    /// User's historical preferred config, learned over time. Blended into
-    /// the result — not yet populated, reserved for future use by
-    /// `IntentLearner`.
+    /// User's historical preferred config at roughly the same time of day.
+    /// Blended into the result via `tuning.historyBlend`.
     var learnedConfig: PomodoroConfig?
 }
 
 // MARK: - Pomodoro Config Resolver
 
 /// Turns a set of signals into a concrete `PomodoroConfig` — continuous, not
-/// snapped to a fixed catalogue of presets. Output is always inside safe
-/// bounds and rounded to 5-minute increments for readability.
+/// snapped to a fixed catalogue of presets. Split into two phases so the
+/// compiler can fix the total duration pre-GA and refine the inner shape
+/// post-placement using the slot's real start hour.
 ///
-/// Design notes:
-/// - Bounds are deliberately narrow so the result always looks like a
-///   Pomodoro session and not an arbitrary timer: work ∈ [15, 60],
-///   break ∈ [3, 15], rounds ∈ [1, 8].
-/// - The resolver is pure: same signals → same config. Injectable signals
-///   make unit testing trivial.
-/// - When `availableMinutes` is tighter than the naive suggestion, the
-///   resolver first drops the long break, then reduces rounds, then trims
-///   work minutes — in that order, to preserve the ritual shape.
+/// `resolveDuration(signals)` — pre-GA. Decides how many minutes to carve
+/// out of the day. Drives slot-finding.
+///
+/// `resolveShape(totalMinutes:startHour:signals:)` — post-GA. Fills
+/// work/break/rounds/longBreak inside a fixed budget using the actual hour
+/// the optimizer picked.
+///
+/// `resolve(signals)` — one-shot for callers (tests, fallback paths) that
+/// don't have a post-GA hook.
 enum PomodoroConfigResolver {
 
-    // MARK: Bounds
+    // MARK: One-shot
 
-    static let minWorkMinutes = 15
-    static let maxWorkMinutes = 60
-    static let minBreakMinutes = 3
-    static let maxBreakMinutes = 15
-    static let minRounds = 1
-    static let maxRounds = 8
-    static let longBreakOptions = [0, 15, 20, 30]
-
-    // MARK: Resolve
-
-    static func resolve(signals: PomodoroResolveSignals) -> PomodoroConfig {
-        var work = baseWorkMinutes(signals: signals)
-        var breakDur = matchedBreak(for: work)
-
-        // Tight deadlines prefer slightly shorter breaks — more time in work.
-        if let days = signals.deadlineDaysAway, days <= 0 {
-            breakDur = max(minBreakMinutes, breakDur - 2)
-        }
-
-        // Target total duration: bounded by slot size and task estimate.
-        let target = targetTotalMinutes(signals: signals, work: work, breakDur: breakDur)
-
-        // Compute rounds from target, then longBreak, then fit to budget.
-        var rounds = roundsFor(targetMinutes: target, work: work, breakDur: breakDur)
-        var longBreak = suggestedLongBreak(rounds: rounds, signals: signals)
-
-        // Blend with learned config if present: nudge work toward the
-        // learned value by ~30% (future — resolver is ready, data isn't).
-        if let learned = signals.learnedConfig {
-            work = snap5(Int(Double(work) * 0.7 + Double(learned.workMinutes) * 0.3))
-            work = clamp(work, minWorkMinutes, maxWorkMinutes)
-            breakDur = matchedBreak(for: work)
-        }
-
-        // Fit to the available window, dropping long break → rounds → work.
-        var config = PomodoroConfig(
-            workMinutes: work,
-            breakMinutes: breakDur,
-            rounds: rounds,
-            longBreakMinutes: longBreak
+    static func resolve(
+        signals: PomodoroResolveSignals,
+        tuning: PomodoroResolverTuning = .default
+    ) -> PomodoroConfig {
+        let duration = resolveDuration(signals: signals, tuning: tuning)
+        return resolveShape(
+            totalMinutes: duration,
+            startHour: signals.startHour,
+            signals: signals,
+            tuning: tuning
         )
+    }
+
+    // MARK: Duration (pre-GA)
+
+    /// Target total session length in minutes. Bounded by the free slot,
+    /// the task estimate, and the resolver's default target.
+    static func resolveDuration(
+        signals: PomodoroResolveSignals,
+        tuning: PomodoroResolverTuning = .default
+    ) -> Int {
+        var target = tuning.defaultTargetMinutes
+        if let est = signals.taskEstimateMinutes, est > 0 {
+            let slack = max(5, est * tuning.taskEstimateSlackPercent / 100)
+            target = est + slack
+        }
         if let budget = signals.availableMinutes, budget > 0 {
-            if config.totalMinutes > budget {
-                longBreak = 0
-                config = PomodoroConfig(workMinutes: work, breakMinutes: breakDur, rounds: rounds, longBreakMinutes: longBreak)
-            }
-            while config.totalMinutes > budget && rounds > minRounds {
-                rounds -= 1
-                config = PomodoroConfig(workMinutes: work, breakMinutes: breakDur, rounds: rounds, longBreakMinutes: longBreak)
-            }
-            while config.totalMinutes > budget && work > minWorkMinutes {
-                work = max(minWorkMinutes, work - 5)
-                breakDur = matchedBreak(for: work)
-                config = PomodoroConfig(workMinutes: work, breakMinutes: breakDur, rounds: rounds, longBreakMinutes: longBreak)
-            }
+            target = min(target, budget)
+        }
+        // Ensure at least one full minimum work interval fits.
+        return max(tuning.workBounds.lowerBound, snap5(target))
+    }
+
+    // MARK: Shape (post-GA)
+
+    /// Fill work / break / rounds / long break so the session fits exactly
+    /// inside `totalMinutes`, using `startHour` to decide work intensity.
+    static func resolveShape(
+        totalMinutes: Int,
+        startHour: Int,
+        signals: PomodoroResolveSignals,
+        tuning: PomodoroResolverTuning = .default
+    ) -> PomodoroConfig {
+        var signalsAtHour = signals
+        signalsAtHour.startHour = startHour
+
+        var work = baseWorkMinutes(signals: signalsAtHour, tuning: tuning)
+        var breakDur = matchedBreak(for: work, tuning: tuning)
+
+        if let days = signals.deadlineDaysAway, days <= 0 {
+            breakDur = clamp(breakDur - tuning.tightDeadlineBreakPenalty, tuning.breakBounds)
         }
 
+        if let learned = signals.learnedConfig {
+            let blend = tuning.historyBlend
+            work = snap5(Int(Double(work) * (1 - blend) + Double(learned.workMinutes) * blend))
+            work = clamp(work, tuning.workBounds)
+            breakDur = matchedBreak(for: work, tuning: tuning)
+        }
+
+        var rounds = roundsFor(
+            targetMinutes: max(totalMinutes, work),
+            work: work,
+            breakDur: breakDur,
+            tuning: tuning
+        )
+        var longBreak = suggestedLongBreak(rounds: rounds, signals: signals, tuning: tuning)
+
+        var config = PomodoroConfig(
+            workMinutes: work, breakMinutes: breakDur,
+            rounds: rounds, longBreakMinutes: longBreak
+        )
+        // Fit to budget: drop long break → reduce rounds → trim work.
+        if totalMinutes > 0 && config.totalMinutes > totalMinutes {
+            longBreak = 0
+            config = PomodoroConfig(workMinutes: work, breakMinutes: breakDur, rounds: rounds, longBreakMinutes: 0)
+        }
+        while totalMinutes > 0 && config.totalMinutes > totalMinutes && rounds > tuning.roundBounds.lowerBound {
+            rounds -= 1
+            config = PomodoroConfig(workMinutes: work, breakMinutes: breakDur, rounds: rounds, longBreakMinutes: longBreak)
+        }
+        while totalMinutes > 0 && config.totalMinutes > totalMinutes && work > tuning.workBounds.lowerBound {
+            work = max(tuning.workBounds.lowerBound, work - 5)
+            breakDur = matchedBreak(for: work, tuning: tuning)
+            config = PomodoroConfig(workMinutes: work, breakMinutes: breakDur, rounds: rounds, longBreakMinutes: longBreak)
+        }
         return config
     }
 
     // MARK: - Internals
 
-    /// Base work-interval length (minutes) driven by energy and deep-work
-    /// signals. Snapped to 5.
-    private static func baseWorkMinutes(signals: PomodoroResolveSignals) -> Int {
+    private static func baseWorkMinutes(
+        signals: PomodoroResolveSignals, tuning: PomodoroResolverTuning
+    ) -> Int {
         if signals.isLowEnergy {
-            return 15
+            return tuning.lowEnergyWork
         }
-        var work = 25
+        var work = tuning.defaultWork
         if let peak = signals.peakEnergyHour {
-            let distance = abs(signals.currentHour - peak)
+            let distance = abs(signals.startHour - peak)
+            let buckets = tuning.peakDistanceBuckets
+            let nearEdge = buckets.first ?? 1
+            let regularEdge = buckets.dropFirst().first ?? 3
             switch distance {
-            case 0...1: work = 45
-            case 2...3: work = 30
-            default:    work = 20
+            case 0...nearEdge:       work = tuning.nearPeakWork
+            case (nearEdge + 1)...regularEdge: work = tuning.defaultWork
+            default:                 work = tuning.farFromPeakWork
             }
         }
         if signals.wantsDeepWork {
-            work = max(work, 45)
+            work = max(work, tuning.nearPeakWork)
         }
-        if let sp = signals.taskStoryPoints, sp >= 8 {
-            work = max(work, 45)
+        if let sp = signals.taskStoryPoints, sp >= tuning.deepTaskStoryPoints {
+            work = max(work, tuning.nearPeakWork)
         }
-        return clamp(snap5(work), minWorkMinutes, maxWorkMinutes)
+        return clamp(snap5(work), tuning.workBounds)
     }
 
-    /// Break length proportional to work (classic 5:1) but clamped.
-    private static func matchedBreak(for work: Int) -> Int {
-        let proposed = snap5(max(minBreakMinutes, work / 5))
-        return clamp(proposed, minBreakMinutes, maxBreakMinutes)
+    private static func matchedBreak(for work: Int, tuning: PomodoroResolverTuning) -> Int {
+        let proposed = snap5(max(tuning.breakBounds.lowerBound, work / 5))
+        return clamp(proposed, tuning.breakBounds)
     }
 
-    /// Target session wall-clock length, bounded by the task size and the
-    /// available window. Without any hint we default to ~2 hours — the
-    /// conventional "set of 4 pomodoros".
-    private static func targetTotalMinutes(
-        signals: PomodoroResolveSignals, work: Int, breakDur: Int
+    private static func roundsFor(
+        targetMinutes: Int, work: Int, breakDur: Int, tuning: PomodoroResolverTuning
     ) -> Int {
-        var target = 120
-        if let est = signals.taskEstimateMinutes, est > 0 {
-            // Give the task 10% slack; no more than one full cycle over the
-            // estimate — otherwise we're stealing time from the next block.
-            target = est + min(work + breakDur, est / 10 + work)
-        }
-        if let budget = signals.availableMinutes, budget > 0 {
-            target = min(target, budget)
-        }
-        return max(work, target)
-    }
-
-    private static func roundsFor(targetMinutes: Int, work: Int, breakDur: Int) -> Int {
-        // total = rounds * work + (rounds - 1) * break
-        //       = rounds * (work + break) - break
+        // total(rounds) = rounds * (work + break) - break
         // rounds ≤ (target + break) / (work + break)
         let cycle = work + breakDur
-        guard cycle > 0 else { return minRounds }
+        guard cycle > 0 else { return tuning.roundBounds.lowerBound }
         let raw = (targetMinutes + breakDur) / cycle
-        return clamp(raw, minRounds, maxRounds)
+        return clamp(raw, tuning.roundBounds)
     }
 
-    private static func suggestedLongBreak(rounds: Int, signals: PomodoroResolveSignals) -> Int {
-        if rounds < 3 { return 0 }
+    private static func suggestedLongBreak(
+        rounds: Int, signals: PomodoroResolveSignals, tuning: PomodoroResolverTuning
+    ) -> Int {
+        guard rounds >= tuning.longBreakRoundThreshold else { return 0 }
         if signals.isLowEnergy { return 20 }
         if let days = signals.deadlineDaysAway, days <= 0 { return 15 }
         return rounds >= 5 ? 20 : 15
     }
 
-    // MARK: Utilities
+    // MARK: - Utilities
 
     private static func snap5(_ v: Int) -> Int {
         let r = Int((Double(v) / 5.0).rounded())
         return r * 5
     }
 
-    private static func clamp(_ v: Int, _ lo: Int, _ hi: Int) -> Int {
-        min(max(v, lo), hi)
+    private static func clamp(_ v: Int, _ range: ClosedRange<Int>) -> Int {
+        min(max(v, range.lowerBound), range.upperBound)
     }
 }

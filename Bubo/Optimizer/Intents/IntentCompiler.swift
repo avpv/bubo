@@ -21,6 +21,10 @@ struct IntentCompiler {
     let backlogService: BacklogService
     var subgraphRegistry: SubgraphRegistry?
     var energyCheckInService: EnergyCheckInService?
+    /// Closes the learning loop for `PomodoroConfigResolver`. When present,
+    /// resolved session shapes blend with the median of recent completed
+    /// sessions at a similar time of day.
+    var pomodoroHistory: PomodoroHistoryService?
 
     // MARK: - Execute
 
@@ -631,10 +635,21 @@ private extension IntentCompiler {
         }
 
         let signals = buildPomodoroSignals(config)
+        // Phase A (pre-GA): pick only the total duration. The inner shape
+        // is finalised in `resolveShape` using `signals.startHour`, which
+        // here is `currentHour`. A post-GA hook (see `OptimizerService.
+        // applyScenario`) can re-invoke `resolveShape` with the actual
+        // placed-slot hour once `CalendarEvent` carries the config.
+        let duration = PomodoroConfigResolver.resolveDuration(signals: signals)
+        let shape = PomodoroConfigResolver.resolveShape(
+            totalMinutes: duration,
+            startHour: signals.startHour,
+            signals: signals
+        )
+
         for i in config.syntheticEvents.indices where config.syntheticEvents[i].autoPomodoro {
-            let resolved = PomodoroConfigResolver.resolve(signals: signals)
-            config.syntheticEvents[i].pomodoroConfig = resolved
-            config.syntheticEvents[i].minutes = resolved.totalMinutes
+            config.syntheticEvents[i].pomodoroConfig = shape
+            config.syntheticEvents[i].minutes = shape.totalMinutes
         }
     }
 
@@ -643,12 +658,13 @@ private extension IntentCompiler {
 
         let cal = Calendar.current
         let now = Date()
-        signals.currentHour = cal.component(.hour, from: now)
+        signals.startHour = cal.component(.hour, from: now)
         signals.peakEnergyHour = config.peakEnergyHour
         signals.isLowEnergy = (config.weights[.energyCurve] ?? 0) >= 1.8
         signals.wantsDeepWork = (config.weights[.focusBlock] ?? 0) >= 2.0
 
         signals.availableMinutes = largestFreeGapMinutes(config: config, now: now)
+        signals.learnedConfig = pomodoroHistory?.learnedConfig(forHour: signals.startHour)
 
         if let task = topBacklogCandidate() {
             signals.taskEstimateMinutes = task.durationMinutes
@@ -662,33 +678,43 @@ private extension IntentCompiler {
         return signals
     }
 
-    /// Largest continuous free window in minutes within today's working
-    /// hours. Returns `nil` when the scan can't produce a meaningful value
-    /// (e.g. day already over) so the resolver falls back to its own target.
+    /// Largest continuous free window in minutes across the full planning
+    /// horizon (today, tomorrow, or the next 7 days). Returns `nil` when
+    /// the scan produces no usable window so the resolver falls back to
+    /// its own target-duration logic.
     private func largestFreeGapMinutes(config: ResolvedConfig, now: Date) -> Int? {
+        let days: Int
+        switch config.horizon {
+        case .today:    days = 1
+        case .tomorrow: days = 2   // today + tomorrow
+        case .week:     days = 7
+        }
+
         let cal = Calendar.current
-        guard
-            let dayStart = cal.date(bySettingHour: config.workingHours.lowerBound, minute: 0, second: 0, of: now),
-            let dayEnd = cal.date(bySettingHour: config.workingHours.upperBound, minute: 0, second: 0, of: now)
-        else {
-            return nil
-        }
-        let scanStart = max(now, dayStart)
-        guard scanStart < dayEnd else { return nil }
-
-        let events = reminderService.allEvents
-            .filter { $0.endDate > scanStart && $0.startDate < dayEnd }
-            .sorted { $0.startDate < $1.startDate }
-
-        var cursor = scanStart
         var largest: TimeInterval = 0
-        for event in events {
-            let gap = event.startDate.timeIntervalSince(cursor)
-            if gap > largest { largest = gap }
-            cursor = max(cursor, event.endDate)
+        for offset in 0..<days {
+            guard
+                let base = cal.date(byAdding: .day, value: offset, to: now),
+                let dayStart = cal.date(bySettingHour: config.workingHours.lowerBound, minute: 0, second: 0, of: base),
+                let dayEnd = cal.date(bySettingHour: config.workingHours.upperBound, minute: 0, second: 0, of: base)
+            else { continue }
+
+            let scanStart = offset == 0 ? max(now, dayStart) : dayStart
+            guard scanStart < dayEnd else { continue }
+
+            let events = reminderService.allEvents
+                .filter { $0.endDate > scanStart && $0.startDate < dayEnd }
+                .sorted { $0.startDate < $1.startDate }
+
+            var cursor = scanStart
+            for event in events {
+                let gap = event.startDate.timeIntervalSince(cursor)
+                if gap > largest { largest = gap }
+                cursor = max(cursor, event.endDate)
+            }
+            let tail = dayEnd.timeIntervalSince(cursor)
+            if tail > largest { largest = tail }
         }
-        let tail = dayEnd.timeIntervalSince(cursor)
-        if tail > largest { largest = tail }
 
         let minutes = Int(largest / 60)
         return minutes > 0 ? minutes : nil

@@ -46,6 +46,12 @@ final class OptimizerService {
     /// Energy check-in service for adaptive energy curve.
     var energyCheckInService: EnergyCheckInService?
 
+    /// Pomodoro outcome log — records completed/abandoned sessions so
+    /// `PomodoroConfigResolver` can blend past choices into new shapes.
+    /// Created on first use; shared with `IntentCompiler` and
+    /// `TimerScreenView`.
+    let pomodoroHistory = PomodoroHistoryService()
+
     // MARK: - Optimizer Settings (persisted)
 
     var workingHoursStart: Int {
@@ -165,6 +171,7 @@ final class OptimizerService {
         )
         compiler.subgraphRegistry = subgraphRegistry
         compiler.energyCheckInService = energyCheckInService
+        compiler.pomodoroHistory = pomodoroHistory
         let result = await compiler.execute(request, defaultWorkingHours: workingHours)
 
         switch result {
@@ -231,6 +238,7 @@ final class OptimizerService {
         )
         compiler.subgraphRegistry = subgraphRegistry
         compiler.energyCheckInService = energyCheckInService
+        compiler.pomodoroHistory = pomodoroHistory
         let result = await compiler.execute(request, defaultWorkingHours: workingHours)
         switch result {
         case .success(let r), .partialSuccess(let r, _, _):
@@ -250,6 +258,7 @@ final class OptimizerService {
         )
         compiler.subgraphRegistry = subgraphRegistry
         compiler.energyCheckInService = energyCheckInService
+        compiler.pomodoroHistory = pomodoroHistory
         
         let req = OptimizationRequest(.horizon(.week), .includeBacklog)
         let result = await compiler.execute(req, defaultWorkingHours: workingHours)
