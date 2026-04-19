@@ -185,6 +185,19 @@ struct OptimizerContext: Sendable {
     /// `ensureConflictGraph()` builds on demand in that case.
     let conflictGraphHolder: ConflictGraphHolder?
 
+    /// Optional tabu memory consulted by LNS destroy when picking
+    /// which events to rip out. When nil the destroy operators fall
+    /// back to their original heuristic selection.
+    let tabuMemory: TabuMemory?
+
+    /// Optional CP-SAT-style repair adapter. When supplied and the
+    /// destroy window is at least `largeWindowThreshold` genes, the
+    /// chromosome's `applyLNS` delegates to this stronger solver
+    /// instead of the built-in handwritten branch-and-bound. nil =
+    /// always use the built-in path.
+    let cpSATRepairer: CPSATRepairer?
+    let cpSATWindowThreshold: Int
+
     init(
         fixedEvents: [CalendarEvent] = [],
         movableEvents: [OptimizableEvent] = [],
@@ -200,7 +213,10 @@ struct OptimizerContext: Sendable {
         mutationBandit: MutationBandit = MutationBandit(),
         lnsStrategyBandit: LNSStrategyBandit = LNSStrategyBandit(),
         contextualCrossoverHead: GeneAttentionHead = GeneAttentionHead(),
-        conflictGraphHolder: ConflictGraphHolder? = nil
+        conflictGraphHolder: ConflictGraphHolder? = nil,
+        tabuMemory: TabuMemory? = nil,
+        cpSATRepairer: CPSATRepairer? = nil,
+        cpSATWindowThreshold: Int = 20
     ) {
         self.fixedEvents = fixedEvents
         self.movableEvents = movableEvents
@@ -217,6 +233,9 @@ struct OptimizerContext: Sendable {
         // context copy hits the same cache; tests and one-shot
         // contexts omit it and pay the build cost on first access.
         self.conflictGraphHolder = conflictGraphHolder
+        self.tabuMemory = tabuMemory
+        self.cpSATRepairer = cpSATRepairer
+        self.cpSATWindowThreshold = cpSATWindowThreshold
     }
 
     /// Returns a materialised conflict graph for this context. Goes

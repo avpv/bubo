@@ -46,7 +46,7 @@ enum MutationOperator: Int, CaseIterable, Sendable, Hashable {
 /// construct a `BanditContext` with the semantic features only.
 ///
 /// The graph-derived features (`precedenceViolationRate`, `conflictDensity`,
-/// `maxChainDepth`) were added for SOTA-2026 so the bandit can pick an
+/// `maxChainDepth`) were added alongside graph preprocessing so the bandit can pick an
 /// operator conditioned on how "graph-constrained" the current landscape
 /// is. All three default to 0 so existing callers keep the original 4-dim
 /// behaviour without code changes; the actual feature dimension is 6 plus

@@ -227,6 +227,27 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
     /// bandit state is shared without going through a single lock.
     let federatedBandit: FederatedMutationBandit?
 
+    /// Externally-supplied warm-start chromosomes (temporal replay,
+    /// GNN-driven greedy, …). Distributed round-robin across islands
+    /// during initial population construction, replacing the same
+    /// number of random individuals so total population size is
+    /// preserved. Empty by default — the legacy seed mix is unchanged.
+    let extraSeeds: [C]
+
+    /// Optional learned migration topology. When set, the engine
+    /// consults the bandit to pick (donor → receiver) pairs at each
+    /// migration boundary instead of the static topology in
+    /// `islandConfig.topology`. Reward (hypervolume delta) is fed
+    /// back after each migration round.
+    let migrationBandit: MigrationTopologyBandit?
+
+    /// Optional batch evaluator propagated into every per-island
+    /// `GeneticAlgorithm`. Enables the multi-fidelity funnel path
+    /// where a surrogate ranks the offspring array and only the top
+    /// fraction gets a real evaluation. nil = each inner GA evaluates
+    /// offspring one-by-one using its per-chromosome `evaluate`.
+    let batchEvaluate: ((inout [C]) -> Void)?
+
     private(set) var bestEver: C?
     private(set) var convergenceGeneration: Int = 0
 
@@ -238,7 +259,10 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         onProgress: ((IslandModelProgress) -> Void)? = nil,
         multiObjective: MultiObjectiveContext<C>? = nil,
         hooks: EvolutionHooks<C> = .noop,
-        federatedBandit: FederatedMutationBandit? = nil
+        federatedBandit: FederatedMutationBandit? = nil,
+        extraSeeds: [C] = [],
+        migrationBandit: MigrationTopologyBandit? = nil,
+        batchEvaluate: ((inout [C]) -> Void)? = nil
     ) {
         self.islandConfig = islandConfig
         self.baseConfig = baseConfig
@@ -248,6 +272,9 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         self.multiObjective = multiObjective
         self.hooks = hooks
         self.federatedBandit = federatedBandit
+        self.extraSeeds = extraSeeds
+        self.migrationBandit = migrationBandit
+        self.batchEvaluate = batchEvaluate
     }
 
     // MARK: - Run
@@ -265,12 +292,28 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         //    thread-safe and deterministic under a fixed top-level seed.
         //    Greedy seeds are distributed per-island based on each island's config.
         let islandConfigs = makeIslandConfigs()
+        // Distribute extraSeeds round-robin across islands. Each
+        // island's allotted seed slice replaces the same number of
+        // random individuals so total population size is preserved.
+        let seedsPerIsland: [[C]] = {
+            guard !extraSeeds.isEmpty else {
+                return Array(repeating: [], count: islandConfigs.count)
+            }
+            var buckets: [[C]] = Array(repeating: [], count: islandConfigs.count)
+            for (i, seed) in extraSeeds.enumerated() {
+                buckets[i % buckets.count].append(seed)
+            }
+            return buckets
+        }()
         let islands = islandConfigs.enumerated().map { (idx, config) -> Island<C> in
             let islandContext = makeIslandContext(islandIndex: idx)
+            let warmSeedSlice = seedsPerIsland[idx]
             let greedyCount = max(0, Int(Double(config.populationSize) * config.greedySeedFraction))
-            let randomCount = config.populationSize - greedyCount
+            let warmCount = min(warmSeedSlice.count, max(0, config.populationSize - greedyCount))
+            let randomCount = max(0, config.populationSize - greedyCount - warmCount)
 
             var individuals: [C] = []
+            individuals.append(contentsOf: warmSeedSlice.prefix(warmCount))
             for i in 0..<greedyCount {
                 var ind = C.greedy(context: islandContext)
                 if i > 0 { ind.mutate(rate: 0.1 + Double(i) * 0.05, context: islandContext) }
@@ -294,7 +337,8 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
                 context: islandContext,
                 evaluate: evaluate,
                 multiObjective: multiObjective,
-                hooks: hooks
+                hooks: hooks,
+                batchEvaluate: batchEvaluate
             )
             return Island(population: pop, ga: ga, context: islandContext)
         }
@@ -381,7 +425,8 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
                 context: islandContext,
                 evaluate: evaluate,
                 multiObjective: multiObjective,
-                hooks: hooks
+                hooks: hooks,
+                batchEvaluate: batchEvaluate
             )
             return Island(population: pop, ga: ga, context: islandContext)
         }
@@ -607,7 +652,24 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         let n = islands.count
         guard n > 1 else { return }
 
-        var migrationPairs = makeMigrationPairs(islandCount: n)
+        // Pre-migration best-fitness snapshot per island, used to
+        // reward the migration bandit afterwards.
+        let preFitness: [Double] = islands.map { $0.bestEver?.rawFitness ?? 0 }
+
+        var migrationPairs: [(source: Int, destination: Int)]
+        if let bandit = migrationBandit {
+            // Consult the UCB bandit for the best (donor, receiver)
+            // pairs. We pull `n` pairs so each island receives at
+            // most one inbound migration per round, matching the
+            // legacy ring/fully-connected throughput.
+            let chosen = bandit.selectTopPairs(n)
+            migrationPairs = chosen.map { (source: $0.donor, destination: $0.receiver) }
+            if migrationPairs.isEmpty {
+                migrationPairs = makeMigrationPairs(islandCount: n)
+            }
+        } else {
+            migrationPairs = makeMigrationPairs(islandCount: n)
+        }
 
         // Productivity routing: for each pair, ensure the source is the
         // more-productive endpoint so flow runs down the fitness
@@ -637,6 +699,21 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         for (source, destination) in migrationPairs {
             if let emigrants = emigrantsBySource[source] {
                 insertImmigrants(emigrants, into: islands[destination])
+            }
+        }
+
+        // Reward the migration bandit by per-pair receiver fitness
+        // delta. Positive reward when the receiver's best improved
+        // post-migration; negative when it stalled or regressed.
+        if let bandit = migrationBandit {
+            for (source, destination) in migrationPairs {
+                let post = islands[destination].bestEver?.rawFitness ?? 0
+                let pre = preFitness[destination]
+                let reward = post - pre
+                bandit.observe(
+                    pair: MigrationPair(donor: source, receiver: destination),
+                    reward: reward
+                )
             }
         }
     }

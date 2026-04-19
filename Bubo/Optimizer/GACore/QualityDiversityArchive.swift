@@ -22,7 +22,7 @@ import Foundation
 
 /// 4-dimensional descriptor used as the archive's cell key.
 ///
-/// `precedenceTightness` is the fourth axis (added for SOTA-2026 graph
+/// `precedenceTightness` is the fourth axis (added for the graph
 /// improvements): the fraction of direct `dependsOn` edges whose
 /// dependent is placed within one working day of the prerequisite's
 /// end. Together with the classical three axes it captures how

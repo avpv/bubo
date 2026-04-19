@@ -97,6 +97,11 @@ final class BuboOptimizer {
     /// The current schedule genes (movable events placement).
     var currentSchedule: [ScheduleGene] = []
 
+    /// Captured from the most recent `optimize()` call — used by adaptive
+    /// feedback methods to record accepted/rejected outcomes into the
+    /// temporal warm-start store and buffer fit. Cleared by `reset()`.
+    private(set) var lastOptimizationContext: OptimizerContext?
+
     // MARK: - Configuration
 
     var gaConfig: GAConfiguration = .default
@@ -132,6 +137,10 @@ final class BuboOptimizer {
         // Apply learned preferences, merging with (not replacing) user preferences
         var prefs = context.preferences
         preferenceLearner.applyToPreferences(&prefs)
+        // Learner-driven preference prelude: DPO weight overlay +
+        // chance-constrained buffer fit applied on top of user prefs.
+        // Both are safe no-ops when their feature flags are off.
+        adjustPreferencesFromLearners(prefs: &prefs, context: context)
 
         // Resolve per-workload learners (bandit + head + surrogate)
         // by task signature so learning persists across runs on the
@@ -147,6 +156,13 @@ final class BuboOptimizer {
         // `optimize()` calls would otherwise interleave draws from
         // a single stream. The split keeps the caller's stream
         // reproducible across concurrent runs.
+        let preliminarySuite = obtainLearnerSuite(for: context)
+        let tabuToInject: TabuMemory? = schedulingFeatures.useTabuMemory
+            ? preliminarySuite.tabu
+            : nil
+        let cpSATToInject: CPSATRepairer? = schedulingFeatures.useCPSATRepair
+            ? CPSATRepairer()
+            : nil
         let adjustedContext = OptimizerContext(
             fixedEvents: context.fixedEvents,
             movableEvents: context.movableEvents,
@@ -158,20 +174,34 @@ final class BuboOptimizer {
             rng: context.rng.split(),
             mutationBandit: workloadLearners.bandit,
             lnsStrategyBandit: workloadLearners.lnsBandit,
-            contextualCrossoverHead: workloadLearners.head
+            contextualCrossoverHead: workloadLearners.head,
+            tabuMemory: tabuToInject,
+            cpSATRepairer: cpSATToInject,
+            cpSATWindowThreshold: schedulingFeatures.cpSATWindowThreshold
         )
+        // Stash for learner-feedback callbacks (acceptScenario etc).
+        lastOptimizationContext = adjustedContext
 
         let evaluator = FitnessEvaluator.standard(preferences: prefs)
         let config = overrideConfig ?? gaConfig
         let capturedIslandConfig = overrideIslandConfig ?? islandConfig
         let capturedScenarioCount = scenarioCount
 
-        // Adaptive NSGA-III + HypE-lite survivor selector. Reads
-        // per-objective scores from the chromosome cache so survivor
-        // selection imposes zero extra evaluation cost.
+        // Survivor selector: MOEA/D-AWA when explicitly enabled
+        // (beneficial at 8+ objectives), else adaptive NSGA-III
+        // with HypE-lite tiebreak. Both read per-objective scores
+        // from the chromosome cache so survivor selection imposes
+        // zero extra evaluation cost.
+        let moeadState: MOEADState? = schedulingFeatures.useMOEADAWASurvivor
+            ? MOEAD_AWA.forScheduleEvaluator(
+                evaluator: evaluator,
+                populationSize: max(2, config.populationSize * 2)
+            )
+            : nil
         let multiObjective = MultiObjectiveContext<ScheduleChromosome>.schedule(
             evaluator: evaluator,
-            populationSize: config.populationSize
+            populationSize: config.populationSize,
+            moeadState: moeadState
         )
 
         // Quality-Diversity archive shared across every island so
@@ -252,7 +282,7 @@ final class BuboOptimizer {
             }
         }
 
-        let hooks = ScheduleEvolutionHooks.compose(
+        var hookComponents: [EvolutionHooks<ScheduleChromosome>] = [
             ScheduleEvolutionHooks.qualityDiversityFeeding(archive: qdArchive),
             ScheduleEvolutionHooks.qualityDiversityEmission(archive: qdArchive, emissionRate: 0.12),
             ScheduleEvolutionHooks.gradientRefinement(
@@ -260,7 +290,25 @@ final class BuboOptimizer {
                 interval: 35,
                 candidates: 3,
                 evaluate: surrogateAssistedEvaluator
+            ),
+        ]
+        if schedulingFeatures.useCMAMEEmitter {
+            // CMA-ME samples around the population's current best.
+            // 5% emission rate keeps cost modest while still
+            // letting the covariance-adapted Gaussian probe locally.
+            hookComponents.append(
+                ScheduleEvolutionHooks.cmaMEEmission(
+                    archive: qdArchive,
+                    emissionRate: 0.05,
+                    templateProvider: { population in
+                        population.individuals.max(by: { $0.rawFitness < $1.rawFitness })
+                    },
+                    evaluate: surrogateAssistedEvaluator
+                )
             )
+        }
+        let hooks = ScheduleEvolutionHooks.compose(
+            contentsOf: hookComponents
         )
 
         // Run island model GA on background thread. All islands share
@@ -274,6 +322,34 @@ final class BuboOptimizer {
         // optimization for callers that want per-island bandits with
         // periodic merging — not wired by default because it fights
         // with the persistent-feedback path.
+        // Collect warm-start seeds from the learner suite so the
+        // initial population starts inside the basin of recent
+        // accepted solutions and respects GNN-derived priorities.
+        let extraSeeds: [ScheduleChromosome] = collectWarmStartSeeds(context: adjustedContext)
+        let learnerSuite = obtainLearnerSuite(for: adjustedContext)
+        let migrationBandit = schedulingFeatures.useMigrationBandit
+            ? learnerSuite.migrationBandit
+            : nil
+
+        // Multi-fidelity funnel: when enabled, wrap the per-chromo
+        // surrogate-assisted evaluator into a batch screen +
+        // tier-2 promotion. Declared as a `@Sendable` closure so it
+        // can cross the Task.detached boundary without the
+        // evaluator's inout state leaking.
+        let multiFidelityBatch: (@Sendable (inout [ScheduleChromosome]) -> Void)?
+        if schedulingFeatures.useMultiFidelityFunnel {
+            let funnel = MultiFidelityEvaluator(
+                surrogate: workloadLearners.surrogate,
+                evaluator: evaluator
+            )
+            let adjustedCtxLocal = adjustedContext
+            multiFidelityBatch = { batch in
+                _ = funnel.evaluateBatch(&batch, context: adjustedCtxLocal)
+            }
+        } else {
+            multiFidelityBatch = nil
+        }
+
         let (population, convergenceGen, duration) = await Task.detached(priority: .userInitiated) {
             let startTime = Date()
 
@@ -283,7 +359,10 @@ final class BuboOptimizer {
                 context: adjustedContext,
                 evaluate: surrogateAssistedEvaluator,
                 multiObjective: multiObjective,
-                hooks: hooks
+                hooks: hooks,
+                extraSeeds: extraSeeds,
+                migrationBandit: migrationBandit,
+                batchEvaluate: multiFidelityBatch
             )
 
             // Cooperative cancellation: `islandGA.run()` throws
@@ -324,7 +403,7 @@ final class BuboOptimizer {
         // feedback methods can route updates to the correct
         // per-workload learner bundle even after later runs on
         // different workloads.
-        let scenarios = archive.diverseScenarios(
+        var scenarios = archive.diverseScenarios(
             count: capturedScenarioCount,
             evaluator: evaluator,
             context: adjustedContext
@@ -333,6 +412,14 @@ final class BuboOptimizer {
             stamped.sourceSignature = signature
             return stamped
         }
+        // Scenario refinement: lex ranking, active-learning pair
+        // surfacing, path relinking, diffusion polish. Each step
+        // checks its own feature flag and no-ops when disabled.
+        scenarios = refineAndRankScenarios(
+            scenarios: scenarios,
+            context: adjustedContext,
+            evaluator: evaluator
+        )
 
         let populationCount = population.prefix(10).count
         let metadata = OptimizationMetadata(
@@ -523,11 +610,39 @@ final class BuboOptimizer {
         currentSchedule = scenario.genes
         preferenceLearner.recordAcceptance(scenarioFitness: scenario.fitness)
         propagateFeedbackReward(+0.1, scenario: scenario)
+        // Propagate acceptance to adaptive learners: DPO + temporal warm-start
+        // using whichever other scenarios from the last run act as
+        // implicit runner-ups.
+        let runnerUps: [ScheduleScenario] = (lastResult?.scenarios ?? [])
+            .filter { $0.id != scenario.id }
+        propagateAcceptFeedback(
+            accepted: scenario,
+            runnerUps: runnerUps,
+            context: lastOptimizationContext
+        )
+        // Training pipeline: append to replay buffer; may trigger a
+        // training cycle once the accept cadence threshold is hit.
+        trainingRecordAccept(accepted: scenario, runnerUps: runnerUps)
     }
 
     func rejectScenario(_ scenario: ScheduleScenario) {
         preferenceLearner.recordRejection(scenarioFitness: scenario.fitness)
         propagateFeedbackReward(-0.1, scenario: scenario)
+        // Model a rejection as a preference against the rejected vs.
+        // the top-fitness alternative. Cheap source of DPO signal.
+        if let best = lastResult?.scenarios.first, best.id != scenario.id,
+           let bundle = lookupLearnerSuite(for: scenario),
+           schedulingFeatures.useDPOWeightLearning {
+            bundle.dpo.observe(pair: DPOPreferencePair(
+                winnerScores: best.objectiveBreakdown,
+                loserScores: scenario.objectiveBreakdown,
+                confidence: 1.0
+            ))
+        }
+        trainingRecordReject(
+            rejected: scenario,
+            allScenarios: lastResult?.scenarios ?? []
+        )
     }
 
     func recordManualEdit(scenario: ScheduleScenario, edited: [ScheduleGene]) {
@@ -867,5 +982,6 @@ final class BuboOptimizer {
         currentSchedule = []
         lastResult = nil
         preferences = OptimizerPreferences()
+        lastOptimizationContext = nil
     }
 }
