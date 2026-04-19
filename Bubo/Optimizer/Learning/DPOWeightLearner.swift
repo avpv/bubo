@@ -185,6 +185,7 @@ final class DPOWeightLearner: @unchecked Sendable {
         if let w = weights["Buffer"] { preferences.bufferWeight = w }
         if let w = weights["MeetingClustering"] { preferences.meetingClusteringWeight = w }
         if let w = weights["TaskInclusion"] { preferences.taskInclusionWeight = w }
+        if let w = weights["BacklogOrder"] { preferences.backlogOrderWeight = w }
     }
 
     // MARK: - Introspection
