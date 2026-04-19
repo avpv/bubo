@@ -702,8 +702,8 @@ struct TaskInclusionConvexityTests {
 
         #expect(keep == 1.0)
         // Convex: drop-loss must exceed the linear baseline of 0.25.
-        // pow(0.75, 1.5) ≈ 0.6495 → loss ≈ 0.35, comfortably over 0.30.
-        #expect(keep - drop > 0.30,
+        // pow(0.75, 2.0) = 0.5625 → loss = 0.4375, comfortably over 0.40.
+        #expect(keep - drop > 0.40,
                 "drop-loss too small: keep=\(keep), drop=\(drop), loss=\(keep - drop)")
     }
 }

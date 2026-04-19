@@ -71,12 +71,14 @@ struct TaskInclusionObjective: FitnessObjective {
         // which fundamentally reward fewer events on the calendar —
         // collectively buy back the cost of a single drop, because the
         // inclusion penalty grew linearly while the aggregate structural
-        // gain scaled with the number of such objectives. Raising the
-        // ratio to the 1.5th power makes each additional drop cost
-        // progressively more than the last without changing either
-        // endpoint (0 stays 0, 1 stays 1). A 1-of-4 drop now loses 0.33
-        // instead of 0.24 — comfortably above the realistic structural
-        // upside of dropping a task on a sparse week.
-        return pow(inclusionRatio, 1.5)
+        // gain scaled with the number of such objectives. Squaring the
+        // ratio makes each additional drop cost progressively more than
+        // the last without changing either endpoint (0 stays 0, 1 stays 1).
+        // A 1-of-4 drop now loses 0.44 instead of the 0.35 we got at
+        // pow(·, 1.5) — needed for the within-day drop case that
+        // `includeDroppedGeneDays` can't address, where the dropped gene's
+        // day still has other included genes and rescoring that day with
+        // fewer events mechanically raises the structural score.
+        return pow(inclusionRatio, 2.0)
     }
 }
