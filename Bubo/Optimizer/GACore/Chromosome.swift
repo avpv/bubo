@@ -205,13 +205,17 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
     static func greedy(context: OptimizerContext) -> ScheduleChromosome {
         let cal = context.calendar
 
-        // Sort events: higher priority first, then earlier deadline, then shorter duration
+        // Sort events: higher priority first, then earlier deadline, then fall
+        // back to input order. Swift's sort is stable, so returning false for
+        // otherwise-equal events preserves the user's backlog/drag order — two
+        // tasks with identical priority and deadline get slots in the order
+        // the user put them in, not re-ordered by duration or anything else.
         let sortedEvents = context.movableEvents.sorted { a, b in
             if a.priority != b.priority { return a.priority > b.priority }
             if let da = a.deadline, let db = b.deadline { return da < db }
             if a.deadline != nil { return true }
             if b.deadline != nil { return false }
-            return a.duration < b.duration
+            return false
         }
 
         // Collect occupied intervals (from fixed events)
