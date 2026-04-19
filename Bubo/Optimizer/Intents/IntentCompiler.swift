@@ -86,9 +86,16 @@ struct IntentCompiler {
             totalBacklogCount = backlogTasks.count
 
             // When rescheduling, remove old calendar events for these tasks
-            // from the fixed set so they don't block their own new placement.
+            // from both the fixed and movable sets so the backlog task itself
+            // drives placement. Without this, a backlog task that was already
+            // scheduled in a previous run appears twice in `allMovable` —
+            // once as its local calendar event (same id as the task) and
+            // once via `collectBacklogTasks` — and `ScheduleConflictGraph`
+            // crashes with "Duplicate values for key" when building its
+            // union-find map.
             let rescheduledIds = Set(backlogTasks.map { $0.id })
             allFixed = allFixed.filter { !rescheduledIds.contains($0.id) }
+            allMovable = allMovable.filter { !rescheduledIds.contains($0.id) }
 
             let capped = capBacklogToAvailableTime(
                 backlogTasks,
