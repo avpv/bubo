@@ -19,6 +19,11 @@ struct OptimizableEvent: Identifiable, Codable, Hashable, Sendable {
     let storyPoints: Int?           // effort estimate (1, 2, 3, 5, 8, 13)
     let dependsOn: [String]         // IDs of tasks that must finish first
     let isDroppable: Bool           // GA can exclude this event if it doesn't fit
+    /// Backlog task ids bound to this optimizable event (ordered).
+    /// Non-empty only for pomodoro sessions produced by `.pomodoroSession`
+    /// or `.focusBurst` — one entry per work round when the session is
+    /// filled with backlog work.
+    let reservedTaskIds: [String]
     /// Position in the user's backlog at the moment the event was collected.
     /// Populated only for events coming from `BacklogService` via
     /// `collectBacklogTasks`; stays `nil` for calendar-derived events.
@@ -44,6 +49,7 @@ struct OptimizableEvent: Identifiable, Codable, Hashable, Sendable {
         storyPoints: Int? = nil,
         dependsOn: [String] = [],
         isDroppable: Bool = false,
+        reservedTaskIds: [String] = [],
         backlogIndex: Int? = nil
     ) {
         self.id = id
@@ -61,6 +67,7 @@ struct OptimizableEvent: Identifiable, Codable, Hashable, Sendable {
         self.storyPoints = storyPoints
         self.dependsOn = dependsOn
         self.isDroppable = isDroppable
+        self.reservedTaskIds = reservedTaskIds
         self.backlogIndex = backlogIndex
     }
 }
@@ -102,6 +109,9 @@ struct ScheduleGene: Codable, Hashable, Sendable {
     /// Flows `OptimizableEvent` → gene → `applyScenario` so the service
     /// can re-resolve or persist the chosen shape onto the `CalendarEvent`.
     let pomodoroConfig: PomodoroConfig?
+    /// Backlog task ids bound to this gene (ordered per work round).
+    /// Non-empty only for auto-pomodoro / focus-burst events.
+    let reservedTaskIds: [String]
 
     var endTime: Date { startTime.addingTimeInterval(duration) }
 
@@ -117,7 +127,8 @@ struct ScheduleGene: Codable, Hashable, Sendable {
         storyPoints: Int? = nil,
         isDroppable: Bool = false,
         isIncluded: Bool = true,
-        pomodoroConfig: PomodoroConfig? = nil
+        pomodoroConfig: PomodoroConfig? = nil,
+        reservedTaskIds: [String] = []
     ) {
         self.eventId = eventId
         self.title = title
@@ -131,6 +142,7 @@ struct ScheduleGene: Codable, Hashable, Sendable {
         self.isDroppable = isDroppable
         self.isIncluded = isIncluded
         self.pomodoroConfig = pomodoroConfig
+        self.reservedTaskIds = reservedTaskIds
     }
 
     /// Create a copy with a new start time (preserves all other fields).
@@ -147,7 +159,8 @@ struct ScheduleGene: Codable, Hashable, Sendable {
             storyPoints: storyPoints,
             isDroppable: isDroppable,
             isIncluded: isIncluded,
-            pomodoroConfig: pomodoroConfig
+            pomodoroConfig: pomodoroConfig,
+            reservedTaskIds: reservedTaskIds
         )
     }
 }

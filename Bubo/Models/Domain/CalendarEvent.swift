@@ -122,6 +122,23 @@ struct CalendarEvent: Identifiable, Codable, Hashable, Sendable {
     /// created before this field existed.
     var pomodoroConfig: PomodoroConfig? = nil
 
+    /// Ordered backlog tasks packed into this pomodoro. Empty for
+    /// single-task sessions created by `.pomodoroSession`; populated by
+    /// `.focusBurst` so the timer can show `taskSequence[round - 1].title`
+    /// at the start of each work round and mark every task scheduled
+    /// against this event. Stored as a value array (not ids) so
+    /// deletion / renaming of a backlog row can't desync what the timer
+    /// shows mid-session.
+    var pomodoroTaskSequence: [TaskSequenceEntry] = []
+
+    /// Entry in `pomodoroTaskSequence` — a snapshot of the backlog task
+    /// at scheduling time. Snapshotting the title keeps the display
+    /// stable even if the user renames the task during the session.
+    struct TaskSequenceEntry: Codable, Hashable, Sendable {
+        let taskId: String
+        let title: String
+    }
+
     // MARK: - Static formatters (avoid re-creation per call)
 
     private static let timeFormatter: DateFormatter = {

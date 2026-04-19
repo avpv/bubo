@@ -80,6 +80,7 @@ enum IntentConflictDetector {
             // for the pre-flight window check use a conservative upper bound
             // that matches the resolver's default target.
             case .pomodoroSession: neededMinutes = 120
+            case .focusBurst: neededMinutes = 180
             default: continue
             }
 

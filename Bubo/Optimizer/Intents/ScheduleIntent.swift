@@ -37,6 +37,14 @@ indirect enum ScheduleIntent: Codable, Hashable, Sendable {
     /// energy curve, deadline) — no preset to pick.
     case pomodoroSession
 
+    /// Pack several small related backlog tasks into a single pomodoro
+    /// session — one task per work round. `maxTasks` caps the pack size;
+    /// `contextFilter` optionally restricts to tasks sharing a project /
+    /// context tag. When the burst consumes fewer than 2 tasks the
+    /// compiler falls through to the regular `.pomodoroSession`
+    /// behaviour, so picking this intent with a sparse backlog is safe.
+    case focusBurst(maxTasks: Int = 4, contextFilter: String? = nil)
+
     // MARK: - Weight Adjustments
 
     /// Boost deadline importance.
@@ -359,6 +367,9 @@ extension ScheduleIntent {
             return "Focus \(m) min\(period)"
         case .createBlock(let t, let m, _, _): return "\(t) (\(m) min)"
         case .pomodoroSession: return "Pomodoro"
+        case .focusBurst(let n, let ctx):
+            if let ctx { return "Focus burst · \(ctx) · \(n) tasks" }
+            return "Focus burst · \(n) tasks"
         case .prioritizeDeadlines: return "Prioritize deadlines"
         case .prioritizeFocus: return "Prioritize focus time"
         case .minimizeContextSwitching: return "Minimize context switching"
@@ -450,7 +461,7 @@ extension ScheduleIntent {
         switch self {
         case .noEventsBefore, .noEventsAfter, .workingHours, .horizon:
             return .time
-        case .focusBlock, .createBlock, .pomodoroSession:
+        case .focusBlock, .createBlock, .pomodoroSession, .focusBurst:
             return .create
         case .prioritizeDeadlines, .prioritizeFocus, .minimizeContextSwitching,
              .groupByProject, .batchMeetings:
@@ -603,7 +614,7 @@ struct OptimizationRequest: Codable, Hashable, Sendable, Identifiable {
     var isCreative: Bool {
         intents.contains { intent in
             switch intent {
-            case .focusBlock, .createBlock, .pomodoroSession: return true
+            case .focusBlock, .createBlock, .pomodoroSession, .focusBurst: return true
             default: return false
             }
         }
@@ -651,6 +662,8 @@ struct OptimizationRequest: Codable, Hashable, Sendable, Identifiable {
                 parts.append("\(t) \(m)m")
             case .pomodoroSession:
                 parts.append("Pomodoro")
+            case .focusBurst(let n, _):
+                parts.append("Focus burst \(n)")
             default: break
             }
         }

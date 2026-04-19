@@ -317,7 +317,8 @@ enum GNNWarmStart {
                 storyPoints: event.storyPoints,
                 isDroppable: event.isDroppable,
                 isIncluded: true,
-                pomodoroConfig: event.pomodoroConfig
+                pomodoroConfig: event.pomodoroConfig,
+                reservedTaskIds: event.reservedTaskIds
             )
             genes.append(gene)
             cursor = gene.endTime

@@ -201,24 +201,40 @@ final class NotificationScheduler {
         let work = TimeInterval(config.workMinutes * 60)
         let shortBreak = TimeInterval(config.breakMinutes * 60)
         let longBreak = TimeInterval(config.longBreakMinutes * 60)
+        let tasks = event.pomodoroTaskSequence
+
+        // Resolve the task title for a 1-based work-round index; nil if
+        // the sequence is empty or shorter than expected.
+        func taskTitle(forRound round: Int) -> String? {
+            guard tasks.indices.contains(round - 1) else { return nil }
+            return tasks[round - 1].title
+        }
 
         for round in 1...config.rounds {
             cursor += work
             let workEnd = event.startDate.addingTimeInterval(cursor)
 
             if round < config.rounds {
+                let doneTitle = taskTitle(forRound: round).map { "“\($0)” done" }
+                    ?? "Round \(round) / \(config.rounds) done"
                 alerts.append(PhaseAlert(
                     fireDate: workEnd,
-                    title: "Round \(round) / \(config.rounds) done",
+                    title: doneTitle,
                     body: "Take a \(config.breakMinutes)-min break",
                     key: "\(event.id)_phase_work\(round)"
                 ))
                 cursor += shortBreak
                 let breakEnd = event.startDate.addingTimeInterval(cursor)
+                let nextBody: String
+                if let next = taskTitle(forRound: round + 1) {
+                    nextBody = "Next: \(next)"
+                } else {
+                    nextBody = "Round \(round + 1) of \(config.rounds) — back to work"
+                }
                 alerts.append(PhaseAlert(
                     fireDate: breakEnd,
                     title: "Break over",
-                    body: "Round \(round + 1) of \(config.rounds) — back to work",
+                    body: nextBody,
                     key: "\(event.id)_phase_break\(round)"
                 ))
             } else {

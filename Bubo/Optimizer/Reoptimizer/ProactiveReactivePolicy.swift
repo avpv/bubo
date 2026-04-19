@@ -220,7 +220,8 @@ final class ProactiveReactivePolicy: @unchecked Sendable {
                     storyPoints: event.storyPoints,
                     isDroppable: event.isDroppable,
                     isIncluded: true,
-                    pomodoroConfig: event.pomodoroConfig
+                    pomodoroConfig: event.pomodoroConfig,
+                    reservedTaskIds: event.reservedTaskIds
                 )
                 return ScheduleRecovery(
                     shifts: [:],
@@ -245,7 +246,8 @@ final class ProactiveReactivePolicy: @unchecked Sendable {
             storyPoints: event.storyPoints,
             isDroppable: event.isDroppable,
             isIncluded: true,
-            pomodoroConfig: event.pomodoroConfig
+            pomodoroConfig: event.pomodoroConfig,
+            reservedTaskIds: event.reservedTaskIds
         )
         return ScheduleRecovery(
             shifts: [:], removals: [], insertions: [gene], reflowAfter: true

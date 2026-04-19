@@ -301,6 +301,23 @@ struct TimerScreenView: View {
                             .lineLimit(2)
                             .truncationMode(.tail)
 
+                        // Focus-burst subtitle: the task tied to the
+                        // current work round, so the user always sees
+                        // "what I'm actually doing right now" even when
+                        // the main title is a compound "A + B + C".
+                        if let currentTask = currentBurstTask(now: now) {
+                            HStack(spacing: DS.Spacing.xs) {
+                                Image(systemName: "play.circle.fill")
+                                    .font(.system(size: DS.Size.iconSmall))
+                                    .foregroundStyle(skin.accentColor)
+                                Text(currentTask.title)
+                                    .font(.system(.subheadline, design: skin.resolvedFontDesign, weight: .medium))
+                                    .foregroundStyle(skin.resolvedTextPrimary)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                            }
+                        }
+
                         HStack(spacing: DS.Spacing.md) {
                             Label(event.formattedDate, systemImage: "calendar")
                                 .font(.caption)
@@ -375,6 +392,22 @@ struct TimerScreenView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Focus Burst
+
+    /// Task tied to the current work round in a focus-burst session.
+    /// Returns `nil` when the event has no task sequence, the timer is
+    /// in a break / long break / done phase, or the round index is out
+    /// of bounds of the sequence (the resolver caps rounds to pack
+    /// size, but a stale persisted event could have a mismatch).
+    private func currentBurstTask(now: Date) -> CalendarEvent.TaskSequenceEntry? {
+        guard !event.pomodoroTaskSequence.isEmpty else { return nil }
+        guard let phase = currentPhase(now) else { return nil }
+        guard case .work(let round, _) = phase.kind else { return nil }
+        let idx = round - 1
+        guard event.pomodoroTaskSequence.indices.contains(idx) else { return nil }
+        return event.pomodoroTaskSequence[idx]
     }
 
     // MARK: - Pomodoro Display

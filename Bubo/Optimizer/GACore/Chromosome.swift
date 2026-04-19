@@ -192,7 +192,8 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 storyPoints: event.storyPoints,
                 isDroppable: event.isDroppable,
                 isIncluded: included,
-                pomodoroConfig: event.pomodoroConfig
+                pomodoroConfig: event.pomodoroConfig,
+                reservedTaskIds: event.reservedTaskIds
             )
         }
         return ScheduleChromosome(genes: genes, needsEvaluation: true)
@@ -271,7 +272,8 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 storyPoints: event.storyPoints,
                 isDroppable: event.isDroppable,
                 isIncluded: isIncluded,
-                pomodoroConfig: event.pomodoroConfig
+                pomodoroConfig: event.pomodoroConfig,
+                reservedTaskIds: event.reservedTaskIds
             )
             genes.append(gene)
 
@@ -297,7 +299,8 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 duration: event.duration, context: event.context, energyCost: event.energyCost,
                 priority: event.priority, isFocusBlock: event.isFocusBlock,
                 storyPoints: event.storyPoints, isDroppable: event.isDroppable, isIncluded: !event.isDroppable,
-                pomodoroConfig: event.pomodoroConfig
+                pomodoroConfig: event.pomodoroConfig,
+                reservedTaskIds: event.reservedTaskIds
             ))
         }
 

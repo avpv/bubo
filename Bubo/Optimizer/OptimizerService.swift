@@ -332,6 +332,16 @@ final class OptimizerService {
                 )
             }
 
+            // Snapshot the backlog tasks bound to this gene so the timer
+            // can show `taskSequence[round].title` and the backlog
+            // service can link every consumed task to the same event.
+            let sequence: [CalendarEvent.TaskSequenceEntry] = gene.reservedTaskIds.compactMap { id in
+                guard let task = backlogService?.tasks.first(where: { $0.id == id }) else {
+                    return nil
+                }
+                return CalendarEvent.TaskSequenceEntry(taskId: id, title: task.title)
+            }
+
             var event = CalendarEvent(
                 id: gene.eventId,
                 title: title,
@@ -344,15 +354,27 @@ final class OptimizerService {
                 colorTag: colorOverride ?? (gene.isFocusBlock ? .blue : .green)
             )
             event.pomodoroConfig = pomodoroConfig
+            event.pomodoroTaskSequence = sequence
             reminderService.addLocalEvent(event)
             createdEventIds.append(event.id)
 
-            // Link backlog tasks to their scheduled events
-            backlogService?.markScheduled(
-                id: gene.eventId,
-                eventId: event.id,
-                date: gene.startTime
-            )
+            // Link backlog tasks to their scheduled events. For focus
+            // bursts every task in the pack points at the same pomodoro.
+            if gene.reservedTaskIds.isEmpty {
+                backlogService?.markScheduled(
+                    id: gene.eventId,
+                    eventId: event.id,
+                    date: gene.startTime
+                )
+            } else {
+                for taskId in gene.reservedTaskIds {
+                    backlogService?.markScheduled(
+                        id: taskId,
+                        eventId: event.id,
+                        date: gene.startTime
+                    )
+                }
+            }
         }
 
         // Save undo snapshot

@@ -331,6 +331,7 @@ enum RequestToolSchema {
                 - {"focusBlock": {"minutes": 120, "period": "morning"}} — create focus time
                 - {"createBlock": {"title": "...", "minutes": 60, "period": "afternoon"}} — generic event
                 - "pomodoroSession" — pomodoro block (optimizer picks work/break/rounds)
+                - {"focusBurst": {"maxTasks": 4, "contextFilter": "..."}} — pack up to N small related tasks into one pomodoro, one task per work round
                 - {"noEventsBefore": {"hour": 11}} — block early hours
                 - {"noEventsAfter": {"hour": 17}} — block late hours
                 - {"horizon": "today"} — today/tomorrow/week

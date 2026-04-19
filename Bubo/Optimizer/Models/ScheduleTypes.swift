@@ -110,10 +110,22 @@ struct EventSpec: Codable, Hashable, Sendable {
     /// Marks the spec as a pomodoro session that `IntentCompiler` must
     /// resolve into a concrete `pomodoroConfig` using live signals.
     var autoPomodoro: Bool = false
+    /// When set, `resolveAutoPomodoros` packs up to this many backlog
+    /// tasks into the session (focus-burst behaviour). `nil` keeps the
+    /// single-task `.pomodoroSession` path. Upper bound matches the
+    /// resolver's `roundBounds.upperBound`.
+    var autoFocusBurstMax: Int? = nil
     /// Concrete pomodoro shape (work / break / rounds / long break).
     /// Populated by `PomodoroConfigResolver` during compilation — no fixed
     /// preset catalogue.
     var pomodoroConfig: PomodoroConfig? = nil
+    /// Backlog task ids consumed by this spec, in per-round order. Drives
+    /// the strict "one pomodoro = these tasks" binding: `IntentCompiler`
+    /// fills it during resolution, `collectBacklogTasks` filters those
+    /// ids out, and `OptimizerService.applyScenario` uses it to populate
+    /// `CalendarEvent.pomodoroTaskSequence` and call `markScheduled` for
+    /// every task in the list.
+    var reservedTaskIds: [String] = []
     var participants: [String] = []
     var creation: CreationMode = .fixed
     var chainGap: Int? = nil
@@ -135,7 +147,9 @@ struct EventSpec: Codable, Hashable, Sendable {
         period = try? c.decode(Period.self, forKey: .period)
         focus = (try? c.decode(Bool.self, forKey: .focus)) ?? false
         autoPomodoro = (try? c.decode(Bool.self, forKey: .autoPomodoro)) ?? false
+        autoFocusBurstMax = try? c.decode(Int.self, forKey: .autoFocusBurstMax)
         pomodoroConfig = try? c.decode(PomodoroConfig.self, forKey: .pomodoroConfig)
+        reservedTaskIds = (try? c.decode([String].self, forKey: .reservedTaskIds)) ?? []
         participants = (try? c.decode([String].self, forKey: .participants)) ?? []
         creation = (try? c.decode(CreationMode.self, forKey: .creation)) ?? .fixed
         chainGap = try? c.decode(Int.self, forKey: .chainGap)
@@ -157,7 +171,9 @@ struct EventSpec: Codable, Hashable, Sendable {
         period: Period? = nil,
         focus: Bool = false,
         autoPomodoro: Bool = false,
+        autoFocusBurstMax: Int? = nil,
         pomodoroConfig: PomodoroConfig? = nil,
+        reservedTaskIds: [String] = [],
         participants: [String] = [],
         creation: CreationMode = .fixed,
         chainGap: Int? = nil,
@@ -177,7 +193,9 @@ struct EventSpec: Codable, Hashable, Sendable {
         self.period = period
         self.focus = focus
         self.autoPomodoro = autoPomodoro
+        self.autoFocusBurstMax = autoFocusBurstMax
         self.pomodoroConfig = pomodoroConfig
+        self.reservedTaskIds = reservedTaskIds
         self.participants = participants
         self.creation = creation
         self.chainGap = chainGap

@@ -220,7 +220,8 @@ final class TemporalWarmStart: @unchecked Sendable {
             storyPoints: event.storyPoints,
             isDroppable: event.isDroppable,
             isIncluded: true,
-            pomodoroConfig: event.pomodoroConfig
+            pomodoroConfig: event.pomodoroConfig,
+            reservedTaskIds: event.reservedTaskIds
         )
     }
 
@@ -237,7 +238,8 @@ final class TemporalWarmStart: @unchecked Sendable {
             storyPoints: event.storyPoints,
             isDroppable: event.isDroppable,
             isIncluded: true,
-            pomodoroConfig: event.pomodoroConfig
+            pomodoroConfig: event.pomodoroConfig,
+            reservedTaskIds: event.reservedTaskIds
         )
     }
 
