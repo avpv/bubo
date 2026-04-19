@@ -99,8 +99,16 @@ struct ScheduleConflictGraph: Sendable {
 
     /// Build the graph from an `OptimizerContext`. Allocates proportional
     /// to events + edges; for 100 events this is a few microseconds.
+    ///
+    /// `Dictionary(uniqueKeysWithValues:)` below traps on duplicates, so we
+    /// build the internal maps against a de-duplicated event list. Callers
+    /// (`IntentCompiler.execute`) already dedupe; this is defence-in-depth
+    /// so a future collision becomes a silently-correct placement instead
+    /// of a runtime crash.
     static func build(from context: OptimizerContext) -> ScheduleConflictGraph {
-        let ids = context.movableEvents.map(\.id)
+        var seen: Set<String> = []
+        let uniqueEvents = context.movableEvents.filter { seen.insert($0.id).inserted }
+        let ids = uniqueEvents.map(\.id)
         guard !ids.isEmpty else {
             return ScheduleConflictGraph(
                 eventIds: [],
@@ -115,13 +123,13 @@ struct ScheduleConflictGraph: Sendable {
         }
 
         let eventById: [String: OptimizableEvent] = Dictionary(
-            uniqueKeysWithValues: context.movableEvents.map { ($0.id, $0) }
+            uniqueKeysWithValues: uniqueEvents.map { ($0.id, $0) }
         )
 
         // 1) Direct precedence edges from `dependsOn`.
         var precedesDirect: [String: Set<String>] = [:]
         var precedenceEdges = 0
-        for event in context.movableEvents where !event.dependsOn.isEmpty {
+        for event in uniqueEvents where !event.dependsOn.isEmpty {
             for depId in event.dependsOn {
                 // Dependency may point at another movable event or a
                 // fixed one; only movable → movable edges participate
@@ -158,7 +166,7 @@ struct ScheduleConflictGraph: Sendable {
         // Participant index: two events that require the same person
         // conflict whenever they overlap, so they share a component.
         var participantIndex: [String: [String]] = [:]
-        for event in context.movableEvents {
+        for event in uniqueEvents {
             for person in event.requiredParticipants {
                 participantIndex[person, default: []].append(event.id)
             }
@@ -189,10 +197,10 @@ struct ScheduleConflictGraph: Sendable {
         // Preferred-hour overlap (soft coupling) — events that prefer
         // overlapping windows get bucketed together for component
         // analysis even without a hard constraint.
-        for i in 0..<context.movableEvents.count {
-            for j in (i + 1)..<context.movableEvents.count {
-                let a = context.movableEvents[i]
-                let b = context.movableEvents[j]
+        for i in 0..<uniqueEvents.count {
+            for j in (i + 1)..<uniqueEvents.count {
+                let a = uniqueEvents[i]
+                let b = uniqueEvents[j]
                 guard let aRange = a.preferredHourRange,
                       let bRange = b.preferredHourRange else { continue }
                 if aRange.overlaps(bRange) {
