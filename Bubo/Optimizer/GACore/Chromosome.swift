@@ -871,7 +871,11 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 // on a single instant. Sampling inside `[lower, dayUpper]`
                 // keeps mutations spread across the day.
                 let hourRange = event?.preferredHourRange ?? context.workingHours
-                let durationHours = Int(genes[i].duration / 3600)
+                // Round up: a 90-min task needs two full working hours of
+                // runway, not one. Truncation here let the sampler pick
+                // `workEnd - 1h` as a start, so the task ended past working
+                // hours and tripped the WorkingHours hard constraint.
+                let durationHours = Int((genes[i].duration / 3600).rounded(.up))
                 let maxStartHour = max(hourRange.lowerBound, hourRange.upperBound - durationHours)
 
                 func windowFor(offset: Int) -> (lower: Date, upper: Date)? {
@@ -2521,7 +2525,12 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         let daysInHorizon = max(1, (calendar.dateComponents([.day], from: horizonStartDay, to: horizonLastDay).day ?? 0) + 1)
 
         let hourRange = event.preferredHourRange ?? workingHours
-        let maxStartHour = max(hourRange.lowerBound, hourRange.upperBound - Int(event.duration / 3600))
+        // Round up: a 90-min task needs two full hours of runway. Truncation
+        // here (`Int(1.5) == 1`) let the sampler start a task at
+        // `workEnd - 1h`, pushing its end past working hours and tripping
+        // the WorkingHours hard constraint.
+        let durationHours = Int((event.duration / 3600).rounded(.up))
+        let maxStartHour = max(hourRange.lowerBound, hourRange.upperBound - durationHours)
         let floor = [horizon.start, event.earliestStart].compactMap { $0 }.max() ?? horizon.start
 
         // Compute the earliest feasible start on a given day offset, or nil
