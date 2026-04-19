@@ -275,4 +275,92 @@ struct CalendarEvent: Identifiable, Codable, Hashable, Sendable {
         if case .afterCount(let count) = rule.end { return count }
         return nil
     }
+
+    // MARK: - Inline Pomodoro Phase (pomodoroConfig-driven)
+    //
+    // Phase model for single-event pomodoros created by the optimizer
+    // (`pomodoroConfig != nil`). Separate from the id-suffix path above
+    // which applies to recurrence-expanded pomodoros. Callers should
+    // prefer this path when `pomodoroConfig != nil`.
+
+    /// A concrete moment within a `pomodoroConfig`-driven session.
+    struct PomodoroPhase: Equatable {
+        enum Kind: Equatable {
+            case work(round: Int, total: Int)
+            case shortBreak(afterRound: Int)
+            case longBreak
+            case done
+        }
+        let kind: Kind
+        let phaseStart: Date
+        let phaseEnd: Date
+        /// Work rounds fully completed by `phaseStart`. For a finished
+        /// session, equals `config.rounds`.
+        let completedRounds: Int
+        let totalRounds: Int
+
+        var duration: TimeInterval { phaseEnd.timeIntervalSince(phaseStart) }
+    }
+
+    /// Walk the pomodoro timeline forward to find which phase contains
+    /// `now`. Returns `nil` when the event has no `pomodoroConfig`
+    /// (i.e. non-optimizer pomodoros or regular events).
+    func currentPomodoroPhase(at now: Date) -> PomodoroPhase? {
+        guard let config = pomodoroConfig else { return nil }
+        let elapsed = max(0, now.timeIntervalSince(startDate))
+        var cursor: TimeInterval = 0
+        let workSec = TimeInterval(config.workMinutes * 60)
+        let breakSec = TimeInterval(config.breakMinutes * 60)
+        let longBreakSec = TimeInterval(config.longBreakMinutes * 60)
+
+        for r in 0..<config.rounds {
+            let workStart = cursor
+            let workEnd = workStart + workSec
+            if elapsed < workEnd {
+                return PomodoroPhase(
+                    kind: .work(round: r + 1, total: config.rounds),
+                    phaseStart: startDate.addingTimeInterval(workStart),
+                    phaseEnd: startDate.addingTimeInterval(workEnd),
+                    completedRounds: r,
+                    totalRounds: config.rounds
+                )
+            }
+            cursor = workEnd
+            if r < config.rounds - 1 {
+                let breakEnd = cursor + breakSec
+                if elapsed < breakEnd {
+                    return PomodoroPhase(
+                        kind: .shortBreak(afterRound: r + 1),
+                        phaseStart: startDate.addingTimeInterval(cursor),
+                        phaseEnd: startDate.addingTimeInterval(breakEnd),
+                        completedRounds: r + 1,
+                        totalRounds: config.rounds
+                    )
+                }
+                cursor = breakEnd
+            }
+        }
+
+        if longBreakSec > 0 {
+            let longBreakEnd = cursor + longBreakSec
+            if elapsed < longBreakEnd {
+                return PomodoroPhase(
+                    kind: .longBreak,
+                    phaseStart: startDate.addingTimeInterval(cursor),
+                    phaseEnd: startDate.addingTimeInterval(longBreakEnd),
+                    completedRounds: config.rounds,
+                    totalRounds: config.rounds
+                )
+            }
+            cursor = longBreakEnd
+        }
+
+        return PomodoroPhase(
+            kind: .done,
+            phaseStart: startDate.addingTimeInterval(cursor),
+            phaseEnd: endDate,
+            completedRounds: config.rounds,
+            totalRounds: config.rounds
+        )
+    }
 }
