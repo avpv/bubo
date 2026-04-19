@@ -761,35 +761,6 @@ final class BuboOptimizer {
         )
     }
 
-    // MARK: - Pomodoro Optimization (#2)
-
-    func suggestPomodoroSlot(
-        config: PomodoroConfig = .classic,
-        fixedEvents: [CalendarEvent],
-        workingHours: ClosedRange<Int> = 9...18
-    ) async -> OptimizerResult {
-        let totalMinutes = config.workMinutes * config.rounds
-            + config.breakMinutes * max(0, config.rounds - 1)
-            + config.longBreakMinutes
-
-        let pomodoroEvent = OptimizableEvent(
-            title: "Pomodoro Session",
-            duration: TimeInterval(totalMinutes * 60),
-            priority: 0.7,
-            context: "focus",
-            energyCost: 0.8,
-            preferredHourRange: 9...14,
-            isFocusBlock: true,
-            pomodoroConfig: config
-        )
-
-        return await optimizeToday(
-            fixedEvents: fixedEvents,
-            movableEvents: [pomodoroEvent],
-            workingHours: workingHours
-        )
-    }
-
     // MARK: - Meeting Scheduling (#5, #16)
 
     func suggestMeetingSlot(

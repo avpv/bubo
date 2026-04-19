@@ -22,7 +22,7 @@ struct IntentPresets {
     static let quickActions: [OptimizationRequest] = [
         .organizeDay,
         .findFocus(),
-        .pomodoroBlock(),
+        .pomodoroBlock,
         .deadlineMode,
         .planWeek,
         .lowEnergyDay,
@@ -46,7 +46,7 @@ struct IntentPresets {
         Category(id: "focus", name: "Focus", presets: [
             .findFocus(),
             .deepWork(),
-            .pomodoroBlock(),
+            .pomodoroBlock,
         ]),
         Category(id: "deadlines", name: "Deadlines", presets: [
             .deadlineMode,
@@ -129,16 +129,14 @@ extension OptimizationRequest {
         )
     }
 
-    static func pomodoroBlock(preset: PomodoroPreset = .auto) -> OptimizationRequest {
-        OptimizationRequest(
-            .pomodoroSession(preset: preset),
-            .horizon(.today), .findSlotsForBacklog,
-            .speed(.quick), .scenarios(count: 1),
-            // Stable name constant — see IntentPresets.Name. Keeps the
-            // post-Pomodoro `seedRecipeId` lookup in MenuBarView in sync.
-            name: IntentPresets.Name.pomodoroSession
-        )
-    }
+    static let pomodoroBlock = OptimizationRequest(
+        .pomodoroSession,
+        .horizon(.today), .findSlotsForBacklog,
+        .speed(.quick), .scenarios(count: 1),
+        // Stable name constant — see IntentPresets.Name. Keeps the
+        // post-Pomodoro `seedRecipeId` lookup in MenuBarView in sync.
+        name: IntentPresets.Name.pomodoroSession
+    )
 
     // MARK: - Deadlines
 

@@ -305,7 +305,7 @@ final class IntentLearner {
             "horizon.tomorrow": .horizon(.tomorrow),
             "horizon.week": .horizon(.week),
             "focusBlock": .focusBlock(minutes: 120),
-            "pomodoroSession": .pomodoroSession(),
+            "pomodoroSession": .pomodoroSession,
             "prioritizeDeadlines": .prioritizeDeadlines(),
             "prioritizeFocus": .prioritizeFocus(),
             "minimizeContextSwitching": .minimizeContextSwitching(),

@@ -81,9 +81,6 @@ struct PomodoroConfig: Codable, Hashable, Sendable {
             + breakMinutes * max(0, rounds - 1)
             + longBreakMinutes
     }
-
-    static let classic = PomodoroConfig(workMinutes: 25, breakMinutes: 5, rounds: 4, longBreakMinutes: 15)
-    static let deepWork = PomodoroConfig(workMinutes: 50, breakMinutes: 10, rounds: 2, longBreakMinutes: 20)
 }
 
 // MARK: - Schedule Gene

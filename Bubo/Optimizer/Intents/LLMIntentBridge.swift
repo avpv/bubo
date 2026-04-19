@@ -65,7 +65,7 @@ struct LLMIntentBridge {
         // Create events
         {"focusBlock": {"minutes": 120, "period": "morning"}},
         {"createBlock": {"title": "...", "minutes": 60, "period": "afternoon", "focus": false}},
-        {"pomodoroSession": {"preset": "auto" | "classic" | "deepWork"}},
+        "pomodoroSession",
 
         // Priorities (weight: 0.5-5.0, default 1.0)
         {"prioritizeDeadlines": {"weight": 2.0}},

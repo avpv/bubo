@@ -792,7 +792,7 @@ struct IntentGraph: Sendable {
         // Tasks
         .includeBacklog, .findSlotsForBacklog,
         // Create
-        .focusBlock(minutes: 120), .pomodoroSession(),
+        .focusBlock(minutes: 120), .pomodoroSession,
         // Transforms
         .splitLong(maxMinutes: 90), .addBuffer(minutes: 10),
         .capTotal(minutesPerDay: 360),

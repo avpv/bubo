@@ -32,10 +32,10 @@ indirect enum ScheduleIntent: Codable, Hashable, Sendable {
     /// Create a generic event block.
     case createBlock(title: String, minutes: Int, period: Period? = nil, focus: Bool = false)
 
-    /// Create a pomodoro session. Defaults to `.auto` so the optimizer
-    /// derives work/break/rounds/longBreak from live signals (available
-    /// slot, task estimate, energy curve, deadline).
-    case pomodoroSession(preset: PomodoroPreset = .auto)
+    /// Create a pomodoro session. The optimizer derives work / break /
+    /// rounds / longBreak from live signals (available slot, task estimate,
+    /// energy curve, deadline) — no preset to pick.
+    case pomodoroSession
 
     // MARK: - Weight Adjustments
 
@@ -358,7 +358,7 @@ extension ScheduleIntent {
             let period = p.map { ", \($0.rawValue)" } ?? ""
             return "Focus \(m) min\(period)"
         case .createBlock(let t, let m, _, _): return "\(t) (\(m) min)"
-        case .pomodoroSession(let p): return "Pomodoro (\(p.rawValue))"
+        case .pomodoroSession: return "Pomodoro"
         case .prioritizeDeadlines: return "Prioritize deadlines"
         case .prioritizeFocus: return "Prioritize focus time"
         case .minimizeContextSwitching: return "Minimize context switching"
@@ -649,8 +649,8 @@ struct OptimizationRequest: Codable, Hashable, Sendable, Identifiable {
                 parts.append("Focus \(m)m \(period)")
             case .createBlock(let t, let m, _, _):
                 parts.append("\(t) \(m)m")
-            case .pomodoroSession(let p):
-                parts.append("Pomodoro (\(p.rawValue))")
+            case .pomodoroSession:
+                parts.append("Pomodoro")
             default: break
             }
         }

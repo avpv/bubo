@@ -311,10 +311,12 @@ private extension IntentCompiler {
                 title: title, minutes: minutes, period: period, focus: focus
             ))
             config.findSlotsOnly = true
-        case .pomodoroSession(let preset):
+        case .pomodoroSession:
+            // Placeholder minutes — resolveAutoPomodoros(&config) rewrites
+            // both `minutes` and `pomodoroConfig` once signals are known.
             config.syntheticEvents.append(EventSpec(
-                title: "Pomodoro", minutes: preset.totalMinutes,
-                priority: 0.8, energy: 0.6, focus: true, pomodoro: preset
+                title: "Pomodoro", minutes: 120,
+                priority: 0.8, energy: 0.6, focus: true, autoPomodoro: true
             ))
             config.findSlotsOnly = true
 
@@ -624,12 +626,12 @@ private extension IntentCompiler {
     /// after the intent loop so every signal (peak energy, working hours,
     /// backlog, calendar) is already settled.
     func resolveAutoPomodoros(in config: inout ResolvedConfig) {
-        guard config.syntheticEvents.contains(where: { $0.pomodoro == .auto }) else {
+        guard config.syntheticEvents.contains(where: { $0.autoPomodoro }) else {
             return
         }
 
         let signals = buildPomodoroSignals(config)
-        for i in config.syntheticEvents.indices where config.syntheticEvents[i].pomodoro == .auto {
+        for i in config.syntheticEvents.indices where config.syntheticEvents[i].autoPomodoro {
             let resolved = PomodoroConfigResolver.resolve(signals: signals)
             config.syntheticEvents[i].pomodoroConfig = resolved
             config.syntheticEvents[i].minutes = resolved.totalMinutes
@@ -719,7 +721,7 @@ private extension IntentCompiler {
                     requiredParticipants: spec.participants,
                     preferredHourRange: spec.period?.hourRange,
                     isFocusBlock: spec.focus,
-                    pomodoroConfig: spec.pomodoroConfig ?? spec.pomodoro?.config,
+                    pomodoroConfig: spec.pomodoroConfig,
                     storyPoints: spec.storyPoints,
                     dependsOn: spec.dependsOn
                 )

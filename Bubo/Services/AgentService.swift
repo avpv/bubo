@@ -330,7 +330,7 @@ enum RequestToolSchema {
                 Available intents:
                 - {"focusBlock": {"minutes": 120, "period": "morning"}} — create focus time
                 - {"createBlock": {"title": "...", "minutes": 60, "period": "afternoon"}} — generic event
-                - {"pomodoroSession": {"preset": "classic"}} — pomodoro block
+                - "pomodoroSession" — pomodoro block (optimizer picks work/break/rounds)
                 - {"noEventsBefore": {"hour": 11}} — block early hours
                 - {"noEventsAfter": {"hour": 17}} — block late hours
                 - {"horizon": "today"} — today/tomorrow/week
