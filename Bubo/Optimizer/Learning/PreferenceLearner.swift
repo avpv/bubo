@@ -58,6 +58,7 @@ final class PreferenceLearner {
         "ContextSwitch": 0.7,
         "Buffer": 0.6,
         "MeetingClustering": 0.8,
+        "BacklogOrder": 0.5,
     ]
 
     // MARK: - Record Feedback
@@ -284,6 +285,11 @@ final class PreferenceLearner {
         preferences.contextSwitchWeight = blended(preferences.contextSwitchWeight, key: "ContextSwitch")
         preferences.bufferWeight = blended(preferences.bufferWeight, key: "Buffer")
         preferences.meetingClusteringWeight = blended(preferences.meetingClusteringWeight, key: "MeetingClustering")
+        // `backlogOrderWeight` is optional in prefs; blend against the
+        // resolved (default-filled) value and write back a concrete number so
+        // later reads don't have to keep resolving.
+        let resolvedBacklogOrder = preferences.backlogOrderWeight ?? OptimizerPreferences.defaultBacklogOrderWeight
+        preferences.backlogOrderWeight = blended(resolvedBacklogOrder, key: "BacklogOrder")
     }
 
     // MARK: - Persistence

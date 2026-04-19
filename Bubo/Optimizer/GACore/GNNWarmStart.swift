@@ -120,7 +120,8 @@ enum GNNWarmStart {
         let ordered = topologicalOrder(
             eventIds: graph.eventIds,
             directPrecedes: graph.directPrecedes,
-            scores: scores
+            scores: scores,
+            backlogIndex: context.backlogIndexMap()
         )
         return greedyAssign(orderedIds: ordered, context: context)
     }
@@ -199,11 +200,14 @@ enum GNNWarmStart {
 
     /// Topological sort stabilised by GNN score. When multiple nodes
     /// become ready simultaneously, the one with the higher score is
-    /// placed first.
+    /// placed first; GNN-score ties fall back to backlog position so
+    /// user-visible drag order survives the warm-start seed instead of
+    /// collapsing to whatever iteration order `eventIds` happens to have.
     private static func topologicalOrder(
         eventIds: [String],
         directPrecedes: [String: Set<String>],
-        scores: [String: Double]
+        scores: [String: Double],
+        backlogIndex: [String: Int]
     ) -> [String] {
         // Build inverse adjacency: what each node depends on.
         var inDegree: [String: Int] = Dictionary(uniqueKeysWithValues: eventIds.map { ($0, 0) })
@@ -212,8 +216,19 @@ enum GNNWarmStart {
                 inDegree[d, default: 0] += 1
             }
         }
+        // Precedence predicate: strict > on GNN score, ties break by
+        // earlier backlog position. Missing backlog indices sort last so
+        // calendar-derived nodes never jump ahead of tagged backlog tasks.
+        func precedes(_ lhs: String, _ rhs: String) -> Bool {
+            let sl = scores[lhs] ?? 0
+            let sr = scores[rhs] ?? 0
+            if sl != sr { return sl > sr }
+            let il = backlogIndex[lhs] ?? Int.max
+            let ir = backlogIndex[rhs] ?? Int.max
+            return il < ir
+        }
         var ready = eventIds.filter { (inDegree[$0] ?? 0) == 0 }
-        ready.sort { (scores[$0] ?? 0) > (scores[$1] ?? 0) }
+        ready.sort(by: precedes)
         var ordered: [String] = []
         ordered.reserveCapacity(eventIds.count)
         while !ready.isEmpty {
@@ -224,9 +239,7 @@ enum GNNWarmStart {
                     deg -= 1
                     inDegree[next] = deg
                     if deg == 0 {
-                        let insertAt = ready.firstIndex {
-                            (scores[next] ?? 0) > (scores[$0] ?? 0)
-                        } ?? ready.count
+                        let insertAt = ready.firstIndex { precedes(next, $0) } ?? ready.count
                         ready.insert(next, at: insertAt)
                     }
                 }

@@ -19,6 +19,14 @@ struct OptimizableEvent: Identifiable, Codable, Hashable, Sendable {
     let storyPoints: Int?           // effort estimate (1, 2, 3, 5, 8, 13)
     let dependsOn: [String]         // IDs of tasks that must finish first
     let isDroppable: Bool           // GA can exclude this event if it doesn't fit
+    /// Position in the user's backlog at the moment the event was collected.
+    /// Populated only for events coming from `BacklogService` via
+    /// `collectBacklogTasks`; stays `nil` for calendar-derived events.
+    /// `BacklogOrderObjective` reads this so that backlog tasks whose
+    /// priority/deadline are identical end up placed in the order the user
+    /// dragged them into — the GA actively prefers matching visual order
+    /// instead of relying on a single stable-sort pass in the greedy seed.
+    let backlogIndex: Int?
 
     init(
         id: String = UUID().uuidString,
@@ -35,7 +43,8 @@ struct OptimizableEvent: Identifiable, Codable, Hashable, Sendable {
         earliestStart: Date? = nil,
         storyPoints: Int? = nil,
         dependsOn: [String] = [],
-        isDroppable: Bool = false
+        isDroppable: Bool = false,
+        backlogIndex: Int? = nil
     ) {
         self.id = id
         self.title = title
@@ -52,6 +61,7 @@ struct OptimizableEvent: Identifiable, Codable, Hashable, Sendable {
         self.storyPoints = storyPoints
         self.dependsOn = dependsOn
         self.isDroppable = isDroppable
+        self.backlogIndex = backlogIndex
     }
 }
 
@@ -249,6 +259,22 @@ struct OptimizerContext: Sendable {
         }
         return ScheduleConflictGraph.build(from: self)
     }
+
+    /// `eventId → backlogIndex` map over `movableEvents`. Built on demand
+    /// by callers that need a backlog-order tiebreaker (LNS destroy, CP
+    /// repair variable selection, warm-start topological ordering,
+    /// contextual crossover attention). Events without a `backlogIndex`
+    /// are omitted — callers should treat "not present" as "no preference".
+    func backlogIndexMap() -> [String: Int] {
+        var map: [String: Int] = [:]
+        map.reserveCapacity(movableEvents.count)
+        for event in movableEvents {
+            if let idx = event.backlogIndex {
+                map[event.id] = idx
+            }
+        }
+        return map
+    }
 }
 
 // MARK: - Optimizer Preferences
@@ -268,6 +294,16 @@ struct OptimizerPreferences: Codable, Sendable {
     var bufferWeight: Double
     var meetingClusteringWeight: Double
     var taskInclusionWeight: Double
+    /// Weight for `BacklogOrderObjective`. Optional so existing persisted
+    /// preferences (JSON blobs without this key) still decode cleanly — a
+    /// missing value reads through the default below. Consumers should route
+    /// through that default instead of force-unwrapping.
+    var backlogOrderWeight: Double?
+
+    /// Fallback when `backlogOrderWeight` is nil. Kept small so backlog-order
+    /// matching only acts as a tiebreaker: deadlines, priority, and energy
+    /// matching still dominate when they differ between tasks.
+    static let defaultBacklogOrderWeight: Double = 0.5
 
     // Energy model
     var peakEnergyHour: Int           // hour of day with peak energy
@@ -309,6 +345,7 @@ struct OptimizerPreferences: Codable, Sendable {
         bufferWeight: Double = 0.6,
         meetingClusteringWeight: Double = 0.8,
         taskInclusionWeight: Double = 4.0,
+        backlogOrderWeight: Double? = nil,
         peakEnergyHour: Int = 10,
         energyDecayRate: Double = 0.1,
         personalEnergyCurve: [Double]? = nil,
@@ -337,6 +374,7 @@ struct OptimizerPreferences: Codable, Sendable {
         self.bufferWeight = bufferWeight
         self.meetingClusteringWeight = meetingClusteringWeight
         self.taskInclusionWeight = taskInclusionWeight
+        self.backlogOrderWeight = backlogOrderWeight
         self.peakEnergyHour = peakEnergyHour
         self.energyDecayRate = energyDecayRate
         self.personalEnergyCurve = personalEnergyCurve

@@ -681,7 +681,7 @@ final class BuboOptimizer {
         for op in MutationOperator.allCases {
             bundle.bandit.record(op: op, reward: -0.03)
         }
-        bundle.head.updateWeights(features: [1, 1, 1, 1], rewardSign: -0.3)
+        bundle.head.updateWeights(features: [1, 1, 1, 1, 1], rewardSign: -0.3)
     }
 
     /// Backwards-compatible overload accepting raw gene arrays. Use
@@ -697,7 +697,7 @@ final class BuboOptimizer {
         for op in MutationOperator.allCases {
             bundle.bandit.record(op: op, reward: -0.03)
         }
-        bundle.head.updateWeights(features: [1, 1, 1, 1], rewardSign: -0.3)
+        bundle.head.updateWeights(features: [1, 1, 1, 1, 1], rewardSign: -0.3)
     }
 
     /// Resolve the learner bundle a scenario refers to. Prefers
@@ -724,7 +724,7 @@ final class BuboOptimizer {
         }
         let rewardSign: Double = reward == 0 ? 0 : (reward < 0 ? -1 : 1)
         let signedMagnitude = rewardSign * max(0.3, scenario.fitness)
-        bundle.head.updateWeights(features: [1, 1, 1, 1], rewardSign: signedMagnitude)
+        bundle.head.updateWeights(features: [1, 1, 1, 1, 1], rewardSign: signedMagnitude)
     }
 
     // MARK: - Scenario Comparison (#27)

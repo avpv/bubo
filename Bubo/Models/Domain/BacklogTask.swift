@@ -180,7 +180,12 @@ extension BacklogTask {
 extension BacklogTask {
 
     /// Convert a backlog task to an OptimizableEvent for the GA.
-    func toOptimizableEvent() -> OptimizableEvent {
+    ///
+    /// `backlogIndex` is the task's 0-based position in the filtered backlog
+    /// list being sent to the optimizer. When supplied, `BacklogOrderObjective`
+    /// uses it to reward schedules that match the user's drag order for tasks
+    /// whose priority/deadline don't otherwise differentiate them.
+    func toOptimizableEvent(backlogIndex: Int? = nil) -> OptimizableEvent {
         let effectiveEnergy = adjustedEnergy(
             base: priority == .high ? 0.7 : 0.5,
             storyPoints: storyPoints
@@ -197,7 +202,8 @@ extension BacklogTask {
             isFocusBlock: false,
             storyPoints: storyPoints,
             dependsOn: dependsOn,
-            isDroppable: true
+            isDroppable: true,
+            backlogIndex: backlogIndex
         )
     }
 }

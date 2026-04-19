@@ -205,13 +205,17 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
     static func greedy(context: OptimizerContext) -> ScheduleChromosome {
         let cal = context.calendar
 
-        // Sort events: higher priority first, then earlier deadline, then shorter duration
+        // Sort events: higher priority first, then earlier deadline, then fall
+        // back to input order. Swift's sort is stable, so returning false for
+        // otherwise-equal events preserves the user's backlog/drag order — two
+        // tasks with identical priority and deadline get slots in the order
+        // the user put them in, not re-ordered by duration or anything else.
         let sortedEvents = context.movableEvents.sorted { a, b in
             if a.priority != b.priority { return a.priority > b.priority }
             if let da = a.deadline, let db = b.deadline { return da < db }
             if a.deadline != nil { return true }
             if b.deadline != nil { return false }
-            return a.duration < b.duration
+            return false
         }
 
         // Collect occupied intervals (from fixed events)
@@ -1178,8 +1182,26 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
             return byDay[chosen] ?? []
 
         case .topPriority:
+            // Priority first; ties broken by backlog position so identical
+            // tasks are always destroyed in the same order the user dragged
+            // them in. Without the tiebreaker, LNS repeats across generations
+            // sampled different permutations of equal-priority tasks, which
+            // propagated into the final schedule.
+            let backlogIdx = context.backlogIndexMap()
             return includedIndices
-                .sorted { genes[$0].priority > genes[$1].priority }
+                .sorted { a, b in
+                    let pa = genes[a].priority
+                    let pb = genes[b].priority
+                    if pa != pb { return pa > pb }
+                    let ia = backlogIdx[genes[a].eventId]
+                    let ib = backlogIdx[genes[b].eventId]
+                    switch (ia, ib) {
+                    case let (.some(x), .some(y)): return x < y
+                    case (.some, .none): return true
+                    case (.none, .some): return false
+                    case (.none, .none): return false
+                    }
+                }
                 .prefix(destroySize)
                 .map { $0 }
 
@@ -1629,15 +1651,25 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
 
         // dom/deg: pick the unassigned, ready variable (livedInDegree=0)
         // with the smallest remaining domain. Ties break by in-degree of
-        // destroyed dependents (most-constraining-first) then by priority
-        // desc so high-value genes commit before low-value ones.
+        // destroyed dependents (most-constraining-first), then by priority
+        // desc, and finally by backlog position so genes the user dragged
+        // to the top of the backlog commit first when everything else is
+        // equal — matches the downstream `BacklogOrderObjective`'s
+        // preference instead of leaving the order to iteration chance.
         //
         // Symmetry: skip a variable whose canonical-sym-predecessor is
         // still unassigned. This forces equivalent genes to commit in
         // a fixed (increasing-index) order, pruning the N!-way
         // redundancy.
+        let backlogIdx = context.backlogIndexMap()
+        func backlogRank(_ idx: Int) -> Int {
+            // Genes without a backlog position (calendar-derived) fall to
+            // the end of the tie-break so they never displace backlog
+            // tasks whose order the user explicitly chose.
+            backlogIdx[genes[idx].eventId] ?? Int.max
+        }
         func pickNextVariable() -> Int? {
-            var best: (idx: Int, size: Int, deg: Int, prio: Double)? = nil
+            var best: (idx: Int, size: Int, deg: Int, prio: Double, backlog: Int)? = nil
             for idx in destroyed {
                 if currentPlacements.keys.contains(idx) { continue }
                 if currentDrops.contains(idx) { continue }
@@ -1650,20 +1682,24 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 let size = (remainingDomains[idx] ?? []).count
                 let deg = destroyedDependents[idx]?.count ?? 0
                 let prio = genes[idx].priority
+                let backlog = backlogRank(idx)
                 if let cur = best {
                     let tighter = size < cur.size
                     let sizeTie = size == cur.size
                     let moreConstraining = deg > cur.deg
                     let degTie = deg == cur.deg
                     let higherPrio = prio > cur.prio
+                    let prioTie = prio == cur.prio
+                    let earlierBacklog = backlog < cur.backlog
                     if tighter
                         || (sizeTie && moreConstraining)
                         || (sizeTie && degTie && higherPrio)
+                        || (sizeTie && degTie && prioTie && earlierBacklog)
                     {
-                        best = (idx, size, deg, prio)
+                        best = (idx, size, deg, prio, backlog)
                     }
                 } else {
-                    best = (idx, size, deg, prio)
+                    best = (idx, size, deg, prio, backlog)
                 }
             }
             return best?.idx

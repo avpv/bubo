@@ -9,7 +9,7 @@ struct ContextualCrossoverTests {
     func headWeightsUpdate() {
         let head = GeneAttentionHead(learningRate: 0.1)
         let initialWeights = head.currentWeights
-        head.updateWeights(features: [1.0, 1.0, 1.0, 1.0], rewardSign: 1.0)
+        head.updateWeights(features: [1.0, 1.0, 1.0, 1.0, 1.0], rewardSign: 1.0)
         let updated = head.currentWeights
         #expect(updated != initialWeights)
         for (old, new) in zip(initialWeights, updated) {

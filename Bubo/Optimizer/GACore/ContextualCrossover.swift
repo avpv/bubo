@@ -39,7 +39,7 @@ import Foundation
 
 // MARK: - Gene-level Linear Scorer
 
-/// Compact 4-feature linear scorer used by `ContextualCrossover`.
+/// Compact 5-feature linear scorer used by `ContextualCrossover`.
 /// Produces a scalar where higher means "this gene should be
 /// inherited." Features are bounded to `[0, 1]` so scores stay bounded
 /// regardless of weight drift.
@@ -52,6 +52,14 @@ import Foundation
 ///     no deadline or > 7d slack.
 ///   • `structuralFit` — penalizes obvious soft-constraint violations
 ///     (e.g. lunch-window starts).
+///   • `backlogFit` — for backlog-tagged genes, 1 when the gene's
+///     time rank among the parent's backlog genes matches its position
+///     in the user's backlog list, degrading linearly with rank
+///     distance. Non-backlog genes get 1 (neutral). Lets the scorer
+///     prefer whichever parent arranges backlog tasks closer to the
+///     user's drag order — same eventId across parents shares every
+///     static feature, so this placement-dependent one is what breaks
+///     the symmetry in favour of the better-ordered parent.
 ///
 /// Updates are a bounded gradient step toward the rewarding
 /// direction. Weights are clamped to `[0, 3]` so a streak of bad
@@ -64,7 +72,10 @@ final class GeneAttentionHead: @unchecked Sendable {
         let weights: [Double]
     }
 
-    private var weights: [Double] = [1.0, 0.6, 0.4, 0.3]
+    /// Default weights; backlogFit starts with a small pull so the
+    /// head has a non-zero gradient from the first generation. The
+    /// bounded update rule can move it up or down once rewards arrive.
+    private var weights: [Double] = [1.0, 0.6, 0.4, 0.3, 0.3]
     private let lock = NSLock()
     private let learningRate: Double
 
@@ -88,10 +99,17 @@ final class GeneAttentionHead: @unchecked Sendable {
 
     /// Score a gene against the precomputed weight snapshot. No lock,
     /// pure arithmetic.
+    ///
+    /// `backlogFitHint` is precomputed per parent (see
+    /// `ContextualCrossover.backlogFit(for:…)`) so this hot-path scorer
+    /// stays O(1). Pass `1.0` for genes without a backlog tag — that
+    /// makes the feature cancel out across the two parents and reduces
+    /// to the 4-feature behaviour.
     func score(
         gene: ScheduleGene,
         event: OptimizableEvent?,
         perDayScoreHint: Double,
+        backlogFitHint: Double,
         preferences: OptimizerPreferences,
         calendar: Calendar,
         snapshot: Snapshot
@@ -112,11 +130,14 @@ final class GeneAttentionHead: @unchecked Sendable {
         let inLunch = hour >= preferences.lunchWindowStart && hour < preferences.lunchWindowEnd
         let structuralFit: Double = inLunch ? 0.2 : 1.0
 
+        let backlogFit = max(0, min(1, backlogFitHint))
+
         let w = snapshot.weights
         return w[0] * localFitness
              + w[1] * priority
              + w[2] * deadlineUrgency
              + w[3] * structuralFit
+             + (w.count > 4 ? w[4] * backlogFit : 0)
     }
 
     /// Apply a bounded reinforcement step toward the rewarding
@@ -168,6 +189,12 @@ enum ContextualCrossover {
         let p1DayHint = perDayHint(for: parent1, calendar: cal)
         let p2DayHint = perDayHint(for: parent2, calendar: cal)
 
+        // Per-parent backlog-fit map. O(N log N) up front so the
+        // per-gene scorer stays a dictionary lookup.
+        let backlogIdx = context.backlogIndexMap()
+        let p1BacklogFit = backlogFit(for: parent1, backlogIndex: backlogIdx)
+        let p2BacklogFit = backlogFit(for: parent2, backlogIndex: backlogIdx)
+
         // Single locked snapshot — every gene scoring uses the same
         // immutable weight vector. Eliminates per-gene lock contention.
         let weightsSnapshot = head.snapshot()
@@ -185,13 +212,17 @@ enum ContextualCrossover {
             let day2 = cal.startOfDay(for: g2.startTime)
             let h1 = p1DayHint[day1] ?? parent1.rawFitness
             let h2 = p2DayHint[day2] ?? parent2.rawFitness
+            let bf1 = p1BacklogFit[g1.eventId] ?? 1.0
+            let bf2 = p2BacklogFit[g2.eventId] ?? 1.0
 
             let s1 = head.score(
                 gene: g1, event: ev, perDayScoreHint: h1,
+                backlogFitHint: bf1,
                 preferences: prefs, calendar: cal, snapshot: weightsSnapshot
             )
             let s2 = head.score(
                 gene: g2, event: ev, perDayScoreHint: h2,
+                backlogFitHint: bf2,
                 preferences: prefs, calendar: cal, snapshot: weightsSnapshot
             )
 
@@ -217,6 +248,63 @@ enum ContextualCrossover {
     }
 
     // MARK: - Helpers
+
+    /// Per-gene "how close is this gene's time rank to its backlog rank"
+    /// map, for a single parent. The scorer reads this in O(1); the map
+    /// itself is built in O(N log N) via two sorts over the parent's
+    /// backlog-tagged included genes.
+    ///
+    /// A fit of 1 means the gene's chronological position among backlog
+    /// tasks matches its position in the user's backlog exactly. A fit
+    /// of 0 means the gene is N − 1 ranks away from where it ought to be.
+    /// Non-backlog or dropped genes are absent from the map; callers
+    /// should treat "missing" as 1.0 (neutral) so that, for genes
+    /// without a user-stated preference, the feature contributes the
+    /// same amount to both parents and cancels out in the softmax.
+    private static func backlogFit(
+        for chromosome: ScheduleChromosome,
+        backlogIndex: [String: Int]
+    ) -> [String: Double] {
+        guard !backlogIndex.isEmpty else { return [:] }
+        let tagged = chromosome.genes.filter { gene in
+            gene.isIncluded && backlogIndex[gene.eventId] != nil
+        }
+        guard tagged.count >= 2 else { return [:] }
+
+        // Rank by startTime (earliest = 0). Stable sort keeps the
+        // original gene order as a tiebreaker, so two genes at the
+        // exact same minute are both judged against the same rank.
+        let byTime = tagged.sorted { $0.startTime < $1.startTime }
+        var timeRank: [String: Int] = [:]
+        timeRank.reserveCapacity(byTime.count)
+        for (rank, gene) in byTime.enumerated() {
+            timeRank[gene.eventId] = rank
+        }
+
+        // Dense rank over backlog indices: the gene's position among
+        // the currently-included tagged genes when sorted by
+        // `backlogIndex`. Comparing time rank against a sparse
+        // `backlogIndex` directly would penalise perfectly-ordered
+        // schedules just because some backlog tasks were dropped.
+        let byIndex = tagged.sorted {
+            (backlogIndex[$0.eventId] ?? Int.max) < (backlogIndex[$1.eventId] ?? Int.max)
+        }
+        var desiredRank: [String: Int] = [:]
+        desiredRank.reserveCapacity(byIndex.count)
+        for (rank, gene) in byIndex.enumerated() {
+            desiredRank[gene.eventId] = rank
+        }
+
+        let spread = max(1, tagged.count - 1)
+        var fit: [String: Double] = [:]
+        fit.reserveCapacity(tagged.count)
+        for gene in tagged {
+            let t = timeRank[gene.eventId] ?? 0
+            let d = desiredRank[gene.eventId] ?? 0
+            fit[gene.eventId] = 1.0 - Double(abs(t - d)) / Double(spread)
+        }
+        return fit
+    }
 
     /// Aggregate per-day hint from a chromosome's cached objective
     /// breakdown. Returns a day → mean-score map. Empty when the cache

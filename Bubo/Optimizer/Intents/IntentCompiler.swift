@@ -686,19 +686,18 @@ private extension IntentCompiler {
         }
         
         if let limit = config.limitToTopTasksCount {
-            filtered.sort { 
-                if $0.priority.numericValue != $1.priority.numericValue {
-                    return $0.priority.numericValue > $1.priority.numericValue
-                }
-                if let d1 = $0.deadline, let d2 = $1.deadline {
-                    return d1 < d2
-                }
-                return $0.deadline != nil
-            }
+            // Preserve the user's backlog order — `schedulable` already reflects
+            // the drag-sorted storage order, so "top N" means the first N rows
+            // the user sees, not a re-sort by priority/deadline.
             filtered = Array(filtered.prefix(limit))
         }
 
-        return filtered.map { $0.toOptimizableEvent() }
+        // Tag each event with its position in the filtered backlog so
+        // `BacklogOrderObjective` can reward schedules that match the user's
+        // drag order. Index is 0-based and dense over `filtered`.
+        return filtered.enumerated().map { idx, task in
+            task.toOptimizableEvent(backlogIndex: idx)
+        }
     }
 
     /// Apply source filters (calendar, project, time range) to events.
