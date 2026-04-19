@@ -259,6 +259,22 @@ struct OptimizerContext: Sendable {
         }
         return ScheduleConflictGraph.build(from: self)
     }
+
+    /// `eventId → backlogIndex` map over `movableEvents`. Built on demand
+    /// by callers that need a backlog-order tiebreaker (LNS destroy, CP
+    /// repair variable selection, warm-start topological ordering,
+    /// contextual crossover attention). Events without a `backlogIndex`
+    /// are omitted — callers should treat "not present" as "no preference".
+    func backlogIndexMap() -> [String: Int] {
+        var map: [String: Int] = [:]
+        map.reserveCapacity(movableEvents.count)
+        for event in movableEvents {
+            if let idx = event.backlogIndex {
+                map[event.id] = idx
+            }
+        }
+        return map
+    }
 }
 
 // MARK: - Optimizer Preferences
