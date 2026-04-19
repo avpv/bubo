@@ -555,6 +555,80 @@ struct DurationAwareStartSamplingTests {
     }
 }
 
+// MARK: - Task Inclusion Convexity Tests
+
+@Suite("Task Inclusion Convexity Tests")
+struct TaskInclusionConvexityTests {
+
+    @Test("Dropping one of four tasks costs meaningfully more than linear")
+    func oneOfFourDropExceedsLinearLoss() {
+        // Convex shaping keeps the GA from cashing in the cost of a single
+        // drop against the collective upside of the structural objectives
+        // (FocusBlock, ContextSwitch, Buffer, EnergyCurve, Break) — each
+        // of which rewards fewer events on the calendar. With a linear
+        // ratio, a 1-of-4 drop cost ~0.25, and the structural cluster
+        // (summed weights ≈ 4) could buy that back with a realistic 0.06
+        // per-objective gain. Convex shaping pushes the cost above that.
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+
+        func event(id: String) -> OptimizableEvent {
+            OptimizableEvent(
+                id: id,
+                title: id,
+                duration: 3600,
+                priority: 0.5,
+                isDroppable: true
+            )
+        }
+        let events = ["a", "b", "c", "d"].map(event(id:))
+        let ctx = OptimizerContext(
+            movableEvents: events,
+            workingHours: 9...18,
+            planningHorizon: DateInterval(start: today, duration: 7 * 24 * 3600)
+        )
+
+        func gene(_ e: OptimizableEvent, hour: Int, included: Bool) -> ScheduleGene {
+            ScheduleGene(
+                eventId: e.id,
+                title: e.title,
+                startTime: cal.date(bySettingHour: hour, minute: 0, second: 0, of: today)!,
+                duration: e.duration,
+                context: nil,
+                energyCost: 0.5,
+                priority: e.priority,
+                isFocusBlock: false,
+                storyPoints: nil,
+                isDroppable: true,
+                isIncluded: included
+            )
+        }
+
+        let keepAll = ScheduleChromosome(genes: [
+            gene(events[0], hour: 9,  included: true),
+            gene(events[1], hour: 11, included: true),
+            gene(events[2], hour: 13, included: true),
+            gene(events[3], hour: 15, included: true),
+        ])
+        let dropOne = ScheduleChromosome(genes: [
+            gene(events[0], hour: 9,  included: true),
+            gene(events[1], hour: 11, included: true),
+            gene(events[2], hour: 13, included: true),
+            gene(events[3], hour: 15, included: false),
+        ])
+
+        let obj = TaskInclusionObjective(weight: 4.0)
+        let keep = obj.evaluate(chromosome: keepAll, context: ctx)
+        let drop = obj.evaluate(chromosome: dropOne, context: ctx)
+
+        #expect(keep == 1.0)
+        // Convex: drop-loss must exceed the linear baseline of 0.25.
+        // pow(0.75, 1.5) ≈ 0.6495 → loss ≈ 0.35, comfortably over 0.30.
+        #expect(keep - drop > 0.30,
+                "drop-loss too small: keep=\(keep), drop=\(drop), loss=\(keep - drop)")
+    }
+}
+
 // MARK: - Population Tests
 
 @Suite("Population Tests")
