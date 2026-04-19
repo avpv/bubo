@@ -150,7 +150,10 @@ struct IntentCompiler {
         }
 
         if let best = filteredResult.scenarios.first, best.fitness < 0.1 {
-            return .infeasible(reason: "Not enough room in this time window", snapshot: snapshot, resolutions: capacityResolutions)
+            let chromo = ScheduleChromosome(genes: best.genes, needsEvaluation: false)
+            let violations = ConstraintEngine.standard.violations(for: chromo, context: context)
+            let reason = "Not enough room — fitness=\(String(format: "%.3f", best.fitness)) active=\(best.activeGenes.count) dropped=\(best.droppedCount) violations=[\(violations.joined(separator: ", "))]"
+            return .infeasible(reason: reason, snapshot: snapshot, resolutions: capacityResolutions)
         }
 
         // Phase 7: Detect dropped tasks and report partial success
