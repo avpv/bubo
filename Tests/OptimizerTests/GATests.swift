@@ -515,29 +515,38 @@ struct TaskPlacementObjectiveTests {
                 "dropScore=\(dropScore) must not exceed keepScore=\(keepScore)")
     }
 
-    @Test("Dropping an only-event-on-day gene must not raise day-partitioned objectives")
-    func droppingLastGeneOnDayDoesNotRaiseDayPartitioned() {
-        // The five day-partitioned objectives (FocusBlock, BreakPlacement,
-        // Buffer, ContextSwitch, MeetingClustering) previously averaged
-        // only over *populated* days. Dropping the only gene on a middling
-        // day erased that day from the denominator, so the arithmetic
-        // mean went up purely from the missing data point. `planWeek`
-        // with four backlog tasks spread across four separate days
-        // reproducibly "lost" the task whose day scored below the mean.
+    @Test("Dropping a task strictly lowers evaluator fitness even when structural axes improve")
+    func droppingStrictlyLowersEvaluatorFitness() {
+        // Architectural invariant: no matter what a drop does to the
+        // individual day-averaged objectives, the final fitness from
+        // `FitnessEvaluator` must strictly decrease. This is the test
+        // that protects the `planWeek` "3 of 4" regression — it exercises
+        // the same end-to-end scoring the GA uses, so it catches both
+        // the "denominator shrinks when a day empties" loophole and the
+        // "fewer events on one day improves focus/break/buffer" loophole
+        // in one go, via the multiplicative `inclusionFactor` riding
+        // every per-axis score the evaluator emits.
         let cal = Calendar.current
         let today = cal.startOfDay(for: Date())
 
-        func task(id: String) -> OptimizableEvent {
+        func task(id: String, context: String?) -> OptimizableEvent {
             OptimizableEvent(
                 id: id,
                 title: id,
                 duration: 3600,
                 priority: 0.5,
-                context: id == "bad" ? "personal" : "work",
+                context: context,
                 isDroppable: true
             )
         }
-        let events = ["a", "b", "c", "bad"].map(task(id:))
+        // Mix of contexts and an empty-day drop victim so most
+        // structural objectives would individually benefit from the drop.
+        let events = [
+            task(id: "a", context: "work"),
+            task(id: "b", context: "work"),
+            task(id: "c", context: "work"),
+            task(id: "bad", context: "personal"),
+        ]
 
         let ctx = OptimizerContext(
             movableEvents: events,
@@ -562,8 +571,6 @@ struct TaskPlacementObjectiveTests {
             )
         }
 
-        // Four tasks on four consecutive working days. `bad` sits on day 3
-        // alone, so dropping it erases day 3 from eventsByDay.
         let keepAll = ScheduleChromosome(genes: [
             gene(events[0], dayOffset: 0, hour: 10, included: true),
             gene(events[1], dayOffset: 1, hour: 10, included: true),
@@ -577,21 +584,46 @@ struct TaskPlacementObjectiveTests {
             gene(events[3], dayOffset: 3, hour: 10, included: false),
         ])
 
-        let objectives: [any FitnessObjective] = [
-            FocusBlockObjective(weight: 1.0),
-            BreakObjective(weight: 1.2),
-            BufferObjective(weight: 0.6),
-            ContextSwitchObjective(weight: 0.7),
-            MeetingClusteringObjective(weight: 0.8),
-            EnergyCurveObjective(weight: 0.9),
-        ]
+        let evaluator = FitnessEvaluator.standard(preferences: OptimizerPreferences())
+        let keepFitness = evaluator.evaluate(chromosome: keepAll, context: ctx)
+        let dropFitness = evaluator.evaluate(chromosome: dropBad, context: ctx)
 
-        for objective in objectives {
-            let keep = objective.evaluate(chromosome: keepAll, context: ctx)
-            let drop = objective.evaluate(chromosome: dropBad, context: ctx)
-            #expect(drop <= keep + 1e-9,
-                    "\(objective.name): drop=\(drop) must not exceed keep=\(keep)")
+        #expect(dropFitness < keepFitness,
+                "drop=\(dropFitness) must be strictly below keep=\(keepFitness)")
+    }
+
+    @Test("inclusionFactor squares the included-droppable ratio")
+    func inclusionFactorMatchesSpec() {
+        // 1-of-4 drop → ratio 0.75 → factor 0.5625. Pinning the shape
+        // catches accidental changes to the exponent the architectural
+        // invariant is calibrated against.
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+
+        func gene(id: String, included: Bool) -> ScheduleGene {
+            ScheduleGene(
+                eventId: id,
+                title: id,
+                startTime: cal.date(bySettingHour: 10, minute: 0, second: 0, of: today)!,
+                duration: 3600,
+                context: nil,
+                energyCost: 0.5,
+                priority: 0.5,
+                isFocusBlock: false,
+                storyPoints: nil,
+                isDroppable: true,
+                isIncluded: included
+            )
         }
+
+        let full = ScheduleChromosome(genes: (0..<4).map { gene(id: "\($0)", included: true) })
+        let threeOfFour = ScheduleChromosome(genes: (0..<4).map { gene(id: "\($0)", included: $0 < 3) })
+        let twoOfFour = ScheduleChromosome(genes: (0..<4).map { gene(id: "\($0)", included: $0 < 2) })
+
+        let evaluator = FitnessEvaluator.standard(preferences: OptimizerPreferences())
+        #expect(abs(evaluator.inclusionFactor(for: full) - 1.0) < 1e-9)
+        #expect(abs(evaluator.inclusionFactor(for: threeOfFour) - pow(0.75, 2.0)) < 1e-9)
+        #expect(abs(evaluator.inclusionFactor(for: twoOfFour) - pow(0.5, 2.0)) < 1e-9)
     }
 }
 
@@ -634,44 +666,46 @@ struct DurationAwareStartSamplingTests {
     }
 }
 
-// MARK: - Task Inclusion Convexity Tests
+// MARK: - Task Inclusion Priority Gradient Tests
 
-@Suite("Task Inclusion Convexity Tests")
-struct TaskInclusionConvexityTests {
+@Suite("Task Inclusion Priority Gradient Tests")
+struct TaskInclusionPriorityGradientTests {
 
-    @Test("Dropping one of four tasks costs meaningfully more than linear")
-    func oneOfFourDropExceedsLinearLoss() {
-        // Convex shaping keeps the GA from cashing in the cost of a single
-        // drop against the collective upside of the structural objectives
-        // (FocusBlock, ContextSwitch, Buffer, EnergyCurve, Break) — each
-        // of which rewards fewer events on the calendar. With a linear
-        // ratio, a 1-of-4 drop cost ~0.25, and the structural cluster
-        // (summed weights ≈ 4) could buy that back with a realistic 0.06
-        // per-objective gain. Convex shaping pushes the cost above that.
+    @Test("Dropping higher-priority tasks costs more than dropping lower-priority ones")
+    func priorityWeightedDropGradient() {
+        // `TaskInclusionObjective` is no longer load-bearing for the *count*
+        // of drops — `FitnessEvaluator.inclusionFactor` multiplies every
+        // axis by `pow(ratio, 2)` and enforces drop-Pareto-dominated. All
+        // this objective has to do now is provide a linear priority-
+        // weighted signal so when a drop is inevitable the GA reaches
+        // for the least valuable task first. Pin that gradient here.
         let cal = Calendar.current
         let today = cal.startOfDay(for: Date())
 
-        func event(id: String) -> OptimizableEvent {
+        func event(id: String, priority: Double) -> OptimizableEvent {
             OptimizableEvent(
                 id: id,
                 title: id,
                 duration: 3600,
-                priority: 0.5,
+                priority: priority,
                 isDroppable: true
             )
         }
-        let events = ["a", "b", "c", "d"].map(event(id:))
+
+        let high = event(id: "h", priority: 0.9)
+        let low = event(id: "l", priority: 0.2)
+
         let ctx = OptimizerContext(
-            movableEvents: events,
+            movableEvents: [high, low],
             workingHours: 9...18,
-            planningHorizon: DateInterval(start: today, duration: 7 * 24 * 3600)
+            planningHorizon: DateInterval(start: today, duration: 24 * 3600)
         )
 
-        func gene(_ e: OptimizableEvent, hour: Int, included: Bool) -> ScheduleGene {
+        func gene(_ e: OptimizableEvent, included: Bool) -> ScheduleGene {
             ScheduleGene(
                 eventId: e.id,
                 title: e.title,
-                startTime: cal.date(bySettingHour: hour, minute: 0, second: 0, of: today)!,
+                startTime: cal.date(bySettingHour: 10, minute: 0, second: 0, of: today)!,
                 duration: e.duration,
                 context: nil,
                 energyCost: 0.5,
@@ -683,28 +717,21 @@ struct TaskInclusionConvexityTests {
             )
         }
 
-        let keepAll = ScheduleChromosome(genes: [
-            gene(events[0], hour: 9,  included: true),
-            gene(events[1], hour: 11, included: true),
-            gene(events[2], hour: 13, included: true),
-            gene(events[3], hour: 15, included: true),
+        let dropLow = ScheduleChromosome(genes: [
+            gene(high, included: true),
+            gene(low, included: false),
         ])
-        let dropOne = ScheduleChromosome(genes: [
-            gene(events[0], hour: 9,  included: true),
-            gene(events[1], hour: 11, included: true),
-            gene(events[2], hour: 13, included: true),
-            gene(events[3], hour: 15, included: false),
+        let dropHigh = ScheduleChromosome(genes: [
+            gene(high, included: false),
+            gene(low, included: true),
         ])
 
-        let obj = TaskInclusionObjective(weight: 4.0)
-        let keep = obj.evaluate(chromosome: keepAll, context: ctx)
-        let drop = obj.evaluate(chromosome: dropOne, context: ctx)
+        let obj = TaskInclusionObjective(weight: 1.0)
+        let keepHigh = obj.evaluate(chromosome: dropLow, context: ctx)
+        let keepLow = obj.evaluate(chromosome: dropHigh, context: ctx)
 
-        #expect(keep == 1.0)
-        // Convex: drop-loss must exceed the linear baseline of 0.25.
-        // pow(0.75, 2.0) = 0.5625 → loss = 0.4375, comfortably over 0.40.
-        #expect(keep - drop > 0.40,
-                "drop-loss too small: keep=\(keep), drop=\(drop), loss=\(keep - drop)")
+        #expect(keepHigh > keepLow,
+                "dropping a low-priority task (score=\(keepHigh)) must score above dropping a high-priority one (score=\(keepLow))")
     }
 }
 

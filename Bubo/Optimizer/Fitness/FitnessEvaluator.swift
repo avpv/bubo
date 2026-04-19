@@ -60,32 +60,6 @@ extension DayPartitionedObjective {
         guard !perDay.isEmpty else { return 1.0 }
         return perDay.values.reduce(0, +) / Double(perDay.count)
     }
-
-    /// Add days touched by dropped droppable genes to the per-day map with
-    /// a 0 score so the denominator stays stable across drops. Without this,
-    /// excluding the only gene on a day silently erased that day from the
-    /// map — and every structural objective (focus, breaks, buffers,
-    /// context-switches, clustering) rewards fewer events on the calendar,
-    /// so erasing a middling day from the denominator mechanically raised
-    /// the average. That arithmetic loophole was enough to push `planWeek`
-    /// into "3 of 4" territory when the backlog actually fit the window.
-    ///
-    /// Days that already carry an included-gene score are left alone — the
-    /// within-day reduction in events is measured by the objective's own
-    /// scoring. Only the cross-day "disappeared from the map" case is what
-    /// this helper closes.
-    func includeDroppedGeneDays(
-        _ perDay: inout [Date: Double],
-        chromosome: ScheduleChromosome,
-        calendar: Calendar
-    ) {
-        for gene in chromosome.genes where gene.isDroppable && !gene.isIncluded {
-            let day = calendar.startOfDay(for: gene.startTime)
-            if perDay[day] == nil {
-                perDay[day] = 0.0
-            }
-        }
-    }
 }
 
 // MARK: - Component-Partitioned Objective
@@ -215,6 +189,35 @@ final class FitnessEvaluator: @unchecked Sendable {
 
     // MARK: - Evaluation
 
+    /// Exponent applied to the per-chromosome inclusion ratio so that a
+    /// drop proportionally scales every objective's score down, not just
+    /// the weighted sum. NSGA-III ranks by Pareto domination on the raw
+    /// objective vector; a multiplicative factor on the scalar alone would
+    /// leave the non-dominated sort free to pick drop-solutions whose
+    /// structural axes look better. Squaring per-axis means a 1-of-4 drop
+    /// caps every structural score at `(0.75)² = 0.5625×` of its raw
+    /// value — a multiplicative penalty no feasible structural upside can
+    /// recover, so keep-solutions dominate drop-solutions on every axis
+    /// that cares about event placement. Cubing was considered but felt
+    /// too aggressive near the 3-of-4 case, where the GA still needs a
+    /// live gradient to choose the *right* task to drop.
+    static let inclusionPenaltyExponent: Double = 2.0
+
+    /// Fraction of droppable genes currently marked `isIncluded`, bounded
+    /// in [0, 1]. Non-droppable workloads return 1.0 so the factor is a
+    /// no-op (inclusionFactor = 1 when nothing can be dropped).
+    func inclusionFactor(for chromosome: ScheduleChromosome) -> Double {
+        var droppable = 0
+        var included = 0
+        for gene in chromosome.genes where gene.isDroppable {
+            droppable += 1
+            if gene.isIncluded { included += 1 }
+        }
+        guard droppable > 0 else { return 1.0 }
+        let ratio = Double(included) / Double(droppable)
+        return pow(ratio, FitnessEvaluator.inclusionPenaltyExponent)
+    }
+
     /// Compute the total fitness for a chromosome.
     /// Returns a value in [0, 1] — 0 = completely infeasible, 1 = perfect.
     func evaluate(chromosome: ScheduleChromosome, context: OptimizerContext) -> Double {
@@ -240,10 +243,18 @@ final class FitnessEvaluator: @unchecked Sendable {
         let totalWeight = objectives.reduce(0.0) { $0 + $1.weight }
         guard totalWeight > 0 else { return 0.1 }
 
+        let factor = inclusionFactor(for: chromosome)
+
         var weightedSum = 0.0
         for objective in objectives {
-            let score = max(0, min(1, objective.evaluate(chromosome: chromosome, context: context)))
-            weightedSum += score * objective.weight
+            let raw = max(0, min(1, objective.evaluate(chromosome: chromosome, context: context)))
+            // Per-axis multiplication is the architectural choke point:
+            // the drop penalty rides *every* objective, so NSGA-III's
+            // non-dominated sort sees drop-solutions lose on each axis
+            // that previously rewarded "fewer events = better structure".
+            // Without this, a drop could still sit on the Pareto front
+            // via axes whose scores improved on the remaining events.
+            weightedSum += raw * factor * objective.weight
         }
 
         let normalizedScore = weightedSum / totalWeight  // [0, 1]
@@ -439,8 +450,13 @@ final class FitnessEvaluator: @unchecked Sendable {
         var perComponentCache: [String: [Int: Double]] = [:]
         var weightedSum = 0.0
 
+        // Multiplicative drop penalty rides every objective so that NSGA-
+        // III's non-dominated sort never sees a drop-solution looking
+        // better on any axis. Mirrors the non-delta `evaluate` path.
+        let factor = inclusionFactor(for: chromosome)
+
         for objective in objectives {
-            let score: Double
+            let raw: Double
 
             if let partitioned = objective as? DayPartitionedObjective {
                 // Day-partitioned: evaluate only dirty days, read the rest
@@ -453,7 +469,7 @@ final class FitnessEvaluator: @unchecked Sendable {
                     dirtyDays: dirtyDays
                 )
                 let combined = partitioned.combinePerDay(newPerDay)
-                score = max(0, min(1, combined))
+                raw = max(0, min(1, combined))
                 perDayCache[objective.name] = newPerDay
             } else if let componentPartitioned = objective as? ComponentPartitionedObjective {
                 // Component-partitioned: rescore only components that
@@ -467,16 +483,20 @@ final class FitnessEvaluator: @unchecked Sendable {
                     dirtyComponents: dirtyComponents
                 )
                 let combined = componentPartitioned.combineComponents(newPerComponent)
-                score = max(0, min(1, combined))
+                raw = max(0, min(1, combined))
                 perComponentCache[objective.name] = newPerComponent
             } else {
                 // Non-partitioned: always recompute. No safe way to know
                 // which genes this objective depends on without a full
                 // dependency model, and a stale cached score would corrupt
                 // the fitness landscape the GA is climbing.
-                score = max(0, min(1, objective.evaluate(chromosome: chromosome, context: context)))
+                raw = max(0, min(1, objective.evaluate(chromosome: chromosome, context: context)))
             }
 
+            // NSGA-III reads `scalarCache` as the per-axis Pareto vector,
+            // so the penalized score has to land there — not just in the
+            // weighted sum below.
+            let score = raw * factor
             scalarCache[objective.name] = score
             weightedSum += score * objective.weight
         }
@@ -592,12 +612,6 @@ final class FitnessEvaluator: @unchecked Sendable {
                 )
             }
         }
-
-        // Keep dropped droppable genes' days in the denominator with score
-        // 0 so toggling `isIncluded` off a gene can't mechanically raise
-        // the average by shrinking the day count. Mirrors the same helper
-        // applied by each objective's full `evaluatePerDay`.
-        objective.includeDroppedGeneDays(&next, chromosome: chromosome, calendar: cal)
 
         return next
     }

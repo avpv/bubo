@@ -370,7 +370,7 @@ struct OptimizerPreferences: Codable, Sendable {
         contextSwitchWeight: Double = 0.7,
         bufferWeight: Double = 0.6,
         meetingClusteringWeight: Double = 0.8,
-        taskInclusionWeight: Double = 4.0,
+        taskInclusionWeight: Double = 1.0,
         backlogOrderWeight: Double? = nil,
         peakEnergyHour: Int = 10,
         energyDecayRate: Double = 0.1,
