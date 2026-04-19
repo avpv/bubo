@@ -863,15 +863,41 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                     cal.dateComponents([.day], from: mutStartDay, to: earliestDay).day ?? 0
                 )
                 guard startOffset < daysInHorizon else { break }
-                let dayOffset = context.rng.int(in: startOffset..<daysInHorizon)
-                let newDay = cal.date(byAdding: .day, value: dayOffset, to: horizonStart)!
-                let hour: Int
-                if let preferred = event?.preferredHourRange, !preferred.isEmpty {
-                    hour = context.rng.int(in: preferred)
-                } else {
-                    hour = context.rng.int(in: context.workingHours)
+
+                // Per-day feasible hour range. Mirrors `randomStartTime`:
+                // clock-time of `floor` carries into day 0, so rolling a
+                // raw `hourRange.lowerBound` would land before `floor` and
+                // the old `max(..., floor)` clamp stacked every such draw
+                // on a single instant. Sampling inside `[lower, dayUpper]`
+                // keeps mutations spread across the day.
+                let hourRange = event?.preferredHourRange ?? context.workingHours
+                let durationHours = Int(genes[i].duration / 3600)
+                let maxStartHour = max(hourRange.lowerBound, hourRange.upperBound - durationHours)
+
+                func windowFor(offset: Int) -> (lower: Date, upper: Date)? {
+                    guard let dayStart = cal.date(byAdding: .day, value: offset, to: mutStartDay),
+                          let dayLower = cal.date(bySettingHour: hourRange.lowerBound, minute: 0, second: 0, of: dayStart),
+                          let dayUpper = cal.date(bySettingHour: maxStartHour, minute: 0, second: 0, of: dayStart)
+                    else { return nil }
+                    let lower = max(dayLower, floor)
+                    return lower <= dayUpper ? (lower, dayUpper) : nil
                 }
-                let rawStart = max(cal.date(bySettingHour: hour, minute: context.rng.int(in: 0...3) * 15, second: 0, of: newDay)!, floor)
+
+                var window = windowFor(offset: context.rng.int(in: startOffset..<daysInHorizon))
+                if window == nil {
+                    for alt in startOffset..<daysInHorizon {
+                        if let w = windowFor(offset: alt) {
+                            window = w
+                            break
+                        }
+                    }
+                }
+                guard let (lower, upper) = window else { break }
+
+                let slotSeconds: TimeInterval = 15 * 60
+                let span = max(0, Int(upper.timeIntervalSince(lower) / slotSeconds))
+                let step = context.rng.int(in: 0...span)
+                let rawStart = lower.addingTimeInterval(TimeInterval(step) * slotSeconds)
                 genes[i] = genes[i].withStartTime(
                     clampToWorkingHours(rawStart, duration: genes[i].duration, workingHours: context.workingHours, calendar: cal, floor: floor)
                 )

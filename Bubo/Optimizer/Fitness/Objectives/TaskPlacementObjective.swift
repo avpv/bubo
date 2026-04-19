@@ -19,11 +19,19 @@ struct TaskPlacementObjective: FitnessObjective {
         var totalScore = 0.0
         var evaluatedCount = 0
 
-        for gene in chromosome.genes where gene.isIncluded {
+        for gene in chromosome.genes {
             guard let event = context.movableEvents.first(where: { $0.id == gene.eventId }) else {
                 continue
             }
             evaluatedCount += 1
+
+            // Dropped droppable genes stay in the denominator but contribute
+            // 0 to `totalScore`. Without this, averaging only over included
+            // genes meant excluding a poorly-placed task could mathematically
+            // *raise* the objective — giving the GA a back-door incentive to
+            // drop tasks whose placements pulled the per-task mean down,
+            // even when `TaskInclusion` wanted to keep them.
+            guard gene.isIncluded else { continue }
 
             var score = 0.0
 

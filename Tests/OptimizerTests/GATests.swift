@@ -192,6 +192,128 @@ struct ChromosomeTests {
             #expect(start >= startAt19_30)
         }
     }
+
+    @Test("Mutation spreads same-day placements across remaining workday")
+    func mutationSpreadsTodayPlacements() {
+        // Even with a mid-afternoon `horizon.start`, repeated `mutate` calls
+        // (which cycle through every operator including the "move to a
+        // different day" branch) must not stack every today-placement on a
+        // single instant.
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let startAt14_30 = cal.date(bySettingHour: 14, minute: 30, second: 0, of: today)!
+        let weekEnd = cal.date(byAdding: .day, value: 7, to: startAt14_30)!
+
+        let event = makeMovableEvent(id: "t1", durationMinutes: 60)
+        let ctx = OptimizerContext(
+            fixedEvents: [],
+            movableEvents: [event],
+            workingHours: 9...18,
+            planningHorizon: DateInterval(start: startAt14_30, end: weekEnd),
+            preferences: OptimizerPreferences()
+        )
+
+        var todayPlacements: Set<Date> = []
+        for _ in 0..<400 {
+            var chromo = ScheduleChromosome.random(context: ctx)
+            chromo.mutate(rate: 1.0, context: ctx)
+            let start = chromo.genes[0].startTime
+            #expect(start >= startAt14_30)
+            if cal.isDate(start, inSameDayAs: startAt14_30) {
+                todayPlacements.insert(start)
+            }
+        }
+
+        // Before the fix, every same-day mutation collapsed to exactly
+        // `startAt14_30`. A healthy spread should cover multiple 15-min
+        // slots in the 14:30–17:00 window.
+        #expect(todayPlacements.count >= 2)
+    }
+}
+
+// MARK: - Task Placement Objective Tests
+
+@Suite("Task Placement Objective Tests")
+struct TaskPlacementObjectiveTests {
+
+    @Test("Dropping a poorly-placed droppable task must not increase the score")
+    func droppingDoesNotIncreaseScore() {
+        // Reproduces the per-included-only averaging loophole: previously,
+        // excluding a task whose placement scored below the mean mechanically
+        // raised the objective, giving the GA a back-door incentive to drop.
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+
+        func peakSlot(hour: Int, title: String, id: String) -> OptimizableEvent {
+            OptimizableEvent(
+                id: id,
+                title: title,
+                duration: 3600,
+                priority: 0.8,
+                preferredHourRange: hour...hour,
+                isDroppable: true
+            )
+        }
+
+        // Three tasks placed in their preferred peak slots + one placed far
+        // from its preferred slot so its per-task score is low.
+        let events = [
+            peakSlot(hour: 10, title: "A", id: "a"),
+            peakSlot(hour: 11, title: "B", id: "b"),
+            peakSlot(hour: 14, title: "C", id: "c"),
+            peakSlot(hour: 15, title: "D", id: "d"),
+        ]
+        let ctx = OptimizerContext(
+            movableEvents: events,
+            workingHours: 9...18,
+            planningHorizon: DateInterval(start: today, duration: 7 * 24 * 3600)
+        )
+
+        func gene(_ event: OptimizableEvent, hour: Int, included: Bool) -> ScheduleGene {
+            ScheduleGene(
+                eventId: event.id,
+                title: event.title,
+                startTime: cal.date(bySettingHour: hour, minute: 0, second: 0, of: today)!,
+                duration: event.duration,
+                context: event.context,
+                energyCost: event.energyCost,
+                priority: event.priority,
+                isFocusBlock: false,
+                storyPoints: nil,
+                isDroppable: true,
+                isIncluded: included
+            )
+        }
+
+        // Keep-all: three well-placed + one badly-placed (D at 09:00 vs
+        // preferred 15:00) — a fourth gene drags the per-task mean down.
+        let keepAll = ScheduleChromosome(genes: [
+            gene(events[0], hour: 10, included: true),
+            gene(events[1], hour: 11, included: true),
+            gene(events[2], hour: 14, included: true),
+            gene(events[3], hour: 9, included: true),
+        ])
+
+        // Drop-bad: identical except D is excluded. With the old per-
+        // included averaging this scored *higher*, even though the user
+        // loses a task.
+        let dropBad = ScheduleChromosome(genes: [
+            gene(events[0], hour: 10, included: true),
+            gene(events[1], hour: 11, included: true),
+            gene(events[2], hour: 14, included: true),
+            gene(events[3], hour: 9, included: false),
+        ])
+
+        let objective = TaskPlacementObjective(weight: 1.0)
+        let keepScore = objective.evaluate(chromosome: keepAll, context: ctx)
+        let dropScore = objective.evaluate(chromosome: dropBad, context: ctx)
+
+        // Dropping must never mathematically help this objective — at best
+        // it's neutral (the dropped gene contributes 0 but still counts in
+        // the denominator).
+        #expect(dropScore <= keepScore,
+                "dropScore=\(dropScore) must not exceed keepScore=\(keepScore)")
+    }
 }
 
 // MARK: - Population Tests
