@@ -40,18 +40,19 @@ struct CommandPalette: View {
     @State private var lastExecutedRequest: OptimizationRequest? = nil
     @State private var conflicts: [IntentConflictDetector.Conflict] = []
     @State private var appliedNotice: String? = nil
+    @State private var workingTask: Task<Void, Never>? = nil
     @FocusState private var isSearchFocused: Bool
 
     private enum Phase: Equatable {
         case picking
-        case working(String)
+        case working(String, intentName: String?)
         case applied([EventInfo], resolutions: [ActionableResolution])
         case failed(message: String, resolutions: [ActionableResolution])
 
         static func == (lhs: Phase, rhs: Phase) -> Bool {
             switch (lhs, rhs) {
             case (.picking, .picking): return true
-            case (.working(let a), .working(let b)): return a == b
+            case (.working(let a, let an), .working(let b, let bn)): return a == b && an == bn
             case (.applied(let a, _), .applied(let b, _)): return a == b
             case (.failed(let a, _), .failed(let b, _)): return a == b
             default: return false
@@ -185,7 +186,10 @@ struct CommandPalette: View {
             isSearchFocused = true
             refreshPreview()
         }
-        .onDisappear { dryRunTask?.cancel() }
+        .onDisappear {
+            dryRunTask?.cancel()
+            workingTask?.cancel()
+        }
     }
 
     // MARK: - Card
@@ -286,7 +290,7 @@ struct CommandPalette: View {
             VStack(alignment: .leading, spacing: 0) {
                 switch phase {
                 case .picking: pickingContent
-                case .working(let label): statusView(label)
+                case .working(let label, let intentName): statusView(label, intentName: intentName)
                 case .applied(let events, let resolutions): appliedView(events, resolutions: resolutions)
                 case .failed(let message, let resolutions): failedView(message, resolutions: resolutions)
                 }
@@ -648,17 +652,34 @@ struct CommandPalette: View {
 
     // MARK: - Status Views
 
-    private func statusView(_ label: String) -> some View {
+    private func statusView(_ label: String, intentName: String?) -> some View {
         VStack(spacing: DS.Spacing.sm) {
             Image(systemName: "hourglass")
                 .font(.largeTitle)
                 .foregroundStyle(skin.accentColor)
                 .symbolEffect(.pulse, isActive: true)
+            if let intentName, !intentName.isEmpty {
+                Text(intentName)
+                    .font(.subheadline.weight(.semibold))
+                    .multilineTextAlignment(.center)
+            }
             Text(label)
                 .font(.subheadline.weight(.medium))
+                .foregroundStyle(skin.resolvedTextSecondary)
+
+            Button("Cancel") { cancelWorking() }
+                .buttonStyle(.action(role: .secondary, size: .compact))
+                .padding(.top, DS.Spacing.xs)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, DS.Spacing.xxl)
+    }
+
+    private func cancelWorking() {
+        workingTask?.cancel()
+        workingTask = nil
+        Haptics.tap()
+        withAnimation(DS.Animation.quick) { phase = .picking }
     }
 
     private func appliedView(_ events: [EventInfo], resolutions: [ActionableResolution]) -> some View {
@@ -777,11 +798,15 @@ struct CommandPalette: View {
         if let seedEvent { working = working.withEventContext(seedEvent) }
         lastExecutedRequest = request
 
-        phase = .working(working.findSlotOnly ? "Scheduling\u{2026}" : "Optimizing\u{2026}")
+        let label = working.findSlotOnly ? "Scheduling\u{2026}" : "Optimizing\u{2026}"
+        phase = .working(label, intentName: working.name)
 
-        Task {
+        workingTask?.cancel()
+        workingTask = Task {
             let result = await optimizerService.executeRequest(working, reminderService: reminderService)
+            if Task.isCancelled { return }
             await MainActor.run {
+                workingTask = nil
                 switch result {
                 case .success, .partialSuccess:
                     guard !optimizerService.scenarios.isEmpty else {
@@ -828,10 +853,13 @@ struct CommandPalette: View {
             return
         }
         Haptics.tap()
-        phase = .working("Thinking\u{2026}")
-        Task {
+        phase = .working("Thinking\u{2026}", intentName: prompt)
+        workingTask?.cancel()
+        workingTask = Task {
             let result = await agentService.generateRequest(from: prompt)
+            if Task.isCancelled { return }
             await MainActor.run {
+                workingTask = nil
                 switch result {
                 case .success(let req): runRequest(req)
                 case .failure(let err): phase = .failed(message: err.localizedDescription, resolutions: [])
