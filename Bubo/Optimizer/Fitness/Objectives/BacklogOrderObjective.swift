@@ -2,30 +2,29 @@ import Foundation
 
 // MARK: - #15 Backlog Order Objective
 
-/// Rewards schedules that place backlog tasks in the same order the user has
-/// them in the backlog list. Only tasks carrying a `backlogIndex` participate
-/// — calendar-derived events and non-backlog optimisables are ignored.
+/// Rewards schedules that place backlog tasks in the same time-order the user
+/// has them in the backlog list. Only tasks carrying a `backlogIndex`
+/// participate — calendar-derived events and non-backlog optimisables are
+/// ignored.
 ///
-/// The existing priority/deadline/energy objectives already decide the macro
+/// The other objectives (priority, deadline, energy, …) decide the macro
 /// shape of the day; this one is the tiebreaker that stops the GA from
 /// shuffling identical tasks into arbitrary time slots just because every
 /// permutation scores the same on every other axis. Weight is intentionally
 /// small — strong preferences (deadlines, peak energy) must still dominate.
 ///
-/// Scoring: Kendall-style inversion count per day. For every ordered pair
-/// `(a, b)` on the same day where `a.backlogIndex < b.backlogIndex` but
-/// `a.startTime > b.startTime`, we count one inversion. Each day yields
-/// `1 - inversions / maxPairs`; the per-day scores are averaged into the
-/// final fitness. Scoping inversions per day lets this objective conform to
-/// `DayPartitionedObjective` so delta evaluation only rescores days touched
-/// by a mutation — cross-day ordering is already driven by deadline/priority
-/// objectives, so losing the global Kendall-tau semantics is a deliberate
-/// trade for the GA's much faster inner loop.
+/// Scoring: Kendall-style inversion count **across every included backlog
+/// gene**, globally — not scoped per day. An earlier attempt was day-
+/// partitioned for delta-evaluation speedups, but that made the signal
+/// vanish whenever the GA spread identical tasks across multiple days: each
+/// day had one or two tasks, so every day scored 1.0 trivially and the
+/// objective couldn't differentiate any permutation. The global version
+/// correctly penalises a Monday-Wednesday-Tuesday layout of tasks 0, 1, 2
+/// (one inversion) the same way it would penalise a within-day shuffle.
 ///
-/// Inversion counting itself runs in O(N log N) via merge sort, so even very
-/// wide backlogs (hundreds of tasks on one day) stay cheap enough to score
-/// on every population evaluation.
-struct BacklogOrderObjective: DayPartitionedObjective {
+/// Inversion counting runs in O(N log N) via merge sort, so even very wide
+/// backlogs stay cheap enough to score on every population evaluation.
+struct BacklogOrderObjective: FitnessObjective {
     let name = "BacklogOrder"
     var weight: Double
 
@@ -34,77 +33,27 @@ struct BacklogOrderObjective: DayPartitionedObjective {
     }
 
     func evaluate(chromosome: ScheduleChromosome, context: OptimizerContext) -> Double {
-        combinePerDay(evaluatePerDay(chromosome: chromosome, context: context))
-    }
-
-    func evaluatePerDay(
-        chromosome: ScheduleChromosome,
-        context: OptimizerContext
-    ) -> [Date: Double] {
-        let indexById = buildIndexMap(context)
-        guard !indexById.isEmpty else { return [:] }
-
-        let cal = context.calendar
-        var byDay: [Date: [(backlogIndex: Int, start: Date)]] = [:]
-        for gene in chromosome.genes where gene.isIncluded {
-            guard let idx = indexById[gene.eventId] else { continue }
-            let day = cal.startOfDay(for: gene.startTime)
-            byDay[day, default: []].append((idx, gene.startTime))
-        }
-
-        var perDay: [Date: Double] = [:]
-        perDay.reserveCapacity(byDay.count)
-        for (day, placements) in byDay {
-            perDay[day] = scoreDay(placements)
-        }
-        return perDay
-    }
-
-    func evaluateOneDay(
-        day: Date,
-        chromosome: ScheduleChromosome,
-        context: OptimizerContext
-    ) -> Double {
-        let indexById = buildIndexMap(context)
+        let indexById = context.backlogIndexMap()
         guard !indexById.isEmpty else { return 1.0 }
 
-        let cal = context.calendar
+        // Collect (backlogIndex, startTime) for every included gene that
+        // belongs to a backlog event. Dropped droppable genes don't
+        // participate — a dropped task has no placement to order.
         var placements: [(backlogIndex: Int, start: Date)] = []
+        placements.reserveCapacity(indexById.count)
         for gene in chromosome.genes where gene.isIncluded {
-            guard cal.startOfDay(for: gene.startTime) == day else { continue }
-            guard let idx = indexById[gene.eventId] else { continue }
-            placements.append((idx, gene.startTime))
-        }
-        return scoreDay(placements)
-    }
-
-    // MARK: - Scoring Core
-
-    /// Map of `eventId → backlogIndex` built lazily per evaluation call.
-    /// Only events the user authored through the backlog carry an index, so
-    /// calendar-derived movables drop out up front and never pay the pairwise
-    /// cost.
-    private func buildIndexMap(_ context: OptimizerContext) -> [String: Int] {
-        var out: [String: Int] = [:]
-        out.reserveCapacity(context.movableEvents.count)
-        for event in context.movableEvents {
-            if let idx = event.backlogIndex {
-                out[event.id] = idx
+            if let idx = indexById[gene.eventId] {
+                placements.append((idx, gene.startTime))
             }
         }
-        return out
-    }
-
-    /// Score a single day's placements. Sorts by start time, then counts
-    /// inversions against the `backlogIndex` sequence via merge sort — an
-    /// inversion is a pair where the earlier-started task has a higher
-    /// backlog index than the later-started one, i.e. the user's drag order
-    /// was violated.
-    private func scoreDay(_ placements: [(backlogIndex: Int, start: Date)]) -> Double {
         // With fewer than two placements there is no pair to invert — any
         // arrangement trivially matches backlog order.
         guard placements.count >= 2 else { return 1.0 }
 
+        // Sort by time, then count inversions against the backlog-index
+        // sequence. An inversion is a pair where the earlier-started task
+        // has a higher backlog index than the later-started one, i.e. the
+        // user's drag order was violated.
         let byStart = placements
             .sorted { $0.start < $1.start }
             .map { $0.backlogIndex }
