@@ -693,7 +693,8 @@ final class BuboOptimizer {
         for op in MutationOperator.allCases {
             bundle.bandit.record(op: op, reward: reward)
         }
-        let signedMagnitude = reward.signum() * max(0.3, scenario.fitness)
+        let rewardSign: Double = reward == 0 ? 0 : (reward < 0 ? -1 : 1)
+        let signedMagnitude = rewardSign * max(0.3, scenario.fitness)
         bundle.head.updateWeights(features: [1, 1, 1, 1], rewardSign: signedMagnitude)
     }
 
