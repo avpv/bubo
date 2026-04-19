@@ -166,6 +166,7 @@ final class FitnessEvaluator: @unchecked Sendable {
                 MeetingClusteringObjective(weight: preferences.meetingClusteringWeight),
                 TaskInclusionObjective(weight: preferences.taskInclusionWeight),
                 PrecedenceObjective(weight: 0.6),
+                BacklogOrderObjective(weight: preferences.backlogOrderWeight ?? OptimizerPreferences.defaultBacklogOrderWeight),
             ],
             constraintEngine: .standard,
             cache: FitnessCache()
@@ -610,6 +611,7 @@ final class FitnessEvaluator: @unchecked Sendable {
             case "ContextSwitch":   objectives[i].weight = preferences.contextSwitchWeight
             case "Buffer":              objectives[i].weight = preferences.bufferWeight
             case "MeetingClustering":   objectives[i].weight = preferences.meetingClusteringWeight
+            case "BacklogOrder":        objectives[i].weight = preferences.backlogOrderWeight ?? OptimizerPreferences.defaultBacklogOrderWeight
             default: break
             }
         }

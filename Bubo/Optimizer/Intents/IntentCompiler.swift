@@ -692,7 +692,12 @@ private extension IntentCompiler {
             filtered = Array(filtered.prefix(limit))
         }
 
-        return filtered.map { $0.toOptimizableEvent() }
+        // Tag each event with its position in the filtered backlog so
+        // `BacklogOrderObjective` can reward schedules that match the user's
+        // drag order. Index is 0-based and dense over `filtered`.
+        return filtered.enumerated().map { idx, task in
+            task.toOptimizableEvent(backlogIndex: idx)
+        }
     }
 
     /// Apply source filters (calendar, project, time range) to events.

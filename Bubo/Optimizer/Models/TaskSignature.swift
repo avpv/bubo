@@ -57,6 +57,8 @@ struct TaskSignature: Hashable, Sendable {
         prefHasher.combine(Int((p.bufferWeight * 10).rounded()))
         prefHasher.combine(Int((p.meetingClusteringWeight * 10).rounded()))
         prefHasher.combine(Int((p.taskInclusionWeight * 10).rounded()))
+        let backlogOrderWeight = p.backlogOrderWeight ?? OptimizerPreferences.defaultBacklogOrderWeight
+        prefHasher.combine(Int((backlogOrderWeight * 10).rounded()))
         self.preferenceHash = prefHasher.finalize()
     }
 }
