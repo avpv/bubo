@@ -2,9 +2,9 @@ import Foundation
 
 // MARK: - Task Inclusion Objective
 
-/// Rewards the GA for including droppable tasks rather than dropping them.
-/// Score is the priority-weighted fraction of droppable tasks that are
-/// included, so the GA prefers to schedule high-priority tasks first.
+/// Priority-gradient for the "which task to drop first" decision. Score is
+/// the priority-weighted fraction of droppable tasks that are included —
+/// higher when low-priority drops are preferred over high-priority drops.
 /// Returns 1.0 when no droppable tasks exist (nothing to optimize).
 ///
 /// Weighting folds in the user's backlog drag order as a pure tiebreaker:
@@ -13,11 +13,17 @@ import Foundation
 /// near the bottom. The position boost is capped well below a single
 /// priority tier, so a HIGH-priority task at the bottom of the backlog is
 /// never dropped in favor of a MEDIUM/LOW task at the top.
+///
+/// This objective is no longer load-bearing for the *count* of drops —
+/// `FitnessEvaluator.inclusionFactor` multiplies every objective score by
+/// `pow(includedDroppableRatio, 2)` so dropping is Pareto-dominated on
+/// every axis by construction. All that remains here is the linear
+/// priority-weighted gradient the GA needs when a drop *is* inevitable.
 struct TaskInclusionObjective: FitnessObjective {
     let name = "TaskInclusion"
     var weight: Double
 
-    init(weight: Double = 4.0) {
+    init(weight: Double = 1.0) {
         self.weight = weight
     }
 
@@ -65,18 +71,12 @@ struct TaskInclusionObjective: FitnessObjective {
         }
 
         guard totalWeight > 0 else { return 1.0 }
-        let inclusionRatio = includedWeight / totalWeight
-        // Convex shaping: a linear ratio let the structural objectives
-        // (FocusBlock, ContextSwitch, Buffer, EnergyCurve, Break…) —
-        // which fundamentally reward fewer events on the calendar —
-        // collectively buy back the cost of a single drop, because the
-        // inclusion penalty grew linearly while the aggregate structural
-        // gain scaled with the number of such objectives. Raising the
-        // ratio to the 1.5th power makes each additional drop cost
-        // progressively more than the last without changing either
-        // endpoint (0 stays 0, 1 stays 1). A 1-of-4 drop now loses 0.33
-        // instead of 0.24 — comfortably above the realistic structural
-        // upside of dropping a task on a sparse week.
-        return pow(inclusionRatio, 1.5)
+        // Linear ratio. Convex shaping used to live here to bully the
+        // structural objectives into submission, but that role now
+        // belongs to `FitnessEvaluator.inclusionFactor` which applies the
+        // penalty per-axis. All we need here is a monotone priority-
+        // weighted signal so the GA still knows *which* task to drop when
+        // a drop is forced.
+        return includedWeight / totalWeight
     }
 }
