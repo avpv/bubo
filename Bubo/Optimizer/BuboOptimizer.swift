@@ -101,16 +101,22 @@ final class BuboOptimizer {
     //   entries are bounded by an LRU so a long session with many
     //   distinct shapes doesn't grow unbounded.
     //
-    // * `conflictGraphCache` (`ScheduleConflictGraphCache`): hash-
-    //   keyed LRU over movable-event structure. Scenarios (same
-    //   events, different objective weights) reuse one graph.
+    // * `conflictGraphCache` (`ScheduleConflictGraphSalsaCache`):
+    //   QueryDB-backed with per-event metadata and per-pair overlap
+    //   queries. The whole-graph build still routes through
+    //   `ScheduleConflictGraph.build` — the domain's existing
+    //   participant-index + sort-sweep fast paths already bypass
+    //   the O(N²) pair predicate evaluation Salsa would accelerate.
+    //   Per-event / per-pair caching is scaffolding for external
+    //   consumers (e.g. UI-driven "does this pair conflict?"
+    //   queries) and future build variants.
     //
-    // `IntentGraphSalsaCache` replaced the older hash-keyed
-    // `IntentGraphCache` in production; the latter stays available
-    // for tests that want a simpler memoization story.
+    // Both caches replaced the prior hash-keyed LRU implementations;
+    // the LRU variants (`IntentGraphCache`, `ScheduleConflictGraphCache`)
+    // stay available for tests that want simpler memoization semantics.
 
     let intentGraphCache = IntentGraphSalsaCache()
-    let conflictGraphCache = ScheduleConflictGraphCache()
+    let conflictGraphCache = ScheduleConflictGraphSalsaCache()
 
     // MARK: - State
 
