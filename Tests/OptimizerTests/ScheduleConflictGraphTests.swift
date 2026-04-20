@@ -148,4 +148,69 @@ struct ScheduleConflictGraphTests {
         #expect(g1.eventIds == g2.eventIds)
         #expect(g1.componentCount == g2.componentCount)
     }
+
+    // MARK: - Preferred-hour bucketing
+
+    @Test("Overlapping preferred-hour ranges still couple events into one component")
+    func overlappingPreferredHoursCouple() {
+        let a = OptimizableEvent(
+            id: "a", title: "a", duration: 3600, preferredHourRange: 9...12
+        )
+        let b = OptimizableEvent(
+            id: "b", title: "b", duration: 3600, preferredHourRange: 11...14
+        )
+        let context = OptimizerTestFixtures.makeContext(movableEvents: [a, b])
+        let graph = ScheduleConflictGraph.build(from: context)
+        #expect(graph.componentOf["a"] == graph.componentOf["b"])
+    }
+
+    @Test("Non-overlapping preferred-hour ranges stay independent")
+    func nonOverlappingPreferredHoursIndependent() {
+        let a = OptimizableEvent(
+            id: "a", title: "a", duration: 3600, preferredHourRange: 9...10
+        )
+        let b = OptimizableEvent(
+            id: "b", title: "b", duration: 3600, preferredHourRange: 14...16
+        )
+        let context = OptimizerTestFixtures.makeContext(movableEvents: [a, b])
+        let graph = ScheduleConflictGraph.build(from: context)
+        #expect(graph.componentOf["a"] != graph.componentOf["b"])
+    }
+
+    @Test("Events without preferredHourRange are skipped by the bucketed scan")
+    func eventsWithoutRangeAreSkipped() {
+        let a = OptimizableEvent(
+            id: "a", title: "a", duration: 3600, preferredHourRange: 9...12
+        )
+        let b = OptimizerTestFixtures.makeEvent(id: "b")  // no range
+        let context = OptimizerTestFixtures.makeContext(movableEvents: [a, b])
+        let graph = ScheduleConflictGraph.build(from: context)
+        #expect(graph.componentOf["a"] != graph.componentOf["b"])
+    }
+
+    // MARK: - Reachability bitset
+
+    @Test("precedesBitset matches the precedes dictionary")
+    func precedesBitsetMatchesDict() {
+        let a = OptimizerTestFixtures.makeEvent(id: "a")
+        let b = OptimizableEvent(id: "b", title: "b", duration: 3600, dependsOn: ["a"])
+        let c = OptimizableEvent(id: "c", title: "c", duration: 3600, dependsOn: ["b"])
+        let context = OptimizerTestFixtures.makeContext(movableEvents: [a, b, c])
+        let graph = ScheduleConflictGraph.build(from: context)
+
+        let bitset = graph.precedesBitset
+        #expect(bitset != nil)
+        // a precedes b and c transitively; b precedes c; c precedes nothing.
+        #expect(graph.transitivelyPrecedes("a", "b"))
+        #expect(graph.transitivelyPrecedes("a", "c"))
+        #expect(graph.transitivelyPrecedes("b", "c"))
+        #expect(graph.transitivelyPrecedes("c", "a") == false)
+    }
+
+    @Test("Empty context produces no bitset")
+    func emptyContextHasNoBitset() {
+        let graph = ScheduleConflictGraph.build(from: OptimizerTestFixtures.makeContext())
+        #expect(graph.precedesBitset == nil)
+        #expect(graph.transitivelyPrecedes("ghost", "phantom") == false)
+    }
 }

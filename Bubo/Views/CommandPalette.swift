@@ -460,7 +460,10 @@ struct CommandPalette: View {
     /// Advanced composer — only shown when user explicitly opts in.
     /// This is where the 65 intents live. But the user chose to see them.
     private func powerModeComposer(_ request: OptimizationRequest) -> some View {
-        let graph = IntentGraph.build(from: request.intents)
+        // Read through the long-lived cache so SwiftUI body re-evaluations
+        // (every chip toggle re-renders this view) hit a warm graph
+        // instead of rebuilding 65-intent auto-resolution per keystroke.
+        let graph = optimizerService.optimizer.intentGraphCache.graph(for: request.intents)
         let phases = graph.intentsByPhase()
         let suggested = graph.suggestedIntents()
 

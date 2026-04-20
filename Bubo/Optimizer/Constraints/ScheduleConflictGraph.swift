@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 // MARK: - Schedule Conflict Graph
 //
@@ -66,6 +67,19 @@ struct ScheduleConflictGraph: Sendable {
     /// Total `dependsOn` edges (direct, not transitive).
     let precedenceEdgeCount: Int
 
+    /// Lazy bitset-backed transitive precedence index. Same content
+    /// as `precedes` but stored as `[UInt64]` words per event so the
+    /// GA can answer "does A precede B?" with a single bit test
+    /// instead of `Set<String>.contains`. Built on first access via
+    /// the holder so callers that never query reachability don't pay
+    /// the ~N²/64-byte allocation. `nil` for empty graphs.
+    let precedesBitsetHolder: ReachabilityBitsetHolder?
+
+    /// Force the bitset build and return it (or `nil` for empty
+    /// graphs). Subsequent calls hit a cached value via
+    /// `ReachabilityBitsetHolder`.
+    var precedesBitset: ReachabilityBitset? { precedesBitsetHolder?.value() }
+
     // MARK: - Public diagnostics
 
     /// Conflict density in [0, 1]: `2 · edges / (N · (N-1))`. Zero
@@ -97,17 +111,53 @@ struct ScheduleConflictGraph: Sendable {
 
     // MARK: - Build
 
-    /// Build the graph from an `OptimizerContext`. Allocates proportional
-    /// to events + edges; for 100 events this is a few microseconds.
-    ///
-    /// `Dictionary(uniqueKeysWithValues:)` below traps on duplicates, so we
-    /// build the internal maps against a de-duplicated event list. Callers
-    /// (`IntentCompiler.execute`) already dedupe; this is defence-in-depth
-    /// so a future collision becomes a silently-correct placement instead
-    /// of a runtime crash.
+    /// Build the graph from an `OptimizerContext`. Convenience over
+    /// `build(fromMovableEvents:)` for callers that already have a
+    /// context handy. The graph only depends on `movableEvents`; other
+    /// context fields (working hours, fixed events, preferences)
+    /// don't influence its structure.
     static func build(from context: OptimizerContext) -> ScheduleConflictGraph {
+        build(fromMovableEvents: context.movableEvents)
+    }
+
+    /// Build the graph directly from a movable-event list. Lets the
+    /// graph cache warm without constructing a throwaway
+    /// `OptimizerContext`, and makes the (movable events → graph)
+    /// dependency explicit at the type level instead of buried in the
+    /// context boilerplate.
+    ///
+    /// Allocates proportional to events + edges; for 100 events this
+    /// is a few microseconds.
+    ///
+    /// `Dictionary(uniqueKeysWithValues:)` below traps on duplicates,
+    /// so we build the internal maps against a de-duplicated event
+    /// list. Callers (`IntentCompiler.execute`) already dedupe; this
+    /// is defence-in-depth so a future collision becomes a silently-
+    /// correct placement instead of a runtime crash.
+    static func build(fromMovableEvents events: [OptimizableEvent]) -> ScheduleConflictGraph {
+        build(fromMovableEvents: events, reachabilityOracle: nil)
+    }
+
+    /// `build(fromMovableEvents:)` overload that lets the caller
+    /// supply a precomputed transitive-precedence oracle. When
+    /// provided, the build skips the internal O(V·E) DFS loop and
+    /// asks the oracle for each event's reachable dependent set.
+    /// Used by `ScheduleConflictGraphSalsaCache` to reuse per-source
+    /// reachability queries across calls: events whose `dependsOn`
+    /// chains didn't change keep their cached reachability, while
+    /// invalidated sources recompute freshly.
+    ///
+    /// The oracle receives (1) the event id being queried and (2)
+    /// the built `precedesDirect` map so it can walk deps if the
+    /// cache misses. Return value is the full transitive dependent
+    /// set (same shape as the default DFS produces). Pass `nil` to
+    /// fall back to the monolithic DFS.
+    static func build(
+        fromMovableEvents events: [OptimizableEvent],
+        reachabilityOracle: ((String, [String: Set<String>]) -> Set<String>)?
+    ) -> ScheduleConflictGraph {
         var seen: Set<String> = []
-        let uniqueEvents = context.movableEvents.filter { seen.insert($0.id).inserted }
+        let uniqueEvents = events.filter { seen.insert($0.id).inserted }
         let ids = uniqueEvents.map(\.id)
         guard !ids.isEmpty else {
             return ScheduleConflictGraph(
@@ -118,7 +168,8 @@ struct ScheduleConflictGraph: Sendable {
                 directPrecedes: [:],
                 precedes: [:],
                 conflictEdgeCount: 0,
-                precedenceEdgeCount: 0
+                precedenceEdgeCount: 0,
+                precedesBitsetHolder: nil
             )
         }
 
@@ -141,18 +192,27 @@ struct ScheduleConflictGraph: Sendable {
             }
         }
 
-        // 2) Transitive precedence via DFS.
+        // 2) Transitive precedence. Default path is an iterative DFS
+        //    per source; the oracle path delegates to a caller-
+        //    supplied closure so the Salsa cache can reuse
+        //    per-source reachability queries across calls.
         var precedes: [String: Set<String>] = [:]
-        for id in ids {
-            var visited: Set<String> = []
-            var stack = Array(precedesDirect[id] ?? [])
-            while let head = stack.popLast() {
-                guard visited.insert(head).inserted else { continue }
-                if let downstream = precedesDirect[head] {
-                    stack.append(contentsOf: downstream)
-                }
+        if let reachabilityOracle {
+            for id in ids {
+                precedes[id] = reachabilityOracle(id, precedesDirect)
             }
-            precedes[id] = visited
+        } else {
+            for id in ids {
+                var visited: Set<String> = []
+                var stack = Array(precedesDirect[id] ?? [])
+                while let head = stack.popLast() {
+                    guard visited.insert(head).inserted else { continue }
+                    if let downstream = precedesDirect[head] {
+                        stack.append(contentsOf: downstream)
+                    }
+                }
+                precedes[id] = visited
+            }
         }
 
         // 3) Conflict edges: pairs that can ever collide on structural
@@ -197,15 +257,34 @@ struct ScheduleConflictGraph: Sendable {
         // Preferred-hour overlap (soft coupling) — events that prefer
         // overlapping windows get bucketed together for component
         // analysis even without a hard constraint.
-        for i in 0..<uniqueEvents.count {
-            for j in (i + 1)..<uniqueEvents.count {
-                let a = uniqueEvents[i]
-                let b = uniqueEvents[j]
-                guard let aRange = a.preferredHourRange,
-                      let bRange = b.preferredHourRange else { continue }
-                if aRange.overlaps(bRange) {
-                    addConflictEdge(a.id, b.id)
-                }
+        //
+        // Old impl was a naive O(N²) double sweep over every event
+        // pair, paying the `guard let aRange / bRange` cost even on
+        // events without a preferred range. Now we (1) filter the list
+        // down to events that *have* a range and (2) sort by lower
+        // bound so the inner sweep can break the moment the next
+        // candidate's lower bound passes our upper bound. For real
+        // calendars where ranges cluster (e.g. focus blocks 9-12,
+        // meetings 14-17), this turns into ~O(N · k) with k = local
+        // overlap-cluster size.
+        let ranged = uniqueEvents
+            .compactMap { event -> (id: String, range: ClosedRange<Int>)? in
+                guard let range = event.preferredHourRange else { return nil }
+                return (event.id, range)
+            }
+            .sorted { $0.range.lowerBound < $1.range.lowerBound }
+
+        for i in 0..<ranged.count {
+            let a = ranged[i]
+            var j = i + 1
+            while j < ranged.count {
+                let b = ranged[j]
+                // `ranged` is sorted ascending by lowerBound; once
+                // `b.lowerBound > a.upperBound` no later element can
+                // overlap a either, so we cut the inner loop short.
+                if b.range.lowerBound > a.range.upperBound { break }
+                addConflictEdge(a.id, b.id)
+                j += 1
             }
         }
 
@@ -248,6 +327,15 @@ struct ScheduleConflictGraph: Sendable {
             }
         }
 
+        // 5) Bitset transitive precedence: same content as `precedes`
+        //    but stored as one `[UInt64]` mask per row. Hot-path
+        //    consumers (objective decomposition, repair preflight)
+        //    can answer "does A precede B?" with a word/bit lookup
+        //    instead of `Set.contains`. Built lazily — callers that
+        //    never call `transitivelyPrecedes(_:_:)` skip the
+        //    allocation entirely.
+        let bitsetHolder = ReachabilityBitsetHolder(ids: ids, edges: precedes)
+
         return ScheduleConflictGraph(
             eventIds: ids,
             componentOf: componentOf,
@@ -256,7 +344,8 @@ struct ScheduleConflictGraph: Sendable {
             directPrecedes: precedesDirect,
             precedes: precedes,
             conflictEdgeCount: conflictEdges,
-            precedenceEdgeCount: precedenceEdges
+            precedenceEdgeCount: precedenceEdges,
+            precedesBitsetHolder: bitsetHolder
         )
     }
 
@@ -267,6 +356,16 @@ struct ScheduleConflictGraph: Sendable {
     func component(containing eventId: String) -> [String] {
         guard let cid = componentOf[eventId] else { return [eventId] }
         return eventIds.filter { componentOf[$0] == cid }
+    }
+
+    /// Bitset-backed "does `prereq` transitively precede `dependent`?"
+    /// query. O(1) on the hot path: one dictionary lookup for each id
+    /// to translate to an integer index, then a word/bit test on the
+    /// stored mask. Returns `false` for unknown event ids or when the
+    /// bitset wasn't built (empty graph).
+    func transitivelyPrecedes(_ prereq: String, _ dependent: String) -> Bool {
+        guard let bitset = precedesBitset else { return false }
+        return bitset.contains(from: prereq, to: dependent)
     }
 
     /// Every component as an array of member event IDs. Useful for
@@ -320,34 +419,33 @@ struct ScheduleConflictGraph: Sendable {
 
 // MARK: - Holder (lazy cache)
 
-/// Reference-type wrapper so `OptimizerContext` (a struct) can share a
-/// single built graph across every copy. `ensureConflictGraph()` goes
-/// through this holder, so fitness evaluators and mutation operators
-/// pay the build cost exactly once per run instead of once per
-/// chromosome evaluation.
+/// Reference-type wrapper so `OptimizerContext` (a struct) can share
+/// a single built graph across every copy. `ensureConflictGraph()`
+/// goes through this holder, so fitness evaluators and mutation
+/// operators pay the build cost exactly once per run instead of once
+/// per chromosome evaluation.
 ///
 /// Thread-safe: the GA evaluates offspring in parallel via
 /// `DispatchQueue.concurrentPerform`, so several threads may race to
-/// be the first caller. `NSLock` keeps the "build once" invariant
-/// without blocking readers once the graph is cached.
-final class ConflictGraphHolder: @unchecked Sendable {
-    private let lock = NSLock()
-    private var cached: ScheduleConflictGraph?
+/// be the first caller. `OSAllocatedUnfairLock` keeps the "build
+/// once" invariant without blocking readers once the graph is
+/// cached, with ~3× cheaper acquire than `NSLock` and Swift 6
+/// strict-concurrency support out of the box.
+final class ConflictGraphHolder: Sendable {
+    private let state: OSAllocatedUnfairLock<ScheduleConflictGraph?>
 
     init(preloaded: ScheduleConflictGraph? = nil) {
-        self.cached = preloaded
+        self.state = OSAllocatedUnfairLock(initialState: preloaded)
     }
 
     /// Build-or-fetch the cached graph. Callers pass the context they
     /// want built from — the holder itself doesn't store one so it
     /// stays light and doesn't retain fixed/movable event arrays.
     func get(for context: OptimizerContext) -> ScheduleConflictGraph {
-        lock.lock()
-        if let cached {
-            lock.unlock()
+        // Fast path: a quick locked read.
+        if let cached = state.withLock({ $0 }) {
             return cached
         }
-        lock.unlock()
 
         // Build outside the lock so concurrent callers don't serialize
         // on the actual computation. Two threads may build the graph
@@ -356,13 +454,13 @@ final class ConflictGraphHolder: @unchecked Sendable {
         // logical graph, so the duplicate is harmless.
         let built = ScheduleConflictGraph.build(from: context)
 
-        lock.lock()
-        if let existing = cached {
-            lock.unlock()
-            return existing
+        return state.withLock { current in
+            if let existing = current {
+                return existing
+            }
+            current = built
+            return built
         }
-        cached = built
-        lock.unlock()
-        return built
     }
 }
+

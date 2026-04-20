@@ -89,6 +89,35 @@ final class BuboOptimizer {
         return fresh
     }
 
+    // MARK: - Graph Caches
+    //
+    // Long-lived memoization layers shared across optimization runs.
+    //
+    // * `intentGraphCache` (`IntentGraphSalsaCache`): QueryDB-backed
+    //   with per-intent / per-pair / per-phase decomposition. A
+    //   single chip edit invalidates only the queries that touched
+    //   the edited intent — other compile entries, pair conflicts,
+    //   and phase buckets stay warm across the edit. Whole-graph
+    //   entries are bounded by an LRU so a long session with many
+    //   distinct shapes doesn't grow unbounded.
+    //
+    // * `conflictGraphCache` (`ScheduleConflictGraphSalsaCache`):
+    //   QueryDB-backed with per-event metadata and per-pair overlap
+    //   queries. The whole-graph build still routes through
+    //   `ScheduleConflictGraph.build` — the domain's existing
+    //   participant-index + sort-sweep fast paths already bypass
+    //   the O(N²) pair predicate evaluation Salsa would accelerate.
+    //   Per-event / per-pair caching is scaffolding for external
+    //   consumers (e.g. UI-driven "does this pair conflict?"
+    //   queries) and future build variants.
+    //
+    // Both caches replaced the prior hash-keyed LRU implementations;
+    // the LRU variants (`IntentGraphCache`, `ScheduleConflictGraphCache`)
+    // stay available for tests that want simpler memoization semantics.
+
+    let intentGraphCache = IntentGraphSalsaCache()
+    let conflictGraphCache = ScheduleConflictGraphSalsaCache()
+
     // MARK: - State
 
     private(set) var isOptimizing = false
