@@ -16,42 +16,96 @@ protocol ScheduleConstraint {
 // MARK: - No Overlap Constraint (Hard)
 
 /// Events must not overlap with each other or with fixed events.
+///
+/// Implementation: merge movable and fixed intervals into a single
+/// list, sort by start time, then run a single left-to-right sweep
+/// maintaining the set of currently-active intervals (those that
+/// haven't ended yet at the current sweep position).
+///
+/// Complexity:
+///   • Sort:  O(N log N) where N = movable + fixed
+///   • Sweep: O(N · k) where k is the maximum simultaneous overlap
+///     depth — for a realistic schedule k ≤ 3, so the sweep is
+///     effectively O(N). Pathological inputs where every interval
+///     overlaps every other (early random GA generations) degrade
+///     to O(N²), matching the legacy pair-scan behaviour.
+///
+/// Semantics: identical to the previous O(N² + M·F) pair-scanner.
+/// Fixed-vs-fixed overlaps are skipped (they come from the user's
+/// calendar and the GA can't change them); movable-vs-movable and
+/// movable-vs-fixed overlaps are counted once each, and the total
+/// overlap is returned in minutes.
 struct NoOverlapConstraint: ScheduleConstraint {
     let name = "NoOverlap"
     let isHard = true
 
+    private struct TaggedInterval {
+        let start: Date
+        let end: Date
+        let isMovable: Bool
+    }
+
     func penalty(for chromosome: ScheduleChromosome, context: OptimizerContext) -> Double {
-        // Only count overlaps where at least one side is a movable gene the
-        // chromosome placed. Fixed-vs-fixed clashes come from the user's
-        // calendar and are outside the GA's control — penalising them makes
-        // `fitness < 0.1` unreachable for every chromosome (including "drop
-        // all"), which surfaces as a false "Not enough room" modal.
-        let movable = chromosome.genes
-            .filter { $0.isIncluded }
-            .map { (start: $0.startTime, end: $0.endTime) }
+        let movableCount = chromosome.genes.lazy.filter { $0.isIncluded }.count
+        guard movableCount > 0 else { return 0 }
 
-        guard !movable.isEmpty else { return 0 }
+        var intervals: [TaggedInterval] = []
+        intervals.reserveCapacity(movableCount + context.fixedEvents.count)
+        for gene in chromosome.genes where gene.isIncluded {
+            intervals.append(TaggedInterval(
+                start: gene.startTime,
+                end: gene.endTime,
+                isMovable: true
+            ))
+        }
+        for ev in context.fixedEvents {
+            intervals.append(TaggedInterval(
+                start: ev.startDate,
+                end: ev.endDate,
+                isMovable: false
+            ))
+        }
+        intervals.sort { $0.start < $1.start }
 
+        // Sweep. `active` holds intervals whose end > current sweep
+        // position. A naïve scan-and-remove keeps `active` small for
+        // realistic schedules (few concurrent events). We drop entries
+        // by copying forward rather than `removeAll(where:)` so the
+        // inner loop stays allocation-free on the hot path.
+        var active: [TaggedInterval] = []
+        active.reserveCapacity(8)
         var overlapMinutes = 0.0
 
-        // movable vs fixed
-        for m in movable {
-            for f in context.fixedEvents {
-                let overlapStart = max(m.start, f.startDate)
-                let overlapEnd = min(m.end, f.endDate)
-                overlapMinutes += max(0, overlapEnd.timeIntervalSince(overlapStart)) / 60.0
+        for interval in intervals {
+            // Evict ended intervals. Equivalent to `active.removeAll
+            // { $0.end <= interval.start }` but avoids the closure.
+            if !active.isEmpty {
+                var write = 0
+                for read in 0..<active.count {
+                    if active[read].end > interval.start {
+                        if write != read { active[write] = active[read] }
+                        write += 1
+                    }
+                }
+                active.removeLast(active.count - write)
             }
-        }
 
-        // movable vs movable
-        for i in 0..<movable.count {
-            for j in (i + 1)..<movable.count {
-                let a = movable[i]
-                let b = movable[j]
-                let overlapStart = max(a.start, b.start)
-                let overlapEnd = min(a.end, b.end)
-                overlapMinutes += max(0, overlapEnd.timeIntervalSince(overlapStart)) / 60.0
+            // Add overlap contribution against each still-active
+            // interval. Fixed-vs-fixed is the only pair we skip.
+            for other in active {
+                if !interval.isMovable && !other.isMovable { continue }
+                // `other.start <= interval.start` because intervals are
+                // sorted by start, so the overlap start is always
+                // `interval.start`. Overlap end is the earlier of the
+                // two end times.
+                let overlapEnd = min(interval.end, other.end)
+                let seconds = overlapEnd.timeIntervalSince(interval.start)
+                if seconds > 0 {
+                    overlapMinutes += seconds / 60.0
+                }
             }
+
+            active.append(interval)
         }
 
         return overlapMinutes

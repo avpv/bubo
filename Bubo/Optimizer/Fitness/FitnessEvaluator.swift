@@ -3,16 +3,22 @@ import os
 
 // MARK: - Eval Telemetry
 
-/// Lightweight thread-safe counters describing how work is flowing
-/// through the evaluator: full re-evals vs delta-paths vs cache hits.
-/// These are the numbers you want when deciding whether the GA is
-/// actually paying for the delta-eval + cache scaffolding or silently
-/// falling back to full evaluation on every offspring.
+/// Lightweight sharded counters describing how work is flowing through
+/// the evaluator: full re-evals vs delta-paths vs cache hits.
 ///
-/// The counters are sample-only — nothing else reads them for control
-/// flow, so the lock contention cost stays out of the inner objective
-/// loops where it would matter. `snapshot()` + `reset()` are the
-/// consumer-facing API; call sites increment via the `record*` methods.
+/// The evaluator's `concurrentPerform` offspring loop fires N parallel
+/// `evaluateAndAssign` calls per generation, so a single shared lock
+/// would serialize the hot path. We shard by current-thread hash into
+/// `shardCount` independent `OSAllocatedUnfairLock<Snapshot>` buckets;
+/// on an 8-core machine each thread mostly lands in its own shard and
+/// lock acquisition is uncontended. Snapshot sums across shards.
+///
+/// These counters are sample-only — nothing reads them for control
+/// flow, so occasional racy-ish reads between shards are fine. Lock
+/// acquires still happen because OSAllocatedUnfairLock is the only
+/// free primitive that gives us atomic-like Int increments on
+/// macOS 14 without pulling in Swift's Synchronization module (which
+/// is 15.0+).
 final class FitnessEvalTelemetry: @unchecked Sendable {
     struct Snapshot: Sendable {
         var fullEvaluations: Int
@@ -32,51 +38,81 @@ final class FitnessEvalTelemetry: @unchecked Sendable {
         var cacheHitFraction: Double {
             total > 0 ? Double(cacheHits) / Double(total) : 0
         }
-    }
 
-    private let lock = OSAllocatedUnfairLock<Snapshot>(
-        initialState: Snapshot(
+        static let zero = Snapshot(
             fullEvaluations: 0,
             deltaEvaluations: 0,
             cacheHits: 0,
             componentCacheHits: 0,
             constraintRejections: 0
         )
-    )
+
+        mutating func add(_ other: Snapshot) {
+            fullEvaluations += other.fullEvaluations
+            deltaEvaluations += other.deltaEvaluations
+            cacheHits += other.cacheHits
+            componentCacheHits += other.componentCacheHits
+            constraintRejections += other.constraintRejections
+        }
+    }
+
+    /// Power of two so `hash & (shardCount - 1)` picks a bucket in one
+    /// instruction without a modulo. 16 comfortably covers typical
+    /// core counts (4–12) with enough slack that two threads landing
+    /// in the same shard is rare even under hash collisions.
+    private static let shardCount = 16
+    private let shards: [OSAllocatedUnfairLock<Snapshot>]
+
+    init() {
+        self.shards = (0..<Self.shardCount).map { _ in
+            OSAllocatedUnfairLock(initialState: .zero)
+        }
+    }
+
+    /// Pick a shard by current-thread hash. `Thread.current.hash`
+    /// is stable for the thread lifetime (it's the NSObject identity
+    /// hash), so a given worker keeps hitting the same shard across
+    /// successive generations — lock contention only appears when
+    /// two threads happen to collide into the same bucket.
+    @inline(__always)
+    private func shard() -> OSAllocatedUnfairLock<Snapshot> {
+        // Two's-complement bit pattern: `h & 0xF` yields 0…15 for any
+        // Int sign, so no abs / modulo needed.
+        let idx = Thread.current.hash & (Self.shardCount - 1)
+        return shards[idx]
+    }
 
     func recordFullEvaluation() {
-        lock.withLock { $0.fullEvaluations += 1 }
+        shard().withLock { $0.fullEvaluations += 1 }
     }
 
     func recordDeltaEvaluation() {
-        lock.withLock { $0.deltaEvaluations += 1 }
+        shard().withLock { $0.deltaEvaluations += 1 }
     }
 
     func recordCacheHit() {
-        lock.withLock { $0.cacheHits += 1 }
+        shard().withLock { $0.cacheHits += 1 }
     }
 
     func recordComponentCacheHit() {
-        lock.withLock { $0.componentCacheHits += 1 }
+        shard().withLock { $0.componentCacheHits += 1 }
     }
 
     func recordConstraintRejection() {
-        lock.withLock { $0.constraintRejections += 1 }
+        shard().withLock { $0.constraintRejections += 1 }
     }
 
     func snapshot() -> Snapshot {
-        lock.withLock { $0 }
+        var total: Snapshot = .zero
+        for shard in shards {
+            total.add(shard.withLock { $0 })
+        }
+        return total
     }
 
     func reset() {
-        lock.withLock { state in
-            state = Snapshot(
-                fullEvaluations: 0,
-                deltaEvaluations: 0,
-                cacheHits: 0,
-                componentCacheHits: 0,
-                constraintRejections: 0
-            )
+        for shard in shards {
+            shard.withLock { $0 = .zero }
         }
     }
 }

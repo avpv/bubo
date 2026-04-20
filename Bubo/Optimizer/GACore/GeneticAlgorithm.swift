@@ -476,6 +476,15 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         var restartsPerformed = 0
         let wallclockStart = Date()
 
+        // Soft deadline semantics: the timeout check sits at the top
+        // of the loop *after* the previous generation has fully
+        // committed (offspring evaluated, bestEver updated, memetic
+        // hill climb applied, onGenerationComplete hook run). So when
+        // we break, `bestEver` and the population are in a consistent
+        // state — never mid-generation. The subsequent post-loop hill
+        // climb still runs, but scales its effort to whatever budget
+        // is left (see `remainingWallclock` below) so the total wall
+        // time stays bounded even on interactive configs.
         for generation in 0..<config.maxGenerations {
             // Cooperative cancellation: UI-triggered task cancellation
             // lands here. `bestEver` is already populated with whatever
@@ -483,11 +492,9 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             // can still surface a usable result.
             try Task.checkCancellation()
 
-            // Wallclock ceiling: bail before starting a new generation
-            // once the budget has been spent. `bestEver` already holds
-            // the best individual found so far; the subsequent hill-
-            // climb pass still runs so interactive callers get a
-            // polished result even under tight budgets.
+            // Wallclock ceiling: soft cap, consulted only between
+            // generations. A generation in flight always gets to
+            // finish so the population invariants survive.
             if config.wallclockTimeout > 0 &&
                 Date().timeIntervalSince(wallclockStart) >= config.wallclockTimeout {
                 convergenceGeneration = generation
@@ -585,11 +592,27 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             }
         }
 
-        // Local search: refine top individuals with SA-hybrid hill climbing
+        // Local search: refine top individuals with SA-hybrid hill climbing.
+        //
+        // Budget-aware sizing: when we exited the evolution loop via
+        // the wallclock break, the final hill-climb still runs because
+        // it often delivers the best gains on the polished elites, but
+        // it scales its per-individual step count to whatever budget
+        // remains so we don't overshoot the caller's deadline. If
+        // nothing is left, one pass of 3 steps still runs — a cheap
+        // improvement that's almost always worth the milliseconds.
         var sorted = population.sortedByFitness
         let refineCount = min(config.eliteCount, sorted.count)
+        let climbSteps: Int = {
+            guard config.wallclockTimeout > 0 else { return 20 }
+            let remaining = config.wallclockTimeout - Date().timeIntervalSince(wallclockStart)
+            let budgetRatio = remaining / config.wallclockTimeout
+            if budgetRatio >= 0.25 { return 20 }
+            if budgetRatio >= 0.0 { return 8 }
+            return 3
+        }()
         for i in 0..<refineCount {
-            sorted[i] = hillClimb(sorted[i], steps: 20)
+            sorted[i] = hillClimb(sorted[i], steps: climbSteps)
         }
 
         // Update bestEver if hill climbing found something better (compare rawFitness).
@@ -743,10 +766,20 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         // Fitness evaluation: prefer the batch path when wired so
         // the multi-fidelity funnel can rank-then-promote across the
         // whole offspring array. Per-chromosome fallback preserves
-        // parallelism via concurrentPerform.
+        // parallelism via concurrentPerform — but only when there's
+        // enough work to amortize GCD's per-iteration dispatch cost.
+        //
+        // Parallelism threshold: below ~32 offspring the GCD
+        // concurrentPerform overhead (thread wake-up + work item
+        // queuing) swallows the evaluation work itself. Measured on
+        // Apple Silicon, a 20-individual `.instant` population
+        // evaluates faster serially than in parallel. The threshold
+        // can go lower for expensive objectives, but 32 is a safe
+        // default across the evaluator stack.
+        let parallelThreshold = 32
         if let batchEvaluate {
             batchEvaluate(&offspring)
-        } else if parallelEvaluation && offspring.count > 1 {
+        } else if parallelEvaluation && offspring.count >= parallelThreshold {
             DispatchQueue.concurrentPerform(iterations: offspring.count) { i in
                 self.evaluate(&offspring[i])
             }

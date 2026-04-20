@@ -206,13 +206,6 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
     /// into the first available slot, sorted by priority/deadline urgency.
     /// Produces high-quality seed individuals that give the GA a strong starting point.
     static func greedy(context: OptimizerContext) -> ScheduleChromosome {
-        let cal = context.calendar
-
-        // Sort events: higher priority first, then earlier deadline, then fall
-        // back to input order. Swift's sort is stable, so returning false for
-        // otherwise-equal events preserves the user's backlog/drag order — two
-        // tasks with identical priority and deadline get slots in the order
-        // the user put them in, not re-ordered by duration or anything else.
         let sortedEvents = context.movableEvents.sorted { a, b in
             if a.priority != b.priority { return a.priority > b.priority }
             if let da = a.deadline, let db = b.deadline { return da < db }
@@ -220,6 +213,24 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
             if b.deadline != nil { return false }
             return false
         }
+        return greedyWithOrder(context: context, eventsInPlacementOrder: sortedEvents)
+    }
+
+    /// Build a feasible chromosome by placing events in the caller-
+    /// supplied order. Used by the brute-force fast path
+    /// (`BuboOptimizer` generates every permutation for tiny backlogs
+    /// and picks the best by fitness) and by warm-start builders that
+    /// want to inject a learned priority order.
+    ///
+    /// `eventsInPlacementOrder` *must* contain every event in
+    /// `context.movableEvents` — duplicates or omissions leave the
+    /// returned chromosome partially unscheduled and are the caller's
+    /// bug, not this function's.
+    static func greedyWithOrder(
+        context: OptimizerContext,
+        eventsInPlacementOrder sortedEvents: [OptimizableEvent]
+    ) -> ScheduleChromosome {
+        let cal = context.calendar
 
         // Collect occupied intervals (from fixed events)
         var occupied: [(start: Date, end: Date)] = context.fixedEvents.map {
