@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 // MARK: - Schedule Conflict Graph
 //
@@ -66,12 +67,18 @@ struct ScheduleConflictGraph: Sendable {
     /// Total `dependsOn` edges (direct, not transitive).
     let precedenceEdgeCount: Int
 
-    /// Bitset-backed transitive precedence index. Same content as
-    /// `precedes` but stored as `[UInt64]` words per event so the GA
-    /// can answer "does A precede B?" with a single bit test instead
-    /// of `Set<String>.contains`. Skipped (`nil`) for graphs with
-    /// zero events so the empty-graph constructor stays cheap.
-    let precedesBitset: ReachabilityBitset?
+    /// Lazy bitset-backed transitive precedence index. Same content
+    /// as `precedes` but stored as `[UInt64]` words per event so the
+    /// GA can answer "does A precede B?" with a single bit test
+    /// instead of `Set<String>.contains`. Built on first access via
+    /// the holder so callers that never query reachability don't pay
+    /// the ~N²/64-byte allocation. `nil` for empty graphs.
+    let precedesBitsetHolder: ReachabilityBitsetHolder?
+
+    /// Force the bitset build and return it (or `nil` for empty
+    /// graphs). Subsequent calls hit a cached value via
+    /// `ReachabilityBitsetHolder`.
+    var precedesBitset: ReachabilityBitset? { precedesBitsetHolder?.value() }
 
     // MARK: - Public diagnostics
 
@@ -104,17 +111,32 @@ struct ScheduleConflictGraph: Sendable {
 
     // MARK: - Build
 
-    /// Build the graph from an `OptimizerContext`. Allocates proportional
-    /// to events + edges; for 100 events this is a few microseconds.
-    ///
-    /// `Dictionary(uniqueKeysWithValues:)` below traps on duplicates, so we
-    /// build the internal maps against a de-duplicated event list. Callers
-    /// (`IntentCompiler.execute`) already dedupe; this is defence-in-depth
-    /// so a future collision becomes a silently-correct placement instead
-    /// of a runtime crash.
+    /// Build the graph from an `OptimizerContext`. Convenience over
+    /// `build(fromMovableEvents:)` for callers that already have a
+    /// context handy. The graph only depends on `movableEvents`; other
+    /// context fields (working hours, fixed events, preferences)
+    /// don't influence its structure.
     static func build(from context: OptimizerContext) -> ScheduleConflictGraph {
+        build(fromMovableEvents: context.movableEvents)
+    }
+
+    /// Build the graph directly from a movable-event list. Lets the
+    /// graph cache warm without constructing a throwaway
+    /// `OptimizerContext`, and makes the (movable events → graph)
+    /// dependency explicit at the type level instead of buried in the
+    /// context boilerplate.
+    ///
+    /// Allocates proportional to events + edges; for 100 events this
+    /// is a few microseconds.
+    ///
+    /// `Dictionary(uniqueKeysWithValues:)` below traps on duplicates,
+    /// so we build the internal maps against a de-duplicated event
+    /// list. Callers (`IntentCompiler.execute`) already dedupe; this
+    /// is defence-in-depth so a future collision becomes a silently-
+    /// correct placement instead of a runtime crash.
+    static func build(fromMovableEvents events: [OptimizableEvent]) -> ScheduleConflictGraph {
         var seen: Set<String> = []
-        let uniqueEvents = context.movableEvents.filter { seen.insert($0.id).inserted }
+        let uniqueEvents = events.filter { seen.insert($0.id).inserted }
         let ids = uniqueEvents.map(\.id)
         guard !ids.isEmpty else {
             return ScheduleConflictGraph(
@@ -126,7 +148,7 @@ struct ScheduleConflictGraph: Sendable {
                 precedes: [:],
                 conflictEdgeCount: 0,
                 precedenceEdgeCount: 0,
-                precedesBitset: nil
+                precedesBitsetHolder: nil
             )
         }
 
@@ -279,8 +301,10 @@ struct ScheduleConflictGraph: Sendable {
         //    but stored as one `[UInt64]` mask per row. Hot-path
         //    consumers (objective decomposition, repair preflight)
         //    can answer "does A precede B?" with a word/bit lookup
-        //    instead of `Set.contains`.
-        let bitset = ReachabilityBitset.build(ids: ids, edges: precedes)
+        //    instead of `Set.contains`. Built lazily — callers that
+        //    never call `transitivelyPrecedes(_:_:)` skip the
+        //    allocation entirely.
+        let bitsetHolder = ReachabilityBitsetHolder(ids: ids, edges: precedes)
 
         return ScheduleConflictGraph(
             eventIds: ids,
@@ -291,7 +315,7 @@ struct ScheduleConflictGraph: Sendable {
             precedes: precedes,
             conflictEdgeCount: conflictEdges,
             precedenceEdgeCount: precedenceEdges,
-            precedesBitset: bitset
+            precedesBitsetHolder: bitsetHolder
         )
     }
 
@@ -365,34 +389,33 @@ struct ScheduleConflictGraph: Sendable {
 
 // MARK: - Holder (lazy cache)
 
-/// Reference-type wrapper so `OptimizerContext` (a struct) can share a
-/// single built graph across every copy. `ensureConflictGraph()` goes
-/// through this holder, so fitness evaluators and mutation operators
-/// pay the build cost exactly once per run instead of once per
-/// chromosome evaluation.
+/// Reference-type wrapper so `OptimizerContext` (a struct) can share
+/// a single built graph across every copy. `ensureConflictGraph()`
+/// goes through this holder, so fitness evaluators and mutation
+/// operators pay the build cost exactly once per run instead of once
+/// per chromosome evaluation.
 ///
 /// Thread-safe: the GA evaluates offspring in parallel via
 /// `DispatchQueue.concurrentPerform`, so several threads may race to
-/// be the first caller. `NSLock` keeps the "build once" invariant
-/// without blocking readers once the graph is cached.
-final class ConflictGraphHolder: @unchecked Sendable {
-    private let lock = NSLock()
-    private var cached: ScheduleConflictGraph?
+/// be the first caller. `OSAllocatedUnfairLock` keeps the "build
+/// once" invariant without blocking readers once the graph is
+/// cached, with ~3× cheaper acquire than `NSLock` and Swift 6
+/// strict-concurrency support out of the box.
+final class ConflictGraphHolder: Sendable {
+    private let state: OSAllocatedUnfairLock<ScheduleConflictGraph?>
 
     init(preloaded: ScheduleConflictGraph? = nil) {
-        self.cached = preloaded
+        self.state = OSAllocatedUnfairLock(initialState: preloaded)
     }
 
     /// Build-or-fetch the cached graph. Callers pass the context they
     /// want built from — the holder itself doesn't store one so it
     /// stays light and doesn't retain fixed/movable event arrays.
     func get(for context: OptimizerContext) -> ScheduleConflictGraph {
-        lock.lock()
-        if let cached {
-            lock.unlock()
+        // Fast path: a quick locked read.
+        if let cached = state.withLock({ $0 }) {
             return cached
         }
-        lock.unlock()
 
         // Build outside the lock so concurrent callers don't serialize
         // on the actual computation. Two threads may build the graph
@@ -401,13 +424,13 @@ final class ConflictGraphHolder: @unchecked Sendable {
         // logical graph, so the duplicate is harmless.
         let built = ScheduleConflictGraph.build(from: context)
 
-        lock.lock()
-        if let existing = cached {
-            lock.unlock()
-            return existing
+        return state.withLock { current in
+            if let existing = current {
+                return existing
+            }
+            current = built
+            return built
         }
-        cached = built
-        lock.unlock()
-        return built
     }
 }
+

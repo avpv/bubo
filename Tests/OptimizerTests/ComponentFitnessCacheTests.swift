@@ -26,7 +26,7 @@ struct ComponentFitnessCacheTests {
 
     // MARK: - Lookup
 
-    @Test("Miss returns nil and bumps misses")
+    @Test("Miss returns nil")
     func missReturnsNil() {
         let cache = ComponentFitnessCache()
         let key = ComponentFitnessCache.componentKey(
@@ -35,8 +35,7 @@ struct ComponentFitnessCacheTests {
             geneByEvent: ["a": gene(id: "a")]
         )
         #expect(cache.value(for: key) == nil)
-        #expect(cache.hits == 0)
-        #expect(cache.misses == 1)
+        #expect(cache.hitRate == 0.0)
     }
 
     @Test("Store then lookup returns the cached score")
@@ -49,7 +48,8 @@ struct ComponentFitnessCacheTests {
         )
         cache.store(key, value: 1.5)
         #expect(cache.value(for: key) == 1.5)
-        #expect(cache.hits == 1)
+        // One hit, no misses → hitRate = 1.0.
+        #expect(cache.hitRate == 1.0)
     }
 
     // MARK: - Key Stability
@@ -120,10 +120,9 @@ struct ComponentFitnessCacheTests {
 
         cache.invalidateAll()
         #expect(cache.value(for: k) == nil)
-        // Lookup after invalidate counts as a fresh miss — `hits` was
-        // reset, so the post-invalidate lookup is the only event.
-        #expect(cache.hits == 0)
-        #expect(cache.misses == 1)
+        // Hit rate after invalidate considers only the single
+        // post-invalidate miss — counters reset on invalidate.
+        #expect(cache.hitRate == 0.0)
     }
 
     // MARK: - Hit Rate
@@ -136,5 +135,31 @@ struct ComponentFitnessCacheTests {
         _ = cache.value(for: k)            // hit
         _ = cache.value(for: ComponentFitnessKey(value: 12))  // miss
         #expect(abs(cache.hitRate - 0.5) < 1e-9)
+    }
+
+    // MARK: - Time Bucketing
+
+    @Test("Sub-bucket startTime jitter still hits the same key")
+    func subBucketJitterCollides() {
+        // Default bucket = 60s; 12:00:00.0 and 12:00:00.4 should
+        // collide because they round to the same bucket index.
+        let baseSeconds = 1_000_000.0
+        let g1: [String: ScheduleGene] = ["a": gene(id: "a", startSeconds: baseSeconds)]
+        let g2: [String: ScheduleGene] = ["a": gene(id: "a", startSeconds: baseSeconds + 0.4)]
+
+        let k1 = ComponentFitnessCache.componentKey(componentId: 0, geneIds: ["a"], geneByEvent: g1)
+        let k2 = ComponentFitnessCache.componentKey(componentId: 0, geneIds: ["a"], geneByEvent: g2)
+        #expect(k1 == k2)
+    }
+
+    @Test("Cross-bucket startTime shift produces a different key")
+    func crossBucketShiftDiverges() {
+        let baseSeconds = 1_000_000.0
+        let g1: [String: ScheduleGene] = ["a": gene(id: "a", startSeconds: baseSeconds)]
+        let g2: [String: ScheduleGene] = ["a": gene(id: "a", startSeconds: baseSeconds + 90)]  // > 1 bucket
+
+        let k1 = ComponentFitnessCache.componentKey(componentId: 0, geneIds: ["a"], geneByEvent: g1)
+        let k2 = ComponentFitnessCache.componentKey(componentId: 0, geneIds: ["a"], geneByEvent: g2)
+        #expect(k1 != k2)
     }
 }

@@ -9,6 +9,10 @@ import Foundation
 // hash the gene state of B and look it up, we recover B's score for
 // free.
 //
+// Backed by `ShardedLRUCache`, so concurrent fitness evaluators in
+// the GA's `concurrentPerform` loop hash into independent shards
+// instead of contending on a single global lock.
+//
 // Usage pattern (caller-driven, opt-in):
 //
 //   let key = ComponentFitnessCache.componentKey(
@@ -25,10 +29,7 @@ import Foundation
 //   }
 //
 // The cache lives outside the chromosome so multiple chromosomes can
-// share component scores within a generation. Bounded LRU keeps memory
-// predictable: typical island holds ~50 chromosomes × ~5 components,
-// so 1024 slots covers the working set with room for population
-// turnover.
+// share component scores within a generation.
 
 /// 64-bit content key for one component's gene state. Computed by
 /// hashing the eventId set + the (startTime, duration, isIncluded)
@@ -39,34 +40,30 @@ struct ComponentFitnessKey: Hashable, Sendable {
     let value: UInt64
 }
 
-final class ComponentFitnessCache: @unchecked Sendable {
+final class ComponentFitnessCache: Sendable {
 
-    // MARK: Storage
+    private let cache: ShardedLRUCache<Double>
 
-    private struct Entry {
-        let key: ComponentFitnessKey
-        let score: Double
-    }
-
-    private let lock = NSLock()
-    private var entries: [Entry] = []
-    private let capacity: Int
-
-    /// Hit/miss counters for telemetry. Atomicity rides on the same
-    /// `lock` that guards `entries`, so no separate synchronization
-    /// needed.
-    private(set) var hits: Int = 0
-    private(set) var misses: Int = 0
-
-    // MARK: Init
+    /// Time-bucket width for `startTime` discretisation in the cache
+    /// key. Two genes whose start times fall into the same bucket
+    /// hash identically — without this, floating-point noise from
+    /// repair operators (sub-second adjustments around minute
+    /// boundaries) would bust the cache despite being functionally
+    /// identical at the GA's evaluation granularity.
+    ///
+    /// Default `60` seconds matches the GA's minimum schedulable
+    /// quantum (per `MutationOperator` docs); evaluators that care
+    /// about sub-minute precision should construct with a smaller
+    /// bucket explicitly.
+    let startTimeBucketSeconds: TimeInterval
 
     /// `capacity = 1024` covers a 4-island setup with ~50 chromosomes
     /// and ~5 components each (1000 working slots) plus headroom for
     /// generation turnover. Bump for larger populations or more
     /// fragmented schedules.
-    init(capacity: Int = 1024) {
-        precondition(capacity > 0, "Cache capacity must be positive.")
-        self.capacity = capacity
+    init(capacity: Int = 1024, startTimeBucketSeconds: TimeInterval = 60) {
+        self.cache = ShardedLRUCache(capacity: capacity)
+        self.startTimeBucketSeconds = max(1, startTimeBucketSeconds)
     }
 
     // MARK: Public API
@@ -74,42 +71,20 @@ final class ComponentFitnessCache: @unchecked Sendable {
     /// Lookup a stored score. Returns `nil` on miss; callers should
     /// compute and `store` on miss to keep the cache warm.
     func value(for key: ComponentFitnessKey) -> Double? {
-        lock.lock()
-        defer { lock.unlock() }
-        if let idx = entries.firstIndex(where: { $0.key == key }) {
-            // LRU touch: move hit to front.
-            let hit = entries.remove(at: idx)
-            entries.insert(hit, at: 0)
-            hits += 1
-            return hit.score
-        }
-        misses += 1
-        return nil
+        cache.lookup(forKey: key.value)
     }
 
     /// Store a freshly-computed component score under `key`. Evicts
     /// the LRU tail when capacity is exceeded. Idempotent: re-storing
     /// an existing key just refreshes its recency.
     func store(_ key: ComponentFitnessKey, value: Double) {
-        lock.lock()
-        defer { lock.unlock() }
-        if let idx = entries.firstIndex(where: { $0.key == key }) {
-            entries.remove(at: idx)
-        }
-        entries.insert(Entry(key: key, score: value), at: 0)
-        if entries.count > capacity {
-            entries.removeLast(entries.count - capacity)
-        }
+        cache.store(forKey: key.value, value: value)
     }
 
     /// Drop everything. Called on graph rebuilds (component layout
     /// changes invalidate every cached score) and at session end.
     func invalidateAll() {
-        lock.lock()
-        defer { lock.unlock() }
-        entries.removeAll()
-        hits = 0
-        misses = 0
+        cache.invalidateAll()
     }
 
     // MARK: Hit Rate Telemetry
@@ -117,31 +92,25 @@ final class ComponentFitnessCache: @unchecked Sendable {
     /// Hit rate over the cache's lifetime, in [0, 1]. Returns 0 when
     /// no lookups have happened yet — callers should treat that as
     /// "cold" rather than "ineffective".
-    var hitRate: Double {
-        lock.lock()
-        defer { lock.unlock() }
-        let total = hits + misses
-        guard total > 0 else { return 0 }
-        return Double(hits) / Double(total)
-    }
+    var hitRate: Double { cache.hitRate }
 
     // MARK: Key Construction
 
     /// Build a content key for one component.
     ///
-    /// Hashes the (eventId, startTime, duration, isIncluded) tuple of
-    /// every gene whose eventId is in `geneIds`. Sorts by eventId so
-    /// gene-array ordering is irrelevant — two chromosomes with the
-    /// same gene set but different array order still hit the same
-    /// cache slot.
+    /// Hashes the (eventId, bucketed-startTime, duration, isIncluded)
+    /// tuple of every gene whose eventId is in `geneIds`. Sorts by
+    /// eventId so gene-array ordering is irrelevant — two chromosomes
+    /// with the same gene set but different array order still hit
+    /// the same cache slot.
     ///
-    /// Genes missing from `geneByEvent` are skipped silently; a
-    /// dropped optional gene contributes the literal "missing" marker
-    /// so a subsequent re-inclusion produces a different key.
+    /// Genes missing from `geneByEvent` contribute a literal "absent"
+    /// marker so a subsequent re-inclusion produces a different key.
     static func componentKey(
         componentId: Int,
         geneIds: [String],
-        geneByEvent: [String: ScheduleGene]
+        geneByEvent: [String: ScheduleGene],
+        startTimeBucketSeconds: TimeInterval = 60
     ) -> ComponentFitnessKey {
         var hasher = Hasher()
         hasher.combine(componentId)
@@ -152,7 +121,14 @@ final class ComponentFitnessCache: @unchecked Sendable {
         for id in geneIds.sorted() {
             hasher.combine(id)
             if let gene = geneByEvent[id] {
-                hasher.combine(gene.startTime.timeIntervalSinceReferenceDate)
+                // Bucket the start time so floating-point noise from
+                // repair operators doesn't bust the cache. Round to
+                // the nearest bucket boundary, then hash the integer
+                // bucket index — that way 12:00:00.0 and 12:00:00.4
+                // collide for the default 60-second bucket.
+                let secs = gene.startTime.timeIntervalSinceReferenceDate
+                let bucketIndex = Int64((secs / startTimeBucketSeconds).rounded())
+                hasher.combine(bucketIndex)
                 hasher.combine(gene.duration)
                 hasher.combine(gene.isIncluded)
             } else {

@@ -16,96 +16,48 @@ import Foundation
 //     user retries with a slightly different intent set or the
 //     optimizer is re-invoked from a UI scenario panel.
 //   * Intent compilation runs every time the user edits the chip
-//     list. With ~65 known intents and the auto-resolver doing a fixed
-//     number of passes, the rebuild is cheap individually but visible
-//     across rapid-fire edits.
+//     list. With ~65 known intents and the auto-resolver doing a
+//     fixed number of passes, the rebuild is cheap individually but
+//     visible across rapid-fire edits.
 //
-// The cache uses a small bounded LRU so memory stays predictable —
-// graphs aren't shared across test cases or scenarios. Capacity is
-// configurable; default 8 covers "current + a few recent what-if
-// branches" without growing unbounded.
+// Concurrency: backed by `ShardedLRUCache`, so concurrent GA
+// evaluators that hash into different shards never contend on the
+// lookup. See `ShardedLRUCache.swift` for the sharding model.
 
-/// Bounded LRU memoization wrapper over `IntentGraph.build`. Thread-
-/// safe via a single internal `NSLock`; reads and writes both go
-/// through the lock because the LRU recency update is a write even on
-/// a cache hit.
-final class IntentGraphCache: @unchecked Sendable {
+/// Bounded LRU memoization wrapper over `IntentGraph.build`.
+final class IntentGraphCache: Sendable {
 
-    // MARK: Storage
-
-    private struct Entry {
-        let key: UInt64
-        let graph: IntentGraph
-    }
-
-    private let lock = NSLock()
-    private var entries: [Entry] = []
-    private let capacity: Int
-
-    // MARK: Init
+    private let cache: ShardedLRUCache<IntentGraph>
 
     /// `capacity = 8` matches the typical "current intent set + a
     /// handful of recent edits / what-if scenarios" working set
     /// observed in interactive editing sessions. Bump for batch
     /// pipelines that page through many distinct intent lists.
     init(capacity: Int = 8) {
-        precondition(capacity > 0, "Cache capacity must be positive.")
-        self.capacity = capacity
+        self.cache = ShardedLRUCache(capacity: capacity)
     }
 
-    // MARK: Public API
-
     /// Return the graph built from `intents`, building once and
-    /// caching by content hash. The hash is order-sensitive (different
-    /// orderings of the same intents produce different graphs because
-    /// dependency resolution is order-aware).
+    /// caching by content hash. The hash is order-sensitive
+    /// (different orderings of the same intents produce different
+    /// graphs because dependency resolution is order-aware).
     func graph(for intents: [ScheduleIntent]) -> IntentGraph {
         let key = Self.hashKey(intents)
-
-        lock.lock()
-        if let idx = entries.firstIndex(where: { $0.key == key }) {
-            // LRU touch: move the hit to the front so older entries
-            // get evicted first under capacity pressure.
-            let hit = entries.remove(at: idx)
-            entries.insert(hit, at: 0)
-            lock.unlock()
-            return hit.graph
+        return cache.value(forKey: key) {
+            IntentGraph.build(from: intents)
         }
-        lock.unlock()
-
-        // Build outside the lock so concurrent callers don't serialize
-        // on the build itself. Two threads racing on the same input
-        // will both build (cheap, microseconds) and the second store
-        // wins — both return logically identical graphs.
-        let built = IntentGraph.build(from: intents)
-
-        lock.lock()
-        // Re-check inside the lock: another caller may have populated
-        // the entry while we were building.
-        if let idx = entries.firstIndex(where: { $0.key == key }) {
-            let existing = entries.remove(at: idx)
-            entries.insert(existing, at: 0)
-            lock.unlock()
-            return existing.graph
-        }
-        entries.insert(Entry(key: key, graph: built), at: 0)
-        if entries.count > capacity {
-            entries.removeLast(entries.count - capacity)
-        }
-        lock.unlock()
-        return built
     }
 
     /// Drop everything in the cache. Called from app-level lifecycle
     /// hooks (sign-out, calendar disconnect) where retained intent
     /// graphs would leak the previous session's data.
     func invalidateAll() {
-        lock.lock()
-        entries.removeAll()
-        lock.unlock()
+        cache.invalidateAll()
     }
 
-    // MARK: Hashing
+    /// Aggregate hit rate, useful for telemetry. 0 means cold (no
+    /// lookups yet), not "ineffective".
+    var hitRate: Double { cache.hitRate }
 
     /// Compose a single 64-bit content hash over an intent array.
     /// `Hasher.finalize()` returns an `Int` whose top bits are the
@@ -121,69 +73,52 @@ final class IntentGraphCache: @unchecked Sendable {
 
 // MARK: - ScheduleConflictGraph Cache
 
-/// Bounded LRU memoization wrapper over `ScheduleConflictGraph.build`.
-/// Mirrors `IntentGraphCache` but keys on the structural fields of
-/// `OptimizerContext.movableEvents` that actually affect the graph
-/// (id, dependsOn, requiredParticipants, preferredHourRange).
-/// Unrelated context (working hours, planning horizon) is intentionally
-/// ignored so two contexts that differ only in cosmetic fields share a
-/// cache slot.
-final class ScheduleConflictGraphCache: @unchecked Sendable {
+/// Bounded LRU memoization wrapper over
+/// `ScheduleConflictGraph.build`. Mirrors `IntentGraphCache` but keys
+/// on the structural fields of `OptimizerContext.movableEvents` that
+/// actually affect the graph (id, dependsOn, requiredParticipants,
+/// preferredHourRange). Unrelated context (working hours, planning
+/// horizon) is intentionally ignored so two contexts that differ only
+/// in cosmetic fields share a cache slot.
+final class ScheduleConflictGraphCache: Sendable {
 
-    private struct Entry {
-        let key: UInt64
-        let graph: ScheduleConflictGraph
-    }
-
-    private let lock = NSLock()
-    private var entries: [Entry] = []
-    private let capacity: Int
+    private let cache: ShardedLRUCache<ScheduleConflictGraph>
 
     init(capacity: Int = 8) {
-        precondition(capacity > 0, "Cache capacity must be positive.")
-        self.capacity = capacity
+        self.cache = ShardedLRUCache(capacity: capacity)
     }
 
+    /// Cache by full context. Equivalent to `graph(forMovableEvents:)`
+    /// — the cache key only inspects `context.movableEvents` since
+    /// other context fields don't participate in conflict graph
+    /// structure.
     func graph(for context: OptimizerContext) -> ScheduleConflictGraph {
-        let key = Self.hashKey(context.movableEvents)
+        graph(forMovableEvents: context.movableEvents)
+    }
 
-        lock.lock()
-        if let idx = entries.firstIndex(where: { $0.key == key }) {
-            let hit = entries.remove(at: idx)
-            entries.insert(hit, at: 0)
-            lock.unlock()
-            return hit.graph
+    /// Cache by movable-event list directly. Lets callers (e.g.
+    /// `IntentCompiler`) warm the cache *before* constructing the
+    /// final `OptimizerContext`, so the holder they pass through can
+    /// be preloaded with the cached graph in one pass instead of
+    /// constructing a throwaway context.
+    func graph(forMovableEvents events: [OptimizableEvent]) -> ScheduleConflictGraph {
+        let key = Self.hashKey(events)
+        return cache.value(forKey: key) {
+            ScheduleConflictGraph.build(fromMovableEvents: events)
         }
-        lock.unlock()
-
-        let built = ScheduleConflictGraph.build(from: context)
-
-        lock.lock()
-        if let idx = entries.firstIndex(where: { $0.key == key }) {
-            let existing = entries.remove(at: idx)
-            entries.insert(existing, at: 0)
-            lock.unlock()
-            return existing.graph
-        }
-        entries.insert(Entry(key: key, graph: built), at: 0)
-        if entries.count > capacity {
-            entries.removeLast(entries.count - capacity)
-        }
-        lock.unlock()
-        return built
     }
 
     func invalidateAll() {
-        lock.lock()
-        entries.removeAll()
-        lock.unlock()
+        cache.invalidateAll()
     }
 
+    var hitRate: Double { cache.hitRate }
+
     /// Hash only the fields that participate in graph structure. The
-    /// goal is for two event lists that produce structurally identical
-    /// conflict graphs to land in the same cache slot — adding a
-    /// title or shifting a duration shouldn't bust the cache when
-    /// neither affects the conflict layer.
+    /// goal is for two event lists that produce structurally
+    /// identical conflict graphs to land in the same cache slot —
+    /// adding a title or shifting a duration shouldn't bust the
+    /// cache when neither affects the conflict layer.
     private static func hashKey(_ events: [OptimizableEvent]) -> UInt64 {
         var hasher = Hasher()
         hasher.combine(events.count)

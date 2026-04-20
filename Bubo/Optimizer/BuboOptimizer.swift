@@ -89,6 +89,22 @@ final class BuboOptimizer {
         return fresh
     }
 
+    // MARK: - Graph Caches
+    //
+    // Long-lived memoization layers shared across optimization runs.
+    // The intent cache absorbs rapid chip edits in the UI (each edit
+    // triggers a re-execute() with a near-identical intent list); the
+    // conflict cache absorbs what-if scenario passes that re-run on
+    // the same movable-event set with different objective weights.
+    //
+    // Both default to capacity 8 — `WorkloadLearners` already keys on
+    // `TaskSignature` with the same default, so two users running
+    // through ~8 distinct workloads see consistent hit rates across
+    // every level of the cache stack.
+
+    let intentGraphCache = IntentGraphCache()
+    let conflictGraphCache = ScheduleConflictGraphCache()
+
     // MARK: - State
 
     private(set) var isOptimizing = false

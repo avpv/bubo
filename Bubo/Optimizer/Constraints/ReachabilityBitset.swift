@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 // MARK: - Reachability Bitset
 //
@@ -129,6 +130,64 @@ struct ReachabilityBitset: Sendable {
                 // the next reachable index (Brian Kernighan's trick).
                 word &= word &- 1
             }
+        }
+    }
+}
+
+// MARK: - Lazy Holder
+//
+// Most consumers of `ScheduleConflictGraph` never call
+// `transitivelyPrecedes(_:_:)` — they iterate `directPrecedes`
+// directly or read `componentOf` and stop there. Building the bitset
+// on every graph construction wastes ~N²/64 bytes per graph for
+// nothing.
+//
+// `ReachabilityBitsetHolder` defers the build to first access. The
+// holder captures the inputs (ids + edge dict) at construction time
+// — both already live on the graph, so the holder is essentially
+// free until someone forces the build.
+//
+// Concurrency: `OSAllocatedUnfairLock` guards the cached state so
+// concurrent GA threads racing on first access produce one bitset
+// without serializing on hot reads (cache hits don't even take the
+// lock for long enough to matter).
+
+final class ReachabilityBitsetHolder: Sendable {
+
+    private struct State {
+        var built: ReachabilityBitset?
+        let ids: [String]
+        let edges: [String: Set<String>]
+    }
+
+    private let state: OSAllocatedUnfairLock<State>
+
+    init(ids: [String], edges: [String: Set<String>]) {
+        self.state = OSAllocatedUnfairLock(
+            initialState: State(built: nil, ids: ids, edges: edges)
+        )
+    }
+
+    /// Force the build (or return the cached bitset). Returns `nil`
+    /// only when the underlying id list was empty at construction
+    /// time — the empty-graph escape from `ReachabilityBitset.build`.
+    func value() -> ReachabilityBitset? {
+        // Fast path: hit.
+        if let cached = state.withLock({ $0.built }) {
+            return cached
+        }
+        // We can't build under the lock without holding it for the
+        // whole `ReachabilityBitset.build` call — but reading `ids`
+        // and `edges` requires the lock too. Take a quick snapshot
+        // so the build runs lock-free.
+        let snapshot = state.withLock { (ids: $0.ids, edges: $0.edges) }
+        let built = ReachabilityBitset.build(ids: snapshot.ids, edges: snapshot.edges)
+        return state.withLock { current in
+            if let existing = current.built {
+                return existing
+            }
+            current.built = built
+            return built
         }
     }
 }

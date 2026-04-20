@@ -35,13 +35,20 @@ struct IntentCompiler {
         // Phase 0: Expand subgraphs and apply variables
         var expandedIntents = request.intents
         if let registry = subgraphRegistry {
-            var graph = IntentGraph.build(from: expandedIntents)
+            // Cache miss is fine here — subgraph expansion mutates the
+            // graph after build, so caching the *expanded* graph isn't
+            // sound. The cached entry corresponds to the pre-expansion
+            // structure; we discard it deliberately.
+            var graph = optimizer.intentGraphCache.graph(for: expandedIntents)
             graph.expandSubgraphs(subgraphs: registry.subgraphs, variables: request.variables)
             expandedIntents = graph.sortedIntents()
         }
 
-        // Phase 1: Build graph, resolve dependencies, sort topologically
-        let graph = IntentGraph.build(from: expandedIntents)
+        // Phase 1: Build graph, resolve dependencies, sort topologically.
+        // The shared cache survives across `execute()` calls so rapid
+        // chip edits in the UI hit a warm graph instead of rebuilding
+        // auto-resolution + topological sort every keystroke.
+        let graph = optimizer.intentGraphCache.graph(for: expandedIntents)
         let orderedIntents = graph.sortedIntents()
 
         var config = ResolvedConfig(defaultWorkingHours: defaultWorkingHours)
@@ -136,12 +143,21 @@ struct IntentCompiler {
             return .noEventsToOptimize
         }
 
+        // Pre-build the conflict graph through the shared cache so the
+        // holder we hand to `OptimizerContext` is already warm. Two
+        // back-to-back optimizations with the same movable-event set
+        // (e.g. weight tuning, what-if scenarios) skip the build
+        // entirely — the cache returns the prior instance and the
+        // holder's double-checked store hands it out to every
+        // chromosome on the hot path.
+        let cachedConflictGraph = optimizer.conflictGraphCache.graph(forMovableEvents: allMovable)
         let context = OptimizerContext(
             fixedEvents: allFixed,
             movableEvents: allMovable,
             workingHours: workingHours,
             planningHorizon: horizon,
-            preferences: prefs
+            preferences: prefs,
+            conflictGraphHolder: ConflictGraphHolder(preloaded: cachedConflictGraph)
         )
 
         // Phase 4: Configure stability
