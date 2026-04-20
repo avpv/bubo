@@ -37,7 +37,11 @@ final class PersistedLocalEvent {
     var deadline: Date?
     var taskStatusRaw: String = "todo"
     var completedAt: Date?
-    var dependsOn: [String] = []
+    /// JSON-encoded `[String]`. Stored as `Data?` because
+    /// `NSPersistentCloudKitContainer` can't materialize a Swift
+    /// `Array<String>` attribute at load time (crashes with
+    /// "Could not materialize Objective-C class named 'Array'").
+    var dependsOnData: Data?
     /// JSON-encoded `PomodoroConfig`. Optional + defaulted so CloudKit
     /// migration is a no-op for pre-existing rows; newly-stored pomodoro
     /// events carry the resolver's chosen shape here.
@@ -74,7 +78,9 @@ final class PersistedLocalEvent {
         self.deadline = event.deadline
         self.taskStatusRaw = event.taskStatus.rawValue
         self.completedAt = event.completedAt
-        self.dependsOn = event.dependsOn
+        self.dependsOnData = event.dependsOn.isEmpty
+            ? nil
+            : try? JSONEncoder().encode(event.dependsOn)
         self.pomodoroConfigData = event.pomodoroConfig.flatMap { try? JSONEncoder().encode($0) }
         self.pomodoroTaskSequenceData = event.pomodoroTaskSequence.isEmpty
             ? nil
@@ -106,7 +112,9 @@ final class PersistedLocalEvent {
         event.deadline = deadline
         event.taskStatus = TaskStatus(rawValue: taskStatusRaw) ?? .todo
         event.completedAt = completedAt
-        event.dependsOn = dependsOn
+        event.dependsOn = dependsOnData.flatMap {
+            try? JSONDecoder().decode([String].self, from: $0)
+        } ?? []
         event.pomodoroConfig = pomodoroConfigData.flatMap {
             try? JSONDecoder().decode(PomodoroConfig.self, from: $0)
         }
@@ -145,7 +153,10 @@ final class PersistedCachedEvent {
     var deadline: Date?
     var taskStatusRaw: String = "todo"
     var completedAt: Date?
-    var dependsOn: [String] = []
+    /// JSON-encoded `[String]`. Stored as `Data?` because CoreData fails
+    /// to materialize a Swift `Array<String>` attribute at load time — see
+    /// the sibling `PersistedLocalEvent` comment.
+    var dependsOnData: Data?
     /// JSON-encoded `PomodoroConfig`. Mirrors the field on
     /// `PersistedLocalEvent` so a pomodoro brought back from the cache
     /// still knows its shape.
@@ -174,7 +185,9 @@ final class PersistedCachedEvent {
         self.deadline = event.deadline
         self.taskStatusRaw = event.taskStatus.rawValue
         self.completedAt = event.completedAt
-        self.dependsOn = event.dependsOn
+        self.dependsOnData = event.dependsOn.isEmpty
+            ? nil
+            : try? JSONEncoder().encode(event.dependsOn)
         self.pomodoroConfigData = event.pomodoroConfig.flatMap { try? JSONEncoder().encode($0) }
         self.pomodoroTaskSequenceData = event.pomodoroTaskSequence.isEmpty
             ? nil
@@ -206,7 +219,9 @@ final class PersistedCachedEvent {
         event.deadline = deadline
         event.taskStatus = TaskStatus(rawValue: taskStatusRaw) ?? .todo
         event.completedAt = completedAt
-        event.dependsOn = dependsOn
+        event.dependsOn = dependsOnData.flatMap {
+            try? JSONDecoder().decode([String].self, from: $0)
+        } ?? []
         event.pomodoroConfig = pomodoroConfigData.flatMap {
             try? JSONDecoder().decode(PomodoroConfig.self, from: $0)
         }
