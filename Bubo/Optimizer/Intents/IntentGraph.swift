@@ -151,6 +151,46 @@ struct IntentGraph: Sendable {
         }
     }
 
+    // MARK: - Compact Indexing
+
+    /// Stable `nodeId → UInt32` index over the current `nodes`
+    /// dictionary, sorted by id so successive builds against the same
+    /// node set produce the same indices. Used by hot-path consumers
+    /// (`reachabilityBitset`, Salsa-style cache key derivation) so a
+    /// `Dictionary<String, …>` lookup collapses to an array index.
+    ///
+    /// Callers should treat the returned indices as opaque: the only
+    /// guarantee is that two indices compare equal iff their ids do.
+    /// The indices are *not* stable across edits to `nodes` (insert/
+    /// remove shifts every id whose sorted position changes).
+    func compactNodeIndex() -> [String: UInt32] {
+        let sorted = nodes.keys.sorted()
+        var out: [String: UInt32] = [:]
+        out.reserveCapacity(sorted.count)
+        for (i, id) in sorted.enumerated() {
+            out[id] = UInt32(i)
+        }
+        return out
+    }
+
+    /// Ordered id list matching `compactNodeIndex` indices. The pair
+    /// `(compactNodeIndex(), orderedNodeIds())` lets callers translate
+    /// in either direction without touching the `nodes` dictionary on
+    /// the hot path.
+    func orderedNodeIds() -> [String] {
+        nodes.keys.sorted()
+    }
+
+    /// Bitset-backed transitive reachability over the same edge set as
+    /// `reachability()`. Returns `nil` when the graph has zero nodes
+    /// (so the empty case stays cheap and unambiguous). Builds the
+    /// `Set<String>` form once internally — the bitset's value is fast
+    /// repeated queries (`contains(from:to:)` is a single bit test).
+    func reachabilityBitset() -> ReachabilityBitset? {
+        let edges = reachability()
+        return ReachabilityBitset.build(ids: orderedNodeIds(), edges: edges)
+    }
+
     // MARK: - Reachability & SCC Diagnostics
 
     /// Transitive closure of `dependsOn` + `requires` edges as a

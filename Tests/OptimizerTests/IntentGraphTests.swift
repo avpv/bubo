@@ -388,4 +388,44 @@ final class IntentGraphTests: XCTestCase {
         XCTAssertTrue(cycleSet.contains("horizon.today"))
         XCTAssertTrue(cycleSet.contains("focusBlock"))
     }
+
+    // MARK: - Compact Indexing & Bitset
+
+    func testCompactNodeIndexIsContiguousAndStable() {
+        let graph = IntentGraph.build(from: [
+            .horizon(.today), .focusBlock(minutes: 60), .speed(.quick)
+        ])
+        let idx = graph.compactNodeIndex()
+        let ordered = graph.orderedNodeIds()
+
+        XCTAssertEqual(idx.count, graph.nodes.count)
+        XCTAssertEqual(ordered.count, graph.nodes.count)
+
+        // Indices must be 0..<count without gaps.
+        let values = Set(idx.values.map(Int.init))
+        XCTAssertEqual(values, Set(0..<graph.nodes.count))
+
+        // ordered[idx[id]] == id.
+        for (id, position) in idx {
+            XCTAssertEqual(ordered[Int(position)], id)
+        }
+    }
+
+    func testReachabilityBitsetMirrorsDictionaryReachability() {
+        let graph = IntentGraph.build(from: [.prioritizeDeadlines()])
+        guard let bitset = graph.reachabilityBitset() else {
+            XCTFail("Graph with nodes must produce a bitset")
+            return
+        }
+        let dictForm = graph.reachability()
+        // Same answer for every (from, to) pair.
+        for (from, targets) in dictForm {
+            for to in targets {
+                XCTAssertTrue(
+                    bitset.contains(from: from, to: to),
+                    "Bitset missed \(from) -> \(to)"
+                )
+            }
+        }
+    }
 }

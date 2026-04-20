@@ -66,6 +66,13 @@ struct ScheduleConflictGraph: Sendable {
     /// Total `dependsOn` edges (direct, not transitive).
     let precedenceEdgeCount: Int
 
+    /// Bitset-backed transitive precedence index. Same content as
+    /// `precedes` but stored as `[UInt64]` words per event so the GA
+    /// can answer "does A precede B?" with a single bit test instead
+    /// of `Set<String>.contains`. Skipped (`nil`) for graphs with
+    /// zero events so the empty-graph constructor stays cheap.
+    let precedesBitset: ReachabilityBitset?
+
     // MARK: - Public diagnostics
 
     /// Conflict density in [0, 1]: `2 · edges / (N · (N-1))`. Zero
@@ -118,7 +125,8 @@ struct ScheduleConflictGraph: Sendable {
                 directPrecedes: [:],
                 precedes: [:],
                 conflictEdgeCount: 0,
-                precedenceEdgeCount: 0
+                precedenceEdgeCount: 0,
+                precedesBitset: nil
             )
         }
 
@@ -197,15 +205,34 @@ struct ScheduleConflictGraph: Sendable {
         // Preferred-hour overlap (soft coupling) — events that prefer
         // overlapping windows get bucketed together for component
         // analysis even without a hard constraint.
-        for i in 0..<uniqueEvents.count {
-            for j in (i + 1)..<uniqueEvents.count {
-                let a = uniqueEvents[i]
-                let b = uniqueEvents[j]
-                guard let aRange = a.preferredHourRange,
-                      let bRange = b.preferredHourRange else { continue }
-                if aRange.overlaps(bRange) {
-                    addConflictEdge(a.id, b.id)
-                }
+        //
+        // Old impl was a naive O(N²) double sweep over every event
+        // pair, paying the `guard let aRange / bRange` cost even on
+        // events without a preferred range. Now we (1) filter the list
+        // down to events that *have* a range and (2) sort by lower
+        // bound so the inner sweep can break the moment the next
+        // candidate's lower bound passes our upper bound. For real
+        // calendars where ranges cluster (e.g. focus blocks 9-12,
+        // meetings 14-17), this turns into ~O(N · k) with k = local
+        // overlap-cluster size.
+        let ranged = uniqueEvents
+            .compactMap { event -> (id: String, range: ClosedRange<Int>)? in
+                guard let range = event.preferredHourRange else { return nil }
+                return (event.id, range)
+            }
+            .sorted { $0.range.lowerBound < $1.range.lowerBound }
+
+        for i in 0..<ranged.count {
+            let a = ranged[i]
+            var j = i + 1
+            while j < ranged.count {
+                let b = ranged[j]
+                // `ranged` is sorted ascending by lowerBound; once
+                // `b.lowerBound > a.upperBound` no later element can
+                // overlap a either, so we cut the inner loop short.
+                if b.range.lowerBound > a.range.upperBound { break }
+                addConflictEdge(a.id, b.id)
+                j += 1
             }
         }
 
@@ -248,6 +275,13 @@ struct ScheduleConflictGraph: Sendable {
             }
         }
 
+        // 5) Bitset transitive precedence: same content as `precedes`
+        //    but stored as one `[UInt64]` mask per row. Hot-path
+        //    consumers (objective decomposition, repair preflight)
+        //    can answer "does A precede B?" with a word/bit lookup
+        //    instead of `Set.contains`.
+        let bitset = ReachabilityBitset.build(ids: ids, edges: precedes)
+
         return ScheduleConflictGraph(
             eventIds: ids,
             componentOf: componentOf,
@@ -256,7 +290,8 @@ struct ScheduleConflictGraph: Sendable {
             directPrecedes: precedesDirect,
             precedes: precedes,
             conflictEdgeCount: conflictEdges,
-            precedenceEdgeCount: precedenceEdges
+            precedenceEdgeCount: precedenceEdges,
+            precedesBitset: bitset
         )
     }
 
@@ -267,6 +302,16 @@ struct ScheduleConflictGraph: Sendable {
     func component(containing eventId: String) -> [String] {
         guard let cid = componentOf[eventId] else { return [eventId] }
         return eventIds.filter { componentOf[$0] == cid }
+    }
+
+    /// Bitset-backed "does `prereq` transitively precede `dependent`?"
+    /// query. O(1) on the hot path: one dictionary lookup for each id
+    /// to translate to an integer index, then a word/bit test on the
+    /// stored mask. Returns `false` for unknown event ids or when the
+    /// bitset wasn't built (empty graph).
+    func transitivelyPrecedes(_ prereq: String, _ dependent: String) -> Bool {
+        guard let bitset = precedesBitset else { return false }
+        return bitset.contains(from: prereq, to: dependent)
     }
 
     /// Every component as an array of member event IDs. Useful for
