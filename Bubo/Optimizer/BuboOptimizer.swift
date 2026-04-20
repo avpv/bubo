@@ -227,9 +227,18 @@ final class BuboOptimizer {
                 populationSize: max(2, config.populationSize * 2)
             )
             : nil
+        // Adaptive hypervolume sample count: the estimator's Monte-Carlo
+        // variance scales with objective count, not population size, but
+        // the budget can: a 20-individual .instant population can never
+        // fill 8 000 niches so the extra samples are wasted work. Anchor
+        // the sample budget to `populationSize²` clamped into a sensible
+        // band so tiny runs get ~500 samples and full-scale runs still
+        // get the 8 000-sample default.
+        let hvSamples = min(8_000, max(500, config.populationSize * config.populationSize * 4))
         let multiObjective = MultiObjectiveContext<ScheduleChromosome>.schedule(
             evaluator: evaluator,
             populationSize: config.populationSize,
+            hypervolumeSampleCount: hvSamples,
             moeadState: moeadState
         )
 
@@ -559,7 +568,70 @@ final class BuboOptimizer {
             participantAvailability: participantAvailability
         )
 
-        return await optimize(context: context)
+        // Problem-size-aware config: a 4-task week does NOT need 240
+        // individuals × 400 generations × 4 islands. Scale the solver
+        // budget to the search-space size so interactive "plan week"
+        // stays under a few seconds on sparse backlogs without losing
+        // solution quality on dense ones.
+        let (gaCfg, islandCfg) = configForWorkload(
+            movableEvents: movableEvents,
+            fixedEvents: fixedEvents
+        )
+        return await optimize(
+            context: context,
+            overrideConfig: gaCfg,
+            overrideIslandConfig: islandCfg
+        )
+    }
+
+    /// Pick GA + island config by the *effective* search-space size.
+    /// The search space is dominated by the number of movable events —
+    /// fixed events only constrain it — so we scale on `movableEvents.count`
+    /// with a secondary check on total duration (a handful of long tasks
+    /// can still form a harder bin-packing than many short ones).
+    ///
+    /// Thresholds were chosen so the three config tiers span the range
+    /// of real week plans:
+    ///   • ≤ 3 movable  → brute-force fast path handles it (see `optimize`).
+    ///   • ≤ 8 movable  → `.quick` (~80 gen × 50 pop × 2 islands ≈ 8k evals).
+    ///   • ≤ 20 movable → `.default` single-pop (200 gen × 100 pop).
+    ///   • > 20 movable → `.island` (the original heavy config).
+    ///
+    /// Returning `nil` for either override means "use instance default"
+    /// — we use that for the heavy case so existing tests that override
+    /// `gaConfig` / `islandConfig` are unaffected.
+    private func configForWorkload(
+        movableEvents: [OptimizableEvent],
+        fixedEvents: [CalendarEvent]
+    ) -> (GAConfiguration?, IslandConfiguration?) {
+        let n = movableEvents.count
+        let single = IslandConfiguration(
+            islandCount: 1,
+            migrationInterval: 10,
+            migrationSize: 1,
+            topology: .ring,
+            emigrantSelection: .best,
+            immigrantReplacement: .worst,
+            diversifyIslands: false,
+            adaptiveMigration: false,
+            routeByProductivity: false
+        )
+        if n <= 3 {
+            // Near-brute-force: 1 island × 20 pop × 20 gen = ~400
+            // total evaluations, plenty for a 3-task workload. With
+            // the 0.5s wallclock cap in .instant, this tier is
+            // effectively a direct-search finisher on the greedy seed.
+            return (.instant, single)
+        }
+        if n <= 8 {
+            return (.quick, .quick)
+        }
+        if n <= 20 {
+            // Single-population .default skips the island overhead but
+            // keeps enough evals for non-trivial workloads.
+            return (.default, single)
+        }
+        return (nil, nil)
     }
 
     // MARK: - Incremental Re-optimization (#26)

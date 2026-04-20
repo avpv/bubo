@@ -449,6 +449,7 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         var effectiveInterval = islandConfig.migrationInterval
         var effectiveSize = islandConfig.migrationSize
         var lastCrossDiversity: CrossIslandDiversity?
+        let wallclockStart = Date()
 
         for generation in 0..<totalGenerations {
             // Cooperative cancellation — UI can stop a long `.thorough`
@@ -456,6 +457,17 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             // date so callers catching `CancellationError` get whatever
             // was found before interruption.
             try Task.checkCancellation()
+
+            // Wallclock ceiling (see GeneticAlgorithm.evolve for
+            // rationale). Island runs can be several-times more
+            // expensive than a single-pop GA, so this cap is often
+            // what saves interactive callers from burning the full
+            // generation budget on a trivially-schedulable workload.
+            if baseConfig.wallclockTimeout > 0 &&
+                Date().timeIntervalSince(wallclockStart) >= baseConfig.wallclockTimeout {
+                convergenceGeneration = generation
+                break
+            }
 
             // Evolve each island for one generation in parallel.
             // Each Island is a reference type, so concurrent access to separate

@@ -1,4 +1,85 @@
 import Foundation
+import os
+
+// MARK: - Eval Telemetry
+
+/// Lightweight thread-safe counters describing how work is flowing
+/// through the evaluator: full re-evals vs delta-paths vs cache hits.
+/// These are the numbers you want when deciding whether the GA is
+/// actually paying for the delta-eval + cache scaffolding or silently
+/// falling back to full evaluation on every offspring.
+///
+/// The counters are sample-only — nothing else reads them for control
+/// flow, so the lock contention cost stays out of the inner objective
+/// loops where it would matter. `snapshot()` + `reset()` are the
+/// consumer-facing API; call sites increment via the `record*` methods.
+final class FitnessEvalTelemetry: @unchecked Sendable {
+    struct Snapshot: Sendable {
+        var fullEvaluations: Int
+        var deltaEvaluations: Int
+        var cacheHits: Int
+        var componentCacheHits: Int
+        var constraintRejections: Int
+
+        var total: Int {
+            fullEvaluations + deltaEvaluations + cacheHits
+        }
+
+        var deltaFraction: Double {
+            total > 0 ? Double(deltaEvaluations) / Double(total) : 0
+        }
+
+        var cacheHitFraction: Double {
+            total > 0 ? Double(cacheHits) / Double(total) : 0
+        }
+    }
+
+    private let lock = OSAllocatedUnfairLock<Snapshot>(
+        initialState: Snapshot(
+            fullEvaluations: 0,
+            deltaEvaluations: 0,
+            cacheHits: 0,
+            componentCacheHits: 0,
+            constraintRejections: 0
+        )
+    )
+
+    func recordFullEvaluation() {
+        lock.withLock { $0.fullEvaluations += 1 }
+    }
+
+    func recordDeltaEvaluation() {
+        lock.withLock { $0.deltaEvaluations += 1 }
+    }
+
+    func recordCacheHit() {
+        lock.withLock { $0.cacheHits += 1 }
+    }
+
+    func recordComponentCacheHit() {
+        lock.withLock { $0.componentCacheHits += 1 }
+    }
+
+    func recordConstraintRejection() {
+        lock.withLock { $0.constraintRejections += 1 }
+    }
+
+    func snapshot() -> Snapshot {
+        lock.withLock { $0 }
+    }
+
+    func reset() {
+        lock.withLock { state in
+            state = Snapshot(
+                fullEvaluations: 0,
+                deltaEvaluations: 0,
+                cacheHits: 0,
+                componentCacheHits: 0,
+                constraintRejections: 0
+            )
+        }
+    }
+}
 
 // MARK: - Fitness Objective Protocol
 
@@ -149,6 +230,15 @@ final class FitnessEvaluator: @unchecked Sendable {
     /// Both are correctness-safe because the key includes everything
     /// `evaluateComponent` reads (eventIds + bucketed gene state).
     let componentFitnessCache: ComponentFitnessCache?
+
+    /// Per-run evaluation telemetry. The evaluator bumps counters on
+    /// every eval path (full, delta, cache hit, constraint reject);
+    /// tests and diagnostic tooling can `snapshot()` to see where
+    /// the work actually went. Always present — the counter overhead
+    /// is one uncontended `OSAllocatedUnfairLock` acquire per eval,
+    /// which is negligible relative to objective work but still gated
+    /// so it can be reset between runs.
+    let telemetry = FitnessEvalTelemetry()
 
     init(
         objectives: [any FitnessObjective],
@@ -318,6 +408,7 @@ final class FitnessEvaluator: @unchecked Sendable {
                 // ground truth — promote the flag for downstream
                 // boundary checks.
                 chromosome.isFitnessReal = true
+                telemetry.recordCacheHit()
                 return
             }
         }
@@ -382,6 +473,7 @@ final class FitnessEvaluator: @unchecked Sendable {
                 .filter { $0.isHard }
                 .reduce(0.0) { $0 + $1.penalty(for: chromosome, context: context) }
             let fitness = 0.09 / (1.0 + hardPenalty * 0.01)
+            telemetry.recordConstraintRejection()
             return EvaluationResult(
                 fitness: fitness,
                 objectiveCache: chromosome.objectiveCache ?? [:],
@@ -522,6 +614,17 @@ final class FitnessEvaluator: @unchecked Sendable {
         let normalizedScore = weightedSum / totalWeight
         let penaltyFactor = 1.0 / (1.0 + softPenalty * 0.01)
         let fitness = 0.1 + normalizedScore * penaltyFactor * 0.9
+
+        // Record whether this eval actually used a delta path or fell
+        // back to a full sweep. We count "delta" when *either* kind of
+        // partitioned reuse was possible — that's what matters for
+        // tuning: a run where `canDeltaPerDay` is always false means
+        // the caller is dropping the snapshot/mutation hint.
+        if canDeltaPerDay || canDeltaPerComponent {
+            telemetry.recordDeltaEvaluation()
+        } else {
+            telemetry.recordFullEvaluation()
+        }
 
         return EvaluationResult(
             fitness: fitness,

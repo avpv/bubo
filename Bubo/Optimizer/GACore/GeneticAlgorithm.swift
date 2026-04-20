@@ -71,6 +71,17 @@ struct GAConfiguration: Sendable {
     /// tuning of `mutationRate` per workload.
     var selfAdaptiveRates: Bool
 
+    /// Wallclock ceiling on the evolution loop. When > 0, both
+    /// `GeneticAlgorithm.evolve` and `IslandModelGA.evolveIslands`
+    /// exit between generations once this many seconds have elapsed
+    /// since the loop started, regardless of `maxGenerations` or
+    /// `convergencePatience`. Value 0 disables the timeout (legacy
+    /// behaviour). Callers driving interactive UIs set this to keep
+    /// "plan week" responsive on small backlogs where GA would
+    /// otherwise burn its full generation budget on a trivially-
+    /// schedulable workload.
+    var wallclockTimeout: TimeInterval
+
     // Schedule-specific tunables (QD emission rate, gradient
     // refinement interval) used to live here. They've moved into the
     // hook closures that the host wires via `EvolutionHooks`, so
@@ -99,7 +110,8 @@ struct GAConfiguration: Sendable {
         chcMaxRestarts: Int = 0,
         chcRestartEliteFraction: Double = 0.15,
         chcRestartMutationRate: Double = 0.35,
-        selfAdaptiveRates: Bool = false
+        selfAdaptiveRates: Bool = false,
+        wallclockTimeout: TimeInterval = 0
     ) {
         self.populationSize = populationSize
         self.maxGenerations = maxGenerations
@@ -123,6 +135,7 @@ struct GAConfiguration: Sendable {
         self.chcRestartEliteFraction = chcRestartEliteFraction
         self.chcRestartMutationRate = chcRestartMutationRate
         self.selfAdaptiveRates = selfAdaptiveRates
+        self.wallclockTimeout = wallclockTimeout
     }
 
     static let `default` = GAConfiguration(
@@ -147,7 +160,8 @@ struct GAConfiguration: Sendable {
         chcMaxRestarts: 1,
         chcRestartEliteFraction: 0.15,
         chcRestartMutationRate: 0.35,
-        selfAdaptiveRates: true
+        selfAdaptiveRates: true,
+        wallclockTimeout: 8.0
     )
 
     static let quick = GAConfiguration(
@@ -159,13 +173,14 @@ struct GAConfiguration: Sendable {
         selectionStrategy: .tournament(size: 3),
         crossoverStrategy: .contextual(temperature: 0.7),
         convergenceThreshold: 0.005,
-        convergencePatience: 15,
+        convergencePatience: 10,
         adaptiveMutation: false,
         diversityThreshold: 0.01,
         immigrationRate: 0.1,
         greedySeedFraction: 0.2,
         enableRepair: true,
-        adaptiveCrossover: false
+        adaptiveCrossover: false,
+        wallclockTimeout: 3.0
     )
 
     /// Ultra-fast config for live preview and drag-to-schedule reflow.
@@ -187,7 +202,8 @@ struct GAConfiguration: Sendable {
         immigrationRate: 0.0,
         greedySeedFraction: 0.3,
         enableRepair: true,
-        adaptiveCrossover: false
+        adaptiveCrossover: false,
+        wallclockTimeout: 0.5
     )
 
     static let thorough = GAConfiguration(
@@ -212,7 +228,8 @@ struct GAConfiguration: Sendable {
         chcMaxRestarts: 2,
         chcRestartEliteFraction: 0.15,
         chcRestartMutationRate: 0.35,
-        selfAdaptiveRates: true
+        selfAdaptiveRates: true,
+        wallclockTimeout: 20.0
     )
 
     /// Per-island config for island model GA. Smaller populations per island
@@ -238,7 +255,8 @@ struct GAConfiguration: Sendable {
         memeticHillClimbInterval: 30,
         memeticHillClimbCandidates: 3,
         memeticHillClimbSteps: 8,
-        selfAdaptiveRates: true
+        selfAdaptiveRates: true,
+        wallclockTimeout: 12.0
     )
 }
 
@@ -456,6 +474,7 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         var staleGenerations = 0
         var lastBestFitness = bestEver?.rawFitness ?? 0
         var restartsPerformed = 0
+        let wallclockStart = Date()
 
         for generation in 0..<config.maxGenerations {
             // Cooperative cancellation: UI-triggered task cancellation
@@ -463,6 +482,17 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             // the current best is, so callers catching CancellationError
             // can still surface a usable result.
             try Task.checkCancellation()
+
+            // Wallclock ceiling: bail before starting a new generation
+            // once the budget has been spent. `bestEver` already holds
+            // the best individual found so far; the subsequent hill-
+            // climb pass still runs so interactive callers get a
+            // polished result even under tight budgets.
+            if config.wallclockTimeout > 0 &&
+                Date().timeIntervalSince(wallclockStart) >= config.wallclockTimeout {
+                convergenceGeneration = generation
+                break
+            }
 
             evolveOneGeneration(
                 &population,
