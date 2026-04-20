@@ -154,7 +154,7 @@ struct ReachabilityBitset: Sendable {
 
 final class ReachabilityBitsetHolder: Sendable {
 
-    private struct State {
+    private struct State: Sendable {
         var built: ReachabilityBitset?
         let ids: [String]
         let edges: [String: Set<String>]

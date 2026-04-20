@@ -34,7 +34,7 @@ final class ShardedLRUCache<Value: Sendable>: Sendable {
 
     // MARK: Storage
 
-    private struct Entry {
+    private struct Entry: Sendable {
         let key: UInt64
         let value: Value
     }
@@ -42,7 +42,7 @@ final class ShardedLRUCache<Value: Sendable>: Sendable {
     /// One shard's protected state. The lock guards both `entries`
     /// and the per-shard hit/miss counters so a single critical
     /// section covers "look up + update LRU + bump telemetry".
-    private struct Shard {
+    private struct Shard: Sendable {
         var entries: [Entry] = []
         var hits: Int = 0
         var misses: Int = 0
