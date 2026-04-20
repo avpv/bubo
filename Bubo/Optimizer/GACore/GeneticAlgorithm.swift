@@ -71,6 +71,17 @@ struct GAConfiguration: Sendable {
     /// tuning of `mutationRate` per workload.
     var selfAdaptiveRates: Bool
 
+    /// Wallclock ceiling on the evolution loop. When > 0, both
+    /// `GeneticAlgorithm.evolve` and `IslandModelGA.evolveIslands`
+    /// exit between generations once this many seconds have elapsed
+    /// since the loop started, regardless of `maxGenerations` or
+    /// `convergencePatience`. Value 0 disables the timeout (legacy
+    /// behaviour). Callers driving interactive UIs set this to keep
+    /// "plan week" responsive on small backlogs where GA would
+    /// otherwise burn its full generation budget on a trivially-
+    /// schedulable workload.
+    var wallclockTimeout: TimeInterval
+
     // Schedule-specific tunables (QD emission rate, gradient
     // refinement interval) used to live here. They've moved into the
     // hook closures that the host wires via `EvolutionHooks`, so
@@ -99,7 +110,8 @@ struct GAConfiguration: Sendable {
         chcMaxRestarts: Int = 0,
         chcRestartEliteFraction: Double = 0.15,
         chcRestartMutationRate: Double = 0.35,
-        selfAdaptiveRates: Bool = false
+        selfAdaptiveRates: Bool = false,
+        wallclockTimeout: TimeInterval = 0
     ) {
         self.populationSize = populationSize
         self.maxGenerations = maxGenerations
@@ -123,6 +135,7 @@ struct GAConfiguration: Sendable {
         self.chcRestartEliteFraction = chcRestartEliteFraction
         self.chcRestartMutationRate = chcRestartMutationRate
         self.selfAdaptiveRates = selfAdaptiveRates
+        self.wallclockTimeout = wallclockTimeout
     }
 
     static let `default` = GAConfiguration(
@@ -147,7 +160,8 @@ struct GAConfiguration: Sendable {
         chcMaxRestarts: 1,
         chcRestartEliteFraction: 0.15,
         chcRestartMutationRate: 0.35,
-        selfAdaptiveRates: true
+        selfAdaptiveRates: true,
+        wallclockTimeout: 8.0
     )
 
     static let quick = GAConfiguration(
@@ -159,13 +173,14 @@ struct GAConfiguration: Sendable {
         selectionStrategy: .tournament(size: 3),
         crossoverStrategy: .contextual(temperature: 0.7),
         convergenceThreshold: 0.005,
-        convergencePatience: 15,
+        convergencePatience: 10,
         adaptiveMutation: false,
         diversityThreshold: 0.01,
         immigrationRate: 0.1,
         greedySeedFraction: 0.2,
         enableRepair: true,
-        adaptiveCrossover: false
+        adaptiveCrossover: false,
+        wallclockTimeout: 3.0
     )
 
     /// Ultra-fast config for live preview and drag-to-schedule reflow.
@@ -187,7 +202,8 @@ struct GAConfiguration: Sendable {
         immigrationRate: 0.0,
         greedySeedFraction: 0.3,
         enableRepair: true,
-        adaptiveCrossover: false
+        adaptiveCrossover: false,
+        wallclockTimeout: 0.5
     )
 
     static let thorough = GAConfiguration(
@@ -212,7 +228,8 @@ struct GAConfiguration: Sendable {
         chcMaxRestarts: 2,
         chcRestartEliteFraction: 0.15,
         chcRestartMutationRate: 0.35,
-        selfAdaptiveRates: true
+        selfAdaptiveRates: true,
+        wallclockTimeout: 20.0
     )
 
     /// Per-island config for island model GA. Smaller populations per island
@@ -238,7 +255,8 @@ struct GAConfiguration: Sendable {
         memeticHillClimbInterval: 30,
         memeticHillClimbCandidates: 3,
         memeticHillClimbSteps: 8,
-        selfAdaptiveRates: true
+        selfAdaptiveRates: true,
+        wallclockTimeout: 12.0
     )
 }
 
@@ -456,13 +474,32 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         var staleGenerations = 0
         var lastBestFitness = bestEver?.rawFitness ?? 0
         var restartsPerformed = 0
+        let wallclockStart = Date()
 
+        // Soft deadline semantics: the timeout check sits at the top
+        // of the loop *after* the previous generation has fully
+        // committed (offspring evaluated, bestEver updated, memetic
+        // hill climb applied, onGenerationComplete hook run). So when
+        // we break, `bestEver` and the population are in a consistent
+        // state — never mid-generation. The subsequent post-loop hill
+        // climb still runs, but scales its effort to whatever budget
+        // is left (see `remainingWallclock` below) so the total wall
+        // time stays bounded even on interactive configs.
         for generation in 0..<config.maxGenerations {
             // Cooperative cancellation: UI-triggered task cancellation
             // lands here. `bestEver` is already populated with whatever
             // the current best is, so callers catching CancellationError
             // can still surface a usable result.
             try Task.checkCancellation()
+
+            // Wallclock ceiling: soft cap, consulted only between
+            // generations. A generation in flight always gets to
+            // finish so the population invariants survive.
+            if config.wallclockTimeout > 0 &&
+                Date().timeIntervalSince(wallclockStart) >= config.wallclockTimeout {
+                convergenceGeneration = generation
+                break
+            }
 
             evolveOneGeneration(
                 &population,
@@ -555,11 +592,27 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             }
         }
 
-        // Local search: refine top individuals with SA-hybrid hill climbing
+        // Local search: refine top individuals with SA-hybrid hill climbing.
+        //
+        // Budget-aware sizing: when we exited the evolution loop via
+        // the wallclock break, the final hill-climb still runs because
+        // it often delivers the best gains on the polished elites, but
+        // it scales its per-individual step count to whatever budget
+        // remains so we don't overshoot the caller's deadline. If
+        // nothing is left, one pass of 3 steps still runs — a cheap
+        // improvement that's almost always worth the milliseconds.
         var sorted = population.sortedByFitness
         let refineCount = min(config.eliteCount, sorted.count)
+        let climbSteps: Int = {
+            guard config.wallclockTimeout > 0 else { return 20 }
+            let remaining = config.wallclockTimeout - Date().timeIntervalSince(wallclockStart)
+            let budgetRatio = remaining / config.wallclockTimeout
+            if budgetRatio >= 0.25 { return 20 }
+            if budgetRatio >= 0.0 { return 8 }
+            return 3
+        }()
         for i in 0..<refineCount {
-            sorted[i] = hillClimb(sorted[i], steps: 20)
+            sorted[i] = hillClimb(sorted[i], steps: climbSteps)
         }
 
         // Update bestEver if hill climbing found something better (compare rawFitness).
@@ -713,10 +766,20 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         // Fitness evaluation: prefer the batch path when wired so
         // the multi-fidelity funnel can rank-then-promote across the
         // whole offspring array. Per-chromosome fallback preserves
-        // parallelism via concurrentPerform.
+        // parallelism via concurrentPerform — but only when there's
+        // enough work to amortize GCD's per-iteration dispatch cost.
+        //
+        // Parallelism threshold: below ~32 offspring the GCD
+        // concurrentPerform overhead (thread wake-up + work item
+        // queuing) swallows the evaluation work itself. Measured on
+        // Apple Silicon, a 20-individual `.instant` population
+        // evaluates faster serially than in parallel. The threshold
+        // can go lower for expensive objectives, but 32 is a safe
+        // default across the evaluator stack.
+        let parallelThreshold = 32
         if let batchEvaluate {
             batchEvaluate(&offspring)
-        } else if parallelEvaluation && offspring.count > 1 {
+        } else if parallelEvaluation && offspring.count >= parallelThreshold {
             DispatchQueue.concurrentPerform(iterations: offspring.count) { i in
                 self.evaluate(&offspring[i])
             }

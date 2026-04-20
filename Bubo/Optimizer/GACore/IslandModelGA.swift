@@ -449,6 +449,7 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         var effectiveInterval = islandConfig.migrationInterval
         var effectiveSize = islandConfig.migrationSize
         var lastCrossDiversity: CrossIslandDiversity?
+        let wallclockStart = Date()
 
         for generation in 0..<totalGenerations {
             // Cooperative cancellation — UI can stop a long `.thorough`
@@ -456,6 +457,18 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             // date so callers catching `CancellationError` get whatever
             // was found before interruption.
             try Task.checkCancellation()
+
+            // Wallclock ceiling — soft deadline. Checked between
+            // generations, after the previous one fully committed
+            // (islands evolved + migration applied + bestEver updated),
+            // so breaking here never leaves a migration round in-flight
+            // or island populations mid-update. The post-loop hill
+            // climb scales its effort to remaining budget.
+            if baseConfig.wallclockTimeout > 0 &&
+                Date().timeIntervalSince(wallclockStart) >= baseConfig.wallclockTimeout {
+                convergenceGeneration = generation
+                break
+            }
 
             // Evolve each island for one generation in parallel.
             // Each Island is a reference type, so concurrent access to separate
@@ -589,11 +602,24 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         // Hill climb on top individuals (reuse GA's hill climbing). Sort by
         // rawFitness since some islands may have fitness sharing enabled,
         // which would bias selection of climb candidates toward sparse niches.
+        //
+        // Step count is budget-aware: when the evolution loop exited
+        // via the wallclock break, we still climb but with fewer steps
+        // so the total wall time stays bounded. Mirrors the logic in
+        // `GeneticAlgorithm.evolve`.
         combined.sort { $0.rawFitness > $1.rawFitness }
         let refineCount = min(baseConfig.eliteCount * 2, combined.count)
         let refiner = islands[0].ga
+        let climbSteps: Int = {
+            guard baseConfig.wallclockTimeout > 0 else { return 20 }
+            let remaining = baseConfig.wallclockTimeout - Date().timeIntervalSince(wallclockStart)
+            let budgetRatio = remaining / baseConfig.wallclockTimeout
+            if budgetRatio >= 0.25 { return 20 }
+            if budgetRatio >= 0.0 { return 8 }
+            return 3
+        }()
         for i in 0..<refineCount {
-            combined[i] = refiner.hillClimb(combined[i], steps: 20)
+            combined[i] = refiner.hillClimb(combined[i], steps: climbSteps)
         }
 
         // Update bestEver after hill climbing (by rawFitness).

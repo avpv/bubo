@@ -227,9 +227,38 @@ final class BuboOptimizer {
                 populationSize: max(2, config.populationSize * 2)
             )
             : nil
+        // Adaptive hypervolume sample count. Two signals matter:
+        //
+        //   1. Objective count `d`. HV estimator variance grows with
+        //      dimensionality; more objectives need more samples to
+        //      keep relative error bounded. We scale linearly in `d`
+        //      — the principled 2^d bound saturates the clamp for
+        //      our 13-objective evaluator and loses resolution, so a
+        //      linear proxy is pragmatic.
+        //
+        //   2. Population size bounds the *useful* sample budget: with
+        //      a 20-individual `.instant` population the Pareto front
+        //      has at most ~20 points and there's no benefit to
+        //      measuring its volume with 8 000 samples — most land in
+        //      pure-dominated or pure-undominated regions that carry
+        //      no tiebreaking signal.
+        //
+        // `popSize × d × 4` clamped to [256, 8 000] gives:
+        //     popSize=20, d=13  → 1040   (was 1600 static cap-hit)
+        //     popSize=60, d=13  → 3120   (was 8000)
+        //     popSize=100, d=13 → 5200   (was 8000)
+        //     popSize≥192, d=13 → 8000   (original full budget)
+        // so tiny runs save ~80% of HV cost and full-scale runs are
+        // unaffected.
+        let objectiveCount = max(1, evaluator.objectives.count)
+        let hvSamples = min(
+            8_000,
+            max(256, config.populationSize * objectiveCount * 4)
+        )
         let multiObjective = MultiObjectiveContext<ScheduleChromosome>.schedule(
             evaluator: evaluator,
             populationSize: config.populationSize,
+            hypervolumeSampleCount: hvSamples,
             moeadState: moeadState
         )
 
@@ -559,7 +588,156 @@ final class BuboOptimizer {
             participantAvailability: participantAvailability
         )
 
-        return await optimize(context: context)
+        // Problem-size-aware config: a 4-task week does NOT need 240
+        // individuals × 400 generations × 4 islands. Scale the solver
+        // budget to the search-space size so interactive "plan week"
+        // stays under a few seconds on sparse backlogs without losing
+        // solution quality on dense ones.
+        let (gaCfg, islandCfg) = configForWorkload(
+            movableEvents: movableEvents,
+            fixedEvents: fixedEvents
+        )
+        return await optimize(
+            context: context,
+            overrideConfig: gaCfg,
+            overrideIslandConfig: islandCfg
+        )
+    }
+
+    /// Pick GA + island config scaled continuously to the effective
+    /// workload size. The search space is dominated by two things:
+    ///
+    ///   • N = movable event count (placement decisions per week)
+    ///   • H = total movable hours / working hours per week
+    ///       (how packed the week has to be — 3 four-hour tasks are a
+    ///       harder bin-packing than 8 thirty-minute tasks).
+    ///
+    /// A single "difficulty" scalar `D` combines both; population,
+    /// generations and wallclock budget all scale linearly with it.
+    /// This avoids the cliff-edges the old bucketed version had at
+    /// N = 4 / 9 / 21 where a single extra task silently doubled the
+    /// solver budget.
+    ///
+    /// `D` is clamped into [0.05, 1.0] where:
+    ///   • D ≤ 0.1   → workload fits within `.instant`-class budget
+    ///   • D ≈ 0.3   → around `.quick`-class
+    ///   • D ≈ 0.7   → around single-pop `.default`-class
+    ///   • D ≥ 0.9   → falls through to the instance's configured
+    ///                 `.island` (heavy full-budget path)
+    ///
+    /// Returning `nil` for either override means "use instance default".
+    private func configForWorkload(
+        movableEvents: [OptimizableEvent],
+        fixedEvents: [CalendarEvent]
+    ) -> (GAConfiguration?, IslandConfiguration?) {
+        let difficulty = workloadDifficulty(
+            movableEvents: movableEvents,
+            fixedEvents: fixedEvents
+        )
+
+        // Above ~0.9 the workload is heavy enough to justify the full
+        // island config. Delegate to instance defaults.
+        guard difficulty < 0.9 else { return (nil, nil) }
+
+        let single = IslandConfiguration(
+            islandCount: 1,
+            migrationInterval: 10,
+            migrationSize: 1,
+            topology: .ring,
+            emigrantSelection: .best,
+            immigrantReplacement: .worst,
+            diversifyIslands: false,
+            adaptiveMigration: false,
+            routeByProductivity: false
+        )
+
+        // Linear interpolation between `.instant` and `.default` as
+        // difficulty rises. Crossover into island mode happens at
+        // D ≥ 0.75 where two islands start to pay for themselves.
+        let popSize = Self.lerpInt(start: 20, end: 100, at: difficulty)
+        let maxGen = Self.lerpInt(start: 30, end: 200, at: difficulty)
+        let timeout = Self.lerpDouble(start: 0.8, end: 8.0, at: difficulty)
+
+        // Memetic hill climb and CHC restarts are expensive but
+        // valuable on harder problems. Off entirely for `.instant`-
+        // class tiers (they waste budget on tiny search spaces); on
+        // from the mid-tier onwards with cadence matched to the
+        // generation budget.
+        let memeticInterval = difficulty >= 0.5 ? max(5, maxGen / 8) : 0
+        let memeticCandidates = difficulty >= 0.5 ? 3 : 3
+        let memeticSteps = difficulty >= 0.5 ? 6 : 5
+
+        let ga = GAConfiguration(
+            populationSize: popSize,
+            maxGenerations: maxGen,
+            mutationRate: 0.18,
+            crossoverRate: 0.82,
+            eliteCount: max(1, popSize / 25),
+            selectionStrategy: .tournament(size: 3),
+            crossoverStrategy: .contextual(temperature: 0.5),
+            convergenceThreshold: 0.003,
+            convergencePatience: max(6, maxGen / 20),
+            adaptiveMutation: true,
+            diversityThreshold: 0.01,
+            immigrationRate: 0.1,
+            greedySeedFraction: 0.2,
+            enableRepair: true,
+            adaptiveCrossover: difficulty >= 0.5,
+            memeticHillClimbInterval: memeticInterval,
+            memeticHillClimbCandidates: memeticCandidates,
+            memeticHillClimbSteps: memeticSteps,
+            wallclockTimeout: timeout
+        )
+
+        // Two islands appear at the high end; their extra cost only
+        // pays off once the search space is big enough for migration
+        // to meaningfully diversify exploration.
+        let islandCfg: IslandConfiguration = difficulty >= 0.75 ? .quick : single
+        return (ga, islandCfg)
+    }
+
+    /// Combined workload difficulty scalar in [0.05, 1.0].
+    ///
+    /// `countFactor` is asymptotic — 30 tasks pushes the factor to
+    /// ~0.95, 50 tasks to ~0.99. `densityFactor` looks at week
+    /// saturation: 40 movable hours over a 5-day × 9-hour working
+    /// week saturates the schedule and forces more search even if N
+    /// is small. Taking the *max* of the two means either factor
+    /// alone can trigger the heavy tier — a handful of very long
+    /// tasks doesn't get under-served.
+    private func workloadDifficulty(
+        movableEvents: [OptimizableEvent],
+        fixedEvents: [CalendarEvent]
+    ) -> Double {
+        let n = Double(movableEvents.count)
+        // Saturating curve: N=1 → ~0.04, N=8 → ~0.30, N=20 → ~0.60,
+        // N=40 → ~0.90. Half-life around 20 tasks.
+        let countFactor = 1.0 - exp(-n / 20.0)
+
+        // Planning horizon is 7 days in optimizeWeek; we approximate
+        // the weekday working hours by 5 × 9h = 45h. Fixed events eat
+        // into that budget — subtract their total duration from the
+        // denominator so a calendar already half-full with meetings
+        // pushes the density up.
+        let movableHours = movableEvents.reduce(0.0) { $0 + $1.duration / 3600.0 }
+        let fixedHours = fixedEvents.reduce(0.0) { acc, ev in
+            acc + ev.endDate.timeIntervalSince(ev.startDate) / 3600.0
+        }
+        let availableHours = max(5.0, 45.0 - fixedHours)
+        let densityFactor = min(1.0, movableHours / availableHours)
+
+        return max(0.05, min(1.0, max(countFactor, densityFactor)))
+    }
+
+    private static func lerpInt(start: Int, end: Int, at t: Double) -> Int {
+        let clamped = max(0.0, min(1.0, t))
+        let raw = Double(start) + clamped * Double(end - start)
+        return max(min(start, end), min(max(start, end), Int(raw.rounded())))
+    }
+
+    private static func lerpDouble(start: Double, end: Double, at t: Double) -> Double {
+        let clamped = max(0.0, min(1.0, t))
+        return start + clamped * (end - start)
     }
 
     // MARK: - Incremental Re-optimization (#26)

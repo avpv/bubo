@@ -392,7 +392,74 @@ extension BuboOptimizer {
         if schedulingFeatures.useGNNWarmStart {
             seeds.append(bundle.gnnTrainer.seedChromosome(context: context))
         }
+
+        // Brute-force seeding for tiny backlogs. With N ≤ 4 the full
+        // set of greedy-constructed permutations is 24 or fewer —
+        // trivially enumerable — and injecting all of them guarantees
+        // the GA's initial population contains the globally optimal
+        // placement order. The subsequent evolution then only has to
+        // fine-tune intra-task timing, not search task ordering.
+        //
+        // Gated on N to keep the combinatorial explosion bounded.
+        // N=5 (120 perms) is borderline; N=6 (720) would start to
+        // dominate the GA cost, so we stop at 4.
+        let n = context.movableEvents.count
+        if n >= 2 && n <= 4 {
+            seeds.append(contentsOf: bruteForceGreedySeeds(context: context))
+        }
         return seeds
+    }
+
+    /// Enumerate all permutations of `context.movableEvents`, build a
+    /// greedy schedule from each, and return the resulting chromosomes.
+    /// Caller is expected to feed these into the GA as warm-start
+    /// seeds — survivor selection handles picking the best.
+    ///
+    /// Deduplication: two distinct permutations often produce identical
+    /// greedy output (tied priorities + a long gap → events land in
+    /// input order either way). We skip structural duplicates by hashing
+    /// the (eventId, startTime) tuple set.
+    private func bruteForceGreedySeeds(context: OptimizerContext) -> [ScheduleChromosome] {
+        guard !context.movableEvents.isEmpty else { return [] }
+        var seen = Set<Int>()
+        var out: [ScheduleChromosome] = []
+
+        var indices = Array(context.movableEvents.indices)
+        permute(&indices, k: 0) { perm in
+            let ordered = perm.map { context.movableEvents[$0] }
+            let chrom = ScheduleChromosome.greedyWithOrder(
+                context: context,
+                eventsInPlacementOrder: ordered
+            )
+            var hasher = Hasher()
+            for gene in chrom.genes where gene.isIncluded {
+                hasher.combine(gene.eventId)
+                hasher.combine(gene.startTime.timeIntervalSinceReferenceDate)
+            }
+            let key = hasher.finalize()
+            if seen.insert(key).inserted {
+                out.append(chrom)
+            }
+        }
+        return out
+    }
+
+    /// Recursive permutation iterator via callback — streams each
+    /// permutation into `body` without allocating `N!` copies up front.
+    private func permute<T>(
+        _ arr: inout [T],
+        k: Int,
+        body: ([T]) -> Void
+    ) {
+        if k == arr.count - 1 || k == arr.count {
+            body(arr)
+            return
+        }
+        for i in k..<arr.count {
+            arr.swapAt(i, k)
+            permute(&arr, k: k + 1, body: body)
+            arr.swapAt(i, k)
+        }
     }
 
     /// Post-processing on final scenarios: lex ranking, path

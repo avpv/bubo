@@ -64,8 +64,11 @@ struct Population<C: Chromosome> {
 
     /// Evaluate all individuals using the given fitness function.
     /// Uses parallel evaluation when the population is large enough to benefit.
+    /// Below the threshold, GCD's `concurrentPerform` dispatch cost
+    /// exceeds the per-individual evaluation cost, so serial is faster.
     mutating func evaluateAll(using evaluate: (inout C) -> Void) {
-        if individuals.count > 1 {
+        let parallelThreshold = 32
+        if individuals.count >= parallelThreshold {
             DispatchQueue.concurrentPerform(iterations: individuals.count) { i in
                 evaluate(&individuals[i])
             }

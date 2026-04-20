@@ -1,4 +1,121 @@
 import Foundation
+import os
+
+// MARK: - Eval Telemetry
+
+/// Lightweight sharded counters describing how work is flowing through
+/// the evaluator: full re-evals vs delta-paths vs cache hits.
+///
+/// The evaluator's `concurrentPerform` offspring loop fires N parallel
+/// `evaluateAndAssign` calls per generation, so a single shared lock
+/// would serialize the hot path. We shard by current-thread hash into
+/// `shardCount` independent `OSAllocatedUnfairLock<Snapshot>` buckets;
+/// on an 8-core machine each thread mostly lands in its own shard and
+/// lock acquisition is uncontended. Snapshot sums across shards.
+///
+/// These counters are sample-only — nothing reads them for control
+/// flow, so occasional racy-ish reads between shards are fine. Lock
+/// acquires still happen because OSAllocatedUnfairLock is the only
+/// free primitive that gives us atomic-like Int increments on
+/// macOS 14 without pulling in Swift's Synchronization module (which
+/// is 15.0+).
+final class FitnessEvalTelemetry: @unchecked Sendable {
+    struct Snapshot: Sendable {
+        var fullEvaluations: Int
+        var deltaEvaluations: Int
+        var cacheHits: Int
+        var componentCacheHits: Int
+        var constraintRejections: Int
+
+        var total: Int {
+            fullEvaluations + deltaEvaluations + cacheHits
+        }
+
+        var deltaFraction: Double {
+            total > 0 ? Double(deltaEvaluations) / Double(total) : 0
+        }
+
+        var cacheHitFraction: Double {
+            total > 0 ? Double(cacheHits) / Double(total) : 0
+        }
+
+        static let zero = Snapshot(
+            fullEvaluations: 0,
+            deltaEvaluations: 0,
+            cacheHits: 0,
+            componentCacheHits: 0,
+            constraintRejections: 0
+        )
+
+        mutating func add(_ other: Snapshot) {
+            fullEvaluations += other.fullEvaluations
+            deltaEvaluations += other.deltaEvaluations
+            cacheHits += other.cacheHits
+            componentCacheHits += other.componentCacheHits
+            constraintRejections += other.constraintRejections
+        }
+    }
+
+    /// Power of two so `hash & (shardCount - 1)` picks a bucket in one
+    /// instruction without a modulo. 16 comfortably covers typical
+    /// core counts (4–12) with enough slack that two threads landing
+    /// in the same shard is rare even under hash collisions.
+    private static let shardCount = 16
+    private let shards: [OSAllocatedUnfairLock<Snapshot>]
+
+    init() {
+        self.shards = (0..<Self.shardCount).map { _ in
+            OSAllocatedUnfairLock(initialState: .zero)
+        }
+    }
+
+    /// Pick a shard by current-thread hash. `Thread.current.hash`
+    /// is stable for the thread lifetime (it's the NSObject identity
+    /// hash), so a given worker keeps hitting the same shard across
+    /// successive generations — lock contention only appears when
+    /// two threads happen to collide into the same bucket.
+    @inline(__always)
+    private func shard() -> OSAllocatedUnfairLock<Snapshot> {
+        // Two's-complement bit pattern: `h & 0xF` yields 0…15 for any
+        // Int sign, so no abs / modulo needed.
+        let idx = Thread.current.hash & (Self.shardCount - 1)
+        return shards[idx]
+    }
+
+    func recordFullEvaluation() {
+        shard().withLock { $0.fullEvaluations += 1 }
+    }
+
+    func recordDeltaEvaluation() {
+        shard().withLock { $0.deltaEvaluations += 1 }
+    }
+
+    func recordCacheHit() {
+        shard().withLock { $0.cacheHits += 1 }
+    }
+
+    func recordComponentCacheHit() {
+        shard().withLock { $0.componentCacheHits += 1 }
+    }
+
+    func recordConstraintRejection() {
+        shard().withLock { $0.constraintRejections += 1 }
+    }
+
+    func snapshot() -> Snapshot {
+        var total: Snapshot = .zero
+        for shard in shards {
+            total.add(shard.withLock { $0 })
+        }
+        return total
+    }
+
+    func reset() {
+        for shard in shards {
+            shard.withLock { $0 = .zero }
+        }
+    }
+}
 
 // MARK: - Fitness Objective Protocol
 
@@ -149,6 +266,15 @@ final class FitnessEvaluator: @unchecked Sendable {
     /// Both are correctness-safe because the key includes everything
     /// `evaluateComponent` reads (eventIds + bucketed gene state).
     let componentFitnessCache: ComponentFitnessCache?
+
+    /// Per-run evaluation telemetry. The evaluator bumps counters on
+    /// every eval path (full, delta, cache hit, constraint reject);
+    /// tests and diagnostic tooling can `snapshot()` to see where
+    /// the work actually went. Always present — the counter overhead
+    /// is one uncontended `OSAllocatedUnfairLock` acquire per eval,
+    /// which is negligible relative to objective work but still gated
+    /// so it can be reset between runs.
+    let telemetry = FitnessEvalTelemetry()
 
     init(
         objectives: [any FitnessObjective],
@@ -318,6 +444,7 @@ final class FitnessEvaluator: @unchecked Sendable {
                 // ground truth — promote the flag for downstream
                 // boundary checks.
                 chromosome.isFitnessReal = true
+                telemetry.recordCacheHit()
                 return
             }
         }
@@ -382,6 +509,7 @@ final class FitnessEvaluator: @unchecked Sendable {
                 .filter { $0.isHard }
                 .reduce(0.0) { $0 + $1.penalty(for: chromosome, context: context) }
             let fitness = 0.09 / (1.0 + hardPenalty * 0.01)
+            telemetry.recordConstraintRejection()
             return EvaluationResult(
                 fitness: fitness,
                 objectiveCache: chromosome.objectiveCache ?? [:],
@@ -522,6 +650,17 @@ final class FitnessEvaluator: @unchecked Sendable {
         let normalizedScore = weightedSum / totalWeight
         let penaltyFactor = 1.0 / (1.0 + softPenalty * 0.01)
         let fitness = 0.1 + normalizedScore * penaltyFactor * 0.9
+
+        // Record whether this eval actually used a delta path or fell
+        // back to a full sweep. We count "delta" when *either* kind of
+        // partitioned reuse was possible — that's what matters for
+        // tuning: a run where `canDeltaPerDay` is always false means
+        // the caller is dropping the snapshot/mutation hint.
+        if canDeltaPerDay || canDeltaPerComponent {
+            telemetry.recordDeltaEvaluation()
+        } else {
+            telemetry.recordFullEvaluation()
+        }
 
         return EvaluationResult(
             fitness: fitness,
