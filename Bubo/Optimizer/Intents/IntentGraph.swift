@@ -85,6 +85,21 @@ struct IntentGraph: Sendable {
 
     /// Build a graph from a flat intent list. Auto-resolves dependencies.
     static func build(from intents: [ScheduleIntent]) -> IntentGraph {
+        build(from: intents, conflictOracle: conflictReason)
+    }
+
+    /// Build a graph with a caller-supplied conflict oracle. The
+    /// oracle mirrors `conflictReason(_:_:)` in shape — given two
+    /// intents, return a human-readable reason if they conflict or
+    /// `nil` if they're compatible — but lets external callers
+    /// (e.g. `IntentGraphSalsaCache`) route the decision through a
+    /// memoized per-pair cache. The static `conflictReason` is the
+    /// default so existing call sites keep the monolithic behaviour
+    /// unchanged.
+    static func build(
+        from intents: [ScheduleIntent],
+        conflictOracle: (ScheduleIntent, ScheduleIntent) -> String?
+    ) -> IntentGraph {
         var graph = IntentGraph()
 
         // Add all explicit intents as nodes
@@ -95,8 +110,8 @@ struct IntentGraph: Sendable {
         // Auto-resolve dependencies
         graph.resolveDependencies()
 
-        // Detect and add conflict edges
-        graph.detectConflicts()
+        // Detect and add conflict edges through the injected oracle.
+        graph.detectConflicts(using: conflictOracle)
 
         return graph
     }
@@ -414,6 +429,18 @@ struct IntentGraph: Sendable {
     /// the quadratic sweep to intents that can actually conflict with
     /// each other, trimming work by 10–20× on real intent lists.
     mutating func detectConflicts() {
+        detectConflicts(using: Self.conflictReason)
+    }
+
+    /// `detectConflicts` variant that routes every pairwise check
+    /// through `reasonOracle` instead of the static
+    /// `conflictReason(_:_:)`. Used by the Salsa-style cache to
+    /// memoize per-pair conflict decisions so a single-intent edit
+    /// doesn't re-check every other pair — only the O(N) pairs
+    /// involving the edited intent invalidate.
+    mutating func detectConflicts(
+        using reasonOracle: (ScheduleIntent, ScheduleIntent) -> String?
+    ) {
         var buckets: [ConflictBucket: [Node]] = [:]
         for node in nodes.values {
             let bucket = Self.conflictBucket(for: node.intent)
@@ -425,7 +452,7 @@ struct IntentGraph: Sendable {
             guard bucketNodes.count > 1 else { continue }
             for i in 0..<bucketNodes.count {
                 for j in (i + 1)..<bucketNodes.count {
-                    if Self.conflictReason(bucketNodes[i].intent, bucketNodes[j].intent) != nil {
+                    if reasonOracle(bucketNodes[i].intent, bucketNodes[j].intent) != nil {
                         addEdge(from: bucketNodes[i].intent, to: bucketNodes[j].intent, kind: .conflicts)
                     }
                 }

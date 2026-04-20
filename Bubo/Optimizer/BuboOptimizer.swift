@@ -92,17 +92,24 @@ final class BuboOptimizer {
     // MARK: - Graph Caches
     //
     // Long-lived memoization layers shared across optimization runs.
-    // The intent cache absorbs rapid chip edits in the UI (each edit
-    // triggers a re-execute() with a near-identical intent list); the
-    // conflict cache absorbs what-if scenario passes that re-run on
-    // the same movable-event set with different objective weights.
     //
-    // Both default to capacity 8 — `WorkloadLearners` already keys on
-    // `TaskSignature` with the same default, so two users running
-    // through ~8 distinct workloads see consistent hit rates across
-    // every level of the cache stack.
+    // * `intentGraphCache` (`IntentGraphSalsaCache`): QueryDB-backed
+    //   with per-intent / per-pair / per-phase decomposition. A
+    //   single chip edit invalidates only the queries that touched
+    //   the edited intent — other compile entries, pair conflicts,
+    //   and phase buckets stay warm across the edit. Whole-graph
+    //   entries are bounded by an LRU so a long session with many
+    //   distinct shapes doesn't grow unbounded.
+    //
+    // * `conflictGraphCache` (`ScheduleConflictGraphCache`): hash-
+    //   keyed LRU over movable-event structure. Scenarios (same
+    //   events, different objective weights) reuse one graph.
+    //
+    // `IntentGraphSalsaCache` replaced the older hash-keyed
+    // `IntentGraphCache` in production; the latter stays available
+    // for tests that want a simpler memoization story.
 
-    let intentGraphCache = IntentGraphCache()
+    let intentGraphCache = IntentGraphSalsaCache()
     let conflictGraphCache = ScheduleConflictGraphCache()
 
     // MARK: - State
