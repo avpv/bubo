@@ -135,14 +135,31 @@ final class FitnessEvaluator: @unchecked Sendable {
     /// calls from UI code paths where duplicates are unlikely.
     let cache: FitnessCache?
 
+    /// Cross-chromosome per-component memoization. When set, the
+    /// component-partitioned delta path consults this cache before
+    /// asking an objective to score a component. Two chromosomes
+    /// whose component-C gene states hash identically (common after
+    /// crossover when one parent's component survives intact) hit
+    /// the cache and skip the objective call entirely.
+    ///
+    /// This is *complementary* to the per-chromosome
+    /// `perComponentObjectiveCache`: that cache catches "same
+    /// chromosome, no mutation in this component", this one catches
+    /// "different chromosome, but the component looks identical".
+    /// Both are correctness-safe because the key includes everything
+    /// `evaluateComponent` reads (eventIds + bucketed gene state).
+    let componentFitnessCache: ComponentFitnessCache?
+
     init(
         objectives: [any FitnessObjective],
         constraintEngine: ConstraintEngine = .standard,
-        cache: FitnessCache? = nil
+        cache: FitnessCache? = nil,
+        componentFitnessCache: ComponentFitnessCache? = nil
     ) {
         self.objectives = objectives
         self.constraintEngine = constraintEngine
         self.cache = cache
+        self.componentFitnessCache = componentFitnessCache
     }
 
     /// All default objectives with weights from preferences.
@@ -169,7 +186,8 @@ final class FitnessEvaluator: @unchecked Sendable {
                 BacklogOrderObjective(weight: preferences.backlogOrderWeight ?? OptimizerPreferences.defaultBacklogOrderWeight),
             ],
             constraintEngine: .standard,
-            cache: FitnessCache()
+            cache: FitnessCache(),
+            componentFitnessCache: ComponentFitnessCache()
         )
     }
 
@@ -529,14 +547,63 @@ final class FitnessEvaluator: @unchecked Sendable {
         let components = graph.allComponents()
         guard !components.isEmpty else { return [:] }
 
+        // Build the geneByEvent lookup once: cross-chromosome cache
+        // key construction reads it for every component, and the
+        // delta path falls into `score(component:)` repeatedly.
+        // Reusing one dict across all components avoids rebuilding
+        // it per `evaluateComponent` call.
+        let geneByEvent: [String: ScheduleGene]
+        if componentFitnessCache != nil {
+            var lookup: [String: ScheduleGene] = [:]
+            lookup.reserveCapacity(chromosome.genes.count)
+            for gene in chromosome.genes where gene.isIncluded {
+                lookup[gene.eventId] = gene
+            }
+            geneByEvent = lookup
+        } else {
+            geneByEvent = [:]
+        }
+
+        // Cross-chromosome cached score for one component.
+        // Falls through to the objective on miss and writes back the
+        // result so a subsequent chromosome with the same component
+        // state hits the cache instead of paying the objective cost.
+        func cachedScore(cid: Int, members: [String]) -> Double {
+            if let crossCache = componentFitnessCache {
+                let key = ComponentFitnessCache.componentKey(
+                    componentId: cid,
+                    geneIds: members,
+                    geneByEvent: geneByEvent,
+                    startTimeBucketSeconds: crossCache.startTimeBucketSeconds
+                )
+                // Composite key: (objective.name, componentKey).
+                // Different objectives produce different scores for
+                // the same gene state, so the objective name has to
+                // participate in the lookup. Cheap composition: XOR
+                // the objective-name hash into the key value.
+                let composite = ComponentFitnessKey(
+                    value: key.value ^ Self.hash(objective.name)
+                )
+                if let hit = crossCache.value(for: composite) {
+                    return hit
+                }
+                let fresh = objective.evaluateComponent(
+                    members: members, chromosome: chromosome, context: context
+                )
+                crossCache.store(composite, value: fresh)
+                return fresh
+            }
+            return objective.evaluateComponent(
+                members: members, chromosome: chromosome, context: context
+            )
+        }
+
         guard let prev = previousPerComponent, let dirty = dirtyComponents else {
             // No prior / no hint → full per-component sweep.
             var fresh: [Int: Double] = [:]
             fresh.reserveCapacity(components.count)
             for (cid, members) in components.enumerated() {
-                fresh[cid] = objective.evaluateComponent(
-                    members: members, chromosome: chromosome, context: context
-                )
+                fresh[cid] = cachedScore(cid: cid, members: members)
             }
             return fresh
         }
@@ -545,20 +612,28 @@ final class FitnessEvaluator: @unchecked Sendable {
         next.reserveCapacity(components.count)
         for (cid, members) in components.enumerated() {
             if dirty.contains(cid) {
-                next[cid] = objective.evaluateComponent(
-                    members: members, chromosome: chromosome, context: context
-                )
+                next[cid] = cachedScore(cid: cid, members: members)
             } else if let cached = prev[cid] {
                 next[cid] = cached
             } else {
                 // Component wasn't cached before (fresh run or newly
-                // reachable) — compute it.
-                next[cid] = objective.evaluateComponent(
-                    members: members, chromosome: chromosome, context: context
-                )
+                // reachable) — compute it. The cross-chromosome
+                // cache may still hit if another chromosome has
+                // already scored this exact state.
+                next[cid] = cachedScore(cid: cid, members: members)
             }
         }
         return next
+    }
+
+    /// Stable 64-bit hash of an objective name for composite-key
+    /// derivation. Wraps `Hasher` so the hash combine is consistent
+    /// with the rest of the codebase even though only the objective-
+    /// name participates here.
+    private static func hash(_ name: String) -> UInt64 {
+        var hasher = Hasher()
+        hasher.combine(name)
+        return UInt64(bitPattern: Int64(hasher.finalize()))
     }
 
     /// For a `DayPartitionedObjective`, compute the new per-day map by
