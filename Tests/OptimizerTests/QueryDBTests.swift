@@ -154,4 +154,115 @@ struct QueryDBTests {
         _ = db.query(QueryKey("test", "b")) { t in t.read(input); return 2 }
         #expect(db.cachedCount == 2)
     }
+
+    // MARK: - Nested dependency propagation (query(_:using:_:))
+
+    @Test("Inner query deps propagate into parent tracker on cache miss")
+    func nestedPropagationOnMiss() {
+        let db = QueryDB<Int>()
+        let parentInput = QueryKey("test", "p")
+        let childInput = QueryKey("test", "c")
+        db.setInput(parentInput)
+        db.setInput(childInput)
+
+        var parentBuilds = 0
+        var childBuilds = 0
+
+        func runParent() -> Int {
+            db.query(QueryKey("test", "parent")) { parentTracker in
+                parentBuilds += 1
+                parentTracker.read(parentInput)
+                // Child runs with `using:` — its deps should bubble
+                // up into parentTracker.
+                let childResult = db.query(QueryKey("test", "child"), using: parentTracker) { childTracker in
+                    childBuilds += 1
+                    childTracker.read(childInput)
+                    return 10
+                }
+                return childResult + 1
+            }
+        }
+
+        _ = runParent()
+        #expect(parentBuilds == 1)
+        #expect(childBuilds == 1)
+
+        // Second call: both cached.
+        _ = runParent()
+        #expect(parentBuilds == 1)
+        #expect(childBuilds == 1)
+
+        // Bump childInput — the child's revision change must
+        // invalidate BOTH child AND parent, because parent's dep
+        // set includes childInput via propagation.
+        db.setInput(childInput)
+        _ = runParent()
+        #expect(childBuilds == 2, "Child must rebuild on its own dep change")
+        #expect(parentBuilds == 2, "Parent must rebuild because child's dep propagated")
+    }
+
+    @Test("Inner query deps propagate into parent tracker on cache hit")
+    func nestedPropagationOnHit() {
+        let db = QueryDB<Int>()
+        let parentInput = QueryKey("test", "p")
+        let childInput = QueryKey("test", "c")
+        db.setInput(parentInput)
+        db.setInput(childInput)
+
+        // Prime the child cache entry separately.
+        _ = db.query(QueryKey("test", "child")) { tracker in
+            tracker.read(childInput)
+            return 99
+        }
+
+        // Now call parent; child is a cache hit, but its deps
+        // still need to propagate so parent invalidates on
+        // childInput change.
+        var parentBuilds = 0
+        func runParent() -> Int {
+            db.query(QueryKey("test", "parent")) { parentTracker in
+                parentBuilds += 1
+                parentTracker.read(parentInput)
+                return db.query(QueryKey("test", "child"), using: parentTracker) { _ in
+                    Issue.record("Child must be a cache hit")
+                    return 0
+                }
+            }
+        }
+
+        _ = runParent()
+        #expect(parentBuilds == 1)
+
+        db.setInput(childInput)
+        _ = runParent()
+        #expect(parentBuilds == 2, "Parent must rebuild when propagated child dep changes")
+    }
+
+    @Test("Unrelated input changes don't invalidate propagated parent")
+    func nestedPropagationIgnoresUnrelatedInputs() {
+        let db = QueryDB<Int>()
+        let relevantInput = QueryKey("test", "rel")
+        let unrelatedInput = QueryKey("test", "other")
+        db.setInput(relevantInput)
+        db.setInput(unrelatedInput)
+
+        var parentBuilds = 0
+        func runParent() -> Int {
+            db.query(QueryKey("test", "parent")) { parent in
+                parentBuilds += 1
+                return db.query(QueryKey("test", "child"), using: parent) { childTracker in
+                    childTracker.read(relevantInput)
+                    return 1
+                }
+            }
+        }
+        _ = runParent()
+        #expect(parentBuilds == 1)
+
+        // Bump the unrelated input — neither child nor parent
+        // touched it, so parent must stay cached.
+        db.setInput(unrelatedInput)
+        _ = runParent()
+        #expect(parentBuilds == 1, "Unrelated input change must not invalidate parent")
+    }
 }

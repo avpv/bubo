@@ -68,11 +68,16 @@ final class ScheduleConflictGraphSalsaCache: Sendable {
     // MARK: Per-query DBs
     private let eventMetadataDB: QueryDB<ConflictEventMetadata>
     private let pairOverlapDB: QueryDB<ConflictOverlapDecision>
+    private let reachabilityDB: QueryDB<Set<String>>
     private let graphDB: QueryDB<ScheduleConflictGraph>
 
-    /// Which event ids the cache has registered as inputs. Guarded
-    /// for concurrent callers from parallel GA evaluators.
-    private let registeredInputs: OSAllocatedUnfairLock<Set<String>>
+    /// Event id → structural fingerprint seen on the most recent
+    /// call. Lets `registerInputs` detect when a previously-seen
+    /// event id has changed shape (e.g. its `dependsOn` list was
+    /// edited) and bump the input revision *only* then — so
+    /// unchanged events don't invalidate their cached per-event /
+    /// per-pair / reachability queries.
+    private let registeredInputs: OSAllocatedUnfairLock<[String: UInt64]>
 
     /// Bounded LRU tracker for whole-graph entries. Same pattern as
     /// `IntentGraphSalsaCache` — per-event and per-pair entries
@@ -94,8 +99,9 @@ final class ScheduleConflictGraphSalsaCache: Sendable {
         self.wholeGraphCapacity = wholeGraphCapacity
         self.eventMetadataDB = QueryDB<ConflictEventMetadata>()
         self.pairOverlapDB = QueryDB<ConflictOverlapDecision>()
+        self.reachabilityDB = QueryDB<Set<String>>()
         self.graphDB = QueryDB<ScheduleConflictGraph>()
-        self.registeredInputs = OSAllocatedUnfairLock(initialState: [])
+        self.registeredInputs = OSAllocatedUnfairLock(initialState: [:])
         self.wholeGraphLRU = OSAllocatedUnfairLock(initialState: WholeGraphLRU())
     }
 
@@ -112,10 +118,10 @@ final class ScheduleConflictGraphSalsaCache: Sendable {
     /// `IntentCompiler`) warm the cache *before* constructing the
     /// final `OptimizerContext`.
     func graph(forMovableEvents events: [OptimizableEvent]) -> ScheduleConflictGraph {
-        // Register each event's id as an input. First-time ids get
-        // revision 1; ids already registered keep their revision.
-        let eventKeys = events.map { Self.eventInputKey(for: $0.id) }
-        registerNewInputs(eventKeys)
+        // Register each event's id as an input, bumping the revision
+        // when a same-id event has changed shape since the last
+        // call. First-time ids initialise at revision 1.
+        registerInputs(for: events)
 
         // Whole-graph query name encodes the full movable-event
         // shape so two distinct event sets don't collide.
@@ -125,6 +131,14 @@ final class ScheduleConflictGraphSalsaCache: Sendable {
         )
         touchWholeGraphLRU(graphKey)
 
+        // Pre-index events by id so the reachability oracle (and
+        // metadata query below) can look up dependency lists in
+        // O(1). The oracle captures this dictionary by reference;
+        // Swift's value-semantics mean no mutation leaks.
+        let eventByIdLookup: [String: OptimizableEvent] = Dictionary(
+            uniqueKeysWithValues: events.map { ($0.id, $0) }
+        )
+
         return graphDB.query(graphKey) { tracker in
             // Force per-event metadata resolution so the tracker
             // records each event's input as a dependency. The
@@ -132,12 +146,41 @@ final class ScheduleConflictGraphSalsaCache: Sendable {
             for event in events {
                 _ = self.metadata(for: event, tracker: tracker)
             }
-            // Build still uses the monolithic algorithm — its
-            // participant-index and hour-bucketing fast paths
-            // already beat what per-pair memoization could offer
-            // on a cold build. Pair-level caching is available via
-            // `pairOverlap(_:_:)` for external consumers.
-            return ScheduleConflictGraph.build(fromMovableEvents: events)
+
+            // Reachability oracle: reuse per-source cached results
+            // when possible, fall back to the Salsa-memoised query
+            // otherwise. Walks `precedesDirect` (prereq →
+            // dependents), matching the monolithic DFS's "transitive
+            // dependents of this source" semantics — *not*
+            // `event.dependsOn` (that would compute prereq closure,
+            // the wrong direction).
+            //
+            // Invalidation breadth: the recursive query reads every
+            // movable event's input, not just the ones it visits.
+            // Without that, an unvisited event newly adding a
+            // `dependsOn` edge to our source would reshape
+            // `precedesDirect` without bumping any revision the
+            // cached entry observed, and we'd return a stale empty
+            // dependent set. Paying for the extra input reads keeps
+            // the oracle correct across structural edits at the
+            // cost of over-invalidation — when one event changes,
+            // every reachability entry rebuilds. That matches the
+            // monolithic DFS's behaviour, and the per-source cache
+            // still wins on the common case of a same-shape re-
+            // evaluation (what-if scenarios, objective tweaks).
+            let allEventInputs = events.map { Self.eventInputKey(for: $0.id) }
+            let oracle: (String, [String: Set<String>]) -> Set<String> = { sourceId, precedesDirect in
+                self.reachability(
+                    fromEventId: sourceId,
+                    precedesDirect: precedesDirect,
+                    allEventInputs: allEventInputs,
+                    parent: tracker
+                )
+            }
+            return ScheduleConflictGraph.build(
+                fromMovableEvents: events,
+                reachabilityOracle: oracle
+            )
         }
     }
 
@@ -149,7 +192,8 @@ final class ScheduleConflictGraphSalsaCache: Sendable {
         _ a: OptimizableEvent,
         _ b: OptimizableEvent
     ) -> ConflictOverlapDecision {
-        registerNewInputs([Self.eventInputKey(for: a.id), Self.eventInputKey(for: b.id)])
+        ensureInputRegistered(for: a)
+        ensureInputRegistered(for: b)
         // No outer query is in flight for this API; use a fresh
         // tracker so the inner query gets its own dep set.
         let scratch = QueryTracker()
@@ -160,6 +204,7 @@ final class ScheduleConflictGraphSalsaCache: Sendable {
     func invalidateAll() {
         eventMetadataDB.invalidateAll()
         pairOverlapDB.invalidateAll()
+        reachabilityDB.invalidateAll()
         graphDB.invalidateAll()
         registeredInputs.withLock { $0.removeAll() }
         wholeGraphLRU.withLock { $0.recencyOrder.removeAll() }
@@ -170,6 +215,7 @@ final class ScheduleConflictGraphSalsaCache: Sendable {
     var cachedGraphCount: Int { graphDB.cachedCount }
     var cachedEventMetadataCount: Int { eventMetadataDB.cachedCount }
     var cachedPairCount: Int { pairOverlapDB.cachedCount }
+    var cachedReachabilityCount: Int { reachabilityDB.cachedCount }
 
     // MARK: - Internals
 
@@ -194,6 +240,72 @@ final class ScheduleConflictGraphSalsaCache: Sendable {
                 preferredHourLower: event.preferredHourRange?.lowerBound,
                 preferredHourUpper: event.preferredHourRange?.upperBound
             )
+        }
+    }
+
+    /// Recursive per-source transitive reachability. Returns the
+    /// set of event ids that transitively *depend on* `sourceId`
+    /// via `dependsOn` chains — matching the semantics of the
+    /// monolithic DFS's `precedes[sourceId]`.
+    ///
+    /// Walks `precedesDirect` (prereq → dependents), not
+    /// `event.dependsOn` (dependent → prereqs). The monolithic code
+    /// treats "transitive precedence" as "events that will be
+    /// waiting on this source", so the cache must agree.
+    ///
+    /// How the recursion plays with `QueryDB`:
+    ///   * This query's cache entry records the source's own
+    ///     `input(sourceId)` as a direct dep, plus `input(d)` for
+    ///     every dependent `d` — so a change to any dependent's
+    ///     `dependsOn` list invalidates this entry. Child recursion
+    ///     uses `using: innerTracker`, so grandchildren's deps
+    ///     propagate up too. Every ancestor transitively depends
+    ///     on every reachable event's input.
+    ///   * Cycles: `visited` is seeded with the source so an
+    ///     `A → B → A` cycle terminates without re-entering `A`.
+    ///     Silent cycle tolerance matches the monolithic DFS (see
+    ///     `ScheduleConflictGraph.build`'s inner DFS).
+    private func reachability(
+        fromEventId sourceId: String,
+        precedesDirect: [String: Set<String>],
+        allEventInputs: [QueryKey],
+        parent: QueryTracker
+    ) -> Set<String> {
+        let key = Self.eventInputKey(for: sourceId)
+        parent.read(key)
+        let queryName = QueryKey("conflictGraph.reachability", sourceId)
+        return reachabilityDB.query(queryName, using: parent) { innerTracker in
+            // Read every movable event's input as a dep so a
+            // structural edit anywhere in the graph correctly
+            // invalidates this entry — see the oracle setup in
+            // `graph(forMovableEvents:)` for the full rationale.
+            for inputKey in allEventInputs {
+                innerTracker.read(inputKey)
+            }
+
+            var result: Set<String> = []
+            // `visited` seeds with the source so a cycle like
+            // `A → B → A` terminates on the second hit to `A`.
+            var visited: Set<String> = [sourceId]
+
+            for dependentId in precedesDirect[sourceId] ?? [] {
+                if visited.insert(dependentId).inserted {
+                    result.insert(dependentId)
+                }
+                // Recurse via the Salsa cache. `using: innerTracker`
+                // propagates the child's observed deps into this
+                // query's dep set.
+                let childReach = self.reachability(
+                    fromEventId: dependentId,
+                    precedesDirect: precedesDirect,
+                    allEventInputs: allEventInputs,
+                    parent: innerTracker
+                )
+                for child in childReach where visited.insert(child).inserted {
+                    result.insert(child)
+                }
+            }
+            return result
         }
     }
 
@@ -255,18 +367,84 @@ final class ScheduleConflictGraphSalsaCache: Sendable {
         }
     }
 
-    /// Register newly-seen input keys across every underlying
-    /// QueryDB. Already-registered keys are skipped so unchanged
-    /// events don't have their revision bumped.
-    private func registerNewInputs(_ keys: [QueryKey]) {
+    /// Register inputs for a batch of events. Three-way reconciliation
+    /// between the previously-seen registration state and the current
+    /// `events` list:
+    ///
+    ///   * **Added or changed** — id present in new list with a
+    ///     fingerprint that doesn't match (or wasn't registered
+    ///     before): `setInput` on every DB bumps revision. Cached
+    ///     queries that touched the id see a revision mismatch and
+    ///     rebuild; queries that never touched it stay warm.
+    ///   * **Unchanged** — same id, same fingerprint: no-op, every
+    ///     cached query for this id stays valid.
+    ///   * **Removed** — id registered previously but not present in
+    ///     the new list: `setInput` bumps revision so cached queries
+    ///     that depended on this id (for example, reachability
+    ///     results that included it) invalidate on next lookup. The
+    ///     fingerprint is dropped from `state` so a re-add starts
+    ///     fresh.
+    ///
+    /// The removal handling matters because some queries (per-source
+    /// reachability especially) transitively read other events'
+    /// inputs via `QueryDB.query(_:using:_:)` propagation. Without
+    /// bumping on removal, a cached `reachability(B)` that once
+    /// transitively reached `A` would still say so even after `A`
+    /// is pulled from the event set — silently wrong.
+    private func registerInputs(for events: [OptimizableEvent]) {
+        let newIds = Set(events.map(\.id))
         registeredInputs.withLock { state in
-            for key in keys {
-                if state.insert(key.identifier).inserted {
-                    self.eventMetadataDB.setInput(key)
-                    self.pairOverlapDB.setInput(key)
-                    self.graphDB.setInput(key)
-                }
+            // Removals: previously-registered ids not in the new call.
+            // Collect first, mutate after, so we don't violate
+            // Dictionary iteration safety.
+            let removedIds = state.keys.filter { !newIds.contains($0) }
+            for removedId in removedIds {
+                let key = Self.eventInputKey(for: removedId)
+                self.eventMetadataDB.setInput(key)
+                self.pairOverlapDB.setInput(key)
+                self.reachabilityDB.setInput(key)
+                self.graphDB.setInput(key)
+                state[removedId] = nil
             }
+
+            // Additions + changes.
+            for event in events {
+                let fingerprint = Self.eventFingerprint(event)
+                if let prev = state[event.id], prev == fingerprint {
+                    continue
+                }
+                state[event.id] = fingerprint
+                let key = Self.eventInputKey(for: event.id)
+                self.eventMetadataDB.setInput(key)
+                self.pairOverlapDB.setInput(key)
+                self.reachabilityDB.setInput(key)
+                self.graphDB.setInput(key)
+            }
+        }
+    }
+
+    /// Register a single event without the full add/remove
+    /// reconciliation that `registerInputs(for:)` performs. Used by
+    /// the external `pairOverlap(_:_:)` entry point so a pair
+    /// probe doesn't accidentally mark every other previously-
+    /// registered event as "removed".
+    ///
+    /// Semantics: first-time ids register at revision 1; ids seen
+    /// with a different fingerprint bump revision; same fingerprint
+    /// is a no-op. Mirrors the per-event branch of
+    /// `registerInputs(for:)` exactly.
+    private func ensureInputRegistered(for event: OptimizableEvent) {
+        let fingerprint = Self.eventFingerprint(event)
+        registeredInputs.withLock { state in
+            if let prev = state[event.id], prev == fingerprint {
+                return
+            }
+            state[event.id] = fingerprint
+            let key = Self.eventInputKey(for: event.id)
+            self.eventMetadataDB.setInput(key)
+            self.pairOverlapDB.setInput(key)
+            self.reachabilityDB.setInput(key)
+            self.graphDB.setInput(key)
         }
     }
 
@@ -294,6 +472,23 @@ final class ScheduleConflictGraphSalsaCache: Sendable {
     /// so the two namespaces don't collide.
     private static func eventInputKey(for eventId: String) -> QueryKey {
         QueryKey("eventInput", eventId)
+    }
+
+    /// Structural fingerprint of an event over the fields the
+    /// conflict graph actually reads. Used by `registerInputs`
+    /// to detect when a same-id event has structurally changed
+    /// between calls and needs its input revision bumped.
+    private static func eventFingerprint(_ event: OptimizableEvent) -> UInt64 {
+        var hasher = Hasher()
+        hasher.combine(event.dependsOn.sorted())
+        hasher.combine(event.requiredParticipants.sorted())
+        if let range = event.preferredHourRange {
+            hasher.combine(range.lowerBound)
+            hasher.combine(range.upperBound)
+        } else {
+            hasher.combine(Int.min)
+        }
+        return UInt64(bitPattern: Int64(hasher.finalize()))
     }
 
     /// Whole-graph cache key — stable per *shape* of the movable-

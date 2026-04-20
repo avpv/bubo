@@ -173,6 +173,68 @@ final class QueryDB<Output: Sendable>: Sendable {
         return result
     }
 
+    /// `query(_:_:)` variant that propagates the inner query's
+    /// observed dependency set up into a caller-supplied `parent`
+    /// tracker. Essential for recursive queries (e.g. per-source
+    /// transitive reachability) where the outer query must reflect
+    /// *every* input its descendants touched, not just the ones it
+    /// read directly — otherwise a transitive input change wouldn't
+    /// invalidate the outer cache entry.
+    ///
+    /// Propagation happens whether the inner query was cached or
+    /// freshly built, so parent always sees the complete transitive
+    /// dep set regardless of cache state. On cache hit we read the
+    /// stored `observedRevisions` keys from the inner entry; on
+    /// miss we propagate the freshly-snapshotted tracker.
+    func query(
+        _ name: QueryKey,
+        using parent: QueryTracker,
+        _ build: (QueryTracker) -> Output
+    ) -> Output {
+        // Fast path: cache hit. Propagate the stored dep set into
+        // parent so transitive invalidation still fires for the
+        // outer query when any of these inputs change.
+        if let cached = cachedIfValid(name) {
+            propagateDeps(of: name, to: parent)
+            return cached
+        }
+
+        // Miss / stale: run the build with its own tracker so the
+        // stored cache entry captures *this* query's direct deps.
+        let tracker = QueryTracker()
+        let result = build(tracker)
+        let observed = tracker.snapshot()
+
+        let revisions = inputs.withLock { state -> [QueryKey: UInt64] in
+            var out: [QueryKey: UInt64] = [:]
+            for key in observed {
+                out[key] = state[key]?.revision ?? 0
+            }
+            return out
+        }
+        cache.withLock { state in
+            state[name] = CacheEntry(value: result, observedRevisions: revisions)
+        }
+
+        // Propagate this query's direct deps into the parent so the
+        // outer query correctly depends on everything we touched.
+        for dep in observed { parent.read(dep) }
+        return result
+    }
+
+    /// Copy a cached query's observed dependencies into a caller-
+    /// supplied tracker. Used on the hot path by the `using:`
+    /// variant so cache hits still propagate correctly — otherwise
+    /// a parent query would miss deps its cached children had
+    /// already observed.
+    private func propagateDeps(of name: QueryKey, to parent: QueryTracker) {
+        let deps = cache.withLock { state -> [QueryKey] in
+            guard let entry = state[name] else { return [] }
+            return Array(entry.observedRevisions.keys)
+        }
+        for dep in deps { parent.read(dep) }
+    }
+
     /// Drop a single cached query entry. Useful when the caller
     /// knows a query's output is invalid for reasons outside the
     /// input-tracking model (e.g. an external resource changed).

@@ -135,6 +135,27 @@ struct ScheduleConflictGraph: Sendable {
     /// is defence-in-depth so a future collision becomes a silently-
     /// correct placement instead of a runtime crash.
     static func build(fromMovableEvents events: [OptimizableEvent]) -> ScheduleConflictGraph {
+        build(fromMovableEvents: events, reachabilityOracle: nil)
+    }
+
+    /// `build(fromMovableEvents:)` overload that lets the caller
+    /// supply a precomputed transitive-precedence oracle. When
+    /// provided, the build skips the internal O(V·E) DFS loop and
+    /// asks the oracle for each event's reachable dependent set.
+    /// Used by `ScheduleConflictGraphSalsaCache` to reuse per-source
+    /// reachability queries across calls: events whose `dependsOn`
+    /// chains didn't change keep their cached reachability, while
+    /// invalidated sources recompute freshly.
+    ///
+    /// The oracle receives (1) the event id being queried and (2)
+    /// the built `precedesDirect` map so it can walk deps if the
+    /// cache misses. Return value is the full transitive dependent
+    /// set (same shape as the default DFS produces). Pass `nil` to
+    /// fall back to the monolithic DFS.
+    static func build(
+        fromMovableEvents events: [OptimizableEvent],
+        reachabilityOracle: ((String, [String: Set<String>]) -> Set<String>)?
+    ) -> ScheduleConflictGraph {
         var seen: Set<String> = []
         let uniqueEvents = events.filter { seen.insert($0.id).inserted }
         let ids = uniqueEvents.map(\.id)
@@ -171,18 +192,27 @@ struct ScheduleConflictGraph: Sendable {
             }
         }
 
-        // 2) Transitive precedence via DFS.
+        // 2) Transitive precedence. Default path is an iterative DFS
+        //    per source; the oracle path delegates to a caller-
+        //    supplied closure so the Salsa cache can reuse
+        //    per-source reachability queries across calls.
         var precedes: [String: Set<String>] = [:]
-        for id in ids {
-            var visited: Set<String> = []
-            var stack = Array(precedesDirect[id] ?? [])
-            while let head = stack.popLast() {
-                guard visited.insert(head).inserted else { continue }
-                if let downstream = precedesDirect[head] {
-                    stack.append(contentsOf: downstream)
-                }
+        if let reachabilityOracle {
+            for id in ids {
+                precedes[id] = reachabilityOracle(id, precedesDirect)
             }
-            precedes[id] = visited
+        } else {
+            for id in ids {
+                var visited: Set<String> = []
+                var stack = Array(precedesDirect[id] ?? [])
+                while let head = stack.popLast() {
+                    guard visited.insert(head).inserted else { continue }
+                    if let downstream = precedesDirect[head] {
+                        stack.append(contentsOf: downstream)
+                    }
+                }
+                precedes[id] = visited
+            }
         }
 
         // 3) Conflict edges: pairs that can ever collide on structural

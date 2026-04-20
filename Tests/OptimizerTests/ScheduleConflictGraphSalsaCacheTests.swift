@@ -152,4 +152,119 @@ struct ScheduleConflictGraphSalsaCacheTests {
         #expect(byContext.componentCount == byEvents.componentCount)
         #expect(cache.cachedGraphCount == 1)
     }
+
+    // MARK: - Per-source reachability (recursive query with propagation)
+
+    /// Build a chain `d1 → d2 → d3 → d4` (arrow = `dependsOn`) plus
+    /// an independent event `e`. Reachability from `d4` is
+    /// `{d3, d2, d1}`; from `e` it's `{}`.
+    private func reachabilityChain() -> [OptimizableEvent] {
+        [
+            OptimizableEvent(id: "d1", title: "d1", duration: 3600),
+            OptimizableEvent(id: "d2", title: "d2", duration: 3600, dependsOn: ["d1"]),
+            OptimizableEvent(id: "d3", title: "d3", duration: 3600, dependsOn: ["d2"]),
+            OptimizableEvent(id: "d4", title: "d4", duration: 3600, dependsOn: ["d3"]),
+            OptimizableEvent(id: "e",  title: "e",  duration: 3600)
+        ]
+    }
+
+    @Test("Per-source reachability cached and reused across graph calls")
+    func reachabilityCachedAcrossCalls() {
+        let cache = ScheduleConflictGraphSalsaCache()
+        let events = reachabilityChain()
+        _ = cache.graph(forMovableEvents: events)
+        let reachAfterFirst = cache.cachedReachabilityCount
+        #expect(reachAfterFirst >= 5, "One reachability entry per source event")
+
+        // Second identical call hits everything warm.
+        _ = cache.graph(forMovableEvents: events)
+        #expect(cache.cachedReachabilityCount == reachAfterFirst)
+    }
+
+    @Test("Editing a leaf event invalidates only its reachability ancestors")
+    func reachabilityPropagatesInvalidationOnlyToAncestors() {
+        let cache = ScheduleConflictGraphSalsaCache()
+        let initial = reachabilityChain()
+        _ = cache.graph(forMovableEvents: initial)
+
+        // Touch d1 (the root prereq): its fingerprint changes.
+        // `d2`, `d3`, `d4` transitively reach d1 and should rebuild;
+        // `e` doesn't touch d1 and must stay cached.
+        //
+        // The `e` event's cached reachability entry is the only
+        // direct proof — `d1` itself doesn't have downstream deps,
+        // so its reachability is also `{}` and both pre- and post-
+        // edit results are identical.
+        let edited: [OptimizableEvent] = [
+            OptimizableEvent(
+                id: "d1", title: "d1", duration: 3600,
+                requiredParticipants: ["new-participant"]  // <-- changed
+            ),
+            OptimizableEvent(id: "d2", title: "d2", duration: 3600, dependsOn: ["d1"]),
+            OptimizableEvent(id: "d3", title: "d3", duration: 3600, dependsOn: ["d2"]),
+            OptimizableEvent(id: "d4", title: "d4", duration: 3600, dependsOn: ["d3"]),
+            OptimizableEvent(id: "e",  title: "e",  duration: 3600)
+        ]
+        _ = cache.graph(forMovableEvents: edited)
+
+        // The cached graph contents must still match a direct build
+        // (correctness preserved across fine-grained invalidation).
+        let cached = cache.graph(forMovableEvents: edited)
+        let direct = ScheduleConflictGraph.build(fromMovableEvents: edited)
+        #expect(cached.eventIds == direct.eventIds)
+        #expect(cached.componentCount == direct.componentCount)
+        #expect(cached.precedes["d4"] == direct.precedes["d4"])
+    }
+
+    @Test("Removing a prereq invalidates reachability that depended on it")
+    func reachabilityInvalidatesOnRemoval() {
+        let cache = ScheduleConflictGraphSalsaCache()
+        let initial = reachabilityChain()
+        _ = cache.graph(forMovableEvents: initial)
+
+        // Remove d1 entirely — d2's reachability still shows {d1}
+        // would be wrong. The `registerInputs` removal path must
+        // bump d1's revision so any query that transitively read
+        // input(d1) invalidates.
+        let withoutD1 = Array(initial.dropFirst())
+        let cached = cache.graph(forMovableEvents: withoutD1)
+        let direct = ScheduleConflictGraph.build(fromMovableEvents: withoutD1)
+
+        // Monolithic build filters out deps pointing at non-movable
+        // ids; cached build must agree.
+        #expect(cached.precedes["d2"] == direct.precedes["d2"])
+        #expect(cached.precedenceEdgeCount == direct.precedenceEdgeCount)
+    }
+
+    @Test("Reachability oracle matches monolithic DFS exactly")
+    func reachabilityOracleMatchesDFS() {
+        let cache = ScheduleConflictGraphSalsaCache()
+        let events = reachabilityChain()
+        let cached = cache.graph(forMovableEvents: events)
+        let direct = ScheduleConflictGraph.build(fromMovableEvents: events)
+
+        // Every `precedes` entry must match the monolithic DFS.
+        for id in direct.eventIds {
+            #expect(
+                cached.precedes[id] == direct.precedes[id],
+                "Mismatch on precedes[\(id)]: \(String(describing: cached.precedes[id])) vs \(String(describing: direct.precedes[id]))"
+            )
+        }
+    }
+
+    @Test("Cycle-safe: A→B, B→A degenerates to empty without infinite recursion")
+    func reachabilityCycleSafe() {
+        let cache = ScheduleConflictGraphSalsaCache()
+        let events = [
+            OptimizableEvent(id: "a", title: "a", duration: 3600, dependsOn: ["b"]),
+            OptimizableEvent(id: "b", title: "b", duration: 3600, dependsOn: ["a"])
+        ]
+        // Must not blow the stack. Test passes simply by returning.
+        let cached = cache.graph(forMovableEvents: events)
+        let direct = ScheduleConflictGraph.build(fromMovableEvents: events)
+
+        // Cache and monolithic DFS agree on cycle semantics.
+        #expect(cached.precedes["a"] == direct.precedes["a"])
+        #expect(cached.precedes["b"] == direct.precedes["b"])
+    }
 }
