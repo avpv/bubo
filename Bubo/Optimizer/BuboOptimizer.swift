@@ -170,6 +170,16 @@ final class BuboOptimizer {
         isOptimizing = true
         defer { isOptimizing = false }
 
+        let planWeekWallStart = Date()
+        logPlanWeekInputs(
+            fixedEvents: context.fixedEvents,
+            movableEvents: context.movableEvents,
+            workingHours: context.workingHours,
+            horizon: context.planningHorizon,
+            gaCfg: overrideConfig ?? gaConfig,
+            islandCfg: overrideIslandConfig ?? islandConfig
+        )
+
         // Apply learned preferences, merging with (not replacing) user preferences
         var prefs = context.preferences
         preferenceLearner.applyToPreferences(&prefs)
@@ -533,6 +543,11 @@ final class BuboOptimizer {
             currentSchedule = best.genes
         }
 
+        logPlanWeekResult(
+            result: result,
+            movableEvents: context.movableEvents,
+            wallDuration: Date().timeIntervalSince(planWeekWallStart)
+        )
         return result
     }
 
@@ -585,13 +600,12 @@ final class BuboOptimizer {
     ) async -> OptimizerResult {
         let now = Date()
         let weekEnd = Calendar.current.date(byAdding: .day, value: 7, to: now)!
-        let horizon = DateInterval(start: now, end: weekEnd)
 
         let context = OptimizerContext(
             fixedEvents: fixedEvents,
             movableEvents: movableEvents,
             workingHours: workingHours,
-            planningHorizon: horizon,
+            planningHorizon: DateInterval(start: now, end: weekEnd),
             preferences: preferences,
             participantAvailability: participantAvailability
         )
@@ -605,27 +619,11 @@ final class BuboOptimizer {
             movableEvents: movableEvents,
             fixedEvents: fixedEvents
         )
-
-        logPlanWeekInputs(
-            fixedEvents: fixedEvents,
-            movableEvents: movableEvents,
-            workingHours: workingHours,
-            horizon: horizon,
-            gaCfg: gaCfg,
-            islandCfg: islandCfg
-        )
-        let wallStart = Date()
-        let result = await optimize(
+        return await optimize(
             context: context,
             overrideConfig: gaCfg,
             overrideIslandConfig: islandCfg
         )
-        logPlanWeekResult(
-            result: result,
-            movableEvents: movableEvents,
-            wallDuration: Date().timeIntervalSince(wallStart)
-        )
-        return result
     }
 
     /// Pick GA + island config scaled continuously to the effective
