@@ -26,7 +26,10 @@ final class PersistedLocalEvent {
     var location: String?
     var eventDescription: String?
     var calendarName: String?
-    var customReminderMinutes: [Int]?
+    /// JSON-encoded `[Int]`. Stored as `Data?` because CoreData fails
+    /// to materialize a Swift `Array<Int>` attribute at load time —
+    /// same bug as `dependsOnData` below.
+    var customReminderMinutesData: Data?
     var recurrenceRuleData: Data?
     var seriesId: String?
     var eventTypeRaw: String = "standard"
@@ -67,7 +70,9 @@ final class PersistedLocalEvent {
         self.location = event.location
         self.eventDescription = event.description
         self.calendarName = event.calendarName
-        self.customReminderMinutes = event.customReminderMinutes
+        self.customReminderMinutesData = event.customReminderMinutes.flatMap {
+            $0.isEmpty ? nil : try? JSONEncoder().encode($0)
+        }
         self.recurrenceRuleData = event.recurrenceRule.flatMap { try? JSONEncoder().encode($0) }
         self.seriesId = event.seriesId
         self.eventTypeRaw = event.eventType.rawValue
@@ -92,6 +97,9 @@ final class PersistedLocalEvent {
         let recurrenceRule: RecurrenceRule? = recurrenceRuleData.flatMap {
             try? JSONDecoder().decode(RecurrenceRule.self, from: $0)
         }
+        let customReminders: [Int]? = customReminderMinutesData.flatMap {
+            try? JSONDecoder().decode([Int].self, from: $0)
+        }
         var event = CalendarEvent(
             id: eventId,
             title: title,
@@ -100,7 +108,7 @@ final class PersistedLocalEvent {
             location: location,
             description: eventDescription,
             calendarName: calendarName,
-            customReminderMinutes: customReminderMinutes,
+            customReminderMinutes: customReminders,
             recurrenceRule: recurrenceRule,
             seriesId: seriesId,
             eventType: EventType(rawValue: eventTypeRaw) ?? .standard,
@@ -142,7 +150,9 @@ final class PersistedCachedEvent {
     var location: String?
     var eventDescription: String?
     var calendarName: String?
-    var customReminderMinutes: [Int]?
+    /// JSON-encoded `[Int]`. Stored as `Data?` for the same reason as on
+    /// `PersistedLocalEvent` — CoreData can't materialize `Array<Int>`.
+    var customReminderMinutesData: Data?
     var recurrenceRuleData: Data?
     var seriesId: String?
     var eventTypeRaw: String
@@ -174,7 +184,9 @@ final class PersistedCachedEvent {
         self.location = event.location
         self.eventDescription = event.description
         self.calendarName = event.calendarName
-        self.customReminderMinutes = event.customReminderMinutes
+        self.customReminderMinutesData = event.customReminderMinutes.flatMap {
+            $0.isEmpty ? nil : try? JSONEncoder().encode($0)
+        }
         self.recurrenceRuleData = event.recurrenceRule.flatMap { try? JSONEncoder().encode($0) }
         self.seriesId = event.seriesId
         self.eventTypeRaw = event.eventType.rawValue
@@ -199,6 +211,9 @@ final class PersistedCachedEvent {
         let recurrenceRule: RecurrenceRule? = recurrenceRuleData.flatMap {
             try? JSONDecoder().decode(RecurrenceRule.self, from: $0)
         }
+        let customReminders: [Int]? = customReminderMinutesData.flatMap {
+            try? JSONDecoder().decode([Int].self, from: $0)
+        }
         var event = CalendarEvent(
             id: eventId,
             title: title,
@@ -207,7 +222,7 @@ final class PersistedCachedEvent {
             location: location,
             description: eventDescription,
             calendarName: calendarName,
-            customReminderMinutes: customReminderMinutes,
+            customReminderMinutes: customReminders,
             recurrenceRule: recurrenceRule,
             seriesId: seriesId,
             eventType: EventType(rawValue: eventTypeRaw) ?? .standard,
@@ -254,14 +269,34 @@ final class PersistedExcludedOccurrence {
 @Model
 final class PersistedReminderOverride {
     var eventId: String = ""
-    var minutes: [Int] = []
+    /// JSON-encoded `[Int]`. Stored as `Data?` because CoreData fails
+    /// to materialize a Swift `Array<Int>` attribute at load time —
+    /// same bug as `PersistedLocalEvent.dependsOnData`.
+    var minutesData: Data?
     var updatedAt: Date = Date()
+
+    /// Decoded reminder minutes. Empty array when the stored blob is
+    /// nil or decode fails. Setter re-encodes to the blob field.
+    var minutes: [Int] {
+        get {
+            minutesData.flatMap {
+                try? JSONDecoder().decode([Int].self, from: $0)
+            } ?? []
+        }
+        set {
+            minutesData = newValue.isEmpty
+                ? nil
+                : try? JSONEncoder().encode(newValue)
+        }
+    }
 
     init() {}
 
     init(eventId: String, minutes: [Int], updatedAt: Date = Date()) {
         self.eventId = eventId
-        self.minutes = minutes
+        self.minutesData = minutes.isEmpty
+            ? nil
+            : try? JSONEncoder().encode(minutes)
         self.updatedAt = updatedAt
     }
 }
