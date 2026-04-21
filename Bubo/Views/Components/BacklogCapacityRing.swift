@@ -68,7 +68,7 @@ struct BacklogCapacityRing: View {
         .onHover { isHovered = $0 }
         .accessibilityLabel("Backlog capacity")
         .accessibilityValue("\(Int(fraction * 100)) percent of remaining workday")
-        .accessibilityHint("Shows capacity details and adjusts working hours")
+        .accessibilityHint("Shows capacity details and adjusts working hours and weekends")
         .popover(isPresented: $isPopoverPresented, arrowEdge: .bottom) {
             BacklogCapacityPopover(
                 pendingMinutes: pendingMinutes,
@@ -172,16 +172,12 @@ struct BacklogCapacityPopover: View {
                 }
 
                 // Skip-weekends lives next to working hours because it's
-                // the same mental model — «как много рабочего времени у
-                // меня на этой неделе». Flipping it on tells the GA
-                // that Sat/Sun aren't valid days (hard constraint via
-                // `WorkingHoursConstraint`) and updates the capacity
-                // ring's own available-minutes math through the usual
-                // working-hours binding.
-                Toggle(isOn: Binding(
-                    get: { service.skipWeekends },
-                    set: { service.skipWeekends = $0 }
-                )) {
+                // the same mental model — how much working time do I
+                // have this week. Flipping it on tells the GA that
+                // Sat/Sun aren't valid placement days (hard constraint
+                // via `WorkingHoursConstraint`) and zeroes the capacity
+                // ring's remaining-minutes math on weekends too.
+                Toggle(isOn: $service.skipWeekends) {
                     Text("Skip weekends")
                         .font(.caption)
                         .foregroundStyle(skin.resolvedTextSecondary)

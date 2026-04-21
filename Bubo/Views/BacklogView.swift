@@ -617,7 +617,10 @@ struct BacklogView: View {
     /// instead of going negative. Uses `OptimizerService.workingHours` — the
     /// same source of truth as the free-slot finder.
     private var remainingWorkdayMinutes: Int {
-        BacklogLogic.remainingWorkdayMinutes(workingHours: optimizerService.workingHours)
+        BacklogLogic.remainingWorkdayMinutes(
+            workingHours: optimizerService.workingHours,
+            skipWeekends: optimizerService.skipWeekends
+        )
     }
 
     private var capacityRingTooltip: String {

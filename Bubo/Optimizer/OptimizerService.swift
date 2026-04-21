@@ -121,6 +121,16 @@ final class OptimizerService {
            let prefs = try? JSONDecoder().decode(OptimizerPreferences.self, from: data) {
             self.optimizer.preferences = prefs
         }
+        // Normalise `skipWeekends` at load. Preference field is `Bool?`
+        // so older persisted JSON (pre-field) decodes to nil; flip that
+        // to `true` once on first load so the UI toggle shows the same
+        // value the GA will actually use, and so downstream code can
+        // trust the flag without juggling nil. Persisted `false` from
+        // an explicit UI flip stays `false` — we only touch nil.
+        if optimizer.preferences.skipWeekends == nil {
+            optimizer.preferences.skipWeekends = true
+            savePreferences()
+        }
         setupCloudSync()
     }
 

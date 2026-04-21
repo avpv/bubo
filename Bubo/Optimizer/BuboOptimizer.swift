@@ -602,26 +602,19 @@ final class BuboOptimizer {
         let now = Date()
         let weekEnd = Calendar.current.date(byAdding: .day, value: 7, to: now)!
 
-        // Week-plan path forces weekends off: `WeekBalanceObjective`
-        // already ignores weekends when scoring load spread, so without
-        // `skipWeekends` the hard constraints see Sat/Sun as valid days
-        // with zero busy time and the solver lands movable tasks there
-        // as a "balance" win. The direct API surfaces `skipWeekends`
-        // indirectly through intents; for the bare `optimizeWeek`
-        // callsite we flip it on unless the caller has already set a
-        // value (the nil → effective-false ladder lets callers opt
-        // back out by passing `false` explicitly).
-        var weekPreferences = preferences
-        if weekPreferences.skipWeekends == nil {
-            weekPreferences.skipWeekends = true
-        }
-
+        // `skipWeekends` is now normalised at `OptimizerService.init` so
+        // the stored preference is never nil in practice; pass it
+        // through as-is. Older direct callers that construct their
+        // own `OptimizerPreferences` with nil get the default-false
+        // behaviour from `effectiveSkipWeekends`, which matches the
+        // pre-field semantics and is the conservative choice for a
+        // caller that explicitly avoided the service.
         let context = OptimizerContext(
             fixedEvents: fixedEvents,
             movableEvents: movableEvents,
             workingHours: workingHours,
             planningHorizon: DateInterval(start: now, end: weekEnd),
-            preferences: weekPreferences,
+            preferences: preferences,
             participantAvailability: participantAvailability
         )
 
