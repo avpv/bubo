@@ -71,6 +71,20 @@ final class OptimizerService {
         }
     }
 
+    /// Toggle for `OptimizerPreferences.skipWeekends`. Lives on the service
+    /// (not just the popover) so every surface that tweaks working hours can
+    /// bind to the same source of truth, and so the setter can route the
+    /// change through `savePreferences()` — otherwise a UI flip would be lost
+    /// on relaunch because `optimizer.preferences` is only persisted through
+    /// that call. Reads fall back to `false` (matches `effectiveSkipWeekends`).
+    var skipWeekends: Bool {
+        get { optimizer.preferences.skipWeekends ?? false }
+        set {
+            optimizer.preferences.skipWeekends = newValue
+            savePreferences()
+        }
+    }
+
     /// Default duration (in minutes) applied to new backlog tasks when the
     /// user doesn't specify one (no `1h`/`30m` suffix in the title). The
     /// ghost preview and the actual create path share this value via

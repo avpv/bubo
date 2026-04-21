@@ -170,6 +170,24 @@ struct BacklogCapacityPopover: View {
                     .labelsHidden()
                     .frame(width: 90)
                 }
+
+                // Skip-weekends lives next to working hours because it's
+                // the same mental model — «как много рабочего времени у
+                // меня на этой неделе». Flipping it on tells the GA
+                // that Sat/Sun aren't valid days (hard constraint via
+                // `WorkingHoursConstraint`) and updates the capacity
+                // ring's own available-minutes math through the usual
+                // working-hours binding.
+                Toggle(isOn: Binding(
+                    get: { service.skipWeekends },
+                    set: { service.skipWeekends = $0 }
+                )) {
+                    Text("Skip weekends")
+                        .font(.caption)
+                        .foregroundStyle(skin.resolvedTextSecondary)
+                }
+                .toggleStyle(.switch)
+                .controlSize(.small)
             }
         }
         .padding(DS.Spacing.lg)
