@@ -730,7 +730,14 @@ final class BuboOptimizer {
             adaptiveMutation: true,
             diversityThreshold: 0.01,
             immigrationRate: 0.1,
-            greedySeedFraction: 0.2,
+            // Greedy seed fraction is saturation-aware: on trivially-
+            // small workloads the greedy constructor is close to
+            // optimal already, so spending 35% of the population on
+            // structured seeds beats 20% random noise. At high
+            // difficulty we back off to 0.15 so random exploration
+            // gets enough budget to escape greedy's priority-first
+            // corner of the search space.
+            greedySeedFraction: max(0.15, 0.35 - 0.20 * difficulty),
             enableRepair: true,
             adaptiveCrossover: difficulty >= 0.5,
             memeticHillClimbInterval: memeticInterval,
