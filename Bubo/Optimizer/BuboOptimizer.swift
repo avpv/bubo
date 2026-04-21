@@ -1,4 +1,11 @@
 import Foundation
+import os
+
+/// Diagnostics log for `optimizeWeek` — captures the input workload
+/// (working window, busy fixed slots, tasks) and the scenarios the GA
+/// produced (placements per day, dropped tasks, fitness breakdown). Read
+/// via Console.app → subsystem `com.avpv.Bubo`, category `PlanWeek`.
+private let planWeekLogger = Logger(subsystem: "com.avpv.Bubo", category: "PlanWeek")
 
 // MARK: - BuboOptimizer
 
@@ -578,12 +585,13 @@ final class BuboOptimizer {
     ) async -> OptimizerResult {
         let now = Date()
         let weekEnd = Calendar.current.date(byAdding: .day, value: 7, to: now)!
+        let horizon = DateInterval(start: now, end: weekEnd)
 
         let context = OptimizerContext(
             fixedEvents: fixedEvents,
             movableEvents: movableEvents,
             workingHours: workingHours,
-            planningHorizon: DateInterval(start: now, end: weekEnd),
+            planningHorizon: horizon,
             preferences: preferences,
             participantAvailability: participantAvailability
         )
@@ -597,11 +605,27 @@ final class BuboOptimizer {
             movableEvents: movableEvents,
             fixedEvents: fixedEvents
         )
-        return await optimize(
+
+        logPlanWeekInputs(
+            fixedEvents: fixedEvents,
+            movableEvents: movableEvents,
+            workingHours: workingHours,
+            horizon: horizon,
+            gaCfg: gaCfg,
+            islandCfg: islandCfg
+        )
+        let wallStart = Date()
+        let result = await optimize(
             context: context,
             overrideConfig: gaCfg,
             overrideIslandConfig: islandCfg
         )
+        logPlanWeekResult(
+            result: result,
+            movableEvents: movableEvents,
+            wallDuration: Date().timeIntervalSince(wallStart)
+        )
+        return result
     }
 
     /// Pick GA + island config scaled continuously to the effective
@@ -727,6 +751,209 @@ final class BuboOptimizer {
         let densityFactor = min(1.0, movableHours / availableHours)
 
         return max(0.05, min(1.0, max(countFactor, densityFactor)))
+    }
+
+    // MARK: - PlanWeek Diagnostics Logging
+
+    /// Log the consolidated input the GA is about to see: working
+    /// window, busy fixed slots broken down by day, movable task list,
+    /// and the adaptive GA budget picked for this workload. Intended
+    /// for diagnosing "the optimizer is making odd choices" reports —
+    /// a side-by-side of this and `logPlanWeekResult` tells you
+    /// whether a surprising placement is an input problem (not enough
+    /// room, conflicting deadline) or a solver problem (budget too
+    /// small, bad fitness trade-off).
+    private func logPlanWeekInputs(
+        fixedEvents: [CalendarEvent],
+        movableEvents: [OptimizableEvent],
+        workingHours: ClosedRange<Int>,
+        horizon: DateInterval,
+        gaCfg: GAConfiguration?,
+        islandCfg: IslandConfiguration?
+    ) {
+        let df = DateFormatter()
+        df.dateFormat = "EEE dd.MM"
+        let tf = DateFormatter()
+        tf.dateFormat = "HH:mm"
+        let cal = Calendar.current
+
+        let fixedInWindow = fixedEvents.filter { horizon.intersects(DateInterval(start: $0.startDate, end: max($0.endDate, $0.startDate))) }
+        let fixedHours = fixedInWindow.reduce(0.0) { $0 + $1.endDate.timeIntervalSince($1.startDate) / 3600.0 }
+        let movableHours = movableEvents.reduce(0.0) { $0 + $1.duration / 3600.0 }
+        let workHoursPerDay = Double(workingHours.upperBound - workingHours.lowerBound)
+        let difficulty = workloadDifficulty(movableEvents: movableEvents, fixedEvents: fixedEvents)
+
+        var lines: [String] = []
+        lines.append("=== PlanWeek inputs ===")
+        lines.append(String(format: "horizon: %@ → %@ (%.1fh/day × window)",
+                            df.string(from: horizon.start),
+                            df.string(from: horizon.end),
+                            workHoursPerDay))
+        lines.append("working hours: \(workingHours.lowerBound):00-\(workingHours.upperBound):00")
+        lines.append(String(format: "tasks: %d (%.1fh total), fixed: %d (%.1fh), difficulty: %.2f",
+                            movableEvents.count, movableHours,
+                            fixedInWindow.count, fixedHours,
+                            difficulty))
+
+        // Busy slots per day — the "сводные слоты" view: everything
+        // already occupied that the GA must route around.
+        lines.append("-- busy slots per day --")
+        let fixedByDay = Dictionary(grouping: fixedInWindow) { cal.startOfDay(for: $0.startDate) }
+        for day in fixedByDay.keys.sorted() {
+            let dayEvents = fixedByDay[day]!.sorted { $0.startDate < $1.startDate }
+            let busyH = dayEvents.reduce(0.0) { $0 + $1.endDate.timeIntervalSince($1.startDate) / 3600.0 }
+            let freeH = max(0, workHoursPerDay - busyH)
+            var parts: [String] = []
+            parts.append("\(df.string(from: day)): \(dayEvents.count) busy (\(String(format: "%.1f", busyH))h), ~\(String(format: "%.1f", freeH))h free")
+            for ev in dayEvents.prefix(6) {
+                parts.append("  \(tf.string(from: ev.startDate))-\(tf.string(from: ev.endDate)) \(ev.title)")
+            }
+            if dayEvents.count > 6 {
+                parts.append("  … (+\(dayEvents.count - 6) more)")
+            }
+            lines.append(parts.joined(separator: "\n"))
+        }
+
+        lines.append("-- movable tasks --")
+        for (i, ev) in movableEvents.enumerated() {
+            var flags: [String] = []
+            if ev.isFocusBlock { flags.append("focus") }
+            if ev.isDroppable { flags.append("droppable") }
+            if !ev.dependsOn.isEmpty { flags.append("deps=\(ev.dependsOn.count)") }
+            if let gid = ev.groupId { flags.append("group=\(gid.prefix(6))") }
+            if let pref = ev.preferredHourRange {
+                flags.append("pref=\(pref.lowerBound)-\(pref.upperBound)")
+            }
+            let deadlineStr = ev.deadline.map { " deadline=\(df.string(from: $0))" } ?? ""
+            let earliestStr = ev.earliestStart.map { " earliest=\(df.string(from: $0))" } ?? ""
+            let ctx = ev.context.map { " ctx=\($0)" } ?? ""
+            let flagStr = flags.isEmpty ? "" : " [\(flags.joined(separator: ","))]"
+            lines.append(String(format: "  %2d. %.1fh p=%.2f e=%.2f%@%@%@%@ %@",
+                                i + 1,
+                                ev.duration / 3600.0,
+                                ev.priority,
+                                ev.energyCost,
+                                ctx,
+                                deadlineStr,
+                                earliestStr,
+                                flagStr,
+                                ev.title))
+        }
+
+        let gaDesc: String
+        if let ga = gaCfg {
+            gaDesc = "pop=\(ga.populationSize) maxGen=\(ga.maxGenerations) timeout=\(String(format: "%.1fs", ga.wallclockTimeout)) mut=\(String(format: "%.2f", ga.mutationRate)) xover=\(String(format: "%.2f", ga.crossoverRate))"
+        } else {
+            gaDesc = "instance default (pop=\(gaConfig.populationSize) maxGen=\(gaConfig.maxGenerations))"
+        }
+        let islandDesc: String
+        if let ic = islandCfg {
+            islandDesc = "islands=\(ic.islandCount) mig=\(ic.migrationInterval)/\(ic.migrationSize)"
+        } else {
+            islandDesc = "instance default (islands=\(islandConfig.islandCount))"
+        }
+        lines.append("GA budget: \(gaDesc) | \(islandDesc)")
+
+        planWeekLogger.info("\(lines.joined(separator: "\n"), privacy: .public)")
+    }
+
+    /// Log what the GA returned: per-scenario placements grouped by
+    /// day, dropped tasks, fitness with top objective breakdown, and
+    /// solver metadata (generations, convergence, wall time). Pair
+    /// with `logPlanWeekInputs` to see whether the final schedule
+    /// lines up with the inputs and constraints.
+    private func logPlanWeekResult(
+        result: OptimizerResult,
+        movableEvents: [OptimizableEvent],
+        wallDuration: TimeInterval
+    ) {
+        let df = DateFormatter()
+        df.dateFormat = "EEE dd.MM"
+        let tf = DateFormatter()
+        tf.dateFormat = "HH:mm"
+        let cal = Calendar.current
+        let titleById = Dictionary(uniqueKeysWithValues: movableEvents.map { ($0.id, $0.title) })
+
+        var lines: [String] = []
+        lines.append("=== PlanWeek result ===")
+        let meta = result.metadata
+        lines.append(String(format: "scenarios=%d, wall=%.2fs (GA=%.2fs), gen=%d, convergedAt=%d, bestFit=%.4f, avgFit=%.4f",
+                            result.scenarios.count,
+                            wallDuration,
+                            meta.totalDuration,
+                            meta.generations,
+                            meta.convergenceGeneration,
+                            meta.bestFitness,
+                            meta.averageFitness))
+
+        if result.scenarios.isEmpty {
+            lines.append("(no scenarios produced — GA returned empty population)")
+            planWeekLogger.info("\(lines.joined(separator: "\n"), privacy: .public)")
+            return
+        }
+
+        for (idx, scenario) in result.scenarios.enumerated() {
+            lines.append("-- scenario #\(idx + 1) --")
+            let active = scenario.activeGenes
+            let dropped = scenario.genes.filter { !$0.isIncluded }
+            lines.append(String(format: "fitness=%.4f, placed=%d, dropped=%d, violations=%d",
+                                scenario.fitness,
+                                active.count,
+                                dropped.count,
+                                scenario.constraintViolations.count))
+
+            // Top objectives (most-negative first — those hurt fitness
+            // the most and usually explain surprising trade-offs).
+            let topObjectives = scenario.objectiveBreakdown
+                .sorted { $0.value < $1.value }
+                .prefix(5)
+            if !topObjectives.isEmpty {
+                let objStr = topObjectives
+                    .map { "\($0.key)=\(String(format: "%.3f", $0.value))" }
+                    .joined(separator: ", ")
+                lines.append("top objectives: \(objStr)")
+            }
+
+            if !scenario.constraintViolations.isEmpty {
+                let shown = scenario.constraintViolations.prefix(5).joined(separator: "; ")
+                let suffix = scenario.constraintViolations.count > 5
+                    ? " (+\(scenario.constraintViolations.count - 5) more)" : ""
+                lines.append("violations: \(shown)\(suffix)")
+            }
+
+            // Placements grouped by day — the "how the optimizer
+            // laid tasks into slots" view the user asked for.
+            let byDay = Dictionary(grouping: active) { cal.startOfDay(for: $0.startTime) }
+            for day in byDay.keys.sorted() {
+                let genes = byDay[day]!.sorted { $0.startTime < $1.startTime }
+                let dayHours = genes.reduce(0.0) { $0 + $1.duration / 3600.0 }
+                lines.append("  \(df.string(from: day)) — \(genes.count) tasks, \(String(format: "%.1f", dayHours))h:")
+                for g in genes {
+                    let title = titleById[g.eventId] ?? g.title
+                    let mins = Int((g.duration / 60).rounded())
+                    lines.append("    \(tf.string(from: g.startTime))-\(tf.string(from: g.endTime)) (\(mins)m) \(title)")
+                }
+            }
+
+            if !dropped.isEmpty {
+                let names = dropped.prefix(8).map { titleById[$0.eventId] ?? $0.title }
+                let suffix = dropped.count > 8 ? " (+\(dropped.count - 8) more)" : ""
+                lines.append("  dropped: \(names.joined(separator: ", "))\(suffix)")
+            }
+        }
+
+        // Cross-scenario: which tasks never got placed by any scenario?
+        // A task that's always dropped usually means the inputs can't
+        // fit it, not that the GA missed an option.
+        let everPlaced = Set(result.scenarios.flatMap { $0.activeGenes.map(\.eventId) })
+        let neverPlaced = movableEvents.filter { !everPlaced.contains($0.id) }
+        if !neverPlaced.isEmpty {
+            let names = neverPlaced.prefix(8).map(\.title)
+            let suffix = neverPlaced.count > 8 ? " (+\(neverPlaced.count - 8) more)" : ""
+            lines.append("never placed across any scenario: \(names.joined(separator: ", "))\(suffix)")
+        }
+
+        planWeekLogger.info("\(lines.joined(separator: "\n"), privacy: .public)")
     }
 
     private static func lerpInt(start: Int, end: Int, at t: Double) -> Int {
