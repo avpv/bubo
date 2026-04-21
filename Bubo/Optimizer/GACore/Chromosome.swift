@@ -961,7 +961,8 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                     workingHours: context.workingHours,
                     horizon: context.planningHorizon,
                     calendar: cal,
-                    floor: floor
+                    floor: floor,
+                    skipWeekends: context.preferences.effectiveSkipWeekends
                 ) {
                     genes[i] = genes[i].withStartTime(freeStart)
                 }
@@ -2213,7 +2214,8 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         workingHours: ClosedRange<Int>,
         horizon: DateInterval,
         calendar: Calendar,
-        floor: Date
+        floor: Date,
+        skipWeekends: Bool = false
     ) -> Date? {
         // Search forward and backward from current position, try gap between each pair
         var candidates: [(start: Date, distance: TimeInterval)] = []
@@ -2221,14 +2223,27 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         // Build sorted occupied list within horizon
         let sorted = occupied.filter { $0.end > horizon.start && $0.start < horizon.end }
 
+        // Reject a candidate start that lands on a weekend day when
+        // `skipWeekends` is on. Keeps repair's relocation in lock-step
+        // with the hard constraint — otherwise the "nearest free slot"
+        // logic would happily park a conflicting gene on Saturday and
+        // call the repair done.
+        func accept(_ start: Date) -> Bool {
+            if skipWeekends && calendar.isDateInWeekend(start) { return false }
+            return true
+        }
+
         // Scan gaps between occupied intervals
         var prevEnd = horizon.start
         for occ in sorted {
             let gapStart = max(prevEnd, floor)
             let gapEnd = occ.start
             if gapEnd.timeIntervalSince(gapStart) >= duration {
-                let clamped = clampToWorkingHours(gapStart, duration: duration, workingHours: workingHours, calendar: calendar, floor: floor)
-                if clamped.addingTimeInterval(duration) <= gapEnd {
+                var clamped = clampToWorkingHours(gapStart, duration: duration, workingHours: workingHours, calendar: calendar, floor: floor)
+                if skipWeekends {
+                    clamped = advancePastWeekend(from: clamped, workingHours: workingHours, horizon: horizon, calendar: calendar)
+                }
+                if accept(clamped) && clamped.addingTimeInterval(duration) <= gapEnd {
                     candidates.append((clamped, abs(clamped.timeIntervalSince(near))))
                 }
             }
@@ -2237,8 +2252,11 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         // Gap after last occupied
         let finalGapStart = max(prevEnd, floor)
         if horizon.end.timeIntervalSince(finalGapStart) >= duration {
-            let clamped = clampToWorkingHours(finalGapStart, duration: duration, workingHours: workingHours, calendar: calendar, floor: floor)
-            if clamped.addingTimeInterval(duration) <= horizon.end {
+            var clamped = clampToWorkingHours(finalGapStart, duration: duration, workingHours: workingHours, calendar: calendar, floor: floor)
+            if skipWeekends {
+                clamped = advancePastWeekend(from: clamped, workingHours: workingHours, horizon: horizon, calendar: calendar)
+            }
+            if accept(clamped) && clamped.addingTimeInterval(duration) <= horizon.end {
                 candidates.append((clamped, abs(clamped.timeIntervalSince(near))))
             }
         }
@@ -2260,15 +2278,33 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
 
         let cal = context.calendar
         let horizonStart = context.planningHorizon.start
+        let skipWeekends = context.preferences.effectiveSkipWeekends
 
-        // Pass 1: Clamp to working hours and planning horizon
+        // Pass 1: Clamp to working hours and planning horizon. When
+        // `skipWeekends` is on, rehome weekend placements onto the
+        // next in-horizon weekday first — otherwise `clampToWorkingHours`
+        // would leave the event on Saturday (just inside 9–18), which
+        // the WorkingHoursConstraint would then reject every generation
+        // until a mutation happened to flip it off the weekend. Without
+        // this, the weekend-aware seeders upstream get silently undone
+        // by repair as soon as mutation pushes anything around.
         for i in genes.indices where genes[i].isIncluded {
             let event = context.movableEvents.first { $0.id == genes[i].eventId }
             let earliest = event?.earliestStart
             let floor = [horizonStart, earliest].compactMap { $0 }.max() ?? horizonStart
 
+            var target = genes[i].startTime
+            if skipWeekends {
+                target = advancePastWeekend(
+                    from: target,
+                    workingHours: context.workingHours,
+                    horizon: context.planningHorizon,
+                    calendar: cal
+                )
+            }
+
             genes[i] = genes[i].withStartTime(
-                clampToWorkingHours(genes[i].startTime, duration: genes[i].duration, workingHours: context.workingHours, calendar: cal, floor: floor)
+                clampToWorkingHours(target, duration: genes[i].duration, workingHours: context.workingHours, calendar: cal, floor: floor)
             )
         }
 
@@ -2311,7 +2347,15 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 gene.startTime < occ.end && gene.endTime > occ.start
             }
 
-            if beforeFloor || hasOverlap {
+            // Weekend-resident genes also need relocation even when
+            // they're already within working hours and conflict-free —
+            // the WorkingHoursConstraint otherwise flags them every
+            // generation. Detecting here (rather than always in Pass 1)
+            // avoids a redundant relocate when the gene was already
+            // moved to a weekday earlier in this repair.
+            let onWeekend = skipWeekends && cal.isDateInWeekend(cal.startOfDay(for: gene.startTime))
+
+            if beforeFloor || hasOverlap || onWeekend {
                 if let freeStart = findNearestFreeSlot(
                     near: max(gene.startTime, floor),
                     duration: gene.duration,
@@ -2319,7 +2363,8 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                     workingHours: context.workingHours,
                     horizon: context.planningHorizon,
                     calendar: cal,
-                    floor: floor
+                    floor: floor,
+                    skipWeekends: skipWeekends
                 ) {
                     genes[idx] = gene.withStartTime(freeStart)
                 } else if beforeFloor {
@@ -2327,8 +2372,17 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                     // honour the floor; this may still overlap, which leaves
                     // the ConstraintEngine to penalise rather than failing
                     // the whole repair silently.
+                    var fallback = floor
+                    if skipWeekends {
+                        fallback = advancePastWeekend(
+                            from: fallback,
+                            workingHours: context.workingHours,
+                            horizon: context.planningHorizon,
+                            calendar: cal
+                        )
+                    }
                     genes[idx] = gene.withStartTime(
-                        clampToWorkingHours(floor, duration: gene.duration,
+                        clampToWorkingHours(fallback, duration: gene.duration,
                                             workingHours: context.workingHours,
                                             calendar: cal, floor: floor)
                     )
@@ -2667,6 +2721,37 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
 }
 
 // MARK: - Free functions
+
+/// Move `date` forward to the first non-weekend day still inside the
+/// horizon, snapping the time-of-day to the working-hours lower bound
+/// when the day is rolled over. Returns `date` unchanged when it's
+/// already on a weekday, or when the horizon contains no weekday (in
+/// which case the caller's constraint penalty is the right signal —
+/// repairing can't manufacture feasibility that doesn't exist).
+func advancePastWeekend(
+    from date: Date,
+    workingHours: ClosedRange<Int>,
+    horizon: DateInterval,
+    calendar: Calendar
+) -> Date {
+    if !calendar.isDateInWeekend(date) { return date }
+    // Walk day by day until we find a weekday inside the horizon.
+    // Guard the loop at 14 iterations — enough for any realistic
+    // planning horizon and keeps a bad calendar from looping forever.
+    var cursor = calendar.startOfDay(for: date)
+    for _ in 0..<14 {
+        guard let next = calendar.date(byAdding: .day, value: 1, to: cursor) else { break }
+        cursor = next
+        if cursor >= horizon.end { return date }
+        if !calendar.isDateInWeekend(cursor) {
+            if let weekdayStart = calendar.date(bySettingHour: workingHours.lowerBound, minute: 0, second: 0, of: cursor) {
+                return weekdayStart
+            }
+            return cursor
+        }
+    }
+    return date
+}
 
 func clampToWorkingHours(
     _ date: Date,
