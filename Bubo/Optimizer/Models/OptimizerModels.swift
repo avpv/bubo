@@ -373,6 +373,26 @@ struct OptimizerPreferences: Codable, Sendable {
     var preferredClusterWindowEnd: Int       // hour — meetings clustered before this
     var maxMeetingsPerCluster: Int           // avoid marathon meeting blocks
 
+    /// Forbid placing movable events on Saturdays/Sundays. Enforced as a hard
+    /// constraint via `WorkingHoursConstraint` (weekend day → entire event
+    /// duration counts as out-of-window). The `.skipWeekends` intent toggles
+    /// this on, and `BuboOptimizer.optimizeWeek` forces it on for the
+    /// week-plan path because GA objectives like WeekBalance already treat
+    /// weekends as non-load — without this flag, the solver happily sinks
+    /// tasks into Sat/Sun because they look like "empty" days for balance.
+    ///
+    /// Optional so older persisted JSON (missing this key) decodes cleanly;
+    /// consumers should route through `effectiveSkipWeekends` which folds
+    /// `nil → false` — matches the pre-field behavior exactly.
+    var skipWeekends: Bool?
+
+    static let defaultSkipWeekends: Bool = false
+
+    /// Non-nil read for the flag. Use this instead of dereferencing
+    /// `skipWeekends` directly so missing values stay pinned to the
+    /// documented default.
+    var effectiveSkipWeekends: Bool { skipWeekends ?? Self.defaultSkipWeekends }
+
     init(
         focusBlockWeight: Double = 1.0,
         pomodoroFitWeight: Double = 0.8,
@@ -401,7 +421,8 @@ struct OptimizerPreferences: Codable, Sendable {
         idealFocusBlockMinutes: Int = 120,
         preferredClusterWindowStart: Int = 9,
         preferredClusterWindowEnd: Int = 13,
-        maxMeetingsPerCluster: Int = 4
+        maxMeetingsPerCluster: Int = 4,
+        skipWeekends: Bool? = nil
     ) {
         self.focusBlockWeight = focusBlockWeight
         self.pomodoroFitWeight = pomodoroFitWeight
@@ -431,8 +452,10 @@ struct OptimizerPreferences: Codable, Sendable {
         self.preferredClusterWindowStart = preferredClusterWindowStart
         self.preferredClusterWindowEnd = preferredClusterWindowEnd
         self.maxMeetingsPerCluster = maxMeetingsPerCluster
+        self.skipWeekends = skipWeekends
     }
 }
+
 
 // MARK: - Optimizer Result
 

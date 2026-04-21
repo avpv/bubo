@@ -1199,6 +1199,10 @@ private extension IntentCompiler {
         if let v = config.meetingClusteringWeight { prefs.meetingClusteringWeight = v }
         if let v = config.lunchStart { prefs.lunchWindowStart = v }
         if let v = config.lunchEnd { prefs.lunchWindowEnd = v }
+        // `.skipWeekends` is opt-in through intents (intent absent → leave
+        // existing preference value). Never flip a user-set `true` back to
+        // `false` just because the intent wasn't supplied.
+        if config.skipWeekends { prefs.skipWeekends = true }
 
         // Inject personal energy curve from check-in data when available.
         if let service = energyCheckInService, service.hasEnoughData {

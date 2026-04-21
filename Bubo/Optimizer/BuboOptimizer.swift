@@ -546,7 +546,8 @@ final class BuboOptimizer {
         logPlanWeekResult(
             result: result,
             movableEvents: context.movableEvents,
-            wallDuration: Date().timeIntervalSince(planWeekWallStart)
+            wallDuration: Date().timeIntervalSince(planWeekWallStart),
+            context: context
         )
         return result
     }
@@ -601,12 +602,26 @@ final class BuboOptimizer {
         let now = Date()
         let weekEnd = Calendar.current.date(byAdding: .day, value: 7, to: now)!
 
+        // Week-plan path forces weekends off: `WeekBalanceObjective`
+        // already ignores weekends when scoring load spread, so without
+        // `skipWeekends` the hard constraints see Sat/Sun as valid days
+        // with zero busy time and the solver lands movable tasks there
+        // as a "balance" win. The direct API surfaces `skipWeekends`
+        // indirectly through intents; for the bare `optimizeWeek`
+        // callsite we flip it on unless the caller has already set a
+        // value (the nil → effective-false ladder lets callers opt
+        // back out by passing `false` explicitly).
+        var weekPreferences = preferences
+        if weekPreferences.skipWeekends == nil {
+            weekPreferences.skipWeekends = true
+        }
+
         let context = OptimizerContext(
             fixedEvents: fixedEvents,
             movableEvents: movableEvents,
             workingHours: workingHours,
             planningHorizon: DateInterval(start: now, end: weekEnd),
-            preferences: preferences,
+            preferences: weekPreferences,
             participantAvailability: participantAvailability
         )
 
@@ -689,6 +704,12 @@ final class BuboOptimizer {
         let memeticCandidates = difficulty >= 0.5 ? 3 : 3
         let memeticSteps = difficulty >= 0.5 ? 6 : 5
 
+        // One CHC restart once the workload clears the toy-problem tier —
+        // on difficulty < 0.2 the search space is small enough that a
+        // restart would mostly replay the same basin, but in the 0.2+
+        // range the extra cataclysmic reseed reliably rescues stuck runs.
+        let restarts = difficulty >= 0.2 ? 1 : 0
+
         let ga = GAConfiguration(
             populationSize: popSize,
             maxGenerations: maxGen,
@@ -698,7 +719,14 @@ final class BuboOptimizer {
             selectionStrategy: .tournament(size: 3),
             crossoverStrategy: .contextual(temperature: 0.5),
             convergenceThreshold: 0.003,
-            convergencePatience: max(6, maxGen / 20),
+            // Patience floor bumped from 6 → 12: with a 4-task week the
+            // difficulty scalar lands around 0.18, and the old floor let
+            // the GA exit at gen 7 after six flat generations — long
+            // before the adaptive mutation / CHC restart had any chance
+            // to break out of the initial basin. 12 still terminates
+            // fast on truly trivial workloads but gives the bandit one
+            // full cycle of operator exploration first.
+            convergencePatience: max(12, maxGen / 15),
             adaptiveMutation: true,
             diversityThreshold: 0.01,
             immigrationRate: 0.1,
@@ -708,6 +736,7 @@ final class BuboOptimizer {
             memeticHillClimbInterval: memeticInterval,
             memeticHillClimbCandidates: memeticCandidates,
             memeticHillClimbSteps: memeticSteps,
+            chcMaxRestarts: restarts,
             wallclockTimeout: timeout
         )
 
@@ -863,7 +892,8 @@ final class BuboOptimizer {
     private func logPlanWeekResult(
         result: OptimizerResult,
         movableEvents: [OptimizableEvent],
-        wallDuration: TimeInterval
+        wallDuration: TimeInterval,
+        context: OptimizerContext
     ) {
         let df = DateFormatter()
         df.dateFormat = "EEE dd.MM"
@@ -950,6 +980,48 @@ final class BuboOptimizer {
             let suffix = neverPlaced.count > 8 ? " (+\(neverPlaced.count - 8) more)" : ""
             lines.append("never placed across any scenario: \(names.joined(separator: ", "))\(suffix)")
         }
+
+        // Mutation bandit arm usage: pulls and mean clipped reward per
+        // operator. Lets a diagnostician see at a glance whether one
+        // arm (usually `shift`) dominated and starved the others, or
+        // whether the bandit actually tried every operator.
+        let banditSnap = context.mutationBandit.snapshot
+        let totalPulls = banditSnap.values.reduce(0) { $0 + $1.pulls }
+        if totalPulls > 0 {
+            let order: [MutationOperator] = [.shift, .moveDay, .snap, .guided, .lnsDay]
+            let parts: [String] = order.compactMap { op in
+                guard let t = banditSnap[op], t.pulls > 0 else { return nil }
+                let name: String
+                switch op {
+                case .shift:   name = "shift"
+                case .moveDay: name = "moveDay"
+                case .snap:    name = "snap"
+                case .guided:  name = "guided"
+                case .lnsDay:  name = "lnsDay"
+                }
+                return "\(name)=\(t.pulls)(r=\(String(format: "%.3f", t.meanReward)))"
+            }
+            if !parts.isEmpty {
+                lines.append("mutation bandit: \(parts.joined(separator: ", "))")
+            }
+        }
+
+        // Skip-weekends + horizon working-day breakdown so a surprising
+        // placement can be root-caused to "weekends weren't actually
+        // off" or "Monday is a public holiday in the calendar but not
+        // to the solver".
+        let cal2 = context.calendar
+        let skipWeekends = context.preferences.effectiveSkipWeekends
+        let horizonStartDay = cal2.startOfDay(for: context.planningHorizon.start)
+        let horizonLastDay = cal2.startOfDay(for: context.planningHorizon.end.addingTimeInterval(-1))
+        let horizonDays = max(1, (cal2.dateComponents([.day], from: horizonStartDay, to: horizonLastDay).day ?? 0) + 1)
+        var workDays = 0
+        for offset in 0..<horizonDays {
+            guard let day = cal2.date(byAdding: .day, value: offset, to: horizonStartDay) else { continue }
+            if skipWeekends && cal2.isDateInWeekend(day) { continue }
+            workDays += 1
+        }
+        lines.append("flags: skipWeekends=\(skipWeekends), workDaysInHorizon=\(workDays)/\(horizonDays)")
 
         planWeekLogger.info("\(lines.joined(separator: "\n"), privacy: .public)")
     }

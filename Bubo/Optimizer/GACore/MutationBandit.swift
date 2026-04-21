@@ -216,13 +216,26 @@ final class MutationBandit: @unchecked Sendable {
         var bestScore = -Double.infinity
         var ties: [MutationOperator] = []
 
+        // When the run is clearly stuck (stagnation ≥ 0.6), bias the
+        // exploration bonus of the `guided` (gap-finding) operator
+        // upward — its per-call cost is high, so LinUCB often avoids
+        // it early, but it's the only operator that actively scans for
+        // feasible free windows. Empirically, most of the late-run
+        // improvements on plan-week workloads come from guided breaks
+        // through crowded days, so we nudge the bandit toward trying
+        // it more when nothing else is working. Same effect as giving
+        // the arm a small late-run prior without perturbing its A/b.
+        let stagnation = currentContext.stagnation
+        let guidedBoost = stagnation >= 0.6 ? 1.0 + 0.5 * (stagnation - 0.6) / 0.4 : 1.0
+
         for op in MutationOperator.allCases {
             guard let arm = arms[op] else { continue }
             guard let aInv = Self.invertNxN(arm.A) else { continue }
             let theta = Self.matvec(aInv, arm.b)
             let mean = Self.dot(theta, x)
             let xAinvX = max(0, Self.quadForm(x, aInv))
-            let bonus = explorationAlpha * xAinvX.squareRoot()
+            var bonus = explorationAlpha * xAinvX.squareRoot()
+            if op == .guided { bonus *= guidedBoost }
             let score = mean + bonus
 
             if score > bestScore + 1e-12 {

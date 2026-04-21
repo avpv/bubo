@@ -169,6 +169,15 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
 
     static func random(context: OptimizerContext) -> ScheduleChromosome {
         let cal = context.calendar
+        // Feasibility-guided droppable inclusion rate: when the week is
+        // already packed (fixed events eat most of the working hours),
+        // the 70% flat rate produces mostly-infeasible starting
+        // individuals that the GA has to spend generations repairing.
+        // Drop the rate proportional to the week's saturation so tight
+        // weeks start with fewer optimistic inclusions and loose weeks
+        // keep the old exploration behaviour.
+        let saturation = Self.fixedSaturation(context: context)
+        let dropInclusionRate = max(0.35, 0.85 - 0.6 * saturation)
         let genes = context.movableEvents.map { event -> ScheduleGene in
             let start = randomStartTime(
                 for: event,
@@ -177,9 +186,12 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 calendar: cal,
                 rng: context.rng
             )
-            // Droppable genes start with ~70% chance of inclusion
-            // so the GA explores both including and excluding them.
-            let included = event.isDroppable ? context.rng.bool(probability: 0.7) : true
+            // Droppable genes start with a saturation-aware inclusion rate
+            // so the GA explores both including and excluding them, but
+            // leans toward excluding when the week has no room anyway.
+            let included = event.isDroppable
+                ? context.rng.bool(probability: dropInclusionRate)
+                : true
             return ScheduleGene(
                 eventId: event.id,
                 title: event.title,
@@ -2593,6 +2605,41 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         let span = max(0, Int(dayUpper.timeIntervalSince(lower) / slotSeconds))
         let offset = rng.int(in: 0...span)
         return lower.addingTimeInterval(TimeInterval(offset) * slotSeconds)
+    }
+
+    /// Ratio in [0, 1] describing how much of the horizon's working hours are
+    /// already committed to fixed events. Weekend days are excluded when
+    /// `skipWeekends` is on because those hours aren't available anyway.
+    /// Used by `random(context:)` to decide how optimistic the droppable-gene
+    /// inclusion rate should be: when the week is nearly full of meetings the
+    /// GA shouldn't start out with every optional task flagged "include".
+    private static func fixedSaturation(context: OptimizerContext) -> Double {
+        let cal = context.calendar
+        let skipWeekends = context.preferences.effectiveSkipWeekends
+        let horizon = context.planningHorizon
+        let hoursPerDay = Double(context.workingHours.upperBound - context.workingHours.lowerBound)
+        guard hoursPerDay > 0 else { return 0 }
+
+        let startDay = cal.startOfDay(for: horizon.start)
+        let lastDay = cal.startOfDay(for: horizon.end.addingTimeInterval(-1))
+        let days = max(1, (cal.dateComponents([.day], from: startDay, to: lastDay).day ?? 0) + 1)
+
+        var workingDays = 0
+        for offset in 0..<days {
+            guard let day = cal.date(byAdding: .day, value: offset, to: startDay) else { continue }
+            if skipWeekends && cal.isDateInWeekend(day) { continue }
+            workingDays += 1
+        }
+        guard workingDays > 0 else { return 0 }
+
+        let totalAvailableHours = Double(workingDays) * hoursPerDay
+        let fixedHours = context.fixedEvents.reduce(0.0) { acc, ev in
+            if skipWeekends && cal.isDateInWeekend(cal.startOfDay(for: ev.startDate)) {
+                return acc
+            }
+            return acc + ev.endDate.timeIntervalSince(ev.startDate) / 3600
+        }
+        return max(0, min(1, fixedHours / totalAvailableHours))
     }
 }
 
