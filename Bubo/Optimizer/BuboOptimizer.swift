@@ -1031,10 +1031,52 @@ final class BuboOptimizer {
         // Slot-registry footprint: total valid slots in the discrete
         // search space the GA operated on. Orders-of-magnitude smaller
         // than the continuous Date range, which is the whole point of
-        // the slot-based decoder — see the "Slot-Alignment Design Note"
+        // the slot-based decoder — see the "Slot-Based Decoder"
         // MARK in Chromosome.swift.
         let slotRegistry = context.ensureSlotRegistry()
         lines.append("slots: registry=\(slotRegistry.count)")
+
+        // Slot-binding coverage on the best scenario: how many genes
+        // actually carry a registry-bound `slotIndex`. A coverage
+        // number below 1.0 flags genes that slipped through a
+        // producer that still uses `withStartTime` — useful for
+        // spotting reoptimizer/warm-start regressions after the
+        // slot-decoder migration.
+        if let best = result.scenarios.first {
+            let active = best.activeGenes
+            if !active.isEmpty {
+                let bound = active.filter { $0.slotIndex != nil }.count
+                let coverage = Double(bound) / Double(active.count)
+                lines.append(String(format: "slots: coverage=%.2f (%d/%d active genes slot-bound)",
+                                    coverage, bound, active.count))
+            }
+        }
+
+        // Constraint breakdown on the best scenario. Lets a
+        // diagnostician see at a glance *which* constraint(s) are
+        // eating fitness — e.g. a dominant `Buffer` penalty hints at
+        // too-tight back-to-back placements, while a dominant
+        // `MaxMeetingsPerDay` penalty hints at a cap the user should
+        // raise. Prints the top-5 penalising constraints (soft or
+        // hard) with their raw penalty magnitude.
+        if let best = result.scenarios.first {
+            let scenarioChromosome = ScheduleChromosome(
+                genes: best.genes,
+                needsEvaluation: false
+            )
+            let engine = ConstraintEngine.standard
+            let breakdown = engine.breakdown(for: scenarioChromosome, context: context)
+                .filter { $0.penalty > 0 }
+                .sorted { $0.penalty > $1.penalty }
+                .prefix(5)
+            if !breakdown.isEmpty {
+                let parts = breakdown.map { entry -> String in
+                    let kind = entry.isHard ? "H" : "S"
+                    return "\(entry.name)[\(kind)]=\(String(format: "%.1f", entry.penalty))"
+                }
+                lines.append("constraints: \(parts.joined(separator: ", "))")
+            }
+        }
 
         planWeekLogger.info("\(lines.joined(separator: "\n"), privacy: .public)")
     }

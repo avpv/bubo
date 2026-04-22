@@ -270,6 +270,7 @@ enum GNNWarmStart {
         let cal = context.calendar
         let horizonStart = cal.startOfDay(for: context.planningHorizon.start)
         let horizonEnd = context.planningHorizon.end
+        let slotRegistry = context.ensureSlotRegistry()
         var cursor = horizonStart
         // Clamp cursor to working-hours start on horizon's first day.
         if let s = cal.date(bySettingHour: context.workingHours.lowerBound,
@@ -318,7 +319,8 @@ enum GNNWarmStart {
                 isDroppable: event.isDroppable,
                 isIncluded: true,
                 pomodoroConfig: event.pomodoroConfig,
-                reservedTaskIds: event.reservedTaskIds
+                reservedTaskIds: event.reservedTaskIds,
+                slotIndex: slotRegistry.nearestIndex(to: start)
             )
             genes.append(gene)
             cursor = gene.endTime

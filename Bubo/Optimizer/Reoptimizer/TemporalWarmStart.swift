@@ -151,7 +151,8 @@ final class TemporalWarmStart: @unchecked Sendable {
                     second: 0,
                     of: day
                 ) ?? day
-                newGenes.append(defaultGene(for: event, start: start))
+                let slot = context.ensureSlotRegistry().nearestIndex(to: start)
+                newGenes.append(defaultGene(for: event, start: start, slotIndex: slot))
             }
         }
 
@@ -206,7 +207,9 @@ final class TemporalWarmStart: @unchecked Sendable {
     /// gene keeps the prior's startTime (already shifted) but adopts
     /// the current event's title, duration, priority, etc. — so a
     /// prior meeting that grew from 30→45 minutes reflects today's
-    /// duration in the seed.
+    /// duration in the seed. The prior's `slotIndex` carries over
+    /// too so the seed chromosome arrives at the GA already bound
+    /// to registry slots.
     private func reassign(_ gene: ScheduleGene, to event: OptimizableEvent) -> ScheduleGene {
         ScheduleGene(
             eventId: event.id,
@@ -221,11 +224,12 @@ final class TemporalWarmStart: @unchecked Sendable {
             isDroppable: event.isDroppable,
             isIncluded: true,
             pomodoroConfig: event.pomodoroConfig,
-            reservedTaskIds: event.reservedTaskIds
+            reservedTaskIds: event.reservedTaskIds,
+            slotIndex: gene.slotIndex
         )
     }
 
-    private func defaultGene(for event: OptimizableEvent, start: Date) -> ScheduleGene {
+    private func defaultGene(for event: OptimizableEvent, start: Date, slotIndex: Int?) -> ScheduleGene {
         ScheduleGene(
             eventId: event.id,
             title: event.title,
@@ -239,7 +243,8 @@ final class TemporalWarmStart: @unchecked Sendable {
             isDroppable: event.isDroppable,
             isIncluded: true,
             pomodoroConfig: event.pomodoroConfig,
-            reservedTaskIds: event.reservedTaskIds
+            reservedTaskIds: event.reservedTaskIds,
+            slotIndex: slotIndex
         )
     }
 

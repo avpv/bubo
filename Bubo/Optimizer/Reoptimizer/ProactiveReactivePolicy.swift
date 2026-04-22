@@ -221,7 +221,8 @@ final class ProactiveReactivePolicy: @unchecked Sendable {
                     isDroppable: event.isDroppable,
                     isIncluded: true,
                     pomodoroConfig: event.pomodoroConfig,
-                    reservedTaskIds: event.reservedTaskIds
+                    reservedTaskIds: event.reservedTaskIds,
+                    slotIndex: context.ensureSlotRegistry().nearestIndex(to: cursor)
                 )
                 return ScheduleRecovery(
                     shifts: [:],
@@ -234,10 +235,11 @@ final class ProactiveReactivePolicy: @unchecked Sendable {
         }
         // No free slot in horizon: reflow after insertion at horizon start
         // and let the optimizer resolve by evicting a low-priority gene.
+        let horizonStart = context.planningHorizon.start
         let gene = ScheduleGene(
             eventId: event.id,
             title: event.title,
-            startTime: context.planningHorizon.start,
+            startTime: horizonStart,
             duration: event.duration,
             context: event.context,
             energyCost: event.energyCost,
@@ -247,7 +249,8 @@ final class ProactiveReactivePolicy: @unchecked Sendable {
             isDroppable: event.isDroppable,
             isIncluded: true,
             pomodoroConfig: event.pomodoroConfig,
-            reservedTaskIds: event.reservedTaskIds
+            reservedTaskIds: event.reservedTaskIds,
+            slotIndex: context.ensureSlotRegistry().nearestIndex(to: horizonStart)
         )
         return ScheduleRecovery(
             shifts: [:], removals: [], insertions: [gene], reflowAfter: true
