@@ -1,4 +1,7 @@
 import Foundation
+import os
+
+private let logger = Logger(subsystem: "com.avpv.Bubo", category: "Optimizer/Intents")
 
 // MARK: - LLM Intent Bridge
 
@@ -18,6 +21,7 @@ struct LLMIntentBridge {
 
     func executeFromJSON(_ json: String) async -> OptimizationResult {
         guard let data = json.data(using: .utf8) else {
+            logger.error("intents_parse_failed source=llm reason=invalid_utf8")
             return .infeasible(reason: "Invalid JSON string")
         }
 
@@ -25,8 +29,12 @@ struct LLMIntentBridge {
         do {
             request = try JSONDecoder().decode(OptimizationRequest.self, from: data)
         } catch {
+            logger.error("intents_parse_failed source=llm reason=decode error=\(error.localizedDescription, privacy: .public) body_size=\(data.count)")
             return .infeasible(reason: "Could not parse intents: \(error.localizedDescription)")
         }
+
+        let caseList = request.intents.map(\.caseName).joined(separator: ",")
+        logger.info("intents_parsed source=llm count=\(request.intents.count) cases=\(caseList, privacy: .public)")
 
         return await optimizerService.executeRequest(request, reminderService: reminderService)
     }
