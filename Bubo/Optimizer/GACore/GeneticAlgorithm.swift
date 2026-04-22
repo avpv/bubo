@@ -425,8 +425,29 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
 
         var individuals: [C] = []
 
-        // Greedy seeds: each gets a slight random perturbation for variety
-        for i in 0..<greedyCount {
+        // CP-SAT prophet seed: when the context exposes a
+        // `CPSATRepairer`, try once to get a fully feasible placement
+        // from the CP solver and slot it in as the first greedy
+        // individual. It considers every event jointly (unlike
+        // per-event greedy) and respects the precedence DAG at the
+        // search level, so on a tight week the CP seed reliably
+        // clears the "one priority-first greedy run couldn't fit
+        // everything" infeasibility trap. The call is fire-and-forget
+        // — a nil return (timeout, empty domain, non-schedule GA)
+        // falls back to pure greedy below.
+        var cpSeedPlaced = false
+        if greedyCount > 0,
+           let cpSeed = ScheduleChromosome.cpSeeded(context: context) as? C {
+            individuals.append(cpSeed)
+            cpSeedPlaced = true
+        }
+
+        // Greedy seeds: each gets a slight random perturbation for variety.
+        // When a CP seed landed above, the first greedy slot is already
+        // filled — start greedy seeding from index 1 so the total
+        // population count still matches `greedyCount`.
+        let greedyStart = cpSeedPlaced ? 1 : 0
+        for i in greedyStart..<greedyCount {
             var individual = C.greedy(context: context)
             // Lightly mutate non-first greedy seeds for diversity
             if i > 0 {
