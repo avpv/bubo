@@ -501,13 +501,16 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         let cal = context.calendar
         let prefs = context.preferences
         let workingDays = prefs.workingDays
+        let slotRegistry = context.ensureSlotRegistry()
+        let slotSeconds: TimeInterval = slotRegistry.stride
 
         // Cap the per-event domain so the solver stays within budget on
-        // dense weeks. 120 candidates ≈ 30 hours of 15-min slots per
-        // event, plenty of room to pack a reasonable week without
-        // exploding the search space.
-        let maxDomain = 120
-        let slotSeconds: TimeInterval = 15 * 60
+        // dense weeks. On a 15-min grid 120 candidates ≈ 30h of
+        // runway per event; on a 5-min grid we bump the cap to 360
+        // so each event still sees the same time-domain coverage
+        // (~30h). Keeps solve time comparable regardless of grid
+        // granularity.
+        let maxDomain = max(120, slotRegistry.stridesForMinutes(30 * 60))
 
         // Domain enumeration is intentionally simpler than
         // `enumerateFeasibleSlots` — we don't need cost scoring, we
@@ -1239,7 +1242,13 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 // reintroducing a continuous-Date jitter that could
                 // land off-grid or off-day.
                 guard let currentSlot = genes[i].slotIndex ?? slotRegistry.nearestIndex(to: genes[i].startTime) else { break }
-                let delta = context.rng.int(in: -2...2)
+                // Δ in *slot units*, auto-scaling with the registry's
+                // stride. `stridesForMinutes(30)` returns 2 on a
+                // 15-min grid (±30 min), 6 on a 5-min grid (±30 min) —
+                // keeps the shift operator's time-domain neighbourhood
+                // constant even when the grid gets finer.
+                let window = slotRegistry.stridesForMinutes(30)
+                let delta = context.rng.int(in: -window...window)
                 let newSlot = slotRegistry.clamped(currentSlot + delta)
                 guard let newDate = slotRegistry.resolvedDate(at: newSlot),
                       newDate >= floor else { break }

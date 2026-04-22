@@ -1032,9 +1032,13 @@ final class BuboOptimizer {
         // search space the GA operated on. Orders-of-magnitude smaller
         // than the continuous Date range, which is the whole point of
         // the slot-based decoder — see the "Slot-Based Decoder"
-        // MARK in Chromosome.swift.
+        // MARK in Chromosome.swift. Stride is auto-detected by
+        // `SlotRegistry.autoDetectStride` — 15-min when the workload
+        // is aligned, 5-min when a fixed event / movable duration
+        // introduces off-quarter minutes.
         let slotRegistry = context.ensureSlotRegistry()
-        lines.append("slots: registry=\(slotRegistry.count)")
+        let strideMinutes = Int((slotRegistry.stride / 60).rounded())
+        lines.append("slots: registry=\(slotRegistry.count), stride=\(strideMinutes)m")
 
         // Slot-binding coverage on the best scenario: how many genes
         // actually carry a registry-bound `slotIndex`. A coverage
