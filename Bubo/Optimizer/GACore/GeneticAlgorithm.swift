@@ -819,14 +819,22 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             let reward = offspring[i].rawFitness - offspringBaselines[i]
             context.mutationBandit.record(op: op, reward: reward)
 
-            // Second feedback channel: when the LNS operator fired, also
-            // reward the destroy strategy it used. Only `ScheduleChromosome`
-            // exposes this — guarding on the concrete type avoids polluting
-            // `AdaptiveMutationChromosome` with an LNS-only property.
-            if op == .lnsDay,
-               let schedule = offspring[i] as? ScheduleChromosome,
-               let strategy = schedule.lastDestroyStrategy {
-                context.lnsStrategyBandit.record(strategy: strategy, reward: reward)
+            // Second feedback channel: when the LNS operator fired, reward
+            // both ends of the destroy × repair pair with the same delta.
+            // Training both bandits on the same fitness signal is the
+            // standard Ropke–Pisinger setup: independent draws, identical
+            // reward, so the product of weights converges on the true
+            // pair quality without needing 15 explicit pair arms.
+            // Only `ScheduleChromosome` exposes the LNS telemetry —
+            // guarding on the concrete type avoids polluting
+            // `AdaptiveMutationChromosome` with LNS-only properties.
+            if op == .lnsDay, let schedule = offspring[i] as? ScheduleChromosome {
+                if let destroy = schedule.lastDestroyStrategy {
+                    context.lnsStrategyBandit.record(strategy: destroy, reward: reward)
+                }
+                if let repair = schedule.lastRepairStrategy {
+                    context.lnsRepairBandit.record(strategy: repair, reward: reward)
+                }
             }
         }
 

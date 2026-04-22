@@ -134,6 +134,12 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
     /// operator-level bandit, so strategy weights adapt with experience.
     var lastDestroyStrategy: LNSDestroyStrategy?
 
+    /// Repair half of the ALNS pair. Siblings `lastMutationOperator` and
+    /// `lastDestroyStrategy` — the GA loop feeds the same fitness delta
+    /// into `LNSRepairBandit` so both ends of the destroy × repair pair
+    /// get trained on the same signal.
+    var lastRepairStrategy: LNSRepairStrategy?
+
     /// Self-adaptive mutation rate encoded directly in the genome. When > 0
     /// it overrides the rate the GA would otherwise pass to `mutate(rate:)`,
     /// and is itself perturbed on every mutation — so a chromosome descended
@@ -1388,20 +1394,46 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         }
         guard !destroyedIndices.isEmpty else { return nil }
 
-        // Repair: switch to CP-SAT adapter for large windows when
-        // wired. The handwritten branch-and-bound stays the default
-        // for small windows where the per-call overhead of the
-        // stronger solver isn't justified.
+        // Repair: full ALNS — let the repair bandit pick between
+        // handwritten B&B, regret insertion, and the CP-SAT adapter.
+        // Each LNS call samples destroy × repair independently and
+        // the two bandits both get a reward update, so after enough
+        // calls the product of weights converges on the pair that
+        // actually wins on this workload. Previous code hard-routed
+        // repair by window size, which worked but left the solver
+        // blind to cases where regret would beat B&B on a small
+        // window (or B&B would beat CP-SAT on a medium one).
+        let cpSATAvailable = context.cpSATRepairer != nil
+        let repairStrategy = context.lnsRepairBandit.select(
+            rng: context.rng,
+            cpSATAvailable: cpSATAvailable
+        )
+        lastRepairStrategy = repairStrategy
         let result: IndexSet?
-        if let repairer = context.cpSATRepairer,
-           destroyedIndices.count >= context.cpSATWindowThreshold {
-            result = applyCPSATRepair(
-                destroyed: destroyedIndices,
-                using: repairer,
-                context: context
-            ) ?? cpRepair(destroyed: Set(destroyedIndices), context: context)
-        } else {
+        switch repairStrategy {
+        case .branchAndBound:
             result = cpRepair(destroyed: Set(destroyedIndices), context: context)
+        case .regret:
+            // `regretRepair` already exists as `cpRepair`'s fallback
+            // path — expose it as a top-level choice here so the
+            // bandit can try it eagerly. Its "place each gene at
+            // its regret-weighted best slot" heuristic is robust
+            // on tight weeks where B&B's branching explodes.
+            result = regretRepair(destroyed: Set(destroyedIndices), context: context)
+        case .cpSAT:
+            if let repairer = context.cpSATRepairer {
+                result = applyCPSATRepair(
+                    destroyed: destroyedIndices,
+                    using: repairer,
+                    context: context
+                ) ?? cpRepair(destroyed: Set(destroyedIndices), context: context)
+            } else {
+                // Defensive — `select(cpSATAvailable:)` filters the
+                // arm out when the adapter is nil, but if a caller
+                // passed `true` + nil adapter we degrade to B&B
+                // rather than crash.
+                result = cpRepair(destroyed: Set(destroyedIndices), context: context)
+            }
         }
 
         // Tabu bookkeeping: tick the clock and mark the destroyed

@@ -287,6 +287,14 @@ struct OptimizerContext: Sendable {
     /// same as `mutationBandit` so strategy rewards accumulate globally.
     let lnsStrategyBandit: LNSStrategyBandit
 
+    /// Second bandit for the repair half of the ALNS cycle — chooses
+    /// between handwritten branch-and-bound, regret insertion, and the
+    /// CP-SAT adapter per LNS call. Trained with the same fitness-delta
+    /// signal as `lnsStrategyBandit`, so the combined policy converges on
+    /// the destroy × repair pair that's best for the current landscape
+    /// without having to enumerate all 15 pairs as independent arms.
+    let lnsRepairBandit: LNSRepairBandit
+
     /// Attention head for `CrossoverStrategy.contextual`. Contextual
     /// crossover scores every gene pair through this head before
     /// deciding which parent to inherit from. Shared across islands so
@@ -345,6 +353,7 @@ struct OptimizerContext: Sendable {
         rng: GARandom = GARandom(),
         mutationBandit: MutationBandit = MutationBandit(),
         lnsStrategyBandit: LNSStrategyBandit = LNSStrategyBandit(),
+        lnsRepairBandit: LNSRepairBandit = LNSRepairBandit(),
         contextualCrossoverHead: GeneAttentionHead = GeneAttentionHead(),
         conflictGraphHolder: ConflictGraphHolder? = nil,
         tabuMemory: TabuMemory? = nil,
@@ -362,6 +371,7 @@ struct OptimizerContext: Sendable {
         self.rng = rng
         self.mutationBandit = mutationBandit
         self.lnsStrategyBandit = lnsStrategyBandit
+        self.lnsRepairBandit = lnsRepairBandit
         self.contextualCrossoverHead = contextualCrossoverHead
         // Production entry points construct a shared holder so every
         // context copy hits the same cache; tests and one-shot
