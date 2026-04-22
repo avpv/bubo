@@ -5,10 +5,11 @@ import OSLog
 
 /// Structured debug logger for PlanWeek / GA diagnostics. Two channels:
 ///
-///   * **`anomaly`** — things that shouldn't happen but might. Always
-///     emitted at `.error` level (even in release) because if one of
-///     these fires, a real bug has already slipped past the invariants
-///     and the user needs to see it in any collected log bundle.
+///   * **`warn`** — things that shouldn't happen but might. Always
+///     emitted at `.warning` OSLog level (even in release) because if
+///     one of these fires, a real bug has already slipped past the
+///     invariants and the user needs to see it in any collected log
+///     bundle.
 ///
 ///   * **`trace`** — per-generation / per-operator detail. Compiled out
 ///     of release builds via `#if DEBUG`; in debug it's at `.debug`
@@ -16,14 +17,20 @@ import OSLog
 ///     to that category.
 ///
 /// Both route through `com.avpv.Bubo:GADebug` so a single OSLog
-/// predicate in Console / `log show` catches everything:
+/// predicate in Console / `log show` catches everything. Filter by
+/// level to pick the channel:
 ///
 /// ```
+/// # All warnings (invariant + input anomalies)
 /// log show --predicate 'subsystem == "com.avpv.Bubo"
-///                       AND category == "GADebug"' --info
+///                       AND category == "GADebug"' --level warning
+///
+/// # Full debug trace (DEBUG builds)
+/// log show --predicate 'subsystem == "com.avpv.Bubo"
+///                       AND category == "GADebug"' --level debug
 /// ```
 ///
-/// Anomalies are also mirrored to `PlanWeek` so they show up alongside
+/// Warnings are also mirrored to `PlanWeek` so they show up alongside
 /// the run's input/result lines in the same log bundle the user would
 /// share.
 enum GADebugLog {
@@ -38,15 +45,18 @@ enum GADebugLog {
         category: "PlanWeek"
     )
 
-    // MARK: - Anomaly channel
+    // MARK: - Warn channel
 
-    /// Report an invariant violation. Shape:
-    ///   `[ANOMALY] <site>: <message> (<context>)`
+    /// Report an invariant violation or suspicious input. The shape is
+    /// `<site>: <message> (<context>)`, where `site` names the check
+    /// (e.g. "slotBinding", "weekendPlacement", "fitnessDrop",
+    /// "input") and `context` is a free-form dictionary formatted as
+    /// `key=value, key=value`.
     ///
-    /// The `site` should name the invariant (e.g. "slotBinding",
-    /// "weekendPlacement", "fitnessDrop"). `context` is a free-form
-    /// dictionary that gets formatted as `key=value, key=value`.
-    static func anomaly(
+    /// Emitted at OSLog's `.warning` level so a single
+    /// `--level warning` filter surfaces every instance across the
+    /// run.
+    static func warn(
         site: String,
         message: String,
         context: [String: String] = [:]
@@ -54,14 +64,14 @@ enum GADebugLog {
         let ctxStr = context.isEmpty
             ? ""
             : " (" + context.map { "\($0)=\($1)" }.sorted().joined(separator: ", ") + ")"
-        let line = "[ANOMALY] \(site): \(message)\(ctxStr)"
-        logger.error("\(line, privacy: .public)")
-        mirror.error("\(line, privacy: .public)")
+        let line = "\(site): \(message)\(ctxStr)"
+        logger.warning("\(line, privacy: .public)")
+        mirror.warning("\(line, privacy: .public)")
     }
 
-    /// Convenience: report an anomaly with no dictionary context.
-    static func anomaly(_ site: String, _ message: String) {
-        anomaly(site: site, message: message, context: [:])
+    /// Convenience: no-context form.
+    static func warn(_ site: String, _ message: String) {
+        warn(site: site, message: message, context: [:])
     }
 
     // MARK: - Trace channel (DEBUG-only)
@@ -90,7 +100,7 @@ enum GADebugLog {
         #if DEBUG
         guard let slot = gene.slotIndex else { return }
         guard let date = registry.resolvedDate(at: slot) else {
-            anomaly(
+            warn(
                 site: "slotBinding",
                 message: "slotIndex out of range",
                 context: [
@@ -104,7 +114,7 @@ enum GADebugLog {
         }
         let drift = abs(date.timeIntervalSinceReferenceDate - gene.startTime.timeIntervalSinceReferenceDate)
         if drift > 30 {  // 30-second tolerance for float shenanigans
-            anomaly(
+            warn(
                 site: "slotBinding",
                 message: "slotIndex doesn't match startTime",
                 context: [
@@ -133,7 +143,7 @@ enum GADebugLog {
         #if DEBUG
         guard gene.isIncluded else { return }
         if !preferences.isWorkingDay(gene.startTime, calendar: calendar) {
-            anomaly(
+            warn(
                 site: "weekendPlacement",
                 message: "included gene on non-working day",
                 context: [

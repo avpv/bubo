@@ -880,11 +880,11 @@ final class BuboOptimizer {
         }
         lines.append("GA budget: \(gaDesc) | \(islandDesc)")
 
-        // Input-anomaly scan. Flags things that usually indicate a
+        // Input anomaly scan. Flags things that usually indicate a
         // parsing / ingestion bug upstream — a malformed event that
         // makes it into the GA is going to produce a surprising
-        // scenario, and searching the log for "[ANOMALY] input:" is
-        // faster than bisecting the ingest pipeline.
+        // scenario, and filtering `GADebug` by `--level warning`
+        // surfaces every hit alongside the invariant checks.
         scanInputAnomalies(
             fixedEvents: fixedInWindow,
             movableEvents: movableEvents,
@@ -895,10 +895,10 @@ final class BuboOptimizer {
         planWeekLogger.info("\(lines.joined(separator: "\n"), privacy: .public)")
     }
 
-    /// Emit `[ANOMALY] input: …` lines via `GADebugLog` for events
-    /// that look malformed at ingest time. Non-blocking — the GA
-    /// still runs — but every hit is something the caller probably
-    /// wants to investigate.
+    /// Emit `GADebugLog.warn(site: "input", …)` lines for events that
+    /// look malformed at ingest time. Non-blocking — the GA still
+    /// runs — but every hit is something the caller probably wants
+    /// to investigate.
     private func scanInputAnomalies(
         fixedEvents: [CalendarEvent],
         movableEvents: [OptimizableEvent],
@@ -914,7 +914,7 @@ final class BuboOptimizer {
             // event. Either the deadline is wrong (stale task) or
             // the horizon is wrong.
             if let deadline = event.deadline, deadline < horizon.start {
-                GADebugLog.anomaly(
+                GADebugLog.warn(
                     site: "input",
                     message: "event deadline precedes horizon start",
                     context: [
@@ -931,7 +931,7 @@ final class BuboOptimizer {
             if let deadline = event.deadline,
                let earliest = event.earliestStart,
                deadline.timeIntervalSince(earliest) < event.duration {
-                GADebugLog.anomaly(
+                GADebugLog.warn(
                     site: "input",
                     message: "earliestStart..deadline window narrower than duration",
                     context: [
@@ -945,19 +945,19 @@ final class BuboOptimizer {
             // Duration sanity. Zero / negative = parsing bug.
             // >12h = unusually long, possibly a `30m` parsed as hours.
             if event.duration <= 0 {
-                GADebugLog.anomaly(
+                GADebugLog.warn(
                     site: "input",
                     message: "non-positive duration",
                     context: ["event": event.id, "duration_sec": "\(Int(event.duration))"]
                 )
             } else if event.duration > 12 * 3600 {
-                GADebugLog.anomaly(
+                GADebugLog.warn(
                     site: "input",
                     message: "unusually long duration (>12h) — possible parse error",
                     context: ["event": event.id, "hours": String(format: "%.1f", event.duration / 3600)]
                 )
             } else if event.duration < 5 * 60 {
-                GADebugLog.anomaly(
+                GADebugLog.warn(
                     site: "input",
                     message: "unusually short duration (<5min) — possible parse error",
                     context: ["event": event.id, "minutes": String(format: "%.1f", event.duration / 60)]
@@ -969,7 +969,7 @@ final class BuboOptimizer {
             // soft objectives.
             let workdaySeconds = Double(workingHours.upperBound - workingHours.lowerBound) * 3600
             if event.duration > workdaySeconds {
-                GADebugLog.anomaly(
+                GADebugLog.warn(
                     site: "input",
                     message: "duration exceeds single working day",
                     context: [
@@ -983,7 +983,7 @@ final class BuboOptimizer {
 
         // Duplicate ids.
         for (id, count) in eventIds where count > 1 {
-            GADebugLog.anomaly(
+            GADebugLog.warn(
                 site: "input",
                 message: "duplicate movable event id",
                 context: ["event": id, "count": "\(count)"]
@@ -993,7 +993,7 @@ final class BuboOptimizer {
         // Fixed-event anomalies.
         for event in fixedEvents {
             if event.endDate <= event.startDate {
-                GADebugLog.anomaly(
+                GADebugLog.warn(
                     site: "input",
                     message: "fixed event has non-positive duration",
                     context: [

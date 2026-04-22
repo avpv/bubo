@@ -598,7 +598,7 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             // bug that promoted a worse individual. Log loudly.
             let currentFitness = bestEver?.rawFitness ?? 0
             if generation > 0 && currentFitness < lastBestFitness - 1e-6 {
-                GADebugLog.anomaly(
+                GADebugLog.warn(
                     site: "fitnessDrop",
                     message: "bestEver regressed — elitism failed to preserve best",
                     context: [
