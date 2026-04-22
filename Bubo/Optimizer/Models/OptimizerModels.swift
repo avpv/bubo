@@ -126,6 +126,21 @@ struct ScheduleGene: Codable, Hashable, Sendable {
     /// rather than each chunk looking up a non-existent "taskId_pN" row.
     let groupId: String?
 
+    /// Slot-based decoder: index into `OptimizerContext.ensureSlotRegistry()`
+    /// that this gene's `startTime` resolves to. Optional so older persisted
+    /// JSON (which predates the field) decodes cleanly and so tests / legacy
+    /// call sites that don't thread a registry still work — `nil` means "no
+    /// slot binding yet, use `startTime` as the source of truth".
+    ///
+    /// When non-nil, operators are expected to mutate by updating the index
+    /// via the registry and then re-deriving `startTime = registry.resolvedDate(at:)`.
+    /// That keeps the dual representation coherent: `slotIndex` drives the
+    /// GA's discrete search, `startTime` is the continuous value every
+    /// reader (fitness, UI, serialisation) already expects. See the
+    /// "Slot-Alignment Design Note" in Chromosome.swift for the migration
+    /// plan that ends with `startTime` becoming a computed property.
+    var slotIndex: Int?
+
     var endTime: Date { startTime.addingTimeInterval(duration) }
 
     init(
@@ -142,7 +157,8 @@ struct ScheduleGene: Codable, Hashable, Sendable {
         isIncluded: Bool = true,
         pomodoroConfig: PomodoroConfig? = nil,
         reservedTaskIds: [String] = [],
-        groupId: String? = nil
+        groupId: String? = nil,
+        slotIndex: Int? = nil
     ) {
         self.eventId = eventId
         self.title = title
@@ -158,9 +174,13 @@ struct ScheduleGene: Codable, Hashable, Sendable {
         self.pomodoroConfig = pomodoroConfig
         self.reservedTaskIds = reservedTaskIds
         self.groupId = groupId
+        self.slotIndex = slotIndex
     }
 
     /// Create a copy with a new start time (preserves all other fields).
+    /// The `slotIndex` is invalidated — callers who know the corresponding
+    /// slot should use `withSlot(index:date:)` instead so the two fields
+    /// stay in sync.
     func withStartTime(_ newStart: Date) -> ScheduleGene {
         ScheduleGene(
             eventId: eventId,
@@ -176,7 +196,65 @@ struct ScheduleGene: Codable, Hashable, Sendable {
             isIncluded: isIncluded,
             pomodoroConfig: pomodoroConfig,
             reservedTaskIds: reservedTaskIds,
-            groupId: groupId
+            groupId: groupId,
+            slotIndex: nil
+        )
+    }
+
+    /// Create a copy that sets both `slotIndex` and the derived
+    /// `startTime` in one go. Use this from every operator that moves
+    /// a gene — mutation, repair's re-home, crossover's swap — so the
+    /// two fields never drift. Passing the resolved `date` up-front
+    /// avoids forcing the caller to carry the registry into fitness
+    /// evaluation (which still reads `startTime`).
+    func withSlot(index: Int, date: Date) -> ScheduleGene {
+        ScheduleGene(
+            eventId: eventId,
+            title: title,
+            startTime: date,
+            duration: duration,
+            context: context,
+            energyCost: energyCost,
+            priority: priority,
+            isFocusBlock: isFocusBlock,
+            storyPoints: storyPoints,
+            isDroppable: isDroppable,
+            isIncluded: isIncluded,
+            pomodoroConfig: pomodoroConfig,
+            reservedTaskIds: reservedTaskIds,
+            groupId: groupId,
+            slotIndex: index
+        )
+    }
+
+    /// Inherit placement (`startTime` + `slotIndex`) from another gene
+    /// while keeping every other field of `self`. Used by crossover so
+    /// slot bindings survive the parent-to-child transfer — without
+    /// this, every crossover would invalidate `slotIndex` (via
+    /// `withStartTime`) and force repair to re-bind every gene on the
+    /// next generation. Passing both fields together keeps the two
+    /// in lock-step even when the donor's `startTime` doesn't line
+    /// up with the current registry (e.g. when registries differ
+    /// between parents' build time and child's; the new binding is
+    /// whatever the donor carried — mutation or repair's later
+    /// `nearestIndex` re-bind corrects drift).
+    func withPlacement(from other: ScheduleGene) -> ScheduleGene {
+        ScheduleGene(
+            eventId: eventId,
+            title: title,
+            startTime: other.startTime,
+            duration: duration,
+            context: context,
+            energyCost: energyCost,
+            priority: priority,
+            isFocusBlock: isFocusBlock,
+            storyPoints: storyPoints,
+            isDroppable: isDroppable,
+            isIncluded: isIncluded,
+            pomodoroConfig: pomodoroConfig,
+            reservedTaskIds: reservedTaskIds,
+            groupId: groupId,
+            slotIndex: other.slotIndex
         )
     }
 }
@@ -250,6 +328,14 @@ struct OptimizerContext: Sendable {
     let cpSATRepairer: CPSATRepairer?
     let cpSATWindowThreshold: Int
 
+    /// Lazy holder for the slot registry — the discrete search space
+    /// the GA samples from. Built once per run and shared across every
+    /// value-semantic copy of this context via the reference holder
+    /// (same pattern as `conflictGraphHolder`). `ensureSlotRegistry()`
+    /// builds on demand when the holder is nil, so legacy callers
+    /// (tests, one-shot contexts) don't have to plumb one in.
+    let slotRegistryHolder: SlotRegistryHolder?
+
     init(
         fixedEvents: [CalendarEvent] = [],
         movableEvents: [OptimizableEvent] = [],
@@ -268,7 +354,8 @@ struct OptimizerContext: Sendable {
         conflictGraphHolder: ConflictGraphHolder? = nil,
         tabuMemory: TabuMemory? = nil,
         cpSATRepairer: CPSATRepairer? = nil,
-        cpSATWindowThreshold: Int = 20
+        cpSATWindowThreshold: Int = 20,
+        slotRegistryHolder: SlotRegistryHolder? = nil
     ) {
         self.fixedEvents = fixedEvents
         self.movableEvents = movableEvents
@@ -288,6 +375,7 @@ struct OptimizerContext: Sendable {
         self.tabuMemory = tabuMemory
         self.cpSATRepairer = cpSATRepairer
         self.cpSATWindowThreshold = cpSATWindowThreshold
+        self.slotRegistryHolder = slotRegistryHolder
     }
 
     /// Returns a materialised conflict graph for this context. Goes
@@ -300,6 +388,17 @@ struct OptimizerContext: Sendable {
             return holder.get(for: self)
         }
         return ScheduleConflictGraph.build(from: self)
+    }
+
+    /// Returns the precomputed slot registry. Goes through the shared
+    /// holder on the production path; callers without a holder (tests,
+    /// legacy one-shot contexts) get an inline build on first access.
+    /// Same pattern as `ensureConflictGraph`.
+    func ensureSlotRegistry() -> SlotRegistry {
+        if let holder = slotRegistryHolder {
+            return holder.get(for: self)
+        }
+        return SlotRegistry.build(from: self)
     }
 
     /// `eventId → backlogIndex` map over `movableEvents`. Built on demand

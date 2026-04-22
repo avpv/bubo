@@ -1031,6 +1031,14 @@ final class BuboOptimizer {
         }.joined(separator: ",")
         lines.append("flags: workingDays=[\(daysLabel)], workDaysInHorizon=\(workDays)/\(horizonDays)")
 
+        // Slot-registry footprint: total valid slots in the discrete
+        // search space the GA operated on. Orders-of-magnitude smaller
+        // than the continuous Date range, which is the whole point of
+        // the slot-based decoder — see the "Slot-Alignment Design Note"
+        // MARK in Chromosome.swift.
+        let slotRegistry = context.ensureSlotRegistry()
+        lines.append("slots: registry=\(slotRegistry.count)")
+
         planWeekLogger.info("\(lines.joined(separator: "\n"), privacy: .public)")
     }
 
