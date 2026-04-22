@@ -5,7 +5,15 @@ import os
 /// (working window, busy fixed slots, tasks) and the scenarios the GA
 /// produced (placements per day, dropped tasks, fitness breakdown). Read
 /// via Console.app → subsystem `com.avpv.Bubo`, category `PlanWeek`.
-private let planWeekLogger = Logger(subsystem: "com.avpv.Bubo", category: "PlanWeek")
+///
+/// We keep both `OSLog` and `Logger` references: `Logger`'s typed
+/// interpolation is what we actually emit with, but `OSLog` lets us
+/// call `isEnabled(type:)` and skip the (very expensive — 50–200 line
+/// multi-line messages) diagnostic body when the level is filtered
+/// out. Without the early check, every PlanWeek invocation eagerly
+/// builds a multi-kilobyte string even when no one is listening.
+private let planWeekOSLog = OSLog(subsystem: "com.avpv.Bubo", category: "PlanWeek")
+private let planWeekLogger = Logger(planWeekOSLog)
 
 // MARK: - BuboOptimizer
 
@@ -797,6 +805,20 @@ final class BuboOptimizer {
         gaCfg: GAConfiguration?,
         islandCfg: IslandConfiguration?
     ) {
+        // Skip the whole diagnostic (kilobytes of string formatting) when
+        // no one is listening at `.info`. The `GADebugLog.warn` anomaly
+        // scan below is cheap and unconditional, so keep it outside the
+        // gate.
+        guard planWeekOSLog.isEnabled(type: .info) else {
+            scanInputAnomalies(
+                fixedEvents: fixedEvents.filter { horizon.intersects(DateInterval(start: $0.startDate, end: max($0.endDate, $0.startDate))) },
+                movableEvents: movableEvents,
+                horizon: horizon,
+                workingHours: workingHours
+            )
+            return
+        }
+
         let df = DateFormatter()
         df.dateFormat = "EEE dd.MM"
         let tf = DateFormatter()
@@ -1018,6 +1040,11 @@ final class BuboOptimizer {
         context: OptimizerContext,
         telemetry: FitnessEvalTelemetry.Snapshot
     ) {
+        // Early-exit when `.info` is disabled — the body below formats a
+        // multi-kilobyte per-scenario report that's pure wasted work if
+        // no one is listening.
+        guard planWeekOSLog.isEnabled(type: .info) else { return }
+
         let df = DateFormatter()
         df.dateFormat = "EEE dd.MM"
         let tf = DateFormatter()

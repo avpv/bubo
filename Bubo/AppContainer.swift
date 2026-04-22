@@ -56,8 +56,11 @@ struct AppContainer {
     /// delegates to `build(...)` for the pure wiring step. Called once
     /// from `BuboApp.init`.
     static func make() -> AppContainer {
+        let startedAt = Date()
         let defaults = UserDefaults.standard
         let cloudPreference = defaults.object(forKey: cloudSyncPreferenceKey) as? Bool ?? false
+
+        logger.info("container_build_started cloud_enabled=\(cloudPreference)")
 
         let eventCacheContainer = resilientContainer(
             storeURL: eventCacheStoreURL,
@@ -81,13 +84,18 @@ struct AppContainer {
             )
         }
 
-        return build(
+        let container = build(
             settings: ReminderSettings.load(),
             eventCacheContainer: eventCacheContainer,
             userEventsContainer: userEventsContainer,
             backlogContainer: backlogContainer,
             cloudServices: cloudServices
         )
+
+        let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+        logger.info("container_build_completed duration_ms=\(durationMs)")
+
+        return container
     }
 
     /// Pure wiring step: given every leaf dependency, assemble the
