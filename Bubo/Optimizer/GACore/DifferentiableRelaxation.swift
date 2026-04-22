@@ -91,6 +91,7 @@ struct ScheduleGradientRefiner: Sendable {
         let horizonStart = context.planningHorizon.start
         let horizonEnd = context.planningHorizon.end
         let cal = context.calendar
+        let slotRegistry = context.ensureSlotRegistry()
 
         var velocity = [TimeInterval](repeating: 0, count: chromosome.genes.count)
 
@@ -122,30 +123,28 @@ struct ScheduleGradientRefiner: Sendable {
                 // correct outcome (we don't want to push into
                 // infeasibility).
                 var plus = chromosome
-                plus.genes[geneIdx] = plus.genes[geneIdx].withStartTime(
-                    clampToWorkingHours(
-                        originalStart.addingTimeInterval(h),
-                        duration: plus.genes[geneIdx].duration,
-                        workingHours: context.workingHours,
-                        calendar: cal,
-                        floor: horizonStart
-                    )
+                let plusDate = clampToWorkingHours(
+                    originalStart.addingTimeInterval(h),
+                    duration: plus.genes[geneIdx].duration,
+                    workingHours: context.workingHours,
+                    calendar: cal,
+                    floor: horizonStart
                 )
+                plus.genes[geneIdx] = plus.genes[geneIdx].withSlot(nearest: plusDate, registry: slotRegistry)
                 plus.mutatedGeneIndices = IndexSet(integer: geneIdx)
                 plus.needsEvaluation = true
                 evaluate(&plus)
                 let fPlus = plus.rawFitness
 
                 var minus = chromosome
-                minus.genes[geneIdx] = minus.genes[geneIdx].withStartTime(
-                    clampToWorkingHours(
-                        originalStart.addingTimeInterval(-h),
-                        duration: minus.genes[geneIdx].duration,
-                        workingHours: context.workingHours,
-                        calendar: cal,
-                        floor: horizonStart
-                    )
+                let minusDate = clampToWorkingHours(
+                    originalStart.addingTimeInterval(-h),
+                    duration: minus.genes[geneIdx].duration,
+                    workingHours: context.workingHours,
+                    calendar: cal,
+                    floor: horizonStart
                 )
+                minus.genes[geneIdx] = minus.genes[geneIdx].withSlot(nearest: minusDate, registry: slotRegistry)
                 minus.mutatedGeneIndices = IndexSet(integer: geneIdx)
                 minus.needsEvaluation = true
                 evaluate(&minus)
@@ -170,7 +169,7 @@ struct ScheduleGradientRefiner: Sendable {
                     calendar: cal,
                     floor: horizonStart
                 )
-                chromosome.genes[geneIdx] = chromosome.genes[geneIdx].withStartTime(newStart)
+                chromosome.genes[geneIdx] = chromosome.genes[geneIdx].withSlot(nearest: newStart, registry: slotRegistry)
             }
 
             chromosome.repair(context: context)

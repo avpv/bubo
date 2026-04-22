@@ -288,6 +288,9 @@ private extension IntentCompiler {
         // Adaptive
         var maxExtraTasks: Int? = nil
         var overflowToTomorrow: Bool = false
+        /// Set by the `.skipWeekends` intent. The compiler translates it
+        /// into a `workingDays = Mon–Fri` override when building the
+        /// final `OptimizerPreferences`.
         var skipWeekends: Bool = false
 
         // Source filters
@@ -1199,6 +1202,13 @@ private extension IntentCompiler {
         if let v = config.meetingClusteringWeight { prefs.meetingClusteringWeight = v }
         if let v = config.lunchStart { prefs.lunchWindowStart = v }
         if let v = config.lunchEnd { prefs.lunchWindowEnd = v }
+        // `.skipWeekends` intent is a convenience alias for "Mon–Fri only".
+        // Translate it into the canonical `workingDays` override here so
+        // the rest of the pipeline never has to juggle two representations.
+        // Intent absent → leave the user's picker-configured set alone.
+        if config.skipWeekends {
+            prefs.workingDays = OptimizerPreferences.defaultWorkingDays
+        }
 
         // Inject personal energy curve from check-in data when available.
         if let service = energyCheckInService, service.hasEnoughData {

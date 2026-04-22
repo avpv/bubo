@@ -114,17 +114,35 @@ struct NoOverlapConstraint: ScheduleConstraint {
 
 // MARK: - Working Hours Constraint (Hard)
 
-/// Events must fall within working hours.
+/// Events must fall within working hours and on a weekday the user has
+/// opted into (`preferences.workingDays`). Non-working days
+/// (e.g. Sat, Sun, or any weekday the user unchecked in the picker)
+/// charge the full event duration so the placement becomes infeasible
+/// and the GA rehomes it onto a real working day. Without this, a day
+/// with no fixed events looks like 10h of free working time and
+/// WeekBalance happily sinks movable tasks onto it.
 struct WorkingHoursConstraint: ScheduleConstraint {
     let name = "WorkingHours"
     let isHard = true
 
     func penalty(for chromosome: ScheduleChromosome, context: OptimizerContext) -> Double {
         let cal = context.calendar
+        let prefs = context.preferences
         var totalViolation = 0.0
 
         for gene in chromosome.genes where gene.isIncluded {
             let day = cal.startOfDay(for: gene.startTime)
+
+            // Non-working day: charge the full event duration. Skip the
+            // in-/out-of-hours arithmetic — the non-working charge
+            // already exceeds any hour-window slip the event could
+            // accumulate within the same day, and mixing the two would
+            // double-count without changing the relative ordering.
+            if !prefs.isWorkingDay(day, calendar: cal) {
+                totalViolation += gene.duration / 60
+                continue
+            }
+
             guard let workStart = cal.date(bySettingHour: context.workingHours.lowerBound, minute: 0, second: 0, of: day),
                   let workEnd = cal.date(bySettingHour: context.workingHours.upperBound, minute: 0, second: 0, of: day) else {
                 continue
@@ -207,31 +225,52 @@ struct EarliestStartConstraint: ScheduleConstraint {
 // MARK: - Max Meetings Per Day Constraint (Soft)
 
 /// Soft limit on the number of meetings per day.
+///
+/// Only penalises the *movable* portion of the overflow: fixed events
+/// arrive from the user's calendar and the GA has no way to move them,
+/// so charging against a day that's already at/over the limit from fixed
+/// alone would be a flat tax on every candidate — same penalty regardless
+/// of what the solver does. That taught the GA nothing and just added
+/// constant noise to WeekBalance-style objectives that already read the
+/// per-day load.
+///
+/// The rule is: only count movable events that push the day's meeting
+/// count above the limit, but never attribute units of overflow that
+/// existed before the GA ever touched the day.
 struct MaxMeetingsPerDayConstraint: ScheduleConstraint {
     let name = "MaxMeetingsPerDay"
     let isHard = false
 
     func penalty(for chromosome: ScheduleChromosome, context: OptimizerContext) -> Double {
         let cal = context.calendar
-        var eventsByDay: [Date: Int] = [:]
+        var fixedCountByDay: [Date: Int] = [:]
+        var movableCountByDay: [Date: Int] = [:]
 
-        // Count fixed events per day
         for event in context.fixedEvents {
             let day = cal.startOfDay(for: event.startDate)
-            eventsByDay[day, default: 0] += 1
+            fixedCountByDay[day, default: 0] += 1
         }
-        // Count movable events per day
         for gene in chromosome.genes where gene.isIncluded {
             let day = cal.startOfDay(for: gene.startTime)
-            eventsByDay[day, default: 0] += 1
+            movableCountByDay[day, default: 0] += 1
         }
 
         let maxPerDay = context.preferences.maxMeetingsPerDay
         var penalty = 0.0
-        for (_, count) in eventsByDay {
-            if count > maxPerDay {
-                penalty += Double(count - maxPerDay) * 10
-            }
+        let allDays = Set(fixedCountByDay.keys).union(movableCountByDay.keys)
+        for day in allDays {
+            let fixed = fixedCountByDay[day] ?? 0
+            let movable = movableCountByDay[day] ?? 0
+            let total = fixed + movable
+            guard total > maxPerDay else { continue }
+            // Slack is the remaining room *after* fixed eats into the cap.
+            // When fixed is already at/over the cap the slack is 0 and the
+            // entire movable contribution on that day is the attributable
+            // overflow. When fixed is under the cap we only blame the
+            // movable events past the slack.
+            let slack = max(0, maxPerDay - fixed)
+            let overflowFromMovable = max(0, movable - slack)
+            penalty += Double(overflowFromMovable) * 10
         }
         return penalty
     }

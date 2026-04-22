@@ -68,7 +68,7 @@ struct BacklogCapacityRing: View {
         .onHover { isHovered = $0 }
         .accessibilityLabel("Backlog capacity")
         .accessibilityValue("\(Int(fraction * 100)) percent of remaining workday")
-        .accessibilityHint("Shows capacity details and adjusts working hours")
+        .accessibilityHint("Shows capacity details and adjusts working hours and working days")
         .popover(isPresented: $isPopoverPresented, arrowEdge: .bottom) {
             BacklogCapacityPopover(
                 pendingMinutes: pendingMinutes,
@@ -141,23 +141,31 @@ struct BacklogCapacityPopover: View {
 
             SkinSeparator()
 
-            // Inline configuration — the ring is about «влезет ли сегодня»,
-            // and the workday length is the lever that answers that
-            // question. Surface it where the answer is, not buried behind
-            // Settings → Assistant.
+            // Inline configuration. The pickers and the working-days
+            // picker are *global* planning preferences — they affect
+            // every planning surface, not just the backlog. The ring
+            // is the most visible consequence and the place the user
+            // notices the issue first, which earns them a shortcut
+            // here instead of a detour through Settings → Assistant.
+            // The scope caption below makes the global reach explicit
+            // so nobody thinks they're tweaking a backlog-only knob.
             VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                Text("Working hours")
+                Text("Workday")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(skin.resolvedTextSecondary)
 
-                HStack(spacing: DS.Spacing.sm) {
+                HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.sm) {
+                    Text("Hours")
+                        .font(.caption)
+                        .foregroundStyle(skin.resolvedTextSecondary)
+                        .frame(width: 60, alignment: .leading)
                     Picker("Start", selection: $service.workingHoursStart) {
                         ForEach(0...23, id: \.self) { hour in
                             Text("\(hour):00").tag(hour)
                         }
                     }
                     .labelsHidden()
-                    .frame(width: 90)
+                    .frame(width: 80)
 
                     Text("\u{2013}")
                         .foregroundStyle(skin.resolvedTextTertiary)
@@ -168,12 +176,25 @@ struct BacklogCapacityPopover: View {
                         }
                     }
                     .labelsHidden()
-                    .frame(width: 90)
+                    .frame(width: 80)
                 }
+
+                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                    Text("Days")
+                        .font(.caption)
+                        .foregroundStyle(skin.resolvedTextSecondary)
+                    WorkingDaysPicker(selection: $service.workingDays)
+                }
+
+                Text("Applies to all planning — also in Settings › Optimizer.")
+                    .font(.caption2)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, DS.Spacing.xxs)
             }
         }
         .padding(DS.Spacing.lg)
-        .frame(width: 260)
+        .frame(width: 320)
     }
 
     @ViewBuilder

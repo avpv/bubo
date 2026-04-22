@@ -216,13 +216,26 @@ final class MutationBandit: @unchecked Sendable {
         var bestScore = -Double.infinity
         var ties: [MutationOperator] = []
 
+        // When the run is clearly stuck (stagnation ≥ 0.6), bias the
+        // exploration bonus of the `guided` (gap-finding) operator
+        // upward — its per-call cost is high, so LinUCB often avoids
+        // it early, but it's the only operator that actively scans for
+        // feasible free windows. Empirically, most of the late-run
+        // improvements on plan-week workloads come from guided breaks
+        // through crowded days, so we nudge the bandit toward trying
+        // it more when nothing else is working. Same effect as giving
+        // the arm a small late-run prior without perturbing its A/b.
+        let stagnation = currentContext.stagnation
+        let guidedBoost = stagnation >= 0.6 ? 1.0 + 0.5 * (stagnation - 0.6) / 0.4 : 1.0
+
         for op in MutationOperator.allCases {
             guard let arm = arms[op] else { continue }
             guard let aInv = Self.invertNxN(arm.A) else { continue }
             let theta = Self.matvec(aInv, arm.b)
             let mean = Self.dot(theta, x)
             let xAinvX = max(0, Self.quadForm(x, aInv))
-            let bonus = explorationAlpha * xAinvX.squareRoot()
+            var bonus = explorationAlpha * xAinvX.squareRoot()
+            if op == .guided { bonus *= guidedBoost }
             let score = mean + bonus
 
             if score > bestScore + 1e-12 {
@@ -564,6 +577,119 @@ final class LNSStrategyBandit: @unchecked Sendable {
             )
         }
         return out
+    }
+}
+
+// MARK: - LNS Repair Strategy (full ALNS)
+
+/// The second half of the adaptive large neighborhood search loop:
+/// which repair heuristic re-inserts the destroyed genes.
+///
+/// Destroy strategies (`LNSDestroyStrategy`) pick *what* to rip out;
+/// repair strategies pick *how* to put it back. Classical ALNS
+/// (Ropke & Pisinger) runs independent bandits over both sides so the
+/// combined policy converges on the pair that works best for the
+/// current landscape — e.g. `topPriority × regret` on a tight week,
+/// `day × cpSAT` when large-scale restructure pays off.
+enum LNSRepairStrategy: Int, CaseIterable, Sendable, Hashable {
+    /// Internal branch-and-bound CP with forward checking + no-good
+    /// clause learning. Strongest repair for small-to-medium windows;
+    /// default path before ALNS.
+    case branchAndBound = 0
+
+    /// Regret-based insertion: places each destroyed gene into its
+    /// best slot weighted by the gap to the *second*-best, so tightly
+    /// bound genes get placed first. Fast and robust.
+    case regret = 1
+
+    /// External CP-SAT adapter (`CPSATRepairer`). Stronger than the
+    /// in-house B&B on large windows but has a higher per-call cost;
+    /// the old code gated it behind `cpSATWindowThreshold`, the
+    /// bandit now learns that trade-off from experience.
+    case cpSAT = 2
+}
+
+// MARK: - LNS Repair Bandit
+
+/// Mirror of `LNSStrategyBandit` for repair heuristics. Same
+/// exponential-smoothing roulette scheme so destroy + repair
+/// bandits compose predictably: each LNS call selects *both*
+/// ends of the pair via independent draws, then rewards each
+/// separately with the same fitness delta. After enough
+/// samples the weight-product reflects the true pair quality
+/// without us having to explicitly enumerate `destroy × repair`
+/// combinations (which would be 5 × 3 = 15 pairs — too many
+/// for fast convergence on a short-budget GA run).
+final class LNSRepairBandit: @unchecked Sendable {
+    private var weights: [LNSRepairStrategy: Double]
+    private var uses: [LNSRepairStrategy: Int]
+    private let lock = NSLock()
+
+    let learningRate: Double
+    let weightFloor: Double
+
+    init(learningRate: Double = 0.1, weightFloor: Double = 0.01) {
+        self.learningRate = learningRate
+        self.weightFloor = weightFloor
+        self.weights = Dictionary(uniqueKeysWithValues: LNSRepairStrategy.allCases.map { ($0, 1.0) })
+        self.uses = Dictionary(uniqueKeysWithValues: LNSRepairStrategy.allCases.map { ($0, 0) })
+    }
+
+    /// Pick a repair strategy proportional to its current weight.
+    /// Deterministic under a fixed RNG — same tie-break semantics as
+    /// `LNSStrategyBandit.select`.
+    ///
+    /// When `cpSATAvailable == false` the `.cpSAT` arm is excluded
+    /// from the draw: the external solver isn't wired into this
+    /// context, so putting probability mass on it would waste a
+    /// selection. The bandit still learns on the other two arms.
+    func select(rng: GARandom, cpSATAvailable: Bool) -> LNSRepairStrategy {
+        lock.lock()
+        defer { lock.unlock() }
+        let ordered = LNSRepairStrategy.allCases.filter { strategy in
+            cpSATAvailable || strategy != .cpSAT
+        }
+        guard !ordered.isEmpty else { return .branchAndBound }
+        let total = ordered.reduce(0.0) { $0 + max(weightFloor, weights[$1] ?? weightFloor) }
+        guard total > 0 else { return ordered[rng.int(in: 0..<ordered.count)] }
+        let r = rng.double(in: 0..<total)
+        var cumsum = 0.0
+        for s in ordered {
+            cumsum += max(weightFloor, weights[s] ?? weightFloor)
+            if r < cumsum { return s }
+        }
+        return ordered.last!
+    }
+
+    /// Fitness-delta reward update, same curve as the destroy bandit:
+    /// clip → shift → exponential smoothing. Negative rewards push
+    /// toward the floor but don't evict the strategy.
+    func record(strategy: LNSRepairStrategy, reward: Double) {
+        let clipped = max(-0.5, min(0.5, reward))
+        lock.lock()
+        defer { lock.unlock() }
+        let current = weights[strategy] ?? 1.0
+        let contribution = max(weightFloor, clipped + 0.5)
+        weights[strategy] = (1.0 - learningRate) * current + learningRate * contribution
+        uses[strategy, default: 0] += 1
+    }
+
+    var snapshot: [LNSRepairStrategy: StrategyTelemetry] {
+        lock.lock()
+        defer { lock.unlock() }
+        var out: [LNSRepairStrategy: StrategyTelemetry] = [:]
+        for s in LNSRepairStrategy.allCases {
+            out[s] = StrategyTelemetry(
+                weight: weights[s] ?? 1.0,
+                uses: uses[s] ?? 0
+            )
+        }
+        return out
+    }
+
+    struct StrategyTelemetry: Sendable {
+        let weight: Double
+        let uses: Int
     }
 }
 

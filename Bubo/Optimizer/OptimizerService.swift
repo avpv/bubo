@@ -71,6 +71,20 @@ final class OptimizerService {
         }
     }
 
+    /// Working-day picker binding for `OptimizerPreferences.workingDays`.
+    /// Lives on the service so every surface that tweaks working time
+    /// binds to the same source of truth, and so the setter routes
+    /// the change through `savePreferences()` — otherwise a UI change
+    /// would be lost on relaunch. Uses Foundation's 1-indexed weekday
+    /// convention (1 = Sun, …, 7 = Sat).
+    var workingDays: Set<Int> {
+        get { optimizer.preferences.workingDays }
+        set {
+            optimizer.preferences.workingDays = newValue
+            savePreferences()
+        }
+    }
+
     /// Default duration (in minutes) applied to new backlog tasks when the
     /// user doesn't specify one (no `1h`/`30m` suffix in the title). The
     /// ghost preview and the actual create path share this value via
@@ -103,6 +117,12 @@ final class OptimizerService {
         self.workingHoursStart = saved.start
         self.workingHoursEnd = saved.end
         self.defaultTaskDurationMinutes = saved.defaultDuration
+        // Persisted preferences are tried best-effort — if the on-disk
+        // blob predates the current model (e.g. the old `skipWeekends`
+        // Bool has been dropped and `workingDays` is now non-optional),
+        // decode throws and we fall through to a fresh default preferences
+        // instance. First-run after upgrade will reset other preference
+        // fields too; that's the explicit "no backward compat" trade.
         if let data = UserDefaults.standard.data(forKey: "BuboOptimizerPreferences"),
            let prefs = try? JSONDecoder().decode(OptimizerPreferences.self, from: data) {
             self.optimizer.preferences = prefs

@@ -126,6 +126,21 @@ struct ScheduleGene: Codable, Hashable, Sendable {
     /// rather than each chunk looking up a non-existent "taskId_pN" row.
     let groupId: String?
 
+    /// Slot-based decoder: index into `OptimizerContext.ensureSlotRegistry()`
+    /// that this gene's `startTime` resolves to. Optional so older persisted
+    /// JSON (which predates the field) decodes cleanly and so tests / legacy
+    /// call sites that don't thread a registry still work — `nil` means "no
+    /// slot binding yet, use `startTime` as the source of truth".
+    ///
+    /// When non-nil, operators are expected to mutate by updating the index
+    /// via the registry and then re-deriving `startTime = registry.resolvedDate(at:)`.
+    /// That keeps the dual representation coherent: `slotIndex` drives the
+    /// GA's discrete search, `startTime` is the continuous value every
+    /// reader (fitness, UI, serialisation) already expects. See the
+    /// "Slot-Alignment Design Note" in Chromosome.swift for the migration
+    /// plan that ends with `startTime` becoming a computed property.
+    var slotIndex: Int?
+
     var endTime: Date { startTime.addingTimeInterval(duration) }
 
     init(
@@ -142,7 +157,8 @@ struct ScheduleGene: Codable, Hashable, Sendable {
         isIncluded: Bool = true,
         pomodoroConfig: PomodoroConfig? = nil,
         reservedTaskIds: [String] = [],
-        groupId: String? = nil
+        groupId: String? = nil,
+        slotIndex: Int? = nil
     ) {
         self.eventId = eventId
         self.title = title
@@ -158,14 +174,20 @@ struct ScheduleGene: Codable, Hashable, Sendable {
         self.pomodoroConfig = pomodoroConfig
         self.reservedTaskIds = reservedTaskIds
         self.groupId = groupId
+        self.slotIndex = slotIndex
     }
 
-    /// Create a copy with a new start time (preserves all other fields).
-    func withStartTime(_ newStart: Date) -> ScheduleGene {
+    /// Create a copy that sets both `slotIndex` and the derived
+    /// `startTime` in one go. Use this from every operator that moves
+    /// a gene — mutation, repair's re-home, crossover's swap — so the
+    /// two fields never drift. Passing the resolved `date` up-front
+    /// avoids forcing the caller to carry the registry into fitness
+    /// evaluation (which still reads `startTime`).
+    func withSlot(index: Int, date: Date) -> ScheduleGene {
         ScheduleGene(
             eventId: eventId,
             title: title,
-            startTime: newStart,
+            startTime: date,
             duration: duration,
             context: context,
             energyCost: energyCost,
@@ -176,7 +198,58 @@ struct ScheduleGene: Codable, Hashable, Sendable {
             isIncluded: isIncluded,
             pomodoroConfig: pomodoroConfig,
             reservedTaskIds: reservedTaskIds,
-            groupId: groupId
+            groupId: groupId,
+            slotIndex: index
+        )
+    }
+
+    /// Drop-in replacement for the old `withStartTime(_:)` that
+    /// binds `slotIndex` through the registry in the same call. The
+    /// canonical way to move a gene when you have a Date in hand
+    /// and a registry available — keeps both fields in sync so
+    /// `slotIndex == nil` never shows up in production state.
+    func withSlot(nearest date: Date, registry: SlotRegistry) -> ScheduleGene {
+        ScheduleGene(
+            eventId: eventId,
+            title: title,
+            startTime: date,
+            duration: duration,
+            context: context,
+            energyCost: energyCost,
+            priority: priority,
+            isFocusBlock: isFocusBlock,
+            storyPoints: storyPoints,
+            isDroppable: isDroppable,
+            isIncluded: isIncluded,
+            pomodoroConfig: pomodoroConfig,
+            reservedTaskIds: reservedTaskIds,
+            groupId: groupId,
+            slotIndex: registry.nearestIndex(to: date)
+        )
+    }
+
+    /// Inherit placement (`startTime` + `slotIndex`) from another gene
+    /// while keeping every other field of `self`. Used by crossover so
+    /// slot bindings survive the parent-to-child transfer — without
+    /// this, every crossover would invalidate `slotIndex` and force
+    /// repair to re-bind every gene on the next generation.
+    func withPlacement(from other: ScheduleGene) -> ScheduleGene {
+        ScheduleGene(
+            eventId: eventId,
+            title: title,
+            startTime: other.startTime,
+            duration: duration,
+            context: context,
+            energyCost: energyCost,
+            priority: priority,
+            isFocusBlock: isFocusBlock,
+            storyPoints: storyPoints,
+            isDroppable: isDroppable,
+            isIncluded: isIncluded,
+            pomodoroConfig: pomodoroConfig,
+            reservedTaskIds: reservedTaskIds,
+            groupId: groupId,
+            slotIndex: other.slotIndex
         )
     }
 }
@@ -214,6 +287,14 @@ struct OptimizerContext: Sendable {
     /// same as `mutationBandit` so strategy rewards accumulate globally.
     let lnsStrategyBandit: LNSStrategyBandit
 
+    /// Second bandit for the repair half of the ALNS cycle — chooses
+    /// between handwritten branch-and-bound, regret insertion, and the
+    /// CP-SAT adapter per LNS call. Trained with the same fitness-delta
+    /// signal as `lnsStrategyBandit`, so the combined policy converges on
+    /// the destroy × repair pair that's best for the current landscape
+    /// without having to enumerate all 15 pairs as independent arms.
+    let lnsRepairBandit: LNSRepairBandit
+
     /// Attention head for `CrossoverStrategy.contextual`. Contextual
     /// crossover scores every gene pair through this head before
     /// deciding which parent to inherit from. Shared across islands so
@@ -250,6 +331,14 @@ struct OptimizerContext: Sendable {
     let cpSATRepairer: CPSATRepairer?
     let cpSATWindowThreshold: Int
 
+    /// Lazy holder for the slot registry — the discrete search space
+    /// the GA samples from. Built once per run and shared across every
+    /// value-semantic copy of this context via the reference holder
+    /// (same pattern as `conflictGraphHolder`). `ensureSlotRegistry()`
+    /// builds on demand when the holder is nil, so legacy callers
+    /// (tests, one-shot contexts) don't have to plumb one in.
+    let slotRegistryHolder: SlotRegistryHolder?
+
     init(
         fixedEvents: [CalendarEvent] = [],
         movableEvents: [OptimizableEvent] = [],
@@ -264,11 +353,13 @@ struct OptimizerContext: Sendable {
         rng: GARandom = GARandom(),
         mutationBandit: MutationBandit = MutationBandit(),
         lnsStrategyBandit: LNSStrategyBandit = LNSStrategyBandit(),
+        lnsRepairBandit: LNSRepairBandit = LNSRepairBandit(),
         contextualCrossoverHead: GeneAttentionHead = GeneAttentionHead(),
         conflictGraphHolder: ConflictGraphHolder? = nil,
         tabuMemory: TabuMemory? = nil,
         cpSATRepairer: CPSATRepairer? = nil,
-        cpSATWindowThreshold: Int = 20
+        cpSATWindowThreshold: Int = 20,
+        slotRegistryHolder: SlotRegistryHolder? = nil
     ) {
         self.fixedEvents = fixedEvents
         self.movableEvents = movableEvents
@@ -280,6 +371,7 @@ struct OptimizerContext: Sendable {
         self.rng = rng
         self.mutationBandit = mutationBandit
         self.lnsStrategyBandit = lnsStrategyBandit
+        self.lnsRepairBandit = lnsRepairBandit
         self.contextualCrossoverHead = contextualCrossoverHead
         // Production entry points construct a shared holder so every
         // context copy hits the same cache; tests and one-shot
@@ -288,6 +380,7 @@ struct OptimizerContext: Sendable {
         self.tabuMemory = tabuMemory
         self.cpSATRepairer = cpSATRepairer
         self.cpSATWindowThreshold = cpSATWindowThreshold
+        self.slotRegistryHolder = slotRegistryHolder
     }
 
     /// Returns a materialised conflict graph for this context. Goes
@@ -300,6 +393,17 @@ struct OptimizerContext: Sendable {
             return holder.get(for: self)
         }
         return ScheduleConflictGraph.build(from: self)
+    }
+
+    /// Returns the precomputed slot registry. Goes through the shared
+    /// holder on the production path; callers without a holder (tests,
+    /// legacy one-shot contexts) get an inline build on first access.
+    /// Same pattern as `ensureConflictGraph`.
+    func ensureSlotRegistry() -> SlotRegistry {
+        if let holder = slotRegistryHolder {
+            return holder.get(for: self)
+        }
+        return SlotRegistry.build(from: self)
     }
 
     /// `eventId → backlogIndex` map over `movableEvents`. Built on demand
@@ -373,6 +477,27 @@ struct OptimizerPreferences: Codable, Sendable {
     var preferredClusterWindowEnd: Int       // hour — meetings clustered before this
     var maxMeetingsPerCluster: Int           // avoid marathon meeting blocks
 
+    /// Weekdays on which the planner is allowed to place movable events.
+    /// Uses Foundation's 1-indexed weekday convention
+    /// (1 = Sunday, 2 = Monday, …, 7 = Saturday) so the values round-trip
+    /// through `Calendar.component(.weekday, from:)` without translation.
+    ///
+    /// Default is Mon–Fri — matches the overwhelming common case and the
+    /// original `skipWeekends = true` default this field replaced.
+    /// Callers who want to allow Sat/Sun should set `Set(1...7)`.
+    var workingDays: Set<Int>
+
+    /// Default weekdays for a brand-new install / seed context. Mon–Fri.
+    static let defaultWorkingDays: Set<Int> = [2, 3, 4, 5, 6]
+
+    /// True iff `date`'s weekday is in `workingDays`. Every former
+    /// weekend-aware check routes through this one helper so
+    /// Mon/Wed/Fri-only or "work Saturdays" schedules behave
+    /// correctly too — the planner simply follows the configured set.
+    func isWorkingDay(_ date: Date, calendar: Calendar) -> Bool {
+        workingDays.contains(calendar.component(.weekday, from: date))
+    }
+
     init(
         focusBlockWeight: Double = 1.0,
         pomodoroFitWeight: Double = 0.8,
@@ -401,7 +526,8 @@ struct OptimizerPreferences: Codable, Sendable {
         idealFocusBlockMinutes: Int = 120,
         preferredClusterWindowStart: Int = 9,
         preferredClusterWindowEnd: Int = 13,
-        maxMeetingsPerCluster: Int = 4
+        maxMeetingsPerCluster: Int = 4,
+        workingDays: Set<Int> = OptimizerPreferences.defaultWorkingDays
     ) {
         self.focusBlockWeight = focusBlockWeight
         self.pomodoroFitWeight = pomodoroFitWeight
@@ -431,8 +557,10 @@ struct OptimizerPreferences: Codable, Sendable {
         self.preferredClusterWindowStart = preferredClusterWindowStart
         self.preferredClusterWindowEnd = preferredClusterWindowEnd
         self.maxMeetingsPerCluster = maxMeetingsPerCluster
+        self.workingDays = workingDays
     }
 }
+
 
 // MARK: - Optimizer Result
 

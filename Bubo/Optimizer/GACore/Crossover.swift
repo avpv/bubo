@@ -125,8 +125,14 @@ enum Crossover {
             let eventId = p1.genes[i].eventId
             guard let componentId = graph.componentOf[eventId] else { continue }
             if takeFromP2[componentId] {
-                child1Genes[i] = p1.genes[i].withStartTime(p2.genes[i].startTime)
-                child2Genes[i] = p2.genes[i].withStartTime(p1.genes[i].startTime)
+                // `withPlacement` carries both `startTime` and
+                // `slotIndex` across so the child keeps the donor's
+                // slot binding — `withStartTime` would invalidate
+                // it, forcing repair to re-bind every gene on the
+                // next generation. See the slot-decoder MARK in
+                // Chromosome.swift for the invariant.
+                child1Genes[i] = p1.genes[i].withPlacement(from: p2.genes[i])
+                child2Genes[i] = p2.genes[i].withPlacement(from: p1.genes[i])
             }
         }
 
@@ -241,7 +247,10 @@ enum Crossover {
         for i in p1.genes.indices {
             let p1Day = cal.startOfDay(for: p1.genes[i].startTime)
             if takeFromP2[p1Day] == true {
-                child1Genes[i] = p1.genes[i].withStartTime(p2.genes[i].startTime)
+                // `withPlacement` carries both `startTime` and
+                // `slotIndex` — keeps day-block crossover in sync
+                // with the slot-decoder invariant.
+                child1Genes[i] = p1.genes[i].withPlacement(from: p2.genes[i])
             }
 
             // Mirror for child2 using its own parent's grouping. Reading the
@@ -249,7 +258,7 @@ enum Crossover {
             // (nothing is discarded on both children simultaneously).
             let p2Day = cal.startOfDay(for: p2.genes[i].startTime)
             if takeFromP2[p2Day] == false {
-                child2Genes[i] = p2.genes[i].withStartTime(p1.genes[i].startTime)
+                child2Genes[i] = p2.genes[i].withPlacement(from: p1.genes[i])
             }
         }
 
@@ -262,6 +271,9 @@ enum Crossover {
     // MARK: - Helper
 
     private static func makeGene(from base: ScheduleGene, withTimeOf donor: ScheduleGene) -> ScheduleGene {
-        base.withStartTime(donor.startTime)
+        // Inherit the donor's full placement (startTime + slotIndex)
+        // so strategy-level crossover flows through the same slot-
+        // decoder invariant the inline loops above already honour.
+        base.withPlacement(from: donor)
     }
 }

@@ -546,7 +546,9 @@ final class BuboOptimizer {
         logPlanWeekResult(
             result: result,
             movableEvents: context.movableEvents,
-            wallDuration: Date().timeIntervalSince(planWeekWallStart)
+            wallDuration: Date().timeIntervalSince(planWeekWallStart),
+            context: context,
+            telemetry: evaluator.telemetry.snapshot()
         )
         return result
     }
@@ -601,6 +603,11 @@ final class BuboOptimizer {
         let now = Date()
         let weekEnd = Calendar.current.date(byAdding: .day, value: 7, to: now)!
 
+        // `workingDays` is a non-optional `Set<Int>` on preferences
+        // (default Mon–Fri); pass `preferences` through as-is. Direct
+        // callers that don't override `workingDays` in their own
+        // `OptimizerPreferences()` get the Mon–Fri default baked into
+        // the initializer.
         let context = OptimizerContext(
             fixedEvents: fixedEvents,
             movableEvents: movableEvents,
@@ -689,6 +696,12 @@ final class BuboOptimizer {
         let memeticCandidates = difficulty >= 0.5 ? 3 : 3
         let memeticSteps = difficulty >= 0.5 ? 6 : 5
 
+        // One CHC restart once the workload clears the toy-problem tier —
+        // on difficulty < 0.2 the search space is small enough that a
+        // restart would mostly replay the same basin, but in the 0.2+
+        // range the extra cataclysmic reseed reliably rescues stuck runs.
+        let restarts = difficulty >= 0.2 ? 1 : 0
+
         let ga = GAConfiguration(
             populationSize: popSize,
             maxGenerations: maxGen,
@@ -698,16 +711,31 @@ final class BuboOptimizer {
             selectionStrategy: .tournament(size: 3),
             crossoverStrategy: .contextual(temperature: 0.5),
             convergenceThreshold: 0.003,
-            convergencePatience: max(6, maxGen / 20),
+            // Patience floor bumped from 6 → 12: with a 4-task week the
+            // difficulty scalar lands around 0.18, and the old floor let
+            // the GA exit at gen 7 after six flat generations — long
+            // before the adaptive mutation / CHC restart had any chance
+            // to break out of the initial basin. 12 still terminates
+            // fast on truly trivial workloads but gives the bandit one
+            // full cycle of operator exploration first.
+            convergencePatience: max(12, maxGen / 15),
             adaptiveMutation: true,
             diversityThreshold: 0.01,
             immigrationRate: 0.1,
-            greedySeedFraction: 0.2,
+            // Greedy seed fraction is saturation-aware: on trivially-
+            // small workloads the greedy constructor is close to
+            // optimal already, so spending 35% of the population on
+            // structured seeds beats 20% random noise. At high
+            // difficulty we back off to 0.15 so random exploration
+            // gets enough budget to escape greedy's priority-first
+            // corner of the search space.
+            greedySeedFraction: max(0.15, 0.35 - 0.20 * difficulty),
             enableRepair: true,
             adaptiveCrossover: difficulty >= 0.5,
             memeticHillClimbInterval: memeticInterval,
             memeticHillClimbCandidates: memeticCandidates,
             memeticHillClimbSteps: memeticSteps,
+            chcMaxRestarts: restarts,
             wallclockTimeout: timeout
         )
 
@@ -852,7 +880,130 @@ final class BuboOptimizer {
         }
         lines.append("GA budget: \(gaDesc) | \(islandDesc)")
 
+        // Input anomaly scan. Flags things that usually indicate a
+        // parsing / ingestion bug upstream — a malformed event that
+        // makes it into the GA is going to produce a surprising
+        // scenario, and filtering `GADebug` by `--level warning`
+        // surfaces every hit alongside the invariant checks.
+        scanInputAnomalies(
+            fixedEvents: fixedInWindow,
+            movableEvents: movableEvents,
+            horizon: horizon,
+            workingHours: workingHours
+        )
+
         planWeekLogger.info("\(lines.joined(separator: "\n"), privacy: .public)")
+    }
+
+    /// Emit `GADebugLog.warn(site: "input", …)` lines for events that
+    /// look malformed at ingest time. Non-blocking — the GA still
+    /// runs — but every hit is something the caller probably wants
+    /// to investigate.
+    private func scanInputAnomalies(
+        fixedEvents: [CalendarEvent],
+        movableEvents: [OptimizableEvent],
+        horizon: DateInterval,
+        workingHours: ClosedRange<Int>
+    ) {
+        // Movable-event anomalies.
+        var eventIds: [String: Int] = [:]
+        for event in movableEvents {
+            eventIds[event.id, default: 0] += 1
+
+            // Deadline before horizon start = guaranteed-infeasible
+            // event. Either the deadline is wrong (stale task) or
+            // the horizon is wrong.
+            if let deadline = event.deadline, deadline < horizon.start {
+                GADebugLog.warn(
+                    site: "input",
+                    message: "event deadline precedes horizon start",
+                    context: [
+                        "event": event.id,
+                        "title": event.title,
+                        "deadline": ISO8601DateFormatter().string(from: deadline),
+                        "horizon_start": ISO8601DateFormatter().string(from: horizon.start)
+                    ]
+                )
+            }
+
+            // Deadline vs duration: if window is smaller than
+            // duration, impossible to schedule legally.
+            if let deadline = event.deadline,
+               let earliest = event.earliestStart,
+               deadline.timeIntervalSince(earliest) < event.duration {
+                GADebugLog.warn(
+                    site: "input",
+                    message: "earliestStart..deadline window narrower than duration",
+                    context: [
+                        "event": event.id,
+                        "window_sec": "\(Int(deadline.timeIntervalSince(earliest)))",
+                        "duration_sec": "\(Int(event.duration))"
+                    ]
+                )
+            }
+
+            // Duration sanity. Zero / negative = parsing bug.
+            // >12h = unusually long, possibly a `30m` parsed as hours.
+            if event.duration <= 0 {
+                GADebugLog.warn(
+                    site: "input",
+                    message: "non-positive duration",
+                    context: ["event": event.id, "duration_sec": "\(Int(event.duration))"]
+                )
+            } else if event.duration > 12 * 3600 {
+                GADebugLog.warn(
+                    site: "input",
+                    message: "unusually long duration (>12h) — possible parse error",
+                    context: ["event": event.id, "hours": String(format: "%.1f", event.duration / 3600)]
+                )
+            } else if event.duration < 5 * 60 {
+                GADebugLog.warn(
+                    site: "input",
+                    message: "unusually short duration (<5min) — possible parse error",
+                    context: ["event": event.id, "minutes": String(format: "%.1f", event.duration / 60)]
+                )
+            }
+
+            // Task duration longer than a whole working day — can
+            // only fit if spanning the whole day, which fights most
+            // soft objectives.
+            let workdaySeconds = Double(workingHours.upperBound - workingHours.lowerBound) * 3600
+            if event.duration > workdaySeconds {
+                GADebugLog.warn(
+                    site: "input",
+                    message: "duration exceeds single working day",
+                    context: [
+                        "event": event.id,
+                        "duration_h": String(format: "%.1f", event.duration / 3600),
+                        "workday_h": String(format: "%.1f", workdaySeconds / 3600)
+                    ]
+                )
+            }
+        }
+
+        // Duplicate ids.
+        for (id, count) in eventIds where count > 1 {
+            GADebugLog.warn(
+                site: "input",
+                message: "duplicate movable event id",
+                context: ["event": id, "count": "\(count)"]
+            )
+        }
+
+        // Fixed-event anomalies.
+        for event in fixedEvents {
+            if event.endDate <= event.startDate {
+                GADebugLog.warn(
+                    site: "input",
+                    message: "fixed event has non-positive duration",
+                    context: [
+                        "event": event.id,
+                        "start": ISO8601DateFormatter().string(from: event.startDate),
+                        "end": ISO8601DateFormatter().string(from: event.endDate)
+                    ]
+                )
+            }
+        }
     }
 
     /// Log what the GA returned: per-scenario placements grouped by
@@ -863,7 +1014,9 @@ final class BuboOptimizer {
     private func logPlanWeekResult(
         result: OptimizerResult,
         movableEvents: [OptimizableEvent],
-        wallDuration: TimeInterval
+        wallDuration: TimeInterval,
+        context: OptimizerContext,
+        telemetry: FitnessEvalTelemetry.Snapshot
     ) {
         let df = DateFormatter()
         df.dateFormat = "EEE dd.MM"
@@ -912,6 +1065,31 @@ final class BuboOptimizer {
                 lines.append("top objectives: \(objStr)")
             }
 
+            // Weighted-contribution view: raw × weight × (1 - raw)
+            // reveals which objectives are *actually* eating the
+            // fitness budget, which the raw-score ordering alone
+            // can miss — a low-weight objective with score 0.2
+            // contributes less than a high-weight objective at
+            // score 0.8. Sorted by contribution-to-loss desc so
+            // the first line is "this is where your fitness went".
+            let weightsByName = weightsByObjectiveName(context.preferences)
+            let contributions: [(name: String, raw: Double, weight: Double, lossPct: Double)] =
+                scenario.objectiveBreakdown.compactMap { entry in
+                    guard let weight = weightsByName[entry.key], weight > 0 else { return nil }
+                    return (entry.key, entry.value, weight, weight * (1 - entry.value))
+                }
+            let totalLoss = contributions.reduce(0.0) { $0 + $1.lossPct }
+            if totalLoss > 0 {
+                let ranked = contributions
+                    .sorted { $0.lossPct > $1.lossPct }
+                    .prefix(5)
+                let parts = ranked.map { entry -> String in
+                    let pct = Int((entry.lossPct / totalLoss * 100).rounded())
+                    return "\(entry.name)=\(pct)%"
+                }
+                lines.append("fitness loss by: \(parts.joined(separator: ", "))")
+            }
+
             if !scenario.constraintViolations.isEmpty {
                 let shown = scenario.constraintViolations.prefix(5).joined(separator: "; ")
                 let suffix = scenario.constraintViolations.count > 5
@@ -951,7 +1129,156 @@ final class BuboOptimizer {
             lines.append("never placed across any scenario: \(names.joined(separator: ", "))\(suffix)")
         }
 
+        // Mutation bandit arm usage: pulls and mean clipped reward per
+        // operator. Lets a diagnostician see at a glance whether one
+        // arm (usually `shift`) dominated and starved the others, or
+        // whether the bandit actually tried every operator.
+        let banditSnap = context.mutationBandit.snapshot
+        let totalPulls = banditSnap.values.reduce(0) { $0 + $1.pulls }
+        if totalPulls > 0 {
+            let order: [MutationOperator] = [.shift, .moveDay, .snap, .guided, .lnsDay]
+            let parts: [String] = order.compactMap { op in
+                guard let t = banditSnap[op], t.pulls > 0 else { return nil }
+                let name: String
+                switch op {
+                case .shift:   name = "shift"
+                case .moveDay: name = "moveDay"
+                case .snap:    name = "snap"
+                case .guided:  name = "guided"
+                case .lnsDay:  name = "lnsDay"
+                }
+                return "\(name)=\(t.pulls)(r=\(String(format: "%.3f", t.meanReward)))"
+            }
+            if !parts.isEmpty {
+                lines.append("mutation bandit: \(parts.joined(separator: ", "))")
+            }
+        }
+
+        // Working-day set + horizon breakdown so a surprising
+        // placement can be root-caused to "the configured working
+        // days don't match expectations" or "Monday is a public
+        // holiday in the calendar but not to the solver".
+        let cal2 = context.calendar
+        let prefs = context.preferences
+        let workingDays = prefs.workingDays
+        let horizonStartDay = cal2.startOfDay(for: context.planningHorizon.start)
+        let horizonLastDay = cal2.startOfDay(for: context.planningHorizon.end.addingTimeInterval(-1))
+        let horizonDays = max(1, (cal2.dateComponents([.day], from: horizonStartDay, to: horizonLastDay).day ?? 0) + 1)
+        var workDays = 0
+        for offset in 0..<horizonDays {
+            guard let day = cal2.date(byAdding: .day, value: offset, to: horizonStartDay) else { continue }
+            if !prefs.isWorkingDay(day, calendar: cal2) { continue }
+            workDays += 1
+        }
+        // Weekday abbreviations in sorted 1→7 order (Sun, Mon, …, Sat).
+        let weekdayAbbrev = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+        let daysLabel = workingDays.sorted().compactMap { idx -> String? in
+            guard idx >= 1, idx <= 7 else { return nil }
+            return weekdayAbbrev[idx - 1]
+        }.joined(separator: ",")
+        lines.append("flags: workingDays=[\(daysLabel)], workDaysInHorizon=\(workDays)/\(horizonDays)")
+
+        // Slot-registry footprint: total valid slots in the discrete
+        // search space the GA operated on. Orders-of-magnitude smaller
+        // than the continuous Date range, which is the whole point of
+        // the slot-based decoder — see the "Slot-Based Decoder"
+        // MARK in Chromosome.swift. Stride is auto-detected by
+        // `SlotRegistry.autoDetectStride` — 15-min when the workload
+        // is aligned, 5-min when a fixed event / movable duration
+        // introduces off-quarter minutes.
+        let slotRegistry = context.ensureSlotRegistry()
+        let strideMinutes = Int((slotRegistry.stride / 60).rounded())
+        lines.append("slots: registry=\(slotRegistry.count), stride=\(strideMinutes)m")
+
+        // Fitness evaluator telemetry — δ-eval hit rate + constraint
+        // rejection count. A δ-hit rate below ~50% flags that recent
+        // mutations aren't getting the partitioned-objective speedup
+        // (usually because mutations affect many days or the mutated
+        // hint is missing). A rising `constraintRejections` count
+        // means many chromosomes fail `ConstraintEngine.isValid` and
+        // are getting the infeasible gradient scaling — fine during
+        // early generations, symptomatic late.
+        let total = telemetry.total
+        if total > 0 {
+            let deltaPct = Int((telemetry.deltaFraction * 100).rounded())
+            let cachePct = Int((telemetry.cacheHitFraction * 100).rounded())
+            lines.append(String(
+                format: "fitness evals: total=%d full=%d delta=%d(%d%%) cache=%d(%d%%) rejections=%d",
+                total,
+                telemetry.fullEvaluations,
+                telemetry.deltaEvaluations, deltaPct,
+                telemetry.cacheHits, cachePct,
+                telemetry.constraintRejections
+            ))
+        }
+
+        // Slot-binding coverage on the best scenario: how many genes
+        // actually carry a registry-bound `slotIndex`. A coverage
+        // number below 1.0 flags genes that slipped through a
+        // producer that still uses `withStartTime` — useful for
+        // spotting reoptimizer/warm-start regressions after the
+        // slot-decoder migration.
+        if let best = result.scenarios.first {
+            let active = best.activeGenes
+            if !active.isEmpty {
+                let bound = active.filter { $0.slotIndex != nil }.count
+                let coverage = Double(bound) / Double(active.count)
+                lines.append(String(format: "slots: coverage=%.2f (%d/%d active genes slot-bound)",
+                                    coverage, bound, active.count))
+            }
+        }
+
+        // Constraint breakdown on the best scenario. Lets a
+        // diagnostician see at a glance *which* constraint(s) are
+        // eating fitness — e.g. a dominant `Buffer` penalty hints at
+        // too-tight back-to-back placements, while a dominant
+        // `MaxMeetingsPerDay` penalty hints at a cap the user should
+        // raise. Prints the top-5 penalising constraints (soft or
+        // hard) with their raw penalty magnitude.
+        if let best = result.scenarios.first {
+            let scenarioChromosome = ScheduleChromosome(
+                genes: best.genes,
+                needsEvaluation: false
+            )
+            let engine = ConstraintEngine.standard
+            let breakdown = engine.breakdown(for: scenarioChromosome, context: context)
+                .filter { $0.penalty > 0 }
+                .sorted { $0.penalty > $1.penalty }
+                .prefix(5)
+            if !breakdown.isEmpty {
+                let parts = breakdown.map { entry -> String in
+                    let kind = entry.isHard ? "H" : "S"
+                    return "\(entry.name)[\(kind)]=\(String(format: "%.1f", entry.penalty))"
+                }
+                lines.append("constraints: \(parts.joined(separator: ", "))")
+            }
+        }
+
         planWeekLogger.info("\(lines.joined(separator: "\n"), privacy: .public)")
+    }
+
+    /// Map `FitnessObjective.name` → weight from the current
+    /// preferences. Used by the weighted-contribution diagnostic
+    /// in the result log. Names must match the `FitnessObjective.name`
+    /// strings at each objective's call site in
+    /// `Bubo/Optimizer/Fitness/Objectives/`.
+    private func weightsByObjectiveName(_ prefs: OptimizerPreferences) -> [String: Double] {
+        return [
+            "FocusBlock":         prefs.focusBlockWeight,
+            "PomodoroFit":        prefs.pomodoroFitWeight,
+            "Conflict":           prefs.conflictWeight,
+            "TaskPlacement":      prefs.taskPlacementWeight,
+            "WeekBalance":        prefs.weekBalanceWeight,
+            "EnergyBalance":      prefs.energyCurveWeight,
+            "MultiPerson":        prefs.multiPersonWeight,
+            "BreakPlacement":     prefs.breakWeight,
+            "Deadline":           prefs.deadlineWeight,
+            "ContextSwitch":      prefs.contextSwitchWeight,
+            "Buffer":             prefs.bufferWeight,
+            "MeetingClustering":  prefs.meetingClusteringWeight,
+            "TaskInclusion":      prefs.taskInclusionWeight,
+            "BacklogOrder":       prefs.backlogOrderWeight ?? OptimizerPreferences.defaultBacklogOrderWeight
+        ]
     }
 
     private static func lerpInt(start: Int, end: Int, at t: Double) -> Int {

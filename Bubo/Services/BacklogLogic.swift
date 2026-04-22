@@ -138,12 +138,22 @@ enum BacklogLogic {
     /// Minutes left between `now` and the end of the working day, clamped
     /// to zero once the window has closed. Shares its `workingHours`
     /// definition with `OptimizerService` so the ring and the free-slot
-    /// finder never disagree.
+    /// finder never disagree. When `workingDays` is non-empty and `now`
+    /// lands on a day not in the set, returns zero — matches the
+    /// hard-constraint view the GA uses, so the capacity ring stops
+    /// claiming "6h remaining" on a day the user has already opted out
+    /// of scheduling. The set uses Foundation's 1-indexed weekday
+    /// convention (1 = Sunday, 7 = Saturday).
     static func remainingWorkdayMinutes(
         workingHours: ClosedRange<Int>,
         now: Date = Date(),
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        workingDays: Set<Int> = []
     ) -> Int {
+        if !workingDays.isEmpty {
+            let weekday = calendar.component(.weekday, from: now)
+            if !workingDays.contains(weekday) { return 0 }
+        }
         guard let endOfWorkday = calendar.date(
             bySettingHour: workingHours.upperBound,
             minute: 0,

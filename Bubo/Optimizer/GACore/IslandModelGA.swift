@@ -41,6 +41,30 @@ struct IslandConfiguration: Sendable {
     /// Productivity is measured as `bestEver.rawFitness`.
     var routeByProductivity: Bool = false
 
+    /// Optional per-island objective-weight multipliers. Keyed by
+    /// island index (0-based); inner dictionary keyed by objective
+    /// name (the `FitnessObjective.name` string, e.g. `"Conflict"`,
+    /// `"WeekBalance"`). Each multiplier is applied to the baseline
+    /// preference weight for that objective on that island.
+    ///
+    /// Classical island-model GA assumes every island shares the
+    /// exact same fitness landscape; in practice different islands
+    /// converging on different regions of the Pareto surface is
+    /// usually a *feature*, not a bug, and biasing each island's
+    /// objective weights pushes the convergence away from monoculture
+    /// without giving up the scalar-fitness survivor selection.
+    ///
+    /// Example: `[0: ["Conflict": 1.5], 1: ["WeekBalance": 2.0]]`
+    /// gives island 0 a conflict-hawk personality (prefers
+    /// conflict-free schedules even at the cost of balance) and
+    /// island 1 a balance-first personality. Migration still works
+    /// unchanged — incoming migrants re-evaluate against the
+    /// receiving island's preferences so fitness is consistent
+    /// within each island.
+    ///
+    /// `nil` (default) = every island uses the unbiased preferences.
+    var objectiveWeightBiases: [Int: [String: Double]]? = nil
+
     /// Fast configs: 2 islands, frequent migration, no diversification.
     /// Adds modest exploration benefit without significant overhead.
     static let quick = IslandConfiguration(
@@ -365,12 +389,22 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
     private func makeIslandContext(islandIndex: Int) -> OptimizerContext {
         let bandit = federatedBandit?.bandit(forIsland: islandIndex)
             ?? context.mutationBandit
+
+        // Per-island objective-weight biasing. When
+        // `islandConfig.objectiveWeightBiases` carries an entry for
+        // this island, clone the baseline preferences and multiply
+        // each named objective's weight by the supplied factor.
+        // Missing names leave the baseline weight untouched, so the
+        // bias dict can be sparse (e.g. `["Conflict": 1.5]`).
+        // Islands without a bias entry get the un-touched baseline.
+        let preferences = biasedPreferences(for: islandIndex)
+
         return OptimizerContext(
             fixedEvents: context.fixedEvents,
             movableEvents: context.movableEvents,
             workingHours: context.workingHours,
             planningHorizon: context.planningHorizon,
-            preferences: context.preferences,
+            preferences: preferences,
             participantAvailability: context.participantAvailability,
             calendar: context.calendar,
             rng: context.rng.split(),
@@ -379,8 +413,58 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             // updates accumulate globally — same sharing pattern as the
             // non-federated mutationBandit path.
             lnsStrategyBandit: context.lnsStrategyBandit,
-            contextualCrossoverHead: context.contextualCrossoverHead
+            lnsRepairBandit: context.lnsRepairBandit,
+            contextualCrossoverHead: context.contextualCrossoverHead,
+            conflictGraphHolder: context.conflictGraphHolder,
+            tabuMemory: context.tabuMemory,
+            cpSATRepairer: context.cpSATRepairer,
+            cpSATWindowThreshold: context.cpSATWindowThreshold,
+            slotRegistryHolder: context.slotRegistryHolder
         )
+    }
+
+    /// Compute the preferences for one island — baseline + any per-
+    /// island multiplicative bias on objective weights configured in
+    /// `islandConfig.objectiveWeightBiases`. Missing / empty biases
+    /// reduce to `context.preferences` unchanged.
+    ///
+    /// Objectives whose names appear in the bias dict are scaled
+    /// multiplicatively; unknown names are silently ignored (keeps
+    /// the dict tolerant of string-level typos without breaking the
+    /// run). Weights are clamped to `>= 0` so a negative bias can't
+    /// accidentally turn an objective adversarial.
+    private func biasedPreferences(for islandIndex: Int) -> OptimizerPreferences {
+        guard let biasMap = islandConfig.objectiveWeightBiases?[islandIndex],
+              !biasMap.isEmpty else {
+            return context.preferences
+        }
+        var prefs = context.preferences
+        for (name, factor) in biasMap {
+            let clampedFactor = max(0, factor)
+            switch name {
+            case "FocusBlock":         prefs.focusBlockWeight *= clampedFactor
+            case "PomodoroFit":        prefs.pomodoroFitWeight *= clampedFactor
+            case "Conflict":           prefs.conflictWeight *= clampedFactor
+            case "TaskPlacement":      prefs.taskPlacementWeight *= clampedFactor
+            case "WeekBalance":        prefs.weekBalanceWeight *= clampedFactor
+            case "EnergyBalance":      prefs.energyCurveWeight *= clampedFactor
+            case "MultiPerson":        prefs.multiPersonWeight *= clampedFactor
+            case "BreakPlacement":     prefs.breakWeight *= clampedFactor
+            case "Deadline":           prefs.deadlineWeight *= clampedFactor
+            case "ContextSwitch":      prefs.contextSwitchWeight *= clampedFactor
+            case "Buffer":             prefs.bufferWeight *= clampedFactor
+            case "MeetingClustering":  prefs.meetingClusteringWeight *= clampedFactor
+            case "TaskInclusion":      prefs.taskInclusionWeight *= clampedFactor
+            case "BacklogOrder":
+                let base = prefs.backlogOrderWeight ?? OptimizerPreferences.defaultBacklogOrderWeight
+                prefs.backlogOrderWeight = base * clampedFactor
+            default:
+                // Unknown name — ignore silently so the bias dict can
+                // evolve independently of the objective list.
+                break
+            }
+        }
+        return prefs
     }
 
     // MARK: - Run Seeded
@@ -863,6 +947,31 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
     /// when no multi-objective info is available.
     private func insertImmigrants(_ immigrants: [C], into island: Island<C>) {
         guard !immigrants.isEmpty else { return }
+
+        // Invalidate incoming fitness when islands have biased
+        // preferences. An immigrant was evaluated under its sender
+        // island's objective weights; on the receiving island those
+        // weights may differ, so its cached `fitness` doesn't
+        // describe how it ranks here. Clearing `needsEvaluation`
+        // forces a full re-eval against the receiver's (biased)
+        // preferences on the next generation, and survivor selection
+        // stops confusing old-island bestness for new-island
+        // bestness. When biases aren't configured every island shares
+        // the exact same fitness landscape and the reset is a pure
+        // cost — skip it.
+        //
+        // `needsEvaluation` is a `ScheduleChromosome`-specific flag
+        // (not on the Chromosome protocol), so we cast; other
+        // chromosome types don't pay any cost here.
+        let immigrants: [C] = {
+            guard islandConfig.objectiveWeightBiases != nil else { return immigrants }
+            return immigrants.map { ind -> C in
+                guard var schedule = ind as? ScheduleChromosome else { return ind }
+                schedule.needsEvaluation = true
+                schedule.isFitnessReal = false
+                return (schedule as? C) ?? ind
+            }
+        }()
 
         var individuals = island.population.individuals
         let eliteCount = island.population.eliteCount

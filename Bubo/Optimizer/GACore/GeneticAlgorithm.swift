@@ -425,8 +425,29 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
 
         var individuals: [C] = []
 
-        // Greedy seeds: each gets a slight random perturbation for variety
-        for i in 0..<greedyCount {
+        // CP-SAT prophet seed: when the context exposes a
+        // `CPSATRepairer`, try once to get a fully feasible placement
+        // from the CP solver and slot it in as the first greedy
+        // individual. It considers every event jointly (unlike
+        // per-event greedy) and respects the precedence DAG at the
+        // search level, so on a tight week the CP seed reliably
+        // clears the "one priority-first greedy run couldn't fit
+        // everything" infeasibility trap. The call is fire-and-forget
+        // — a nil return (timeout, empty domain, non-schedule GA)
+        // falls back to pure greedy below.
+        var cpSeedPlaced = false
+        if greedyCount > 0,
+           let cpSeed = ScheduleChromosome.cpSeeded(context: context) as? C {
+            individuals.append(cpSeed)
+            cpSeedPlaced = true
+        }
+
+        // Greedy seeds: each gets a slight random perturbation for variety.
+        // When a CP seed landed above, the first greedy slot is already
+        // filled — start greedy seeding from index 1 so the total
+        // population count still matches `greedyCount`.
+        let greedyStart = cpSeedPlaced ? 1 : 0
+        for i in greedyStart..<greedyCount {
             var individual = C.greedy(context: context)
             // Lightly mutate non-first greedy seeds for diversity
             if i > 0 {
@@ -553,9 +574,44 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
                 diversity: fitnessDiversity
             ))
 
+            // Per-generation trace — compiled out of release. One
+            // line per generation tells you fitness progression,
+            // diversity, and stagnation at a glance; searching for
+            // "STAGNATION" / "RESTART" / "DROP" surfaces the
+            // three-character events worth looking at first.
+            GADebugLog.trace(
+                "gen",
+                String(
+                    format: "%03d fit=%.4f avg=%.4f div=%.3f stale=%d",
+                    generation,
+                    bestEver?.rawFitness ?? 0,
+                    population.averageFitness,
+                    fitnessDiversity,
+                    staleGenerations
+                )
+            )
+
+            // Regression detector: with elitism enabled, best-fitness
+            // should never decrease generation-over-generation. When
+            // it does, something's wrong — usually an
+            // accidentally-missed elite copy, or a survivor selection
+            // bug that promoted a worse individual. Log loudly.
+            let currentFitness = bestEver?.rawFitness ?? 0
+            if generation > 0 && currentFitness < lastBestFitness - 1e-6 {
+                GADebugLog.warn(
+                    site: "fitnessDrop",
+                    message: "bestEver regressed — elitism failed to preserve best",
+                    context: [
+                        "gen": "\(generation)",
+                        "prev": String(format: "%.6f", lastBestFitness),
+                        "now": String(format: "%.6f", currentFitness),
+                        "delta": String(format: "%.6f", lastBestFitness - currentFitness)
+                    ]
+                )
+            }
+
             // Relative convergence detection: handles both small and large fitness values.
             // Use rawFitness so fitness sharing can't confuse stagnation detection.
-            let currentFitness = bestEver?.rawFitness ?? 0
             let relativeImprovement = lastBestFitness > 1e-9
                 ? abs(currentFitness - lastBestFitness) / lastBestFitness
                 : abs(currentFitness - lastBestFitness)
@@ -576,6 +632,10 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
                 // preserved but the majority of the population is re-seeded
                 // in a meaningfully different neighbourhood.
                 if restartsPerformed < config.chcMaxRestarts {
+                    GADebugLog.trace(
+                        "restart",
+                        "CHC restart #\(restartsPerformed + 1) at gen \(generation) after \(staleGenerations) stale"
+                    )
                     chcRestart(
                         population: &population,
                         config: config
@@ -798,14 +858,22 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             let reward = offspring[i].rawFitness - offspringBaselines[i]
             context.mutationBandit.record(op: op, reward: reward)
 
-            // Second feedback channel: when the LNS operator fired, also
-            // reward the destroy strategy it used. Only `ScheduleChromosome`
-            // exposes this — guarding on the concrete type avoids polluting
-            // `AdaptiveMutationChromosome` with an LNS-only property.
-            if op == .lnsDay,
-               let schedule = offspring[i] as? ScheduleChromosome,
-               let strategy = schedule.lastDestroyStrategy {
-                context.lnsStrategyBandit.record(strategy: strategy, reward: reward)
+            // Second feedback channel: when the LNS operator fired, reward
+            // both ends of the destroy × repair pair with the same delta.
+            // Training both bandits on the same fitness signal is the
+            // standard Ropke–Pisinger setup: independent draws, identical
+            // reward, so the product of weights converges on the true
+            // pair quality without needing 15 explicit pair arms.
+            // Only `ScheduleChromosome` exposes the LNS telemetry —
+            // guarding on the concrete type avoids polluting
+            // `AdaptiveMutationChromosome` with LNS-only properties.
+            if op == .lnsDay, let schedule = offspring[i] as? ScheduleChromosome {
+                if let destroy = schedule.lastDestroyStrategy {
+                    context.lnsStrategyBandit.record(strategy: destroy, reward: reward)
+                }
+                if let repair = schedule.lastRepairStrategy {
+                    context.lnsRepairBandit.record(strategy: repair, reward: reward)
+                }
             }
         }
 
