@@ -880,7 +880,130 @@ final class BuboOptimizer {
         }
         lines.append("GA budget: \(gaDesc) | \(islandDesc)")
 
+        // Input-anomaly scan. Flags things that usually indicate a
+        // parsing / ingestion bug upstream — a malformed event that
+        // makes it into the GA is going to produce a surprising
+        // scenario, and searching the log for "[ANOMALY] input:" is
+        // faster than bisecting the ingest pipeline.
+        scanInputAnomalies(
+            fixedEvents: fixedInWindow,
+            movableEvents: movableEvents,
+            horizon: horizon,
+            workingHours: workingHours
+        )
+
         planWeekLogger.info("\(lines.joined(separator: "\n"), privacy: .public)")
+    }
+
+    /// Emit `[ANOMALY] input: …` lines via `GADebugLog` for events
+    /// that look malformed at ingest time. Non-blocking — the GA
+    /// still runs — but every hit is something the caller probably
+    /// wants to investigate.
+    private func scanInputAnomalies(
+        fixedEvents: [CalendarEvent],
+        movableEvents: [OptimizableEvent],
+        horizon: DateInterval,
+        workingHours: ClosedRange<Int>
+    ) {
+        // Movable-event anomalies.
+        var eventIds: [String: Int] = [:]
+        for event in movableEvents {
+            eventIds[event.id, default: 0] += 1
+
+            // Deadline before horizon start = guaranteed-infeasible
+            // event. Either the deadline is wrong (stale task) or
+            // the horizon is wrong.
+            if let deadline = event.deadline, deadline < horizon.start {
+                GADebugLog.anomaly(
+                    site: "input",
+                    message: "event deadline precedes horizon start",
+                    context: [
+                        "event": event.id,
+                        "title": event.title,
+                        "deadline": ISO8601DateFormatter().string(from: deadline),
+                        "horizon_start": ISO8601DateFormatter().string(from: horizon.start)
+                    ]
+                )
+            }
+
+            // Deadline vs duration: if window is smaller than
+            // duration, impossible to schedule legally.
+            if let deadline = event.deadline,
+               let earliest = event.earliestStart,
+               deadline.timeIntervalSince(earliest) < event.duration {
+                GADebugLog.anomaly(
+                    site: "input",
+                    message: "earliestStart..deadline window narrower than duration",
+                    context: [
+                        "event": event.id,
+                        "window_sec": "\(Int(deadline.timeIntervalSince(earliest)))",
+                        "duration_sec": "\(Int(event.duration))"
+                    ]
+                )
+            }
+
+            // Duration sanity. Zero / negative = parsing bug.
+            // >12h = unusually long, possibly a `30m` parsed as hours.
+            if event.duration <= 0 {
+                GADebugLog.anomaly(
+                    site: "input",
+                    message: "non-positive duration",
+                    context: ["event": event.id, "duration_sec": "\(Int(event.duration))"]
+                )
+            } else if event.duration > 12 * 3600 {
+                GADebugLog.anomaly(
+                    site: "input",
+                    message: "unusually long duration (>12h) — possible parse error",
+                    context: ["event": event.id, "hours": String(format: "%.1f", event.duration / 3600)]
+                )
+            } else if event.duration < 5 * 60 {
+                GADebugLog.anomaly(
+                    site: "input",
+                    message: "unusually short duration (<5min) — possible parse error",
+                    context: ["event": event.id, "minutes": String(format: "%.1f", event.duration / 60)]
+                )
+            }
+
+            // Task duration longer than a whole working day — can
+            // only fit if spanning the whole day, which fights most
+            // soft objectives.
+            let workdaySeconds = Double(workingHours.upperBound - workingHours.lowerBound) * 3600
+            if event.duration > workdaySeconds {
+                GADebugLog.anomaly(
+                    site: "input",
+                    message: "duration exceeds single working day",
+                    context: [
+                        "event": event.id,
+                        "duration_h": String(format: "%.1f", event.duration / 3600),
+                        "workday_h": String(format: "%.1f", workdaySeconds / 3600)
+                    ]
+                )
+            }
+        }
+
+        // Duplicate ids.
+        for (id, count) in eventIds where count > 1 {
+            GADebugLog.anomaly(
+                site: "input",
+                message: "duplicate movable event id",
+                context: ["event": id, "count": "\(count)"]
+            )
+        }
+
+        // Fixed-event anomalies.
+        for event in fixedEvents {
+            if event.endDate <= event.startDate {
+                GADebugLog.anomaly(
+                    site: "input",
+                    message: "fixed event has non-positive duration",
+                    context: [
+                        "event": event.id,
+                        "start": ISO8601DateFormatter().string(from: event.startDate),
+                        "end": ISO8601DateFormatter().string(from: event.endDate)
+                    ]
+                )
+            }
+        }
     }
 
     /// Log what the GA returned: per-scenario placements grouped by
@@ -940,6 +1063,31 @@ final class BuboOptimizer {
                     .map { "\($0.key)=\(String(format: "%.3f", $0.value))" }
                     .joined(separator: ", ")
                 lines.append("top objectives: \(objStr)")
+            }
+
+            // Weighted-contribution view: raw × weight × (1 - raw)
+            // reveals which objectives are *actually* eating the
+            // fitness budget, which the raw-score ordering alone
+            // can miss — a low-weight objective with score 0.2
+            // contributes less than a high-weight objective at
+            // score 0.8. Sorted by contribution-to-loss desc so
+            // the first line is "this is where your fitness went".
+            let weightsByName = weightsByObjectiveName(context.preferences)
+            let contributions: [(name: String, raw: Double, weight: Double, lossPct: Double)] =
+                scenario.objectiveBreakdown.compactMap { entry in
+                    guard let weight = weightsByName[entry.key], weight > 0 else { return nil }
+                    return (entry.key, entry.value, weight, weight * (1 - entry.value))
+                }
+            let totalLoss = contributions.reduce(0.0) { $0 + $1.lossPct }
+            if totalLoss > 0 {
+                let ranked = contributions
+                    .sorted { $0.lossPct > $1.lossPct }
+                    .prefix(5)
+                let parts = ranked.map { entry -> String in
+                    let pct = Int((entry.lossPct / totalLoss * 100).rounded())
+                    return "\(entry.name)=\(pct)%"
+                }
+                lines.append("fitness loss by: \(parts.joined(separator: ", "))")
             }
 
             if !scenario.constraintViolations.isEmpty {
@@ -1107,6 +1255,30 @@ final class BuboOptimizer {
         }
 
         planWeekLogger.info("\(lines.joined(separator: "\n"), privacy: .public)")
+    }
+
+    /// Map `FitnessObjective.name` → weight from the current
+    /// preferences. Used by the weighted-contribution diagnostic
+    /// in the result log. Names must match the `FitnessObjective.name`
+    /// strings at each objective's call site in
+    /// `Bubo/Optimizer/Fitness/Objectives/`.
+    private func weightsByObjectiveName(_ prefs: OptimizerPreferences) -> [String: Double] {
+        return [
+            "FocusBlock":         prefs.focusBlockWeight,
+            "PomodoroFit":        prefs.pomodoroFitWeight,
+            "Conflict":           prefs.conflictWeight,
+            "TaskPlacement":      prefs.taskPlacementWeight,
+            "WeekBalance":        prefs.weekBalanceWeight,
+            "EnergyBalance":      prefs.energyCurveWeight,
+            "MultiPerson":        prefs.multiPersonWeight,
+            "BreakPlacement":     prefs.breakWeight,
+            "Deadline":           prefs.deadlineWeight,
+            "ContextSwitch":      prefs.contextSwitchWeight,
+            "Buffer":             prefs.bufferWeight,
+            "MeetingClustering":  prefs.meetingClusteringWeight,
+            "TaskInclusion":      prefs.taskInclusionWeight,
+            "BacklogOrder":       prefs.backlogOrderWeight ?? OptimizerPreferences.defaultBacklogOrderWeight
+        ]
     }
 
     private static func lerpInt(start: Int, end: Int, at t: Double) -> Int {

@@ -2803,6 +2803,17 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         // Repair may have moved genes; fitness reflects the previous
         // layout. Mark phantom until the next real evaluation.
         isFitnessReal = false
+
+        // Post-repair invariant check (DEBUG). Every active gene must
+        // be on a working day and its slotIndex (if set) must resolve
+        // to its startTime. A hit here means repair failed to enforce
+        // what it's supposed to enforce — a bug worth seeing.
+        #if DEBUG
+        for gene in genes where gene.isIncluded {
+            GADebugLog.assertWorkingDay(gene, preferences: context.preferences, calendar: cal, site: "repair")
+            GADebugLog.assertSlotBinding(gene, registry: slotRegistry, site: "repair")
+        }
+        #endif
     }
 
     /// Kahn's algorithm on the `dependsOn` graph among included genes, with

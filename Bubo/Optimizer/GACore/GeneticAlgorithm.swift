@@ -574,9 +574,44 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
                 diversity: fitnessDiversity
             ))
 
+            // Per-generation trace — compiled out of release. One
+            // line per generation tells you fitness progression,
+            // diversity, and stagnation at a glance; searching for
+            // "STAGNATION" / "RESTART" / "DROP" surfaces the
+            // three-character events worth looking at first.
+            GADebugLog.trace(
+                "gen",
+                String(
+                    format: "%03d fit=%.4f avg=%.4f div=%.3f stale=%d",
+                    generation,
+                    bestEver?.rawFitness ?? 0,
+                    population.averageFitness,
+                    fitnessDiversity,
+                    staleGenerations
+                )
+            )
+
+            // Regression detector: with elitism enabled, best-fitness
+            // should never decrease generation-over-generation. When
+            // it does, something's wrong — usually an
+            // accidentally-missed elite copy, or a survivor selection
+            // bug that promoted a worse individual. Log loudly.
+            let currentFitness = bestEver?.rawFitness ?? 0
+            if generation > 0 && currentFitness < lastBestFitness - 1e-6 {
+                GADebugLog.anomaly(
+                    site: "fitnessDrop",
+                    message: "bestEver regressed — elitism failed to preserve best",
+                    context: [
+                        "gen": "\(generation)",
+                        "prev": String(format: "%.6f", lastBestFitness),
+                        "now": String(format: "%.6f", currentFitness),
+                        "delta": String(format: "%.6f", lastBestFitness - currentFitness)
+                    ]
+                )
+            }
+
             // Relative convergence detection: handles both small and large fitness values.
             // Use rawFitness so fitness sharing can't confuse stagnation detection.
-            let currentFitness = bestEver?.rawFitness ?? 0
             let relativeImprovement = lastBestFitness > 1e-9
                 ? abs(currentFitness - lastBestFitness) / lastBestFitness
                 : abs(currentFitness - lastBestFitness)
@@ -597,6 +632,10 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
                 // preserved but the majority of the population is re-seeded
                 // in a meaningfully different neighbourhood.
                 if restartsPerformed < config.chcMaxRestarts {
+                    GADebugLog.trace(
+                        "restart",
+                        "CHC restart #\(restartsPerformed + 1) at gen \(generation) after \(staleGenerations) stale"
+                    )
                     chcRestart(
                         population: &population,
                         config: config
