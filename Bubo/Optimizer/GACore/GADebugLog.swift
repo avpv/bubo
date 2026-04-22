@@ -78,6 +78,23 @@ enum GADebugLog {
 
     /// Per-generation / per-operator detail. Compiled out of release
     /// so production runs never pay the string formatting cost.
+    ///
+    /// `@inline(__always)` + `@autoclosure` together guarantee the
+    /// call site collapses to zero instructions in release builds:
+    /// the `#if DEBUG` strips the body, the inliner sees an empty
+    /// function and inlines it, and the `@autoclosure` argument is
+    /// never evaluated (its body — typically a `String(format:)`
+    /// call — doesn't run). Without `@inline(__always)` the compiler
+    /// *usually* inlines small empty functions under `-O` but
+    /// doesn't have to; the explicit hint makes it a guarantee.
+    ///
+    /// We use `@inline(__always)` rather than `@inlinable` because
+    /// Bubo is a single-module target — `@inlinable`'s cross-module
+    /// machinery buys nothing here and would force every referenced
+    /// internal symbol (`logger`, `warn`, the formatters) to be
+    /// `@usableFromInline`. `@inline(__always)` gives the same
+    /// release-build guarantee without the visibility dance.
+    @inline(__always)
     static func trace(_ site: String, _ message: @autoclosure () -> String) {
         #if DEBUG
         logger.debug("[\(site, privacy: .public)] \(message(), privacy: .public)")
@@ -91,7 +108,11 @@ enum GADebugLog {
     /// `ScheduleGene(...)` without going through the helpers that keep
     /// the two fields in sync — that's a bug, the kind you can't see
     /// until fitness drifts in a way that doesn't match the visible
-    /// placement. No-op in release.
+    /// placement. No-op in release; `@inline(__always)` guarantees
+    /// the empty body collapses to zero instructions at call sites
+    /// so the per-gene-per-repair-call check costs nothing in
+    /// production.
+    @inline(__always)
     static func assertSlotBinding(
         _ gene: ScheduleGene,
         registry: SlotRegistry,
@@ -132,8 +153,9 @@ enum GADebugLog {
 
     /// Check that an active gene sits on a working day under the
     /// configured preferences. Used after any mutation / repair /
-    /// crossover output. Fires when the slot-decoder invariants are
-    /// supposed to forbid this — a hit means something slipped through.
+    /// crossover output. No-op in release; `@inline(__always)`
+    /// collapses the call to zero instructions.
+    @inline(__always)
     static func assertWorkingDay(
         _ gene: ScheduleGene,
         preferences: OptimizerPreferences,
