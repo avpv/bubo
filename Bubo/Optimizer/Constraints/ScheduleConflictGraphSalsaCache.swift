@@ -84,6 +84,18 @@ final class ScheduleConflictGraphSalsaCache: Sendable {
     /// survive the whole-graph eviction and stay warm.
     private let wholeGraphLRU: OSAllocatedUnfairLock<WholeGraphLRU>
 
+    /// Whole-graph hit/miss counters. A hit means the outer
+    /// `graphDB.query(...)` closure did *not* run. Snapshotted as
+    /// deltas by `BuboOptimizer.optimize()` so cache effectiveness
+    /// surfaces per run without any per-call logging cost on the
+    /// hot path.
+    private let stats: OSAllocatedUnfairLock<Stats>
+
+    struct Stats: Sendable {
+        var hits: Int = 0
+        var misses: Int = 0
+    }
+
     private struct WholeGraphLRU: Sendable {
         var recencyOrder: [QueryKey] = []
     }
@@ -103,6 +115,13 @@ final class ScheduleConflictGraphSalsaCache: Sendable {
         self.graphDB = QueryDB<ScheduleConflictGraph>()
         self.registeredInputs = OSAllocatedUnfairLock(initialState: [:])
         self.wholeGraphLRU = OSAllocatedUnfairLock(initialState: WholeGraphLRU())
+        self.stats = OSAllocatedUnfairLock(initialState: Stats())
+    }
+
+    /// Snapshot of cumulative hit/miss counters. Diff two snapshots
+    /// around a run to measure per-run cache effectiveness.
+    var statsSnapshot: Stats {
+        stats.withLock { $0 }
     }
 
     // MARK: Public API
@@ -139,7 +158,13 @@ final class ScheduleConflictGraphSalsaCache: Sendable {
             uniqueKeysWithValues: events.map { ($0.id, $0) }
         )
 
-        return graphDB.query(graphKey) { tracker in
+        // Hit/miss detection via a flag flipped inside the `graphDB`
+        // closure (which only runs on cache miss).
+        let missFlag = OSAllocatedUnfairLock(initialState: false)
+        let buildStartedAt = OSAllocatedUnfairLock<Date?>(initialState: nil)
+        let result = graphDB.query(graphKey) { tracker in
+            missFlag.withLock { $0 = true }
+            buildStartedAt.withLock { $0 = Date() }
             // Force per-event metadata resolution so the tracker
             // records each event's input as a dependency. The
             // metadata is cached; hot calls skip the field reads.
@@ -182,7 +207,18 @@ final class ScheduleConflictGraphSalsaCache: Sendable {
                 reachabilityOracle: oracle
             )
         }
+        let wasMiss = missFlag.withLock { $0 }
+        stats.withLock { s in
+            if wasMiss { s.misses += 1 } else { s.hits += 1 }
+        }
+        if wasMiss, let start = buildStartedAt.withLock({ $0 }) {
+            let buildMs = Int(Date().timeIntervalSince(start) * 1000)
+            Self.buildLogger.info("conflict_graph_built events=\(events.count) components=\(result.componentCount) conflict_edges=\(result.conflictEdgeCount) precedence_edges=\(result.precedenceEdgeCount) density=\(result.conflictDensity) build_ms=\(buildMs)")
+        }
+        return result
     }
+
+    private static let buildLogger = Logger(subsystem: "com.avpv.Bubo", category: "Optimizer/ConflictGraph")
 
     /// Query the per-pair overlap decision. Reads both events'
     /// input keys via the tracker so editing either event

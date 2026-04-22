@@ -77,6 +77,23 @@ final class IntentGraphSalsaCache: Sendable {
     /// editing through many intent shapes doesn't grow unbounded.
     private let wholeGraphLRU: OSAllocatedUnfairLock<WholeGraphLRU>
 
+    /// Whole-graph hit/miss counters. A hit means the outer
+    /// `graphDB.query(...)` closure did *not* run — the prior entry
+    /// was still valid. Misses include both cold-start and
+    /// invalidation-driven rebuilds. Emitted as deltas by
+    /// `BuboOptimizer.optimize()` to show cache effectiveness per
+    /// run without leaking per-call logging overhead into the hot
+    /// path.
+    private let stats: OSAllocatedUnfairLock<Stats>
+
+    /// Snapshot of the cumulative hit/miss counters. Subtract two
+    /// snapshots around a section of work to measure that section's
+    /// cache effectiveness in isolation.
+    struct Stats: Sendable {
+        var hits: Int = 0
+        var misses: Int = 0
+    }
+
     private struct WholeGraphLRU: Sendable {
         /// Cached query names in MRU-first order.
         var recencyOrder: [QueryKey] = []
@@ -97,6 +114,7 @@ final class IntentGraphSalsaCache: Sendable {
         self.graphDB = QueryDB<IntentGraph>()
         self.registeredInputs = OSAllocatedUnfairLock(initialState: [])
         self.wholeGraphLRU = OSAllocatedUnfairLock(initialState: WholeGraphLRU())
+        self.stats = OSAllocatedUnfairLock(initialState: Stats())
     }
 
     // MARK: Public API
@@ -126,7 +144,13 @@ final class IntentGraphSalsaCache: Sendable {
         // queries that touched it.
         let graphKey = QueryKey("intentGraph.whole", Self.shapeFingerprint(intents))
         touchWholeGraphLRU(graphKey)
-        return graphDB.query(graphKey) { tracker in
+        // Miss-detection pattern: the `graphDB.query` closure only
+        // runs when the entry is stale or absent. Flipping a flag
+        // inside the closure captures hit vs miss without changing
+        // QueryDB's public shape.
+        let missFlag = OSAllocatedUnfairLock(initialState: false)
+        let result = graphDB.query(graphKey) { tracker in
+            missFlag.withLock { $0 = true }
             // Force every per-intent compile to resolve (this also
             // registers the tracker.read for each input key).
             for intent in intents {
@@ -142,6 +166,18 @@ final class IntentGraphSalsaCache: Sendable {
             }
             return IntentGraph.build(from: intents, conflictOracle: oracle)
         }
+        let wasMiss = missFlag.withLock { $0 }
+        stats.withLock { s in
+            if wasMiss { s.misses += 1 } else { s.hits += 1 }
+        }
+        return result
+    }
+
+    /// Snapshot of cumulative hit/miss counters. Callers capture one
+    /// before a run, one after, and diff them to log per-run cache
+    /// effectiveness.
+    var statsSnapshot: Stats {
+        stats.withLock { $0 }
     }
 
     /// Materialise the phase bucket for `phase` over `intents`, with

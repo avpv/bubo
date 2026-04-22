@@ -186,6 +186,13 @@ final class BuboOptimizer {
         defer { isOptimizing = false }
 
         let planWeekWallStart = Date()
+        // Capture cache counters at run start so the terminal log
+        // can emit *per-run* hit/miss deltas. Without the diff the
+        // counts would be cumulative across the cache's lifetime
+        // and useless for attributing wins to individual runs.
+        let intentCacheStart = intentGraphCache.statsSnapshot
+        let conflictCacheStart = conflictGraphCache.statsSnapshot
+
         logPlanWeekInputs(
             fixedEvents: context.fixedEvents,
             movableEvents: context.movableEvents,
@@ -518,6 +525,7 @@ final class BuboOptimizer {
         }
         var archive = MAPElitesArchive()
         archive.depositAll(verifiedPopulation, context: adjustedContext)
+        gaStatsLogger.info("map_elites_archive cells=\(archive.cells.count) capacity=\(archive.capacity) requested=\(capturedScenarioCount)")
         // Stamp every scenario with the run's task signature so
         // feedback methods can route updates to the correct
         // per-workload learner bundle even after later runs on
@@ -564,10 +572,16 @@ final class BuboOptimizer {
         let violationCount = best?.constraintViolations.count ?? 0
         let droppedCount = best?.droppedCount ?? 0
         let bestFitness = best?.fitness ?? 0
+        let intentCacheEnd = intentGraphCache.statsSnapshot
+        let conflictCacheEnd = conflictGraphCache.statsSnapshot
+        let igHits = intentCacheEnd.hits - intentCacheStart.hits
+        let igMisses = intentCacheEnd.misses - intentCacheStart.misses
+        let cgHits = conflictCacheEnd.hits - conflictCacheStart.hits
+        let cgMisses = conflictCacheEnd.misses - conflictCacheStart.misses
         // One-line event keeps OSLog interpolation happy (no literal
         // newlines embedded in the format string) and matches the
         // `event k=v k=v` convention used by the rest of the app.
-        gaStatsLogger.info("ga_run_stats scenarios=\(scenarios.count) generations=\(convergenceGen) best_fitness=\(bestFitness) violations=\(violationCount) dropped=\(droppedCount) full_evals=\(snapshot.fullEvaluations) delta_evals=\(snapshot.deltaEvaluations) eval_cache_hits=\(snapshot.cacheHits) delta_fraction=\(snapshot.deltaFraction) cache_hit_fraction=\(snapshot.cacheHitFraction) constraint_rejections=\(snapshot.constraintRejections) duration_ms=\(wallMs)")
+        gaStatsLogger.info("ga_run_stats scenarios=\(scenarios.count) generations=\(convergenceGen) best_fitness=\(bestFitness) violations=\(violationCount) dropped=\(droppedCount) full_evals=\(snapshot.fullEvaluations) delta_evals=\(snapshot.deltaEvaluations) eval_cache_hits=\(snapshot.cacheHits) delta_fraction=\(snapshot.deltaFraction) cache_hit_fraction=\(snapshot.cacheHitFraction) constraint_rejections=\(snapshot.constraintRejections) intent_cache_hits=\(igHits) intent_cache_misses=\(igMisses) conflict_cache_hits=\(cgHits) conflict_cache_misses=\(cgMisses) duration_ms=\(wallMs)")
 
         logPlanWeekResult(
             result: result,
