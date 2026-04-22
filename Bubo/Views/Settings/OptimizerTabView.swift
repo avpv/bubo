@@ -19,7 +19,7 @@ struct OptimizerTabView: View {
             VStack(spacing: DS.Spacing.lg) {
 
                 SettingsPlatter("Working Hours") {
-                    VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                    VStack(alignment: .leading, spacing: DS.Spacing.md) {
                         Grid(alignment: .leading, verticalSpacing: DS.Spacing.md) {
                             GridRow {
                                 Text("Start:")
@@ -44,9 +44,17 @@ struct OptimizerTabView: View {
                                 .frame(width: 100)
                             }
                         }
-                        Text("The Tasks capacity ring compares your pending workload to the minutes left before the end of the working day.")
+
+                        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                            Text("Working days")
+                                .font(.subheadline)
+                            WorkingDaysPicker(selection: $service.workingDays)
+                        }
+
+                        Text("Applies to every planning surface — calendar reflow, today's plan, and the weekly backlog roll-up. The capacity ring on the Tasks list uses the same window to compare pending workload against remaining minutes.")
                             .font(.caption)
                             .foregroundStyle(skin.resolvedTextSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
 

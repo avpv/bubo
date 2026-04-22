@@ -602,12 +602,13 @@ final class BuboOptimizer {
         let now = Date()
         let weekEnd = Calendar.current.date(byAdding: .day, value: 7, to: now)!
 
-        // `skipWeekends` is now normalised at `OptimizerService.init` so
-        // the stored preference is never nil in practice; pass it
-        // through as-is. Older direct callers that construct their
-        // own `OptimizerPreferences` with nil get the default-false
-        // behaviour from `effectiveSkipWeekends`, which matches the
-        // pre-field semantics and is the conservative choice for a
+        // `workingDays` is normalised at `OptimizerService.init`
+        // (legacy `skipWeekends` migrated into the Set), so the stored
+        // preference is never nil in practice; pass prefs through
+        // as-is. Direct callers that construct their own
+        // `OptimizerPreferences()` with nil get the default Mon–Fri
+        // behaviour from `effectiveWorkingDays`, matching the
+        // pre-refactor default and the conservative choice for a
         // caller that explicitly avoided the service.
         let context = OptimizerContext(
             fixedEvents: fixedEvents,
@@ -1006,22 +1007,29 @@ final class BuboOptimizer {
             }
         }
 
-        // Skip-weekends + horizon working-day breakdown so a surprising
-        // placement can be root-caused to "weekends weren't actually
-        // off" or "Monday is a public holiday in the calendar but not
-        // to the solver".
+        // Working-day set + horizon breakdown so a surprising
+        // placement can be root-caused to "the configured working
+        // days don't match expectations" or "Monday is a public
+        // holiday in the calendar but not to the solver".
         let cal2 = context.calendar
-        let skipWeekends = context.preferences.effectiveSkipWeekends
+        let prefs = context.preferences
+        let workingDays = prefs.effectiveWorkingDays
         let horizonStartDay = cal2.startOfDay(for: context.planningHorizon.start)
         let horizonLastDay = cal2.startOfDay(for: context.planningHorizon.end.addingTimeInterval(-1))
         let horizonDays = max(1, (cal2.dateComponents([.day], from: horizonStartDay, to: horizonLastDay).day ?? 0) + 1)
         var workDays = 0
         for offset in 0..<horizonDays {
             guard let day = cal2.date(byAdding: .day, value: offset, to: horizonStartDay) else { continue }
-            if skipWeekends && cal2.isDateInWeekend(day) { continue }
+            if !prefs.isWorkingDay(day, calendar: cal2) { continue }
             workDays += 1
         }
-        lines.append("flags: skipWeekends=\(skipWeekends), workDaysInHorizon=\(workDays)/\(horizonDays)")
+        // Weekday abbreviations in sorted 1→7 order (Sun, Mon, …, Sat).
+        let weekdayAbbrev = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+        let daysLabel = workingDays.sorted().compactMap { idx -> String? in
+            guard idx >= 1, idx <= 7 else { return nil }
+            return weekdayAbbrev[idx - 1]
+        }.joined(separator: ",")
+        lines.append("flags: workingDays=[\(daysLabel)], workDaysInHorizon=\(workDays)/\(horizonDays)")
 
         planWeekLogger.info("\(lines.joined(separator: "\n"), privacy: .public)")
     }

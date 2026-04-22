@@ -178,7 +178,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         // keep the old exploration behaviour.
         let saturation = Self.fixedSaturation(context: context)
         let dropInclusionRate = max(0.35, 0.85 - 0.6 * saturation)
-        let skipWeekends = context.preferences.effectiveSkipWeekends
+        let workingDays = context.preferences.effectiveWorkingDays
         let genes = context.movableEvents.map { event -> ScheduleGene in
             let start = randomStartTime(
                 for: event,
@@ -186,7 +186,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 workingHours: context.workingHours,
                 calendar: cal,
                 rng: context.rng,
-                skipWeekends: skipWeekends
+                workingDays: workingDays
             )
             // Droppable genes start with a saturation-aware inclusion rate
             // so the GA explores both including and excluding them, but
@@ -245,7 +245,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         eventsInPlacementOrder sortedEvents: [OptimizableEvent]
     ) -> ScheduleChromosome {
         let cal = context.calendar
-        let skipWeekends = context.preferences.effectiveSkipWeekends
+        let workingDays = context.preferences.effectiveWorkingDays
 
         // Collect occupied intervals (from fixed events)
         var occupied: [(start: Date, end: Date)] = context.fixedEvents.map {
@@ -270,7 +270,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 dependsOn: event.dependsOn,
                 placedGenes: genes,
                 genesByEvent: genesByEvent,
-                skipWeekends: skipWeekends
+                workingDays: workingDays
             )
 
             let isIncluded: Bool
@@ -286,7 +286,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 workingHours: context.workingHours,
                 calendar: cal,
                 rng: context.rng,
-                skipWeekends: skipWeekends
+                workingDays: workingDays
             )
 
             let gene = ScheduleGene(
@@ -323,7 +323,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         var result = orderedGenes
         let missing = context.movableEvents.filter { ev in !result.contains(where: { $0.eventId == ev.id }) }
         for event in missing {
-            let start = randomStartTime(for: event, in: context.planningHorizon, workingHours: context.workingHours, calendar: cal, rng: context.rng, skipWeekends: skipWeekends)
+            let start = randomStartTime(for: event, in: context.planningHorizon, workingHours: context.workingHours, calendar: cal, rng: context.rng, workingDays: workingDays)
             result.append(ScheduleGene(
                 eventId: event.id, title: event.title, startTime: start,
                 duration: event.duration, context: event.context, energyCost: event.energyCost,
@@ -351,7 +351,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         dependsOn: [String],
         placedGenes: [ScheduleGene],
         genesByEvent: [String: Int],
-        skipWeekends: Bool = false
+        workingDays: Set<Int> = []
     ) -> Date? {
         let horizonStartDay = calendar.startOfDay(for: horizon.start)
         let horizonLastDay = calendar.startOfDay(for: horizon.end.addingTimeInterval(-1))
@@ -369,11 +369,15 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         // Try each day, preferring preferred hours
         for dayOffset in 0..<daysInHorizon {
             guard let day = calendar.date(byAdding: .day, value: dayOffset, to: horizonStartDay) else { continue }
-            // Skip weekends when the caller asked us to — matches the
-            // `WorkingHoursConstraint` weekend branch so the greedy
-            // seeder and LNS re-inserter don't burn effort probing
-            // Saturday slots that the hard constraint will reject.
-            if skipWeekends && calendar.isDateInWeekend(day) { continue }
+            // Skip non-working days when the caller asked us to — matches
+            // the `WorkingHoursConstraint` day-of-week branch so greedy
+            // seeding and LNS re-insertion don't probe days the hard
+            // constraint will immediately reject. Empty set = no filter
+            // (legacy caller that doesn't care about day-of-week).
+            if !workingDays.isEmpty {
+                let weekday = calendar.component(.weekday, from: day)
+                if !workingDays.contains(weekday) { continue }
+            }
             let hourRange = preferredHours ?? workingHours
             guard let dayWorkStart = calendar.date(bySettingHour: hourRange.lowerBound, minute: 0, second: 0, of: day),
                   let dayWorkEnd = calendar.date(bySettingHour: min(hourRange.upperBound, workingHours.upperBound), minute: 0, second: 0, of: day) else { continue }
@@ -437,7 +441,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         dependsOn: [String],
         placedGenes: [ScheduleGene],
         genesByEvent: [String: Int],
-        skipWeekends: Bool = false
+        workingDays: Set<Int> = []
     ) -> Date? {
         let horizonStartDay = calendar.startOfDay(for: horizon.start)
         let horizonLastDay = calendar.startOfDay(for: horizon.end.addingTimeInterval(-1))
@@ -456,7 +460,10 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         // Walk days in reverse, searching for the latest feasible start.
         for dayOffset in stride(from: daysInHorizon - 1, through: 0, by: -1) {
             guard let day = calendar.date(byAdding: .day, value: dayOffset, to: horizonStartDay) else { continue }
-            if skipWeekends && calendar.isDateInWeekend(day) { continue }
+            if !workingDays.isEmpty {
+                let weekday = calendar.component(.weekday, from: day)
+                if !workingDays.contains(weekday) { continue }
+            }
             let hourRange = preferredHours ?? workingHours
             guard let dayWorkStart = calendar.date(bySettingHour: hourRange.lowerBound, minute: 0, second: 0, of: day),
                   let dayWorkEnd = calendar.date(bySettingHour: min(hourRange.upperBound, workingHours.upperBound), minute: 0, second: 0, of: day) else { continue }
@@ -962,7 +969,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                     horizon: context.planningHorizon,
                     calendar: cal,
                     floor: floor,
-                    skipWeekends: context.preferences.effectiveSkipWeekends
+                    workingDays: context.preferences.effectiveWorkingDays
                 ) {
                     genes[i] = genes[i].withStartTime(freeStart)
                 }
@@ -2083,7 +2090,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                     dependsOn: event?.dependsOn ?? [],
                     placedGenes: genes,
                     genesByEvent: genesByEvent,
-                    skipWeekends: context.preferences.effectiveSkipWeekends
+                    workingDays: context.preferences.effectiveWorkingDays
                 )
                 guard let earliestSlot = earliest else {
                     if fallbackIdx == nil { fallbackIdx = idx }
@@ -2101,7 +2108,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                     dependsOn: event?.dependsOn ?? [],
                     placedGenes: genes,
                     genesByEvent: genesByEvent,
-                    skipWeekends: context.preferences.effectiveSkipWeekends
+                    workingDays: context.preferences.effectiveWorkingDays
                 ) ?? earliestSlot
 
                 let window = max(0, latestSlot.timeIntervalSince(earliestSlot))
@@ -2176,7 +2183,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                     dependsOn: [],
                     placedGenes: genes,
                     genesByEvent: genesByEvent,
-                    skipWeekends: context.preferences.effectiveSkipWeekends
+                    workingDays: context.preferences.effectiveWorkingDays
                 )
                 if let slot {
                     if genes[idx].startTime != slot {
@@ -2215,7 +2222,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         horizon: DateInterval,
         calendar: Calendar,
         floor: Date,
-        skipWeekends: Bool = false
+        workingDays: Set<Int> = []
     ) -> Date? {
         // Search forward and backward from current position, try gap between each pair
         var candidates: [(start: Date, distance: TimeInterval)] = []
@@ -2223,14 +2230,15 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         // Build sorted occupied list within horizon
         let sorted = occupied.filter { $0.end > horizon.start && $0.start < horizon.end }
 
-        // Reject a candidate start that lands on a weekend day when
-        // `skipWeekends` is on. Keeps repair's relocation in lock-step
+        // Reject a candidate start that lands on a non-working day when
+        // `workingDays` is set. Keeps repair's relocation in lock-step
         // with the hard constraint — otherwise the "nearest free slot"
-        // logic would happily park a conflicting gene on Saturday and
-        // call the repair done.
+        // logic would happily park a conflicting gene on a day the
+        // constraint will reject and call the repair done.
         func accept(_ start: Date) -> Bool {
-            if skipWeekends && calendar.isDateInWeekend(start) { return false }
-            return true
+            if workingDays.isEmpty { return true }
+            let weekday = calendar.component(.weekday, from: start)
+            return workingDays.contains(weekday)
         }
 
         // Scan gaps between occupied intervals
@@ -2240,8 +2248,8 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
             let gapEnd = occ.start
             if gapEnd.timeIntervalSince(gapStart) >= duration {
                 var clamped = clampToWorkingHours(gapStart, duration: duration, workingHours: workingHours, calendar: calendar, floor: floor)
-                if skipWeekends {
-                    clamped = advancePastWeekend(from: clamped, workingHours: workingHours, horizon: horizon, calendar: calendar)
+                if !workingDays.isEmpty {
+                    clamped = advancePastNonWorkingDay(from: clamped, workingHours: workingHours, horizon: horizon, calendar: calendar, workingDays: workingDays)
                 }
                 if accept(clamped) && clamped.addingTimeInterval(duration) <= gapEnd {
                     candidates.append((clamped, abs(clamped.timeIntervalSince(near))))
@@ -2253,8 +2261,8 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         let finalGapStart = max(prevEnd, floor)
         if horizon.end.timeIntervalSince(finalGapStart) >= duration {
             var clamped = clampToWorkingHours(finalGapStart, duration: duration, workingHours: workingHours, calendar: calendar, floor: floor)
-            if skipWeekends {
-                clamped = advancePastWeekend(from: clamped, workingHours: workingHours, horizon: horizon, calendar: calendar)
+            if !workingDays.isEmpty {
+                clamped = advancePastNonWorkingDay(from: clamped, workingHours: workingHours, horizon: horizon, calendar: calendar, workingDays: workingDays)
             }
             if accept(clamped) && clamped.addingTimeInterval(duration) <= horizon.end {
                 candidates.append((clamped, abs(clamped.timeIntervalSince(near))))
@@ -2278,28 +2286,31 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
 
         let cal = context.calendar
         let horizonStart = context.planningHorizon.start
-        let skipWeekends = context.preferences.effectiveSkipWeekends
+        let workingDays = context.preferences.effectiveWorkingDays
+        let prefs = context.preferences
 
-        // Pass 1: Clamp to working hours and planning horizon. When
-        // `skipWeekends` is on, rehome weekend placements onto the
-        // next in-horizon weekday first — otherwise `clampToWorkingHours`
-        // would leave the event on Saturday (just inside 9–18), which
-        // the WorkingHoursConstraint would then reject every generation
-        // until a mutation happened to flip it off the weekend. Without
-        // this, the weekend-aware seeders upstream get silently undone
-        // by repair as soon as mutation pushes anything around.
+        // Pass 1: Clamp to working hours and planning horizon. When the
+        // user configured `workingDays`, rehome non-working-day
+        // placements onto the next in-horizon working day first —
+        // otherwise `clampToWorkingHours` would leave the event on
+        // Saturday (just inside 9–18), which the
+        // WorkingHoursConstraint would then reject every generation
+        // until a mutation happened to flip it onto a working day.
+        // Without this, the day-aware seeders upstream get silently
+        // undone by repair as soon as mutation pushes anything around.
         for i in genes.indices where genes[i].isIncluded {
             let event = context.movableEvents.first { $0.id == genes[i].eventId }
             let earliest = event?.earliestStart
             let floor = [horizonStart, earliest].compactMap { $0 }.max() ?? horizonStart
 
             var target = genes[i].startTime
-            if skipWeekends {
-                target = advancePastWeekend(
+            if !prefs.isWorkingDay(target, calendar: cal) {
+                target = advancePastNonWorkingDay(
                     from: target,
                     workingHours: context.workingHours,
                     horizon: context.planningHorizon,
-                    calendar: cal
+                    calendar: cal,
+                    workingDays: workingDays
                 )
             }
 
@@ -2347,15 +2358,16 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 gene.startTime < occ.end && gene.endTime > occ.start
             }
 
-            // Weekend-resident genes also need relocation even when
-            // they're already within working hours and conflict-free —
-            // the WorkingHoursConstraint otherwise flags them every
-            // generation. Detecting here (rather than always in Pass 1)
-            // avoids a redundant relocate when the gene was already
-            // moved to a weekday earlier in this repair.
-            let onWeekend = skipWeekends && cal.isDateInWeekend(cal.startOfDay(for: gene.startTime))
+            // Non-working-day-resident genes also need relocation even
+            // when they're already within working hours and
+            // conflict-free — the WorkingHoursConstraint otherwise
+            // flags them every generation. Detecting here (rather than
+            // always in Pass 1) avoids a redundant relocate when the
+            // gene was already moved to a working day earlier in this
+            // repair.
+            let onNonWorkingDay = !prefs.isWorkingDay(gene.startTime, calendar: cal)
 
-            if beforeFloor || hasOverlap || onWeekend {
+            if beforeFloor || hasOverlap || onNonWorkingDay {
                 if let freeStart = findNearestFreeSlot(
                     near: max(gene.startTime, floor),
                     duration: gene.duration,
@@ -2364,7 +2376,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                     horizon: context.planningHorizon,
                     calendar: cal,
                     floor: floor,
-                    skipWeekends: skipWeekends
+                    workingDays: workingDays
                 ) {
                     genes[idx] = gene.withStartTime(freeStart)
                 } else if beforeFloor {
@@ -2373,12 +2385,13 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                     // the ConstraintEngine to penalise rather than failing
                     // the whole repair silently.
                     var fallback = floor
-                    if skipWeekends {
-                        fallback = advancePastWeekend(
+                    if !prefs.isWorkingDay(fallback, calendar: cal) {
+                        fallback = advancePastNonWorkingDay(
                             from: fallback,
                             workingHours: context.workingHours,
                             horizon: context.planningHorizon,
-                            calendar: cal
+                            calendar: cal,
+                            workingDays: workingDays
                         )
                     }
                     genes[idx] = gene.withStartTime(
@@ -2612,7 +2625,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         workingHours: ClosedRange<Int>,
         calendar: Calendar,
         rng: GARandom,
-        skipWeekends: Bool = false
+        workingDays: Set<Int> = []
     ) -> Date {
         // Count distinct calendar days spanned (not whole 24h periods) so
         // the GA can reach every day in the horizon, even when the start is
@@ -2634,15 +2647,18 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         // when no 15-minute slot between `floor` and `maxStartHour` exists
         // on that day. Keeps today (offset 0) usable when horizon.start is
         // mid-afternoon, but skips it entirely when the floor is already
-        // past the last feasible starting hour. Weekend days return nil
-        // too when `skipWeekends` is set — matches the hard-constraint
+        // past the last feasible starting hour. Non-working days return
+        // nil too when `workingDays` is set — matches the hard-constraint
         // behaviour so the sampler doesn't seed placements that the
         // `WorkingHoursConstraint` will immediately reject.
         func earliestSlot(onOffset offset: Int) -> Date? {
             guard let day = calendar.date(byAdding: .day, value: offset, to: horizonStartDay) else {
                 return nil
             }
-            if skipWeekends && calendar.isDateInWeekend(day) { return nil }
+            if !workingDays.isEmpty {
+                let weekday = calendar.component(.weekday, from: day)
+                if !workingDays.contains(weekday) { return nil }
+            }
             guard let dayLower = calendar.date(bySettingHour: hourRange.lowerBound, minute: 0, second: 0, of: day),
                   let dayUpper = calendar.date(bySettingHour: maxStartHour, minute: 0, second: 0, of: day)
             else { return nil }
@@ -2685,14 +2701,15 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
     }
 
     /// Ratio in [0, 1] describing how much of the horizon's working hours are
-    /// already committed to fixed events. Weekend days are excluded when
-    /// `skipWeekends` is on because those hours aren't available anyway.
-    /// Used by `random(context:)` to decide how optimistic the droppable-gene
-    /// inclusion rate should be: when the week is nearly full of meetings the
-    /// GA shouldn't start out with every optional task flagged "include".
+    /// already committed to fixed events. Non-working days are excluded via
+    /// `preferences.isWorkingDay(_:calendar:)` because those hours aren't
+    /// available anyway. Used by `random(context:)` to decide how
+    /// optimistic the droppable-gene inclusion rate should be: when the
+    /// week is nearly full of meetings the GA shouldn't start out with
+    /// every optional task flagged "include".
     private static func fixedSaturation(context: OptimizerContext) -> Double {
         let cal = context.calendar
-        let skipWeekends = context.preferences.effectiveSkipWeekends
+        let prefs = context.preferences
         let horizon = context.planningHorizon
         let hoursPerDay = Double(context.workingHours.upperBound - context.workingHours.lowerBound)
         guard hoursPerDay > 0 else { return 0 }
@@ -2701,19 +2718,17 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         let lastDay = cal.startOfDay(for: horizon.end.addingTimeInterval(-1))
         let days = max(1, (cal.dateComponents([.day], from: startDay, to: lastDay).day ?? 0) + 1)
 
-        var workingDays = 0
+        var workingDayCount = 0
         for offset in 0..<days {
             guard let day = cal.date(byAdding: .day, value: offset, to: startDay) else { continue }
-            if skipWeekends && cal.isDateInWeekend(day) { continue }
-            workingDays += 1
+            if !prefs.isWorkingDay(day, calendar: cal) { continue }
+            workingDayCount += 1
         }
-        guard workingDays > 0 else { return 0 }
+        guard workingDayCount > 0 else { return 0 }
 
-        let totalAvailableHours = Double(workingDays) * hoursPerDay
+        let totalAvailableHours = Double(workingDayCount) * hoursPerDay
         let fixedHours = context.fixedEvents.reduce(0.0) { acc, ev in
-            if skipWeekends && cal.isDateInWeekend(cal.startOfDay(for: ev.startDate)) {
-                return acc
-            }
+            if !prefs.isWorkingDay(ev.startDate, calendar: cal) { return acc }
             return acc + ev.endDate.timeIntervalSince(ev.startDate) / 3600
         }
         return max(0, min(1, fixedHours / totalAvailableHours))
@@ -2722,30 +2737,36 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
 
 // MARK: - Free functions
 
-/// Move `date` forward to the first non-weekend day still inside the
-/// horizon, snapping the time-of-day to the working-hours lower bound
-/// when the day is rolled over. Returns `date` unchanged when it's
-/// already on a weekday, or when the horizon contains no weekday (in
-/// which case the caller's constraint penalty is the right signal —
-/// repairing can't manufacture feasibility that doesn't exist).
-func advancePastWeekend(
+/// Move `date` forward to the first working day still inside the horizon
+/// (as defined by `workingDays` — set of 1-indexed weekdays where
+/// 1 = Sunday, 7 = Saturday), snapping the time-of-day to the
+/// working-hours lower bound when the day is rolled over. Returns
+/// `date` unchanged when it's already on a working day, when
+/// `workingDays` is empty (no filter), or when the horizon contains
+/// no working day at all (in which case the caller's constraint
+/// penalty is the right signal — repairing can't manufacture
+/// feasibility that doesn't exist).
+func advancePastNonWorkingDay(
     from date: Date,
     workingHours: ClosedRange<Int>,
     horizon: DateInterval,
-    calendar: Calendar
+    calendar: Calendar,
+    workingDays: Set<Int>
 ) -> Date {
-    if !calendar.isDateInWeekend(date) { return date }
-    // Walk day by day until we find a weekday inside the horizon.
+    if workingDays.isEmpty { return date }
+    if workingDays.contains(calendar.component(.weekday, from: date)) { return date }
+    // Walk day by day until we find a working day inside the horizon.
     // Guard the loop at 14 iterations — enough for any realistic
-    // planning horizon and keeps a bad calendar from looping forever.
+    // planning horizon and keeps a pathological calendar from
+    // looping forever.
     var cursor = calendar.startOfDay(for: date)
     for _ in 0..<14 {
         guard let next = calendar.date(byAdding: .day, value: 1, to: cursor) else { break }
         cursor = next
         if cursor >= horizon.end { return date }
-        if !calendar.isDateInWeekend(cursor) {
-            if let weekdayStart = calendar.date(bySettingHour: workingHours.lowerBound, minute: 0, second: 0, of: cursor) {
-                return weekdayStart
+        if workingDays.contains(calendar.component(.weekday, from: cursor)) {
+            if let dayStart = calendar.date(bySettingHour: workingHours.lowerBound, minute: 0, second: 0, of: cursor) {
+                return dayStart
             }
             return cursor
         }

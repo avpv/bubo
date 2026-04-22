@@ -71,16 +71,17 @@ final class OptimizerService {
         }
     }
 
-    /// Toggle for `OptimizerPreferences.skipWeekends`. Lives on the service
-    /// (not just the popover) so every surface that tweaks working hours can
-    /// bind to the same source of truth, and so the setter can route the
-    /// change through `savePreferences()` — otherwise a UI flip would be lost
-    /// on relaunch because `optimizer.preferences` is only persisted through
-    /// that call. Reads fall back to `false` (matches `effectiveSkipWeekends`).
-    var skipWeekends: Bool {
-        get { optimizer.preferences.skipWeekends ?? false }
+    /// Working-day picker binding for `OptimizerPreferences.workingDays`.
+    /// Lives on the service (not just the popover) so every surface that
+    /// tweaks working time binds to the same source of truth, and so the
+    /// setter routes the change through `savePreferences()` — otherwise a
+    /// UI change would be lost on relaunch because `optimizer.preferences`
+    /// is only persisted through that call. Uses Foundation's 1-indexed
+    /// weekday convention (1 = Sun, …, 7 = Sat).
+    var workingDays: Set<Int> {
+        get { optimizer.preferences.effectiveWorkingDays }
         set {
-            optimizer.preferences.skipWeekends = newValue
+            optimizer.preferences.workingDays = newValue
             savePreferences()
         }
     }
@@ -121,14 +122,32 @@ final class OptimizerService {
            let prefs = try? JSONDecoder().decode(OptimizerPreferences.self, from: data) {
             self.optimizer.preferences = prefs
         }
-        // Normalise `skipWeekends` at load. Preference field is `Bool?`
-        // so older persisted JSON (pre-field) decodes to nil; flip that
-        // to `true` once on first load so the UI toggle shows the same
-        // value the GA will actually use, and so downstream code can
-        // trust the flag without juggling nil. Persisted `false` from
-        // an explicit UI flip stays `false` — we only touch nil.
-        if optimizer.preferences.skipWeekends == nil {
-            optimizer.preferences.skipWeekends = true
+        // Normalise `workingDays` at load. Three cases:
+        //
+        //   1. Stored `workingDays` is non-nil → already migrated, use
+        //      as-is.
+        //   2. Stored `workingDays` is nil and legacy `skipWeekends`
+        //      is non-nil → migrate from the Bool: skipWeekends=true
+        //      maps to Mon–Fri, skipWeekends=false maps to Mon–Sun
+        //      (all seven days). Clear the legacy field to avoid
+        //      drift on subsequent saves.
+        //   3. Both nil → brand-new install; seed with the Mon–Fri
+        //      default so the UI picker shows the same value the GA
+        //      will actually use.
+        //
+        // Every branch persists so the normalisation is sticky and
+        // downstream code can trust `effectiveWorkingDays` without
+        // juggling nil.
+        let prefs = optimizer.preferences
+        if prefs.workingDays == nil {
+            if let skip = prefs.skipWeekends {
+                optimizer.preferences.workingDays = skip
+                    ? OptimizerPreferences.defaultWorkingDays
+                    : Set(1...7)
+            } else {
+                optimizer.preferences.workingDays = OptimizerPreferences.defaultWorkingDays
+            }
+            optimizer.preferences.skipWeekends = nil
             savePreferences()
         }
         setupCloudSync()

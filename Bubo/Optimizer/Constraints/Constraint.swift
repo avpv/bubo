@@ -114,29 +114,31 @@ struct NoOverlapConstraint: ScheduleConstraint {
 
 // MARK: - Working Hours Constraint (Hard)
 
-/// Events must fall within working hours, and — when `preferences.skipWeekends`
-/// is on — must not land on a Saturday or Sunday. The weekend case is handled
-/// by counting the event's entire duration as out-of-window, which makes the
-/// placement infeasible and forces the GA to rehome it to a weekday. Without
-/// this branch, a weekend day with no fixed events looks like 10h of "free
-/// working time" and WeekBalance happily sinks movable tasks there.
+/// Events must fall within working hours and on a weekday the user has
+/// opted into (`preferences.effectiveWorkingDays`). Non-working days
+/// (e.g. Sat, Sun, or any weekday the user unchecked in the picker)
+/// charge the full event duration so the placement becomes infeasible
+/// and the GA rehomes it onto a real working day. Without this, a day
+/// with no fixed events looks like 10h of free working time and
+/// WeekBalance happily sinks movable tasks onto it.
 struct WorkingHoursConstraint: ScheduleConstraint {
     let name = "WorkingHours"
     let isHard = true
 
     func penalty(for chromosome: ScheduleChromosome, context: OptimizerContext) -> Double {
         let cal = context.calendar
-        let skipWeekends = context.preferences.effectiveSkipWeekends
+        let prefs = context.preferences
         var totalViolation = 0.0
 
         for gene in chromosome.genes where gene.isIncluded {
             let day = cal.startOfDay(for: gene.startTime)
 
-            // Weekend day while `skipWeekends` is on: charge the full event
-            // duration. Continue without also summing in-/out-of-hours
-            // minutes — the weekend charge already exceeds any hour-window
-            // slip the event could accumulate within the same day.
-            if skipWeekends && cal.isDateInWeekend(day) {
+            // Non-working day: charge the full event duration. Skip the
+            // in-/out-of-hours arithmetic — the non-working charge
+            // already exceeds any hour-window slip the event could
+            // accumulate within the same day, and mixing the two would
+            // double-count without changing the relative ordering.
+            if !prefs.isWorkingDay(day, calendar: cal) {
                 totalViolation += gene.duration / 60
                 continue
             }

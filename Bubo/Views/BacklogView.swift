@@ -619,7 +619,7 @@ struct BacklogView: View {
     private var remainingWorkdayMinutes: Int {
         BacklogLogic.remainingWorkdayMinutes(
             workingHours: optimizerService.workingHours,
-            skipWeekends: optimizerService.skipWeekends
+            workingDays: optimizerService.workingDays
         )
     }
 
