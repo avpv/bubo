@@ -691,11 +691,21 @@ final class FitnessEvaluator: @unchecked Sendable {
                 let fullFitness = evaluate(chromosome: shadow, context: context)
                 let drift = abs(fullFitness - fitness)
                 if drift > 0.005 {
-                    // Log but don't abort — the bad data is already
-                    // returned; aborting in production here would
-                    // mask real drift in tests. The warning is the
-                    // signal to a developer reading logs.
-                    print("[FitnessEvaluator] δ-eval drift: full=\(fullFitness) delta=\(fitness) diff=\(drift)")
+                    // Route through `GADebugLog.anomaly` so the drift
+                    // report lives in the same `com.avpv.Bubo:GADebug`
+                    // category as every other invariant failure.
+                    // Anomaly-channel emits even in release — but this
+                    // whole branch is `#if DEBUG`, so the call only
+                    // fires when the sampler is actually wired in.
+                    GADebugLog.anomaly(
+                        site: "deltaEvalDrift",
+                        message: "delta evaluation diverged from full evaluation",
+                        context: [
+                            "full": String(format: "%.6f", fullFitness),
+                            "delta": String(format: "%.6f", fitness),
+                            "diff": String(format: "%.6f", drift)
+                        ]
+                    )
                 }
             }
         }
