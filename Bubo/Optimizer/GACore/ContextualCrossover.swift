@@ -231,13 +231,17 @@ enum ContextualCrossover {
             let probC1TakesP2 = 1.0 / (1.0 + exp(-diff))
 
             if rng.bool(probability: probC1TakesP2) {
-                child1Genes[i] = g1.withStartTime(g2.startTime)
+                // `withPlacement` carries both `startTime` and
+                // `slotIndex` across — contextual crossover needs to
+                // preserve the slot binding for the slot-decoder
+                // invariant, same as other crossover strategies.
+                child1Genes[i] = g1.withPlacement(from: g2)
             }
             // Complementary decision for child2: a gene taken by
             // child1 from parent2 is left intact on child2 (which
             // inherited from p2 by construction), and vice versa.
             if rng.bool(probability: 1.0 - probC1TakesP2) {
-                child2Genes[i] = g2.withStartTime(g1.startTime)
+                child2Genes[i] = g2.withPlacement(from: g1)
             }
         }
 

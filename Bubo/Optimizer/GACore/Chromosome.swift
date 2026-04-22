@@ -1102,10 +1102,12 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         var child1Genes = Array(genes[..<point])
         var child2Genes = Array(other.genes[..<point])
 
-        // Fill remaining genes from the other parent — swap time slots
+        // Fill remaining genes from the other parent — swap time slots.
+        // `withPlacement` carries both `startTime` and `slotIndex`
+        // across so crossover doesn't erase the donor's slot binding.
         for i in point..<genes.count {
-            child1Genes.append(genes[i].withStartTime(other.genes[i].startTime))
-            child2Genes.append(other.genes[i].withStartTime(genes[i].startTime))
+            child1Genes.append(genes[i].withPlacement(from: other.genes[i]))
+            child2Genes.append(other.genes[i].withPlacement(from: genes[i]))
         }
 
         return (
@@ -1304,11 +1306,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                     floor: floor,
                     workingDays: context.preferences.workingDays
                 ) {
-                    if let slot = slotRegistry.nearestIndex(to: freeStart) {
-                        genes[i] = genes[i].withSlot(index: slot, date: freeStart)
-                    } else {
-                        genes[i] = genes[i].withStartTime(freeStart)
-                    }
+                    genes[i] = genes[i].withSlot(nearest: freeStart, registry: slotRegistry)
                 }
             default:
                 break
@@ -1443,6 +1441,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         let horizon = context.planningHorizon
         let workStart = context.workingHours.lowerBound
         let workEnd = context.workingHours.upperBound
+        let slotRegistry = context.ensureSlotRegistry()
 
         // Build domains.
         var variables: [CPVariable] = []
@@ -1524,7 +1523,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         var mutated = IndexSet()
         for (idx, slot) in solution.assignments {
             guard idx < genes.count else { continue }
-            genes[idx] = genes[idx].withStartTime(slot)
+            genes[idx] = genes[idx].withSlot(nearest: slot, registry: slotRegistry)
             mutated.insert(idx)
         }
         return mutated
@@ -1785,6 +1784,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
     ) -> IndexSet? {
         let cal = context.calendar
         let horizon = context.planningHorizon
+        let slotRegistry = context.ensureSlotRegistry()
 
         var baseOccupied: [(start: Date, end: Date)] = context.fixedEvents.map {
             ($0.startDate, $0.endDate)
@@ -2317,7 +2317,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 }
             } else if let slot = bestPlacements[idx] {
                 if genes[idx].startTime != slot {
-                    genes[idx] = genes[idx].withStartTime(slot)
+                    genes[idx] = genes[idx].withSlot(nearest: slot, registry: slotRegistry)
                     changed.insert(idx)
                 }
             }
@@ -2348,6 +2348,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
     ) -> IndexSet? {
         let cal = context.calendar
         let horizon = context.planningHorizon
+        let slotRegistry = context.ensureSlotRegistry()
 
         var occupied: [(start: Date, end: Date)] = context.fixedEvents.map {
             ($0.startDate, $0.endDate)
@@ -2478,7 +2479,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
 
             if let slot = chosenSlot {
                 if genes[chosenIdx].startTime != slot {
-                    genes[chosenIdx] = genes[chosenIdx].withStartTime(slot)
+                    genes[chosenIdx] = genes[chosenIdx].withSlot(nearest: slot, registry: slotRegistry)
                     changed.insert(chosenIdx)
                 }
                 occupied.append((slot, slot.addingTimeInterval(genes[chosenIdx].duration)))
@@ -2524,7 +2525,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 )
                 if let slot {
                     if genes[idx].startTime != slot {
-                        genes[idx] = genes[idx].withStartTime(slot)
+                        genes[idx] = genes[idx].withSlot(nearest: slot, registry: slotRegistry)
                         changed.insert(idx)
                     }
                     occupied.append((slot, slot.addingTimeInterval(genes[idx].duration)))
@@ -2653,11 +2654,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
             }
 
             let clamped = clampToWorkingHours(target, duration: genes[i].duration, workingHours: context.workingHours, calendar: cal, floor: floor)
-            if let slot = slotRegistry.nearestIndex(to: clamped) {
-                genes[i] = genes[i].withSlot(index: slot, date: clamped)
-            } else {
-                genes[i] = genes[i].withStartTime(clamped)
-            }
+            genes[i] = genes[i].withSlot(nearest: clamped, registry: slotRegistry)
         }
 
         // Pass 2: Resolve overlaps. We visit genes in topological order
@@ -2719,11 +2716,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                     floor: floor,
                     workingDays: workingDays
                 ) {
-                    if let slot = slotRegistry.nearestIndex(to: freeStart) {
-                        genes[idx] = gene.withSlot(index: slot, date: freeStart)
-                    } else {
-                        genes[idx] = gene.withStartTime(freeStart)
-                    }
+                    genes[idx] = gene.withSlot(nearest: freeStart, registry: slotRegistry)
                 } else if beforeFloor {
                     // No gap fits but dependency floor was violated — at least
                     // honour the floor; this may still overlap, which leaves
@@ -2739,11 +2732,10 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                             workingDays: workingDays
                         )
                     }
-                    genes[idx] = gene.withStartTime(
-                        clampToWorkingHours(fallback, duration: gene.duration,
-                                            workingHours: context.workingHours,
-                                            calendar: cal, floor: floor)
-                    )
+                    let fallbackClamped = clampToWorkingHours(fallback, duration: gene.duration,
+                                                              workingHours: context.workingHours,
+                                                              calendar: cal, floor: floor)
+                    genes[idx] = gene.withSlot(nearest: fallbackClamped, registry: slotRegistry)
                 }
             }
 

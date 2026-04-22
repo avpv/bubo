@@ -100,6 +100,7 @@ final class CMAMEEmitter: @unchecked Sendable {
         lock.unlock()
         let rng = context.rng
         let cal = context.calendar
+        let slotRegistry = context.ensureSlotRegistry()
 
         var newGenes: [ScheduleGene] = []
         newGenes.reserveCapacity(template.genes.count)
@@ -113,7 +114,7 @@ final class CMAMEEmitter: @unchecked Sendable {
                 calendar: cal,
                 workingHours: context.workingHours
             )
-            newGenes.append(gene.withStartTime(clipped))
+            newGenes.append(gene.withSlot(nearest: clipped, registry: slotRegistry))
         }
         var child = ScheduleChromosome(genes: newGenes, needsEvaluation: true)
         child.repair(context: context)

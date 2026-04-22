@@ -315,7 +315,7 @@ extension BuboOptimizer {
             currentSchedule: currentSchedule,
             context: context
         )
-        let updated = recovery.applied(to: currentSchedule)
+        let updated = recovery.applied(to: currentSchedule, registry: context.ensureSlotRegistry())
         currentSchedule = updated
         return updated
     }

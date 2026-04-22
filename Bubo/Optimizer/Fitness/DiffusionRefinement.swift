@@ -78,6 +78,7 @@ enum DiffusionRefinement {
         var evalCount = 1
         let rng = context.rng
         let cal = context.calendar
+        let slotRegistry = context.ensureSlotRegistry()
 
         for step in 0..<config.stepCount {
             let sigma = config.initialSigmaMinutes * pow(0.5, Double(step))
@@ -86,9 +87,8 @@ enum DiffusionRefinement {
             var perturbed = current
             for i in perturbed.genes.indices {
                 let noise = rng.gaussian(mean: 0, stdDev: sigma) * 60 // seconds
-                perturbed.genes[i] = perturbed.genes[i].withStartTime(
-                    perturbed.genes[i].startTime.addingTimeInterval(noise)
-                )
+                let newStart = perturbed.genes[i].startTime.addingTimeInterval(noise)
+                perturbed.genes[i] = perturbed.genes[i].withSlot(nearest: newStart, registry: slotRegistry)
             }
             perturbed.needsEvaluation = true
             clipToHorizon(&perturbed, context: context, cal: cal)
@@ -101,17 +101,15 @@ enum DiffusionRefinement {
             let eps = config.gradientEpsilonMinutes * 60
             for i in denoised.genes.indices {
                 var plus = denoised
-                plus.genes[i] = plus.genes[i].withStartTime(
-                    plus.genes[i].startTime.addingTimeInterval(eps)
-                )
+                let plusDate = plus.genes[i].startTime.addingTimeInterval(eps)
+                plus.genes[i] = plus.genes[i].withSlot(nearest: plusDate, registry: slotRegistry)
                 plus.needsEvaluation = true
                 evaluate(&plus)
                 evalCount += 1
 
                 var minus = denoised
-                minus.genes[i] = minus.genes[i].withStartTime(
-                    minus.genes[i].startTime.addingTimeInterval(-eps)
-                )
+                let minusDate = minus.genes[i].startTime.addingTimeInterval(-eps)
+                minus.genes[i] = minus.genes[i].withSlot(nearest: minusDate, registry: slotRegistry)
                 minus.needsEvaluation = true
                 evaluate(&minus)
                 evalCount += 1
@@ -125,9 +123,8 @@ enum DiffusionRefinement {
                     -config.maxStepSizeMinutes * 60,
                     min(config.maxStepSizeMinutes * 60, rawStep)
                 )
-                denoised.genes[i] = denoised.genes[i].withStartTime(
-                    denoised.genes[i].startTime.addingTimeInterval(clampedStep)
-                )
+                let nextStart = denoised.genes[i].startTime.addingTimeInterval(clampedStep)
+                denoised.genes[i] = denoised.genes[i].withSlot(nearest: nextStart, registry: slotRegistry)
             }
             denoised.needsEvaluation = true
             clipToHorizon(&denoised, context: context, cal: cal)
@@ -157,13 +154,14 @@ enum DiffusionRefinement {
     ) {
         let start = context.planningHorizon.start
         let end = context.planningHorizon.end
+        let slotRegistry = context.ensureSlotRegistry()
         for i in chromosome.genes.indices {
             let gene = chromosome.genes[i]
             if gene.startTime < start {
-                chromosome.genes[i] = gene.withStartTime(start)
+                chromosome.genes[i] = gene.withSlot(nearest: start, registry: slotRegistry)
             } else if gene.endTime > end {
                 let adjustedStart = end.addingTimeInterval(-gene.duration)
-                chromosome.genes[i] = gene.withStartTime(max(start, adjustedStart))
+                chromosome.genes[i] = gene.withSlot(nearest: max(start, adjustedStart), registry: slotRegistry)
             }
         }
     }

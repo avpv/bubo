@@ -200,7 +200,7 @@ final class TemporalWarmStart: @unchecked Sendable {
             || shiftedStart > context.planningHorizon.end {
             return nil
         }
-        return gene.withStartTime(shiftedStart)
+        return gene.withSlot(nearest: shiftedStart, registry: context.ensureSlotRegistry())
     }
 
     /// Replace the gene's identity with the current event's. The

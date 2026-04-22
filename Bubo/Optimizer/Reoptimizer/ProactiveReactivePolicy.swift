@@ -310,12 +310,35 @@ final class ProactiveReactivePolicy: @unchecked Sendable {
 
 extension ScheduleRecovery {
     /// Apply the recovery to a gene array, producing the adjusted
-    /// schedule. Pure function — does not touch any external state.
-    func applied(to schedule: [ScheduleGene]) -> [ScheduleGene] {
+    /// schedule. Optional `registry` binds `slotIndex` on shifted
+    /// genes so the return set arrives at the GA already slot-aware;
+    /// when nil (tests, legacy paths) shifted genes get a nil
+    /// `slotIndex` and the GA's repair pass re-binds them on first
+    /// touch — still correct, just pays one extra eval.
+    func applied(to schedule: [ScheduleGene], registry: SlotRegistry? = nil) -> [ScheduleGene] {
         var result = schedule.compactMap { gene -> ScheduleGene? in
             if removals.contains(gene.eventId) { return nil }
             if let newStart = shifts[gene.eventId] {
-                return gene.withStartTime(newStart)
+                if let registry {
+                    return gene.withSlot(nearest: newStart, registry: registry)
+                }
+                return ScheduleGene(
+                    eventId: gene.eventId,
+                    title: gene.title,
+                    startTime: newStart,
+                    duration: gene.duration,
+                    context: gene.context,
+                    energyCost: gene.energyCost,
+                    priority: gene.priority,
+                    isFocusBlock: gene.isFocusBlock,
+                    storyPoints: gene.storyPoints,
+                    isDroppable: gene.isDroppable,
+                    isIncluded: gene.isIncluded,
+                    pomodoroConfig: gene.pomodoroConfig,
+                    reservedTaskIds: gene.reservedTaskIds,
+                    groupId: gene.groupId,
+                    slotIndex: nil
+                )
             }
             return gene
         }

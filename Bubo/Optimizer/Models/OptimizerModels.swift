@@ -177,30 +177,6 @@ struct ScheduleGene: Codable, Hashable, Sendable {
         self.slotIndex = slotIndex
     }
 
-    /// Create a copy with a new start time (preserves all other fields).
-    /// The `slotIndex` is invalidated — callers who know the corresponding
-    /// slot should use `withSlot(index:date:)` instead so the two fields
-    /// stay in sync.
-    func withStartTime(_ newStart: Date) -> ScheduleGene {
-        ScheduleGene(
-            eventId: eventId,
-            title: title,
-            startTime: newStart,
-            duration: duration,
-            context: context,
-            energyCost: energyCost,
-            priority: priority,
-            isFocusBlock: isFocusBlock,
-            storyPoints: storyPoints,
-            isDroppable: isDroppable,
-            isIncluded: isIncluded,
-            pomodoroConfig: pomodoroConfig,
-            reservedTaskIds: reservedTaskIds,
-            groupId: groupId,
-            slotIndex: nil
-        )
-    }
-
     /// Create a copy that sets both `slotIndex` and the derived
     /// `startTime` in one go. Use this from every operator that moves
     /// a gene — mutation, repair's re-home, crossover's swap — so the
@@ -227,17 +203,36 @@ struct ScheduleGene: Codable, Hashable, Sendable {
         )
     }
 
+    /// Drop-in replacement for the old `withStartTime(_:)` that
+    /// binds `slotIndex` through the registry in the same call. The
+    /// canonical way to move a gene when you have a Date in hand
+    /// and a registry available — keeps both fields in sync so
+    /// `slotIndex == nil` never shows up in production state.
+    func withSlot(nearest date: Date, registry: SlotRegistry) -> ScheduleGene {
+        ScheduleGene(
+            eventId: eventId,
+            title: title,
+            startTime: date,
+            duration: duration,
+            context: context,
+            energyCost: energyCost,
+            priority: priority,
+            isFocusBlock: isFocusBlock,
+            storyPoints: storyPoints,
+            isDroppable: isDroppable,
+            isIncluded: isIncluded,
+            pomodoroConfig: pomodoroConfig,
+            reservedTaskIds: reservedTaskIds,
+            groupId: groupId,
+            slotIndex: registry.nearestIndex(to: date)
+        )
+    }
+
     /// Inherit placement (`startTime` + `slotIndex`) from another gene
     /// while keeping every other field of `self`. Used by crossover so
     /// slot bindings survive the parent-to-child transfer — without
-    /// this, every crossover would invalidate `slotIndex` (via
-    /// `withStartTime`) and force repair to re-bind every gene on the
-    /// next generation. Passing both fields together keeps the two
-    /// in lock-step even when the donor's `startTime` doesn't line
-    /// up with the current registry (e.g. when registries differ
-    /// between parents' build time and child's; the new binding is
-    /// whatever the donor carried — mutation or repair's later
-    /// `nearestIndex` re-bind corrects drift).
+    /// this, every crossover would invalidate `slotIndex` and force
+    /// repair to re-bind every gene on the next generation.
     func withPlacement(from other: ScheduleGene) -> ScheduleGene {
         ScheduleGene(
             eventId: eventId,
