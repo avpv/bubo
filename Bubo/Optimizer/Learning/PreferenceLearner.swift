@@ -1,4 +1,7 @@
 import Foundation
+import os
+
+private let logger = Logger(subsystem: "com.avpv.Bubo", category: "Optimizer/Learning")
 
 // MARK: - #24 Preference Learner
 
@@ -68,6 +71,7 @@ final class PreferenceLearner {
             scenarioFitness: scenarioFitness,
             weights: learnedWeights
         ))
+        logger.info("feedback_recorded kind=accepted fitness=\(scenarioFitness) total=\(self.feedbackHistory.count)")
         learnIfReady()
         save()
     }
@@ -77,6 +81,7 @@ final class PreferenceLearner {
             scenarioFitness: scenarioFitness,
             weights: learnedWeights
         ))
+        logger.info("feedback_recorded kind=rejected fitness=\(scenarioFitness) total=\(self.feedbackHistory.count)")
         learnIfReady()
         save()
     }
@@ -87,6 +92,7 @@ final class PreferenceLearner {
             editedGenes: edited,
             weights: learnedWeights
         ))
+        logger.info("feedback_recorded kind=modified original_genes=\(original.count) edited_genes=\(edited.count) total=\(self.feedbackHistory.count)")
         learnIfReady()
         save()
     }
@@ -103,7 +109,25 @@ final class PreferenceLearner {
         let newFeedback = feedbackHistory.count - feedbackCountAtLastLearn
         guard newFeedback >= 5 else { return }
         feedbackCountAtLastLearn = feedbackHistory.count
+        let startedAt = Date()
+        let weightsBefore = learnedWeights
+        logger.info("learning_triggered kind=preference total_feedback=\(self.feedbackHistory.count) new_since_last=\(newFeedback)")
         evolveWeights()
+        // Summarise the biggest weight shifts so post-mortems can tell
+        // whether learning converged or just jittered. Only the top-3
+        // absolute deltas survive — anything smaller is noise at the
+        // default learning rate.
+        let deltas = self.learnedWeights
+            .compactMap { key, value -> (String, Double)? in
+                guard let prior = weightsBefore[key] else { return nil }
+                let delta = value - prior
+                return abs(delta) > 0.0001 ? (key, delta) : nil
+            }
+            .sorted { abs($0.1) > abs($1.1) }
+            .prefix(3)
+        let topDeltas = deltas.map { "\($0.0)=\($0.1)" }.joined(separator: ",")
+        let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+        logger.info("learning_completed kind=preference top_deltas=\(topDeltas, privacy: .public) duration_ms=\(durationMs)")
     }
 
     /// Meta-GA: evolve objective weights to match user preferences.

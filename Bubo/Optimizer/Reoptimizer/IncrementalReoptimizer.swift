@@ -1,4 +1,7 @@
 import Foundation
+import os
+
+private let logger = Logger(subsystem: "com.avpv.Bubo", category: "Optimizer/Reoptimizer")
 
 // MARK: - #26 Incremental Re-optimizer
 
@@ -30,7 +33,9 @@ final class IncrementalReoptimizer: @unchecked Sendable {
         evaluator: FitnessEvaluator,
         config: GAConfiguration = .quick
     ) -> OptimizerResult? {
-        let now = Date()
+        let startedAt = Date()
+        let now = startedAt
+        logger.info("reoptimize_triggered trigger=\(trigger.logName, privacy: .public) stability_weight=\(self.stabilityWeight) schedule_size=\(currentSchedule.count)")
 
         // 1. Separate frozen and movable genes
         let (frozenGenes, movableGenes) = partitionGenes(
@@ -64,7 +69,10 @@ final class IncrementalReoptimizer: @unchecked Sendable {
             contextualCrossoverHead: context.contextualCrossoverHead
         )
 
-        guard !futureMovable.isEmpty else { return nil }
+        guard !futureMovable.isEmpty else {
+            logger.info("reoptimize_result outcome=skipped reason=no_future_movable frozen=\(frozenGenes.count)")
+            return nil
+        }
 
         // 3. Evaluate current schedule fitness for comparison
         var currentChromosome = ScheduleChromosome(genes: movableGenes)
@@ -106,13 +114,28 @@ final class IncrementalReoptimizer: @unchecked Sendable {
         // incremental reoptimizer is synchronous and tolerates no
         // cancellation, so we swallow any error and fall back to
         // "no improvement found" semantics.
-        guard let results = try? ga.runSeeded(with: seeds) else { return nil }
+        let results: [ScheduleChromosome]
+        do {
+            results = try ga.runSeeded(with: seeds)
+        } catch {
+            let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+            logger.warning("reoptimize_result outcome=failed reason=ga_error error=\(error.localizedDescription, privacy: .public) duration_ms=\(durationMs)")
+            return nil
+        }
 
         // 6. Check if the new schedule is significantly better
-        guard let best = results.first else { return nil }
+        guard let best = results.first else {
+            let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+            logger.info("reoptimize_result outcome=rejected reason=no_results duration_ms=\(durationMs)")
+            return nil
+        }
 
         let improvement = best.fitness - currentFitness
-        guard improvement > minimumImprovement else { return nil }
+        guard improvement > minimumImprovement else {
+            let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+            logger.info("reoptimize_result outcome=rejected reason=below_threshold improvement=\(improvement) threshold=\(self.minimumImprovement) duration_ms=\(durationMs)")
+            return nil
+        }
 
         // 7. Merge frozen + new movable genes
         let finalGenes = frozenGenes + best.genes
@@ -123,6 +146,9 @@ final class IncrementalReoptimizer: @unchecked Sendable {
             objectiveBreakdown: evaluator.objectiveBreakdown(for: best, context: adjustedContext),
             constraintViolations: evaluator.constraintEngine.violations(for: best, context: adjustedContext)
         )
+
+        let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+        logger.info("reoptimize_result outcome=accepted improvement=\(improvement) fitness=\(best.fitness) frozen=\(frozenGenes.count) movable=\(best.genes.count) generations=\(ga.convergenceGeneration) duration_ms=\(durationMs)")
 
         return OptimizerResult(
             scenarios: [scenario],
@@ -226,6 +252,19 @@ enum ReoptimizationTrigger: Sendable {
     case movedEvent(eventId: String, newStart: Date)
     case preferencesChanged
     case periodicRefresh
+
+    /// Stable snake_case label for structured logs. Associated values
+    /// are deliberately dropped — the event IDs and dates inside them
+    /// would make aggregation (e.g. counting triggers by kind) useless.
+    var logName: String {
+        switch self {
+        case .newEvent: return "new_event"
+        case .cancelledEvent: return "cancelled_event"
+        case .movedEvent: return "moved_event"
+        case .preferencesChanged: return "preferences_changed"
+        case .periodicRefresh: return "periodic_refresh"
+        }
+    }
 }
 
 // MARK: - Stability-Aware Fitness Evaluator

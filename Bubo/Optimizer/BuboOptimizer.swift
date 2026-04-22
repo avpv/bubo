@@ -15,6 +15,13 @@ import os
 private let planWeekOSLog = OSLog(subsystem: "com.avpv.Bubo", category: "PlanWeek")
 private let planWeekLogger = Logger(planWeekOSLog)
 
+/// Per-run summary log — one line at the end of every `optimize()` call
+/// with GA telemetry, cache stats, and top-level constraint counts.
+/// Separated from `PlanWeek` (which is verbose multi-line diagnostics
+/// gated on `.info`) so these stats remain on in release without
+/// dragging kilobytes of per-run narrative with them.
+private let gaStatsLogger = Logger(subsystem: "com.avpv.Bubo", category: "Optimizer/GA")
+
 // MARK: - BuboOptimizer
 
 /// Main facade for the Bubo schedule optimization engine.
@@ -551,12 +558,23 @@ final class BuboOptimizer {
             currentSchedule = best.genes
         }
 
+        let snapshot = evaluator.telemetry.snapshot()
+        let wallMs = Int(Date().timeIntervalSince(planWeekWallStart) * 1000)
+        let best = scenarios.first
+        let violationCount = best?.constraintViolations.count ?? 0
+        let droppedCount = best?.droppedCount ?? 0
+        let bestFitness = best?.fitness ?? 0
+        // One-line event keeps OSLog interpolation happy (no literal
+        // newlines embedded in the format string) and matches the
+        // `event k=v k=v` convention used by the rest of the app.
+        gaStatsLogger.info("ga_run_stats scenarios=\(scenarios.count) generations=\(convergenceGen) best_fitness=\(bestFitness) violations=\(violationCount) dropped=\(droppedCount) full_evals=\(snapshot.fullEvaluations) delta_evals=\(snapshot.deltaEvaluations) eval_cache_hits=\(snapshot.cacheHits) delta_fraction=\(snapshot.deltaFraction) cache_hit_fraction=\(snapshot.cacheHitFraction) constraint_rejections=\(snapshot.constraintRejections) duration_ms=\(wallMs)")
+
         logPlanWeekResult(
             result: result,
             movableEvents: context.movableEvents,
             wallDuration: Date().timeIntervalSince(planWeekWallStart),
             context: context,
-            telemetry: evaluator.telemetry.snapshot()
+            telemetry: snapshot
         )
         return result
     }
