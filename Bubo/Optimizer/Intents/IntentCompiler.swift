@@ -42,9 +42,10 @@ struct IntentCompiler {
         // logs on one device.
         let requestId = String(format: "%08x", UInt32.random(in: .min ... .max))
         let startedAt = Date()
-        let inputCases = request.intents.map(\.caseName).joined(separator: ",")
         let inputName = request.name.map { "name=\"\($0)\" " } ?? ""
-        logger.info("intents_received rid=\(requestId, privacy: .public) \(inputName, privacy: .public)count=\(request.intents.count) cases=\(inputCases, privacy: .public)")
+        // `cases` join deferred via OSLog interpolation — skipped when
+        // `.info` is filtered out.
+        logger.info("intents_received rid=\(requestId, privacy: .public) \(inputName, privacy: .public)count=\(request.intents.count) cases=\(request.intents.map(\.caseName).joined(separator: ","), privacy: .public)")
 
         // Phase 0: Expand subgraphs and apply variables
         var expandedIntents = request.intents

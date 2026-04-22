@@ -78,8 +78,9 @@ final class IntentLearner {
             dayOfWeek: cal.component(.weekday, from: now)
         )
         history.append(execution)
-        let cases = request.intents.map(\.caseName).joined(separator: ",")
-        logger.info("intent_execution_recorded outcome=\(outcome.rawValue, privacy: .public) intents=\(request.intents.count) hour=\(execution.hour) day_of_week=\(execution.dayOfWeek) cases=\(cases, privacy: .public)")
+        // `cases` join deferred via OSLog interpolation — skipped
+        // when `.info` is filtered out.
+        logger.info("intent_execution_recorded outcome=\(outcome.rawValue, privacy: .public) intents=\(request.intents.count) hour=\(execution.hour) day_of_week=\(execution.dayOfWeek) cases=\(request.intents.map(\.caseName).joined(separator: ","), privacy: .public)")
 
         // Update frequency and co-occurrence
         if outcome == .accepted {

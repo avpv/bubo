@@ -33,8 +33,9 @@ struct LLMIntentBridge {
             return .infeasible(reason: "Could not parse intents: \(error.localizedDescription)")
         }
 
-        let caseList = request.intents.map(\.caseName).joined(separator: ",")
-        logger.info("intents_parsed source=llm count=\(request.intents.count) cases=\(caseList, privacy: .public)")
+        // Interpolated lazily: OSLog captures the map+join call site
+        // and only evaluates it when the message is actually recorded.
+        logger.info("intents_parsed source=llm count=\(request.intents.count) cases=\(request.intents.map(\.caseName).joined(separator: ","), privacy: .public)")
 
         return await optimizerService.executeRequest(request, reminderService: reminderService)
     }

@@ -186,12 +186,13 @@ final class BuboOptimizer {
         defer { isOptimizing = false }
 
         let planWeekWallStart = Date()
-        // Capture cache counters at run start so the terminal log
-        // can emit *per-run* hit/miss deltas. Without the diff the
-        // counts would be cumulative across the cache's lifetime
-        // and useless for attributing wins to individual runs.
-        let intentCacheStart = intentGraphCache.statsSnapshot
-        let conflictCacheStart = conflictGraphCache.statsSnapshot
+        // Snapshot `cachedCount` before the run so the terminal log
+        // can emit *per-run* cold misses (new whole-graph entries
+        // added). Captures the common case cleanly; re-validation
+        // misses on existing keys aren't counted — they don't change
+        // `cachedCount` — but those are the cheap kind anyway.
+        let intentCacheSizeBefore = intentGraphCache.cachedGraphCount
+        let conflictCacheSizeBefore = conflictGraphCache.cachedGraphCount
 
         logPlanWeekInputs(
             fixedEvents: context.fixedEvents,
@@ -572,16 +573,16 @@ final class BuboOptimizer {
         let violationCount = best?.constraintViolations.count ?? 0
         let droppedCount = best?.droppedCount ?? 0
         let bestFitness = best?.fitness ?? 0
-        let intentCacheEnd = intentGraphCache.statsSnapshot
-        let conflictCacheEnd = conflictGraphCache.statsSnapshot
-        let igHits = intentCacheEnd.hits - intentCacheStart.hits
-        let igMisses = intentCacheEnd.misses - intentCacheStart.misses
-        let cgHits = conflictCacheEnd.hits - conflictCacheStart.hits
-        let cgMisses = conflictCacheEnd.misses - conflictCacheStart.misses
+        let intentCacheAdded = intentGraphCache.cachedGraphCount - intentCacheSizeBefore
+        let conflictCacheAdded = conflictGraphCache.cachedGraphCount - conflictCacheSizeBefore
         // One-line event keeps OSLog interpolation happy (no literal
         // newlines embedded in the format string) and matches the
         // `event k=v k=v` convention used by the rest of the app.
-        gaStatsLogger.info("ga_run_stats scenarios=\(scenarios.count) generations=\(convergenceGen) best_fitness=\(bestFitness) violations=\(violationCount) dropped=\(droppedCount) full_evals=\(snapshot.fullEvaluations) delta_evals=\(snapshot.deltaEvaluations) eval_cache_hits=\(snapshot.cacheHits) delta_fraction=\(snapshot.deltaFraction) cache_hit_fraction=\(snapshot.cacheHitFraction) constraint_rejections=\(snapshot.constraintRejections) intent_cache_hits=\(igHits) intent_cache_misses=\(igMisses) conflict_cache_hits=\(cgHits) conflict_cache_misses=\(cgMisses) duration_ms=\(wallMs)")
+        // `intent_cache_new` / `conflict_cache_new` are the number of
+        // cold misses this run added to each whole-graph cache — a
+        // good proxy for "how much of the plan was novel". Zero
+        // means every cache lookup hit a warm entry.
+        gaStatsLogger.info("ga_run_stats scenarios=\(scenarios.count) generations=\(convergenceGen) best_fitness=\(bestFitness) violations=\(violationCount) dropped=\(droppedCount) full_evals=\(snapshot.fullEvaluations) delta_evals=\(snapshot.deltaEvaluations) eval_cache_hits=\(snapshot.cacheHits) delta_fraction=\(snapshot.deltaFraction) cache_hit_fraction=\(snapshot.cacheHitFraction) constraint_rejections=\(snapshot.constraintRejections) intent_cache_new=\(intentCacheAdded) conflict_cache_new=\(conflictCacheAdded) duration_ms=\(wallMs)")
 
         logPlanWeekResult(
             result: result,
