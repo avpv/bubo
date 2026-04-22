@@ -1417,11 +1417,19 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
             rng: context.rng,
             cpSATAvailable: cpSATAvailable
         )
-        lastRepairStrategy = repairStrategy
+        // Track what actually ran, not just what was selected. The
+        // CP-SAT arm can silently fall back to B&B on timeout;
+        // rewarding the *selected* arm in that case pollutes the
+        // bandit with mis-attributed fitness deltas. The reward
+        // feedback in `GeneticAlgorithm.evolveOneGeneration` reads
+        // `lastRepairStrategy`, so setting it to the fallback when
+        // fallback fires gives the bandit the honest signal.
         let result: IndexSet?
+        let actualRepair: LNSRepairStrategy
         switch repairStrategy {
         case .branchAndBound:
             result = cpRepair(destroyed: Set(destroyedIndices), context: context)
+            actualRepair = .branchAndBound
         case .regret:
             // `regretRepair` already exists as `cpRepair`'s fallback
             // path — expose it as a top-level choice here so the
@@ -1429,21 +1437,22 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
             // its regret-weighted best slot" heuristic is robust
             // on tight weeks where B&B's branching explodes.
             result = regretRepair(destroyed: Set(destroyedIndices), context: context)
+            actualRepair = .regret
         case .cpSAT:
-            if let repairer = context.cpSATRepairer {
-                result = applyCPSATRepair(
-                    destroyed: destroyedIndices,
-                    using: repairer,
-                    context: context
-                ) ?? cpRepair(destroyed: Set(destroyedIndices), context: context)
+            if let repairer = context.cpSATRepairer,
+               let cp = applyCPSATRepair(destroyed: destroyedIndices, using: repairer, context: context) {
+                result = cp
+                actualRepair = .cpSAT
             } else {
-                // Defensive — `select(cpSATAvailable:)` filters the
-                // arm out when the adapter is nil, but if a caller
-                // passed `true` + nil adapter we degrade to B&B
-                // rather than crash.
+                // CP-SAT timed out / adapter nil → fall through to B&B
+                // and honestly report "what ran" instead of the
+                // selected arm. Without this, a dead CP-SAT path would
+                // keep earning reward through B&B's work.
                 result = cpRepair(destroyed: Set(destroyedIndices), context: context)
+                actualRepair = .branchAndBound
             }
         }
+        lastRepairStrategy = actualRepair
 
         // Tabu bookkeeping: tick the clock and mark the destroyed
         // events as recently moved, so subsequent LNS passes

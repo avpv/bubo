@@ -948,6 +948,31 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
     private func insertImmigrants(_ immigrants: [C], into island: Island<C>) {
         guard !immigrants.isEmpty else { return }
 
+        // Invalidate incoming fitness when islands have biased
+        // preferences. An immigrant was evaluated under its sender
+        // island's objective weights; on the receiving island those
+        // weights may differ, so its cached `fitness` doesn't
+        // describe how it ranks here. Clearing `needsEvaluation`
+        // forces a full re-eval against the receiver's (biased)
+        // preferences on the next generation, and survivor selection
+        // stops confusing old-island bestness for new-island
+        // bestness. When biases aren't configured every island shares
+        // the exact same fitness landscape and the reset is a pure
+        // cost — skip it.
+        //
+        // `needsEvaluation` is a `ScheduleChromosome`-specific flag
+        // (not on the Chromosome protocol), so we cast; other
+        // chromosome types don't pay any cost here.
+        let immigrants: [C] = {
+            guard islandConfig.objectiveWeightBiases != nil else { return immigrants }
+            return immigrants.map { ind -> C in
+                guard var schedule = ind as? ScheduleChromosome else { return ind }
+                schedule.needsEvaluation = true
+                schedule.isFitnessReal = false
+                return (schedule as? C) ?? ind
+            }
+        }()
+
         var individuals = island.population.individuals
         let eliteCount = island.population.eliteCount
 

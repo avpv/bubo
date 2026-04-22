@@ -547,7 +547,8 @@ final class BuboOptimizer {
             result: result,
             movableEvents: context.movableEvents,
             wallDuration: Date().timeIntervalSince(planWeekWallStart),
-            context: context
+            context: context,
+            telemetry: evaluator.telemetry.snapshot()
         )
         return result
     }
@@ -891,7 +892,8 @@ final class BuboOptimizer {
         result: OptimizerResult,
         movableEvents: [OptimizableEvent],
         wallDuration: TimeInterval,
-        context: OptimizerContext
+        context: OptimizerContext,
+        telemetry: FitnessEvalTelemetry.Snapshot
     ) {
         let df = DateFormatter()
         df.dateFormat = "EEE dd.MM"
@@ -1039,6 +1041,28 @@ final class BuboOptimizer {
         let slotRegistry = context.ensureSlotRegistry()
         let strideMinutes = Int((slotRegistry.stride / 60).rounded())
         lines.append("slots: registry=\(slotRegistry.count), stride=\(strideMinutes)m")
+
+        // Fitness evaluator telemetry — δ-eval hit rate + constraint
+        // rejection count. A δ-hit rate below ~50% flags that recent
+        // mutations aren't getting the partitioned-objective speedup
+        // (usually because mutations affect many days or the mutated
+        // hint is missing). A rising `constraintRejections` count
+        // means many chromosomes fail `ConstraintEngine.isValid` and
+        // are getting the infeasible gradient scaling — fine during
+        // early generations, symptomatic late.
+        let total = telemetry.total
+        if total > 0 {
+            let deltaPct = Int((telemetry.deltaFraction * 100).rounded())
+            let cachePct = Int((telemetry.cacheHitFraction * 100).rounded())
+            lines.append(String(
+                format: "fitness evals: total=%d full=%d delta=%d(%d%%) cache=%d(%d%%) rejections=%d",
+                total,
+                telemetry.fullEvaluations,
+                telemetry.deltaEvaluations, deltaPct,
+                telemetry.cacheHits, cachePct,
+                telemetry.constraintRejections
+            ))
+        }
 
         // Slot-binding coverage on the best scenario: how many genes
         // actually carry a registry-bound `slotIndex`. A coverage

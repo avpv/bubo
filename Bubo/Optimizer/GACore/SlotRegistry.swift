@@ -266,80 +266,65 @@ struct SlotRegistry: Sendable {
     // MARK: - Stride auto-detection
 
     /// Returns the grid stride the registry should use for this
-    /// workload, expressed in seconds. Scans fixed-event start/end
-    /// timestamps and movable-event earliestStart / deadline /
-    /// duration, extracts their minute-of-hour offsets, and takes
-    /// the GCD. The two tiers we actually return:
+    /// workload, expressed in seconds. Two tiers: `15 × 60` (default)
+    /// and `5 × 60` (opt-in when the workload has irregular minutes).
     ///
-    ///   * `15 × 60` (default) — every observed minute offset is a
-    ///     multiple of 15. Covers the overwhelming majority of
-    ///     real calendars where meetings live on quarter-hour
-    ///     boundaries and tasks are specified in 30 / 60 / 90 min.
-    ///   * `5 × 60` — anything else. A fixed event at 15:05, a
-    ///     23-minute duration, a 17:37 deadline — any of those
-    ///     drops the grid to 5-min resolution so the solver can
-    ///     actually fit tasks into the gaps those non-aligned
-    ///     events leave.
+    /// Majority-rule rather than naive GCD. The original implementation
+    /// took the GCD of all non-zero minute offsets and dropped the whole
+    /// registry to 5-min the moment a single outlier showed up — e.g.
+    /// a user with 50 meetings on quarter-hour boundaries plus one
+    /// recurring stand-up at :07 would triple the search space because
+    /// of that one event. Now we count how many timestamps are
+    /// 15-aligned vs not; only when the non-aligned fraction exceeds
+    /// `nonAlignedThreshold` (10% default) do we drop to 5-min. The
+    /// one outlier gets served by mutation landing on the nearest
+    /// slot — still feasible, just not pixel-perfect.
     ///
-    /// We don't go below 5 minutes because triple-precision grid
-    /// (1-min / per-second) inflates the search space without
-    /// measurably improving placement quality on human-paced
-    /// calendars — every integer-minute stride gets rounded up
-    /// to 5.
-    static func autoDetectStride(for context: OptimizerContext) -> TimeInterval {
+    /// Signals scanned:
+    ///   * Fixed-event start and end minute-of-hour
+    ///   * Movable-event `earliestStart` / `deadline` minute-of-hour
+    ///   * Movable-event `duration` minute-of-hour tail
+    ///
+    /// We don't go below 5 minutes — per-minute grid inflates the
+    /// search space without measurably improving placement quality
+    /// on human-paced calendars. Every integer-minute stride rounds
+    /// up to 5.
+    static func autoDetectStride(
+        for context: OptimizerContext,
+        nonAlignedThreshold: Double = 0.1
+    ) -> TimeInterval {
         let cal = context.calendar
-        var nonZeroOffsets: [Int] = []
-        nonZeroOffsets.reserveCapacity(
-            context.fixedEvents.count * 2 + context.movableEvents.count * 3
-        )
+        var alignedCount = 0
+        var nonAlignedCount = 0
 
-        func captureMinute(_ date: Date) {
-            let m = cal.component(.minute, from: date)
-            if m != 0 { nonZeroOffsets.append(m) }
+        @inline(__always)
+        func tally(minute: Int) {
+            if minute == 0 || minute % 15 == 0 {
+                alignedCount += 1
+            } else {
+                nonAlignedCount += 1
+            }
         }
 
         for ev in context.fixedEvents {
-            captureMinute(ev.startDate)
-            captureMinute(ev.endDate)
+            tally(minute: cal.component(.minute, from: ev.startDate))
+            tally(minute: cal.component(.minute, from: ev.endDate))
         }
         for ev in context.movableEvents {
-            if let es = ev.earliestStart { captureMinute(es) }
-            if let dl = ev.deadline { captureMinute(dl) }
-            // Duration's minute-of-hour tail. A 90-min task has tail 30
-            // (multiple of 15); a 23-min task has tail 23 (not a
-            // multiple of 15 and not 5 either — drops grid to 5).
+            if let es = ev.earliestStart {
+                tally(minute: cal.component(.minute, from: es))
+            }
+            if let dl = ev.deadline {
+                tally(minute: cal.component(.minute, from: dl))
+            }
             let tail = Int((ev.duration / 60).rounded()) % 60
-            if tail != 0 { nonZeroOffsets.append(tail) }
+            tally(minute: tail)
         }
 
-        guard !nonZeroOffsets.isEmpty else {
-            // Everything aligned to the hour — 15-min grid is fine.
-            return defaultStride
-        }
-
-        // Include 60 in the GCD pool so the hour boundary stays
-        // representable — without it a workload that's all at :15
-        // would produce GCD = 15 correctly, but all at :20 would
-        // produce GCD = 20 and we want to fall through to the
-        // 5-min floor instead.
-        var g = 60
-        for m in nonZeroOffsets {
-            g = gcd(g, m)
-            if g <= 1 { break }
-        }
-
-        // Clamp: { ≥ 15 → 15-min grid, otherwise → 5-min grid }.
-        // The narrow range {5, 15} keeps mutation deltas /
-        // domain-size scaling predictable. Intermediate tiers
-        // (7, 10, 12) were considered but don't help in practice —
-        // user-facing schedules rarely have that much irregularity.
-        return g >= 15 ? defaultStride : 5 * 60
-    }
-
-    private static func gcd(_ a: Int, _ b: Int) -> Int {
-        var a = abs(a), b = abs(b)
-        while b > 0 { (a, b) = (b, a % b) }
-        return a
+        let total = alignedCount + nonAlignedCount
+        guard total > 0 else { return defaultStride }
+        let nonAlignedRatio = Double(nonAlignedCount) / Double(total)
+        return nonAlignedRatio > nonAlignedThreshold ? 5 * 60 : defaultStride
     }
 }
 

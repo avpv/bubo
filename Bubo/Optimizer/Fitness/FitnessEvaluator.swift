@@ -656,11 +656,50 @@ final class FitnessEvaluator: @unchecked Sendable {
         // partitioned reuse was possible — that's what matters for
         // tuning: a run where `canDeltaPerDay` is always false means
         // the caller is dropping the snapshot/mutation hint.
-        if canDeltaPerDay || canDeltaPerComponent {
+        let usedDelta = canDeltaPerDay || canDeltaPerComponent
+        if usedDelta {
             telemetry.recordDeltaEvaluation()
         } else {
             telemetry.recordFullEvaluation()
         }
+
+        // DEBUG invariant check: sample a small fraction of delta
+        // evaluations and cross-check the scalar against a full
+        // re-evaluation. Partitioned objectives (DayPartitioned,
+        // ComponentPartitioned) are obligated to produce
+        // byte-identical results on the partitioned path vs. the
+        // `evaluate()` path — if they drift, delta eval poisons the
+        // GA with a slightly-wrong fitness that the full path would
+        // never produce. This check doesn't run in release builds
+        // (the `#if DEBUG` guards the whole block), and even in debug
+        // it samples at 1/64 so the per-generation overhead stays
+        // negligible (~1 extra full eval per 64 delta calls).
+        #if DEBUG
+        if usedDelta {
+            // Cheap deterministic sampler — hash the gene days
+            // snapshot to pick which generations to verify. Avoids
+            // needing a separate RNG here.
+            let hash = currentGeneDays.reduce(0) { $0 &+ Int($1.timeIntervalSinceReferenceDate.bitPattern) }
+            if hash & 0x3F == 0 {
+                // Clear caches on a shadow copy to force a full eval.
+                var shadow = chromosome
+                shadow.objectiveCache = nil
+                shadow.perDayObjectiveCache = nil
+                shadow.perComponentObjectiveCache = nil
+                shadow.geneDaysSnapshot = nil
+                shadow.mutatedGeneIndices = nil
+                let fullFitness = evaluate(chromosome: shadow, context: context)
+                let drift = abs(fullFitness - fitness)
+                if drift > 0.005 {
+                    // Log but don't abort — the bad data is already
+                    // returned; aborting in production here would
+                    // mask real drift in tests. The warning is the
+                    // signal to a developer reading logs.
+                    print("[FitnessEvaluator] δ-eval drift: full=\(fullFitness) delta=\(fitness) diff=\(drift)")
+                }
+            }
+        }
+        #endif
 
         return EvaluationResult(
             fitness: fitness,
