@@ -17,18 +17,65 @@ interface Env {
 const DAILY_LIMIT = 20; // requests per device per day
 const DEEPSEEK_API = "https://api.deepseek.com/chat/completions";
 
+// ── Structured Logging ──────────────────────────────────
+
+// Every log line is a single JSON object on stdout so Cloudflare Logpush /
+// `wrangler tail --format=json` can ingest it without extra parsing. The
+// field shape is intentionally stable — downstream consumers (dashboards,
+// support tooling) key off `event` and `device_id_hash`.
+type LogFields = Record<string, string | number | boolean | undefined>;
+
+function log(
+  level: "info" | "warn" | "error",
+  event: string,
+  fields: LogFields = {}
+): void {
+  const payload = {
+    ts: new Date().toISOString(),
+    level,
+    event,
+    ...fields,
+  };
+  const line = JSON.stringify(payload);
+  if (level === "error") {
+    console.error(line);
+  } else if (level === "warn") {
+    console.warn(line);
+  } else {
+    console.log(line);
+  }
+}
+
+// Cheap, non-cryptographic hash so device IDs in logs correlate across
+// lines without leaking the raw UUID. Good enough for aggregation; not a
+// security boundary.
+function hashDeviceId(id: string): string {
+  let h = 2166136261;
+  for (let i = 0; i < id.length; i++) {
+    h ^= id.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(16).padStart(8, "0");
+}
+
 // ── Entry Point ─────────────────────────────────────────
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    const startedAt = Date.now();
+    const url = new URL(request.url);
+
     // CORS preflight
     if (request.method === "OPTIONS") {
       return corsResponse(new Response(null, { status: 204 }));
     }
 
     // Only POST to the recipe endpoint
-    const url = new URL(request.url);
     if (request.method !== "POST" || url.pathname !== "/v1/agent/recipe") {
+      log("warn", "route_not_found", {
+        method: request.method,
+        path: url.pathname,
+      });
       return corsResponse(
         new Response(JSON.stringify({ error: "Not found" }), {
           status: 404,
@@ -40,6 +87,7 @@ export default {
     // Require device ID
     const deviceId = request.headers.get("x-device-id");
     if (!deviceId || deviceId.length < 10) {
+      log("warn", "missing_device_id");
       return corsResponse(
         new Response(JSON.stringify({ error: "Missing x-device-id header" }), {
           status: 400,
@@ -47,6 +95,8 @@ export default {
         })
       );
     }
+
+    const deviceHash = hashDeviceId(deviceId);
 
     // ── Rate Limiting ─────────────────────────────────
 
@@ -58,6 +108,12 @@ export default {
 
     if (used >= DAILY_LIMIT) {
       const resetAt = getEndOfDayUTC();
+      log("warn", "rate_limited", {
+        device_id_hash: deviceHash,
+        used,
+        limit: DAILY_LIMIT,
+        reset_at: Math.floor(resetAt / 1000),
+      });
       return corsResponse(
         new Response(JSON.stringify({ error: "Daily limit exceeded" }), {
           status: 429,
@@ -80,7 +136,12 @@ export default {
     let parsed: Record<string, unknown>;
     try {
       parsed = JSON.parse(body);
-    } catch {
+    } catch (err) {
+      log("warn", "invalid_json", {
+        device_id_hash: deviceHash,
+        body_size: body.length,
+        error: err instanceof Error ? err.message : String(err),
+      });
       return corsResponse(
         new Response(JSON.stringify({ error: "Invalid JSON body" }), {
           status: 400,
@@ -90,6 +151,10 @@ export default {
     }
 
     if (!Array.isArray(parsed.messages) || parsed.messages.length === 0) {
+      log("warn", "invalid_body", {
+        device_id_hash: deviceHash,
+        reason: "messages_missing_or_empty",
+      });
       return corsResponse(
         new Response(
           JSON.stringify({ error: "Request must contain messages array" }),
@@ -101,15 +166,37 @@ export default {
       );
     }
 
-    // Forward with the server-side API key
-    const anthropicResponse = await fetch(DEEPSEEK_API, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "authorization": `Bearer ${env.DEEPSEEK_API_KEY}`,
-      },
-      body,
+    log("info", "request_forwarding", {
+      device_id_hash: deviceHash,
+      used,
+      limit: DAILY_LIMIT,
+      body_size: body.length,
     });
+
+    // Forward with the server-side API key
+    let anthropicResponse: Response;
+    try {
+      anthropicResponse = await fetch(DEEPSEEK_API, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "authorization": `Bearer ${env.DEEPSEEK_API_KEY}`,
+        },
+        body,
+      });
+    } catch (err) {
+      log("error", "upstream_fetch_failed", {
+        device_id_hash: deviceHash,
+        duration_ms: Date.now() - startedAt,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return corsResponse(
+        new Response(JSON.stringify({ error: "Upstream unavailable" }), {
+          status: 502,
+          headers: { "content-type": "application/json" },
+        })
+      );
+    }
 
     // Increment counter only on successful API call
     const newUsed = used + 1;
@@ -121,6 +208,22 @@ export default {
 
     const remaining = DAILY_LIMIT - newUsed;
     const resetAt = getEndOfDayUTC();
+
+    log(
+      anthropicResponse.status >= 500
+        ? "error"
+        : anthropicResponse.status >= 400
+          ? "warn"
+          : "info",
+      "request_forwarded",
+      {
+        device_id_hash: deviceHash,
+        status: anthropicResponse.status,
+        duration_ms: Date.now() - startedAt,
+        remaining,
+        used: newUsed,
+      }
+    );
 
     // Stream the Anthropic response back with rate-limit headers
     const responseHeaders = new Headers(anthropicResponse.headers);

@@ -65,8 +65,12 @@ enum GADebugLog {
             ? ""
             : " (" + context.map { "\($0)=\($1)" }.sorted().joined(separator: ", ") + ")"
         let line = "\(site): \(message)\(ctxStr)"
-        logger.warning("\(line, privacy: .public)")
-        mirror.warning("\(line, privacy: .public)")
+        // `.private` — the `ctxStr` bag routinely embeds event ids and
+        // titles from user calendars. Support reports can bring these
+        // in by enabling private logging via `log config` or by
+        // running a debug build.
+        logger.warning("\(line, privacy: .private)")
+        mirror.warning("\(line, privacy: .private)")
     }
 
     /// Convenience: no-context form.
@@ -97,7 +101,7 @@ enum GADebugLog {
     @inline(__always)
     static func trace(_ site: String, _ message: @autoclosure () -> String) {
         #if DEBUG
-        logger.debug("[\(site, privacy: .public)] \(message(), privacy: .public)")
+        logger.debug("[\(site, privacy: .public)] \(message(), privacy: .private)")
         #endif
     }
 

@@ -5,7 +5,22 @@ import os
 /// (working window, busy fixed slots, tasks) and the scenarios the GA
 /// produced (placements per day, dropped tasks, fitness breakdown). Read
 /// via Console.app → subsystem `com.avpv.Bubo`, category `PlanWeek`.
-private let planWeekLogger = Logger(subsystem: "com.avpv.Bubo", category: "PlanWeek")
+///
+/// We keep both `OSLog` and `Logger` references: `Logger`'s typed
+/// interpolation is what we actually emit with, but `OSLog` lets us
+/// call `isEnabled(type:)` and skip the (very expensive — 50–200 line
+/// multi-line messages) diagnostic body when the level is filtered
+/// out. Without the early check, every PlanWeek invocation eagerly
+/// builds a multi-kilobyte string even when no one is listening.
+private let planWeekOSLog = OSLog(subsystem: "com.avpv.Bubo", category: "PlanWeek")
+private let planWeekLogger = Logger(planWeekOSLog)
+
+/// Per-run summary log — one line at the end of every `optimize()` call
+/// with GA telemetry, cache stats, and top-level constraint counts.
+/// Separated from `PlanWeek` (which is verbose multi-line diagnostics
+/// gated on `.info`) so these stats remain on in release without
+/// dragging kilobytes of per-run narrative with them.
+private let gaStatsLogger = Logger(subsystem: "com.avpv.Bubo", category: "Optimizer/GA")
 
 // MARK: - BuboOptimizer
 
@@ -165,12 +180,27 @@ final class BuboOptimizer {
     func optimize(
         context: OptimizerContext,
         overrideConfig: GAConfiguration? = nil,
-        overrideIslandConfig: IslandConfiguration? = nil
+        overrideIslandConfig: IslandConfiguration? = nil,
+        rid: String? = nil
     ) async -> OptimizerResult {
         isOptimizing = true
         defer { isOptimizing = false }
 
+        // Correlation id is either supplied by the caller
+        // (IntentCompiler mints one at `execute()` entry) or minted
+        // here as a fallback so non-IntentCompiler callers — today
+        // none, tomorrow maybe — still produce a correlatable trail.
+        let runId = rid ?? String(format: "%08x", UInt32.random(in: .min ... .max))
+
         let planWeekWallStart = Date()
+        // Snapshot `cachedCount` before the run so the terminal log
+        // can emit *per-run* cold misses (new whole-graph entries
+        // added). Captures the common case cleanly; re-validation
+        // misses on existing keys aren't counted — they don't change
+        // `cachedCount` — but those are the cheap kind anyway.
+        let intentCacheSizeBefore = intentGraphCache.cachedGraphCount
+        let conflictCacheSizeBefore = conflictGraphCache.cachedGraphCount
+
         logPlanWeekInputs(
             fixedEvents: context.fixedEvents,
             movableEvents: context.movableEvents,
@@ -503,6 +533,7 @@ final class BuboOptimizer {
         }
         var archive = MAPElitesArchive()
         archive.depositAll(verifiedPopulation, context: adjustedContext)
+        gaStatsLogger.info("map_elites_archive rid=\(runId, privacy: .public) cells=\(archive.cells.count) capacity=\(archive.capacity) requested=\(capturedScenarioCount)")
         // Stamp every scenario with the run's task signature so
         // feedback methods can route updates to the correct
         // per-workload learner bundle even after later runs on
@@ -543,12 +574,29 @@ final class BuboOptimizer {
             currentSchedule = best.genes
         }
 
+        let snapshot = evaluator.telemetry.snapshot()
+        let wallMs = Int(Date().timeIntervalSince(planWeekWallStart) * 1000)
+        let best = scenarios.first
+        let violationCount = best?.constraintViolations.count ?? 0
+        let droppedCount = best?.droppedCount ?? 0
+        let bestFitness = best?.fitness ?? 0
+        let intentCacheAdded = intentGraphCache.cachedGraphCount - intentCacheSizeBefore
+        let conflictCacheAdded = conflictGraphCache.cachedGraphCount - conflictCacheSizeBefore
+        // One-line event keeps OSLog interpolation happy (no literal
+        // newlines embedded in the format string) and matches the
+        // `event k=v k=v` convention used by the rest of the app.
+        // `intent_cache_new` / `conflict_cache_new` are the number of
+        // cold misses this run added to each whole-graph cache — a
+        // good proxy for "how much of the plan was novel". Zero
+        // means every cache lookup hit a warm entry.
+        gaStatsLogger.info("ga_run_stats rid=\(runId, privacy: .public) scenarios=\(scenarios.count) generations=\(convergenceGen) best_fitness=\(bestFitness) violations=\(violationCount) dropped=\(droppedCount) full_evals=\(snapshot.fullEvaluations) delta_evals=\(snapshot.deltaEvaluations) eval_cache_hits=\(snapshot.cacheHits) delta_fraction=\(snapshot.deltaFraction) cache_hit_fraction=\(snapshot.cacheHitFraction) constraint_rejections=\(snapshot.constraintRejections) intent_cache_new=\(intentCacheAdded) conflict_cache_new=\(conflictCacheAdded) duration_ms=\(wallMs)")
+
         logPlanWeekResult(
             result: result,
             movableEvents: context.movableEvents,
             wallDuration: Date().timeIntervalSince(planWeekWallStart),
             context: context,
-            telemetry: evaluator.telemetry.snapshot()
+            telemetry: snapshot
         )
         return result
     }
@@ -797,6 +845,20 @@ final class BuboOptimizer {
         gaCfg: GAConfiguration?,
         islandCfg: IslandConfiguration?
     ) {
+        // Skip the whole diagnostic (kilobytes of string formatting) when
+        // no one is listening at `.info`. The `GADebugLog.warn` anomaly
+        // scan below is cheap and unconditional, so keep it outside the
+        // gate.
+        guard planWeekOSLog.isEnabled(type: .info) else {
+            scanInputAnomalies(
+                fixedEvents: fixedEvents.filter { horizon.intersects(DateInterval(start: $0.startDate, end: max($0.endDate, $0.startDate))) },
+                movableEvents: movableEvents,
+                horizon: horizon,
+                workingHours: workingHours
+            )
+            return
+        }
+
         let df = DateFormatter()
         df.dateFormat = "EEE dd.MM"
         let tf = DateFormatter()
@@ -892,7 +954,7 @@ final class BuboOptimizer {
             workingHours: workingHours
         )
 
-        planWeekLogger.info("\(lines.joined(separator: "\n"), privacy: .public)")
+        planWeekLogger.info("\(lines.joined(separator: "\n"), privacy: .private)")
     }
 
     /// Emit `GADebugLog.warn(site: "input", …)` lines for events that
@@ -1018,6 +1080,11 @@ final class BuboOptimizer {
         context: OptimizerContext,
         telemetry: FitnessEvalTelemetry.Snapshot
     ) {
+        // Early-exit when `.info` is disabled — the body below formats a
+        // multi-kilobyte per-scenario report that's pure wasted work if
+        // no one is listening.
+        guard planWeekOSLog.isEnabled(type: .info) else { return }
+
         let df = DateFormatter()
         df.dateFormat = "EEE dd.MM"
         let tf = DateFormatter()
@@ -1039,7 +1106,7 @@ final class BuboOptimizer {
 
         if result.scenarios.isEmpty {
             lines.append("(no scenarios produced — GA returned empty population)")
-            planWeekLogger.info("\(lines.joined(separator: "\n"), privacy: .public)")
+            planWeekLogger.info("\(lines.joined(separator: "\n"), privacy: .private)")
             return
         }
 
@@ -1254,7 +1321,7 @@ final class BuboOptimizer {
             }
         }
 
-        planWeekLogger.info("\(lines.joined(separator: "\n"), privacy: .public)")
+        planWeekLogger.info("\(lines.joined(separator: "\n"), privacy: .private)")
     }
 
     /// Map `FitnessObjective.name` → weight from the current

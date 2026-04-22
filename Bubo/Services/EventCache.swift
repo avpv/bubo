@@ -57,7 +57,14 @@ actor EventCache {
             sortBy: [SortDescriptor(\.cachedAt, order: .reverse)]
         )
         descriptor.fetchLimit = 1
-        guard let newest = try? context.fetch(descriptor).first else { return nil }
+        let newest: PersistedCachedEvent?
+        do {
+            newest = try context.fetch(descriptor).first
+        } catch {
+            logger.error("Failed to query cache age: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+        guard let newest else { return nil }
         return Date().timeIntervalSince(newest.cachedAt)
     }
 

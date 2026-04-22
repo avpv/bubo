@@ -139,6 +139,7 @@ final class EventKitSyncCoordinator {
 
     func syncNow() {
         guard settings.isCalendarSyncEnabled else {
+            logger.info("sync_skipped reason=disabled")
             syncError = "Calendar sync disabled"
             isUsingCache = false
             onEventsUpdated?([], .live)
@@ -146,9 +147,13 @@ final class EventKitSyncCoordinator {
         }
 
         guard calendarSource.hasAccess else {
+            logger.warning("sync_skipped reason=no_access")
             syncError = "Calendar access not granted"
             return
         }
+
+        let startedAt = Date()
+        logger.info("sync_started")
 
         isSyncing = true
         syncError = nil
@@ -176,6 +181,9 @@ final class EventKitSyncCoordinator {
         }
 
         schedulePostSyncRefresh()
+
+        let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+        logger.info("sync_completed events=\(events.count) duration_ms=\(durationMs)")
     }
 
     /// Re-fetches events without triggering another remote refresh, on a

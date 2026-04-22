@@ -1,4 +1,7 @@
 import Foundation
+import os
+
+private let logger = Logger(subsystem: "com.avpv.Bubo", category: "Services/PomodoroHistory")
 
 // MARK: - Pomodoro History Entry
 
@@ -38,9 +41,16 @@ final class PomodoroHistoryService {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        if let data = defaults.data(forKey: defaultsKey),
-           let decoded = try? JSONDecoder().decode([PomodoroHistoryEntry].self, from: data) {
-            self.entries = decoded
+        if let data = defaults.data(forKey: defaultsKey) {
+            do {
+                self.entries = try JSONDecoder().decode([PomodoroHistoryEntry].self, from: data)
+            } catch {
+                // Corrupt blob — log it so we find out, then start fresh.
+                // Not fatal: worst case the user loses their learned config
+                // bias, which rebuilds after a few sessions.
+                logger.error("Failed to decode history, resetting: \(error.localizedDescription, privacy: .public)")
+                self.entries = []
+            }
         } else {
             self.entries = []
         }
@@ -63,8 +73,12 @@ final class PomodoroHistoryService {
     }
 
     private func persist() {
-        guard let data = try? JSONEncoder().encode(entries) else { return }
-        defaults.set(data, forKey: defaultsKey)
+        do {
+            let data = try JSONEncoder().encode(entries)
+            defaults.set(data, forKey: defaultsKey)
+        } catch {
+            logger.error("Failed to encode history: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     // MARK: - Queries

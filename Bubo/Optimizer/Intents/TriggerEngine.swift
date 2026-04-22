@@ -1,5 +1,8 @@
 import Foundation
 import UserNotifications
+import os
+
+private let logger = Logger(subsystem: "com.avpv.Bubo", category: "Optimizer/Triggers")
 
 // MARK: - Trigger Engine
 
@@ -30,22 +33,30 @@ final class TriggerEngine {
 
     /// Scan all saved pipelines for triggers and schedule them.
     func startAll() {
-        guard let registry = optimizerService.subgraphRegistry else { return }
+        guard let registry = optimizerService.subgraphRegistry else {
+            logger.info("triggers_start_skipped reason=no_registry")
+            return
+        }
 
         stopAll()
 
+        var daily = 0
+        var weekly = 0
         for sg in registry.subgraphs.values {
             for intent in sg.intents {
                 switch intent {
                 case .daily(let hour):
                     scheduleDaily(subgraph: sg, hour: hour, registry: registry)
+                    daily += 1
                 case .weekly(let day):
                     scheduleWeekly(subgraph: sg, day: day, registry: registry)
+                    weekly += 1
                 default:
                     break
                 }
             }
         }
+        logger.info("triggers_scheduled daily=\(daily) weekly=\(weekly) subgraphs=\(registry.subgraphs.count)")
     }
 
     func stopAll() {
@@ -182,6 +193,9 @@ final class TriggerEngine {
 
     /// Execute a subgraph as an optimization request.
     private func executeSubgraph(_ subgraph: Subgraph, registry: SubgraphRegistry, context: String) async {
+        let startedAt = Date()
+        logger.info("trigger_fired subgraph=\(subgraph.name, privacy: .private) context=\(context, privacy: .private(mask: .hash))")
+
         let request = OptimizationRequest.fromSubgraph(subgraph, registry: registry)
 
         // Check if autoApply is set
@@ -192,14 +206,26 @@ final class TriggerEngine {
 
         let result = await optimizerService.executeRequest(request, reminderService: reminderService)
 
+        var autoApplied = false
         if shouldAutoApply {
             if case .success = result, !optimizerService.scenarios.isEmpty {
                 optimizerService.applyScenario(at: 0, to: reminderService)
+                autoApplied = true
             }
         }
 
         lastTriggeredAt = Date()
         lastTriggeredName = "\(subgraph.name) (\(context))"
+
+        let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+        let resultKind: String
+        switch result {
+        case .success: resultKind = "success"
+        case .partialSuccess: resultKind = "partial_success"
+        case .infeasible: resultKind = "infeasible"
+        case .noEventsToOptimize: resultKind = "no_events"
+        }
+        logger.info("trigger_executed subgraph=\(subgraph.name, privacy: .private) result=\(resultKind, privacy: .public) auto_applied=\(autoApplied) duration_ms=\(durationMs)")
     }
 
     deinit {

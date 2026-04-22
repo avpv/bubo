@@ -741,3 +741,21 @@ struct OptimizationRequest: Codable, Hashable, Sendable, Identifiable {
         }
     }
 }
+
+// MARK: - Logging Helpers
+
+extension ScheduleIntent {
+
+    /// Machine-readable case name stripped of associated values.
+    /// The prose `label` changes with every numeric parameter, which
+    /// makes log aggregation useless. `caseName` returns a stable
+    /// identifier (`"noEventsBefore"`, `"focusBlock"`, etc.) that
+    /// survives parameter changes and is safe to use as a log key.
+    var caseName: String {
+        let desc = String(describing: self)
+        if let paren = desc.firstIndex(of: "(") {
+            return String(desc[..<paren])
+        }
+        return desc
+    }
+}

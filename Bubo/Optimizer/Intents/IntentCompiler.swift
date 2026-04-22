@@ -1,4 +1,8 @@
 import Foundation
+import os
+
+private let logger = Logger(subsystem: "com.avpv.Bubo", category: "Optimizer/Intents")
+private let intentsOSLog = OSLog(subsystem: "com.avpv.Bubo", category: "Optimizer/Intents")
 
 // MARK: - Intent Compiler
 
@@ -32,6 +36,18 @@ struct IntentCompiler {
         _ request: OptimizationRequest,
         defaultWorkingHours: ClosedRange<Int>
     ) async -> OptimizationResult {
+        // Short per-call correlation id so every log line tied to this
+        // optimization can be grep'd out of the stream together. UUIDs
+        // would be noise — an 8-char hex is enough for a single day of
+        // logs on one device.
+        let requestId = String(format: "%08x", UInt32.random(in: .min ... .max))
+        let startedAt = Date()
+        // `cases` join + user-named preset both deferred via OSLog
+        // interpolation. Preset name is `.private` — user-authored
+        // content — while the structural `cases` enum list stays
+        // `.public` since it carries no user data.
+        logger.info("intents_received rid=\(requestId, privacy: .public) name=\(request.name ?? "", privacy: .private) count=\(request.intents.count) cases=\(request.intents.map(\.caseName).joined(separator: ","), privacy: .public)")
+
         // Phase 0: Expand subgraphs and apply variables
         var expandedIntents = request.intents
         if let registry = subgraphRegistry {
@@ -42,6 +58,9 @@ struct IntentCompiler {
             var graph = optimizer.intentGraphCache.graph(for: expandedIntents)
             graph.expandSubgraphs(subgraphs: registry.subgraphs, variables: request.variables)
             expandedIntents = graph.sortedIntents()
+            if expandedIntents.count != request.intents.count {
+                logger.info("intents_subgraph_expanded rid=\(requestId, privacy: .public) before=\(request.intents.count) after=\(expandedIntents.count)")
+            }
         }
 
         // Phase 1: Build graph, resolve dependencies, sort topologically.
@@ -54,7 +73,7 @@ struct IntentCompiler {
         var config = ResolvedConfig(defaultWorkingHours: defaultWorkingHours)
 
         for intent in orderedIntents {
-            apply(intent, to: &config)
+            apply(intent, to: &config, requestId: requestId)
         }
 
         // Phase 1.5: Resolve any `.auto` pomodoro specs now that the full
@@ -140,6 +159,8 @@ struct IntentCompiler {
         }
 
         guard !allMovable.isEmpty else {
+            let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+            logger.info("optimization_completed rid=\(requestId, privacy: .public) result=no_events duration_ms=\(durationMs)")
             return .noEventsToOptimize
         }
 
@@ -150,7 +171,7 @@ struct IntentCompiler {
         // entirely — the cache returns the prior instance and the
         // holder's double-checked store hands it out to every
         // chromosome on the hot path.
-        let cachedConflictGraph = optimizer.conflictGraphCache.graph(forMovableEvents: allMovable)
+        let cachedConflictGraph = optimizer.conflictGraphCache.graph(forMovableEvents: allMovable, rid: requestId)
         let context = OptimizerContext(
             fixedEvents: allFixed,
             movableEvents: allMovable,
@@ -174,12 +195,14 @@ struct IntentCompiler {
         let snapshot = buildSnapshot(fixedEvents: allFixed, workingHours: workingHours, horizon: horizon)
         let hasDroppable = allMovable.contains { $0.isDroppable }
         if !hasDroppable, let failure = preflightCheck(context: context) {
+            let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+            logger.warning("optimization_completed rid=\(requestId, privacy: .public) result=infeasible stage=preflight reason=\(failure.reason, privacy: .private) duration_ms=\(durationMs)")
             return .infeasible(reason: failure.reason, snapshot: snapshot, resolutions: failure.resolutions)
         }
 
         // Phase 6: Run GA
         let gaConfig = config.speed.gaConfiguration
-        let result = await optimizer.optimize(context: context, overrideConfig: gaConfig)
+        let result = await optimizer.optimize(context: context, overrideConfig: gaConfig, rid: requestId)
 
         let maxScenarios = config.maxScenarios
         let filteredScenarios = Array(result.scenarios.prefix(maxScenarios))
@@ -191,10 +214,14 @@ struct IntentCompiler {
         let capacityResolutions = buildCapacityResolutions(config)
 
         if filteredResult.scenarios.isEmpty {
+            let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+            logger.warning("optimization_completed rid=\(requestId, privacy: .public) result=infeasible stage=ga reason=no_scenarios duration_ms=\(durationMs)")
             return .infeasible(reason: "Could not find a valid placement", snapshot: snapshot, resolutions: capacityResolutions)
         }
 
         if let best = filteredResult.scenarios.first, best.fitness < 0.1 {
+            let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+            logger.warning("optimization_completed rid=\(requestId, privacy: .public) result=infeasible stage=ga reason=low_fitness fitness=\(best.fitness) duration_ms=\(durationMs)")
             return .infeasible(reason: "Not enough room in this time window", snapshot: snapshot, resolutions: capacityResolutions)
         }
 
@@ -210,9 +237,14 @@ struct IntentCompiler {
                 warnings.append("Planned \(planned) of \(total) tasks")
             }
 
+            let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+            logger.info("optimization_completed rid=\(requestId, privacy: .public) result=partial_success scenarios=\(filteredResult.scenarios.count) planned=\(planned) dropped=\(best.droppedCount) duration_ms=\(durationMs)")
             return .partialSuccess(filteredResult, warnings: warnings, resolutions: capacityResolutions)
         }
 
+        let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+        let planned = filteredResult.scenarios.first?.activeGenes.count ?? 0
+        logger.info("optimization_completed rid=\(requestId, privacy: .public) result=success scenarios=\(filteredResult.scenarios.count) planned=\(planned) duration_ms=\(durationMs)")
         return .success(filteredResult)
     }
 
@@ -321,7 +353,18 @@ private extension IntentCompiler {
 
     // MARK: - Apply Single Intent
 
-    func apply(_ intent: ScheduleIntent, to config: inout ResolvedConfig) {
+    func apply(_ intent: ScheduleIntent, to config: inout ResolvedConfig, requestId: String = "-") {
+        // Per-intent trace, gated at the OSLog level so the 60-case switch
+        // below doesn't pay string formatting when debug is filtered out.
+        // Emitted at `.debug` deliberately: this is developer-facing
+        // instrumentation, not a support signal — the aggregate
+        // `intents_received` line above is what investigators grep for.
+        if intentsOSLog.isEnabled(type: .debug) {
+            // `caseName` is the stable enum tag (no user data, .public);
+            // `label` inlines user titles like `createBlock(title:)`, so
+            // it stays `.private`.
+            logger.debug("intent_applied rid=\(requestId, privacy: .public) case=\(intent.caseName, privacy: .public) detail=\(intent.label, privacy: .private)")
+        }
         switch intent {
 
         // Time constraints

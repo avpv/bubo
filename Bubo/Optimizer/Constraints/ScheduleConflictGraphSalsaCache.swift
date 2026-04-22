@@ -110,14 +110,19 @@ final class ScheduleConflictGraphSalsaCache: Sendable {
     /// Cache-by-context shorthand. Reads `context.movableEvents`
     /// only — other context fields (working hours, fixed events)
     /// don't influence the conflict graph's structure.
-    func graph(for context: OptimizerContext) -> ScheduleConflictGraph {
-        graph(forMovableEvents: context.movableEvents)
+    func graph(for context: OptimizerContext, rid: String? = nil) -> ScheduleConflictGraph {
+        graph(forMovableEvents: context.movableEvents, rid: rid)
     }
 
     /// Cache by movable-event list directly. Lets callers (e.g.
     /// `IntentCompiler`) warm the cache *before* constructing the
     /// final `OptimizerContext`.
-    func graph(forMovableEvents events: [OptimizableEvent]) -> ScheduleConflictGraph {
+    ///
+    /// `rid` threads the caller's optimization-run correlation id
+    /// into the `conflict_graph_built` log (only emitted on cache
+    /// miss) so a single user action can be grep'd across the whole
+    /// pipeline.
+    func graph(forMovableEvents events: [OptimizableEvent], rid: String? = nil) -> ScheduleConflictGraph {
         // Register each event's id as an input, bumping the revision
         // when a same-id event has changed shape since the last
         // call. First-time ids initialise at revision 1.
@@ -140,6 +145,11 @@ final class ScheduleConflictGraphSalsaCache: Sendable {
         )
 
         return graphDB.query(graphKey) { tracker in
+            // This closure runs only on cache miss, so timing and
+            // logging live here directly — no out-of-band flag
+            // needed to distinguish hit from miss.
+            let buildStart = Date()
+
             // Force per-event metadata resolution so the tracker
             // records each event's input as a dependency. The
             // metadata is cached; hot calls skip the field reads.
@@ -177,12 +187,17 @@ final class ScheduleConflictGraphSalsaCache: Sendable {
                     parent: tracker
                 )
             }
-            return ScheduleConflictGraph.build(
+            let graph = ScheduleConflictGraph.build(
                 fromMovableEvents: events,
                 reachabilityOracle: oracle
             )
+            let buildMs = Int(Date().timeIntervalSince(buildStart) * 1000)
+            Self.buildLogger.info("conflict_graph_built rid=\(rid ?? "-", privacy: .public) events=\(events.count) components=\(graph.componentCount) conflict_edges=\(graph.conflictEdgeCount) precedence_edges=\(graph.precedenceEdgeCount) density=\(graph.conflictDensity) build_ms=\(buildMs)")
+            return graph
         }
     }
+
+    private static let buildLogger = Logger(subsystem: "com.avpv.Bubo", category: "Optimizer/ConflictGraph")
 
     /// Query the per-pair overlap decision. Reads both events'
     /// input keys via the tracker so editing either event
