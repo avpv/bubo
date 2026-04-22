@@ -178,7 +178,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         // keep the old exploration behaviour.
         let saturation = Self.fixedSaturation(context: context)
         let dropInclusionRate = max(0.35, 0.85 - 0.6 * saturation)
-        let workingDays = context.preferences.effectiveWorkingDays
+        let workingDays = context.preferences.workingDays
 
         // Randomised-greedy placement. We shuffle the event list so
         // each `random()` call explores a different insertion order,
@@ -316,7 +316,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         eventsInPlacementOrder sortedEvents: [OptimizableEvent]
     ) -> ScheduleChromosome {
         let cal = context.calendar
-        let workingDays = context.preferences.effectiveWorkingDays
+        let workingDays = context.preferences.workingDays
         let slotRegistry = context.ensureSlotRegistry()
 
         // Collect occupied intervals (from fixed events)
@@ -494,7 +494,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
 
         let cal = context.calendar
         let prefs = context.preferences
-        let workingDays = prefs.effectiveWorkingDays
+        let workingDays = prefs.workingDays
 
         // Cap the per-event domain so the solver stays within budget on
         // dense weeks. 120 candidates ≈ 30 hours of 15-min slots per
@@ -1220,72 +1220,35 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
 
             switch strategy {
             case 0:
-                // Small time shift — slot-based. Moves the gene by a
-                // random ±2 slot delta (±30 min on the 15-min grid)
-                // and re-derives `startTime` from the new registry
-                // slot. Because every registry slot is by-construction
-                // on a working day inside working hours and not inside
-                // a fixed block, the result is feasible wrt placement
-                // without any `clampToWorkingHours` /
-                // `advancePastNonWorkingDay` sanitation — the old
-                // continuous-Date path needed both.
+                // Small time shift — ±2 slots (±30 min on the 15-min
+                // grid). Every registry slot is by construction on a
+                // working day inside working hours and not inside a
+                // fixed block, so the result is placement-feasible
+                // without any post-hoc sanitation.
                 //
-                // Fallback path (registry empty or gene has no slot
-                // binding yet — rare, mostly test / legacy seed
-                // survivors) preserves the pre-decoder Date jitter so
-                // mutation never silently skips.
-                let currentSlot = genes[i].slotIndex ?? slotRegistry.nearestIndex(to: genes[i].startTime)
-                if let currentSlot {
-                    let delta = context.rng.int(in: -2...2)
-                    let newSlot = slotRegistry.clamped(currentSlot + delta)
-                    if let newDate = slotRegistry.resolvedDate(at: newSlot), newDate >= floor {
-                        genes[i] = genes[i].withSlot(index: newSlot, date: newDate)
-                        break
-                    }
-                }
-                // Legacy Date fallback — same semantics as before the
-                // slot decoder: bounded jitter + grid-snap + workday
-                // guard + working-hours clamp.
-                let jitter = context.rng.double(in: -1800.0...1800.0)
-                var newStart = max(genes[i].startTime.addingTimeInterval(jitter), floor)
-                let slotSeconds: TimeInterval = 15 * 60
-                let snapped = (newStart.timeIntervalSinceReferenceDate / slotSeconds).rounded() * slotSeconds
-                newStart = Date(timeIntervalSinceReferenceDate: snapped)
-                if !context.preferences.isWorkingDay(newStart, calendar: cal) {
-                    newStart = advancePastNonWorkingDay(
-                        from: newStart,
-                        workingHours: context.workingHours,
-                        horizon: context.planningHorizon,
-                        calendar: cal,
-                        workingDays: context.preferences.effectiveWorkingDays
-                    )
-                }
-                genes[i] = genes[i].withStartTime(
-                    clampToWorkingHours(newStart, duration: genes[i].duration, workingHours: context.workingHours, calendar: cal, floor: floor)
-                )
+                // An empty registry (degenerate horizon / pathological
+                // config) simply skips this mutation — better than
+                // reintroducing a continuous-Date jitter that could
+                // land off-grid or off-day.
+                guard let currentSlot = genes[i].slotIndex ?? slotRegistry.nearestIndex(to: genes[i].startTime) else { break }
+                let delta = context.rng.int(in: -2...2)
+                let newSlot = slotRegistry.clamped(currentSlot + delta)
+                guard let newDate = slotRegistry.resolvedDate(at: newSlot),
+                      newDate >= floor else { break }
+                genes[i] = genes[i].withSlot(index: newSlot, date: newDate)
             case 1:
-                // Move to different day within horizon.
+                // Move to a different day — slot-based. Sample uniformly
+                // across every registry index that could host this gene
+                // under the current floor/ceiling. Registry slots are
+                // pre-filtered for working-days, working-hours, horizon
+                // and fixed-event overlaps, so a random pick is feasible
+                // by construction.
                 //
-                // Constraint-aware: restrict day selection to days
-                // that are at or after `floor` (which already folds
-                // `earliestStart` and, via repair's dependency pass,
-                // the earliest day any included prerequisite could
-                // finish). Random days earlier than that would be
-                // immediately reshuffled by the next repair pass,
-                // costing a wasted fitness evaluation per mutation.
-                // Slot-based day-jump: sample uniformly across every
-                // registry index that could host this gene. Registry
-                // slots are pre-filtered for working-days, working-
-                // hours, horizon, and fixed-event overlaps, so a
-                // random pick is feasible by construction — the
-                // ~90-line day-iteration walk the continuous path
-                // needed collapses to a single integer draw.
-                //
-                // Dependency floor folds into the lower bound so a
-                // draw can't land before any `dependsOn` predecessor
+                // Dependency floor folds into the lower bound so a draw
+                // can't land before any `dependsOn` predecessor
                 // finishes; the result otherwise respects
-                // `earliestStart`, `deadline`, and duration fit on
-                // the target day.
+                // `earliestStart`, `deadline`, and duration fit on the
+                // target day.
                 var effectiveFloor = floor
                 if let event, !event.dependsOn.isEmpty {
                     for depId in event.dependsOn {
@@ -1295,70 +1258,16 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                     }
                 }
 
-                if !slotRegistry.isEmpty,
-                   let range = slotRegistry.allowedIndices(
-                       duration: genes[i].duration,
-                       floor: effectiveFloor,
-                       ceiling: event?.deadline,
-                       workingHoursUpperBound: context.workingHours.upperBound
-                   ), !range.isEmpty {
-                    let newSlot = context.rng.int(in: range.lowerBound..<range.upperBound)
-                    if let newDate = slotRegistry.resolvedDate(at: newSlot) {
-                        genes[i] = genes[i].withSlot(index: newSlot, date: newDate)
-                        break
-                    }
-                }
-
-                // Legacy Date fallback preserves behaviour when
-                // registry is empty (tests, degenerate horizon) —
-                // identical to the pre-decoder implementation.
-                let mutStartDay = cal.startOfDay(for: horizonStart)
-                let mutLastDay = cal.startOfDay(for: context.planningHorizon.end.addingTimeInterval(-1))
-                let daysInHorizon = max(1, (cal.dateComponents([.day], from: mutStartDay, to: mutLastDay).day ?? 0) + 1)
-                guard daysInHorizon > 0 else { break }
-
-                var earliestDay = cal.startOfDay(for: effectiveFloor)
-                let startOffset = max(
-                    0,
-                    cal.dateComponents([.day], from: mutStartDay, to: earliestDay).day ?? 0
-                )
-                guard startOffset < daysInHorizon else { break }
-
-                let hourRange = event?.preferredHourRange ?? context.workingHours
-                let durationHours = Int((genes[i].duration / 3600).rounded(.up))
-                let maxStartHour = max(hourRange.lowerBound, hourRange.upperBound - durationHours)
-                let mutWorkingDays = context.preferences.effectiveWorkingDays
-                func windowFor(offset: Int) -> (lower: Date, upper: Date)? {
-                    guard let dayStart = cal.date(byAdding: .day, value: offset, to: mutStartDay) else { return nil }
-                    if !mutWorkingDays.isEmpty {
-                        let weekday = cal.component(.weekday, from: dayStart)
-                        if !mutWorkingDays.contains(weekday) { return nil }
-                    }
-                    guard let dayLower = cal.date(bySettingHour: hourRange.lowerBound, minute: 0, second: 0, of: dayStart),
-                          let dayUpper = cal.date(bySettingHour: maxStartHour, minute: 0, second: 0, of: dayStart)
-                    else { return nil }
-                    let lower = max(dayLower, effectiveFloor)
-                    return lower <= dayUpper ? (lower, dayUpper) : nil
-                }
-
-                var window = windowFor(offset: context.rng.int(in: startOffset..<daysInHorizon))
-                if window == nil {
-                    for alt in startOffset..<daysInHorizon {
-                        if let w = windowFor(offset: alt) {
-                            window = w
-                            break
-                        }
-                    }
-                }
-                guard let (lower, upper) = window else { break }
-
-                let slotSeconds: TimeInterval = 15 * 60
-                let span = max(0, Int(upper.timeIntervalSince(lower) / slotSeconds))
-                let step = context.rng.int(in: 0...span)
-                let rawStart = lower.addingTimeInterval(TimeInterval(step) * slotSeconds)
-                genes[i] = genes[i].withStartTime(
-                    clampToWorkingHours(rawStart, duration: genes[i].duration, workingHours: context.workingHours, calendar: cal, floor: effectiveFloor)
-                )
+                guard !slotRegistry.isEmpty,
+                      let range = slotRegistry.allowedIndices(
+                          duration: genes[i].duration,
+                          floor: effectiveFloor,
+                          ceiling: event?.deadline,
+                          workingHoursUpperBound: context.workingHours.upperBound
+                      ), !range.isEmpty else { break }
+                let newSlot = context.rng.int(in: range.lowerBound..<range.upperBound)
+                guard let newDate = slotRegistry.resolvedDate(at: newSlot) else { break }
+                genes[i] = genes[i].withSlot(index: newSlot, date: newDate)
             case 2:
                 // Slot-based snap: align to the nearest registry slot.
                 // The registry is a superset of every placement the
@@ -1369,28 +1278,11 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 // an incompatible registry) back onto the canonical
                 // discrete lattice. Serves as a cheap sanity operator
                 // that never worsens feasibility.
-                if !slotRegistry.isEmpty,
-                   let slot = slotRegistry.nearestIndex(to: genes[i].startTime),
-                   let date = slotRegistry.resolvedDate(at: slot),
-                   date >= floor {
-                    genes[i] = genes[i].withSlot(index: slot, date: date)
-                    break
-                }
-                // Legacy fallback: original 30-min Date round.
-                let timeInterval = genes[i].startTime.timeIntervalSinceReferenceDate
-                var snapped = max(Date(timeIntervalSinceReferenceDate: (timeInterval / 1800).rounded() * 1800), floor)
-                if !context.preferences.isWorkingDay(snapped, calendar: cal) {
-                    snapped = advancePastNonWorkingDay(
-                        from: snapped,
-                        workingHours: context.workingHours,
-                        horizon: context.planningHorizon,
-                        calendar: cal,
-                        workingDays: context.preferences.effectiveWorkingDays
-                    )
-                }
-                genes[i] = genes[i].withStartTime(
-                    clampToWorkingHours(snapped, duration: genes[i].duration, workingHours: context.workingHours, calendar: cal, floor: floor)
-                )
+                guard !slotRegistry.isEmpty,
+                      let slot = slotRegistry.nearestIndex(to: genes[i].startTime),
+                      let date = slotRegistry.resolvedDate(at: slot),
+                      date >= floor else { break }
+                genes[i] = genes[i].withSlot(index: slot, date: date)
             case 3:
                 // Guided mutation: find nearest free gap that also
                 // avoids overlapping other included genes. The Date
@@ -1410,7 +1302,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                     horizon: context.planningHorizon,
                     calendar: cal,
                     floor: floor,
-                    workingDays: context.preferences.effectiveWorkingDays
+                    workingDays: context.preferences.workingDays
                 ) {
                     if let slot = slotRegistry.nearestIndex(to: freeStart) {
                         genes[i] = genes[i].withSlot(index: slot, date: freeStart)
@@ -2535,7 +2427,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                     dependsOn: event?.dependsOn ?? [],
                     placedGenes: genes,
                     genesByEvent: genesByEvent,
-                    workingDays: context.preferences.effectiveWorkingDays
+                    workingDays: context.preferences.workingDays
                 )
                 guard let earliestSlot = earliest else {
                     if fallbackIdx == nil { fallbackIdx = idx }
@@ -2553,7 +2445,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                     dependsOn: event?.dependsOn ?? [],
                     placedGenes: genes,
                     genesByEvent: genesByEvent,
-                    workingDays: context.preferences.effectiveWorkingDays
+                    workingDays: context.preferences.workingDays
                 ) ?? earliestSlot
 
                 let window = max(0, latestSlot.timeIntervalSince(earliestSlot))
@@ -2628,7 +2520,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                     dependsOn: [],
                     placedGenes: genes,
                     genesByEvent: genesByEvent,
-                    workingDays: context.preferences.effectiveWorkingDays
+                    workingDays: context.preferences.workingDays
                 )
                 if let slot {
                     if genes[idx].startTime != slot {
@@ -2731,7 +2623,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
 
         let cal = context.calendar
         let horizonStart = context.planningHorizon.start
-        let workingDays = context.preferences.effectiveWorkingDays
+        let workingDays = context.preferences.workingDays
         let prefs = context.preferences
         let slotRegistry = context.ensureSlotRegistry()
 

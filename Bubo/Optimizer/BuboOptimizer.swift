@@ -602,14 +602,11 @@ final class BuboOptimizer {
         let now = Date()
         let weekEnd = Calendar.current.date(byAdding: .day, value: 7, to: now)!
 
-        // `workingDays` is normalised at `OptimizerService.init`
-        // (legacy `skipWeekends` migrated into the Set), so the stored
-        // preference is never nil in practice; pass prefs through
-        // as-is. Direct callers that construct their own
-        // `OptimizerPreferences()` with nil get the default Mon–Fri
-        // behaviour from `effectiveWorkingDays`, matching the
-        // pre-refactor default and the conservative choice for a
-        // caller that explicitly avoided the service.
+        // `workingDays` is a non-optional `Set<Int>` on preferences
+        // (default Mon–Fri); pass `preferences` through as-is. Direct
+        // callers that don't override `workingDays` in their own
+        // `OptimizerPreferences()` get the Mon–Fri default baked into
+        // the initializer.
         let context = OptimizerContext(
             fixedEvents: fixedEvents,
             movableEvents: movableEvents,
@@ -1013,7 +1010,7 @@ final class BuboOptimizer {
         // holiday in the calendar but not to the solver".
         let cal2 = context.calendar
         let prefs = context.preferences
-        let workingDays = prefs.effectiveWorkingDays
+        let workingDays = prefs.workingDays
         let horizonStartDay = cal2.startOfDay(for: context.planningHorizon.start)
         let horizonLastDay = cal2.startOfDay(for: context.planningHorizon.end.addingTimeInterval(-1))
         let horizonDays = max(1, (cal2.dateComponents([.day], from: horizonStartDay, to: horizonLastDay).day ?? 0) + 1)

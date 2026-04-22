@@ -115,7 +115,7 @@ struct NoOverlapConstraint: ScheduleConstraint {
 // MARK: - Working Hours Constraint (Hard)
 
 /// Events must fall within working hours and on a weekday the user has
-/// opted into (`preferences.effectiveWorkingDays`). Non-working days
+/// opted into (`preferences.workingDays`). Non-working days
 /// (e.g. Sat, Sun, or any weekday the user unchecked in the picker)
 /// charge the full event duration so the placement becomes infeasible
 /// and the GA rehomes it onto a real working day. Without this, a day

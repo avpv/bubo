@@ -6,7 +6,7 @@ import Foundation
 /// horizon — the GA's discrete search space.
 ///
 /// A slot is a `Date` that satisfies:
-///   * falls on a day in `preferences.effectiveWorkingDays`;
+///   * falls on a day in `preferences.workingDays`;
 ///   * sits inside `workingHours` for its day;
 ///   * lies inside `planningHorizon`;
 ///   * does **not** overlap a fixed-event block (those minutes are
@@ -160,7 +160,7 @@ struct SlotRegistry: Sendable {
         let cal = context.calendar
         let prefs = context.preferences
         let horizon = context.planningHorizon
-        let workingDays = prefs.effectiveWorkingDays
+        let workingDays = prefs.workingDays
 
         let horizonStartDay = cal.startOfDay(for: horizon.start)
         let horizonLastDay = cal.startOfDay(for: horizon.end.addingTimeInterval(-1))

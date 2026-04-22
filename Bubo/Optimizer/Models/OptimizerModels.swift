@@ -472,48 +472,25 @@ struct OptimizerPreferences: Codable, Sendable {
     var preferredClusterWindowEnd: Int       // hour — meetings clustered before this
     var maxMeetingsPerCluster: Int           // avoid marathon meeting blocks
 
-    /// **Legacy.** Earlier versions shipped a simple Sat/Sun-off Bool;
-    /// `OptimizerService.init` now migrates a non-nil value into
-    /// `workingDays` (skipWeekends=true → Mon–Fri, skipWeekends=false →
-    /// Mon–Sun) and leaves this field as a readable artefact for older
-    /// persisted JSON. No new code should read it — use `workingDays`
-    /// / `effectiveWorkingDays` / `isWorkingDay(_:calendar:)` instead.
-    var skipWeekends: Bool?
-
     /// Weekdays on which the planner is allowed to place movable events.
     /// Uses Foundation's 1-indexed weekday convention
     /// (1 = Sunday, 2 = Monday, …, 7 = Saturday) so the values round-trip
     /// through `Calendar.component(.weekday, from:)` without translation.
     ///
-    /// `nil` means "not yet migrated / not yet configured" — the
-    /// `effectiveWorkingDays` accessor folds that into Mon–Fri, which is
-    /// the default we want for a brand-new install. An explicit empty
-    /// set means "no restriction"; callers that want to let Sat/Sun
-    /// through should set `Set(1...7)` instead.
-    var workingDays: Set<Int>?
+    /// Default is Mon–Fri — matches the overwhelming common case and the
+    /// original `skipWeekends = true` default this field replaced.
+    /// Callers who want to allow Sat/Sun should set `Set(1...7)`.
+    var workingDays: Set<Int>
 
-    /// Default weekdays when nothing has been persisted yet. Mon–Fri
-    /// aligns with the `skipWeekends=true` default we shipped with the
-    /// Bool and with the universal "weekday work schedule" expectation.
+    /// Default weekdays for a brand-new install / seed context. Mon–Fri.
     static let defaultWorkingDays: Set<Int> = [2, 3, 4, 5, 6]
 
-    /// Non-nil working-days set for consumers. `nil` in storage folds to
-    /// the Mon–Fri default; an explicit empty set (from an older build
-    /// or a tests roundtrip) also folds to the default so we never
-    /// return "nothing is a working day" by accident.
-    var effectiveWorkingDays: Set<Int> {
-        guard let days = workingDays, !days.isEmpty else {
-            return Self.defaultWorkingDays
-        }
-        return days
-    }
-
-    /// True iff `date`'s weekday is in `effectiveWorkingDays`. Every
-    /// previously weekend-aware check routes through this one helper
-    /// so Mon/Wed/Fri-only or "work Saturdays" schedules behave
+    /// True iff `date`'s weekday is in `workingDays`. Every former
+    /// weekend-aware check routes through this one helper so
+    /// Mon/Wed/Fri-only or "work Saturdays" schedules behave
     /// correctly too — the planner simply follows the configured set.
     func isWorkingDay(_ date: Date, calendar: Calendar) -> Bool {
-        effectiveWorkingDays.contains(calendar.component(.weekday, from: date))
+        workingDays.contains(calendar.component(.weekday, from: date))
     }
 
     init(
@@ -545,8 +522,7 @@ struct OptimizerPreferences: Codable, Sendable {
         preferredClusterWindowStart: Int = 9,
         preferredClusterWindowEnd: Int = 13,
         maxMeetingsPerCluster: Int = 4,
-        skipWeekends: Bool? = nil,
-        workingDays: Set<Int>? = nil
+        workingDays: Set<Int> = OptimizerPreferences.defaultWorkingDays
     ) {
         self.focusBlockWeight = focusBlockWeight
         self.pomodoroFitWeight = pomodoroFitWeight
@@ -576,7 +552,6 @@ struct OptimizerPreferences: Codable, Sendable {
         self.preferredClusterWindowStart = preferredClusterWindowStart
         self.preferredClusterWindowEnd = preferredClusterWindowEnd
         self.maxMeetingsPerCluster = maxMeetingsPerCluster
-        self.skipWeekends = skipWeekends
         self.workingDays = workingDays
     }
 }
