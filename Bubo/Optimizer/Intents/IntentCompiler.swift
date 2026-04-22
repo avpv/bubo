@@ -42,10 +42,11 @@ struct IntentCompiler {
         // logs on one device.
         let requestId = String(format: "%08x", UInt32.random(in: .min ... .max))
         let startedAt = Date()
-        let inputName = request.name.map { "name=\"\($0)\" " } ?? ""
-        // `cases` join deferred via OSLog interpolation — skipped when
-        // `.info` is filtered out.
-        logger.info("intents_received rid=\(requestId, privacy: .public) \(inputName, privacy: .public)count=\(request.intents.count) cases=\(request.intents.map(\.caseName).joined(separator: ","), privacy: .public)")
+        // `cases` join + user-named preset both deferred via OSLog
+        // interpolation. Preset name is `.private` — user-authored
+        // content — while the structural `cases` enum list stays
+        // `.public` since it carries no user data.
+        logger.info("intents_received rid=\(requestId, privacy: .public) name=\(request.name ?? "", privacy: .private) count=\(request.intents.count) cases=\(request.intents.map(\.caseName).joined(separator: ","), privacy: .public)")
 
         // Phase 0: Expand subgraphs and apply variables
         var expandedIntents = request.intents
@@ -170,7 +171,7 @@ struct IntentCompiler {
         // entirely — the cache returns the prior instance and the
         // holder's double-checked store hands it out to every
         // chromosome on the hot path.
-        let cachedConflictGraph = optimizer.conflictGraphCache.graph(forMovableEvents: allMovable)
+        let cachedConflictGraph = optimizer.conflictGraphCache.graph(forMovableEvents: allMovable, rid: requestId)
         let context = OptimizerContext(
             fixedEvents: allFixed,
             movableEvents: allMovable,
@@ -195,13 +196,13 @@ struct IntentCompiler {
         let hasDroppable = allMovable.contains { $0.isDroppable }
         if !hasDroppable, let failure = preflightCheck(context: context) {
             let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
-            logger.warning("optimization_completed rid=\(requestId, privacy: .public) result=infeasible stage=preflight reason=\"\(failure.reason, privacy: .public)\" duration_ms=\(durationMs)")
+            logger.warning("optimization_completed rid=\(requestId, privacy: .public) result=infeasible stage=preflight reason=\(failure.reason, privacy: .private) duration_ms=\(durationMs)")
             return .infeasible(reason: failure.reason, snapshot: snapshot, resolutions: failure.resolutions)
         }
 
         // Phase 6: Run GA
         let gaConfig = config.speed.gaConfiguration
-        let result = await optimizer.optimize(context: context, overrideConfig: gaConfig)
+        let result = await optimizer.optimize(context: context, overrideConfig: gaConfig, rid: requestId)
 
         let maxScenarios = config.maxScenarios
         let filteredScenarios = Array(result.scenarios.prefix(maxScenarios))
@@ -359,7 +360,10 @@ private extension IntentCompiler {
         // instrumentation, not a support signal — the aggregate
         // `intents_received` line above is what investigators grep for.
         if intentsOSLog.isEnabled(type: .debug) {
-            logger.debug("intent_applied rid=\(requestId, privacy: .public) case=\(intent.caseName, privacy: .public) detail=\"\(intent.label, privacy: .public)\"")
+            // `caseName` is the stable enum tag (no user data, .public);
+            // `label` inlines user titles like `createBlock(title:)`, so
+            // it stays `.private`.
+            logger.debug("intent_applied rid=\(requestId, privacy: .public) case=\(intent.caseName, privacy: .public) detail=\(intent.label, privacy: .private)")
         }
         switch intent {
 

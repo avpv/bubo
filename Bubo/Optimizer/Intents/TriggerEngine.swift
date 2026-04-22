@@ -194,7 +194,7 @@ final class TriggerEngine {
     /// Execute a subgraph as an optimization request.
     private func executeSubgraph(_ subgraph: Subgraph, registry: SubgraphRegistry, context: String) async {
         let startedAt = Date()
-        logger.info("trigger_fired subgraph=\"\(subgraph.name, privacy: .public)\" context=\"\(context, privacy: .public)\"")
+        logger.info("trigger_fired subgraph=\(subgraph.name, privacy: .private) context=\(context, privacy: .private(mask: .hash))")
 
         let request = OptimizationRequest.fromSubgraph(subgraph, registry: registry)
 
@@ -225,7 +225,7 @@ final class TriggerEngine {
         case .infeasible: resultKind = "infeasible"
         case .noEventsToOptimize: resultKind = "no_events"
         }
-        logger.info("trigger_executed subgraph=\"\(subgraph.name, privacy: .public)\" result=\(resultKind, privacy: .public) auto_applied=\(autoApplied) duration_ms=\(durationMs)")
+        logger.info("trigger_executed subgraph=\(subgraph.name, privacy: .private) result=\(resultKind, privacy: .public) auto_applied=\(autoApplied) duration_ms=\(durationMs)")
     }
 
     deinit {

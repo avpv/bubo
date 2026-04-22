@@ -180,10 +180,17 @@ final class BuboOptimizer {
     func optimize(
         context: OptimizerContext,
         overrideConfig: GAConfiguration? = nil,
-        overrideIslandConfig: IslandConfiguration? = nil
+        overrideIslandConfig: IslandConfiguration? = nil,
+        rid: String? = nil
     ) async -> OptimizerResult {
         isOptimizing = true
         defer { isOptimizing = false }
+
+        // Correlation id is either supplied by the caller
+        // (IntentCompiler mints one at `execute()` entry) or minted
+        // here as a fallback so non-IntentCompiler callers — today
+        // none, tomorrow maybe — still produce a correlatable trail.
+        let runId = rid ?? String(format: "%08x", UInt32.random(in: .min ... .max))
 
         let planWeekWallStart = Date()
         // Snapshot `cachedCount` before the run so the terminal log
@@ -526,7 +533,7 @@ final class BuboOptimizer {
         }
         var archive = MAPElitesArchive()
         archive.depositAll(verifiedPopulation, context: adjustedContext)
-        gaStatsLogger.info("map_elites_archive cells=\(archive.cells.count) capacity=\(archive.capacity) requested=\(capturedScenarioCount)")
+        gaStatsLogger.info("map_elites_archive rid=\(runId, privacy: .public) cells=\(archive.cells.count) capacity=\(archive.capacity) requested=\(capturedScenarioCount)")
         // Stamp every scenario with the run's task signature so
         // feedback methods can route updates to the correct
         // per-workload learner bundle even after later runs on
@@ -582,7 +589,7 @@ final class BuboOptimizer {
         // cold misses this run added to each whole-graph cache — a
         // good proxy for "how much of the plan was novel". Zero
         // means every cache lookup hit a warm entry.
-        gaStatsLogger.info("ga_run_stats scenarios=\(scenarios.count) generations=\(convergenceGen) best_fitness=\(bestFitness) violations=\(violationCount) dropped=\(droppedCount) full_evals=\(snapshot.fullEvaluations) delta_evals=\(snapshot.deltaEvaluations) eval_cache_hits=\(snapshot.cacheHits) delta_fraction=\(snapshot.deltaFraction) cache_hit_fraction=\(snapshot.cacheHitFraction) constraint_rejections=\(snapshot.constraintRejections) intent_cache_new=\(intentCacheAdded) conflict_cache_new=\(conflictCacheAdded) duration_ms=\(wallMs)")
+        gaStatsLogger.info("ga_run_stats rid=\(runId, privacy: .public) scenarios=\(scenarios.count) generations=\(convergenceGen) best_fitness=\(bestFitness) violations=\(violationCount) dropped=\(droppedCount) full_evals=\(snapshot.fullEvaluations) delta_evals=\(snapshot.deltaEvaluations) eval_cache_hits=\(snapshot.cacheHits) delta_fraction=\(snapshot.deltaFraction) cache_hit_fraction=\(snapshot.cacheHitFraction) constraint_rejections=\(snapshot.constraintRejections) intent_cache_new=\(intentCacheAdded) conflict_cache_new=\(conflictCacheAdded) duration_ms=\(wallMs)")
 
         logPlanWeekResult(
             result: result,
@@ -947,7 +954,7 @@ final class BuboOptimizer {
             workingHours: workingHours
         )
 
-        planWeekLogger.info("\(lines.joined(separator: "\n"), privacy: .public)")
+        planWeekLogger.info("\(lines.joined(separator: "\n"), privacy: .private)")
     }
 
     /// Emit `GADebugLog.warn(site: "input", …)` lines for events that
@@ -1099,7 +1106,7 @@ final class BuboOptimizer {
 
         if result.scenarios.isEmpty {
             lines.append("(no scenarios produced — GA returned empty population)")
-            planWeekLogger.info("\(lines.joined(separator: "\n"), privacy: .public)")
+            planWeekLogger.info("\(lines.joined(separator: "\n"), privacy: .private)")
             return
         }
 
@@ -1314,7 +1321,7 @@ final class BuboOptimizer {
             }
         }
 
-        planWeekLogger.info("\(lines.joined(separator: "\n"), privacy: .public)")
+        planWeekLogger.info("\(lines.joined(separator: "\n"), privacy: .private)")
     }
 
     /// Map `FitnessObjective.name` → weight from the current
