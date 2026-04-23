@@ -127,12 +127,12 @@ extension BuboOptimizer {
         let embedder: CalendarEmbedder
         let warmStart: TemporalWarmStart
         let bufferStore: ChanceConstrainedBufferStore
-        let branchingBandit: LearnedBranchingBandit
         let objectiveClusterer: ObjectiveCorrelationClusterer
         let gnnTrainer: GNNWarmStartTrainer
-        let migrationBandit: MigrationTopologyBandit
 
         init(islandCount: Int = 4) {
+            _ = islandCount // retained for API symmetry with earlier
+                            // variants that sized per-island state.
             self.tabu = TabuMemory()
             self.dpo = DPOWeightLearner(
                 priorWeights: PreferenceLearner.defaultWeights
@@ -140,10 +140,8 @@ extension BuboOptimizer {
             self.embedder = CalendarEmbedder()
             self.warmStart = TemporalWarmStart()
             self.bufferStore = ChanceConstrainedBufferStore()
-            self.branchingBandit = LearnedBranchingBandit()
             self.objectiveClusterer = ObjectiveCorrelationClusterer()
             self.gnnTrainer = GNNWarmStartTrainer()
-            self.migrationBandit = MigrationTopologyBandit(islandCount: max(2, islandCount))
         }
     }
 }

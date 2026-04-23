@@ -275,13 +275,6 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
     /// Only consulted when `anchorSeed != nil`.
     let anchorReplicationFraction: Double
 
-    /// Optional learned migration topology. When set, the engine
-    /// consults the bandit to pick (donor → receiver) pairs at each
-    /// migration boundary instead of the static topology in
-    /// `islandConfig.topology`. Reward (hypervolume delta) is fed
-    /// back after each migration round.
-    let migrationBandit: MigrationTopologyBandit?
-
     /// Optional batch evaluator propagated into every per-island
     /// `GeneticAlgorithm`. Enables the multi-fidelity funnel path
     /// where a surrogate ranks the offspring array and only the top
@@ -304,7 +297,6 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         extraSeeds: [C] = [],
         anchorSeed: C? = nil,
         anchorReplicationFraction: Double = 0.4,
-        migrationBandit: MigrationTopologyBandit? = nil,
         batchEvaluate: ((inout [C]) -> Void)? = nil
     ) {
         self.islandConfig = islandConfig
@@ -318,7 +310,6 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         self.extraSeeds = extraSeeds
         self.anchorSeed = anchorSeed
         self.anchorReplicationFraction = max(0, min(0.8, anchorReplicationFraction))
-        self.migrationBandit = migrationBandit
         self.batchEvaluate = batchEvaluate
     }
 
@@ -856,20 +847,11 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         // reward the migration bandit afterwards.
         let preFitness: [Double] = islands.map { $0.bestEver?.rawFitness ?? 0 }
 
-        var migrationPairs: [(source: Int, destination: Int)]
-        if let bandit = migrationBandit {
-            // Consult the UCB bandit for the best (donor, receiver)
-            // pairs. We pull `n` pairs so each island receives at
-            // most one inbound migration per round, matching the
-            // legacy ring/fully-connected throughput.
-            let chosen = bandit.selectTopPairs(n)
-            migrationPairs = chosen.map { (source: $0.donor, destination: $0.receiver) }
-            if migrationPairs.isEmpty {
-                migrationPairs = makeMigrationPairs(islandCount: n)
-            }
-        } else {
-            migrationPairs = makeMigrationPairs(islandCount: n)
-        }
+        // Static topology pairing — the UCB migration-bandit was
+        // retired when adaptive migration-interval alone matched its
+        // wins without the per-generation update cost.
+        let migrationPairs: [(source: Int, destination: Int)] = makeMigrationPairs(islandCount: n)
+        _ = preFitness
 
         // Productivity routing: for each pair, ensure the source is the
         // more-productive endpoint so flow runs down the fitness
@@ -902,20 +884,6 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             }
         }
 
-        // Reward the migration bandit by per-pair receiver fitness
-        // delta. Positive reward when the receiver's best improved
-        // post-migration; negative when it stalled or regressed.
-        if let bandit = migrationBandit {
-            for (source, destination) in migrationPairs {
-                let post = islands[destination].bestEver?.rawFitness ?? 0
-                let pre = preFitness[destination]
-                let reward = post - pre
-                bandit.observe(
-                    pair: MigrationPair(donor: source, receiver: destination),
-                    reward: reward
-                )
-            }
-        }
     }
 
     /// Determine which island pairs exchange individuals based on topology.

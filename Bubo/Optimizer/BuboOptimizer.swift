@@ -290,22 +290,35 @@ final class BuboOptimizer {
         // has. The solver also injects a `CPSATRepairer` into the
         // context so LNS repair's bandit can pick it too.
         let cpSATStart = Date()
-        let anchorSeed: ScheduleChromosome? = schedulingFeatures.useCPSATSeed
-            ? ScheduleChromosome.cpSeeded(context: adjustedContext)
-            : nil
+        let cpSATAnchor: ScheduleChromosome?
+        if schedulingFeatures.useCPSATSeed {
+            cpSATAnchor = ScheduleChromosome.cpSeeded(context: adjustedContext)
+        } else {
+            cpSATAnchor = nil
+        }
+        // Greedy-construct fallback when CP-SAT couldn't deliver
+        // (flag off, solver timeout, infeasible on the hard
+        // constraints). The pipeline is unconditionally
+        // `anchor → GA polish/refine`; the fallback is silent so
+        // there's never an "anchor-less" branch the GA config has
+        // to reason about. `greedy(context:)` is feasibility-by-
+        // construction on our domain (working hours, fixed-event
+        // overlap, precedence via topological insertion in
+        // `greedyWithOrder`), so this always produces SOMETHING
+        // usable.
+        let anchorSeed: ScheduleChromosome = cpSATAnchor
+            ?? ScheduleChromosome.greedy(context: adjustedContext)
+        let anchorSource: String = cpSATAnchor != nil ? "cpsat" : "greedy"
         let cpSATDurationMs = Int(Date().timeIntervalSince(cpSATStart) * 1000)
 
-        // GA-config dispatch: `CP-SAT → GA` is the canonical pipeline,
-        // but the GA's role changes dramatically depending on whether
-        // CP-SAT delivered an anchor and how hard the workload is.
+        // GA-config dispatch: we now always have an anchor — the GA's
+        // job is to polish or refine around it. The choice between
+        // presets is driven by the *workload* (how big the search
+        // space is), not by whether CP-SAT succeeded:
         //
-        //   anchor present + difficulty < 0.25  → `.polish`
-        //   anchor present + difficulty < 0.6   → `.refine`
-        //   anchor present + difficulty ≥ 0.6   → caller's config
-        //                                          (still seeded, no
-        //                                          budget trim)
-        //   anchor absent                        → caller's config
-        //                                          (full search burden)
+        //   difficulty < 0.25  → `.polish`
+        //   difficulty < 0.6   → `.refine`
+        //   difficulty ≥ 0.6   → caller's config (anchor is a hint)
         //
         // An explicit `overrideConfig` always wins so programmatic
         // callers (tests, training pipeline) keep their current
@@ -321,33 +334,25 @@ final class BuboOptimizer {
             config = override
             capturedIslandConfig = overrideIslandConfig ?? islandConfig
             dispatchMode = "override"
-        } else if anchorSeed != nil {
-            if difficulty < Self.trivialWorkloadDifficulty {
-                config = .polish
-                capturedIslandConfig = Self.singleIslandConfig(from: islandConfig)
-                dispatchMode = "polish"
-            } else if difficulty < Self.mediumWorkloadDifficulty {
-                config = .refine
-                capturedIslandConfig = Self.singleIslandConfig(from: islandConfig)
-                dispatchMode = "refine"
-            } else {
-                config = gaConfig
-                capturedIslandConfig = overrideIslandConfig ?? islandConfig
-                dispatchMode = "seeded_full"
-            }
+        } else if difficulty < Self.trivialWorkloadDifficulty {
+            config = .polish
+            capturedIslandConfig = Self.singleIslandConfig(from: islandConfig)
+            dispatchMode = "polish"
+        } else if difficulty < Self.mediumWorkloadDifficulty {
+            config = .refine
+            capturedIslandConfig = Self.singleIslandConfig(from: islandConfig)
+            dispatchMode = "refine"
         } else {
             config = gaConfig
             capturedIslandConfig = overrideIslandConfig ?? islandConfig
-            dispatchMode = "search_full"
+            dispatchMode = "seeded_full"
         }
 
-        // Fall-through difficulty cap: still applies when the caller
-        // supplied an override OR when CP-SAT missed on a trivial
-        // workload — we don't want `.thorough` running 20 s on 4
-        // tasks just because CP-SAT happened to time out. Skipped in
-        // `polish` / `refine` modes because those presets already
-        // have tight bounds.
-        if dispatchMode == "override" || dispatchMode == "search_full",
+        // Difficulty cap for explicit overrides on trivial workloads.
+        // Polish / refine / seeded_full presets are already sized
+        // against difficulty — only `override` escapes the dispatch
+        // and can arrive too heavy for a 4-task week.
+        if dispatchMode == "override",
            difficulty < Self.trivialWorkloadDifficulty {
             let capPop = max(20, Int(Double(config.populationSize) * 0.25))
             let capGen = max(20, Int(Double(config.maxGenerations) * 0.15))
@@ -363,14 +368,12 @@ final class BuboOptimizer {
             gaStatsLogger.info("workload_downshift rid=\(runId, privacy: .public) difficulty=\(difficulty) pop=\(originalPop)→\(config.populationSize) gen=\(config.maxGenerations) wallclock=\(String(format: "%.1f", originalTimeout))s→\(String(format: "%.1f", config.wallclockTimeout))s")
         }
 
-        gaStatsLogger.info("dispatch rid=\(runId, privacy: .public) mode=\(dispatchMode, privacy: .public) difficulty=\(difficulty) cpsat=\(anchorSeed != nil ? "hit" : "miss", privacy: .public) cpsat_ms=\(cpSATDurationMs) pop=\(config.populationSize) gen=\(config.maxGenerations) wallclock=\(String(format: "%.1f", config.wallclockTimeout))s")
+        gaStatsLogger.info("dispatch rid=\(runId, privacy: .public) mode=\(dispatchMode, privacy: .public) difficulty=\(difficulty) anchor=\(anchorSource, privacy: .public) cpsat_ms=\(cpSATDurationMs) pop=\(config.populationSize) gen=\(config.maxGenerations) wallclock=\(String(format: "%.1f", config.wallclockTimeout))s")
 
         // Survivor selector: adaptive NSGA-III with HypE-lite
-        // tiebreak. The MOEA/D-AWA alternative was removed from the
-        // production path — NSGA-III consistently matched it on
-        // realistic 14-objective workloads and `moeadState == nil`
-        // is the documented default for the schedule evaluator.
-        let moeadState: MOEADState? = nil
+        // tiebreak. The MOEA/D-AWA alternative was retired along
+        // with its feature flag — NSGA-III consistently matched it
+        // on realistic 14-objective workloads.
         // Adaptive hypervolume sample count. Two signals matter:
         //
         //   1. Objective count `d`. HV estimator variance grows with
@@ -402,8 +405,7 @@ final class BuboOptimizer {
         let multiObjective = MultiObjectiveContext<ScheduleChromosome>.schedule(
             evaluator: evaluator,
             populationSize: config.populationSize,
-            hypervolumeSampleCount: hvSamples,
-            moeadState: moeadState
+            hypervolumeSampleCount: hvSamples
         )
 
         // Quality-Diversity archive shared across every island so
@@ -522,10 +524,7 @@ final class BuboOptimizer {
         // accepted solutions and respects GNN-derived priorities.
         let extraSeeds: [ScheduleChromosome] = collectWarmStartSeeds(context: adjustedContext)
         // Migration-topology bandit retired — adaptive migration
-        // interval already reacts to stagnation, and the UCB bandit
-        // over static ring pairs didn't change the pair ordering
-        // enough to justify the per-generation update cost.
-        let migrationBandit: MigrationTopologyBandit? = nil
+        // interval in IslandModelGA already reacts to stagnation.
 
         // Multi-fidelity funnel: when enabled, wrap the per-chromo
         // surrogate-assisted evaluator into a batch screen +
@@ -563,7 +562,6 @@ final class BuboOptimizer {
                 extraSeeds: extraSeeds,
                 anchorSeed: anchorSeed,
                 anchorReplicationFraction: capturedAnchorFraction,
-                migrationBandit: migrationBandit,
                 batchEvaluate: multiFidelityBatch
             )
 

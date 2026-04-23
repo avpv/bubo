@@ -29,7 +29,6 @@ struct TrainingRound: Codable, Sendable, Hashable {
     enum Target: String, Codable, Sendable {
         case dpo
         case calendarEmbedder
-        case branchingBandit
         case chanceBufferFit
         case objectiveCluster
     }
