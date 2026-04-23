@@ -239,6 +239,14 @@ final class BuboOptimizer {
         let cpSATToInject: CPSATRepairer? = schedulingFeatures.useCPSATRepair
             ? CPSATRepairer()
             : nil
+        // One shared slot registry + per-gene domain cache for the
+        // whole run. Every island context inherits the same holders,
+        // so registry build happens once and each movable event's
+        // feasible-slot domain is computed once — every mutation
+        // afterwards gets an O(1) read instead of the old per-call
+        // `allowedIndices` binary search + fixed-event overlap scan.
+        let slotRegistryHolder = SlotRegistryHolder()
+        let slotDomainsHolder = SlotDomainsHolder()
         let adjustedContext = OptimizerContext(
             fixedEvents: context.fixedEvents,
             movableEvents: context.movableEvents,
@@ -253,7 +261,9 @@ final class BuboOptimizer {
             contextualCrossoverHead: workloadLearners.head,
             tabuMemory: tabuToInject,
             cpSATRepairer: cpSATToInject,
-            cpSATWindowThreshold: schedulingFeatures.cpSATWindowThreshold
+            cpSATWindowThreshold: schedulingFeatures.cpSATWindowThreshold,
+            slotRegistryHolder: slotRegistryHolder,
+            slotDomainsHolder: slotDomainsHolder
         )
         // Stash for learner-feedback callbacks (acceptScenario etc).
         lastOptimizationContext = adjustedContext
@@ -547,9 +557,9 @@ final class BuboOptimizer {
         //     focusMass / morningSkew / daySpread to drive *emitter*
         //     selection inside evolution.
         //   - `MAPElitesArchive` (post-GA, here) bins on
-        //     focusQuality / meetingDensity / inclusionRatio —
-        //     user-meaningful axes — to pick the *display* set of
-        //     scenarios. Different axes serve different consumers,
+        //     taskSpreadDays / morningShare / lastTaskHour —
+        //     movable-placement-driven axes — to pick the *display*
+        //     set of scenarios. Different axes serve different consumers,
         //     so the two coexist deliberately.
         //
         // Force real evaluation on every candidate whose `rawFitness`

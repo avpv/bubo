@@ -419,7 +419,8 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             tabuMemory: context.tabuMemory,
             cpSATRepairer: context.cpSATRepairer,
             cpSATWindowThreshold: context.cpSATWindowThreshold,
-            slotRegistryHolder: context.slotRegistryHolder
+            slotRegistryHolder: context.slotRegistryHolder,
+            slotDomainsHolder: context.slotDomainsHolder
         )
     }
 

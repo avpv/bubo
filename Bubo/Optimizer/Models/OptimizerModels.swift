@@ -350,6 +350,17 @@ struct OptimizerContext: Sendable {
     /// (tests, one-shot contexts) don't have to plumb one in.
     let slotRegistryHolder: SlotRegistryHolder?
 
+    /// Lazy holder for per-movable-event feasible slot domains. Each
+    /// domain is the subset of registry indices that satisfy the
+    /// event's static constraints (earliestStart, deadline,
+    /// working-hours fit, duration-aware fixed-event non-overlap) and
+    /// is consulted by mutation operators to sample from a
+    /// pre-filtered set instead of recomputing
+    /// `SlotRegistry.allowedIndices` and the overlap scan per call.
+    /// `ensureSlotDomains()` builds on demand when the holder is nil,
+    /// matching `slotRegistryHolder`'s lazy-build contract.
+    let slotDomainsHolder: SlotDomainsHolder?
+
     init(
         fixedEvents: [CalendarEvent] = [],
         movableEvents: [OptimizableEvent] = [],
@@ -370,7 +381,8 @@ struct OptimizerContext: Sendable {
         tabuMemory: TabuMemory? = nil,
         cpSATRepairer: CPSATRepairer? = nil,
         cpSATWindowThreshold: Int = 20,
-        slotRegistryHolder: SlotRegistryHolder? = nil
+        slotRegistryHolder: SlotRegistryHolder? = nil,
+        slotDomainsHolder: SlotDomainsHolder? = nil
     ) {
         self.fixedEvents = fixedEvents
         self.movableEvents = movableEvents
@@ -392,6 +404,7 @@ struct OptimizerContext: Sendable {
         self.cpSATRepairer = cpSATRepairer
         self.cpSATWindowThreshold = cpSATWindowThreshold
         self.slotRegistryHolder = slotRegistryHolder
+        self.slotDomainsHolder = slotDomainsHolder
     }
 
     /// Returns a materialised conflict graph for this context. Goes
@@ -415,6 +428,22 @@ struct OptimizerContext: Sendable {
             return holder.get(for: self)
         }
         return SlotRegistry.build(from: self)
+    }
+
+    /// Returns this movable event's precomputed slot domain — the set
+    /// of registry indices where the event can feasibly start given
+    /// its static constraints plus duration-aware fixed-event
+    /// non-overlap. Goes through the shared holder on the production
+    /// path; falls back to an inline build for tests that don't plumb
+    /// a holder through.
+    func ensureSlotDomain(for eventId: String) -> SlotDomain {
+        if let holder = slotDomainsHolder {
+            return holder.domain(for: eventId, in: self)
+        }
+        guard let event = movableEvents.first(where: { $0.id == eventId }) else {
+            return .empty
+        }
+        return SlotDomain.build(for: event, registry: ensureSlotRegistry(), context: self)
     }
 
     /// `eventId → backlogIndex` map over `movableEvents`. Built on demand

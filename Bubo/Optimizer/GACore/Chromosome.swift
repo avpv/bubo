@@ -1310,16 +1310,22 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                     }
                 }
 
-                guard !slotRegistry.isEmpty,
-                      let range = slotRegistry.allowedIndices(
-                          duration: genes[i].duration,
-                          floor: effectiveFloor,
-                          ceiling: event?.deadline,
-                          workingHoursUpperBound: context.workingHours.upperBound
-                      ), !range.isEmpty else { break }
-                let newSlot = context.rng.int(in: range.lowerBound..<range.upperBound)
-                guard let newDate = slotRegistry.resolvedDate(at: newSlot) else { break }
-                genes[i] = genes[i].withSlot(index: newSlot, date: newDate)
+                // Per-gene precomputed domain replaces the per-mutation
+                // `allowedIndices` binary search + fixed-event overlap
+                // scan. The domain already excludes slots that would
+                // overlap a fixed event across the full duration, so a
+                // random pick from the domain is placement-feasible by
+                // construction. Dependency floor is the only dynamic
+                // constraint — we binary-search the domain for the
+                // first entry past the floor instead of rebuilding the
+                // candidate set.
+                guard !slotRegistry.isEmpty else { break }
+                let domain = context.ensureSlotDomain(for: genes[i].eventId)
+                let feasible = domain.indices(after: effectiveFloor, registry: slotRegistry)
+                guard !feasible.isEmpty else { break }
+                let pick = feasible[context.rng.int(in: feasible.startIndex..<feasible.endIndex)]
+                guard let newDate = slotRegistry.resolvedDate(at: pick) else { break }
+                genes[i] = genes[i].withSlot(index: pick, date: newDate)
             case 2:
                 // Slot-based snap: align to the nearest registry slot.
                 // The registry is a superset of every placement the
