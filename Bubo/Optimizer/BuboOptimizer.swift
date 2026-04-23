@@ -279,25 +279,76 @@ final class BuboOptimizer {
         lastOptimizationContext = adjustedContext
 
         let evaluator = FitnessEvaluator.standard(preferences: prefs)
-        var config = overrideConfig ?? gaConfig
-        var capturedIslandConfig = overrideIslandConfig ?? islandConfig
         let capturedScenarioCount = scenarioCount
 
-        // Difficulty-based cap: even when the caller asked for
-        // `.thorough` (200 pop × 500 gen × 20s wallclock), a 4-task
-        // week with zero conflict edges does not need that budget —
-        // the greedy-seeded initial population already holds the
-        // plateau and the remaining generations churn on variations
-        // that can't improve the fitness. Trim the heavy axes so the
-        // run finishes in sub-second time; leave convergence
-        // thresholds, adaptive flags, and objective weights untouched
-        // so the *quality* axis the user asked about (deeper search
-        // around the plateau) still fires — just bounded.
+        // Run CP-SAT construction seeder synchronously so its result
+        // can drive the GA-config dispatch below. A successful solve
+        // lands a feasibility-optimal chromosome on the hard + mid
+        // lex tiers (inclusion, deadline, backlog) before GA starts;
+        // a timeout / infeasibility returns nil and the pipeline
+        // falls through to the plain greedy-seeded GA as it always
+        // has. The solver also injects a `CPSATRepairer` into the
+        // context so LNS repair's bandit can pick it too.
+        let cpSATStart = Date()
+        let anchorSeed: ScheduleChromosome? = schedulingFeatures.useCPSATSeed
+            ? ScheduleChromosome.cpSeeded(context: adjustedContext)
+            : nil
+        let cpSATDurationMs = Int(Date().timeIntervalSince(cpSATStart) * 1000)
+
+        // GA-config dispatch: `CP-SAT → GA` is the canonical pipeline,
+        // but the GA's role changes dramatically depending on whether
+        // CP-SAT delivered an anchor and how hard the workload is.
+        //
+        //   anchor present + difficulty < 0.25  → `.polish`
+        //   anchor present + difficulty < 0.6   → `.refine`
+        //   anchor present + difficulty ≥ 0.6   → caller's config
+        //                                          (still seeded, no
+        //                                          budget trim)
+        //   anchor absent                        → caller's config
+        //                                          (full search burden)
+        //
+        // An explicit `overrideConfig` always wins so programmatic
+        // callers (tests, training pipeline) keep their current
+        // behaviour unchanged.
         let difficulty = workloadDifficulty(
             movableEvents: context.movableEvents,
             fixedEvents: context.fixedEvents
         )
-        if difficulty < Self.trivialWorkloadDifficulty {
+        let dispatchMode: String
+        var config: GAConfiguration
+        var capturedIslandConfig: IslandConfiguration
+        if let override = overrideConfig {
+            config = override
+            capturedIslandConfig = overrideIslandConfig ?? islandConfig
+            dispatchMode = "override"
+        } else if anchorSeed != nil {
+            if difficulty < Self.trivialWorkloadDifficulty {
+                config = .polish
+                capturedIslandConfig = Self.singleIslandConfig(from: islandConfig)
+                dispatchMode = "polish"
+            } else if difficulty < Self.mediumWorkloadDifficulty {
+                config = .refine
+                capturedIslandConfig = Self.singleIslandConfig(from: islandConfig)
+                dispatchMode = "refine"
+            } else {
+                config = gaConfig
+                capturedIslandConfig = overrideIslandConfig ?? islandConfig
+                dispatchMode = "seeded_full"
+            }
+        } else {
+            config = gaConfig
+            capturedIslandConfig = overrideIslandConfig ?? islandConfig
+            dispatchMode = "search_full"
+        }
+
+        // Fall-through difficulty cap: still applies when the caller
+        // supplied an override OR when CP-SAT missed on a trivial
+        // workload — we don't want `.thorough` running 20 s on 4
+        // tasks just because CP-SAT happened to time out. Skipped in
+        // `polish` / `refine` modes because those presets already
+        // have tight bounds.
+        if dispatchMode == "override" || dispatchMode == "search_full",
+           difficulty < Self.trivialWorkloadDifficulty {
             let capPop = max(20, Int(Double(config.populationSize) * 0.25))
             let capGen = max(20, Int(Double(config.maxGenerations) * 0.15))
             let capWall = max(0.8, config.wallclockTimeout * 0.15)
@@ -308,24 +359,11 @@ final class BuboOptimizer {
             config.maxGenerations = min(config.maxGenerations, capGen)
             config.wallclockTimeout = min(config.wallclockTimeout, capWall)
             config.convergencePatience = min(config.convergencePatience, capPatience)
-            // Island mode's per-island × N overhead is pure waste on a
-            // toy problem; collapse to a single island so total work
-            // scales with `config.populationSize` alone.
-            if capturedIslandConfig.islandCount > 1 {
-                capturedIslandConfig = IslandConfiguration(
-                    islandCount: 1,
-                    migrationInterval: capturedIslandConfig.migrationInterval,
-                    migrationSize: capturedIslandConfig.migrationSize,
-                    topology: capturedIslandConfig.topology,
-                    emigrantSelection: capturedIslandConfig.emigrantSelection,
-                    immigrantReplacement: capturedIslandConfig.immigrantReplacement,
-                    diversifyIslands: false,
-                    adaptiveMigration: false,
-                    routeByProductivity: false
-                )
-            }
+            capturedIslandConfig = Self.singleIslandConfig(from: capturedIslandConfig)
             gaStatsLogger.info("workload_downshift rid=\(runId, privacy: .public) difficulty=\(difficulty) pop=\(originalPop)→\(config.populationSize) gen=\(config.maxGenerations) wallclock=\(String(format: "%.1f", originalTimeout))s→\(String(format: "%.1f", config.wallclockTimeout))s")
         }
+
+        gaStatsLogger.info("dispatch rid=\(runId, privacy: .public) mode=\(dispatchMode, privacy: .public) difficulty=\(difficulty) cpsat=\(anchorSeed != nil ? "hit" : "miss", privacy: .public) cpsat_ms=\(cpSATDurationMs) pop=\(config.populationSize) gen=\(config.maxGenerations) wallclock=\(String(format: "%.1f", config.wallclockTimeout))s")
 
         // Survivor selector: adaptive NSGA-III with HypE-lite
         // tiebreak. The MOEA/D-AWA alternative was removed from the
@@ -508,6 +546,10 @@ final class BuboOptimizer {
             multiFidelityBatch = nil
         }
 
+        // Capture the anchor-replication fraction here so the detached
+        // task doesn't have to reach back into the @MainActor type.
+        let capturedAnchorFraction = Self.anchorReplicationFraction(forMode: dispatchMode)
+
         let (population, convergenceGen, duration) = await Task.detached(priority: .userInitiated) {
             let startTime = Date()
 
@@ -519,6 +561,8 @@ final class BuboOptimizer {
                 multiObjective: multiObjective,
                 hooks: hooks,
                 extraSeeds: extraSeeds,
+                anchorSeed: anchorSeed,
+                anchorReplicationFraction: capturedAnchorFraction,
                 migrationBandit: migrationBandit,
                 batchEvaluate: multiFidelityBatch
             )
@@ -1423,6 +1467,49 @@ final class BuboOptimizer {
     /// budget without forcing the downshift on mid-sized weeks that
     /// genuinely benefit from more generations.
     private static let trivialWorkloadDifficulty: Double = 0.25
+
+    /// Upper bound on difficulty where `.refine` is still the right
+    /// GA config when CP-SAT delivered an anchor. Above this the
+    /// workload has genuine exploration need even with a good start
+    /// — fall through to the caller's configured preset so the
+    /// heavier machinery (multi-island, memetic hill climb,
+    /// adaptive mutation) gets a chance to fire.
+    private static let mediumWorkloadDifficulty: Double = 0.6
+
+    /// Fraction of each island's initial population seeded as
+    /// mutated copies of the CP-SAT anchor, chosen by dispatch mode.
+    /// Higher in `polish` (tight cloud around the lex-optimum,
+    /// minimal exploration) and lower in `seeded_full` (anchor is
+    /// one hint among many, GA still needs room to search).
+    private static func anchorReplicationFraction(forMode mode: String) -> Double {
+        switch mode {
+        case "polish":      return 0.6
+        case "refine":      return 0.4
+        case "seeded_full": return 0.2
+        default:            return 0.0
+        }
+    }
+
+    /// Collapse the supplied island configuration to a single-island
+    /// variant, preserving migration and replacement policies so any
+    /// downstream code that reads them stays happy. Used by the
+    /// polish / refine dispatch because multi-island only pays off
+    /// when the populations per island are large enough for
+    /// migration to meaningfully diversify — not the case here.
+    private static func singleIslandConfig(from source: IslandConfiguration) -> IslandConfiguration {
+        guard source.islandCount > 1 else { return source }
+        return IslandConfiguration(
+            islandCount: 1,
+            migrationInterval: source.migrationInterval,
+            migrationSize: source.migrationSize,
+            topology: source.topology,
+            emigrantSelection: source.emigrantSelection,
+            immigrantReplacement: source.immigrantReplacement,
+            diversifyIslands: false,
+            adaptiveMigration: false,
+            routeByProductivity: false
+        )
+    }
 
     private static func lerpInt(start: Int, end: Int, at t: Double) -> Int {
         let clamped = max(0.0, min(1.0, t))

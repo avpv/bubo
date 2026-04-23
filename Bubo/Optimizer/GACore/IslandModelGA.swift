@@ -258,6 +258,23 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
     /// preserved. Empty by default — the legacy seed mix is unchanged.
     let extraSeeds: [C]
 
+    /// CP-SAT construction anchor. When set, every island starts with
+    /// a cloud of near-copies built by `anchorReplicationFraction` of
+    /// the population — each copy is the anchor with a light mutation
+    /// applied — plus the usual mix of greedy / random for diversity.
+    /// `BuboOptimizer.optimize` populates this after calling
+    /// `ScheduleChromosome.cpSeeded`; passing `nil` preserves the
+    /// pre-anchor behaviour where greedy + random fill every slot.
+    let anchorSeed: C?
+
+    /// Fraction of each island's initial population that is seeded
+    /// as a mutated copy of `anchorSeed` when present. Above this
+    /// the island would converge to identical copies of the anchor
+    /// and lose soft-tier exploration; below it the anchor's
+    /// near-optimum doesn't get enough local sampling to matter.
+    /// Only consulted when `anchorSeed != nil`.
+    let anchorReplicationFraction: Double
+
     /// Optional learned migration topology. When set, the engine
     /// consults the bandit to pick (donor → receiver) pairs at each
     /// migration boundary instead of the static topology in
@@ -285,6 +302,8 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         hooks: EvolutionHooks<C> = .noop,
         federatedBandit: FederatedMutationBandit? = nil,
         extraSeeds: [C] = [],
+        anchorSeed: C? = nil,
+        anchorReplicationFraction: Double = 0.4,
         migrationBandit: MigrationTopologyBandit? = nil,
         batchEvaluate: ((inout [C]) -> Void)? = nil
     ) {
@@ -297,6 +316,8 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         self.hooks = hooks
         self.federatedBandit = federatedBandit
         self.extraSeeds = extraSeeds
+        self.anchorSeed = anchorSeed
+        self.anchorReplicationFraction = max(0, min(0.8, anchorReplicationFraction))
         self.migrationBandit = migrationBandit
         self.batchEvaluate = batchEvaluate
     }
@@ -332,11 +353,45 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         let islands = islandConfigs.enumerated().map { (idx, config) -> Island<C> in
             let islandContext = makeIslandContext(islandIndex: idx)
             let warmSeedSlice = seedsPerIsland[idx]
-            let greedyCount = max(0, Int(Double(config.populationSize) * config.greedySeedFraction))
-            let warmCount = min(warmSeedSlice.count, max(0, config.populationSize - greedyCount))
-            let randomCount = max(0, config.populationSize - greedyCount - warmCount)
+
+            // Anchor-replication: when CP-SAT has delivered an
+            // anchor, reserve a slice of the population for
+            // mutated copies of it. This is the "polish" basin —
+            // every copy starts at the lex-optimum and the low-rate
+            // mutation samples its immediate soft-tier neighbourhood.
+            // Remaining slots split across greedy variants + random
+            // for exploration, same as before.
+            let anchorCount: Int
+            if anchorSeed != nil {
+                anchorCount = max(0, Int(Double(config.populationSize) * anchorReplicationFraction))
+            } else {
+                anchorCount = 0
+            }
+            // Budget after anchor takes its share. Greedy and random
+            // fractions apply to the remainder.
+            let postAnchorBudget = max(0, config.populationSize - anchorCount)
+            let greedyCount = max(0, Int(Double(postAnchorBudget) * config.greedySeedFraction))
+            let warmCount = min(warmSeedSlice.count, max(0, postAnchorBudget - greedyCount))
+            let randomCount = max(0, postAnchorBudget - greedyCount - warmCount)
 
             var individuals: [C] = []
+            // First: the anchor itself (unmutated) and its mutated
+            // copies. The first entry is the untouched anchor so the
+            // GA's elitism can't lose the lex-optimum to a bad
+            // crossover on the very first generation.
+            if let anchor = anchorSeed, anchorCount > 0 {
+                individuals.append(anchor)
+                for i in 1..<anchorCount {
+                    var copy = anchor
+                    // Gentle perturbation so the initial cloud
+                    // samples a tight neighbourhood — rate scales
+                    // very slowly with i so the tail is still close
+                    // to the anchor rather than becoming random.
+                    let rate = 0.04 + Double(i) * 0.01
+                    copy.mutate(rate: min(0.25, rate), context: islandContext)
+                    individuals.append(copy)
+                }
+            }
             individuals.append(contentsOf: warmSeedSlice.prefix(warmCount))
             for i in 0..<greedyCount {
                 // Island index folds into the variant key so every

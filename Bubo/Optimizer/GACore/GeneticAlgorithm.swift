@@ -215,6 +215,84 @@ struct GAConfiguration: Sendable {
         wallclockTimeout: 0.5
     )
 
+    /// Polish configuration — GA runs *after* CP-SAT has found the
+    /// hard+mid tier optimum and the job is just to refine soft-tier
+    /// placement (Buffer, ContextSwitch, DayCompactness, EnergyCurve)
+    /// in the neighbourhood of the anchor.
+    ///
+    /// Shape is deliberately lean:
+    ///   • Tiny population because the anchor is already great —
+    ///     we're not searching, we're sampling a small basin.
+    ///   • Low mutation rate so perturbations stay local to the
+    ///     CP-SAT anchor and don't re-discover hard+mid violations
+    ///     that the anchor already solved.
+    ///   • No CHC restart: restart would throw away the anchor's
+    ///     structural win and is only useful when the GA is stuck,
+    ///     which it can't be on a trivially-polishable landscape.
+    ///   • Short wallclock + tight patience so the whole polish
+    ///     phase costs ~100-500ms even on the thorough path.
+    ///
+    /// `IslandModelGA` adds anchor-replication seeds on top: a
+    /// large fraction of the initial population is CP-SAT mutated
+    /// with ±1–2 slot jitter, so the GA's first generation is a
+    /// dense cloud around the lex-optimum. Remaining slots are
+    /// filled with greedy variants and random for diversity.
+    static let polish = GAConfiguration(
+        populationSize: 30,
+        maxGenerations: 25,
+        mutationRate: 0.08,
+        crossoverRate: 0.75,
+        eliteCount: 2,
+        selectionStrategy: .tournament(size: 3),
+        crossoverStrategy: .contextual(temperature: 0.4),
+        convergenceThreshold: 0.002,
+        convergencePatience: 6,
+        adaptiveMutation: true,
+        diversityThreshold: 0.02,
+        immigrationRate: 0.05,
+        greedySeedFraction: 0.2,
+        enableRepair: true,
+        adaptiveCrossover: false,
+        memeticHillClimbInterval: 10,
+        memeticHillClimbCandidates: 2,
+        memeticHillClimbSteps: 4,
+        chcMaxRestarts: 0,
+        chcRestartEliteFraction: 0.0,
+        chcRestartMutationRate: 0.0,
+        selfAdaptiveRates: true,
+        wallclockTimeout: 1.5
+    )
+
+    /// Refine configuration — GA after CP-SAT on a medium workload
+    /// where the anchor is feasible-optimal but soft tier has real
+    /// search space (20-40 events, some conflicts). Between
+    /// `polish` and `default` in every axis.
+    static let refine = GAConfiguration(
+        populationSize: 60,
+        maxGenerations: 80,
+        mutationRate: 0.12,
+        crossoverRate: 0.8,
+        eliteCount: 3,
+        selectionStrategy: .tournament(size: 3),
+        crossoverStrategy: .contextual(temperature: 0.5),
+        convergenceThreshold: 0.001,
+        convergencePatience: 12,
+        adaptiveMutation: true,
+        diversityThreshold: 0.015,
+        immigrationRate: 0.08,
+        greedySeedFraction: 0.25,
+        enableRepair: true,
+        adaptiveCrossover: true,
+        memeticHillClimbInterval: 20,
+        memeticHillClimbCandidates: 3,
+        memeticHillClimbSteps: 5,
+        chcMaxRestarts: 1,
+        chcRestartEliteFraction: 0.2,
+        chcRestartMutationRate: 0.3,
+        selfAdaptiveRates: true,
+        wallclockTimeout: 4.0
+    )
+
     static let thorough = GAConfiguration(
         populationSize: 200,
         maxGenerations: 500,

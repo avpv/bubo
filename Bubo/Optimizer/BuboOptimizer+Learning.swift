@@ -418,20 +418,12 @@ extension BuboOptimizer {
         if schedulingFeatures.useGNNWarmStart {
             seeds.append(bundle.gnnTrainer.seedChromosome(context: context))
         }
-        // CP-SAT construction seeder: one feasibility-optimal
-        // individual that already maximises placement, minimises
-        // deadline overruns, and respects backlog order. Fires
-        // before the brute-force small-N path below so its answer
-        // enters the initial population even on 4-task weeks, where
-        // it typically lands on the exact optimum that the GA would
-        // otherwise have to discover by mutation. Returns nil on
-        // timeout / flag-off / infeasibility — the whole seeder is
-        // best-effort and its absence just means the population
-        // starts with the other sources.
-        if schedulingFeatures.useCPSATSeed,
-           let cpSeed = ScheduleChromosome.cpSeeded(context: context) {
-            seeds.append(cpSeed)
-        }
+        // NOTE: CP-SAT construction seed is handled separately in
+        // `BuboOptimizer.optimize` so its result can drive the
+        // GA-config dispatch (polish / refine / search). The anchor
+        // reaches the island populations through
+        // `IslandModelGA.anchorSeed` rather than this generic
+        // warm-start list.
 
         // Brute-force seeding for tiny backlogs. With N ≤ 4 the full
         // set of greedy-constructed permutations is 24 or fewer —
