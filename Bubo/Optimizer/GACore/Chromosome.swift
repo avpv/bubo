@@ -2422,6 +2422,24 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
             occupied.append((gene.startTime, gene.endTime))
         }
         occupied.sort { $0.start < $1.start }
+        occupied.reserveCapacity(occupied.count + destroyed.count)
+
+        // See `repair()` for the rationale — binary-search insertion
+        // keeps the per-placement cost O(log N + N) instead of the
+        // full O(N log N) sort that used to run after every append.
+        func insertSorted(_ entry: (start: Date, end: Date)) {
+            var lo = 0
+            var hi = occupied.count
+            while lo < hi {
+                let mid = (lo + hi) / 2
+                if occupied[mid].start < entry.start {
+                    lo = mid + 1
+                } else {
+                    hi = mid
+                }
+            }
+            occupied.insert(entry, at: lo)
+        }
 
         let eventById: [String: OptimizableEvent] = Dictionary(
             uniqueKeysWithValues: context.movableEvents.map { ($0.id, $0) }
@@ -2547,8 +2565,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                     genes[chosenIdx] = genes[chosenIdx].withSlot(nearest: slot, registry: slotRegistry)
                     changed.insert(chosenIdx)
                 }
-                occupied.append((slot, slot.addingTimeInterval(genes[chosenIdx].duration)))
-                occupied.sort { $0.start < $1.start }
+                insertSorted((slot, slot.addingTimeInterval(genes[chosenIdx].duration)))
             } else if genes[chosenIdx].isDroppable {
                 if genes[chosenIdx].isIncluded {
                     genes[chosenIdx].isIncluded = false
@@ -2593,8 +2610,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                         genes[idx] = genes[idx].withSlot(nearest: slot, registry: slotRegistry)
                         changed.insert(idx)
                     }
-                    occupied.append((slot, slot.addingTimeInterval(genes[idx].duration)))
-                    occupied.sort { $0.start < $1.start }
+                    insertSorted((slot, slot.addingTimeInterval(genes[idx].duration)))
                 }
             }
         }
@@ -2735,6 +2751,31 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
             ($0.startDate, $0.endDate)
         }
         occupied.sort { $0.start < $1.start }
+        occupied.reserveCapacity(occupied.count + sortedIndices.count)
+
+        // Insert `entry` into the already-sorted `occupied` array in
+        // O(log N) binary search + O(N) shift. Kept inline so the
+        // iteration below stays easy to follow.
+        //
+        // Previously this loop appended and then ran a full O(N log N)
+        // `sort` on every iteration — O(N² log N) total when repair
+        // touches all N genes, which is the hot path for any mutation.
+        // A linear scan would work for tiny arrays, but binary search
+        // keeps the insertion cost bounded as the horizon grows to
+        // include dozens of fixed events + movables.
+        func insertSorted(_ entry: (start: Date, end: Date)) {
+            var lo = 0
+            var hi = occupied.count
+            while lo < hi {
+                let mid = (lo + hi) / 2
+                if occupied[mid].start < entry.start {
+                    lo = mid + 1
+                } else {
+                    hi = mid
+                }
+            }
+            occupied.insert(entry, at: lo)
+        }
 
         for idx in sortedIndices {
             let gene = genes[idx]
@@ -2804,8 +2845,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 }
             }
 
-            occupied.append((genes[idx].startTime, genes[idx].endTime))
-            occupied.sort { $0.start < $1.start }
+            insertSorted((genes[idx].startTime, genes[idx].endTime))
         }
 
         // Canonicalize equivalent gene groups after

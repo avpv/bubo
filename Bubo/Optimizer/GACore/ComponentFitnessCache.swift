@@ -99,10 +99,19 @@ final class ComponentFitnessCache: Sendable {
     /// Build a content key for one component.
     ///
     /// Hashes the (eventId, bucketed-startTime, duration, isIncluded)
-    /// tuple of every gene whose eventId is in `geneIds`. Sorts by
-    /// eventId so gene-array ordering is irrelevant — two chromosomes
-    /// with the same gene set but different array order still hit
-    /// the same cache slot.
+    /// tuple of every gene whose eventId is in `geneIds`.
+    ///
+    /// The caller is expected to pass `geneIds` in a deterministic
+    /// order — typically whatever `ScheduleConflictGraph.allComponents()`
+    /// returns, which is the movable-events-order bucketing that stays
+    /// stable for the lifetime of a graph. The key does not sort
+    /// defensively: two chromosomes share a cache slot when they share
+    /// the same *graph* (which governs the `geneIds` order anyway), and
+    /// the cache is invalidated on graph rebuilds. An O(N log N) sort
+    /// per component per chromosome evaluation was previously run here
+    /// "defensively" and cost 30-100 µs/generation on typical
+    /// schedules while protecting against a hypothetical future caller
+    /// that doesn't exist today.
     ///
     /// Genes missing from `geneByEvent` contribute a literal "absent"
     /// marker so a subsequent re-inclusion produces a different key.
@@ -115,10 +124,7 @@ final class ComponentFitnessCache: Sendable {
         var hasher = Hasher()
         hasher.combine(componentId)
         hasher.combine(geneIds.count)
-        // Sort defensively — `allComponents()` returns members in id
-        // order today, but a future change shouldn't silently break
-        // cache identity.
-        for id in geneIds.sorted() {
+        for id in geneIds {
             hasher.combine(id)
             if let gene = geneByEvent[id] {
                 // Bucket the start time so floating-point noise from

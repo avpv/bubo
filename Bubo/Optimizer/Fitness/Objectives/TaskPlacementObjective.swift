@@ -16,13 +16,29 @@ struct TaskPlacementObjective: FitnessObjective {
         guard !chromosome.genes.isEmpty else { return 1.0 }
 
         let cal = context.calendar
+        // One-time lookups: avoid O(N·M) `first(where:)` scan over
+        // `movableEvents` per gene and O(N·(F+M)) interrupted-check
+        // over every fixed + gene per gene. Both collapse to
+        // per-day/per-id dictionary reads below.
+        let movableById = Dictionary(
+            uniqueKeysWithValues: context.movableEvents.map { ($0.id, $0) }
+        )
+        var fixedStartsByDay: [Date: [Date]] = [:]
+        for ev in context.fixedEvents {
+            let day = cal.startOfDay(for: ev.startDate)
+            fixedStartsByDay[day, default: []].append(ev.startDate)
+        }
+        var geneStartsByDay: [Date: [Date]] = [:]
+        for g in chromosome.genes where g.isIncluded {
+            let day = cal.startOfDay(for: g.startTime)
+            geneStartsByDay[day, default: []].append(g.startTime)
+        }
+
         var totalScore = 0.0
         var evaluatedCount = 0
 
         for gene in chromosome.genes {
-            guard let event = context.movableEvents.first(where: { $0.id == gene.eventId }) else {
-                continue
-            }
+            guard let event = movableById[gene.eventId] else { continue }
             evaluatedCount += 1
 
             // Dropped droppable genes stay in the denominator but contribute
@@ -66,7 +82,14 @@ struct TaskPlacementObjective: FitnessObjective {
             score += 0.3 * (slotQuality * effectivePriority + (1 - effectivePriority) * 0.5)
 
             // 3. Not fragmented — task has enough continuous time (0.3 weight)
-            let hasEnoughRoom = !isInterrupted(gene: gene, chromosome: chromosome, context: context)
+            let geneDay = cal.startOfDay(for: gene.startTime)
+            let fixedStarts = fixedStartsByDay[geneDay] ?? []
+            let geneStarts = geneStartsByDay[geneDay] ?? []
+            let hasEnoughRoom = !isInterrupted(
+                gene: gene,
+                fixedStartsOnDay: fixedStarts,
+                geneStartsOnDay: geneStarts
+            )
             score += hasEnoughRoom ? 0.3 : 0.05
 
             totalScore += score
@@ -75,20 +98,25 @@ struct TaskPlacementObjective: FitnessObjective {
         return evaluatedCount > 0 ? totalScore / Double(evaluatedCount) : 1.0
     }
 
+    /// Returns true when any fixed event or other included gene starts
+    /// strictly between `gene.startTime` and `gene.endTime`. Pre-
+    /// filtered to the gene's own day by the caller — avoids a
+    /// whole-horizon scan for a check that's only meaningful for
+    /// same-day events. Self-exclusion falls out of the strict `>`
+    /// comparison (a gene's own start is never strictly greater than
+    /// itself), so no eventId filter is needed here.
     private func isInterrupted(
         gene: ScheduleGene,
-        chromosome: ScheduleChromosome,
-        context: OptimizerContext
+        fixedStartsOnDay: [Date],
+        geneStartsOnDay: [Date]
     ) -> Bool {
-        for event in context.fixedEvents {
-            if event.startDate > gene.startTime && event.startDate < gene.endTime {
-                return true
-            }
+        let start = gene.startTime
+        let end = gene.endTime
+        for s in fixedStartsOnDay where s > start && s < end {
+            return true
         }
-        for other in chromosome.genes where other.eventId != gene.eventId && other.isIncluded {
-            if other.startTime > gene.startTime && other.startTime < gene.endTime {
-                return true
-            }
+        for s in geneStartsOnDay where s > start && s < end {
+            return true
         }
         return false
     }
