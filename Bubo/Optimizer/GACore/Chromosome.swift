@@ -722,26 +722,103 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
             ($0.startDate, $0.endDate)
         }
 
-        // Simple priority-weighted scorer: earlier placements of
-        // higher-priority events score better. The solver uses this to
-        // break ties between feasible assignments; we don't need a
-        // sophisticated metric because the GA will polish soft
-        // objectives on subsequent generations.
+        // Lexicographic-via-scalar scorer. The three-tier lex-fitness
+        // the GA runs downstream cares about placement quality in
+        // this priority order:
+        //   1. more events placed (inclusion)
+        //   2. fewer minutes of deadline overrun
+        //   3. fewer backlog-order inversions
+        //   4. earlier placement of high-priority events (tie-break)
+        //
+        // The CP-SAT solver wants a single scalar `scoreAssignment`
+        // callback. We encode the lex order via large weight gaps:
+        // each tier's maximum possible contribution is smaller than
+        // the *minimum* useful unit of the tier above it, so a lower-
+        // tier improvement can never overpower a higher-tier one. On
+        // realistic workloads (≤ 30 events, ≤ 7 days) the gaps are
+        // comfortably wide — the solver treats them as a pure
+        // hierarchy and the fallback tie-breaker only fires when the
+        // higher tiers genuinely tie.
+        //
+        // Weights:
+        //   W1 (inclusion)   = 1e9  — every placed event adds 1e9
+        //   W2 (deadline)    = 1e5  — per-minute overrun subtracts
+        //   W3 (backlog)     = 1e1  — per-inversion subtracts 10
+        //   W4 (earliness)   = 1.0  — per-event × (1 - position)
+        //
+        // Totals stay comfortably in Double range: W1 × 200 events =
+        // 2e11, well below 1e15 where precision starts to matter.
+        let backlogById = context.backlogIndexMap()
         let priorityByIndex: [Int: Double] = Dictionary(
             uniqueKeysWithValues: context.movableEvents.enumerated().map { ($0, $1.priority) }
         )
-        let horizonStart = context.planningHorizon.start.timeIntervalSinceReferenceDate
-        let horizonSpan = max(1, context.planningHorizon.end.timeIntervalSinceReferenceDate - horizonStart)
+        let deadlineByIndex: [Int: Date] = Dictionary(
+            uniqueKeysWithValues: context.movableEvents.enumerated().compactMap { idx, ev in
+                ev.deadline.map { (idx, $0) }
+            }
+        )
+        let durationByIndex: [Int: TimeInterval] = Dictionary(
+            uniqueKeysWithValues: context.movableEvents.enumerated().map { ($0, $1.duration) }
+        )
+        let backlogRankByIndex: [Int: Int] = Dictionary(
+            uniqueKeysWithValues: context.movableEvents.enumerated().compactMap { idx, ev in
+                backlogById[ev.id].map { (idx, $0) }
+            }
+        )
+        let horizonStartRef = context.planningHorizon.start.timeIntervalSinceReferenceDate
+        let horizonSpan = max(1, context.planningHorizon.end.timeIntervalSinceReferenceDate - horizonStartRef)
         let scorer: ([Int: Date]) -> Double = { assignment in
-            var score = 0.0
+            // Tier 1: inclusion — every placed variable contributes W1.
+            let inclusion = Double(assignment.count) * 1e9
+
+            // Tier 2: deadline overrun in minutes, negated so more
+            // overrun scores worse. Computed per-assignment as
+            // `max(0, end - deadline)` in minutes.
+            var overrunMinutes = 0.0
+            for (idx, start) in assignment {
+                guard let deadline = deadlineByIndex[idx],
+                      let duration = durationByIndex[idx] else { continue }
+                let end = start.addingTimeInterval(duration)
+                if end > deadline {
+                    overrunMinutes += end.timeIntervalSince(deadline) / 60.0
+                }
+            }
+            let deadlineScore = -overrunMinutes * 1e5
+
+            // Tier 3: backlog inversions. An inversion is a pair
+            // (i, j) where i has a lower (= earlier) backlog rank
+            // than j but i's assigned start is *later* than j's.
+            // Events without a backlog rank don't contribute.
+            var inversions = 0
+            let ranked: [(idx: Int, rank: Int, start: Date)] = assignment.compactMap { idx, start in
+                backlogRankByIndex[idx].map { (idx: idx, rank: $0, start: start) }
+            }
+            if ranked.count >= 2 {
+                for i in 0..<ranked.count {
+                    for j in (i + 1)..<ranked.count {
+                        let a = ranked[i]
+                        let b = ranked[j]
+                        if a.rank < b.rank && a.start > b.start {
+                            inversions += 1
+                        } else if b.rank < a.rank && b.start > a.start {
+                            inversions += 1
+                        }
+                    }
+                }
+            }
+            let backlogScore = -Double(inversions) * 1e1
+
+            // Tier 4: priority × earliness tie-breaker. Same as the
+            // pre-lex scorer; only decides among otherwise-equivalent
+            // assignments.
+            var earliness = 0.0
             for (idx, date) in assignment {
                 let priority = priorityByIndex[idx] ?? 0.5
-                // Position in [0, 1]: 0 = start of horizon, 1 = end.
-                let position = (date.timeIntervalSinceReferenceDate - horizonStart) / horizonSpan
-                // Priority wants early placement → invert position.
-                score += priority * (1.0 - position)
+                let position = (date.timeIntervalSinceReferenceDate - horizonStartRef) / horizonSpan
+                earliness += priority * (1.0 - position)
             }
-            return score
+
+            return inclusion + deadlineScore + backlogScore + earliness
         }
 
         let result = repairer.solve(

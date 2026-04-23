@@ -1,15 +1,32 @@
 import Foundation
 
-// MARK: - CP-SAT-style Repair Adapter (Wave 3 / п.1)
+// MARK: - CP-SAT-style Solver
 //
-// The existing `applyLNS` already runs CP-style branch-and-bound
-// with forward checking, dom/deg ordering, and cost pruning — but it
-// hard-caps the destroy window at 15 genes and the node-expansion
-// budget at 2000. On dense workloads (≥20 precedence-heavy events)
-// that truncates search before useful no-goods emerge.
+// CDCL-lite constraint solver with Luby restarts and VSIDS-like
+// variable activity. Originally introduced as a complementary LNS
+// repair engine; now reused as the backend for
+// `ScheduleChromosome.cpSeeded`, the feasibility-optimal
+// construction seeder that injects one guaranteed-feasible, lex-
+// optimising individual into the GA's initial population.
 //
-// This adapter is a complementary repair engine designed for large
-// windows (≥20 genes) with:
+// Why this shape of solver works for both roles:
+//
+//   • The API (`solve(variables:precedence:fixedBlocks:
+//     scoreAssignment:)`) is purely assignment-shaped — the caller
+//     supplies per-variable domains and overlap / precedence
+//     constraints and receives a `[geneIndex: Date]` map. It
+//     doesn't care whether the "variables" represent a destroyed
+//     LNS window or the whole movable-events set.
+//
+//   • The score callback lets the caller encode whatever objective
+//     the solver should maximise. LNS passes a displacement
+//     minimiser; the construction seeder passes a weighted lex
+//     encoding of (inclusion, deadline, backlog, earliness) so the
+//     solver lands on the exact hard + mid tier optimum in the
+//     three-tier `LexFitness` hierarchy the GA uses downstream.
+//
+// Implementation notes retained from the repair-era design:
+//
 //   • CDCL-lite: every dead-end records a no-good clause (the set
 //     of (variable, value) assignments that led to failure) and
 //     future branching prunes any subtree that would hit the clause.
@@ -21,11 +38,11 @@ import Foundation
 //     variables that appear in many no-goods get searched first,
 //     exposing conflicts faster.
 //
-// Not wired into the main LNS path — callers construct a
-// `CPSATRepairer`, pass it the destroyed window + domains, and
-// receive an assignment. Intended for use by the LNS operator when
-// the destroy window size exceeds the built-in threshold (20),
-// matching the recommendation to gate CP-SAT by window size.
+// Wired into the main LNS path through the LNS repair bandit (it
+// gets to choose between branch-and-bound, regret, and this
+// solver) when `context.cpSATRepairer` is non-nil, and into
+// construction seeding unconditionally via `cpSeeded` whenever the
+// repairer is present.
 
 // MARK: - Types
 

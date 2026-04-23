@@ -25,10 +25,10 @@ import Foundation
 /// template fixes gene count / eventId positions; samples are offset
 /// vectors of the same length.
 ///
-/// Retired from the production path. `schedulingFeatures.useCMAMEEmitter`
-/// was removed; no feature flag now reaches the `cmaMEEmission` hook
-/// that builds one. File kept so existing tests compile; follow-up
-/// cleanup can delete it plus the Wave2Tests coverage once nothing
+/// Retired from the production path: `schedulingFeatures.useCMAMEEmitter`
+/// was removed and no feature flag now reaches the `cmaMEEmission`
+/// hook that builds one. File kept so existing tests compile; follow-
+/// up cleanup can delete it plus the Wave2Tests coverage once nothing
 /// external imports the type.
 final class CMAMEEmitter: @unchecked Sendable {
     struct Configuration: Sendable {

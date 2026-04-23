@@ -236,11 +236,19 @@ final class BuboOptimizer {
         let tabuToInject: TabuMemory? = schedulingFeatures.useTabuMemory
             ? preliminarySuite.tabu
             : nil
-        // CP-SAT repair adapter retired from the production path —
-        // the baseline branch-and-bound in `cpRepair` matched it on
-        // realistic workloads without a second solver's maintenance
-        // cost. Pass nil so `applyLNS` always uses the built-in path.
-        let cpSATToInject: CPSATRepairer? = nil
+        // CP-SAT as feasibility-optimal construction seeder. The
+        // repair-side use was retired (handwritten B&B matches it on
+        // the realistic workloads we measured), but as a *seeder* the
+        // solver buys something different: one guaranteed-feasible
+        // initial individual that already optimises the hard + mid
+        // lex tiers (inclusion, deadline, backlog order) before the
+        // GA starts polishing the soft tier. When the flag is off or
+        // the solver times out, the warm-start collector silently
+        // skips the CP-SAT seed and the population stays
+        // greedy + random + GNN.
+        let cpSATToInject: CPSATRepairer? = schedulingFeatures.useCPSATSeed
+            ? CPSATRepairer()
+            : nil
         // One shared slot registry + per-gene domain cache for the
         // whole run. Every island context inherits the same holders,
         // so registry build happens once and each movable event's

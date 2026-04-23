@@ -44,9 +44,24 @@ struct SchedulingFeatureToggles: Sendable {
     var usePathRelinking: Bool = true
 
     /// Shared window threshold retained for the extended learner
-    /// bundle's public API surface even after the CP-SAT dispatcher
-    /// was retired — some callers read it for diagnostics.
+    /// bundle's public API surface and referenced by
+    /// `ScheduleChromosome.cpSeeded` to decide when the CP-SAT
+    /// construction seeder fires at all.
     var cpSATWindowThreshold: Int = 20
+
+    /// When on, inject a `CPSATRepairer` into the optimizer context
+    /// so the construction seeder (`ScheduleChromosome.cpSeeded`)
+    /// can produce one feasibility-optimal individual per run.
+    /// Distinct from the retired `useCPSATRepair` — that flag routed
+    /// LNS destroy windows through the same solver and was dropped
+    /// because the handwritten branch-and-bound matched it on the
+    /// realistic workloads we measured. As a *seeder* the solver
+    /// buys something different: a guaranteed-feasible start that
+    /// already optimises the hard + mid lex tiers (inclusion,
+    /// deadline, backlog-order), so the GA only has to polish the
+    /// soft tier. On timeout or infeasibility `cpSeeded` returns
+    /// nil and the warm-start collector skips it.
+    var useCPSATSeed: Bool = true
 
     // MARK: - Removed flags
     //
@@ -57,19 +72,22 @@ struct SchedulingFeatureToggles: Sendable {
     //   • `useCMAMEEmitter` — covariance-adapted Gaussian emitter
     //     on top of the MAP-Elites archive.
     //   • `useCPSATRepair` — routed LNS destroy windows ≥ threshold
-    //     through a CDCL-lite adapter. The baseline branch-and-bound
-    //     consistently matched or beat it on realistic workloads
-    //     while avoiding a second solver's maintenance cost.
+    //     through the CDCL-lite solver. The baseline branch-and-bound
+    //     consistently matched or beat it on realistic workloads as
+    //     a *repair* engine; the solver itself still lives under
+    //     `CPSATRepair.swift` and is now reused as the construction
+    //     seeder backend via `useCPSATSeed`.
     //   • `useLearnedBranching` — LinUCB bandit over CP-SAT variable
-    //     ordering. Only meaningful when CP-SAT was on.
+    //     ordering. Dormant; the seeder path uses the solver's
+    //     built-in VSIDS-like ordering.
     //   • `useMigrationBandit` — UCB bandit over island migration
     //     pairs. The adaptive migration interval plus fixed ring
     //     topology delivered the same win without the extra state.
     //
-    // The underlying types remain in the codebase under
-    // `@available(*, deprecated, …)` for reference; production paths
-    // no longer reach them. Remove the files entirely once nothing
-    // external still imports them.
+    // Underlying types remain in the codebase so the solver can be
+    // reached by new entry points (as with CPSATRepair above) and so
+    // existing tests keep compiling. Remove the file entries entirely
+    // once nothing external imports them.
 
     /// Wave 4: online DPO weight learning from user feedback.
     var useDPOWeightLearning: Bool = true
@@ -399,6 +417,20 @@ extension BuboOptimizer {
         }
         if schedulingFeatures.useGNNWarmStart {
             seeds.append(bundle.gnnTrainer.seedChromosome(context: context))
+        }
+        // CP-SAT construction seeder: one feasibility-optimal
+        // individual that already maximises placement, minimises
+        // deadline overruns, and respects backlog order. Fires
+        // before the brute-force small-N path below so its answer
+        // enters the initial population even on 4-task weeks, where
+        // it typically lands on the exact optimum that the GA would
+        // otherwise have to discover by mutation. Returns nil on
+        // timeout / flag-off / infeasibility — the whole seeder is
+        // best-effort and its absence just means the population
+        // starts with the other sources.
+        if schedulingFeatures.useCPSATSeed,
+           let cpSeed = ScheduleChromosome.cpSeeded(context: context) {
+            seeds.append(cpSeed)
         }
 
         // Brute-force seeding for tiny backlogs. With N ≤ 4 the full
