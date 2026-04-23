@@ -915,12 +915,14 @@ final class BuboOptimizer {
             let deadlineStr = ev.deadline.map { " deadline=\(df.string(from: $0))" } ?? ""
             let earliestStr = ev.earliestStart.map { " earliest=\(df.string(from: $0))" } ?? ""
             let ctx = ev.context.map { " ctx=\($0)" } ?? ""
+            let spStr = ev.storyPoints.map { " sp=\($0)" } ?? ""
             let flagStr = flags.isEmpty ? "" : " [\(flags.joined(separator: ","))]"
-            lines.append(String(format: "  %2d. %.1fh p=%.2f e=%.2f%@%@%@%@ %@",
+            lines.append(String(format: "  %2d. %.1fh p=%.2f e=%.2f%@%@%@%@%@ %@",
                                 i + 1,
                                 ev.duration / 3600.0,
                                 ev.priority,
                                 ev.energyCost,
+                                spStr,
                                 ctx,
                                 deadlineStr,
                                 earliestStr,
@@ -1174,14 +1176,26 @@ final class BuboOptimizer {
                 for g in genes {
                     let title = titleById[g.eventId] ?? g.title
                     let mins = Int((g.duration / 60).rounded())
-                    lines.append("    \(tf.string(from: g.startTime))-\(tf.string(from: g.endTime)) (\(mins)m) \(title)")
+                    let spStr = g.storyPoints.map { " sp=\($0)" } ?? ""
+                    lines.append(String(format: "    %@-%@ (%dm) p=%.2f%@ %@",
+                                        tf.string(from: g.startTime),
+                                        tf.string(from: g.endTime),
+                                        mins,
+                                        g.priority,
+                                        spStr,
+                                        title))
                 }
             }
 
             if !dropped.isEmpty {
-                let names = dropped.prefix(8).map { titleById[$0.eventId] ?? $0.title }
+                let entries = dropped.prefix(8).map { g -> String in
+                    let title = titleById[g.eventId] ?? g.title
+                    let mins = Int((g.duration / 60).rounded())
+                    let spStr = g.storyPoints.map { " sp=\($0)" } ?? ""
+                    return String(format: "%@ (p=%.2f%@ %dm)", title, g.priority, spStr, mins)
+                }
                 let suffix = dropped.count > 8 ? " (+\(dropped.count - 8) more)" : ""
-                lines.append("  dropped: \(names.joined(separator: ", "))\(suffix)")
+                lines.append("  dropped: \(entries.joined(separator: ", "))\(suffix)")
             }
         }
 
@@ -1191,9 +1205,13 @@ final class BuboOptimizer {
         let everPlaced = Set(result.scenarios.flatMap { $0.activeGenes.map(\.eventId) })
         let neverPlaced = movableEvents.filter { !everPlaced.contains($0.id) }
         if !neverPlaced.isEmpty {
-            let names = neverPlaced.prefix(8).map(\.title)
+            let entries = neverPlaced.prefix(8).map { ev -> String in
+                let mins = Int((ev.duration / 60).rounded())
+                let spStr = ev.storyPoints.map { " sp=\($0)" } ?? ""
+                return String(format: "%@ (p=%.2f%@ %dm)", ev.title, ev.priority, spStr, mins)
+            }
             let suffix = neverPlaced.count > 8 ? " (+\(neverPlaced.count - 8) more)" : ""
-            lines.append("never placed across any scenario: \(names.joined(separator: ", "))\(suffix)")
+            lines.append("never placed across any scenario: \(entries.joined(separator: ", "))\(suffix)")
         }
 
         // Mutation bandit arm usage: pulls and mean clipped reward per
