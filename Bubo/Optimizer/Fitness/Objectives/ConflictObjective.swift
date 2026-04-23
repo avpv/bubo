@@ -13,13 +13,15 @@ import Foundation
 /// O(dirty_days) when a mutation touches only a few days — the
 /// typical single-gene case on weekly plans.
 ///
-/// The combining step reconstructs the pre-partitioning scalar so the
-/// combined score still tracks `exp(-α·total_minutes)` semantics: we
-/// take the geometric mean (weighted by the per-day event count)
-/// rather than the arithmetic-mean default. Arithmetic mean would
-/// reward many-clean-days even when a single day has heavy overlap;
-/// geometric mean keeps a day with severe conflicts dominating the
-/// combined score, matching the original un-partitioned objective.
+/// The combining step averages per-day scores arithmetically,
+/// weighted by event count so empty days don't dilute the signal
+/// from a single busy-and-cluttered day. The previous geometric-mean
+/// variant amplified small per-day penalties multiplicatively and
+/// sent the combined Conflict score to ~0.6 even when
+/// `conflict_edges=0` and the only trouble was a 5-minute gap
+/// between two adjacent events — a penalty that blamed the GA for
+/// user-driven fixed-event collisions it couldn't do anything about
+/// and ate 70%+ of the fitness budget on trivial problems.
 struct ConflictObjective: DayPartitionedObjective {
     let name = "Conflict"
     var weight: Double
@@ -38,15 +40,16 @@ struct ConflictObjective: DayPartitionedObjective {
         context: OptimizerContext
     ) -> [Date: Double] {
         let cal = context.calendar
-        var eventsByDay: [Date: [(start: Date, end: Date)]] = [:]
+        typealias DayEvent = (start: Date, end: Date, movable: Bool)
+        var eventsByDay: [Date: [DayEvent]] = [:]
 
         for event in context.fixedEvents {
             let day = cal.startOfDay(for: event.startDate)
-            eventsByDay[day, default: []].append((event.startDate, event.endDate))
+            eventsByDay[day, default: []].append((event.startDate, event.endDate, false))
         }
         for gene in chromosome.genes where gene.isIncluded {
             let day = cal.startOfDay(for: gene.startTime)
-            eventsByDay[day, default: []].append((gene.startTime, gene.endTime))
+            eventsByDay[day, default: []].append((gene.startTime, gene.endTime, true))
         }
 
         var perDay: [Date: Double] = [:]
@@ -63,43 +66,43 @@ struct ConflictObjective: DayPartitionedObjective {
         context: OptimizerContext
     ) -> Double {
         let cal = context.calendar
-        var events: [(start: Date, end: Date)] = []
+        var events: [(start: Date, end: Date, movable: Bool)] = []
         for event in context.fixedEvents where cal.startOfDay(for: event.startDate) == day {
-            events.append((event.startDate, event.endDate))
+            events.append((event.startDate, event.endDate, false))
         }
         for gene in chromosome.genes where gene.isIncluded && cal.startOfDay(for: gene.startTime) == day {
-            events.append((gene.startTime, gene.endTime))
+            events.append((gene.startTime, gene.endTime, true))
         }
         return scoreDay(events: events)
     }
 
-    /// Geometric mean of per-day scores. Falls back to 1.0 when no day
-    /// has events — matches `DayPartitionedObjective`'s empty-horizon
-    /// default while keeping a single overloaded day from being
-    /// diluted into invisibility by several clean ones.
+    /// Arithmetic mean of per-day scores. Days with no events are
+    /// skipped so the empty-horizon default (`1.0`) still applies.
+    /// Unlike the previous geometric-mean combine, a single day
+    /// scoring 0.9 no longer drags a week of perfect days down to
+    /// ~0.95 — the combined score tracks the fraction of trouble
+    /// linearly, which is what downstream fitness-loss breakdowns
+    /// actually read for user-facing explanations.
     func combinePerDay(_ perDay: [Date: Double]) -> Double {
         guard !perDay.isEmpty else { return 1.0 }
-        // Geometric mean via log-sum to avoid underflow when many days
-        // have scores near 0.
-        var logSum = 0.0
+        var sum = 0.0
         var count = 0
         for score in perDay.values {
-            // Clamp to a tiny floor so log(0) doesn't blow up; score=0
-            // becomes log(1e-10) which already dominates the aggregate
-            // the way we want.
-            let clamped = max(1e-10, score)
-            logSum += log(clamped)
+            sum += score
             count += 1
         }
-        return exp(logSum / Double(count))
+        return sum / Double(count)
     }
 
-    /// Per-day scoring core — identical math to the pre-partitioning
-    /// implementation but restricted to events on the same day.
-    /// Same exponential-decay scales (0.05 per overlap minute, 0.02
-    /// per near-miss minute) so the geometric combine above
-    /// reconstructs the global scalar.
-    private func scoreDay(events: [(start: Date, end: Date)]) -> Double {
+    /// Per-day scoring core. Only counts overlaps and near-misses
+    /// that involve at least one movable gene — fixed↔fixed
+    /// collisions on the user's calendar are not the optimizer's
+    /// problem to solve and should not be penalised.
+    ///
+    /// Same exponential-decay scales as before (0.05 per overlap
+    /// minute, 0.02 per near-miss minute) so the scalar comparison
+    /// with historical runs stays meaningful.
+    private func scoreDay(events: [(start: Date, end: Date, movable: Bool)]) -> Double {
         guard !events.isEmpty else { return 1.0 }
         let sorted = events.sorted { $0.start < $1.start }
 
@@ -109,6 +112,8 @@ struct ConflictObjective: DayPartitionedObjective {
         for i in 0..<sorted.count {
             for j in (i + 1)..<sorted.count {
                 guard sorted[j].start < sorted[i].end else { break }
+                // Skip fixed↔fixed overlaps — the user owns those.
+                if !sorted[i].movable && !sorted[j].movable { continue }
                 let overlapStart = max(sorted[i].start, sorted[j].start)
                 let overlapEnd = min(sorted[i].end, sorted[j].end)
                 let overlapDuration = max(0, overlapEnd.timeIntervalSince(overlapStart)) / 60
@@ -116,6 +121,10 @@ struct ConflictObjective: DayPartitionedObjective {
             }
 
             if i + 1 < sorted.count {
+                // Near-miss also only when at least one side is
+                // movable — two back-to-back fixed meetings are the
+                // user's arrangement, not a scheduling defect.
+                if !sorted[i].movable && !sorted[i + 1].movable { continue }
                 let gap = sorted[i + 1].start.timeIntervalSince(sorted[i].end) / 60
                 if gap > 0 && gap < 5 {
                     nearMissMinutes += (5 - gap)

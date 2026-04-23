@@ -208,11 +208,22 @@ struct ScheduleGene: Codable, Hashable, Sendable {
     /// canonical way to move a gene when you have a Date in hand
     /// and a registry available — keeps both fields in sync so
     /// `slotIndex == nil` never shows up in production state.
+    ///
+    /// Also snaps `startTime` to the resolved grid Date so the
+    /// invariant `startTime == registry.slots[slotIndex]` holds after
+    /// this call. Callers routinely pass off-grid Dates (`horizon.start`
+    /// captured at the current wall-clock, `earliestStart` pulled from
+    /// arbitrary user input, gap edges from fixed-event boundaries at
+    /// sub-minute precision) and used to have those off-grid seconds
+    /// leak into `startTime` — which then surfaced in the UI and log
+    /// as times like 15:06 or 17:21 instead of the 15-/5-minute grid.
     func withSlot(nearest date: Date, registry: SlotRegistry) -> ScheduleGene {
-        ScheduleGene(
+        let idx = registry.nearestIndex(to: date)
+        let aligned = idx.flatMap { registry.resolvedDate(at: $0) } ?? date
+        return ScheduleGene(
             eventId: eventId,
             title: title,
-            startTime: date,
+            startTime: aligned,
             duration: duration,
             context: context,
             energyCost: energyCost,
@@ -224,7 +235,7 @@ struct ScheduleGene: Codable, Hashable, Sendable {
             pomodoroConfig: pomodoroConfig,
             reservedTaskIds: reservedTaskIds,
             groupId: groupId,
-            slotIndex: registry.nearestIndex(to: date)
+            slotIndex: idx
         )
     }
 
@@ -446,10 +457,15 @@ struct OptimizerPreferences: Codable, Sendable {
     /// through that default instead of force-unwrapping.
     var backlogOrderWeight: Double?
 
-    /// Fallback when `backlogOrderWeight` is nil. Kept small so backlog-order
-    /// matching only acts as a tiebreaker: deadlines, priority, and energy
-    /// matching still dominate when they differ between tasks.
-    static let defaultBacklogOrderWeight: Double = 0.5
+    /// Fallback when `backlogOrderWeight` is nil. Sized to match
+    /// `taskPlacementWeight` (default 1.0) — backlog order is a
+    /// first-class preference when the user asked to include the
+    /// backlog, not a tiebreaker. At the previous 0.5 value a GA
+    /// could save 5% of fitness via Buffer/ContextSwitch wins by
+    /// violating three out of four desired-order pairs, which
+    /// surfaced as "task 1 scheduled after tasks 2 and 3 on next
+    /// week" patterns in the logs.
+    static let defaultBacklogOrderWeight: Double = 1.5
 
     // Energy model
     var peakEnergyHour: Int           // hour of day with peak energy

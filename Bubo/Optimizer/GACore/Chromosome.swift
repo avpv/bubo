@@ -250,7 +250,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
             // or droppable we chose to include), fall back to a random
             // working-day start so the chromosome still has a value;
             // constraint penalties + repair will arbitrate.
-            let start = slot ?? randomStartTime(
+            let rawStart = slot ?? randomStartTime(
                 for: event,
                 in: context.planningHorizon,
                 workingHours: context.workingHours,
@@ -259,7 +259,14 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 workingDays: workingDays
             )
 
-            let boundSlot = slotRegistry.nearestIndex(to: start)
+            // Align seed startTime to the registry grid. Callers
+            // above (`findFirstFreeSlot`, `randomStartTime`) can
+            // return off-grid Dates when floors like `horizon.start`
+            // carry the current wall-clock time or when gaps abut
+            // fixed-event boundaries at sub-minute precision. Snapping
+            // keeps invariant (1) — `startTime == registry.slots[slotIndex]`.
+            let boundSlot = slotRegistry.nearestIndex(to: rawStart)
+            let start = boundSlot.flatMap { slotRegistry.resolvedDate(at: $0) } ?? rawStart
             genes.append(ScheduleGene(
                 eventId: event.id,
                 title: event.title,
@@ -358,7 +365,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 isIncluded = !event.isDroppable
             }
 
-            let startTime = slot ?? randomStartTime(
+            let rawStart = slot ?? randomStartTime(
                 for: event,
                 in: context.planningHorizon,
                 workingHours: context.workingHours,
@@ -366,6 +373,9 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 rng: context.rng,
                 workingDays: workingDays
             )
+            // Snap to registry grid — see `random(context:)` above.
+            let boundSlot = slotRegistry.nearestIndex(to: rawStart)
+            let startTime = boundSlot.flatMap { slotRegistry.resolvedDate(at: $0) } ?? rawStart
 
             let gene = ScheduleGene(
                 eventId: event.id,
@@ -382,7 +392,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 pomodoroConfig: event.pomodoroConfig,
                 reservedTaskIds: event.reservedTaskIds,
                 groupId: event.groupId,
-                slotIndex: slotRegistry.nearestIndex(to: startTime)
+                slotIndex: boundSlot
             )
             genes.append(gene)
 
@@ -402,7 +412,9 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         var result = orderedGenes
         let missing = context.movableEvents.filter { ev in !result.contains(where: { $0.eventId == ev.id }) }
         for event in missing {
-            let start = randomStartTime(for: event, in: context.planningHorizon, workingHours: context.workingHours, calendar: cal, rng: context.rng, workingDays: workingDays)
+            let rawStart = randomStartTime(for: event, in: context.planningHorizon, workingHours: context.workingHours, calendar: cal, rng: context.rng, workingDays: workingDays)
+            let boundSlot = slotRegistry.nearestIndex(to: rawStart)
+            let start = boundSlot.flatMap { slotRegistry.resolvedDate(at: $0) } ?? rawStart
             result.append(ScheduleGene(
                 eventId: event.id, title: event.title, startTime: start,
                 duration: event.duration, context: event.context, energyCost: event.energyCost,
@@ -411,7 +423,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 pomodoroConfig: event.pomodoroConfig,
                 reservedTaskIds: event.reservedTaskIds,
                 groupId: event.groupId,
-                slotIndex: slotRegistry.nearestIndex(to: start)
+                slotIndex: boundSlot
             ))
         }
 
@@ -650,22 +662,26 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         var genes: [ScheduleGene] = []
         genes.reserveCapacity(context.movableEvents.count)
         for (idx, event) in context.movableEvents.enumerated() {
-            let start: Date
+            let rawStart: Date
             let included: Bool
             if excludedGeneIndices.contains(idx) {
                 // Droppable with empty domain → keep at a nominal slot
                 // and flag excluded. Nominal slot is the earliest
                 // horizon edge so comparisons stay well-behaved.
-                start = context.planningHorizon.start
+                rawStart = context.planningHorizon.start
                 included = false
             } else if let assigned = result.assignments[idx] {
-                start = assigned
+                rawStart = assigned
                 included = true
             } else {
                 // Shouldn't happen given the count-match guard above,
                 // but fall through defensively rather than crashing.
                 return nil
             }
+            // Snap to registry grid so `startTime` matches the slot
+            // the index resolves to — see `random(context:)` rationale.
+            let boundSlot = slotRegistry.nearestIndex(to: rawStart)
+            let start = boundSlot.flatMap { slotRegistry.resolvedDate(at: $0) } ?? rawStart
             genes.append(ScheduleGene(
                 eventId: event.id,
                 title: event.title,
@@ -681,7 +697,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 pomodoroConfig: event.pomodoroConfig,
                 reservedTaskIds: event.reservedTaskIds,
                 groupId: event.groupId,
-                slotIndex: slotRegistry.nearestIndex(to: start)
+                slotIndex: boundSlot
             ))
         }
         return ScheduleChromosome(genes: genes, needsEvaluation: true)

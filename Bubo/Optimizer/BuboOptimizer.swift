@@ -263,6 +263,34 @@ final class BuboOptimizer {
         let capturedIslandConfig = overrideIslandConfig ?? islandConfig
         let capturedScenarioCount = scenarioCount
 
+        // Deterministic fast path for small, conflict-free problems.
+        // A 4-task backlog with no multi-participant edges used to
+        // spin the GA for 20+ seconds on a `.thorough` run to produce
+        // scattered afternoon placements; greedy placement in
+        // (priority DESC, backlogIndex ASC, deadline ASC) order nails
+        // the optimum in milliseconds. Falls back to the full GA path
+        // when the guardrails below don't hold.
+        if let greedyResult = tryGreedyFastPath(
+            context: adjustedContext,
+            evaluator: evaluator,
+            signature: signature,
+            wallStart: planWeekWallStart,
+            runId: runId
+        ) {
+            lastResult = greedyResult
+            if let best = greedyResult.scenarios.first {
+                currentSchedule = best.genes
+            }
+            logPlanWeekResult(
+                result: greedyResult,
+                movableEvents: context.movableEvents,
+                wallDuration: Date().timeIntervalSince(planWeekWallStart),
+                context: context,
+                telemetry: evaluator.telemetry.snapshot()
+            )
+            return greedyResult
+        }
+
         // Survivor selector: MOEA/D-AWA when explicitly enabled
         // (beneficial at 8+ objectives), else adaptive NSGA-III
         // with HypE-lite tiebreak. Both read per-objective scores
@@ -680,6 +708,132 @@ final class BuboOptimizer {
             overrideIslandConfig: islandCfg
         )
     }
+
+    /// Returns a single deterministic scenario built by greedy
+    /// placement in (priority DESC, backlogIndex ASC, deadline ASC,
+    /// earliestStart ASC) order when the problem is small and
+    /// unconstrained enough that the GA's exploration provides no
+    /// measurable benefit. Returns nil to fall through to the full
+    /// GA path.
+    ///
+    /// Criteria (all must hold):
+    ///   * ≤ `Self.fastPathMaxEvents` movable events
+    ///   * No `dependsOn` edges (precedence-free)
+    ///   * No multi-participant conflict edges
+    ///   * Every non-droppable event greedy-places successfully
+    ///
+    /// Rationale: a 4-task backlog with no conflict edges used to
+    /// spin the GA 20+ seconds on `.thorough` for a solution worse
+    /// than greedy-by-priority. The flat landscape (no conflicts, no
+    /// deps) means Conflict/Buffer/ContextSwitch objectives are all
+    /// near-saturated as soon as placements don't overlap, and the
+    /// only remaining signal — BacklogOrder — is exactly what the
+    /// greedy ordering enforces by construction.
+    private func tryGreedyFastPath(
+        context: OptimizerContext,
+        evaluator: FitnessEvaluator,
+        signature: TaskSignature,
+        wallStart: Date,
+        runId: String
+    ) -> OptimizerResult? {
+        let movable = context.movableEvents
+        guard !movable.isEmpty else { return nil }
+        guard movable.count <= Self.fastPathMaxEvents else { return nil }
+        // Any precedence edge means topological ordering can override
+        // the (priority, backlog, deadline) key — defer to GA/repair.
+        guard movable.allSatisfy({ $0.dependsOn.isEmpty }) else { return nil }
+
+        // Multi-participant conflict check via the context's cached
+        // conflict graph. Zero edges means no pair of events can
+        // collide via shared participants — only direct time overlap
+        // (which greedy handles by construction), so the landscape is
+        // dominated by objectives that a greedy fill already
+        // near-saturates.
+        let graph = context.ensureConflictGraph()
+        guard graph.conflictEdgeCount == 0 else { return nil }
+
+        // Sort: priority DESC, then backlog order, then deadline
+        // urgency, then earliestStart. Everything else is an
+        // alphabetical tiebreaker to keep the output deterministic
+        // across runs with equal keys.
+        let backlogById = context.backlogIndexMap()
+        let ordered = movable.sorted { a, b in
+            if a.priority != b.priority { return a.priority > b.priority }
+            let ai = backlogById[a.id]
+            let bi = backlogById[b.id]
+            if ai != bi {
+                switch (ai, bi) {
+                case let (l?, r?): return l < r
+                case (_?, nil):    return true
+                case (nil, _?):    return false
+                default:           break
+                }
+            }
+            if let da = a.deadline, let db = b.deadline, da != db { return da < db }
+            if (a.deadline != nil) != (b.deadline != nil) { return a.deadline != nil }
+            if let ea = a.earliestStart, let eb = b.earliestStart, ea != eb { return ea < eb }
+            return a.id < b.id
+        }
+
+        // Build the greedy placement. `greedyWithOrder` places every
+        // event into the first working-day slot that fits; droppable
+        // events that don't fit are excluded, non-droppables fall
+        // back to `randomStartTime` (which `evaluateAndAssign`'s
+        // constraint engine will then flag so the fast path can tell
+        // "greedy was feasible" from "nothing fits").
+        var chromo = ScheduleChromosome.greedyWithOrder(
+            context: context,
+            eventsInPlacementOrder: ordered
+        )
+        // Final repair pass — aligns every gene to the registry grid
+        // and resolves any edge-case overlap that greedy couldn't
+        // avoid (duplicate preferred-hour windows on the same day,
+        // etc.). Safe no-op when the greedy output was already clean.
+        chromo.repair(context: context)
+        chromo.needsEvaluation = true
+
+        evaluator.evaluateAndAssign(&chromo, context: context)
+
+        let violations = evaluator.constraintEngine.violations(
+            for: chromo,
+            context: context
+        )
+        // Any hard-constraint violation means greedy couldn't honour
+        // a non-negotiable (working hours, no-overlap, deadline) —
+        // hand off to the GA, which can drop-and-reshuffle. Droppable
+        // exclusions are expected and stay inside the fast path.
+        guard violations.isEmpty else { return nil }
+
+        let breakdown = chromo.objectiveCache
+            ?? evaluator.objectiveBreakdown(for: chromo, context: context)
+        var scenario = ScheduleScenario(
+            genes: chromo.genes,
+            fitness: chromo.rawFitness,
+            objectiveBreakdown: breakdown,
+            constraintViolations: violations
+        )
+        scenario.sourceSignature = signature
+
+        let duration = Date().timeIntervalSince(wallStart)
+        gaStatsLogger.info("plan_week_fast_path rid=\(runId, privacy: .public) events=\(movable.count) fitness=\(chromo.rawFitness) duration_ms=\(Int(duration * 1000))")
+
+        let metadata = OptimizationMetadata(
+            generations: 0,
+            totalDuration: duration,
+            bestFitness: chromo.rawFitness,
+            averageFitness: chromo.rawFitness,
+            convergenceGeneration: 0
+        )
+        return OptimizerResult(scenarios: [scenario], metadata: metadata)
+    }
+
+    /// Upper bound on movable events the greedy fast path will
+    /// consider. Chosen so a typical "plan my 4-5 task backlog" run
+    /// bypasses the GA while integration tests at 8 events and
+    /// power-user 20-event weeks still go through the full island
+    /// treatment — the latter produces the multi-scenario diversity
+    /// and per-run learner telemetry those tests assert on.
+    private static let fastPathMaxEvents = 6
 
     /// Pick GA + island config scaled continuously to the effective
     /// workload size. The search space is dominated by two things:

@@ -306,10 +306,16 @@ enum GNNWarmStart {
                 ) ?? nextStart
             }
             if start >= horizonEnd { continue }
+            // Align seed to the registry grid so `startTime` stays
+            // kept with `slotIndex` — otherwise the day-rollover math
+            // above can leave sub-minute drift on days where horizon
+            // edges don't fall on grid boundaries.
+            let boundSlot = slotRegistry.nearestIndex(to: start)
+            let alignedStart = boundSlot.flatMap { slotRegistry.resolvedDate(at: $0) } ?? start
             let gene = ScheduleGene(
                 eventId: event.id,
                 title: event.title,
-                startTime: start,
+                startTime: alignedStart,
                 duration: event.duration,
                 context: event.context,
                 energyCost: event.energyCost,
@@ -320,7 +326,7 @@ enum GNNWarmStart {
                 isIncluded: true,
                 pomodoroConfig: event.pomodoroConfig,
                 reservedTaskIds: event.reservedTaskIds,
-                slotIndex: slotRegistry.nearestIndex(to: start)
+                slotIndex: boundSlot
             )
             genes.append(gene)
             cursor = gene.endTime
