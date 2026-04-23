@@ -237,6 +237,11 @@ struct MAPElitesArchive {
         // Fraction of movable-task minutes that fall before 12:00.
         // Reports 0.5 (neutral) when there are no included movables so
         // empty schedules don't all pile into the same corner cell.
+        //
+        // Date-based comparison instead of hour-only: a gene ending at
+        // 12:30 has `endHour == 12` but is not wholly-morning. Comparing
+        // `gene.endTime <= noon` correctly classifies that as straddling
+        // noon so only the 30 pre-noon minutes get credited.
         var totalMinutes = 0.0
         var morningMinutes = 0.0
         let noonHour = 12
@@ -244,22 +249,16 @@ struct MAPElitesArchive {
             let duration = gene.endTime.timeIntervalSince(gene.startTime) / 60.0
             guard duration > 0 else { continue }
             totalMinutes += duration
-            let startHour = cal.component(.hour, from: gene.startTime)
-            let endHour = cal.component(.hour, from: gene.endTime)
-            if endHour <= noonHour {
+            let dayStart = cal.startOfDay(for: gene.startTime)
+            guard let noon = cal.date(bySettingHour: noonHour, minute: 0, second: 0, of: dayStart) else { continue }
+            if gene.endTime <= noon {
                 morningMinutes += duration
-            } else if startHour >= noonHour {
+            } else if gene.startTime >= noon {
                 // wholly afternoon — no contribution
             } else {
-                // Straddles noon — take the pre-noon slice. Construct
-                // the noon boundary on the gene's day so the interval
-                // math works for genes that start before lunch and end
-                // after it.
-                let dayStart = cal.startOfDay(for: gene.startTime)
-                if let noon = cal.date(bySettingHour: noonHour, minute: 0, second: 0, of: dayStart) {
-                    let clipped = noon.timeIntervalSince(gene.startTime) / 60.0
-                    morningMinutes += max(0, clipped)
-                }
+                // Straddles noon — credit only the pre-noon slice.
+                let clipped = noon.timeIntervalSince(gene.startTime) / 60.0
+                morningMinutes += max(0, clipped)
             }
         }
         let morningShare: Double
