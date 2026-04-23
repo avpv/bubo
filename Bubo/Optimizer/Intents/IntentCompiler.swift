@@ -46,7 +46,7 @@ struct IntentCompiler {
         // interpolation. Preset name is `.private` — user-authored
         // content — while the structural `cases` enum list stays
         // `.public` since it carries no user data.
-        logger.info("intents_received rid=\(requestId, privacy: .public) name=\(request.name ?? "", privacy: .private) count=\(request.intents.count) cases=\(request.intents.map(\.caseName).joined(separator: ","), privacy: .public)")
+        logger.info("intents_received rid=\(requestId, privacy: .public) name=\(request.name ?? "", privacy: .public) count=\(request.intents.count) cases=\(request.intents.map(\.caseName).joined(separator: ","), privacy: .public)")
 
         // Phase 0: Expand subgraphs and apply variables
         var expandedIntents = request.intents
@@ -361,9 +361,9 @@ private extension IntentCompiler {
         // `intents_received` line above is what investigators grep for.
         if intentsOSLog.isEnabled(type: .debug) {
             // `caseName` is the stable enum tag (no user data, .public);
-            // `label` inlines user titles like `createBlock(title:)`, so
-            // it stays `.private`.
-            logger.debug("intent_applied rid=\(requestId, privacy: .public) case=\(intent.caseName, privacy: .public) detail=\(intent.label, privacy: .private)")
+            // `label` inlines user titles like `createBlock(title:)`.
+            // Temporarily `.public` for plan-week slowness diagnosis.
+            logger.debug("intent_applied rid=\(requestId, privacy: .public) case=\(intent.caseName, privacy: .public) detail=\(intent.label, privacy: .public)")
         }
         switch intent {
 
