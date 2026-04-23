@@ -954,7 +954,7 @@ final class BuboOptimizer {
             workingHours: workingHours
         )
 
-        planWeekLogger.info("\(lines.joined(separator: "\n"), privacy: .private)")
+        planWeekLogger.info("\(lines.joined(separator: "\n"), privacy: .public)")
     }
 
     /// Emit `GADebugLog.warn(site: "input", …)` lines for events that
@@ -1106,7 +1106,7 @@ final class BuboOptimizer {
 
         if result.scenarios.isEmpty {
             lines.append("(no scenarios produced — GA returned empty population)")
-            planWeekLogger.info("\(lines.joined(separator: "\n"), privacy: .private)")
+            planWeekLogger.info("\(lines.joined(separator: "\n"), privacy: .public)")
             return
         }
 
@@ -1321,7 +1321,7 @@ final class BuboOptimizer {
             }
         }
 
-        planWeekLogger.info("\(lines.joined(separator: "\n"), privacy: .private)")
+        planWeekLogger.info("\(lines.joined(separator: "\n"), privacy: .public)")
     }
 
     /// Map `FitnessObjective.name` → weight from the current
