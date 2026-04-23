@@ -496,6 +496,16 @@ struct OptimizerPreferences: Codable, Sendable {
     /// week" patterns in the logs.
     static let defaultBacklogOrderWeight: Double = 1.5
 
+    /// Weight for `DayCompactnessObjective`. Optional so existing
+    /// persisted preferences decode cleanly without the key.
+    var dayCompactnessWeight: Double?
+
+    /// Fallback when `dayCompactnessWeight` is nil. Moderate — pulls
+    /// same-day tasks together without overruling Buffer's "keep a
+    /// few minutes between events" or BreakPlacement's hard break
+    /// windows.
+    static let defaultDayCompactnessWeight: Double = 0.5
+
     // Energy model
     var peakEnergyHour: Int           // hour of day with peak energy
     var energyDecayRate: Double       // how fast energy drops
@@ -558,6 +568,7 @@ struct OptimizerPreferences: Codable, Sendable {
         meetingClusteringWeight: Double = 0.8,
         taskInclusionWeight: Double = 1.0,
         backlogOrderWeight: Double? = nil,
+        dayCompactnessWeight: Double? = nil,
         peakEnergyHour: Int = 10,
         energyDecayRate: Double = 0.1,
         personalEnergyCurve: [Double]? = nil,
@@ -588,6 +599,7 @@ struct OptimizerPreferences: Codable, Sendable {
         self.meetingClusteringWeight = meetingClusteringWeight
         self.taskInclusionWeight = taskInclusionWeight
         self.backlogOrderWeight = backlogOrderWeight
+        self.dayCompactnessWeight = dayCompactnessWeight
         self.peakEnergyHour = peakEnergyHour
         self.energyDecayRate = energyDecayRate
         self.personalEnergyCurve = personalEnergyCurve

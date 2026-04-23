@@ -310,6 +310,7 @@ final class FitnessEvaluator: @unchecked Sendable {
                 TaskInclusionObjective(weight: preferences.taskInclusionWeight),
                 PrecedenceObjective(weight: 0.6),
                 BacklogOrderObjective(weight: preferences.backlogOrderWeight ?? OptimizerPreferences.defaultBacklogOrderWeight),
+                DayCompactnessObjective(weight: preferences.dayCompactnessWeight ?? OptimizerPreferences.defaultDayCompactnessWeight),
             ],
             constraintEngine: .standard,
             cache: FitnessCache(),
@@ -922,6 +923,7 @@ final class FitnessEvaluator: @unchecked Sendable {
             case "Buffer":              objectives[i].weight = preferences.bufferWeight
             case "MeetingClustering":   objectives[i].weight = preferences.meetingClusteringWeight
             case "BacklogOrder":        objectives[i].weight = preferences.backlogOrderWeight ?? OptimizerPreferences.defaultBacklogOrderWeight
+            case "DayCompactness":      objectives[i].weight = preferences.dayCompactnessWeight ?? OptimizerPreferences.defaultDayCompactnessWeight
             default: break
             }
         }

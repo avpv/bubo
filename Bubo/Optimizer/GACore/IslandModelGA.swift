@@ -339,7 +339,16 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             var individuals: [C] = []
             individuals.append(contentsOf: warmSeedSlice.prefix(warmCount))
             for i in 0..<greedyCount {
-                var ind = C.greedy(context: islandContext)
+                // Island index folds into the variant key so every
+                // island starts with its own rotation of greedy
+                // strategies (priority-first, deadline-first,
+                // short-first, long-first). Previously every greedy
+                // seed was the default sort, so the 30-50% "greedy"
+                // share of each population was really 1 unique
+                // individual × N copies. Now the seeds genuinely
+                // span multiple basins.
+                let variantKey = idx * 7 + i
+                var ind = C.greedy(context: islandContext, variantIndex: variantKey)
                 if i > 0 { ind.mutate(rate: 0.1 + Double(i) * 0.05, context: islandContext) }
                 individuals.append(ind)
             }
@@ -459,6 +468,9 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             case "BacklogOrder":
                 let base = prefs.backlogOrderWeight ?? OptimizerPreferences.defaultBacklogOrderWeight
                 prefs.backlogOrderWeight = base * clampedFactor
+            case "DayCompactness":
+                let base = prefs.dayCompactnessWeight ?? OptimizerPreferences.defaultDayCompactnessWeight
+                prefs.dayCompactnessWeight = base * clampedFactor
             default:
                 // Unknown name — ignore silently so the bias dict can
                 // evolve independently of the objective list.
@@ -529,6 +541,16 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         var globalStaleGenerations = 0
         var lastGlobalBestFitness = bestEver?.rawFitness ?? 0
         var totalMigrations = 0
+        // Global plateau detector — see GeneticAlgorithm.evolve for
+        // rationale. Window is half `convergencePatience +
+        // migrationInterval` so migrations still have a chance to
+        // revive islands before termination fires, but the detector
+        // exits ~2× faster than the counter alone once every island
+        // has genuinely stagnated.
+        var globalPlateauDetector = FitnessPlateauDetector(
+            capacity: max(3, (baseConfig.convergencePatience + islandConfig.migrationInterval) / 2)
+        )
+        globalPlateauDetector.push(lastGlobalBestFitness)
 
         // Adaptive migration state
         var effectiveInterval = islandConfig.migrationInterval
@@ -669,8 +691,20 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
                 convergenceGeneration = generation
             }
             lastGlobalBestFitness = currentGlobalBest
+            globalPlateauDetector.push(currentGlobalBest)
 
-            // Use higher patience for island model — migration can revive stale islands
+            // Primary termination: plateau detector. See
+            // GeneticAlgorithm.evolve for why this sees through the
+            // cache-driven jitter that kept globalStaleGenerations
+            // from triggering on genuinely stagnant runs.
+            if globalPlateauDetector.isPlateau {
+                convergenceGeneration = generation - globalPlateauDetector.capacity + 1
+                break
+            }
+
+            // Fallback: legacy counter-based termination, kept so
+            // pathological cases (fitness oscillating just above the
+            // relative threshold every other generation) still exit.
             let globalPatience = baseConfig.convergencePatience + islandConfig.migrationInterval
             if globalStaleGenerations >= globalPatience {
                 convergenceGeneration = generation - globalPatience

@@ -36,10 +36,6 @@ struct SchedulingFeatureToggles: Sendable {
     /// Wave 1: tier-1 surrogate funnel over batch evaluations.
     var useMultiFidelityFunnel: Bool = true
 
-    /// Wave 2: MOEA/D-AWA as alternative survivor selector. Off by
-    /// default — keep NSGA-III as the stable baseline.
-    var useMOEADAWASurvivor: Bool = false
-
     /// Wave 2: online objective correlation clustering, exposed via
     /// telemetry and optionally used by MOEA/D-AWA.
     var useObjectiveClustering: Bool = true
@@ -47,21 +43,33 @@ struct SchedulingFeatureToggles: Sendable {
     /// Wave 2: post-GA path relinking across the final scenarios.
     var usePathRelinking: Bool = true
 
-    /// Wave 2: replace the MAP-Elites uniform emitter with a CMA-ME
-    /// covariance-adapted Gaussian.
-    var useCMAMEEmitter: Bool = false
-
-    /// Wave 3: switch LNS repair to the CP-SAT adapter for windows
-    /// ≥ `cpSATWindowThreshold`. Expensive — off by default.
-    var useCPSATRepair: Bool = false
+    /// Shared window threshold retained for the extended learner
+    /// bundle's public API surface even after the CP-SAT dispatcher
+    /// was retired — some callers read it for diagnostics.
     var cpSATWindowThreshold: Int = 20
 
-    /// Wave 3: learned branching bandit driving CP-SAT variable
-    /// ordering. Only meaningful when CP-SAT is also enabled.
-    var useLearnedBranching: Bool = false
-
-    /// Wave 3: UCB bandit over island migration pairs.
-    var useMigrationBandit: Bool = false
+    // MARK: - Removed flags
+    //
+    // The following toggles previously gated experimental subsystems
+    // that stayed off-by-default in production and never graduated:
+    //
+    //   • `useMOEADAWASurvivor` — alternative NSGA-III replacement.
+    //   • `useCMAMEEmitter` — covariance-adapted Gaussian emitter
+    //     on top of the MAP-Elites archive.
+    //   • `useCPSATRepair` — routed LNS destroy windows ≥ threshold
+    //     through a CDCL-lite adapter. The baseline branch-and-bound
+    //     consistently matched or beat it on realistic workloads
+    //     while avoiding a second solver's maintenance cost.
+    //   • `useLearnedBranching` — LinUCB bandit over CP-SAT variable
+    //     ordering. Only meaningful when CP-SAT was on.
+    //   • `useMigrationBandit` — UCB bandit over island migration
+    //     pairs. The adaptive migration interval plus fixed ring
+    //     topology delivered the same win without the extra state.
+    //
+    // The underlying types remain in the codebase under
+    // `@available(*, deprecated, …)` for reference; production paths
+    // no longer reach them. Remove the files entirely once nothing
+    // external still imports them.
 
     /// Wave 4: online DPO weight learning from user feedback.
     var useDPOWeightLearning: Bool = true

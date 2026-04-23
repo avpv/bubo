@@ -236,9 +236,11 @@ final class BuboOptimizer {
         let tabuToInject: TabuMemory? = schedulingFeatures.useTabuMemory
             ? preliminarySuite.tabu
             : nil
-        let cpSATToInject: CPSATRepairer? = schedulingFeatures.useCPSATRepair
-            ? CPSATRepairer()
-            : nil
+        // CP-SAT repair adapter retired from the production path —
+        // the baseline branch-and-bound in `cpRepair` matched it on
+        // realistic workloads without a second solver's maintenance
+        // cost. Pass nil so `applyLNS` always uses the built-in path.
+        let cpSATToInject: CPSATRepairer? = nil
         // One shared slot registry + per-gene domain cache for the
         // whole run. Every island context inherits the same holders,
         // so registry build happens once and each movable event's
@@ -317,17 +319,12 @@ final class BuboOptimizer {
             gaStatsLogger.info("workload_downshift rid=\(runId, privacy: .public) difficulty=\(difficulty) pop=\(originalPop)→\(config.populationSize) gen=\(config.maxGenerations) wallclock=\(String(format: "%.1f", originalTimeout))s→\(String(format: "%.1f", config.wallclockTimeout))s")
         }
 
-        // Survivor selector: MOEA/D-AWA when explicitly enabled
-        // (beneficial at 8+ objectives), else adaptive NSGA-III
-        // with HypE-lite tiebreak. Both read per-objective scores
-        // from the chromosome cache so survivor selection imposes
-        // zero extra evaluation cost.
-        let moeadState: MOEADState? = schedulingFeatures.useMOEADAWASurvivor
-            ? MOEAD_AWA.forScheduleEvaluator(
-                evaluator: evaluator,
-                populationSize: max(2, config.populationSize * 2)
-            )
-            : nil
+        // Survivor selector: adaptive NSGA-III with HypE-lite
+        // tiebreak. The MOEA/D-AWA alternative was removed from the
+        // production path — NSGA-III consistently matched it on
+        // realistic 14-objective workloads and `moeadState == nil`
+        // is the documented default for the schedule evaluator.
+        let moeadState: MOEADState? = nil
         // Adaptive hypervolume sample count. Two signals matter:
         //
         //   1. Objective count `d`. HV estimator variance grows with
@@ -456,21 +453,9 @@ final class BuboOptimizer {
                 evaluate: surrogateAssistedEvaluator
             ),
         ]
-        if schedulingFeatures.useCMAMEEmitter {
-            // CMA-ME samples around the population's current best.
-            // 5% emission rate keeps cost modest while still
-            // letting the covariance-adapted Gaussian probe locally.
-            hookComponents.append(
-                ScheduleEvolutionHooks.cmaMEEmission(
-                    archive: qdArchive,
-                    emissionRate: 0.05,
-                    templateProvider: { population in
-                        population.individuals.max(by: { $0.rawFitness < $1.rawFitness })
-                    },
-                    evaluate: surrogateAssistedEvaluator
-                )
-            )
-        }
+        // CMA-ME emitter retired — the uniform MAP-Elites emitter
+        // delivered equivalent archive coverage on realistic
+        // workloads without the per-generation matrix update cost.
         let hooks = ScheduleEvolutionHooks.compose(
             contentsOf: hookComponents
         )
@@ -490,10 +475,11 @@ final class BuboOptimizer {
         // initial population starts inside the basin of recent
         // accepted solutions and respects GNN-derived priorities.
         let extraSeeds: [ScheduleChromosome] = collectWarmStartSeeds(context: adjustedContext)
-        let learnerSuite = obtainLearnerSuite(for: adjustedContext)
-        let migrationBandit = schedulingFeatures.useMigrationBandit
-            ? learnerSuite.migrationBandit
-            : nil
+        // Migration-topology bandit retired — adaptive migration
+        // interval already reacts to stagnation, and the UCB bandit
+        // over static ring pairs didn't change the pair ordering
+        // enough to justify the per-generation update cost.
+        let migrationBandit: MigrationTopologyBandit? = nil
 
         // Multi-fidelity funnel: when enabled, wrap the per-chromo
         // surrogate-assisted evaluator into a batch screen +
@@ -1416,7 +1402,8 @@ final class BuboOptimizer {
             "Buffer":             prefs.bufferWeight,
             "MeetingClustering":  prefs.meetingClusteringWeight,
             "TaskInclusion":      prefs.taskInclusionWeight,
-            "BacklogOrder":       prefs.backlogOrderWeight ?? OptimizerPreferences.defaultBacklogOrderWeight
+            "BacklogOrder":       prefs.backlogOrderWeight ?? OptimizerPreferences.defaultBacklogOrderWeight,
+            "DayCompactness":     prefs.dayCompactnessWeight ?? OptimizerPreferences.defaultDayCompactnessWeight
         ]
     }
 

@@ -24,6 +24,12 @@ import Foundation
 /// One CMA-ME emitter bound to a specific template chromosome. The
 /// template fixes gene count / eventId positions; samples are offset
 /// vectors of the same length.
+///
+/// Retired from the production path. `schedulingFeatures.useCMAMEEmitter`
+/// was removed; no feature flag now reaches the `cmaMEEmission` hook
+/// that builds one. File kept so existing tests compile; follow-up
+/// cleanup can delete it plus the Wave2Tests coverage once nothing
+/// external imports the type.
 final class CMAMEEmitter: @unchecked Sendable {
     struct Configuration: Sendable {
         /// Initial per-gene standard deviation (minutes). 30 is a

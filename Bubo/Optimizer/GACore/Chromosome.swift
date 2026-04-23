@@ -25,6 +25,16 @@ protocol Chromosome: Hashable {
     /// Returns a feasible (or near-feasible) starting point for the GA.
     static func greedy(context: OptimizerContext) -> Self
 
+    /// Create a heuristically-seeded chromosome using an alternative
+    /// greedy ordering, indexed by `variantIndex`. Different indices
+    /// should exercise qualitatively different insertion orders
+    /// (priority-first, deadline-first, duration-first, …) so
+    /// multi-seed populations actually explore multiple basins
+    /// instead of starting as `N` identical copies of the default
+    /// greedy. Default implementation falls back to `greedy` for
+    /// chromosome types that don't benefit from variant seeding.
+    static func greedy(context: OptimizerContext, variantIndex: Int) -> Self
+
     /// Produce two offspring via crossover with another chromosome.
     func crossover(with other: Self, context: OptimizerContext) -> (Self, Self)
 
@@ -54,6 +64,12 @@ extension Chromosome {
     /// Default greedy falls back to random.
     static func greedy(context: OptimizerContext) -> Self {
         random(context: context)
+    }
+
+    /// Default variant-greedy ignores the variant index. Concrete
+    /// types that want multi-strategy seeding override this.
+    static func greedy(context: OptimizerContext, variantIndex: Int) -> Self {
+        greedy(context: context)
     }
 
     /// Default distance: 0 if equal, 1 otherwise.
@@ -314,22 +330,86 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
     /// Events without a `backlogIndex` sink to the end of their
     /// priority tier.
     static func greedy(context: OptimizerContext) -> ScheduleChromosome {
+        greedy(context: context, variantIndex: 0)
+    }
+
+    /// Multi-strategy greedy seeder. `variantIndex % 4` selects the
+    /// sort key, so a population-level seed loop with `0..<greedyCount`
+    /// exercises four qualitatively-different insertion orders
+    /// instead of N identical copies of the default:
+    ///
+    ///   0. Priority + backlog (default) — rewards exactly what
+    ///      `BacklogOrderObjective` scores.
+    ///   1. Urgency-first: deadline ASC, priority DESC tiebreaker.
+    ///      Finds a feasible layout when tight deadlines dominate.
+    ///   2. Short-first: duration ASC, priority DESC tiebreaker.
+    ///      Classic bin-packing intuition — small items slot into
+    ///      gaps that bigger ones would force onto another day.
+    ///   3. Long-first: duration DESC, priority DESC tiebreaker.
+    ///      Reserves big uninterrupted blocks before short tasks
+    ///      fragment the day; helps when focus blocks matter.
+    ///
+    /// Each island's greedy seeds cycle through these so the first
+    /// generation already spans four basins in parallel. The GA's
+    /// crossover then mixes them, which is far cheaper than
+    /// rediscovering each ordering from random shuffles.
+    static func greedy(context: OptimizerContext, variantIndex: Int) -> ScheduleChromosome {
         let backlogById = context.backlogIndexMap()
-        let sortedEvents = context.movableEvents.sorted { a, b in
-            if a.priority != b.priority { return a.priority > b.priority }
-            let ai = backlogById[a.id]
-            let bi = backlogById[b.id]
-            if ai != bi {
-                switch (ai, bi) {
-                case let (l?, r?): return l < r
-                case (_?, nil):    return true
-                case (nil, _?):    return false
-                default:           break
+        let strategy = ((variantIndex % 4) + 4) % 4
+
+        let sortedEvents: [OptimizableEvent]
+        switch strategy {
+        case 1:
+            // Deadline ASC, priority DESC, backlog ASC.
+            sortedEvents = context.movableEvents.sorted { a, b in
+                switch (a.deadline, b.deadline) {
+                case let (da?, db?) where da != db: return da < db
+                case (_?, nil): return true
+                case (nil, _?): return false
+                default: break
                 }
+                if a.priority != b.priority { return a.priority > b.priority }
+                let ai = backlogById[a.id] ?? Int.max
+                let bi = backlogById[b.id] ?? Int.max
+                return ai < bi
             }
-            if let da = a.deadline, let db = b.deadline, da != db { return da < db }
-            if (a.deadline != nil) != (b.deadline != nil) { return a.deadline != nil }
-            return false
+        case 2:
+            // Duration ASC, priority DESC, backlog ASC.
+            sortedEvents = context.movableEvents.sorted { a, b in
+                if a.duration != b.duration { return a.duration < b.duration }
+                if a.priority != b.priority { return a.priority > b.priority }
+                let ai = backlogById[a.id] ?? Int.max
+                let bi = backlogById[b.id] ?? Int.max
+                return ai < bi
+            }
+        case 3:
+            // Duration DESC, priority DESC, backlog ASC.
+            sortedEvents = context.movableEvents.sorted { a, b in
+                if a.duration != b.duration { return a.duration > b.duration }
+                if a.priority != b.priority { return a.priority > b.priority }
+                let ai = backlogById[a.id] ?? Int.max
+                let bi = backlogById[b.id] ?? Int.max
+                return ai < bi
+            }
+        default:
+            // Priority DESC, backlog ASC, deadline ASC — matches
+            // `BacklogOrderObjective` by construction.
+            sortedEvents = context.movableEvents.sorted { a, b in
+                if a.priority != b.priority { return a.priority > b.priority }
+                let ai = backlogById[a.id]
+                let bi = backlogById[b.id]
+                if ai != bi {
+                    switch (ai, bi) {
+                    case let (l?, r?): return l < r
+                    case (_?, nil):    return true
+                    case (nil, _?):    return false
+                    default:           break
+                    }
+                }
+                if let da = a.deadline, let db = b.deadline, da != db { return da < db }
+                if (a.deadline != nil) != (b.deadline != nil) { return a.deadline != nil }
+                return false
+            }
         }
         return greedyWithOrder(context: context, eventsInPlacementOrder: sortedEvents)
     }

@@ -511,6 +511,16 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         var lastBestFitness = bestEver?.rawFitness ?? 0
         var restartsPerformed = 0
         let wallclockStart = Date()
+        // Plateau detector sees through cache-driven fitness jitter
+        // that used to reset the `staleGenerations` counter. Window is
+        // half the patience so termination fires ~2× earlier than the
+        // counter alone once the GA is genuinely done. Minimum 3 so
+        // near-instant configs still have meaningful variance
+        // measurement.
+        var plateauDetector = FitnessPlateauDetector(
+            capacity: max(3, config.convergencePatience / 2)
+        )
+        plateauDetector.push(lastBestFitness)
 
         // Soft deadline semantics: the timeout check sits at the top
         // of the loop *after* the previous generation has fully
@@ -638,6 +648,19 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
                 convergenceGeneration = generation
             }
             lastBestFitness = currentFitness
+            plateauDetector.push(currentFitness)
+
+            // Termination: the plateau detector decides first. It sees
+            // through the cache-driven fitness jitter that keeps the
+            // stale-counter bouncing to zero on chromosomes whose
+            // fitness is recomputed from cache with microscopic
+            // floating-point variance — generations where "nothing
+            // really changed" used to reset the counter and let the
+            // GA burn through wallclock chasing phantom improvements.
+            if plateauDetector.isPlateau {
+                convergenceGeneration = generation - plateauDetector.capacity + 1
+                break
+            }
 
             if staleGenerations >= config.convergencePatience {
                 // CHC restart: before giving up, try regenerating the
@@ -657,6 +680,12 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
                     )
                     restartsPerformed += 1
                     staleGenerations = 0
+                    // The post-restart population is a new search
+                    // basin — let the detector re-fill its window
+                    // against the fresh trajectory instead of
+                    // immediately re-triggering on the pre-restart
+                    // plateau.
+                    plateauDetector.reset()
                     // Don't reset convergenceGeneration; the reported value
                     // should still reflect when the bestEver was last
                     // improved, not when we decided to relaunch.

@@ -21,28 +21,42 @@ import Foundation
 // incumbent tracking. When the GA's base fitness path is used for back-
 // compat, lex-fitness silently does nothing.
 
-/// A pair of tier scores, higher is better in both tiers.
+/// Three tier scores, higher is better in each. Comparisons walk the
+/// tiers top-down: `hardTier` dominates, then `midTier`, then
+/// `softTier`. Ties within ε on a tier fall through to the next.
 struct LexFitness: Hashable, Sendable {
     /// Near-hard tier: aggregate of Precedence and Conflict scores.
-    /// [0, 1], 1 = no violations.
+    /// These are almost-hard constraints — any soft-tier win traded
+    /// for a hard violation is a bug. [0, 1], 1 = no violations.
     let hardTier: Double
 
-    /// Soft tier: weighted aggregate of the 12 quality objectives.
+    /// User-declared preference tier: aggregate of Deadline and
+    /// BacklogOrder. Sacrificing these for Buffer / ContextSwitch /
+    /// EnergyCurve is the exact failure mode the previous
+    /// two-tier setup produced for backlog-inclusion scenarios —
+    /// the GA spread task 1 across next week to save a few percent
+    /// on ContextSwitch. Making them a separate tier makes that
+    /// trade impossible without first matching the user's order.
+    let midTier: Double
+
+    /// Soft tier: weighted aggregate of the remaining quality
+    /// objectives (Buffer, ContextSwitch, Break, FocusBlock, …).
     /// [0, 1], 1 = perfect quality.
     let softTier: Double
 
-    init(hardTier: Double, softTier: Double) {
+    init(hardTier: Double, midTier: Double, softTier: Double) {
         self.hardTier = hardTier
+        self.midTier = midTier
         self.softTier = softTier
     }
 }
 
-/// Comparator that orders two `LexFitness` values lexicographically.
-/// Tie-tolerance on the hard tier is configurable: within `epsilon`
-/// the two are treated as equal on the first coordinate and decide
-/// by the soft tier. The default ε is 1e-4, which prevents the GA from
-/// churning on floating-point noise while still keeping a meaningful
-/// hard-tier dominance signal.
+/// Comparator that orders two `LexFitness` values lexicographically
+/// across three tiers (hard → mid → soft). Tie-tolerance on each tier
+/// is `epsilon`; within it, the two are treated as equal on that
+/// coordinate and the next tier decides. Default ε = 1e-4 prevents the
+/// GA from churning on floating-point noise while still keeping a
+/// meaningful dominance signal on each tier.
 struct LexicographicComparator: Sendable {
     let epsilon: Double
 
@@ -50,9 +64,12 @@ struct LexicographicComparator: Sendable {
 
     /// Returns true when `lhs` dominates `rhs` under the lex order.
     func isBetter(_ lhs: LexFitness, than rhs: LexFitness) -> Bool {
-        let delta = lhs.hardTier - rhs.hardTier
-        if delta > epsilon { return true }
-        if delta < -epsilon { return false }
+        let hardDelta = lhs.hardTier - rhs.hardTier
+        if hardDelta > epsilon { return true }
+        if hardDelta < -epsilon { return false }
+        let midDelta = lhs.midTier - rhs.midTier
+        if midDelta > epsilon { return true }
+        if midDelta < -epsilon { return false }
         return lhs.softTier > rhs.softTier
     }
 
@@ -64,24 +81,36 @@ struct LexicographicComparator: Sendable {
 
 // MARK: - Classification
 
-/// Which objectives live in the near-hard tier. Names come from the
-/// objective protocol's `name` field as wired into
-/// `FitnessEvaluator.standard`. Keep this in sync — adding a new
-/// objective that is structurally hard (e.g. NoConflict, ResourceLimit)
-/// belongs here too.
+/// Which objectives live in which tier. Names come from the objective
+/// protocol's `name` field as wired into `FitnessEvaluator.standard`.
+/// Keep these sets in sync when objectives are added or renamed.
 enum LexTier: Sendable {
-    /// Precedence + Conflict. Sacrificing these for any soft gain is a bug.
+    /// Precedence + Conflict. Sacrificing these for any softer gain
+    /// is a bug. The constraint engine catches most violations, but
+    /// these objectives provide gradient even when the constraint
+    /// is satisfied (soft buffers around fixed events, etc.).
     static let hardTierObjectiveNames: Set<String> = [
         "Precedence",
         "Conflict",
     ]
 
-    /// Classify an objective by name into hard or soft tier.
+    /// User-declared preferences that must dominate the quality axes.
+    /// Deadline violations and backlog-order inversions are visible
+    /// to the user in a way that "2 fewer context switches" is not;
+    /// the GA should never trade them for those softer gains.
+    static let midTierObjectiveNames: Set<String> = [
+        "Deadline",
+        "BacklogOrder",
+    ]
+
+    /// Classify an objective by name into its tier.
     static func tier(of name: String) -> Tier {
-        hardTierObjectiveNames.contains(name) ? .hard : .soft
+        if hardTierObjectiveNames.contains(name) { return .hard }
+        if midTierObjectiveNames.contains(name) { return .mid }
+        return .soft
     }
 
-    enum Tier: Sendable { case hard, soft }
+    enum Tier: Sendable { case hard, mid, soft }
 }
 
 // MARK: - Extraction from objective cache
@@ -126,6 +155,7 @@ struct LexicographicExtractor: Sendable {
     /// pre-computed per-objective dictionary (e.g. scenario metadata).
     func extract(fromCache cache: [String: Double]) -> LexFitness {
         var hardNum = 0.0, hardDen = 0.0
+        var midNum = 0.0, midDen = 0.0
         var softNum = 0.0, softDen = 0.0
         for (name, score) in cache {
             let clamped = max(0.0, min(1.0, score))
@@ -135,6 +165,9 @@ struct LexicographicExtractor: Sendable {
             case .hard:
                 hardNum += clamped * w
                 hardDen += w
+            case .mid:
+                midNum += clamped * w
+                midDen += w
             case .soft:
                 softNum += clamped * w
                 softDen += w
@@ -142,11 +175,11 @@ struct LexicographicExtractor: Sendable {
         }
         // Denominator of 0 = that tier has no contributing objectives.
         // Return 1.0 (perfect) for empty tiers so the comparator
-        // gracefully degrades to pure soft comparison when no hard
-        // objective is wired.
+        // gracefully degrades through tiers when some are unwired.
         let hard = hardDen > 0 ? hardNum / hardDen : 1.0
+        let mid = midDen > 0 ? midNum / midDen : 1.0
         let soft = softDen > 0 ? softNum / softDen : 1.0
-        return LexFitness(hardTier: hard, softTier: soft)
+        return LexFitness(hardTier: hard, midTier: mid, softTier: soft)
     }
 }
 
@@ -163,10 +196,10 @@ extension Array where Element == ScheduleChromosome {
         guard !isEmpty else { return nil }
         var bestIdx = 0
         var bestLex = extractor.extract(from: self[0])
-            ?? LexFitness(hardTier: self[0].rawFitness, softTier: self[0].rawFitness)
+            ?? LexFitness(hardTier: self[0].rawFitness, midTier: self[0].rawFitness, softTier: self[0].rawFitness)
         for i in 1..<count {
             let lex = extractor.extract(from: self[i])
-                ?? LexFitness(hardTier: self[i].rawFitness, softTier: self[i].rawFitness)
+                ?? LexFitness(hardTier: self[i].rawFitness, midTier: self[i].rawFitness, softTier: self[i].rawFitness)
             if comparator.isBetter(lex, than: bestLex) {
                 bestLex = lex
                 bestIdx = i
@@ -183,7 +216,7 @@ extension Array where Element == ScheduleChromosome {
         // Decorate-sort-undecorate to avoid recomputing lex per comparison.
         let decorated: [(LexFitness, ScheduleChromosome)] = map { chromo in
             let lex = extractor.extract(from: chromo)
-                ?? LexFitness(hardTier: chromo.rawFitness, softTier: chromo.rawFitness)
+                ?? LexFitness(hardTier: chromo.rawFitness, midTier: chromo.rawFitness, softTier: chromo.rawFitness)
             return (lex, chromo)
         }
         let sorted = decorated.sorted { comparator.isBetter($0.0, than: $1.0) }

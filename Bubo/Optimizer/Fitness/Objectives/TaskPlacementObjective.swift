@@ -64,7 +64,24 @@ struct TaskPlacementObjective: FitnessObjective {
                     score += 0.4 * max(0, 1.0 - Double(distance) * 0.15)
                 }
             } else {
-                score += 0.3  // no preference = neutral
+                // No preference → reward "earlier in the day" instead
+                // of a flat neutral 0.3. Before this, a task without
+                // `preferredHourRange` scored identically at 09:00 and
+                // 17:00, so the GA had no gradient pulling same-day
+                // tasks toward the morning. Users consistently prefer
+                // "do tasks first, leave gaps at the end of the day";
+                // this term gives them that preference for free when
+                // no stronger signal is set. Linear ramp from 0.4 (at
+                // `workingHours.lowerBound`) to 0.2 (at
+                // `workingHours.upperBound`) so a morning placement
+                // still can't beat a matched `preferredHourRange`
+                // placement on a task that has one.
+                let lower = context.workingHours.lowerBound
+                let upper = context.workingHours.upperBound
+                let span = max(1, upper - lower)
+                let offsetFromStart = max(0, min(span, hour - lower))
+                let earliness = 1.0 - Double(offsetFromStart) / Double(span)
+                score += 0.2 + 0.2 * earliness
             }
 
             // 2. Priority-weighted slot quality (0.3 weight)
