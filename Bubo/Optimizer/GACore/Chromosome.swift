@@ -647,7 +647,6 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         }
         guard result.assignments.count == variables.count else { return nil }
 
-        let slotRegistry = context.ensureSlotRegistry()
         var genes: [ScheduleGene] = []
         genes.reserveCapacity(context.movableEvents.count)
         for (idx, event) in context.movableEvents.enumerated() {
