@@ -1049,8 +1049,13 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             var config = baseConfig
             switch i {
             case 0:
-                // Island 0: exploitation — base config, greedy seeds, repair
-                config.greedySeedFraction = 0.2
+                // Island 0: exploitation — base config, heavy greedy
+                // seeding so the "starts right" half of the population
+                // is concentrated here. Island 1 (exploration) stays
+                // at zero greedy share to preserve the diversity
+                // dimension that made the multi-island setup worth
+                // paying for in the first place.
+                config.greedySeedFraction = 0.5
                 config.enableRepair = true
 
             case 1:
@@ -1069,7 +1074,7 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
                 // individuals still contribute genes to offspring.
                 config.selectionStrategy = .rank
                 config.mutationRate = baseConfig.mutationRate * 1.3
-                config.greedySeedFraction = 0.1
+                config.greedySeedFraction = 0.3
 
             case 3:
                 // Island 3: day-block crossover — preserves bundled day
@@ -1079,7 +1084,7 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
                 config.crossoverStrategy = .dayBlock
                 config.crossoverRate = 0.9
                 config.adaptiveCrossover = true
-                config.greedySeedFraction = 0.15
+                config.greedySeedFraction = 0.3
 
             default:
                 // Additional islands: deterministic parameter variations

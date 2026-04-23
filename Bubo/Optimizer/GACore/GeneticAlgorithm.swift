@@ -147,11 +147,20 @@ struct GAConfiguration: Sendable {
         selectionStrategy: .tournament(size: 3),
         crossoverStrategy: .contextual(temperature: 0.5),
         convergenceThreshold: 0.001,
-        convergencePatience: 30,
+        // Lower patience (was 30). With the stronger greedy seeding
+        // below, the initial population usually already contains the
+        // fitness-plateau winner; waiting 30 generations to confirm
+        // that nothing beats it burned most of the wallclock budget
+        // on workloads that converge immediately.
+        convergencePatience: 15,
         adaptiveMutation: true,
         diversityThreshold: 0.01,
         immigrationRate: 0.1,
-        greedySeedFraction: 0.15,
+        // Greedy share bumped from 0.15 to 0.35 — seeds the population
+        // with feasible (priority, backlog, deadline)-ordered layouts
+        // so the GA starts polishing a near-optimal solution instead
+        // of discovering the sort key from random shuffles.
+        greedySeedFraction: 0.35,
         enableRepair: true,
         adaptiveCrossover: true,
         memeticHillClimbInterval: 25,
@@ -173,11 +182,11 @@ struct GAConfiguration: Sendable {
         selectionStrategy: .tournament(size: 3),
         crossoverStrategy: .contextual(temperature: 0.7),
         convergenceThreshold: 0.005,
-        convergencePatience: 10,
+        convergencePatience: 8,
         adaptiveMutation: false,
         diversityThreshold: 0.01,
         immigrationRate: 0.1,
-        greedySeedFraction: 0.2,
+        greedySeedFraction: 0.4,
         enableRepair: true,
         adaptiveCrossover: false,
         wallclockTimeout: 3.0
@@ -200,7 +209,7 @@ struct GAConfiguration: Sendable {
         adaptiveMutation: false,
         diversityThreshold: 0.05,
         immigrationRate: 0.0,
-        greedySeedFraction: 0.3,
+        greedySeedFraction: 0.5,
         enableRepair: true,
         adaptiveCrossover: false,
         wallclockTimeout: 0.5
@@ -215,11 +224,17 @@ struct GAConfiguration: Sendable {
         selectionStrategy: .tournament(size: 5),
         crossoverStrategy: .contextual(temperature: 0.5),
         convergenceThreshold: 0.0005,
-        convergencePatience: 50,
+        // Patience trimmed 50 → 25: on tiny workloads `.thorough`
+        // used to run until the wallclock killed it because the
+        // greedy seed hit the plateau in gen 0-2 and then sat there
+        // unchanged for 50 generations of "no improvement" waiting.
+        // 25 plus `migrationInterval` still gives deep exploration
+        // room on hard problems while letting trivial ones exit.
+        convergencePatience: 25,
         adaptiveMutation: true,
         diversityThreshold: 0.005,
         immigrationRate: 0.15,
-        greedySeedFraction: 0.1,
+        greedySeedFraction: 0.35,
         enableRepair: true,
         adaptiveCrossover: true,
         memeticHillClimbInterval: 40,
@@ -245,11 +260,11 @@ struct GAConfiguration: Sendable {
         selectionStrategy: .tournament(size: 4),
         crossoverStrategy: .contextual(temperature: 0.5),
         convergenceThreshold: 0.0005,
-        convergencePatience: 40,
+        convergencePatience: 20,
         adaptiveMutation: true,
         diversityThreshold: 0.008,
         immigrationRate: 0.1,
-        greedySeedFraction: 0.1,
+        greedySeedFraction: 0.3,
         enableRepair: true,
         adaptiveCrossover: true,
         memeticHillClimbInterval: 30,

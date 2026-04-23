@@ -300,15 +300,35 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
 
     // MARK: - Greedy Initialization
 
-    /// Build a feasible chromosome by greedily placing events one at a time
-    /// into the first available slot, sorted by priority/deadline urgency.
-    /// Produces high-quality seed individuals that give the GA a strong starting point.
+    /// Build a feasible chromosome by greedily placing events one at
+    /// a time into the first available slot.
+    ///
+    /// Sort key: `(priority DESC, backlogIndex ASC, deadline ASC)`.
+    /// Matches exactly what `BacklogOrderObjective` rewards, so the
+    /// greedy seed starts at a BacklogOrder score of 1.0 and the GA
+    /// only has to polish the spacing / energy-curve axes — not
+    /// discover the right permutation from a random shuffle.
+    /// `backlogIndex` sits between priority and deadline so the
+    /// user's drag order breaks priority ties before deadlines do
+    /// (deadline ties are rare in practice and less user-visible).
+    /// Events without a `backlogIndex` sink to the end of their
+    /// priority tier.
     static func greedy(context: OptimizerContext) -> ScheduleChromosome {
+        let backlogById = context.backlogIndexMap()
         let sortedEvents = context.movableEvents.sorted { a, b in
             if a.priority != b.priority { return a.priority > b.priority }
-            if let da = a.deadline, let db = b.deadline { return da < db }
-            if a.deadline != nil { return true }
-            if b.deadline != nil { return false }
+            let ai = backlogById[a.id]
+            let bi = backlogById[b.id]
+            if ai != bi {
+                switch (ai, bi) {
+                case let (l?, r?): return l < r
+                case (_?, nil):    return true
+                case (nil, _?):    return false
+                default:           break
+                }
+            }
+            if let da = a.deadline, let db = b.deadline, da != db { return da < db }
+            if (a.deadline != nil) != (b.deadline != nil) { return a.deadline != nil }
             return false
         }
         return greedyWithOrder(context: context, eventsInPlacementOrder: sortedEvents)
