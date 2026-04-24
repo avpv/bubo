@@ -118,4 +118,28 @@ enum ScheduleEvolutionHooks {
     // `CMAMEEmitter`. The uniform MAP-Elites emitter covers the
     // archive-diversity use case on realistic workloads without the
     // per-generation covariance update.
+
+    /// Replace the worst non-elite individuals with archive emitters.
+    /// Elite slots are left untouched; emitters carry their archive
+    /// fitness so no re-evaluation runs here.
+    private static func injectEmitters(
+        _ emitters: [ScheduleChromosome],
+        into population: inout Population<ScheduleChromosome>
+    ) {
+        let eliteCount = population.eliteCount
+        let n = population.individuals.count
+        guard n > eliteCount else { return }
+
+        let sorted = population.individuals.indices.sorted {
+            population.individuals[$0].rawFitness > population.individuals[$1].rawFitness
+        }
+        let replaceable = Array(sorted.suffix(n - eliteCount).reversed())
+
+        var slot = 0
+        for emitter in emitters {
+            guard slot < replaceable.count else { break }
+            population.individuals[replaceable[slot]] = emitter
+            slot += 1
+        }
+    }
 }

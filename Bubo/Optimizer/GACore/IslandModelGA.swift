@@ -828,7 +828,7 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         // Static topology pairing — the UCB migration-bandit was
         // retired when adaptive migration-interval alone matched its
         // wins without the per-generation update cost.
-        let migrationPairs: [(source: Int, destination: Int)] = makeMigrationPairs(islandCount: n)
+        var migrationPairs: [(source: Int, destination: Int)] = makeMigrationPairs(islandCount: n)
         _ = preFitness
 
         // Productivity routing: for each pair, ensure the source is the
