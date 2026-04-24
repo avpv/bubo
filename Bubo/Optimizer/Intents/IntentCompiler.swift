@@ -1238,7 +1238,7 @@ private extension IntentCompiler {
         }
 
         // Apply direct preference overrides
-        if let v = config.peakEnergyHour { prefs.peakEnergyHour = v }
+        if let v = config.peakEnergyHour { prefs.peakEnergyHours = [v] }
         if let v = config.maxMeetingsPerDay { prefs.maxMeetingsPerDay = v }
         if let v = config.minBreakMinutes { prefs.minBreakMinutes = v }
         if let v = config.maxConsecutiveWorkMinutes { prefs.maxConsecutiveMeetingMinutes = v }
@@ -1265,7 +1265,7 @@ private extension IntentCompiler {
             prefs.personalEnergyCurve = service.predictedCurve(
                 dayOfWeek: dow,
                 meetingCount: meetingCount,
-                defaultPeakHour: prefs.peakEnergyHour
+                defaultPeakHour: prefs.primaryPeakEnergyHour
             )
         }
 

@@ -56,8 +56,7 @@ struct PomodoroFitObjective: FitnessObjective {
             // 2. Prefer morning/preferred hours for Pomodoro (high cognitive demand)
             let cal = context.calendar
             let hour = cal.component(.hour, from: gene.startTime)
-            let peakHour = context.preferences.peakEnergyHour
-            let hourDistance = abs(hour - peakHour)
+            let hourDistance = context.preferences.peakEnergyDistance(from: hour)
             let timeScore = 1.0 / (1.0 + Double(hourDistance) * 0.15)
             score += timeScore * 0.3
 

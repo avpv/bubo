@@ -1239,8 +1239,8 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 if let curve = preferences.personalEnergyCurve, curve.count == 24, hour >= 0, hour < 24 {
                     energyLevel = max(0, min(1, curve[hour]))
                 } else {
-                    let d = Double(hour - preferences.peakEnergyHour)
-                    energyLevel = exp(-d * d * 0.02)
+                    let d = preferences.peakEnergyDistance(from: hour)
+                    energyLevel = exp(-Double(d) * Double(d) * 0.02)
                 }
                 let energyMisalign = energyCost * (1.0 - energyLevel)
 

@@ -88,8 +88,7 @@ struct TaskPlacementObjective: FitnessObjective {
             // Higher priority tasks should be at peak energy times.
             // Story points boost the effective priority for slot placement:
             // high-SP tasks are pushed harder toward peak energy hours.
-            let peakHour = context.preferences.peakEnergyHour
-            let peakDistance = abs(hour - peakHour)
+            let peakDistance = context.preferences.peakEnergyDistance(from: hour)
             let slotQuality = 1.0 / (1.0 + Double(peakDistance) * 0.1)
             let spBoost: Double = {
                 guard let sp = gene.storyPoints, sp > 0 else { return 0.0 }
