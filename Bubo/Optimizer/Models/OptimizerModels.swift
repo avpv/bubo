@@ -507,11 +507,39 @@ struct OptimizerPreferences: Codable, Sendable {
     static let defaultDayCompactnessWeight: Double = 0.5
 
     // Energy model
-    var peakEnergyHour: Int           // hour of day with peak energy
+    var peakEnergyHour: Int           // hour of day with peak energy (primary)
+    /// Optional additional peak-energy hours for users who have more than one
+    /// productive window (e.g. morning + post-lunch). Optional so persisted
+    /// preferences without this key decode cleanly — nil means "use only
+    /// `peakEnergyHour`". When non-nil, the effective peak set is this value
+    /// unioned with `peakEnergyHour` so the primary hour is always a peak.
+    var peakEnergyHours: Set<Int>?
     var energyDecayRate: Double       // how fast energy drops
     /// Personal energy curve from check-in data (24 values, 0…1 per hour).
-    /// nil = use static Gaussian centred on peakEnergyHour.
+    /// nil = use static Gaussian centred on effectivePeakEnergyHours.
     var personalEnergyCurve: [Double]?
+
+    /// The full set of peak-energy hours to use for fitness / placement.
+    /// Always contains `peakEnergyHour` so the primary single-peak field
+    /// stays authoritative as a fallback for code paths that only read it.
+    var effectivePeakEnergyHours: Set<Int> {
+        var set = peakEnergyHours ?? []
+        set.insert(peakEnergyHour)
+        return set
+    }
+
+    /// Smallest absolute distance, in hours, from `hour` to any hour in the
+    /// effective peak-energy set. Used by fitness objectives so multi-peak
+    /// users get credit for scheduling near any of their productive windows.
+    func peakEnergyDistance(from hour: Int) -> Int {
+        effectivePeakEnergyHours.map { abs(hour - $0) }.min() ?? abs(hour - peakEnergyHour)
+    }
+
+    /// Fractional-hour variant of `peakEnergyDistance(from:)` for callers that
+    /// compute a Double hour (e.g. including minutes).
+    func peakEnergyDistance(from hour: Double) -> Double {
+        effectivePeakEnergyHours.map { abs(hour - Double($0)) }.min() ?? abs(hour - Double(peakEnergyHour))
+    }
 
     // Break rules
     var maxConsecutiveMeetingMinutes: Int
@@ -570,6 +598,7 @@ struct OptimizerPreferences: Codable, Sendable {
         backlogOrderWeight: Double? = nil,
         dayCompactnessWeight: Double? = nil,
         peakEnergyHour: Int = 10,
+        peakEnergyHours: Set<Int>? = nil,
         energyDecayRate: Double = 0.1,
         personalEnergyCurve: [Double]? = nil,
         maxConsecutiveMeetingMinutes: Int = 120,
@@ -601,6 +630,7 @@ struct OptimizerPreferences: Codable, Sendable {
         self.backlogOrderWeight = backlogOrderWeight
         self.dayCompactnessWeight = dayCompactnessWeight
         self.peakEnergyHour = peakEnergyHour
+        self.peakEnergyHours = peakEnergyHours
         self.energyDecayRate = energyDecayRate
         self.personalEnergyCurve = personalEnergyCurve
         self.maxConsecutiveMeetingMinutes = maxConsecutiveMeetingMinutes

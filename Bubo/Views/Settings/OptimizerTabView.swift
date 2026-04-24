@@ -80,24 +80,32 @@ struct OptimizerTabView: View {
 
                 SettingsPlatter("Your Day") {
                     VStack(spacing: DS.Spacing.lg) {
-                        HStack {
+                        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                                Text("Peak energy hour")
-                                Text("When you're most productive")
+                                Text("Peak energy hours")
+                                Text("When you're most productive — pick one or more")
                                     .font(.caption)
                                     .foregroundStyle(skin.resolvedTextSecondary)
                             }
-                            Spacer()
-                            Picker("Peak energy hour", selection: Binding(
-                                get: { optimizerService.optimizer.preferences.peakEnergyHour },
-                                set: { optimizerService.optimizer.preferences.peakEnergyHour = $0; optimizerService.savePreferences() }
-                            )) {
-                                ForEach(0...23, id: \.self) { hour in
-                                    Text("\(hour):00").tag(hour)
-                                }
-                            }
-                            .labelsHidden()
-                            .frame(width: 100)
+                            PeakEnergyHoursPicker(
+                                selection: Binding(
+                                    get: {
+                                        optimizerService.optimizer.preferences.effectivePeakEnergyHours
+                                    },
+                                    set: { newSet in
+                                        // Keep `peakEnergyHour` aligned with the
+                                        // smallest selected hour so legacy
+                                        // single-peak readers still see a
+                                        // sensible value. At least one hour is
+                                        // guaranteed by the picker itself.
+                                        let sorted = newSet.sorted()
+                                        guard let primary = sorted.first else { return }
+                                        optimizerService.optimizer.preferences.peakEnergyHour = primary
+                                        optimizerService.optimizer.preferences.peakEnergyHours = newSet
+                                        optimizerService.savePreferences()
+                                    }
+                                )
+                            )
                         }
 
                         Divider()

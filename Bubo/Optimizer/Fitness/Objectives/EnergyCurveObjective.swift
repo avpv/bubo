@@ -30,8 +30,8 @@ struct EnergyCurveObjective: FitnessObjective {
 
         guard !eventsByDay.isEmpty else { return 1.0 }
 
-        let peakHour = context.preferences.peakEnergyHour
-        let decayRate = context.preferences.energyDecayRate
+        let preferences = context.preferences
+        let decayRate = preferences.energyDecayRate
         var totalScore = 0.0
         var dayCount = 0
 
@@ -61,15 +61,16 @@ struct EnergyCurveObjective: FitnessObjective {
                 let durationHours = event.end.timeIntervalSince(event.start) / 3600
 
                 // Energy at this time of day — use personal curve when available,
-                // otherwise fall back to static Gaussian around peakHour.
+                // otherwise fall back to static Gaussian around the closest
+                // peak-energy hour in the user's configured set.
                 let timeEnergy: Double
-                if let curve = context.preferences.personalEnergyCurve, curve.count == 24 {
+                if let curve = preferences.personalEnergyCurve, curve.count == 24 {
                     let h0 = min(23, Int(hour))
                     let h1 = min(23, h0 + 1)
                     let frac = hour - Double(h0)
                     timeEnergy = curve[h0] * (1.0 - frac) + curve[h1] * frac
                 } else {
-                    let hourDistance = abs(hour - Double(peakHour))
+                    let hourDistance = preferences.peakEnergyDistance(from: hour)
                     timeEnergy = exp(-hourDistance * hourDistance * 0.02)
                 }
 
