@@ -755,134 +755,18 @@ final class BuboOptimizer {
             participantAvailability: participantAvailability
         )
 
-        // Problem-size-aware config: a 4-task week does NOT need 240
-        // individuals × 400 generations × 4 islands. Scale the solver
-        // budget to the search-space size so interactive "plan week"
-        // stays under a few seconds on sparse backlogs without losing
-        // solution quality on dense ones.
-        let (gaCfg, islandCfg) = configForWorkload(
-            movableEvents: movableEvents,
-            fixedEvents: fixedEvents
-        )
-        return await optimize(
-            context: context,
-            overrideConfig: gaCfg,
-            overrideIslandConfig: islandCfg
-        )
+        // No `overrideConfig` here — let `optimize()` choose via its
+        // own CP-SAT → dispatch pipeline:
+        //   difficulty < 0.25  → `.polish`
+        //   difficulty < 0.6   → `.refine`
+        //   otherwise          → the instance's `gaConfig`
+        // The old `configForWorkload` inline-interpolation was
+        // duplicating this logic with slightly different constants
+        // and bypassing the polish / refine presets by arriving as
+        // an override. Removed for a single source of truth.
+        return await optimize(context: context)
     }
 
-    /// Pick GA + island config scaled continuously to the effective
-    /// workload size. The search space is dominated by two things:
-    ///
-    ///   • N = movable event count (placement decisions per week)
-    ///   • H = total movable hours / working hours per week
-    ///       (how packed the week has to be — 3 four-hour tasks are a
-    ///       harder bin-packing than 8 thirty-minute tasks).
-    ///
-    /// A single "difficulty" scalar `D` combines both; population,
-    /// generations and wallclock budget all scale linearly with it.
-    /// This avoids the cliff-edges the old bucketed version had at
-    /// N = 4 / 9 / 21 where a single extra task silently doubled the
-    /// solver budget.
-    ///
-    /// `D` is clamped into [0.05, 1.0] where:
-    ///   • D ≤ 0.1   → workload fits within `.instant`-class budget
-    ///   • D ≈ 0.3   → around `.quick`-class
-    ///   • D ≈ 0.7   → around single-pop `.default`-class
-    ///   • D ≥ 0.9   → falls through to the instance's configured
-    ///                 `.island` (heavy full-budget path)
-    ///
-    /// Returning `nil` for either override means "use instance default".
-    private func configForWorkload(
-        movableEvents: [OptimizableEvent],
-        fixedEvents: [CalendarEvent]
-    ) -> (GAConfiguration?, IslandConfiguration?) {
-        let difficulty = workloadDifficulty(
-            movableEvents: movableEvents,
-            fixedEvents: fixedEvents
-        )
-
-        // Above ~0.9 the workload is heavy enough to justify the full
-        // island config. Delegate to instance defaults.
-        guard difficulty < 0.9 else { return (nil, nil) }
-
-        let single = IslandConfiguration(
-            islandCount: 1,
-            migrationInterval: 10,
-            migrationSize: 1,
-            topology: .ring,
-            emigrantSelection: .best,
-            immigrantReplacement: .worst,
-            diversifyIslands: false,
-            adaptiveMigration: false,
-            routeByProductivity: false
-        )
-
-        // Linear interpolation between `.instant` and `.default` as
-        // difficulty rises. Crossover into island mode happens at
-        // D ≥ 0.75 where two islands start to pay for themselves.
-        let popSize = Self.lerpInt(start: 20, end: 100, at: difficulty)
-        let maxGen = Self.lerpInt(start: 30, end: 200, at: difficulty)
-        let timeout = Self.lerpDouble(start: 0.8, end: 8.0, at: difficulty)
-
-        // Memetic hill climb and CHC restarts are expensive but
-        // valuable on harder problems. Off entirely for `.instant`-
-        // class tiers (they waste budget on tiny search spaces); on
-        // from the mid-tier onwards with cadence matched to the
-        // generation budget.
-        let memeticInterval = difficulty >= 0.5 ? max(5, maxGen / 8) : 0
-        let memeticCandidates = difficulty >= 0.5 ? 3 : 3
-        let memeticSteps = difficulty >= 0.5 ? 6 : 5
-
-        // One CHC restart once the workload clears the toy-problem tier —
-        // on difficulty < 0.2 the search space is small enough that a
-        // restart would mostly replay the same basin, but in the 0.2+
-        // range the extra cataclysmic reseed reliably rescues stuck runs.
-        let restarts = difficulty >= 0.2 ? 1 : 0
-
-        let ga = GAConfiguration(
-            populationSize: popSize,
-            maxGenerations: maxGen,
-            mutationRate: 0.18,
-            crossoverRate: 0.82,
-            eliteCount: max(1, popSize / 25),
-            selectionStrategy: .tournament(size: 3),
-            crossoverStrategy: .contextual(temperature: 0.5),
-            convergenceThreshold: 0.003,
-            // Patience floor bumped from 6 → 12: with a 4-task week the
-            // difficulty scalar lands around 0.18, and the old floor let
-            // the GA exit at gen 7 after six flat generations — long
-            // before the adaptive mutation / CHC restart had any chance
-            // to break out of the initial basin. 12 still terminates
-            // fast on truly trivial workloads but gives the bandit one
-            // full cycle of operator exploration first.
-            convergencePatience: max(12, maxGen / 15),
-            adaptiveMutation: true,
-            diversityThreshold: 0.01,
-            immigrationRate: 0.1,
-            // Greedy seed fraction is saturation-aware: on trivially-
-            // small workloads the greedy constructor is close to
-            // optimal already, so spending 35% of the population on
-            // structured seeds beats 20% random noise. At high
-            // difficulty we back off to 0.15 so random exploration
-            // gets enough budget to escape greedy's priority-first
-            // corner of the search space.
-            greedySeedFraction: max(0.15, 0.35 - 0.20 * difficulty),
-            enableRepair: true,
-            adaptiveCrossover: difficulty >= 0.5,
-            memeticHillClimbInterval: memeticInterval,
-            memeticHillClimbCandidates: memeticCandidates,
-            memeticHillClimbSteps: memeticSteps,
-            chcMaxRestarts: restarts,
-            wallclockTimeout: timeout
-        )
-
-        // Two islands appear at the high end; their extra cost only
-        // pays off once the search space is big enough for migration
-        // to meaningfully diversify exploration.
-        let islandCfg: IslandConfiguration = difficulty >= 0.75 ? .quick : single
-        return (ga, islandCfg)
-    }
 
     /// Combined workload difficulty scalar in [0.05, 1.0].
     ///
@@ -1509,16 +1393,6 @@ final class BuboOptimizer {
         )
     }
 
-    private static func lerpInt(start: Int, end: Int, at t: Double) -> Int {
-        let clamped = max(0.0, min(1.0, t))
-        let raw = Double(start) + clamped * Double(end - start)
-        return max(min(start, end), min(max(start, end), Int(raw.rounded())))
-    }
-
-    private static func lerpDouble(start: Double, end: Double, at t: Double) -> Double {
-        let clamped = max(0.0, min(1.0, t))
-        return start + clamped * (end - start)
-    }
 
     // MARK: - Incremental Re-optimization (#26)
 

@@ -325,32 +325,6 @@ struct GAConfiguration: Sendable {
         wallclockTimeout: 20.0
     )
 
-    /// Per-island config for island model GA. Smaller populations per island
-    /// since total individuals = populationSize * islandCount.
-    /// Uses contextual crossover and gradient refinement; IslandModelGA
-    /// diversifies strategies across islands.
-    static let island = GAConfiguration(
-        populationSize: 60,
-        maxGenerations: 400,
-        mutationRate: 0.12,
-        crossoverRate: 0.85,
-        eliteCount: 3,
-        selectionStrategy: .tournament(size: 4),
-        crossoverStrategy: .contextual(temperature: 0.5),
-        convergenceThreshold: 0.0005,
-        convergencePatience: 20,
-        adaptiveMutation: true,
-        diversityThreshold: 0.008,
-        immigrationRate: 0.1,
-        greedySeedFraction: 0.3,
-        enableRepair: true,
-        adaptiveCrossover: true,
-        memeticHillClimbInterval: 30,
-        memeticHillClimbCandidates: 3,
-        memeticHillClimbSteps: 8,
-        selfAdaptiveRates: true,
-        wallclockTimeout: 12.0
-    )
 }
 
 // MARK: - GA Progress

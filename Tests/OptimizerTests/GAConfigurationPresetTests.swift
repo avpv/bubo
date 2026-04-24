@@ -19,11 +19,18 @@ struct GAConfigurationPresetTests {
         else { Issue.record("Expected .contextual crossover strategy on .thorough") }
     }
 
-    @Test("Island preset uses contextual crossover")
-    func islandPresetConfigured() {
-        let c = GAConfiguration.island
+    @Test("Polish preset uses contextual crossover")
+    func polishPresetConfigured() {
+        let c = GAConfiguration.polish
         if case .contextual = c.crossoverStrategy { #expect(true) }
-        else { Issue.record("Expected .contextual crossover strategy on .island") }
+        else { Issue.record("Expected .contextual crossover strategy on .polish") }
+    }
+
+    @Test("Refine preset uses contextual crossover")
+    func refinePresetConfigured() {
+        let c = GAConfiguration.refine
+        if case .contextual = c.crossoverStrategy { #expect(true) }
+        else { Issue.record("Expected .contextual crossover strategy on .refine") }
     }
 
     @Test("Instant preset keeps single-point crossover for preview latency")
