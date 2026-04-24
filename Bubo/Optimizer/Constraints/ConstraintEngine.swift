@@ -48,6 +48,23 @@ struct ConstraintEngine {
         return true
     }
 
+    /// Total penalty from every hard constraint. Returns `0` when the
+    /// chromosome is feasible. Callers that need both "is it feasible"
+    /// and "how badly does it violate" in one pass (the fitness
+    /// evaluator) should use this instead of `isValid` + a separate
+    /// penalty sum — otherwise every infeasible chromosome runs each
+    /// hard constraint's `.penalty(...)` twice (first via `isValid`'s
+    /// early-exit probe, then again in the sum), doubling the
+    /// per-rejection cost on early generations where 30-50% of
+    /// chromosomes are infeasible post-repair.
+    func hardPenaltySum(for chromosome: ScheduleChromosome, context: OptimizerContext) -> Double {
+        var total = 0.0
+        for constraint in constraints where constraint.isHard {
+            total += constraint.penalty(for: chromosome, context: context)
+        }
+        return total
+    }
+
     /// Return a list of violated constraint names.
     func violations(for chromosome: ScheduleChromosome, context: OptimizerContext) -> [String] {
         constraints.compactMap { constraint in

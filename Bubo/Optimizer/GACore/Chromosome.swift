@@ -25,6 +25,16 @@ protocol Chromosome: Hashable {
     /// Returns a feasible (or near-feasible) starting point for the GA.
     static func greedy(context: OptimizerContext) -> Self
 
+    /// Create a heuristically-seeded chromosome using an alternative
+    /// greedy ordering, indexed by `variantIndex`. Different indices
+    /// should exercise qualitatively different insertion orders
+    /// (priority-first, deadline-first, duration-first, …) so
+    /// multi-seed populations actually explore multiple basins
+    /// instead of starting as `N` identical copies of the default
+    /// greedy. Default implementation falls back to `greedy` for
+    /// chromosome types that don't benefit from variant seeding.
+    static func greedy(context: OptimizerContext, variantIndex: Int) -> Self
+
     /// Produce two offspring via crossover with another chromosome.
     func crossover(with other: Self, context: OptimizerContext) -> (Self, Self)
 
@@ -54,6 +64,12 @@ extension Chromosome {
     /// Default greedy falls back to random.
     static func greedy(context: OptimizerContext) -> Self {
         random(context: context)
+    }
+
+    /// Default variant-greedy ignores the variant index. Concrete
+    /// types that want multi-strategy seeding override this.
+    static func greedy(context: OptimizerContext, variantIndex: Int) -> Self {
+        greedy(context: context)
     }
 
     /// Default distance: 0 if equal, 1 otherwise.
@@ -231,7 +247,9 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 dependsOn: event.dependsOn,
                 placedGenes: genes,
                 genesByEvent: genesByEventOrder,
-                workingDays: workingDays
+                workingDays: workingDays,
+                eventId: event.id,
+                context: context
             )
 
             // Roll the saturation-aware inclusion decision for
@@ -250,7 +268,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
             // or droppable we chose to include), fall back to a random
             // working-day start so the chromosome still has a value;
             // constraint penalties + repair will arbitrate.
-            let start = slot ?? randomStartTime(
+            let rawStart = slot ?? randomStartTime(
                 for: event,
                 in: context.planningHorizon,
                 workingHours: context.workingHours,
@@ -259,7 +277,14 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 workingDays: workingDays
             )
 
-            let boundSlot = slotRegistry.nearestIndex(to: start)
+            // Align seed startTime to the registry grid. Callers
+            // above (`findFirstFreeSlot`, `randomStartTime`) can
+            // return off-grid Dates when floors like `horizon.start`
+            // carry the current wall-clock time or when gaps abut
+            // fixed-event boundaries at sub-minute precision. Snapping
+            // keeps invariant (1) — `startTime == registry.slots[slotIndex]`.
+            let boundSlot = slotRegistry.nearestIndex(to: rawStart)
+            let start = boundSlot.flatMap { slotRegistry.resolvedDate(at: $0) } ?? rawStart
             genes.append(ScheduleGene(
                 eventId: event.id,
                 title: event.title,
@@ -293,16 +318,100 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
 
     // MARK: - Greedy Initialization
 
-    /// Build a feasible chromosome by greedily placing events one at a time
-    /// into the first available slot, sorted by priority/deadline urgency.
-    /// Produces high-quality seed individuals that give the GA a strong starting point.
+    /// Build a feasible chromosome by greedily placing events one at
+    /// a time into the first available slot.
+    ///
+    /// Sort key: `(priority DESC, backlogIndex ASC, deadline ASC)`.
+    /// Matches exactly what `BacklogOrderObjective` rewards, so the
+    /// greedy seed starts at a BacklogOrder score of 1.0 and the GA
+    /// only has to polish the spacing / energy-curve axes — not
+    /// discover the right permutation from a random shuffle.
+    /// `backlogIndex` sits between priority and deadline so the
+    /// user's drag order breaks priority ties before deadlines do
+    /// (deadline ties are rare in practice and less user-visible).
+    /// Events without a `backlogIndex` sink to the end of their
+    /// priority tier.
     static func greedy(context: OptimizerContext) -> ScheduleChromosome {
-        let sortedEvents = context.movableEvents.sorted { a, b in
-            if a.priority != b.priority { return a.priority > b.priority }
-            if let da = a.deadline, let db = b.deadline { return da < db }
-            if a.deadline != nil { return true }
-            if b.deadline != nil { return false }
-            return false
+        greedy(context: context, variantIndex: 0)
+    }
+
+    /// Multi-strategy greedy seeder. `variantIndex % 4` selects the
+    /// sort key, so a population-level seed loop with `0..<greedyCount`
+    /// exercises four qualitatively-different insertion orders
+    /// instead of N identical copies of the default:
+    ///
+    ///   0. Priority + backlog (default) — rewards exactly what
+    ///      `BacklogOrderObjective` scores.
+    ///   1. Urgency-first: deadline ASC, priority DESC tiebreaker.
+    ///      Finds a feasible layout when tight deadlines dominate.
+    ///   2. Short-first: duration ASC, priority DESC tiebreaker.
+    ///      Classic bin-packing intuition — small items slot into
+    ///      gaps that bigger ones would force onto another day.
+    ///   3. Long-first: duration DESC, priority DESC tiebreaker.
+    ///      Reserves big uninterrupted blocks before short tasks
+    ///      fragment the day; helps when focus blocks matter.
+    ///
+    /// Each island's greedy seeds cycle through these so the first
+    /// generation already spans four basins in parallel. The GA's
+    /// crossover then mixes them, which is far cheaper than
+    /// rediscovering each ordering from random shuffles.
+    static func greedy(context: OptimizerContext, variantIndex: Int) -> ScheduleChromosome {
+        let backlogById = context.backlogIndexMap()
+        let strategy = ((variantIndex % 4) + 4) % 4
+
+        let sortedEvents: [OptimizableEvent]
+        switch strategy {
+        case 1:
+            // Deadline ASC, priority DESC, backlog ASC.
+            sortedEvents = context.movableEvents.sorted { a, b in
+                switch (a.deadline, b.deadline) {
+                case let (da?, db?) where da != db: return da < db
+                case (_?, nil): return true
+                case (nil, _?): return false
+                default: break
+                }
+                if a.priority != b.priority { return a.priority > b.priority }
+                let ai = backlogById[a.id] ?? Int.max
+                let bi = backlogById[b.id] ?? Int.max
+                return ai < bi
+            }
+        case 2:
+            // Duration ASC, priority DESC, backlog ASC.
+            sortedEvents = context.movableEvents.sorted { a, b in
+                if a.duration != b.duration { return a.duration < b.duration }
+                if a.priority != b.priority { return a.priority > b.priority }
+                let ai = backlogById[a.id] ?? Int.max
+                let bi = backlogById[b.id] ?? Int.max
+                return ai < bi
+            }
+        case 3:
+            // Duration DESC, priority DESC, backlog ASC.
+            sortedEvents = context.movableEvents.sorted { a, b in
+                if a.duration != b.duration { return a.duration > b.duration }
+                if a.priority != b.priority { return a.priority > b.priority }
+                let ai = backlogById[a.id] ?? Int.max
+                let bi = backlogById[b.id] ?? Int.max
+                return ai < bi
+            }
+        default:
+            // Priority DESC, backlog ASC, deadline ASC — matches
+            // `BacklogOrderObjective` by construction.
+            sortedEvents = context.movableEvents.sorted { a, b in
+                if a.priority != b.priority { return a.priority > b.priority }
+                let ai = backlogById[a.id]
+                let bi = backlogById[b.id]
+                if ai != bi {
+                    switch (ai, bi) {
+                    case let (l?, r?): return l < r
+                    case (_?, nil):    return true
+                    case (nil, _?):    return false
+                    default:           break
+                    }
+                }
+                if let da = a.deadline, let db = b.deadline, da != db { return da < db }
+                if (a.deadline != nil) != (b.deadline != nil) { return a.deadline != nil }
+                return false
+            }
         }
         return greedyWithOrder(context: context, eventsInPlacementOrder: sortedEvents)
     }
@@ -348,7 +457,9 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 dependsOn: event.dependsOn,
                 placedGenes: genes,
                 genesByEvent: genesByEvent,
-                workingDays: workingDays
+                workingDays: workingDays,
+                eventId: event.id,
+                context: context
             )
 
             let isIncluded: Bool
@@ -358,7 +469,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 isIncluded = !event.isDroppable
             }
 
-            let startTime = slot ?? randomStartTime(
+            let rawStart = slot ?? randomStartTime(
                 for: event,
                 in: context.planningHorizon,
                 workingHours: context.workingHours,
@@ -366,6 +477,9 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 rng: context.rng,
                 workingDays: workingDays
             )
+            // Snap to registry grid — see `random(context:)` above.
+            let boundSlot = slotRegistry.nearestIndex(to: rawStart)
+            let startTime = boundSlot.flatMap { slotRegistry.resolvedDate(at: $0) } ?? rawStart
 
             let gene = ScheduleGene(
                 eventId: event.id,
@@ -382,7 +496,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 pomodoroConfig: event.pomodoroConfig,
                 reservedTaskIds: event.reservedTaskIds,
                 groupId: event.groupId,
-                slotIndex: slotRegistry.nearestIndex(to: startTime)
+                slotIndex: boundSlot
             )
             genes.append(gene)
 
@@ -402,7 +516,9 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         var result = orderedGenes
         let missing = context.movableEvents.filter { ev in !result.contains(where: { $0.eventId == ev.id }) }
         for event in missing {
-            let start = randomStartTime(for: event, in: context.planningHorizon, workingHours: context.workingHours, calendar: cal, rng: context.rng, workingDays: workingDays)
+            let rawStart = randomStartTime(for: event, in: context.planningHorizon, workingHours: context.workingHours, calendar: cal, rng: context.rng, workingDays: workingDays)
+            let boundSlot = slotRegistry.nearestIndex(to: rawStart)
+            let start = boundSlot.flatMap { slotRegistry.resolvedDate(at: $0) } ?? rawStart
             result.append(ScheduleGene(
                 eventId: event.id, title: event.title, startTime: start,
                 duration: event.duration, context: event.context, energyCost: event.energyCost,
@@ -411,7 +527,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 pomodoroConfig: event.pomodoroConfig,
                 reservedTaskIds: event.reservedTaskIds,
                 groupId: event.groupId,
-                slotIndex: slotRegistry.nearestIndex(to: start)
+                slotIndex: boundSlot
             ))
         }
 
@@ -512,54 +628,33 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         // granularity.
         let maxDomain = max(120, slotRegistry.stridesForMinutes(30 * 60))
 
-        // Domain enumeration is intentionally simpler than
-        // `enumerateFeasibleSlots` — we don't need cost scoring, we
-        // just need a superset of every slot the solver might pick.
-        // Quality / ordering is the solver's job via `scoreAssignment`
-        // and its own variable-activity heuristics.
+        // Domain enumeration now reads from the precomputed
+        // `SlotDomain` cache. The cache already excludes slots that
+        // would:
+        //   • start before `earliestStart` or leave no room before
+        //     `deadline`;
+        //   • end past the working-hours window of their day;
+        //   • overlap any fixed event across the event's full
+        //     duration.
+        // Mutation / repair call paths consult the same cache, so
+        // the CP-SAT seeder and the rest of the GA explore an
+        // identical feasible domain — no drift between "what the
+        // seeder thinks is legal" and "what a mutation can reach".
+        _ = slotSeconds   // retained for backward-compat; no longer
+                          // needed now that SlotDomain supplies the
+                          // grid-aligned candidates.
+        _ = workingDays   // idem — working-day filtering lives inside
+                          // the registry build.
         func enumerateDomain(for event: OptimizableEvent) -> [Date] {
-            let horizon = context.planningHorizon
-            let horizonStartDay = cal.startOfDay(for: horizon.start)
-            let horizonLastDay = cal.startOfDay(for: horizon.end.addingTimeInterval(-1))
-            let daysInHorizon = max(1, (cal.dateComponents([.day], from: horizonStartDay, to: horizonLastDay).day ?? 0) + 1)
-            let hourRange = event.preferredHourRange ?? context.workingHours
-            let hoursLower = hourRange.lowerBound
-            let hoursUpper = min(hourRange.upperBound, context.workingHours.upperBound)
-
-            let floor = [horizon.start, event.earliestStart].compactMap { $0 }.max() ?? horizon.start
-            let ceiling = event.deadline.map { min($0, horizon.end) } ?? horizon.end
-
+            let domain = context.ensureSlotDomain(for: event.id)
+            guard !domain.isEmpty else { return [] }
             var candidates: [Date] = []
-            candidates.reserveCapacity(maxDomain)
-
-            for dayOffset in 0..<daysInHorizon {
-                guard let day = cal.date(byAdding: .day, value: dayOffset, to: horizonStartDay) else { continue }
-                if !workingDays.contains(cal.component(.weekday, from: day)) { continue }
-
-                guard let dayWorkStart = cal.date(bySettingHour: hoursLower, minute: 0, second: 0, of: day),
-                      let dayWorkEnd = cal.date(bySettingHour: hoursUpper, minute: 0, second: 0, of: day) else { continue }
-
-                let dayFloor = max(dayWorkStart, floor)
-                let latestStart = dayWorkEnd.addingTimeInterval(-event.duration)
-                if latestStart < dayFloor { continue }
-                if dayFloor > ceiling.addingTimeInterval(-event.duration) { continue }
-
-                // Snap the lower edge up to a grid line so every
-                // candidate lands on the same 15-min lattice the rest
-                // of the system uses.
-                let floorSecs = dayFloor.timeIntervalSinceReferenceDate
-                let snappedFloorSecs = (floorSecs / slotSeconds).rounded(.up) * slotSeconds
-                var candidate = Date(timeIntervalSinceReferenceDate: snappedFloorSecs)
-
-                while candidate <= latestStart && candidates.count < maxDomain {
-                    let candidateEnd = candidate.addingTimeInterval(event.duration)
-                    if candidateEnd > ceiling { break }
-                    candidates.append(candidate)
-                    candidate = candidate.addingTimeInterval(slotSeconds)
-                }
+            candidates.reserveCapacity(min(domain.count, maxDomain))
+            for idx in domain.indices {
+                guard let date = slotRegistry.resolvedDate(at: idx) else { continue }
+                candidates.append(date)
                 if candidates.count >= maxDomain { break }
             }
-
             return candidates
         }
 
@@ -610,33 +705,100 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
             ($0.startDate, $0.endDate)
         }
 
-        // Simple priority-weighted scorer: earlier placements of
-        // higher-priority events score better. The solver uses this to
-        // break ties between feasible assignments; we don't need a
-        // sophisticated metric because the GA will polish soft
-        // objectives on subsequent generations.
+        // True lexicographic hierarchy — no weight-gap tricks. Each
+        // tier is solved as its own pass; the previous tier's
+        // optimum becomes a hard constraint for everything below.
+        // On a pathological workload where scalar-weighted lex could
+        // be overwhelmed by tier-4 accumulation, the hierarchy
+        // provably cannot be — an earlier tier's score is checked
+        // and its branches pruned when they regress.
+        //
+        // Tier order matches the GA's three-tier `LexFitness` plus
+        // a priority-earliness tiebreaker:
+        //   1. inclusion (count of placed events)
+        //   2. -deadline overrun (minutes, more negative = worse)
+        //   3. -backlog inversions (count, more negative = worse)
+        //   4. priority × earliness (sum over placed events)
+        let backlogById = context.backlogIndexMap()
         let priorityByIndex: [Int: Double] = Dictionary(
             uniqueKeysWithValues: context.movableEvents.enumerated().map { ($0, $1.priority) }
         )
-        let horizonStart = context.planningHorizon.start.timeIntervalSinceReferenceDate
-        let horizonSpan = max(1, context.planningHorizon.end.timeIntervalSinceReferenceDate - horizonStart)
-        let scorer: ([Int: Date]) -> Double = { assignment in
-            var score = 0.0
-            for (idx, date) in assignment {
-                let priority = priorityByIndex[idx] ?? 0.5
-                // Position in [0, 1]: 0 = start of horizon, 1 = end.
-                let position = (date.timeIntervalSinceReferenceDate - horizonStart) / horizonSpan
-                // Priority wants early placement → invert position.
-                score += priority * (1.0 - position)
+        let deadlineByIndex: [Int: Date] = Dictionary(
+            uniqueKeysWithValues: context.movableEvents.enumerated().compactMap { idx, ev in
+                ev.deadline.map { (idx, $0) }
             }
-            return score
-        }
+        )
+        let durationByIndex: [Int: TimeInterval] = Dictionary(
+            uniqueKeysWithValues: context.movableEvents.enumerated().map { ($0, $1.duration) }
+        )
+        let backlogRankByIndex: [Int: Int] = Dictionary(
+            uniqueKeysWithValues: context.movableEvents.enumerated().compactMap { idx, ev in
+                backlogById[ev.id].map { (idx, $0) }
+            }
+        )
+        let horizonStartRef = context.planningHorizon.start.timeIntervalSinceReferenceDate
+        let horizonSpan = max(1, context.planningHorizon.end.timeIntervalSinceReferenceDate - horizonStartRef)
+        let tiers: [CPSATRepairer.LexTier] = [
+            CPSATRepairer.LexTier(
+                name: "inclusion",
+                extract: { assignment in Double(assignment.count) }
+            ),
+            CPSATRepairer.LexTier(
+                name: "deadline",
+                extract: { assignment in
+                    var overrun = 0.0
+                    for (idx, start) in assignment {
+                        guard let deadline = deadlineByIndex[idx],
+                              let duration = durationByIndex[idx] else { continue }
+                        let end = start.addingTimeInterval(duration)
+                        if end > deadline {
+                            overrun += end.timeIntervalSince(deadline) / 60.0
+                        }
+                    }
+                    return -overrun
+                }
+            ),
+            CPSATRepairer.LexTier(
+                name: "backlog",
+                extract: { assignment in
+                    let ranked: [(rank: Int, start: Date)] = assignment.compactMap { idx, start in
+                        backlogRankByIndex[idx].map { (rank: $0, start: start) }
+                    }
+                    guard ranked.count >= 2 else { return 0 }
+                    var inversions = 0
+                    for i in 0..<ranked.count {
+                        for j in (i + 1)..<ranked.count {
+                            let a = ranked[i]
+                            let b = ranked[j]
+                            if a.rank < b.rank && a.start > b.start {
+                                inversions += 1
+                            } else if b.rank < a.rank && b.start > a.start {
+                                inversions += 1
+                            }
+                        }
+                    }
+                    return -Double(inversions)
+                }
+            ),
+            CPSATRepairer.LexTier(
+                name: "earliness",
+                extract: { assignment in
+                    var total = 0.0
+                    for (idx, date) in assignment {
+                        let priority = priorityByIndex[idx] ?? 0.5
+                        let position = (date.timeIntervalSinceReferenceDate - horizonStartRef) / horizonSpan
+                        total += priority * (1.0 - position)
+                    }
+                    return total
+                }
+            ),
+        ]
 
-        let result = repairer.solve(
+        let result = repairer.solveLexHierarchy(
             variables: variables,
             precedence: precedence,
             fixedBlocks: fixedBlocks,
-            scoreAssignment: scorer
+            tiers: tiers
         )
 
         // Require every variable to have an assignment — a partial
@@ -650,22 +812,26 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         var genes: [ScheduleGene] = []
         genes.reserveCapacity(context.movableEvents.count)
         for (idx, event) in context.movableEvents.enumerated() {
-            let start: Date
+            let rawStart: Date
             let included: Bool
             if excludedGeneIndices.contains(idx) {
                 // Droppable with empty domain → keep at a nominal slot
                 // and flag excluded. Nominal slot is the earliest
                 // horizon edge so comparisons stay well-behaved.
-                start = context.planningHorizon.start
+                rawStart = context.planningHorizon.start
                 included = false
             } else if let assigned = result.assignments[idx] {
-                start = assigned
+                rawStart = assigned
                 included = true
             } else {
                 // Shouldn't happen given the count-match guard above,
                 // but fall through defensively rather than crashing.
                 return nil
             }
+            // Snap to registry grid so `startTime` matches the slot
+            // the index resolves to — see `random(context:)` rationale.
+            let boundSlot = slotRegistry.nearestIndex(to: rawStart)
+            let start = boundSlot.flatMap { slotRegistry.resolvedDate(at: $0) } ?? rawStart
             genes.append(ScheduleGene(
                 eventId: event.id,
                 title: event.title,
@@ -681,7 +847,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 pomodoroConfig: event.pomodoroConfig,
                 reservedTaskIds: event.reservedTaskIds,
                 groupId: event.groupId,
-                slotIndex: slotRegistry.nearestIndex(to: start)
+                slotIndex: boundSlot
             ))
         }
         return ScheduleChromosome(genes: genes, needsEvaluation: true)
@@ -700,7 +866,9 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         dependsOn: [String],
         placedGenes: [ScheduleGene],
         genesByEvent: [String: Int],
-        workingDays: Set<Int> = []
+        workingDays: Set<Int> = [],
+        eventId: String? = nil,
+        context: OptimizerContext? = nil
     ) -> Date? {
         let horizonStartDay = calendar.startOfDay(for: horizon.start)
         let horizonLastDay = calendar.startOfDay(for: horizon.end.addingTimeInterval(-1))
@@ -712,6 +880,44 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         for depId in dependsOn {
             if let depGene = placedGenes.first(where: { $0.eventId == depId && $0.isIncluded }) {
                 floor = max(floor, depGene.endTime)
+            }
+        }
+
+        // Fast path: consult the precomputed per-event slot domain
+        // when the caller supplied both `eventId` and `context`.
+        // The domain already encodes `earliestStart`, event-level
+        // `deadline`, working-hours fit and fixed-event non-overlap,
+        // so the only runtime filters are:
+        //   • the chromosome-specific `occupied` intervals;
+        //   • the dependency-derived `floor` above;
+        //   • a caller-supplied `deadline` that may be *tighter*
+        //     than the event's static deadline (LNS reverse-deps).
+        // Iterating the domain (typically ≤200 entries) is strictly
+        // cheaper than the day-by-day stride walk below (~28×h
+        // working hours × slots-per-hour).
+        if let eventId, let context {
+            let registry = context.ensureSlotRegistry()
+            let domain = context.ensureSlotDomain(for: eventId)
+            if !domain.isEmpty {
+                let feasibleStart = domain.indices(after: floor, registry: registry)
+                for idx in feasibleStart {
+                    guard let candidate = registry.resolvedDate(at: idx) else { continue }
+                    let candidateEnd = candidate.addingTimeInterval(duration)
+                    // Dynamic deadline (tighter than static) — break
+                    // on overshoot since domain is chronologically
+                    // sorted, so every later entry overshoots too.
+                    if let deadline, candidateEnd > deadline { break }
+                    let hasOverlap = occupied.contains { occ in
+                        candidate < occ.end && candidateEnd > occ.start
+                    }
+                    if !hasOverlap {
+                        return candidate
+                    }
+                }
+                // Domain was non-empty but every entry conflicts
+                // with current `occupied` (or dynamic deadline) —
+                // no feasible slot.
+                return nil
             }
         }
 
@@ -1274,16 +1480,22 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                     }
                 }
 
-                guard !slotRegistry.isEmpty,
-                      let range = slotRegistry.allowedIndices(
-                          duration: genes[i].duration,
-                          floor: effectiveFloor,
-                          ceiling: event?.deadline,
-                          workingHoursUpperBound: context.workingHours.upperBound
-                      ), !range.isEmpty else { break }
-                let newSlot = context.rng.int(in: range.lowerBound..<range.upperBound)
-                guard let newDate = slotRegistry.resolvedDate(at: newSlot) else { break }
-                genes[i] = genes[i].withSlot(index: newSlot, date: newDate)
+                // Per-gene precomputed domain replaces the per-mutation
+                // `allowedIndices` binary search + fixed-event overlap
+                // scan. The domain already excludes slots that would
+                // overlap a fixed event across the full duration, so a
+                // random pick from the domain is placement-feasible by
+                // construction. Dependency floor is the only dynamic
+                // constraint — we binary-search the domain for the
+                // first entry past the floor instead of rebuilding the
+                // candidate set.
+                guard !slotRegistry.isEmpty else { break }
+                let domain = context.ensureSlotDomain(for: genes[i].eventId)
+                let feasible = domain.indices(after: effectiveFloor, registry: slotRegistry)
+                guard !feasible.isEmpty else { break }
+                let pick = feasible[context.rng.int(in: feasible.startIndex..<feasible.endIndex)]
+                guard let newDate = slotRegistry.resolvedDate(at: pick) else { break }
+                genes[i] = genes[i].withSlot(index: pick, date: newDate)
             case 2:
                 // Slot-based snap: align to the nearest registry slot.
                 // The registry is a superset of every placement the
@@ -2406,6 +2618,24 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
             occupied.append((gene.startTime, gene.endTime))
         }
         occupied.sort { $0.start < $1.start }
+        occupied.reserveCapacity(occupied.count + destroyed.count)
+
+        // See `repair()` for the rationale — binary-search insertion
+        // keeps the per-placement cost O(log N + N) instead of the
+        // full O(N log N) sort that used to run after every append.
+        func insertSorted(_ entry: (start: Date, end: Date)) {
+            var lo = 0
+            var hi = occupied.count
+            while lo < hi {
+                let mid = (lo + hi) / 2
+                if occupied[mid].start < entry.start {
+                    lo = mid + 1
+                } else {
+                    hi = mid
+                }
+            }
+            occupied.insert(entry, at: lo)
+        }
 
         let eventById: [String: OptimizableEvent] = Dictionary(
             uniqueKeysWithValues: context.movableEvents.map { ($0.id, $0) }
@@ -2477,7 +2707,9 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                     dependsOn: event?.dependsOn ?? [],
                     placedGenes: genes,
                     genesByEvent: genesByEvent,
-                    workingDays: context.preferences.workingDays
+                    workingDays: context.preferences.workingDays,
+                    eventId: event?.id,
+                    context: context
                 )
                 guard let earliestSlot = earliest else {
                     if fallbackIdx == nil { fallbackIdx = idx }
@@ -2531,8 +2763,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                     genes[chosenIdx] = genes[chosenIdx].withSlot(nearest: slot, registry: slotRegistry)
                     changed.insert(chosenIdx)
                 }
-                occupied.append((slot, slot.addingTimeInterval(genes[chosenIdx].duration)))
-                occupied.sort { $0.start < $1.start }
+                insertSorted((slot, slot.addingTimeInterval(genes[chosenIdx].duration)))
             } else if genes[chosenIdx].isDroppable {
                 if genes[chosenIdx].isIncluded {
                     genes[chosenIdx].isIncluded = false
@@ -2570,15 +2801,16 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                     dependsOn: [],
                     placedGenes: genes,
                     genesByEvent: genesByEvent,
-                    workingDays: context.preferences.workingDays
+                    workingDays: context.preferences.workingDays,
+                    eventId: event?.id,
+                    context: context
                 )
                 if let slot {
                     if genes[idx].startTime != slot {
                         genes[idx] = genes[idx].withSlot(nearest: slot, registry: slotRegistry)
                         changed.insert(idx)
                     }
-                    occupied.append((slot, slot.addingTimeInterval(genes[idx].duration)))
-                    occupied.sort { $0.start < $1.start }
+                    insertSorted((slot, slot.addingTimeInterval(genes[idx].duration)))
                 }
             }
         }
@@ -2719,6 +2951,31 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
             ($0.startDate, $0.endDate)
         }
         occupied.sort { $0.start < $1.start }
+        occupied.reserveCapacity(occupied.count + sortedIndices.count)
+
+        // Insert `entry` into the already-sorted `occupied` array in
+        // O(log N) binary search + O(N) shift. Kept inline so the
+        // iteration below stays easy to follow.
+        //
+        // Previously this loop appended and then ran a full O(N log N)
+        // `sort` on every iteration — O(N² log N) total when repair
+        // touches all N genes, which is the hot path for any mutation.
+        // A linear scan would work for tiny arrays, but binary search
+        // keeps the insertion cost bounded as the horizon grows to
+        // include dozens of fixed events + movables.
+        func insertSorted(_ entry: (start: Date, end: Date)) {
+            var lo = 0
+            var hi = occupied.count
+            while lo < hi {
+                let mid = (lo + hi) / 2
+                if occupied[mid].start < entry.start {
+                    lo = mid + 1
+                } else {
+                    hi = mid
+                }
+            }
+            occupied.insert(entry, at: lo)
+        }
 
         for idx in sortedIndices {
             let gene = genes[idx]
@@ -2788,8 +3045,7 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
                 }
             }
 
-            occupied.append((genes[idx].startTime, genes[idx].endTime))
-            occupied.sort { $0.start < $1.start }
+            insertSorted((genes[idx].startTime, genes[idx].endTime))
         }
 
         // Canonicalize equivalent gene groups after

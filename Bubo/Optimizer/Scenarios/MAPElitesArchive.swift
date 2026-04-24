@@ -9,14 +9,25 @@ import Foundation
 // scenarios returned to the user are simply the most-populated / highest-
 // scoring cells sorted by fitness.
 //
-// Feature space (5 × 5 × 5 = 125 cells):
-// • focusQuality: longest uninterrupted focus block per day, averaged across
-//   days, normalized against the user's `idealFocusBlockMinutes`. Captures
-//   "does this schedule protect deep-work time?"
-// • meetingDensity: fraction of working hours occupied by meeting-context
-//   events. Captures "how packed is the day with meetings?"
-// • inclusionRatio: fraction of droppable events that were included.
-//   Captures "did we pack the schedule or drop tasks?"
+// Feature space (5 × 5 × 5 = 125 cells) — chosen to actually VARY across
+// different placements of the same task set:
+//
+// • taskSpreadDays: distinct days hosting movable tasks / working days in
+//   horizon. Separates "all tasks today" from "tasks spread across the week".
+//
+// • morningShare: fraction of movable-task hours scheduled before 12:00.
+//   Separates "morning-heavy" from "afternoon-heavy" layouts.
+//
+// • lastTaskHour: hour-of-day of the latest-ending movable task, normalized
+//   over the working-hours window. Separates "finish by lunch" from "work
+//   late" layouts.
+//
+// The previous axes (focusQuality, meetingDensity, inclusionRatio) were all
+// dominated by FIXED-event content — on a typical week with 20 meetings,
+// every candidate schedule landed in the same cell regardless of where the
+// user's 4 movable tasks went, so `scenarios=3` surfaced only 1 cell. The
+// new triple is defined purely over movable placements, so variations in
+// task arrangement actually populate distinct cells.
 //
 // Every feature is clamped to [0, 1] and binned into 5 uniform slots. Two
 // schedules that differ on the same objective but land in the same cell will
@@ -27,20 +38,24 @@ import Foundation
 // MARK: - Features
 
 struct MAPElitesFeatures: Hashable, Sendable {
-    /// 0–1 (clamped). Longer protected focus blocks per day → higher score.
-    let focusQuality: Double
-    /// 0–1 (clamped). More working-hour minutes marked as meetings → higher score.
-    let meetingDensity: Double
-    /// 0–1. Droppable events included / total droppable events (1.0 if none).
-    let inclusionRatio: Double
+    /// 0–1. Distinct days with movable tasks / working days in horizon.
+    /// 0 = no movables, 1 = every working day has at least one task.
+    let taskSpreadDays: Double
+    /// 0–1. Minutes of movable work scheduled before 12:00 / total
+    /// movable minutes. 0 = everything afternoon, 1 = everything morning.
+    let morningShare: Double
+    /// 0–1. Latest-ending movable task's hour-of-day normalized over
+    /// working hours. 0 = ends at workingHours.lowerBound, 1 = ends at
+    /// workingHours.upperBound.
+    let lastTaskHour: Double
 
     /// Bin each feature into `bins` equal-width slots so identical cells
     /// collide in a dictionary lookup. `bins` defaults to 5 per dimension.
     func cell(bins: Int) -> MAPElitesCell {
         MAPElitesCell(
-            focusBin: Self.bin(focusQuality, bins: bins),
-            meetingBin: Self.bin(meetingDensity, bins: bins),
-            inclusionBin: Self.bin(inclusionRatio, bins: bins)
+            spreadBin: Self.bin(taskSpreadDays, bins: bins),
+            morningBin: Self.bin(morningShare, bins: bins),
+            lastHourBin: Self.bin(lastTaskHour, bins: bins)
         )
     }
 
@@ -54,9 +69,9 @@ struct MAPElitesFeatures: Hashable, Sendable {
 }
 
 struct MAPElitesCell: Hashable, Sendable {
-    let focusBin: Int
-    let meetingBin: Int
-    let inclusionBin: Int
+    let spreadBin: Int
+    let morningBin: Int
+    let lastHourBin: Int
 }
 
 // MARK: - Archive
@@ -180,9 +195,9 @@ struct MAPElitesArchive {
     /// three axes differ. Used for diverse-scenario selection strictness.
     private func axisDistance(_ a: MAPElitesCell, _ b: MAPElitesCell) -> Int {
         var count = 0
-        if a.focusBin != b.focusBin { count += 1 }
-        if a.meetingBin != b.meetingBin { count += 1 }
-        if a.inclusionBin != b.inclusionBin { count += 1 }
+        if a.spreadBin != b.spreadBin { count += 1 }
+        if a.morningBin != b.morningBin { count += 1 }
+        if a.lastHourBin != b.lastHourBin { count += 1 }
         return count
     }
 
@@ -196,88 +211,116 @@ struct MAPElitesArchive {
         context: OptimizerContext
     ) -> MAPElitesFeatures {
         let cal = context.calendar
-        let workingMinutes = Double((context.workingHours.upperBound - context.workingHours.lowerBound) * 60)
-        let idealFocus = max(30.0, Double(context.preferences.idealFocusBlockMinutes))
 
-        // Per-day bucketing of included genes + fixed events.
-        var eventsByDay: [Date: [(start: Date, end: Date, isMeeting: Bool)]] = [:]
-        for event in context.fixedEvents {
-            let day = cal.startOfDay(for: event.startDate)
-            let meetingish = Self.isMeetingContext(event.resolvedContext())
-            eventsByDay[day, default: []].append((event.startDate, event.endDate, meetingish))
+        // Collect included movable genes once — every axis reads from
+        // this slice, so no repeated scans.
+        let active = chromosome.genes.filter(\.isIncluded)
+
+        // Axis 1: taskSpreadDays
+        // Distinct-day count / working days in horizon, so "all tasks
+        // on one day" → 1/5 = 0.2 and "tasks on each of 5 working days"
+        // → 1.0. Normalizing over working days (not total days) keeps
+        // the axis usable for horizons that span weekends.
+        let workingDayCount = Self.workingDaysInHorizon(context: context, calendar: cal)
+        var uniqueDays = Set<Date>()
+        for gene in active {
+            uniqueDays.insert(cal.startOfDay(for: gene.startTime))
         }
-        for gene in chromosome.genes where gene.isIncluded {
-            let day = cal.startOfDay(for: gene.startTime)
-            eventsByDay[day, default: []].append(
-                (gene.startTime, gene.endTime, Self.isMeetingContext(gene.context))
-            )
-        }
-
-        // focusQuality: longest gap between events per day, normalized to
-        // idealFocusBlockMinutes. Averaged across populated days.
-        var focusSum = 0.0
-        var focusDays = 0
-        var meetingSum = 0.0
-        for (day, events) in eventsByDay {
-            guard let workStart = cal.date(bySettingHour: context.workingHours.lowerBound, minute: 0, second: 0, of: day),
-                  let workEnd = cal.date(bySettingHour: context.workingHours.upperBound, minute: 0, second: 0, of: day)
-            else { continue }
-
-            let sorted = events.sorted { $0.start < $1.start }
-            var longestGap: TimeInterval = 0
-            var cursor = workStart
-            for event in sorted {
-                let eventStart = max(event.start, workStart)
-                let eventEnd = min(event.end, workEnd)
-                guard eventStart < workEnd && eventEnd > workStart else { continue }
-                if eventStart > cursor {
-                    longestGap = max(longestGap, eventStart.timeIntervalSince(cursor))
-                }
-                cursor = max(cursor, eventEnd)
-            }
-            if cursor < workEnd {
-                longestGap = max(longestGap, workEnd.timeIntervalSince(cursor))
-            }
-            focusSum += min(1.0, (longestGap / 60.0) / idealFocus)
-            focusDays += 1
-
-            // Meeting minutes per day, normalized to working minutes.
-            let meetingMinutes = sorted
-                .filter(\.isMeeting)
-                .map { min($0.end, workEnd).timeIntervalSince(max($0.start, workStart)) / 60.0 }
-                .reduce(0, +)
-            meetingSum += min(1.0, meetingMinutes / workingMinutes)
-        }
-
-        let focusQuality = focusDays > 0 ? focusSum / Double(focusDays) : 0.5
-        let meetingDensity = focusDays > 0 ? meetingSum / Double(focusDays) : 0.0
-
-        // inclusionRatio: fraction of droppable genes actually included.
-        // If the schedule contains no droppable genes, default to 1.0 so
-        // the feature doesn't spuriously push every candidate into the
-        // same cell.
-        let droppable = chromosome.genes.filter(\.isDroppable)
-        let inclusionRatio: Double
-        if droppable.isEmpty {
-            inclusionRatio = 1.0
+        let taskSpreadDays: Double
+        if workingDayCount > 0 {
+            taskSpreadDays = min(1.0, Double(uniqueDays.count) / Double(workingDayCount))
         } else {
-            inclusionRatio = Double(droppable.count(where: \.isIncluded)) / Double(droppable.count)
+            taskSpreadDays = 0
+        }
+
+        // Axis 2: morningShare
+        // Fraction of movable-task minutes that fall before 12:00.
+        // Reports 0.5 (neutral) when there are no included movables so
+        // empty schedules don't all pile into the same corner cell.
+        //
+        // Date-based comparison instead of hour-only: a gene ending at
+        // 12:30 has `endHour == 12` but is not wholly-morning. Comparing
+        // `gene.endTime <= noon` correctly classifies that as straddling
+        // noon so only the 30 pre-noon minutes get credited.
+        var totalMinutes = 0.0
+        var morningMinutes = 0.0
+        let noonHour = 12
+        for gene in active {
+            let duration = gene.endTime.timeIntervalSince(gene.startTime) / 60.0
+            guard duration > 0 else { continue }
+            totalMinutes += duration
+            let dayStart = cal.startOfDay(for: gene.startTime)
+            guard let noon = cal.date(bySettingHour: noonHour, minute: 0, second: 0, of: dayStart) else { continue }
+            if gene.endTime <= noon {
+                morningMinutes += duration
+            } else if gene.startTime >= noon {
+                // wholly afternoon — no contribution
+            } else {
+                // Straddles noon — credit only the pre-noon slice.
+                let clipped = noon.timeIntervalSince(gene.startTime) / 60.0
+                morningMinutes += max(0, clipped)
+            }
+        }
+        let morningShare: Double
+        if totalMinutes > 0 {
+            morningShare = min(1.0, morningMinutes / totalMinutes)
+        } else {
+            morningShare = 0.5
+        }
+
+        // Axis 3: lastTaskHour
+        // Time-of-day of the latest-ending movable task, normalized
+        // over the working-hours span. Neutral 0.5 when the schedule
+        // has no movables.
+        let lowerHour = context.workingHours.lowerBound
+        let upperHour = context.workingHours.upperBound
+        let workingSpan = max(1, upperHour - lowerHour)
+        var latestEndHour: Double?
+        for gene in active {
+            let h = Double(cal.component(.hour, from: gene.endTime))
+            let m = Double(cal.component(.minute, from: gene.endTime))
+            let decimal = h + m / 60.0
+            if let curr = latestEndHour {
+                latestEndHour = max(curr, decimal)
+            } else {
+                latestEndHour = decimal
+            }
+        }
+        let lastTaskHour: Double
+        if let latest = latestEndHour {
+            let normalized = (latest - Double(lowerHour)) / Double(workingSpan)
+            lastTaskHour = max(0, min(1, normalized))
+        } else {
+            lastTaskHour = 0.5
         }
 
         return MAPElitesFeatures(
-            focusQuality: focusQuality,
-            meetingDensity: meetingDensity,
-            inclusionRatio: inclusionRatio
+            taskSpreadDays: taskSpreadDays,
+            morningShare: morningShare,
+            lastTaskHour: lastTaskHour
         )
     }
 
-    /// Treat anything tagged `meeting` (case-insensitive, prefix-level) as
-    /// a meeting for density accounting. Matches `ContextSwitchObjective`'s
-    /// prefix semantics so the archive's features and the objective's
-    /// scoring stay in sync.
-    private static func isMeetingContext(_ context: String?) -> Bool {
-        guard let context else { return false }
-        let lower = context.lowercased()
-        return lower.hasPrefix("meeting") || lower.contains("/meeting")
+    /// Count of working days inside the planning horizon. Working-day
+    /// membership comes from `preferences.workingDays`; empty set means
+    /// every weekday counts (same convention as the rest of the
+    /// optimizer).
+    private static func workingDaysInHorizon(
+        context: OptimizerContext,
+        calendar: Calendar
+    ) -> Int {
+        let horizon = context.planningHorizon
+        let startDay = calendar.startOfDay(for: horizon.start)
+        let lastDay = calendar.startOfDay(for: horizon.end.addingTimeInterval(-1))
+        let totalDays = max(1, (calendar.dateComponents([.day], from: startDay, to: lastDay).day ?? 0) + 1)
+        let workingDays = context.preferences.workingDays
+        if workingDays.isEmpty { return totalDays }
+        var count = 0
+        for offset in 0..<totalDays {
+            guard let day = calendar.date(byAdding: .day, value: offset, to: startDay) else { continue }
+            let weekday = calendar.component(.weekday, from: day)
+            if workingDays.contains(weekday) { count += 1 }
+        }
+        return count
     }
 }

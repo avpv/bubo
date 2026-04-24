@@ -147,11 +147,20 @@ struct GAConfiguration: Sendable {
         selectionStrategy: .tournament(size: 3),
         crossoverStrategy: .contextual(temperature: 0.5),
         convergenceThreshold: 0.001,
-        convergencePatience: 30,
+        // Lower patience (was 30). With the stronger greedy seeding
+        // below, the initial population usually already contains the
+        // fitness-plateau winner; waiting 30 generations to confirm
+        // that nothing beats it burned most of the wallclock budget
+        // on workloads that converge immediately.
+        convergencePatience: 15,
         adaptiveMutation: true,
         diversityThreshold: 0.01,
         immigrationRate: 0.1,
-        greedySeedFraction: 0.15,
+        // Greedy share bumped from 0.15 to 0.35 — seeds the population
+        // with feasible (priority, backlog, deadline)-ordered layouts
+        // so the GA starts polishing a near-optimal solution instead
+        // of discovering the sort key from random shuffles.
+        greedySeedFraction: 0.35,
         enableRepair: true,
         adaptiveCrossover: true,
         memeticHillClimbInterval: 25,
@@ -173,11 +182,11 @@ struct GAConfiguration: Sendable {
         selectionStrategy: .tournament(size: 3),
         crossoverStrategy: .contextual(temperature: 0.7),
         convergenceThreshold: 0.005,
-        convergencePatience: 10,
+        convergencePatience: 8,
         adaptiveMutation: false,
         diversityThreshold: 0.01,
         immigrationRate: 0.1,
-        greedySeedFraction: 0.2,
+        greedySeedFraction: 0.4,
         enableRepair: true,
         adaptiveCrossover: false,
         wallclockTimeout: 3.0
@@ -200,10 +209,88 @@ struct GAConfiguration: Sendable {
         adaptiveMutation: false,
         diversityThreshold: 0.05,
         immigrationRate: 0.0,
-        greedySeedFraction: 0.3,
+        greedySeedFraction: 0.5,
         enableRepair: true,
         adaptiveCrossover: false,
         wallclockTimeout: 0.5
+    )
+
+    /// Polish configuration — GA runs *after* CP-SAT has found the
+    /// hard+mid tier optimum and the job is just to refine soft-tier
+    /// placement (Buffer, ContextSwitch, DayCompactness, EnergyCurve)
+    /// in the neighbourhood of the anchor.
+    ///
+    /// Shape is deliberately lean:
+    ///   • Tiny population because the anchor is already great —
+    ///     we're not searching, we're sampling a small basin.
+    ///   • Low mutation rate so perturbations stay local to the
+    ///     CP-SAT anchor and don't re-discover hard+mid violations
+    ///     that the anchor already solved.
+    ///   • No CHC restart: restart would throw away the anchor's
+    ///     structural win and is only useful when the GA is stuck,
+    ///     which it can't be on a trivially-polishable landscape.
+    ///   • Short wallclock + tight patience so the whole polish
+    ///     phase costs ~100-500ms even on the thorough path.
+    ///
+    /// `IslandModelGA` adds anchor-replication seeds on top: a
+    /// large fraction of the initial population is CP-SAT mutated
+    /// with ±1–2 slot jitter, so the GA's first generation is a
+    /// dense cloud around the lex-optimum. Remaining slots are
+    /// filled with greedy variants and random for diversity.
+    static let polish = GAConfiguration(
+        populationSize: 30,
+        maxGenerations: 25,
+        mutationRate: 0.08,
+        crossoverRate: 0.75,
+        eliteCount: 2,
+        selectionStrategy: .tournament(size: 3),
+        crossoverStrategy: .contextual(temperature: 0.4),
+        convergenceThreshold: 0.002,
+        convergencePatience: 6,
+        adaptiveMutation: true,
+        diversityThreshold: 0.02,
+        immigrationRate: 0.05,
+        greedySeedFraction: 0.2,
+        enableRepair: true,
+        adaptiveCrossover: false,
+        memeticHillClimbInterval: 10,
+        memeticHillClimbCandidates: 2,
+        memeticHillClimbSteps: 4,
+        chcMaxRestarts: 0,
+        chcRestartEliteFraction: 0.0,
+        chcRestartMutationRate: 0.0,
+        selfAdaptiveRates: true,
+        wallclockTimeout: 1.5
+    )
+
+    /// Refine configuration — GA after CP-SAT on a medium workload
+    /// where the anchor is feasible-optimal but soft tier has real
+    /// search space (20-40 events, some conflicts). Between
+    /// `polish` and `default` in every axis.
+    static let refine = GAConfiguration(
+        populationSize: 60,
+        maxGenerations: 80,
+        mutationRate: 0.12,
+        crossoverRate: 0.8,
+        eliteCount: 3,
+        selectionStrategy: .tournament(size: 3),
+        crossoverStrategy: .contextual(temperature: 0.5),
+        convergenceThreshold: 0.001,
+        convergencePatience: 12,
+        adaptiveMutation: true,
+        diversityThreshold: 0.015,
+        immigrationRate: 0.08,
+        greedySeedFraction: 0.25,
+        enableRepair: true,
+        adaptiveCrossover: true,
+        memeticHillClimbInterval: 20,
+        memeticHillClimbCandidates: 3,
+        memeticHillClimbSteps: 5,
+        chcMaxRestarts: 1,
+        chcRestartEliteFraction: 0.2,
+        chcRestartMutationRate: 0.3,
+        selfAdaptiveRates: true,
+        wallclockTimeout: 4.0
     )
 
     static let thorough = GAConfiguration(
@@ -215,11 +302,17 @@ struct GAConfiguration: Sendable {
         selectionStrategy: .tournament(size: 5),
         crossoverStrategy: .contextual(temperature: 0.5),
         convergenceThreshold: 0.0005,
-        convergencePatience: 50,
+        // Patience trimmed 50 → 25: on tiny workloads `.thorough`
+        // used to run until the wallclock killed it because the
+        // greedy seed hit the plateau in gen 0-2 and then sat there
+        // unchanged for 50 generations of "no improvement" waiting.
+        // 25 plus `migrationInterval` still gives deep exploration
+        // room on hard problems while letting trivial ones exit.
+        convergencePatience: 25,
         adaptiveMutation: true,
         diversityThreshold: 0.005,
         immigrationRate: 0.15,
-        greedySeedFraction: 0.1,
+        greedySeedFraction: 0.35,
         enableRepair: true,
         adaptiveCrossover: true,
         memeticHillClimbInterval: 40,
@@ -232,32 +325,6 @@ struct GAConfiguration: Sendable {
         wallclockTimeout: 20.0
     )
 
-    /// Per-island config for island model GA. Smaller populations per island
-    /// since total individuals = populationSize * islandCount.
-    /// Uses contextual crossover and gradient refinement; IslandModelGA
-    /// diversifies strategies across islands.
-    static let island = GAConfiguration(
-        populationSize: 60,
-        maxGenerations: 400,
-        mutationRate: 0.12,
-        crossoverRate: 0.85,
-        eliteCount: 3,
-        selectionStrategy: .tournament(size: 4),
-        crossoverStrategy: .contextual(temperature: 0.5),
-        convergenceThreshold: 0.0005,
-        convergencePatience: 40,
-        adaptiveMutation: true,
-        diversityThreshold: 0.008,
-        immigrationRate: 0.1,
-        greedySeedFraction: 0.1,
-        enableRepair: true,
-        adaptiveCrossover: true,
-        memeticHillClimbInterval: 30,
-        memeticHillClimbCandidates: 3,
-        memeticHillClimbSteps: 8,
-        selfAdaptiveRates: true,
-        wallclockTimeout: 12.0
-    )
 }
 
 // MARK: - GA Progress
@@ -289,14 +356,6 @@ struct MultiObjectiveContext<C: Chromosome>: @unchecked Sendable {
     /// survivor selection.
     let hypervolume: HypervolumeEstimator
 
-    /// Optional MOEA/D-AWA state. When non-nil the engine's survivor
-    /// path delegates selection to MOEAD (decomposition-based for
-    /// many-objective problems) instead of NSGA-III. The adaptive
-    /// weight adjustment fires on its internal cadence. Setting this
-    /// is an opt-in for callers that have ≥8 objectives where
-    /// NSGA-III's reference-point niching degrades.
-    let moeadState: MOEADState?
-
     /// Ranker snapshot for the current generation. Taken from the
     /// adaptive variant so reference-point evolution is observed by
     /// every selection call.
@@ -309,8 +368,7 @@ struct MultiObjectiveContext<C: Chromosome>: @unchecked Sendable {
         evaluator: FitnessEvaluator,
         populationSize: Int,
         hypervolumeSampleCount: Int = 8_000,
-        hypervolumeSeed: UInt64 = 0x5EED_F2_2026,
-        moeadState: MOEADState? = nil
+        hypervolumeSeed: UInt64 = 0x5EED_F2_2026
     ) -> MultiObjectiveContext<ScheduleChromosome> {
         let names = evaluator.objectives.map(\.name)
         // Combined parent + offspring pool is 2·N, so feed NSGA-III that
@@ -334,8 +392,7 @@ struct MultiObjectiveContext<C: Chromosome>: @unchecked Sendable {
                 }
                 return names.map { _ in 0.0 }
             },
-            hypervolume: hv,
-            moeadState: moeadState
+            hypervolume: hv
         )
     }
 }
@@ -496,6 +553,16 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
         var lastBestFitness = bestEver?.rawFitness ?? 0
         var restartsPerformed = 0
         let wallclockStart = Date()
+        // Plateau detector sees through cache-driven fitness jitter
+        // that used to reset the `staleGenerations` counter. Window is
+        // half the patience so termination fires ~2× earlier than the
+        // counter alone once the GA is genuinely done. Minimum 3 so
+        // near-instant configs still have meaningful variance
+        // measurement.
+        var plateauDetector = FitnessPlateauDetector(
+            capacity: max(3, config.convergencePatience / 2)
+        )
+        plateauDetector.push(lastBestFitness)
 
         // Soft deadline semantics: the timeout check sits at the top
         // of the loop *after* the previous generation has fully
@@ -623,6 +690,19 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
                 convergenceGeneration = generation
             }
             lastBestFitness = currentFitness
+            plateauDetector.push(currentFitness)
+
+            // Termination: the plateau detector decides first. It sees
+            // through the cache-driven fitness jitter that keeps the
+            // stale-counter bouncing to zero on chromosomes whose
+            // fitness is recomputed from cache with microscopic
+            // floating-point variance — generations where "nothing
+            // really changed" used to reset the counter and let the
+            // GA burn through wallclock chasing phantom improvements.
+            if plateauDetector.isPlateau {
+                convergenceGeneration = generation - plateauDetector.capacity + 1
+                break
+            }
 
             if staleGenerations >= config.convergencePatience {
                 // CHC restart: before giving up, try regenerating the
@@ -642,6 +722,12 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
                     )
                     restartsPerformed += 1
                     staleGenerations = 0
+                    // The post-restart population is a new search
+                    // basin — let the detector re-fill its window
+                    // against the fresh trajectory instead of
+                    // immediately re-triggering on the pre-restart
+                    // plateau.
+                    plateauDetector.reset()
                     // Don't reset convergenceGeneration; the reported value
                     // should still reflect when the bestEver was last
                     // improved, not when we decided to relaunch.
@@ -889,23 +975,10 @@ final class GeneticAlgorithm<C: Chromosome>: @unchecked Sendable {
             var nicheOfLocal: [Int: Int] = [:]
             var distLocal: [Int: Double] = [:]
 
-            if let moead = mo.moeadState {
-                // MOEA/D-AWA survivor path. Tchebycheff scalarisation
-                // over Das–Dennis weights; AWA periodically relocates
-                // stagnant subproblems. All survivors are treated as
-                // front 0 with neutral niche metadata.
-                let candidates = vectors.enumerated().map { (idx, v) in
-                    (index: idx, objectives: v)
-                }
-                moead.updateIncumbents(candidates: candidates)
-                let chosen = moead.selectedIndices(from: candidates)
-                survivorIndices = Array(chosen.prefix(config.populationSize))
-                for localIdx in 0..<survivorIndices.count {
-                    frontOfLocal[localIdx] = 0
-                    nicheOfLocal[localIdx] = 0
-                    distLocal[localIdx] = 0
-                }
-            } else {
+            // MOEA/D-AWA survivor alternative was retired — NSGA-III
+            // with HypE-lite tiebreak is the sole multi-objective
+            // survivor path now.
+            do {
                 let activeRanker = mo.activeRanker
                 // Fold the observed per-axis minimum into the hypervolume
                 // estimator's nadir so the Monte Carlo sampling box

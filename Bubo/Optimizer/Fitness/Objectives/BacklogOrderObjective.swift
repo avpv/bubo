@@ -31,7 +31,7 @@ struct BacklogOrderObjective: FitnessObjective {
     let name = "BacklogOrder"
     var weight: Double
 
-    init(weight: Double = 0.5) {
+    init(weight: Double = 1.5) {
         self.weight = weight
     }
 

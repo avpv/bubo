@@ -236,9 +236,27 @@ final class BuboOptimizer {
         let tabuToInject: TabuMemory? = schedulingFeatures.useTabuMemory
             ? preliminarySuite.tabu
             : nil
-        let cpSATToInject: CPSATRepairer? = schedulingFeatures.useCPSATRepair
+        // CP-SAT as feasibility-optimal construction seeder. The
+        // repair-side use was retired (handwritten B&B matches it on
+        // the realistic workloads we measured), but as a *seeder* the
+        // solver buys something different: one guaranteed-feasible
+        // initial individual that already optimises the hard + mid
+        // lex tiers (inclusion, deadline, backlog order) before the
+        // GA starts polishing the soft tier. When the flag is off or
+        // the solver times out, the warm-start collector silently
+        // skips the CP-SAT seed and the population stays
+        // greedy + random + GNN.
+        let cpSATToInject: CPSATRepairer? = schedulingFeatures.useCPSATSeed
             ? CPSATRepairer()
             : nil
+        // One shared slot registry + per-gene domain cache for the
+        // whole run. Every island context inherits the same holders,
+        // so registry build happens once and each movable event's
+        // feasible-slot domain is computed once — every mutation
+        // afterwards gets an O(1) read instead of the old per-call
+        // `allowedIndices` binary search + fixed-event overlap scan.
+        let slotRegistryHolder = SlotRegistryHolder()
+        let slotDomainsHolder = SlotDomainsHolder()
         let adjustedContext = OptimizerContext(
             fixedEvents: context.fixedEvents,
             movableEvents: context.movableEvents,
@@ -253,27 +271,109 @@ final class BuboOptimizer {
             contextualCrossoverHead: workloadLearners.head,
             tabuMemory: tabuToInject,
             cpSATRepairer: cpSATToInject,
-            cpSATWindowThreshold: schedulingFeatures.cpSATWindowThreshold
+            cpSATWindowThreshold: schedulingFeatures.cpSATWindowThreshold,
+            slotRegistryHolder: slotRegistryHolder,
+            slotDomainsHolder: slotDomainsHolder
         )
         // Stash for learner-feedback callbacks (acceptScenario etc).
         lastOptimizationContext = adjustedContext
 
         let evaluator = FitnessEvaluator.standard(preferences: prefs)
-        let config = overrideConfig ?? gaConfig
-        let capturedIslandConfig = overrideIslandConfig ?? islandConfig
         let capturedScenarioCount = scenarioCount
 
-        // Survivor selector: MOEA/D-AWA when explicitly enabled
-        // (beneficial at 8+ objectives), else adaptive NSGA-III
-        // with HypE-lite tiebreak. Both read per-objective scores
-        // from the chromosome cache so survivor selection imposes
-        // zero extra evaluation cost.
-        let moeadState: MOEADState? = schedulingFeatures.useMOEADAWASurvivor
-            ? MOEAD_AWA.forScheduleEvaluator(
-                evaluator: evaluator,
-                populationSize: max(2, config.populationSize * 2)
-            )
-            : nil
+        // Run CP-SAT construction seeder synchronously so its result
+        // can drive the GA-config dispatch below. A successful solve
+        // lands a feasibility-optimal chromosome on the hard + mid
+        // lex tiers (inclusion, deadline, backlog) before GA starts;
+        // a timeout / infeasibility returns nil and the pipeline
+        // falls through to the plain greedy-seeded GA as it always
+        // has. The solver also injects a `CPSATRepairer` into the
+        // context so LNS repair's bandit can pick it too.
+        let cpSATStart = Date()
+        let cpSATAnchor: ScheduleChromosome?
+        if schedulingFeatures.useCPSATSeed {
+            cpSATAnchor = ScheduleChromosome.cpSeeded(context: adjustedContext)
+        } else {
+            cpSATAnchor = nil
+        }
+        // Greedy-construct fallback when CP-SAT couldn't deliver
+        // (flag off, solver timeout, infeasible on the hard
+        // constraints). The pipeline is unconditionally
+        // `anchor → GA polish/refine`; the fallback is silent so
+        // there's never an "anchor-less" branch the GA config has
+        // to reason about. `greedy(context:)` is feasibility-by-
+        // construction on our domain (working hours, fixed-event
+        // overlap, precedence via topological insertion in
+        // `greedyWithOrder`), so this always produces SOMETHING
+        // usable.
+        let anchorSeed: ScheduleChromosome = cpSATAnchor
+            ?? ScheduleChromosome.greedy(context: adjustedContext)
+        let anchorSource: String = cpSATAnchor != nil ? "cpsat" : "greedy"
+        let cpSATDurationMs = Int(Date().timeIntervalSince(cpSATStart) * 1000)
+
+        // GA-config dispatch: we now always have an anchor — the GA's
+        // job is to polish or refine around it. The choice between
+        // presets is driven by the *workload* (how big the search
+        // space is), not by whether CP-SAT succeeded:
+        //
+        //   difficulty < 0.25  → `.polish`
+        //   difficulty < 0.6   → `.refine`
+        //   difficulty ≥ 0.6   → caller's config (anchor is a hint)
+        //
+        // An explicit `overrideConfig` always wins so programmatic
+        // callers (tests, training pipeline) keep their current
+        // behaviour unchanged.
+        let difficulty = workloadDifficulty(
+            movableEvents: context.movableEvents,
+            fixedEvents: context.fixedEvents
+        )
+        let dispatchMode: String
+        var config: GAConfiguration
+        var capturedIslandConfig: IslandConfiguration
+        if let override = overrideConfig {
+            config = override
+            capturedIslandConfig = overrideIslandConfig ?? islandConfig
+            dispatchMode = "override"
+        } else if difficulty < Self.trivialWorkloadDifficulty {
+            config = .polish
+            capturedIslandConfig = Self.singleIslandConfig(from: islandConfig)
+            dispatchMode = "polish"
+        } else if difficulty < Self.mediumWorkloadDifficulty {
+            config = .refine
+            capturedIslandConfig = Self.singleIslandConfig(from: islandConfig)
+            dispatchMode = "refine"
+        } else {
+            config = gaConfig
+            capturedIslandConfig = overrideIslandConfig ?? islandConfig
+            dispatchMode = "seeded_full"
+        }
+
+        // Difficulty cap for explicit overrides on trivial workloads.
+        // Polish / refine / seeded_full presets are already sized
+        // against difficulty — only `override` escapes the dispatch
+        // and can arrive too heavy for a 4-task week.
+        if dispatchMode == "override",
+           difficulty < Self.trivialWorkloadDifficulty {
+            let capPop = max(20, Int(Double(config.populationSize) * 0.25))
+            let capGen = max(20, Int(Double(config.maxGenerations) * 0.15))
+            let capWall = max(0.8, config.wallclockTimeout * 0.15)
+            let capPatience = max(8, config.convergencePatience / 3)
+            let originalPop = config.populationSize
+            let originalTimeout = config.wallclockTimeout
+            config.populationSize = min(config.populationSize, capPop)
+            config.maxGenerations = min(config.maxGenerations, capGen)
+            config.wallclockTimeout = min(config.wallclockTimeout, capWall)
+            config.convergencePatience = min(config.convergencePatience, capPatience)
+            capturedIslandConfig = Self.singleIslandConfig(from: capturedIslandConfig)
+            gaStatsLogger.info("workload_downshift rid=\(runId, privacy: .public) difficulty=\(difficulty) pop=\(originalPop)→\(config.populationSize) gen=\(config.maxGenerations) wallclock=\(String(format: "%.1f", originalTimeout))s→\(String(format: "%.1f", config.wallclockTimeout))s")
+        }
+
+        gaStatsLogger.info("dispatch rid=\(runId, privacy: .public) mode=\(dispatchMode, privacy: .public) difficulty=\(difficulty) anchor=\(anchorSource, privacy: .public) cpsat_ms=\(cpSATDurationMs) pop=\(config.populationSize) gen=\(config.maxGenerations) wallclock=\(String(format: "%.1f", config.wallclockTimeout))s")
+
+        // Survivor selector: adaptive NSGA-III with HypE-lite
+        // tiebreak. The MOEA/D-AWA alternative was retired along
+        // with its feature flag — NSGA-III consistently matched it
+        // on realistic 14-objective workloads.
         // Adaptive hypervolume sample count. Two signals matter:
         //
         //   1. Objective count `d`. HV estimator variance grows with
@@ -305,8 +405,7 @@ final class BuboOptimizer {
         let multiObjective = MultiObjectiveContext<ScheduleChromosome>.schedule(
             evaluator: evaluator,
             populationSize: config.populationSize,
-            hypervolumeSampleCount: hvSamples,
-            moeadState: moeadState
+            hypervolumeSampleCount: hvSamples
         )
 
         // Quality-Diversity archive shared across every island so
@@ -402,21 +501,9 @@ final class BuboOptimizer {
                 evaluate: surrogateAssistedEvaluator
             ),
         ]
-        if schedulingFeatures.useCMAMEEmitter {
-            // CMA-ME samples around the population's current best.
-            // 5% emission rate keeps cost modest while still
-            // letting the covariance-adapted Gaussian probe locally.
-            hookComponents.append(
-                ScheduleEvolutionHooks.cmaMEEmission(
-                    archive: qdArchive,
-                    emissionRate: 0.05,
-                    templateProvider: { population in
-                        population.individuals.max(by: { $0.rawFitness < $1.rawFitness })
-                    },
-                    evaluate: surrogateAssistedEvaluator
-                )
-            )
-        }
+        // CMA-ME emitter retired — the uniform MAP-Elites emitter
+        // delivered equivalent archive coverage on realistic
+        // workloads without the per-generation matrix update cost.
         let hooks = ScheduleEvolutionHooks.compose(
             contentsOf: hookComponents
         )
@@ -428,18 +515,12 @@ final class BuboOptimizer {
         // updates the same bundle on subsequent optimizations of the
         // same workload.
         //
-        // `FederatedMutationBandit` remains available as an opt-in
-        // optimization for callers that want per-island bandits with
-        // periodic merging — not wired by default because it fights
-        // with the persistent-feedback path.
         // Collect warm-start seeds from the learner suite so the
         // initial population starts inside the basin of recent
         // accepted solutions and respects GNN-derived priorities.
         let extraSeeds: [ScheduleChromosome] = collectWarmStartSeeds(context: adjustedContext)
-        let learnerSuite = obtainLearnerSuite(for: adjustedContext)
-        let migrationBandit = schedulingFeatures.useMigrationBandit
-            ? learnerSuite.migrationBandit
-            : nil
+        // Migration-topology bandit retired — adaptive migration
+        // interval in IslandModelGA already reacts to stagnation.
 
         // Multi-fidelity funnel: when enabled, wrap the per-chromo
         // surrogate-assisted evaluator into a batch screen +
@@ -460,6 +541,10 @@ final class BuboOptimizer {
             multiFidelityBatch = nil
         }
 
+        // Capture the anchor-replication fraction here so the detached
+        // task doesn't have to reach back into the @MainActor type.
+        let capturedAnchorFraction = Self.anchorReplicationFraction(forMode: dispatchMode)
+
         let (population, convergenceGen, duration) = await Task.detached(priority: .userInitiated) {
             let startTime = Date()
 
@@ -471,7 +556,8 @@ final class BuboOptimizer {
                 multiObjective: multiObjective,
                 hooks: hooks,
                 extraSeeds: extraSeeds,
-                migrationBandit: migrationBandit,
+                anchorSeed: anchorSeed,
+                anchorReplicationFraction: capturedAnchorFraction,
                 batchEvaluate: multiFidelityBatch
             )
 
@@ -503,9 +589,9 @@ final class BuboOptimizer {
         //     focusMass / morningSkew / daySpread to drive *emitter*
         //     selection inside evolution.
         //   - `MAPElitesArchive` (post-GA, here) bins on
-        //     focusQuality / meetingDensity / inclusionRatio —
-        //     user-meaningful axes — to pick the *display* set of
-        //     scenarios. Different axes serve different consumers,
+        //     taskSpreadDays / morningShare / lastTaskHour —
+        //     movable-placement-driven axes — to pick the *display*
+        //     set of scenarios. Different axes serve different consumers,
         //     so the two coexist deliberately.
         //
         // Force real evaluation on every candidate whose `rawFitness`
@@ -665,134 +751,18 @@ final class BuboOptimizer {
             participantAvailability: participantAvailability
         )
 
-        // Problem-size-aware config: a 4-task week does NOT need 240
-        // individuals × 400 generations × 4 islands. Scale the solver
-        // budget to the search-space size so interactive "plan week"
-        // stays under a few seconds on sparse backlogs without losing
-        // solution quality on dense ones.
-        let (gaCfg, islandCfg) = configForWorkload(
-            movableEvents: movableEvents,
-            fixedEvents: fixedEvents
-        )
-        return await optimize(
-            context: context,
-            overrideConfig: gaCfg,
-            overrideIslandConfig: islandCfg
-        )
+        // No `overrideConfig` here — let `optimize()` choose via its
+        // own CP-SAT → dispatch pipeline:
+        //   difficulty < 0.25  → `.polish`
+        //   difficulty < 0.6   → `.refine`
+        //   otherwise          → the instance's `gaConfig`
+        // The old `configForWorkload` inline-interpolation was
+        // duplicating this logic with slightly different constants
+        // and bypassing the polish / refine presets by arriving as
+        // an override. Removed for a single source of truth.
+        return await optimize(context: context)
     }
 
-    /// Pick GA + island config scaled continuously to the effective
-    /// workload size. The search space is dominated by two things:
-    ///
-    ///   • N = movable event count (placement decisions per week)
-    ///   • H = total movable hours / working hours per week
-    ///       (how packed the week has to be — 3 four-hour tasks are a
-    ///       harder bin-packing than 8 thirty-minute tasks).
-    ///
-    /// A single "difficulty" scalar `D` combines both; population,
-    /// generations and wallclock budget all scale linearly with it.
-    /// This avoids the cliff-edges the old bucketed version had at
-    /// N = 4 / 9 / 21 where a single extra task silently doubled the
-    /// solver budget.
-    ///
-    /// `D` is clamped into [0.05, 1.0] where:
-    ///   • D ≤ 0.1   → workload fits within `.instant`-class budget
-    ///   • D ≈ 0.3   → around `.quick`-class
-    ///   • D ≈ 0.7   → around single-pop `.default`-class
-    ///   • D ≥ 0.9   → falls through to the instance's configured
-    ///                 `.island` (heavy full-budget path)
-    ///
-    /// Returning `nil` for either override means "use instance default".
-    private func configForWorkload(
-        movableEvents: [OptimizableEvent],
-        fixedEvents: [CalendarEvent]
-    ) -> (GAConfiguration?, IslandConfiguration?) {
-        let difficulty = workloadDifficulty(
-            movableEvents: movableEvents,
-            fixedEvents: fixedEvents
-        )
-
-        // Above ~0.9 the workload is heavy enough to justify the full
-        // island config. Delegate to instance defaults.
-        guard difficulty < 0.9 else { return (nil, nil) }
-
-        let single = IslandConfiguration(
-            islandCount: 1,
-            migrationInterval: 10,
-            migrationSize: 1,
-            topology: .ring,
-            emigrantSelection: .best,
-            immigrantReplacement: .worst,
-            diversifyIslands: false,
-            adaptiveMigration: false,
-            routeByProductivity: false
-        )
-
-        // Linear interpolation between `.instant` and `.default` as
-        // difficulty rises. Crossover into island mode happens at
-        // D ≥ 0.75 where two islands start to pay for themselves.
-        let popSize = Self.lerpInt(start: 20, end: 100, at: difficulty)
-        let maxGen = Self.lerpInt(start: 30, end: 200, at: difficulty)
-        let timeout = Self.lerpDouble(start: 0.8, end: 8.0, at: difficulty)
-
-        // Memetic hill climb and CHC restarts are expensive but
-        // valuable on harder problems. Off entirely for `.instant`-
-        // class tiers (they waste budget on tiny search spaces); on
-        // from the mid-tier onwards with cadence matched to the
-        // generation budget.
-        let memeticInterval = difficulty >= 0.5 ? max(5, maxGen / 8) : 0
-        let memeticCandidates = difficulty >= 0.5 ? 3 : 3
-        let memeticSteps = difficulty >= 0.5 ? 6 : 5
-
-        // One CHC restart once the workload clears the toy-problem tier —
-        // on difficulty < 0.2 the search space is small enough that a
-        // restart would mostly replay the same basin, but in the 0.2+
-        // range the extra cataclysmic reseed reliably rescues stuck runs.
-        let restarts = difficulty >= 0.2 ? 1 : 0
-
-        let ga = GAConfiguration(
-            populationSize: popSize,
-            maxGenerations: maxGen,
-            mutationRate: 0.18,
-            crossoverRate: 0.82,
-            eliteCount: max(1, popSize / 25),
-            selectionStrategy: .tournament(size: 3),
-            crossoverStrategy: .contextual(temperature: 0.5),
-            convergenceThreshold: 0.003,
-            // Patience floor bumped from 6 → 12: with a 4-task week the
-            // difficulty scalar lands around 0.18, and the old floor let
-            // the GA exit at gen 7 after six flat generations — long
-            // before the adaptive mutation / CHC restart had any chance
-            // to break out of the initial basin. 12 still terminates
-            // fast on truly trivial workloads but gives the bandit one
-            // full cycle of operator exploration first.
-            convergencePatience: max(12, maxGen / 15),
-            adaptiveMutation: true,
-            diversityThreshold: 0.01,
-            immigrationRate: 0.1,
-            // Greedy seed fraction is saturation-aware: on trivially-
-            // small workloads the greedy constructor is close to
-            // optimal already, so spending 35% of the population on
-            // structured seeds beats 20% random noise. At high
-            // difficulty we back off to 0.15 so random exploration
-            // gets enough budget to escape greedy's priority-first
-            // corner of the search space.
-            greedySeedFraction: max(0.15, 0.35 - 0.20 * difficulty),
-            enableRepair: true,
-            adaptiveCrossover: difficulty >= 0.5,
-            memeticHillClimbInterval: memeticInterval,
-            memeticHillClimbCandidates: memeticCandidates,
-            memeticHillClimbSteps: memeticSteps,
-            chcMaxRestarts: restarts,
-            wallclockTimeout: timeout
-        )
-
-        // Two islands appear at the high end; their extra cost only
-        // pays off once the search space is big enough for migration
-        // to meaningfully diversify exploration.
-        let islandCfg: IslandConfiguration = difficulty >= 0.75 ? .quick : single
-        return (ga, islandCfg)
-    }
 
     /// Combined workload difficulty scalar in [0.05, 1.0].
     ///
@@ -1362,20 +1332,63 @@ final class BuboOptimizer {
             "Buffer":             prefs.bufferWeight,
             "MeetingClustering":  prefs.meetingClusteringWeight,
             "TaskInclusion":      prefs.taskInclusionWeight,
-            "BacklogOrder":       prefs.backlogOrderWeight ?? OptimizerPreferences.defaultBacklogOrderWeight
+            "BacklogOrder":       prefs.backlogOrderWeight ?? OptimizerPreferences.defaultBacklogOrderWeight,
+            "DayCompactness":     prefs.dayCompactnessWeight ?? OptimizerPreferences.defaultDayCompactnessWeight
         ]
     }
 
-    private static func lerpInt(start: Int, end: Int, at t: Double) -> Int {
-        let clamped = max(0.0, min(1.0, t))
-        let raw = Double(start) + clamped * Double(end - start)
-        return max(min(start, end), min(max(start, end), Int(raw.rounded())))
+    /// Workloads below this difficulty scalar get their GA budget
+    /// capped in `optimize` even when the caller supplied a heavier
+    /// `overrideConfig`. A 4-task week with no conflicts scores
+    /// around 0.18 via `workloadDifficulty`; the 0.25 threshold lets
+    /// that case and similar-sized backlogs escape the `.thorough`
+    /// budget without forcing the downshift on mid-sized weeks that
+    /// genuinely benefit from more generations.
+    private static let trivialWorkloadDifficulty: Double = 0.25
+
+    /// Upper bound on difficulty where `.refine` is still the right
+    /// GA config when CP-SAT delivered an anchor. Above this the
+    /// workload has genuine exploration need even with a good start
+    /// — fall through to the caller's configured preset so the
+    /// heavier machinery (multi-island, memetic hill climb,
+    /// adaptive mutation) gets a chance to fire.
+    private static let mediumWorkloadDifficulty: Double = 0.6
+
+    /// Fraction of each island's initial population seeded as
+    /// mutated copies of the CP-SAT anchor, chosen by dispatch mode.
+    /// Higher in `polish` (tight cloud around the lex-optimum,
+    /// minimal exploration) and lower in `seeded_full` (anchor is
+    /// one hint among many, GA still needs room to search).
+    private static func anchorReplicationFraction(forMode mode: String) -> Double {
+        switch mode {
+        case "polish":      return 0.6
+        case "refine":      return 0.4
+        case "seeded_full": return 0.2
+        default:            return 0.0
+        }
     }
 
-    private static func lerpDouble(start: Double, end: Double, at t: Double) -> Double {
-        let clamped = max(0.0, min(1.0, t))
-        return start + clamped * (end - start)
+    /// Collapse the supplied island configuration to a single-island
+    /// variant, preserving migration and replacement policies so any
+    /// downstream code that reads them stays happy. Used by the
+    /// polish / refine dispatch because multi-island only pays off
+    /// when the populations per island are large enough for
+    /// migration to meaningfully diversify — not the case here.
+    private static func singleIslandConfig(from source: IslandConfiguration) -> IslandConfiguration {
+        guard source.islandCount > 1 else { return source }
+        return IslandConfiguration(
+            islandCount: 1,
+            migrationInterval: source.migrationInterval,
+            migrationSize: source.migrationSize,
+            topology: source.topology,
+            emigrantSelection: source.emigrantSelection,
+            immigrantReplacement: source.immigrantReplacement,
+            diversifyIslands: false,
+            adaptiveMigration: false,
+            routeByProductivity: false
+        )
     }
+
 
     // MARK: - Incremental Re-optimization (#26)
 

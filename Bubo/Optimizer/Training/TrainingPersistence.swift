@@ -120,19 +120,8 @@ enum TrainingPersistence {
         buffers.importSnapshot(persisted.entries)
     }
 
-    // MARK: - Branching bandit roundtrip
-
-    static func capture(branching: LearnedBranchingBandit) -> PersistedBranchingBanditState {
-        PersistedBranchingBanditState(
-            entries: branching.exportSnapshot(),
-            savedAt: Date()
-        )
-    }
-
-    static func restore(
-        branching: LearnedBranchingBandit,
-        from persisted: PersistedBranchingBanditState
-    ) {
-        branching.importSnapshot(persisted.entries)
-    }
+    // Branching-bandit persistence was retired with the
+    // LearnedBranchingBandit type. `TrainingSnapshot.branching`
+    // stays on the wire (optional) so older saved snapshots still
+    // decode; the payload is ignored on restore.
 }

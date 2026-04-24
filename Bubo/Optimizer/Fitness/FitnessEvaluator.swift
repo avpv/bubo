@@ -310,6 +310,7 @@ final class FitnessEvaluator: @unchecked Sendable {
                 TaskInclusionObjective(weight: preferences.taskInclusionWeight),
                 PrecedenceObjective(weight: 0.6),
                 BacklogOrderObjective(weight: preferences.backlogOrderWeight ?? OptimizerPreferences.defaultBacklogOrderWeight),
+                DayCompactnessObjective(weight: preferences.dayCompactnessWeight ?? OptimizerPreferences.defaultDayCompactnessWeight),
             ],
             constraintEngine: .standard,
             cache: FitnessCache(),
@@ -367,12 +368,12 @@ final class FitnessEvaluator: @unchecked Sendable {
     func evaluate(chromosome: ScheduleChromosome, context: OptimizerContext) -> Double {
         // Hard constraint check — infeasible solutions get near-zero fitness
         // but we still give a tiny gradient based on violation magnitude
-        // so the GA can evolve toward feasibility.
-        if !constraintEngine.isValid(chromosome, context: context) {
-            // Only use hard constraint penalties for the gradient (not soft)
-            let hardPenalty = constraintEngine.constraints
-                .filter { $0.isHard }
-                .reduce(0.0) { $0 + $1.penalty(for: chromosome, context: context) }
+        // so the GA can evolve toward feasibility. Compute the hard
+        // penalty in one pass (`hardPenaltySum` returns 0 on feasible
+        // schedules) so we don't run every hard constraint twice on
+        // rejections.
+        let hardPenalty = constraintEngine.hardPenaltySum(for: chromosome, context: context)
+        if hardPenalty > 0 {
             // Map penalty to (0, 0.09] — lower penalty = closer to 0.09
             // Ceiling at 0.09 ensures infeasible < feasible (which starts at 0.1)
             return 0.09 / (1.0 + hardPenalty * 0.01)
@@ -504,10 +505,10 @@ final class FitnessEvaluator: @unchecked Sendable {
         // solutions get the same tiny gradient as in the non-delta path;
         // the caches are returned unchanged so the next delta eval can
         // resume where it left off if the mutation fixes the violation.
-        if !constraintEngine.isValid(chromosome, context: context) {
-            let hardPenalty = constraintEngine.constraints
-                .filter { $0.isHard }
-                .reduce(0.0) { $0 + $1.penalty(for: chromosome, context: context) }
+        // Single-pass penalty sum — see `hardPenaltySum` rationale in the
+        // non-delta path above.
+        let hardPenalty = constraintEngine.hardPenaltySum(for: chromosome, context: context)
+        if hardPenalty > 0 {
             let fitness = 0.09 / (1.0 + hardPenalty * 0.01)
             telemetry.recordConstraintRejection()
             return EvaluationResult(
@@ -922,6 +923,7 @@ final class FitnessEvaluator: @unchecked Sendable {
             case "Buffer":              objectives[i].weight = preferences.bufferWeight
             case "MeetingClustering":   objectives[i].weight = preferences.meetingClusteringWeight
             case "BacklogOrder":        objectives[i].weight = preferences.backlogOrderWeight ?? OptimizerPreferences.defaultBacklogOrderWeight
+            case "DayCompactness":      objectives[i].weight = preferences.dayCompactnessWeight ?? OptimizerPreferences.defaultDayCompactnessWeight
             default: break
             }
         }

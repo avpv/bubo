@@ -111,23 +111,8 @@ extension BuboOptimizer {
         state.replayBuffer.append(.preferencePair(event))
     }
 
-    /// Record a branching-bandit decision made during CP-SAT repair.
-    /// Wire this into the LearnedBranchingBandit observe path so
-    /// every online decision gets persisted.
-    func trainingRecordBranching(
-        regime: Int,
-        policy: BranchingPolicy,
-        reward: Double
-    ) {
-        let state = trainingStateStore.load(key: ObjectIdentifier(self))
-        let event = BranchingDecisionEvent(
-            timestamp: Date(),
-            regimeKey: regime,
-            policy: policy.rawValue,
-            reward: reward
-        )
-        state.replayBuffer.append(.branchingDecision(event))
-    }
+    // `trainingRecordBranching` was retired along with the
+    // LearnedBranchingBandit that consumed its events.
 
     /// Record an event's scheduled-vs-actual duration. Called by
     /// the host when an event finishes. Merges into both the live

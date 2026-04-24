@@ -54,8 +54,35 @@ struct ComponentFitnessCacheTests {
 
     // MARK: - Key Stability
 
-    @Test("Same gene state produces the same key regardless of array order")
-    func keyIsOrderIndependent() {
+    @Test("Same gene state and same geneIds order produces the same key")
+    func keyIsStableForSameOrder() {
+        let geneById: [String: ScheduleGene] = [
+            "a": gene(id: "a"),
+            "b": gene(id: "b", startSeconds: 1_003_600)
+        ]
+        let k1 = ComponentFitnessCache.componentKey(
+            componentId: 0,
+            geneIds: ["a", "b"],
+            geneByEvent: geneById
+        )
+        let k2 = ComponentFitnessCache.componentKey(
+            componentId: 0,
+            geneIds: ["a", "b"],
+            geneByEvent: geneById
+        )
+        #expect(k1 == k2)
+    }
+
+    @Test("Different geneIds order produces different keys (caller must provide stable order)")
+    func keyDependsOnOrder() {
+        // Since `componentKey` no longer sorts defensively, callers are
+        // responsible for passing a deterministic order — typically
+        // whatever `ScheduleConflictGraph.allComponents()` returns,
+        // which is stable for the graph's lifetime. Two different
+        // orderings of the same gene set intentionally miss each
+        // other's cache slots now, trading a theoretical cache hit
+        // (which real callers never triggered) for a measurable
+        // O(N log N)-per-component saving on every evaluation.
         let geneById: [String: ScheduleGene] = [
             "a": gene(id: "a"),
             "b": gene(id: "b", startSeconds: 1_003_600)
@@ -70,7 +97,7 @@ struct ComponentFitnessCacheTests {
             geneIds: ["b", "a"],
             geneByEvent: geneById
         )
-        #expect(k1 == k2)
+        #expect(k1 != k2)
     }
 
     @Test("Different startTime produces a different key")

@@ -113,15 +113,10 @@ struct IslandConfigurationTests {
         #expect(thorough.migrationSize >= def.migrationSize)
     }
 
-    @Test("GA island preset has smaller population than thorough")
-    func islandPresetHasSmallerPopulation() {
-        let island = GAConfiguration.island
-        let thorough = GAConfiguration.thorough
-        #expect(island.populationSize < thorough.populationSize)
-        // Total individuals across islands should be comparable
-        let totalIsland = island.populationSize * IslandConfiguration.default.islandCount
-        #expect(totalIsland >= thorough.populationSize)
-    }
+    // `.island` preset was retired — `IslandModelGA` now runs with
+    // whatever base config the caller supplies (typically the
+    // instance's `gaConfig`). The per-island × N scaling check that
+    // used to live here is no longer meaningful.
 }
 
 // MARK: - Island Model GA Tests
@@ -137,7 +132,7 @@ struct IslandModelGATests {
 
         let islandGA = IslandModelGA<ScheduleChromosome>(
             islandConfig: .default,
-            baseConfig: .island,
+            baseConfig: .thorough,
             context: context,
             evaluate: { chromosome in
                 evaluator.evaluateAndAssign(&chromosome, context: context)
@@ -210,7 +205,7 @@ struct IslandModelGATests {
                 diversifyIslands: true,
                 adaptiveMigration: false
             ),
-            baseConfig: .island,
+            baseConfig: .thorough,
             context: context,
             evaluate: { chromosome in
                 evaluator.evaluateAndAssign(&chromosome, context: context)

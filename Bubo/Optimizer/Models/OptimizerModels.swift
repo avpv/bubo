@@ -208,11 +208,22 @@ struct ScheduleGene: Codable, Hashable, Sendable {
     /// canonical way to move a gene when you have a Date in hand
     /// and a registry available — keeps both fields in sync so
     /// `slotIndex == nil` never shows up in production state.
+    ///
+    /// Also snaps `startTime` to the resolved grid Date so the
+    /// invariant `startTime == registry.slots[slotIndex]` holds after
+    /// this call. Callers routinely pass off-grid Dates (`horizon.start`
+    /// captured at the current wall-clock, `earliestStart` pulled from
+    /// arbitrary user input, gap edges from fixed-event boundaries at
+    /// sub-minute precision) and used to have those off-grid seconds
+    /// leak into `startTime` — which then surfaced in the UI and log
+    /// as times like 15:06 or 17:21 instead of the 15-/5-minute grid.
     func withSlot(nearest date: Date, registry: SlotRegistry) -> ScheduleGene {
-        ScheduleGene(
+        let idx = registry.nearestIndex(to: date)
+        let aligned = idx.flatMap { registry.resolvedDate(at: $0) } ?? date
+        return ScheduleGene(
             eventId: eventId,
             title: title,
-            startTime: date,
+            startTime: aligned,
             duration: duration,
             context: context,
             energyCost: energyCost,
@@ -224,7 +235,7 @@ struct ScheduleGene: Codable, Hashable, Sendable {
             pomodoroConfig: pomodoroConfig,
             reservedTaskIds: reservedTaskIds,
             groupId: groupId,
-            slotIndex: registry.nearestIndex(to: date)
+            slotIndex: idx
         )
     }
 
@@ -339,6 +350,17 @@ struct OptimizerContext: Sendable {
     /// (tests, one-shot contexts) don't have to plumb one in.
     let slotRegistryHolder: SlotRegistryHolder?
 
+    /// Lazy holder for per-movable-event feasible slot domains. Each
+    /// domain is the subset of registry indices that satisfy the
+    /// event's static constraints (earliestStart, deadline,
+    /// working-hours fit, duration-aware fixed-event non-overlap) and
+    /// is consulted by mutation operators to sample from a
+    /// pre-filtered set instead of recomputing
+    /// `SlotRegistry.allowedIndices` and the overlap scan per call.
+    /// `ensureSlotDomains()` builds on demand when the holder is nil,
+    /// matching `slotRegistryHolder`'s lazy-build contract.
+    let slotDomainsHolder: SlotDomainsHolder?
+
     init(
         fixedEvents: [CalendarEvent] = [],
         movableEvents: [OptimizableEvent] = [],
@@ -359,7 +381,8 @@ struct OptimizerContext: Sendable {
         tabuMemory: TabuMemory? = nil,
         cpSATRepairer: CPSATRepairer? = nil,
         cpSATWindowThreshold: Int = 20,
-        slotRegistryHolder: SlotRegistryHolder? = nil
+        slotRegistryHolder: SlotRegistryHolder? = nil,
+        slotDomainsHolder: SlotDomainsHolder? = nil
     ) {
         self.fixedEvents = fixedEvents
         self.movableEvents = movableEvents
@@ -381,6 +404,7 @@ struct OptimizerContext: Sendable {
         self.cpSATRepairer = cpSATRepairer
         self.cpSATWindowThreshold = cpSATWindowThreshold
         self.slotRegistryHolder = slotRegistryHolder
+        self.slotDomainsHolder = slotDomainsHolder
     }
 
     /// Returns a materialised conflict graph for this context. Goes
@@ -404,6 +428,22 @@ struct OptimizerContext: Sendable {
             return holder.get(for: self)
         }
         return SlotRegistry.build(from: self)
+    }
+
+    /// Returns this movable event's precomputed slot domain — the set
+    /// of registry indices where the event can feasibly start given
+    /// its static constraints plus duration-aware fixed-event
+    /// non-overlap. Goes through the shared holder on the production
+    /// path; falls back to an inline build for tests that don't plumb
+    /// a holder through.
+    func ensureSlotDomain(for eventId: String) -> SlotDomain {
+        if let holder = slotDomainsHolder {
+            return holder.domain(for: eventId, in: self)
+        }
+        guard let event = movableEvents.first(where: { $0.id == eventId }) else {
+            return .empty
+        }
+        return SlotDomain.build(for: event, registry: ensureSlotRegistry(), context: self)
     }
 
     /// `eventId → backlogIndex` map over `movableEvents`. Built on demand
@@ -446,10 +486,25 @@ struct OptimizerPreferences: Codable, Sendable {
     /// through that default instead of force-unwrapping.
     var backlogOrderWeight: Double?
 
-    /// Fallback when `backlogOrderWeight` is nil. Kept small so backlog-order
-    /// matching only acts as a tiebreaker: deadlines, priority, and energy
-    /// matching still dominate when they differ between tasks.
-    static let defaultBacklogOrderWeight: Double = 0.5
+    /// Fallback when `backlogOrderWeight` is nil. Sized to match
+    /// `taskPlacementWeight` (default 1.0) — backlog order is a
+    /// first-class preference when the user asked to include the
+    /// backlog, not a tiebreaker. At the previous 0.5 value a GA
+    /// could save 5% of fitness via Buffer/ContextSwitch wins by
+    /// violating three out of four desired-order pairs, which
+    /// surfaced as "task 1 scheduled after tasks 2 and 3 on next
+    /// week" patterns in the logs.
+    static let defaultBacklogOrderWeight: Double = 1.5
+
+    /// Weight for `DayCompactnessObjective`. Optional so existing
+    /// persisted preferences decode cleanly without the key.
+    var dayCompactnessWeight: Double?
+
+    /// Fallback when `dayCompactnessWeight` is nil. Moderate — pulls
+    /// same-day tasks together without overruling Buffer's "keep a
+    /// few minutes between events" or BreakPlacement's hard break
+    /// windows.
+    static let defaultDayCompactnessWeight: Double = 0.5
 
     // Energy model
     var peakEnergyHour: Int           // hour of day with peak energy
@@ -513,6 +568,7 @@ struct OptimizerPreferences: Codable, Sendable {
         meetingClusteringWeight: Double = 0.8,
         taskInclusionWeight: Double = 1.0,
         backlogOrderWeight: Double? = nil,
+        dayCompactnessWeight: Double? = nil,
         peakEnergyHour: Int = 10,
         energyDecayRate: Double = 0.1,
         personalEnergyCurve: [Double]? = nil,
@@ -543,6 +599,7 @@ struct OptimizerPreferences: Codable, Sendable {
         self.meetingClusteringWeight = meetingClusteringWeight
         self.taskInclusionWeight = taskInclusionWeight
         self.backlogOrderWeight = backlogOrderWeight
+        self.dayCompactnessWeight = dayCompactnessWeight
         self.peakEnergyHour = peakEnergyHour
         self.energyDecayRate = energyDecayRate
         self.personalEnergyCurve = personalEnergyCurve

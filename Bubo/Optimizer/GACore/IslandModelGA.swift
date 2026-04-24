@@ -245,12 +245,6 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
     /// types into the engine.
     let hooks: EvolutionHooks<C>
 
-    /// Optional federated mutation bandit. When non-nil, each island
-    /// uses its own per-island `MutationBandit` from the federation;
-    /// the island loop triggers a merge on every migration boundary so
-    /// bandit state is shared without going through a single lock.
-    let federatedBandit: FederatedMutationBandit?
-
     /// Externally-supplied warm-start chromosomes (temporal replay,
     /// GNN-driven greedy, …). Distributed round-robin across islands
     /// during initial population construction, replacing the same
@@ -258,12 +252,22 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
     /// preserved. Empty by default — the legacy seed mix is unchanged.
     let extraSeeds: [C]
 
-    /// Optional learned migration topology. When set, the engine
-    /// consults the bandit to pick (donor → receiver) pairs at each
-    /// migration boundary instead of the static topology in
-    /// `islandConfig.topology`. Reward (hypervolume delta) is fed
-    /// back after each migration round.
-    let migrationBandit: MigrationTopologyBandit?
+    /// CP-SAT construction anchor. When set, every island starts with
+    /// a cloud of near-copies built by `anchorReplicationFraction` of
+    /// the population — each copy is the anchor with a light mutation
+    /// applied — plus the usual mix of greedy / random for diversity.
+    /// `BuboOptimizer.optimize` populates this after calling
+    /// `ScheduleChromosome.cpSeeded`; passing `nil` preserves the
+    /// pre-anchor behaviour where greedy + random fill every slot.
+    let anchorSeed: C?
+
+    /// Fraction of each island's initial population that is seeded
+    /// as a mutated copy of `anchorSeed` when present. Above this
+    /// the island would converge to identical copies of the anchor
+    /// and lose soft-tier exploration; below it the anchor's
+    /// near-optimum doesn't get enough local sampling to matter.
+    /// Only consulted when `anchorSeed != nil`.
+    let anchorReplicationFraction: Double
 
     /// Optional batch evaluator propagated into every per-island
     /// `GeneticAlgorithm`. Enables the multi-fidelity funnel path
@@ -283,9 +287,9 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         onProgress: ((IslandModelProgress) -> Void)? = nil,
         multiObjective: MultiObjectiveContext<C>? = nil,
         hooks: EvolutionHooks<C> = .noop,
-        federatedBandit: FederatedMutationBandit? = nil,
         extraSeeds: [C] = [],
-        migrationBandit: MigrationTopologyBandit? = nil,
+        anchorSeed: C? = nil,
+        anchorReplicationFraction: Double = 0.4,
         batchEvaluate: ((inout [C]) -> Void)? = nil
     ) {
         self.islandConfig = islandConfig
@@ -295,9 +299,9 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         self.onProgress = onProgress
         self.multiObjective = multiObjective
         self.hooks = hooks
-        self.federatedBandit = federatedBandit
         self.extraSeeds = extraSeeds
-        self.migrationBandit = migrationBandit
+        self.anchorSeed = anchorSeed
+        self.anchorReplicationFraction = max(0, min(0.8, anchorReplicationFraction))
         self.batchEvaluate = batchEvaluate
     }
 
@@ -332,14 +336,57 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         let islands = islandConfigs.enumerated().map { (idx, config) -> Island<C> in
             let islandContext = makeIslandContext(islandIndex: idx)
             let warmSeedSlice = seedsPerIsland[idx]
-            let greedyCount = max(0, Int(Double(config.populationSize) * config.greedySeedFraction))
-            let warmCount = min(warmSeedSlice.count, max(0, config.populationSize - greedyCount))
-            let randomCount = max(0, config.populationSize - greedyCount - warmCount)
+
+            // Anchor-replication: when CP-SAT has delivered an
+            // anchor, reserve a slice of the population for
+            // mutated copies of it. This is the "polish" basin —
+            // every copy starts at the lex-optimum and the low-rate
+            // mutation samples its immediate soft-tier neighbourhood.
+            // Remaining slots split across greedy variants + random
+            // for exploration, same as before.
+            let anchorCount: Int
+            if anchorSeed != nil {
+                anchorCount = max(0, Int(Double(config.populationSize) * anchorReplicationFraction))
+            } else {
+                anchorCount = 0
+            }
+            // Budget after anchor takes its share. Greedy and random
+            // fractions apply to the remainder.
+            let postAnchorBudget = max(0, config.populationSize - anchorCount)
+            let greedyCount = max(0, Int(Double(postAnchorBudget) * config.greedySeedFraction))
+            let warmCount = min(warmSeedSlice.count, max(0, postAnchorBudget - greedyCount))
+            let randomCount = max(0, postAnchorBudget - greedyCount - warmCount)
 
             var individuals: [C] = []
+            // First: the anchor itself (unmutated) and its mutated
+            // copies. The first entry is the untouched anchor so the
+            // GA's elitism can't lose the lex-optimum to a bad
+            // crossover on the very first generation.
+            if let anchor = anchorSeed, anchorCount > 0 {
+                individuals.append(anchor)
+                for i in 1..<anchorCount {
+                    var copy = anchor
+                    // Gentle perturbation so the initial cloud
+                    // samples a tight neighbourhood — rate scales
+                    // very slowly with i so the tail is still close
+                    // to the anchor rather than becoming random.
+                    let rate = 0.04 + Double(i) * 0.01
+                    copy.mutate(rate: min(0.25, rate), context: islandContext)
+                    individuals.append(copy)
+                }
+            }
             individuals.append(contentsOf: warmSeedSlice.prefix(warmCount))
             for i in 0..<greedyCount {
-                var ind = C.greedy(context: islandContext)
+                // Island index folds into the variant key so every
+                // island starts with its own rotation of greedy
+                // strategies (priority-first, deadline-first,
+                // short-first, long-first). Previously every greedy
+                // seed was the default sort, so the 30-50% "greedy"
+                // share of each population was really 1 unique
+                // individual × N copies. Now the seeds genuinely
+                // span multiple basins.
+                let variantKey = idx * 7 + i
+                var ind = C.greedy(context: islandContext, variantIndex: variantKey)
                 if i > 0 { ind.mutate(rate: 0.1 + Double(i) * 0.05, context: islandContext) }
                 individuals.append(ind)
             }
@@ -380,15 +427,11 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
     /// top-level seed because `split()` advances deterministically in
     /// island-creation order.
     ///
-    /// Mutation bandit selection:
-    ///   • Federated wired → island `i` gets `federatedBandit.bandit(forIsland: i)`.
-    ///     Each island's bandit is independent in the hot path; merges
-    ///     happen on migration boundaries (see `evolveIslands`).
-    ///   • No federation → fall back to the shared `context.mutationBandit`
-    ///     so the legacy single-bandit path keeps working.
+    /// Every island shares `context.mutationBandit` — the federated
+    /// variant was retired when the persistent-feedback path proved
+    /// to work better on realistic workloads than per-island merges.
     private func makeIslandContext(islandIndex: Int) -> OptimizerContext {
-        let bandit = federatedBandit?.bandit(forIsland: islandIndex)
-            ?? context.mutationBandit
+        let bandit = context.mutationBandit
 
         // Per-island objective-weight biasing. When
         // `islandConfig.objectiveWeightBiases` carries an entry for
@@ -419,7 +462,8 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             tabuMemory: context.tabuMemory,
             cpSATRepairer: context.cpSATRepairer,
             cpSATWindowThreshold: context.cpSATWindowThreshold,
-            slotRegistryHolder: context.slotRegistryHolder
+            slotRegistryHolder: context.slotRegistryHolder,
+            slotDomainsHolder: context.slotDomainsHolder
         )
     }
 
@@ -458,6 +502,9 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             case "BacklogOrder":
                 let base = prefs.backlogOrderWeight ?? OptimizerPreferences.defaultBacklogOrderWeight
                 prefs.backlogOrderWeight = base * clampedFactor
+            case "DayCompactness":
+                let base = prefs.dayCompactnessWeight ?? OptimizerPreferences.defaultDayCompactnessWeight
+                prefs.dayCompactnessWeight = base * clampedFactor
             default:
                 // Unknown name — ignore silently so the bias dict can
                 // evolve independently of the objective list.
@@ -528,6 +575,16 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         var globalStaleGenerations = 0
         var lastGlobalBestFitness = bestEver?.rawFitness ?? 0
         var totalMigrations = 0
+        // Global plateau detector — see GeneticAlgorithm.evolve for
+        // rationale. Window is half `convergencePatience +
+        // migrationInterval` so migrations still have a chance to
+        // revive islands before termination fires, but the detector
+        // exits ~2× faster than the counter alone once every island
+        // has genuinely stagnated.
+        var globalPlateauDetector = FitnessPlateauDetector(
+            capacity: max(3, (baseConfig.convergencePatience + islandConfig.migrationInterval) / 2)
+        )
+        globalPlateauDetector.push(lastGlobalBestFitness)
 
         // Adaptive migration state
         var effectiveInterval = islandConfig.migrationInterval
@@ -623,16 +680,6 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             if isMigrationGeneration {
                 migrate(islands: islands, migrationSize: effectiveSize)
                 totalMigrations += 1
-
-                // Federated bandit merge coincides with migration
-                // boundaries: both share the rhythm of "islands have
-                // accumulated distinct experience, now exchange and
-                // continue." Uniform weighting across islands keeps the
-                // default behaviour symmetric; callers can weight by
-                // per-island best-fitness via a custom scheme if needed.
-                if let federated = federatedBandit {
-                    federated.merge()
-                }
             }
 
             // Update global best (by rawFitness — see per-island note above).
@@ -668,8 +715,20 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
                 convergenceGeneration = generation
             }
             lastGlobalBestFitness = currentGlobalBest
+            globalPlateauDetector.push(currentGlobalBest)
 
-            // Use higher patience for island model — migration can revive stale islands
+            // Primary termination: plateau detector. See
+            // GeneticAlgorithm.evolve for why this sees through the
+            // cache-driven jitter that kept globalStaleGenerations
+            // from triggering on genuinely stagnant runs.
+            if globalPlateauDetector.isPlateau {
+                convergenceGeneration = generation - globalPlateauDetector.capacity + 1
+                break
+            }
+
+            // Fallback: legacy counter-based termination, kept so
+            // pathological cases (fitness oscillating just above the
+            // relative threshold every other generation) still exit.
             let globalPatience = baseConfig.convergencePatience + islandConfig.migrationInterval
             if globalStaleGenerations >= globalPatience {
                 convergenceGeneration = generation - globalPatience
@@ -766,20 +825,11 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         // reward the migration bandit afterwards.
         let preFitness: [Double] = islands.map { $0.bestEver?.rawFitness ?? 0 }
 
-        var migrationPairs: [(source: Int, destination: Int)]
-        if let bandit = migrationBandit {
-            // Consult the UCB bandit for the best (donor, receiver)
-            // pairs. We pull `n` pairs so each island receives at
-            // most one inbound migration per round, matching the
-            // legacy ring/fully-connected throughput.
-            let chosen = bandit.selectTopPairs(n)
-            migrationPairs = chosen.map { (source: $0.donor, destination: $0.receiver) }
-            if migrationPairs.isEmpty {
-                migrationPairs = makeMigrationPairs(islandCount: n)
-            }
-        } else {
-            migrationPairs = makeMigrationPairs(islandCount: n)
-        }
+        // Static topology pairing — the UCB migration-bandit was
+        // retired when adaptive migration-interval alone matched its
+        // wins without the per-generation update cost.
+        let migrationPairs: [(source: Int, destination: Int)] = makeMigrationPairs(islandCount: n)
+        _ = preFitness
 
         // Productivity routing: for each pair, ensure the source is the
         // more-productive endpoint so flow runs down the fitness
@@ -812,20 +862,6 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             }
         }
 
-        // Reward the migration bandit by per-pair receiver fitness
-        // delta. Positive reward when the receiver's best improved
-        // post-migration; negative when it stalled or regressed.
-        if let bandit = migrationBandit {
-            for (source, destination) in migrationPairs {
-                let post = islands[destination].bestEver?.rawFitness ?? 0
-                let pre = preFitness[destination]
-                let reward = post - pre
-                bandit.observe(
-                    pair: MigrationPair(donor: source, receiver: destination),
-                    reward: reward
-                )
-            }
-        }
     }
 
     /// Determine which island pairs exchange individuals based on topology.
@@ -1049,8 +1085,13 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             var config = baseConfig
             switch i {
             case 0:
-                // Island 0: exploitation — base config, greedy seeds, repair
-                config.greedySeedFraction = 0.2
+                // Island 0: exploitation — base config, heavy greedy
+                // seeding so the "starts right" half of the population
+                // is concentrated here. Island 1 (exploration) stays
+                // at zero greedy share to preserve the diversity
+                // dimension that made the multi-island setup worth
+                // paying for in the first place.
+                config.greedySeedFraction = 0.5
                 config.enableRepair = true
 
             case 1:
@@ -1069,7 +1110,7 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
                 // individuals still contribute genes to offspring.
                 config.selectionStrategy = .rank
                 config.mutationRate = baseConfig.mutationRate * 1.3
-                config.greedySeedFraction = 0.1
+                config.greedySeedFraction = 0.3
 
             case 3:
                 // Island 3: day-block crossover — preserves bundled day
@@ -1079,7 +1120,7 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
                 config.crossoverStrategy = .dayBlock
                 config.crossoverRate = 0.9
                 config.adaptiveCrossover = true
-                config.greedySeedFraction = 0.15
+                config.greedySeedFraction = 0.3
 
             default:
                 // Additional islands: deterministic parameter variations

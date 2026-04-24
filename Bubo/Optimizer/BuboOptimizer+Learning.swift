@@ -36,10 +36,6 @@ struct SchedulingFeatureToggles: Sendable {
     /// Wave 1: tier-1 surrogate funnel over batch evaluations.
     var useMultiFidelityFunnel: Bool = true
 
-    /// Wave 2: MOEA/D-AWA as alternative survivor selector. Off by
-    /// default — keep NSGA-III as the stable baseline.
-    var useMOEADAWASurvivor: Bool = false
-
     /// Wave 2: online objective correlation clustering, exposed via
     /// telemetry and optionally used by MOEA/D-AWA.
     var useObjectiveClustering: Bool = true
@@ -47,21 +43,51 @@ struct SchedulingFeatureToggles: Sendable {
     /// Wave 2: post-GA path relinking across the final scenarios.
     var usePathRelinking: Bool = true
 
-    /// Wave 2: replace the MAP-Elites uniform emitter with a CMA-ME
-    /// covariance-adapted Gaussian.
-    var useCMAMEEmitter: Bool = false
-
-    /// Wave 3: switch LNS repair to the CP-SAT adapter for windows
-    /// ≥ `cpSATWindowThreshold`. Expensive — off by default.
-    var useCPSATRepair: Bool = false
+    /// Shared window threshold retained for the extended learner
+    /// bundle's public API surface and referenced by
+    /// `ScheduleChromosome.cpSeeded` to decide when the CP-SAT
+    /// construction seeder fires at all.
     var cpSATWindowThreshold: Int = 20
 
-    /// Wave 3: learned branching bandit driving CP-SAT variable
-    /// ordering. Only meaningful when CP-SAT is also enabled.
-    var useLearnedBranching: Bool = false
+    /// When on, inject a `CPSATRepairer` into the optimizer context
+    /// so the construction seeder (`ScheduleChromosome.cpSeeded`)
+    /// can produce one feasibility-optimal individual per run.
+    /// Distinct from the retired `useCPSATRepair` — that flag routed
+    /// LNS destroy windows through the same solver and was dropped
+    /// because the handwritten branch-and-bound matched it on the
+    /// realistic workloads we measured. As a *seeder* the solver
+    /// buys something different: a guaranteed-feasible start that
+    /// already optimises the hard + mid lex tiers (inclusion,
+    /// deadline, backlog-order), so the GA only has to polish the
+    /// soft tier. On timeout or infeasibility `cpSeeded` returns
+    /// nil and the warm-start collector skips it.
+    var useCPSATSeed: Bool = true
 
-    /// Wave 3: UCB bandit over island migration pairs.
-    var useMigrationBandit: Bool = false
+    // MARK: - Removed flags
+    //
+    // The following toggles previously gated experimental subsystems
+    // that stayed off-by-default in production and never graduated:
+    //
+    //   • `useMOEADAWASurvivor` — alternative NSGA-III replacement.
+    //   • `useCMAMEEmitter` — covariance-adapted Gaussian emitter
+    //     on top of the MAP-Elites archive.
+    //   • `useCPSATRepair` — routed LNS destroy windows ≥ threshold
+    //     through the CDCL-lite solver. The baseline branch-and-bound
+    //     consistently matched or beat it on realistic workloads as
+    //     a *repair* engine; the solver itself still lives under
+    //     `CPSATRepair.swift` and is now reused as the construction
+    //     seeder backend via `useCPSATSeed`.
+    //   • `useLearnedBranching` — LinUCB bandit over CP-SAT variable
+    //     ordering. Dormant; the seeder path uses the solver's
+    //     built-in VSIDS-like ordering.
+    //   • `useMigrationBandit` — UCB bandit over island migration
+    //     pairs. The adaptive migration interval plus fixed ring
+    //     topology delivered the same win without the extra state.
+    //
+    // Underlying types remain in the codebase so the solver can be
+    // reached by new entry points (as with CPSATRepair above) and so
+    // existing tests keep compiling. Remove the file entries entirely
+    // once nothing external imports them.
 
     /// Wave 4: online DPO weight learning from user feedback.
     var useDPOWeightLearning: Bool = true
@@ -101,12 +127,12 @@ extension BuboOptimizer {
         let embedder: CalendarEmbedder
         let warmStart: TemporalWarmStart
         let bufferStore: ChanceConstrainedBufferStore
-        let branchingBandit: LearnedBranchingBandit
         let objectiveClusterer: ObjectiveCorrelationClusterer
         let gnnTrainer: GNNWarmStartTrainer
-        let migrationBandit: MigrationTopologyBandit
 
         init(islandCount: Int = 4) {
+            _ = islandCount // retained for API symmetry with earlier
+                            // variants that sized per-island state.
             self.tabu = TabuMemory()
             self.dpo = DPOWeightLearner(
                 priorWeights: PreferenceLearner.defaultWeights
@@ -114,10 +140,8 @@ extension BuboOptimizer {
             self.embedder = CalendarEmbedder()
             self.warmStart = TemporalWarmStart()
             self.bufferStore = ChanceConstrainedBufferStore()
-            self.branchingBandit = LearnedBranchingBandit()
             self.objectiveClusterer = ObjectiveCorrelationClusterer()
             self.gnnTrainer = GNNWarmStartTrainer()
-            self.migrationBandit = MigrationTopologyBandit(islandCount: max(2, islandCount))
         }
     }
 }
@@ -392,6 +416,12 @@ extension BuboOptimizer {
         if schedulingFeatures.useGNNWarmStart {
             seeds.append(bundle.gnnTrainer.seedChromosome(context: context))
         }
+        // NOTE: CP-SAT construction seed is handled separately in
+        // `BuboOptimizer.optimize` so its result can drive the
+        // GA-config dispatch (polish / refine / search). The anchor
+        // reaches the island populations through
+        // `IslandModelGA.anchorSeed` rather than this generic
+        // warm-start list.
 
         // Brute-force seeding for tiny backlogs. With N ≤ 4 the full
         // set of greedy-constructed permutations is 24 or fewer —

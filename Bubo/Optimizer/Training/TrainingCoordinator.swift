@@ -121,11 +121,8 @@ final class TrainingCoordinator: @unchecked Sendable {
             rounds.append(round)
         }
 
-        // 3. Branching bandit replay.
-        if let round = trainBranchingBandit(bundle: bundle) {
-            metrics.record(round)
-            rounds.append(round)
-        }
+        // 3. Branching bandit replay — retired along with the
+        // LearnedBranchingBandit + CP-SAT repair dispatch.
 
         // 4. Buffer fitter refit (no-op when samples insufficient).
         if let round = trainBufferStore(bundle: bundle) {
@@ -219,53 +216,10 @@ final class TrainingCoordinator: @unchecked Sendable {
         return Double(correct) / Double(pairs.count)
     }
 
-    private func trainBranchingBandit(bundle: BuboOptimizer.AdaptiveLearnerSuite) -> TrainingRound? {
-        let events = replayBuffer.branchingDecisions()
-        guard events.count >= config.branchingMinimumEvents else { return nil }
-        let bandit = bundle.branchingBandit
-        // Re-observe — the bandit is additive, not idempotent. To
-        // prevent unbounded growth we shuffle and take a bounded
-        // window (last N events).
-        let window = Array(events.suffix(256))
-        for ev in window {
-            guard let policy = BranchingPolicy(rawValue: ev.policy) else { continue }
-            // Reconstruct a features proxy; we only have regimeKey.
-            // Invert the bucket to an approximate feature set —
-            // slow-but-harmless for replay purposes.
-            let approx = reconstructFeatures(fromRegime: ev.regimeKey)
-            bandit.observe(policy: policy, features: approx, reward: ev.reward)
-        }
-        return TrainingRound(
-            timestamp: Date(),
-            target: .branchingBandit,
-            samplesConsumed: window.count,
-            preLoss: 0,   // bandit: no loss defined
-            postLoss: 0,
-            accuracy: nil,
-            auxiliary: ["totalObservations": Double(bandit.totalObservations)]
-        )
-    }
-
-    private func reconstructFeatures(fromRegime key: Int) -> BranchingDecisionFeatures {
-        // regimeKey = (((b0 * 3) + b1) * 3 + b2) * 3 + b3
-        let b3 = key % 3
-        let b2 = (key / 3) % 3
-        let b1 = (key / 9) % 3
-        let b0 = (key / 27) % 3
-        func bucketValue(_ b: Int) -> Double {
-            switch b {
-            case 0: return 0.15
-            case 1: return 0.50
-            default: return 0.85
-            }
-        }
-        return BranchingDecisionFeatures(
-            averageDomainRatio: bucketValue(b0),
-            activeConstraintFraction: bucketValue(b1),
-            stagnation: bucketValue(b2),
-            searchDepth: bucketValue(b3)
-        )
-    }
+    // `trainBranchingBandit` + its feature-reconstruction helper
+    // were retired along with the LearnedBranchingBandit type. The
+    // replay buffer's `branchingDecisions()` feed has no consumer
+    // in production anymore.
 
     private func trainBufferStore(bundle: BuboOptimizer.AdaptiveLearnerSuite) -> TrainingRound? {
         let samples = replayBuffer.durationSamples()
@@ -305,7 +259,7 @@ final class TrainingCoordinator: @unchecked Sendable {
         let snapshot = TrainingSnapshot(
             dpo: TrainingPersistence.capture(dpo: bundle.dpo),
             buffers: TrainingPersistence.capture(buffers: bundle.bufferStore),
-            branching: TrainingPersistence.capture(branching: bundle.branchingBandit),
+            branching: nil,
             savedAt: Date()
         )
         TrainingPersistence.save(snapshot: snapshot, to: path)
@@ -327,8 +281,9 @@ final class TrainingCoordinator: @unchecked Sendable {
         if let buffers = snapshot.buffers {
             TrainingPersistence.restore(buffers: bundle.bufferStore, from: buffers)
         }
-        if let branching = snapshot.branching {
-            TrainingPersistence.restore(branching: bundle.branchingBandit, from: branching)
-        }
+        // Snapshot's `branching` payload retained for backward
+        // compatibility with on-disk files; no restore target since
+        // the bandit was retired.
+        _ = snapshot.branching
     }
 }
