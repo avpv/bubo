@@ -73,23 +73,13 @@ struct FreeSlotRow: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 0) {
-            // Level 4: a dashed vertical bar the exact same height as an
-            // event's urgency accent bar (4×28) so event rows and free-slot
-            // rows share one anchor column. Dashes — not a solid fill — keep
-            // the semantic distinction: "empty time, not booked".
-            Path { path in
-                path.move(to: CGPoint(x: DS.Size.accentBarWidth / 2, y: 0))
-                path.addLine(to: CGPoint(x: DS.Size.accentBarWidth / 2, y: DS.Size.accentBarHeight))
-            }
-            .stroke(
-                skin.resolvedTextTertiary.opacity(DS.Opacity.half),
-                style: StrokeStyle(
-                    lineWidth: DS.Size.accentBarWidth,
-                    lineCap: .round,
-                    dash: [3, 3]
-                )
-            )
-            .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
+            // Level 4: an invisible spacer the exact same width as an event's
+            // urgency accent bar so event rows and free-slot rows share one
+            // anchor column. No stroke: Free slots are *colorless* empty
+            // time, and any tint (even a muted tertiary one) reads as "this
+            // slot has a color", which confuses the color filter semantics.
+            Color.clear
+                .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
             // Same trailing as EventRowView's urgencyBar — keeps the time
             // columns of both row types on the same vertical axis. No
             // leading offset: the row's outer `sm` padding already matches
