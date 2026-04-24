@@ -14,6 +14,10 @@ struct MenuBarView: View {
     @State private var toastState = ToastState()
     @State private var scrollPositionID: String?
     @State private var colorFilter: EventColorTag? = nil
+    /// Mutually exclusive with `colorFilter`: when true, the timeline hides
+    /// events entirely and shows only free slots so users can eyeball where
+    /// they actually have open time.
+    @State private var freeOnlyFilter: Bool = false
 
     /// When true, BacklogView will grab focus on its "Add task…" field.
     /// Set from footer / keyboard shortcut, consumed by BacklogView.
@@ -878,10 +882,13 @@ struct MenuBarView: View {
                     emptyState
                 } else if filteredEventsByDay.isEmpty {
                     VStack(spacing: DS.Spacing.sm) {
-                        Text("No events with this color")
+                        Text(freeOnlyFilter ? "No free slots in working hours" : "No events with this color")
                             .font(.subheadline)
                             .foregroundStyle(skin.resolvedTextSecondary)
-                        Button("Clear filter") { colorFilter = nil }
+                        Button("Clear filter") {
+                            colorFilter = nil
+                            freeOnlyFilter = false
+                        }
                             .buttonStyle(.bordered)
                             .controlSize(.small)
                     }
@@ -1094,25 +1101,41 @@ struct MenuBarView: View {
 
     private var colorFilterBar: some View {
         let selected = colorFilter
+        let anyFilter = selected != nil || freeOnlyFilter
         return HStack(spacing: DS.Spacing.xs) {
             ForEach(EventColorTag.allCases, id: \.self) { tag in
                 ColorDotButton(
                     tag: tag,
                     isActive: selected == tag,
-                    isDimmed: selected != nil && selected != tag
+                    isDimmed: anyFilter && selected != tag
                 ) {
                     Haptics.tap()
                     withAnimation(skin.resolvedMicroAnimation) {
+                        freeOnlyFilter = false
                         colorFilter = (colorFilter == tag) ? nil : tag
                     }
                 }
             }
 
-            if selected != nil {
+            // Hollow dot = "only free slots". Mutually exclusive with the
+            // color filters above so the two modes never fight each other.
+            FreeSlotDotButton(
+                isActive: freeOnlyFilter,
+                isDimmed: anyFilter && !freeOnlyFilter
+            ) {
+                Haptics.tap()
+                withAnimation(skin.resolvedMicroAnimation) {
+                    colorFilter = nil
+                    freeOnlyFilter.toggle()
+                }
+            }
+
+            if anyFilter {
                 Button {
                     Haptics.tap()
                     withAnimation(skin.resolvedMicroAnimation) {
                         colorFilter = nil
+                        freeOnlyFilter = false
                     }
                 } label: {
                     Image(systemName: "xmark.circle.fill")
@@ -1135,6 +1158,7 @@ struct MenuBarView: View {
         .padding(.horizontal, DS.Spacing.contentMargin)
         .padding(.vertical, DS.Spacing.xs)
         .animation(skin.resolvedMicroAnimation, value: colorFilter)
+        .animation(skin.resolvedMicroAnimation, value: freeOnlyFilter)
     }
 
     private var eventList: some View {
@@ -1230,14 +1254,28 @@ struct MenuBarView: View {
             // event of the day.
             .padding(.horizontal, DS.Spacing.sm)
 
-        let freeSlots = FreeSlotFinder.slots(
-            for: dayGroup.events,
-            on: dayGroup.date,
-            workingHours: optimizerService.workingHours
-        )
+        // Filter interaction:
+        // • colorFilter active → events already pruned to one tag, so the
+        //   remaining "gaps" are filled by events of other colors in the real
+        //   timeline. Rendering them as Free slots would be misleading, so
+        //   hide them.
+        // • freeOnlyFilter active → hide events entirely and show only the
+        //   real free slots, so users can eyeball open time at a glance.
+        let freeSlots: [(start: Date, end: Date)] = colorFilter == nil
+            ? FreeSlotFinder.slots(
+                for: dayGroup.events,
+                on: dayGroup.date,
+                workingHours: optimizerService.workingHours
+            )
+            : []
 
         let ghost = ghostForDay(dayGroup.date)
-        let interleaved = interleave(events: dayGroup.events, freeSlots: freeSlots, ghost: ghost)
+        let interleaved = interleave(
+            events: dayGroup.events,
+            freeSlots: freeSlots,
+            ghost: ghost,
+            includeEvents: !freeOnlyFilter
+        )
         // Pick the first `.slot` item's id inside this day — only that row
         // gets the onboarding hint. Precomputing keeps the ForEach body a
         // pure function of the item and avoids per-iteration scanning.
@@ -1250,7 +1288,7 @@ struct MenuBarView: View {
         // free slots (the real targets) and the expanded task list above
         // share the vertical space. One header > N thin slivers — Бирман:
         // «свернуть в строку-заголовок, а не уменьшать всё пропорционально».
-        if backlogCoordinator.isDraggingTask && !dayGroup.events.isEmpty {
+        if backlogCoordinator.isDraggingTask && !dayGroup.events.isEmpty && !freeOnlyFilter {
             collapsedEventsHeader(for: dayGroup.events)
         }
 
@@ -1417,9 +1455,10 @@ struct MenuBarView: View {
     private func interleave(
         events: [CalendarEvent],
         freeSlots: [(start: Date, end: Date)],
-        ghost: (start: Date, end: Date, title: String)? = nil
+        ghost: (start: Date, end: Date, title: String)? = nil,
+        includeEvents: Bool = true
     ) -> [DayListItem] {
-        var result: [DayListItem] = events.map(DayListItem.event)
+        var result: [DayListItem] = includeEvents ? events.map(DayListItem.event) : []
         result += freeSlots.map { DayListItem.slot($0.start, $0.end) }
         if let ghost {
             result.append(.ghost(ghost.start, ghost.end, ghost.title))
