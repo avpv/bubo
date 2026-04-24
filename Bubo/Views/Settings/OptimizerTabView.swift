@@ -89,18 +89,8 @@ struct OptimizerTabView: View {
                             }
                             PeakEnergyHoursPicker(
                                 selection: Binding(
-                                    get: {
-                                        optimizerService.optimizer.preferences.effectivePeakEnergyHours
-                                    },
+                                    get: { optimizerService.optimizer.preferences.peakEnergyHours },
                                     set: { newSet in
-                                        // Keep `peakEnergyHour` aligned with the
-                                        // smallest selected hour so legacy
-                                        // single-peak readers still see a
-                                        // sensible value. At least one hour is
-                                        // guaranteed by the picker itself.
-                                        let sorted = newSet.sorted()
-                                        guard let primary = sorted.first else { return }
-                                        optimizerService.optimizer.preferences.peakEnergyHour = primary
                                         optimizerService.optimizer.preferences.peakEnergyHours = newSet
                                         optimizerService.savePreferences()
                                     }

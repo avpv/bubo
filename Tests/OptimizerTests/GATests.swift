@@ -2383,7 +2383,7 @@ struct FractionalHourEnergyTests {
         let chromPeak = ScheduleChromosome(genes: [geneAtPeak])
         let chromOff = ScheduleChromosome(genes: [geneOffPeak])
 
-        // peakEnergyHour defaults to 10
+        // peakEnergyHours defaults to [10]
         let context = makeContext()
         let objective = EnergyCurveObjective(weight: 1.0)
 
