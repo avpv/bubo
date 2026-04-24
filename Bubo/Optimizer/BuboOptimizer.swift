@@ -515,10 +515,6 @@ final class BuboOptimizer {
         // updates the same bundle on subsequent optimizations of the
         // same workload.
         //
-        // `FederatedMutationBandit` remains available as an opt-in
-        // optimization for callers that want per-island bandits with
-        // periodic merging — not wired by default because it fights
-        // with the persistent-feedback path.
         // Collect warm-start seeds from the learner suite so the
         // initial population starts inside the basin of recent
         // accepted solutions and respects GNN-derived priorities.

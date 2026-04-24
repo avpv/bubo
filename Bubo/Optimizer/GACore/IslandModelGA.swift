@@ -245,12 +245,6 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
     /// types into the engine.
     let hooks: EvolutionHooks<C>
 
-    /// Optional federated mutation bandit. When non-nil, each island
-    /// uses its own per-island `MutationBandit` from the federation;
-    /// the island loop triggers a merge on every migration boundary so
-    /// bandit state is shared without going through a single lock.
-    let federatedBandit: FederatedMutationBandit?
-
     /// Externally-supplied warm-start chromosomes (temporal replay,
     /// GNN-driven greedy, …). Distributed round-robin across islands
     /// during initial population construction, replacing the same
@@ -293,7 +287,6 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         onProgress: ((IslandModelProgress) -> Void)? = nil,
         multiObjective: MultiObjectiveContext<C>? = nil,
         hooks: EvolutionHooks<C> = .noop,
-        federatedBandit: FederatedMutationBandit? = nil,
         extraSeeds: [C] = [],
         anchorSeed: C? = nil,
         anchorReplicationFraction: Double = 0.4,
@@ -306,7 +299,6 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         self.onProgress = onProgress
         self.multiObjective = multiObjective
         self.hooks = hooks
-        self.federatedBandit = federatedBandit
         self.extraSeeds = extraSeeds
         self.anchorSeed = anchorSeed
         self.anchorReplicationFraction = max(0, min(0.8, anchorReplicationFraction))
@@ -435,15 +427,11 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
     /// top-level seed because `split()` advances deterministically in
     /// island-creation order.
     ///
-    /// Mutation bandit selection:
-    ///   • Federated wired → island `i` gets `federatedBandit.bandit(forIsland: i)`.
-    ///     Each island's bandit is independent in the hot path; merges
-    ///     happen on migration boundaries (see `evolveIslands`).
-    ///   • No federation → fall back to the shared `context.mutationBandit`
-    ///     so the legacy single-bandit path keeps working.
+    /// Every island shares `context.mutationBandit` — the federated
+    /// variant was retired when the persistent-feedback path proved
+    /// to work better on realistic workloads than per-island merges.
     private func makeIslandContext(islandIndex: Int) -> OptimizerContext {
-        let bandit = federatedBandit?.bandit(forIsland: islandIndex)
-            ?? context.mutationBandit
+        let bandit = context.mutationBandit
 
         // Per-island objective-weight biasing. When
         // `islandConfig.objectiveWeightBiases` carries an entry for
@@ -692,16 +680,6 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             if isMigrationGeneration {
                 migrate(islands: islands, migrationSize: effectiveSize)
                 totalMigrations += 1
-
-                // Federated bandit merge coincides with migration
-                // boundaries: both share the rhythm of "islands have
-                // accumulated distinct experience, now exchange and
-                // continue." Uniform weighting across islands keeps the
-                // default behaviour symmetric; callers can weight by
-                // per-island best-fitness via a custom scheme if needed.
-                if let federated = federatedBandit {
-                    federated.merge()
-                }
             }
 
             // Update global best (by rawFitness — see per-island note above).
