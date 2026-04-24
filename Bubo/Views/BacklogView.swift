@@ -53,18 +53,17 @@ struct BacklogView: View {
     /// Birman: «информация важнее украшений» — шеврон сам несёт три смысла
     /// (collapsed / compact / expanded), без дублирующей кнопки «Show more».
     @State private var expansion: TaskListExpansion = .collapsed
-    @State private var editingTaskId: String? = nil
-    /// Snapshot of `expansion` captured the moment inline edit begins so we
-    /// can restore it when the user finishes editing. Editing forces the
-    /// list into `.expanded` to give the form room to breathe (HIG: don't
-    /// make the user scroll to see the field they're filling).
-    @State private var expansionBeforeEdit: TaskListExpansion? = nil
-    /// Snapshot of `expansion` captured the moment a drag starts. Same
-    /// idea as `expansionBeforeEdit`: during a drag the list flips to
-    /// `.expanded` so the user sees every reorder target at once, and the
-    /// pre-drag state is restored when the drag ends. Decoupled from
-    /// `expansionBeforeEdit` because the two can nest (user starts editing,
-    /// then drags a row from inside the edit session).
+    /// Task being edited in the inspector sheet. Presenting the editor in a
+    /// sheet rather than inline removes the list's previous three-way
+    /// tangle — edit-expansion snapshot, drag-expansion snapshot, and live
+    /// `expansion` — down to one channel (drag only). Apple HIG: an inspector
+    /// is a sibling surface, not a row that grows to 10x its height inside
+    /// the list it belongs to.
+    @State private var editingTask: BacklogTask? = nil
+    /// Snapshot of `expansion` captured the moment a drag starts. During a
+    /// drag the list flips to `.expanded` so the user sees every reorder
+    /// target at once, and the pre-drag state is restored when the drag
+    /// ends.
     @State private var expansionBeforeDrag: TaskListExpansion? = nil
     /// Measured height of the hosting popover. Drives the dynamic ceiling
     /// for the fully-expanded and editing states so large screens are not
@@ -153,19 +152,6 @@ struct BacklogView: View {
         )
     }
 
-    /// Taller ceiling used while a task is being inline-edited. The edit
-    /// card itself is ~350–450pt tall; without the extra headroom the user
-    /// has to scroll inside the list to see the fields they're filling.
-    private var editingMaxHeight: CGFloat {
-        guard measuredHostHeight > 0 else { return Self.fullyExpandedMaxHeight + 200 }
-        // Reserve less space under the list during edit (the timeline is
-        // less relevant while the user is heads-down on a task).
-        return max(
-            Self.fullyExpandedMaxHeight + 200,
-            measuredHostHeight - 140
-        )
-    }
-
     /// Single-line row height. Lower than the former 44pt because the row
     /// is now one line (title + inline middot-separated metadata) instead
     /// of a two-line stack.
@@ -231,19 +217,6 @@ struct BacklogView: View {
 
         guard activeCount > 0 || tombstoneMin > 0 else { return 0 }
 
-        // While inline-editing, the edit card takes the place of a row and
-        // is several hundred points tall. Use a taller ceiling and skip the
-        // compact cap entirely so the form isn't clipped. The list still
-        // caps at `editingMaxHeight` so something of the footer stays
-        // reachable for users who want to click Add at the bottom.
-        if editingTaskId != nil {
-            // Rough budget: the edit card (~420pt) + remaining rows.
-            let editCardHeight: CGFloat = 420
-            let otherRows = max(0, activeCount - 1)
-            let content = editCardHeight + rowHeight * CGFloat(otherRows) + tombstoneMin
-            return min(content, editingMaxHeight)
-        }
-
         switch expansion {
         case .collapsed:
             return 0
@@ -298,25 +271,13 @@ struct BacklogView: View {
         // via `NSApp.windows` lazily (not a GeometryReader on self, which
         // would cycle: list height → host height → list height).
         .background(hostHeightProbe)
-        .onChange(of: editingTaskId) { oldValue, newValue in
-            // Remember where the user was before entering edit, then force
-            // the list into `.expanded` so the form has room. On exit,
-            // restore the captured state — without this, finishing an edit
-            // could leave the card collapsed with the cursor hanging in
-            // empty space.
-            if oldValue == nil, newValue != nil {
-                expansionBeforeEdit = expansion
-                withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-                    if expansion == .collapsed { expansion = .expanded }
-                }
-            } else if oldValue != nil, newValue == nil {
-                if let previous = expansionBeforeEdit {
-                    withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-                        expansion = previous
-                    }
-                }
-                expansionBeforeEdit = nil
-            }
+        .sheet(item: $editingTask) { task in
+            BacklogTaskInspector(
+                task: task,
+                backlogService: backlogService,
+                onDone: { editingTask = nil }
+            )
+            .environment(\.activeSkin, skin)
         }
         .onChange(of: focusRequested) { _, requested in
             if requested {
@@ -744,56 +705,46 @@ struct BacklogView: View {
         }
     }
 
-    /// Either the inline edit form (when this row is being edited) or the
-    /// read-only `BacklogTaskRow`. Extracted so the grouped and flat
-    /// rendering paths in `taskRowsContent` don't duplicate 40 lines of
-    /// parameter plumbing.
+    /// Read-only row. Editing lives in the inspector sheet (`editingTask`
+    /// binding on the outer view), so the row no longer has to swap
+    /// between a display and edit representation mid-list.
     @ViewBuilder
     private func taskRowBody(_ task: BacklogTask) -> some View {
-        if editingTaskId == task.id {
-            BacklogTaskEditRow(
-                task: task,
-                backlogService: backlogService,
-                onDone: { editingTaskId = nil }
-            )
-            .transition(.opacity)
-        } else {
-            BacklogTaskRow(
-                task: task,
-                isUrgent: isUrgent(task),
-                isDragging: coordinator?.draggedTask?.taskId == task.id,
-                canMoveUp: canMoveUp(task),
-                canMoveDown: canMoveDown(task),
-                isSprintMode: isSprintMode,
-                onComplete: { completeTaskWithUndo(task) },
-                onEdit: { editingTaskId = task.id },
-                onDelete: { onDeleteTask?(task) },
-                onFreeze: { freezeTaskWithUndo(task) },
-                onDragStart: {
-                    coordinator?.beginDrag(payload(for: task))
-                    if !hasDragged { hasDragged = true }
-                },
-                onDragEnd: { coordinator?.endDrag() },
-                onReorderDrop: { dropped in
-                    handleReorderDrop(dropped: dropped, targetId: task.id)
-                },
-                onMoveUp: { moveTask(task, by: -1) },
-                onMoveDown: { moveTask(task, by: +1) },
-                onMoveToTop: { moveTaskToEdge(task, toTop: true) },
-                onMoveToBottom: { moveTaskToEdge(task, toTop: false) },
-                isFocused: focusedTaskId == task.id,
-                onFocusPrev: { focusRow(offsetFrom: task.id, by: -1) },
-                onFocusNext: { focusRow(offsetFrom: task.id, by: +1) },
-                slotPreview: slotPreviewCache.cached(durationMinutes: task.durationMinutes),
-                onHoverChanged: { hovering in
-                    handleRowHover(task: task, hovering: hovering)
-                }
-            )
-            .focusable()
-            .focused($focusedTaskId, equals: task.id)
-            .focusEffectDisabled()
-            .transition(.opacity.combined(with: .move(edge: .leading)))
-        }
+        BacklogTaskRow(
+            task: task,
+            isUrgent: isUrgent(task),
+            isDragging: coordinator?.draggedTask?.taskId == task.id,
+            canMoveUp: canMoveUp(task),
+            canMoveDown: canMoveDown(task),
+            isSprintMode: isSprintMode,
+            onComplete: { completeTaskWithUndo(task) },
+            onEdit: { editingTask = task },
+            onDelete: { onDeleteTask?(task) },
+            onFreeze: { freezeTaskWithUndo(task) },
+            onDragStart: {
+                coordinator?.beginDrag(payload(for: task))
+                if !hasDragged { hasDragged = true }
+            },
+            onDragEnd: { coordinator?.endDrag() },
+            onReorderDrop: { dropped in
+                handleReorderDrop(dropped: dropped, targetId: task.id)
+            },
+            onMoveUp: { moveTask(task, by: -1) },
+            onMoveDown: { moveTask(task, by: +1) },
+            onMoveToTop: { moveTaskToEdge(task, toTop: true) },
+            onMoveToBottom: { moveTaskToEdge(task, toTop: false) },
+            isFocused: focusedTaskId == task.id,
+            onFocusPrev: { focusRow(offsetFrom: task.id, by: -1) },
+            onFocusNext: { focusRow(offsetFrom: task.id, by: +1) },
+            slotPreview: slotPreviewCache.cached(durationMinutes: task.durationMinutes),
+            onHoverChanged: { hovering in
+                handleRowHover(task: task, hovering: hovering)
+            }
+        )
+        .focusable()
+        .focused($focusedTaskId, equals: task.id)
+        .focusEffectDisabled()
+        .transition(.opacity.combined(with: .move(edge: .leading)))
     }
 
     // MARK: - Completed-today tombstone

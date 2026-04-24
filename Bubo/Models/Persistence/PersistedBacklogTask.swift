@@ -45,6 +45,15 @@ final class PersistedBacklogTask {
     var isRecurring: Bool = false
     var recurrenceTag: String?
 
+    /// Rich task fields that round-trip through Apple Reminders. Added after
+    /// the initial schema — defaulted to nil so older CloudKit rows decode
+    /// without migration.
+    var notes: String?
+    /// URL stored as a string so SwiftData/CloudKit serialize it as scalar
+    /// text instead of a blob. `toBacklogTask` parses it back on load.
+    var urlString: String?
+    var location: String?
+
     /// Plain integer position.  `BacklogService` rewrites `sortOrder` on
     /// every save in line with the in-memory array index — the incremental
     /// diff touches only rows whose position actually moved, but the
@@ -87,6 +96,9 @@ final class PersistedBacklogTask {
         self.reminderCalendarItemId = task.reminderCalendarItemId
         self.isRecurring = task.isRecurring
         self.recurrenceTag = task.recurrenceTag
+        self.notes = task.notes
+        self.urlString = task.url?.absoluteString
+        self.location = task.location
         if let sortOrder { self.sortOrder = sortOrder }
     }
 
@@ -108,6 +120,9 @@ final class PersistedBacklogTask {
             preferredPeriod: preferredPeriodRaw.flatMap { Period(rawValue: $0) },
             isRecurring: isRecurring,
             recurrenceTag: recurrenceTag,
+            notes: notes,
+            url: urlString.flatMap(URL.init(string:)),
+            location: location,
             createdAt: createdAt
         )
         task.status = BacklogStatus(rawValue: statusRaw) ?? .pending

@@ -124,4 +124,77 @@ final class AppleRemindersServiceTests: XCTestCase {
     func testRemindersIdReturnsNilForEmptyInput() {
         XCTAssertNil(AppleRemindersService.remindersId(from: ""))
     }
+
+    // MARK: - Notes / URL Codec
+
+    func testComposeNotesReturnsNilWhenEmpty() {
+        XCTAssertNil(AppleRemindersService.composeNotes(notes: nil, url: nil))
+        XCTAssertNil(AppleRemindersService.composeNotes(notes: "", url: nil))
+        XCTAssertNil(AppleRemindersService.composeNotes(notes: "   \n  ", url: nil))
+    }
+
+    func testComposeNotesPlainBody() {
+        let composed = AppleRemindersService.composeNotes(
+            notes: "Design the launch",
+            url: nil
+        )
+        XCTAssertEqual(composed, "Design the launch")
+    }
+
+    func testComposeNotesWithURLOnly() {
+        let composed = AppleRemindersService.composeNotes(
+            notes: nil,
+            url: URL(string: "https://example.com/spec")
+        )
+        XCTAssertEqual(composed, "URL: https://example.com/spec")
+    }
+
+    func testComposeNotesWithURLAndBody() {
+        let composed = AppleRemindersService.composeNotes(
+            notes: "Ship the thing",
+            url: URL(string: "https://example.com/spec")
+        )
+        XCTAssertEqual(composed, "URL: https://example.com/spec\n\nShip the thing")
+    }
+
+    func testExtractURLFromNotesWithSentinel() {
+        let (url, notes) = AppleRemindersService.extractURL(
+            fromNotes: "URL: https://example.com/spec\n\nShip the thing"
+        )
+        XCTAssertEqual(url, URL(string: "https://example.com/spec"))
+        XCTAssertEqual(notes, "Ship the thing")
+    }
+
+    func testExtractURLFromPlainNotesHasNoURL() {
+        let (url, notes) = AppleRemindersService.extractURL(
+            fromNotes: "Just a regular note"
+        )
+        XCTAssertNil(url)
+        XCTAssertEqual(notes, "Just a regular note")
+    }
+
+    func testExtractURLRejectsInvalidSentinel() {
+        // Leading "URL:" but the payload doesn't parse — keep the whole
+        // string visible instead of silently dropping it.
+        let (url, notes) = AppleRemindersService.extractURL(
+            fromNotes: "URL: \n\nbody"
+        )
+        XCTAssertNil(url)
+        XCTAssertEqual(notes, "URL: \n\nbody")
+    }
+
+    func testNotesURLRoundTrip() {
+        let original = BacklogTask(
+            title: "Draft",
+            notes: "Bullet A\nBullet B",
+            url: URL(string: "https://example.com/doc")
+        )
+        let composed = AppleRemindersService.composeNotes(
+            notes: original.notes,
+            url: original.url
+        )
+        let (url, notes) = AppleRemindersService.extractURL(fromNotes: composed)
+        XCTAssertEqual(url, original.url)
+        XCTAssertEqual(notes, original.notes)
+    }
 }

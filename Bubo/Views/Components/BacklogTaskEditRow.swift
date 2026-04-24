@@ -1,15 +1,18 @@
 import SwiftUI
 
-// MARK: - Backlog Task Edit Row (Inline, Autosave)
+// MARK: - Backlog Task Edit Row (Autosave)
 
-/// Truly inline editing — every change persists immediately, no Save/Cancel
-/// chrome, Esc collapses the card back to the read-only row.
+/// Autosaving editor — every change persists immediately, no Save/Cancel
+/// chrome, Esc / ⌘↩ / Return on the title all end editing.
+///
+/// Hosted by `BacklogTaskInspector` in a sheet rather than inlined into
+/// the backlog list: an inline card that grew to 10× a row's height broke
+/// the Birman principle it was trying to honour (the list became modal by
+/// accident). The sheet is honest about being modal and lets the list stay
+/// quiet while it's open.
 ///
 /// HIG: direct manipulation — the form IS the task, not a dialog about the
-/// task. ⌘↩ and Esc (and clicking Return in the title) all end editing.
-/// Birman: *«редактирование без модальности»* — значит не «сохранить и
-/// применить», а «менять — уже применено». Отмена — через undo-toast на
-/// Complete / Delete / Reorder, не через Cancel-кнопку.
+/// task. Changes flush through `BacklogService.updateTask` on every edit.
 struct BacklogTaskEditRow: View {
     let task: BacklogTask
     var backlogService: BacklogService
@@ -29,6 +32,14 @@ struct BacklogTaskEditRow: View {
     /// "any" (nil). Fed into the optimizer via `toOptimizableEvent`'s
     /// `preferredHourRange`, which nudges the scheduler without forcing it.
     @State private var preferredPeriod: Period?
+    /// Free-form notes/description. Round-trips through Apple Reminders.
+    @State private var notes: String
+    /// Optional link associated with the task. Stored on `BacklogTask.url`;
+    /// serialized into the reminder's notes body by the sync layer.
+    @State private var urlString: String
+    /// Free-form location (room, address). Paired with `EKStructuredLocation`
+    /// on export so iPhone Reminders can fire arrival alerts.
+    @State private var location: String
     /// Currently-selected task in the "Add dependency" picker — resets to nil
     /// after each successful add so the picker returns to its placeholder.
     @State private var newDependencyId: String? = nil
@@ -55,6 +66,9 @@ struct BacklogTaskEditRow: View {
         _recurrenceTag = State(initialValue: task.recurrenceTag ?? "")
         _dependsOn = State(initialValue: task.dependsOn)
         _preferredPeriod = State(initialValue: task.preferredPeriod)
+        _notes = State(initialValue: task.notes ?? "")
+        _urlString = State(initialValue: task.url?.absoluteString ?? "")
+        _location = State(initialValue: task.location ?? "")
     }
 
     private static let durationOptions = [15, 30, 45, 60, 90, 120, 180, 240]
@@ -222,6 +236,64 @@ struct BacklogTaskEditRow: View {
             }
             .motionAwareAnimation(DS.Animation.quick, value: isRecurring, reduceMotion: reduceMotion)
 
+            // Notes — round-trips through `EKReminder.notes`. A multi-line
+            // text editor keeps the field unobtrusive when empty and grows
+            // with content; no separate "show more" affordance needed.
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                Text("Notes")
+                    .font(.caption2)
+                    .foregroundStyle(skin.resolvedTextSecondary)
+                TextEditor(text: $notes)
+                    .font(.caption)
+                    .scrollContentBackground(.hidden)
+                    .frame(minHeight: 56, maxHeight: 120)
+                    .padding(DS.Spacing.xs)
+                    .background(
+                        RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
+                            .fill(skin.resolvedTextTertiary.opacity(DS.Opacity.subtleFill))
+                    )
+                    .onChange(of: notes) { _, _ in autosave() }
+            }
+
+            // Link — kept as its own field even though Apple Reminders has no
+            // dedicated URL slot. Sync layer serializes it into the notes
+            // body with a `URL:` sentinel so Reminders.app renders it as a
+            // tappable link.
+            HStack(spacing: DS.Spacing.xs) {
+                Image(systemName: "link")
+                    .font(.caption2)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                TextField("https://…", text: $urlString)
+                    .textFieldStyle(.plain)
+                    .font(.caption2)
+                    .onChange(of: urlString) { _, _ in autosave() }
+                    .onSubmit { commit() }
+                if let url = Self.parseURL(urlString) {
+                    Button {
+                        NSWorkspace.shared.open(url)
+                    } label: {
+                        Image(systemName: "arrow.up.right.square")
+                            .font(.caption2)
+                            .foregroundStyle(skin.accentColor)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Open link")
+                }
+            }
+
+            // Location — round-trips through `EKStructuredLocation.title` so
+            // iPhone Reminders can fire arrival alerts for offline meetings.
+            HStack(spacing: DS.Spacing.xs) {
+                Image(systemName: "mappin.and.ellipse")
+                    .font(.caption2)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                TextField("Location", text: $location)
+                    .textFieldStyle(.plain)
+                    .font(.caption2)
+                    .onChange(of: location) { _, _ in autosave() }
+                    .onSubmit { commit() }
+            }
+
             // Dependencies. Each entry is another task whose completion
             // should block this one. The picker offers all active tasks
             // except self and already-linked ones; ✕ clears a link.
@@ -284,7 +356,22 @@ struct BacklogTaskEditRow: View {
         updated.recurrenceTag = (isRecurring && !trimmedTag.isEmpty) ? trimmedTag : nil
         updated.dependsOn = dependsOn
         updated.preferredPeriod = preferredPeriod
+        let trimmedNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        updated.notes = trimmedNotes.isEmpty ? nil : trimmedNotes
+        updated.url = Self.parseURL(urlString)
+        let trimmedLocation = location.trimmingCharacters(in: .whitespaces)
+        updated.location = trimmedLocation.isEmpty ? nil : trimmedLocation
         backlogService.updateTask(updated)
+    }
+
+    /// Lenient URL parser used by both the "Open" button and `autosave`.
+    /// Accepts bare domains ("example.com/foo") by synthesizing `https://`
+    /// when a scheme is missing, so users don't have to type boilerplate.
+    static func parseURL(_ raw: String) -> URL? {
+        let trimmed = raw.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+        if let url = URL(string: trimmed), url.scheme != nil { return url }
+        return URL(string: "https://\(trimmed)")
     }
 
     /// Pick-or-remove UI for task dependencies. Linked tasks render as small
@@ -434,5 +521,52 @@ struct BacklogTaskEditRow: View {
                 )
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Backlog Task Inspector (Sheet)
+
+/// Sheet chrome around `BacklogTaskEditRow`. Presented from `BacklogView`
+/// when the user taps "Edit" on a row — replaces the previous inline
+/// expansion-to-420pt behaviour that tangled three state machines inside
+/// the list. The sheet floats above the backlog, so the list below stays
+/// idle (no forced `.expanded`, no pre-edit snapshot to restore).
+struct BacklogTaskInspector: View {
+    let task: BacklogTask
+    var backlogService: BacklogService
+    var onDone: () -> Void
+
+    @Environment(\.activeSkin) private var skin
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header — matches `PopoverHeader` weight but stays self-contained
+            // so the inspector renders the same whether it's hosted in a sheet
+            // inside the menu-bar popover or a detached window later on.
+            HStack {
+                Text("Edit task")
+                    .font(.headline)
+                    .foregroundStyle(skin.resolvedTextPrimary)
+                Spacer()
+                Button("Done") { onDone() }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .keyboardShortcut(.cancelAction)
+            }
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.vertical, DS.Spacing.md)
+            SkinSeparator()
+
+            ScrollView {
+                BacklogTaskEditRow(
+                    task: task,
+                    backlogService: backlogService,
+                    onDone: onDone
+                )
+                .padding(DS.Spacing.lg)
+            }
+        }
+        .frame(width: 420, height: 540)
+        .background(skin.resolvedPlatterMaterial)
     }
 }

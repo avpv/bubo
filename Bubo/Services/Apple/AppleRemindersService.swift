@@ -156,6 +156,12 @@ final class AppleRemindersService {
             deadline = nil
         }
 
+        // EKReminder doesn't expose a dedicated URL slot, so we carry the
+        // link in `notes` using a leading `URL:` sentinel line. Round-trips
+        // cleanly with Reminders.app: the sentinel text is visible there and
+        // stays intact when users edit the notes body below it.
+        let (parsedURL, strippedNotes) = Self.extractURL(fromNotes: reminder.notes)
+
         return BacklogTask(
             id: "reminder_\(reminder.calendarItemIdentifier)",
             title: reminder.title ?? "Untitled",
@@ -163,6 +169,9 @@ final class AppleRemindersService {
             priority: priority,
             deadline: deadline,
             context: reminder.calendar.title,
+            notes: strippedNotes,
+            url: parsedURL,
+            location: reminder.structuredLocation?.title ?? reminder.location,
             createdAt: reminder.creationDate ?? Date()
         )
     }
@@ -199,6 +208,11 @@ final class AppleRemindersService {
         let reminder = EKReminder(eventStore: store)
         reminder.title = task.title
         reminder.priority = Self.appleRemindersPriority(from: task.priority)
+        reminder.notes = Self.composeNotes(notes: task.notes, url: task.url)
+        if let loc = task.location, !loc.isEmpty {
+            reminder.location = loc
+            reminder.structuredLocation = EKStructuredLocation(title: loc)
+        }
 
         if let deadline = task.deadline {
             reminder.dueDateComponents = Self.dueDateComponents(from: deadline)
@@ -238,6 +252,8 @@ final class AppleRemindersService {
         let newPriority = Self.appleRemindersPriority(from: task.priority)
         let newDueComponents: DateComponents? = task.deadline.map(Self.dueDateComponents(from:))
         let shouldBeDone = task.status == .done
+        let newNotes = Self.composeNotes(notes: task.notes, url: task.url)
+        let newLocation = task.location.flatMap { $0.isEmpty ? nil : $0 }
 
         // Field-by-field diff — skip the save if nothing actually changed.
         var didChange = false
@@ -245,6 +261,15 @@ final class AppleRemindersService {
         if reminder.priority != newPriority { reminder.priority = newPriority; didChange = true }
         if reminder.dueDateComponents != newDueComponents {
             reminder.dueDateComponents = newDueComponents
+            didChange = true
+        }
+        if reminder.notes != newNotes {
+            reminder.notes = newNotes
+            didChange = true
+        }
+        if reminder.location != newLocation {
+            reminder.location = newLocation
+            reminder.structuredLocation = newLocation.map { EKStructuredLocation(title: $0) }
             didChange = true
         }
         if reminder.isCompleted != shouldBeDone {
@@ -341,5 +366,55 @@ final class AppleRemindersService {
             return cal.dateComponents([.year, .month, .day, .hour, .minute], from: date)
         }
         return cal.dateComponents([.year, .month, .day], from: date)
+    }
+
+    // MARK: - Notes / URL Codec
+
+    /// Sentinel line prefix used to serialize `BacklogTask.url` inside
+    /// `EKReminder.notes`. Placed on the first line so Reminders.app still
+    /// renders the link as a tappable URL and users can edit the notes body
+    /// below without disturbing it.
+    private static let urlNotesPrefix = "URL: "
+
+    /// Combine a task's notes + url into a single `EKReminder.notes` string.
+    /// `nil` when neither field is populated so reminders without rich data
+    /// keep an empty notes slot instead of a stray blank line.
+    static func composeNotes(notes: String?, url: URL?) -> String? {
+        let body = notes?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let url {
+            let header = "\(urlNotesPrefix)\(url.absoluteString)"
+            if let body, !body.isEmpty {
+                return "\(header)\n\n\(body)"
+            }
+            return header
+        }
+        guard let body, !body.isEmpty else { return nil }
+        return body
+    }
+
+    /// Inverse of `composeNotes`. Splits the leading `URL:` sentinel (when
+    /// present) from the remaining body. Returns `(nil, original)` when the
+    /// notes don't contain a parseable sentinel so user-authored text never
+    /// gets misclassified as a link.
+    static func extractURL(fromNotes raw: String?) -> (url: URL?, notes: String?) {
+        guard let raw, !raw.isEmpty else { return (nil, nil) }
+        let lines = raw.split(separator: "\n", omittingEmptySubsequences: false)
+        guard let first = lines.first,
+              first.hasPrefix(urlNotesPrefix) else {
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            return (nil, trimmed.isEmpty ? nil : trimmed)
+        }
+        let urlString = String(first.dropFirst(urlNotesPrefix.count))
+            .trimmingCharacters(in: .whitespaces)
+        let url = URL(string: urlString)
+        let remainder = lines.dropFirst()
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        // When parsing failed, keep the whole string in notes — we'd rather
+        // surface a bad link as readable text than silently discard it.
+        if url == nil {
+            return (nil, raw.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+        return (url, remainder.isEmpty ? nil : remainder)
     }
 }

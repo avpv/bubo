@@ -28,11 +28,30 @@ struct BacklogCapacityRing: View {
     }
 
     private var color: Color {
+        Self.ringColor(for: fraction, skin: skin)
+    }
+
+    /// Four-step capacity palette. Dark skins swap the plain `.orange` /
+    /// `.green` system colors for slightly lighter, higher-chroma shades —
+    /// the defaults sit too close in luminance to common dark glass fills,
+    /// and the 2pt ring stroke disappears against certain Material
+    /// backgrounds. Extracted so the same resolution is reachable from
+    /// tests without instantiating the view.
+    static func ringColor(for fraction: Double, skin: SkinDefinition) -> Color {
+        let isDark = skin.prefersDarkTint
         switch fraction {
-        case ..<0.8: return .green
-        case ..<1.0: return skin.accentColor
-        case ..<1.2: return .orange
-        default:     return skin.resolvedDestructiveColor
+        case ..<0.8:
+            return isDark
+                ? Color(red: 0.35, green: 0.85, blue: 0.55) // mint, WCAG-ish vs dark glass
+                : .green
+        case ..<1.0:
+            return skin.accentColor
+        case ..<1.2:
+            return isDark
+                ? Color(red: 1.00, green: 0.72, blue: 0.18) // amber — higher luminance than system .orange
+                : .orange
+        default:
+            return skin.resolvedDestructiveColor
         }
     }
 

@@ -374,8 +374,12 @@ final class RemindersSyncService {
         let priorityChanged = existing.priority != remote.priority
         let deadlineChanged = existing.deadline != remote.deadline
         let contextChanged = existing.context != remote.context
+        let notesChanged = existing.notes != remote.notes
+        let urlChanged = existing.url != remote.url
+        let locationChanged = existing.location != remote.location
 
-        guard titleChanged || priorityChanged || deadlineChanged || contextChanged else {
+        guard titleChanged || priorityChanged || deadlineChanged || contextChanged
+            || notesChanged || urlChanged || locationChanged else {
             return nil
         }
 
@@ -384,6 +388,9 @@ final class RemindersSyncService {
         merged.priority = remote.priority
         merged.deadline = remote.deadline
         merged.context = remote.context
+        merged.notes = remote.notes
+        merged.url = remote.url
+        merged.location = remote.location
         merged.modifiedAt = Date()
         return merged
     }
