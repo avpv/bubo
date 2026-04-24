@@ -610,7 +610,10 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
     /// repair pass runs it through the rest of the normalisation
     /// machinery anyway, which is harmless on an already-feasible
     /// schedule.
-    static func cpSeeded(context: OptimizerContext) -> ScheduleChromosome? {
+    static func cpSeeded(
+        context: OptimizerContext,
+        warmStart: [ScheduleGene]? = nil
+    ) -> ScheduleChromosome? {
         guard let repairer = context.cpSATRepairer else { return nil }
         guard !context.movableEvents.isEmpty else { return nil }
 
@@ -794,11 +797,39 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
             ),
         ]
 
+        // Project the caller's warm-start genes into the solver's
+        // `[geneIndex: Date]` space. Only included genes whose
+        // eventId resolves to an active variable and whose start
+        // time lives in that variable's precomputed domain make it
+        // into the hint — anything else would fail the repairer's
+        // feasibility gate anyway, and a partial/out-of-domain hint
+        // there is silently dropped (never a correctness issue,
+        // just a missed warm-start).
+        let hint: [Int: Date]? = warmStart.flatMap { genes in
+            var out: [Int: Date] = [:]
+            let domains: [Int: Set<Date>] = Dictionary(
+                uniqueKeysWithValues: variables.map { v in
+                    (v.geneIndex, Set(v.domain))
+                }
+            )
+            for gene in genes where gene.isIncluded {
+                guard
+                    let idx = indexByEventId[gene.eventId],
+                    !excludedGeneIndices.contains(idx),
+                    let domain = domains[idx],
+                    domain.contains(gene.startTime)
+                else { continue }
+                out[idx] = gene.startTime
+            }
+            return out.count == variables.count ? out : nil
+        }
+
         let result = repairer.solveLexHierarchy(
             variables: variables,
             precedence: precedence,
             fixedBlocks: fixedBlocks,
-            tiers: tiers
+            tiers: tiers,
+            hint: hint
         )
 
         // Require every variable to have an assignment — a partial
