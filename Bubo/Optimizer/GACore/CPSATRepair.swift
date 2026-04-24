@@ -138,11 +138,20 @@ final class CPSATRepairer: @unchecked Sendable {
     /// assignment found within budget. Throws nothing — on timeout
     /// the `wasTimedOut` flag is set and whatever partial
     /// assignment we have is returned.
+    ///
+    /// `hint` is an optional warm-start assignment. When every
+    /// variable in `hint` is feasible against `precedence` and
+    /// `fixedBlocks`, the hint is scored up front and becomes the
+    /// initial incumbent; subsequent DFS branches have to beat it
+    /// to survive. An infeasible or partial hint is silently
+    /// ignored — warm-start is best-effort, never a correctness
+    /// dependency.
     func solve(
         variables: [CPVariable],
         precedence: [(Int, Int)],
         fixedBlocks: [(start: Date, end: Date)],
-        scoreAssignment: (_ assignment: [Int: Date]) -> Double
+        scoreAssignment: (_ assignment: [Int: Date]) -> Double,
+        hint: [Int: Date]? = nil
     ) -> CPSATAssignment {
         lock.lock()
         noGoods.removeAll(keepingCapacity: true)
@@ -153,6 +162,21 @@ final class CPSATRepairer: @unchecked Sendable {
 
         var best: [Int: Date]? = nil
         var bestScore = -Double.infinity
+        // Seed the incumbent with a feasible warm-start hint if one
+        // was supplied. The DFS uses `bestScoreSoFar` as its cutoff
+        // reference, so a pre-seeded incumbent prunes worse branches
+        // from the first node rather than after a full exploratory
+        // descent. Infeasible or partial hints skip this block.
+        if let hint, hint.count == variables.count,
+           hintIsFeasible(
+               hint,
+               variables: variables,
+               precedence: precedence,
+               fixedBlocks: fixedBlocks
+           ) {
+            best = hint
+            bestScore = scoreAssignment(hint)
+        }
         var budget = config.restartInitialBudget
         var lubyIdx = 1
         var nodesThisRestart = 0
@@ -168,7 +192,8 @@ final class CPSATRepairer: @unchecked Sendable {
                 scoreAssignment: scoreAssignment,
                 budget: restartBudget,
                 nodesThisRestart: &nodesThisRestart,
-                bestScoreSoFar: bestScore
+                bestScoreSoFar: bestScore,
+                hint: hint
             )
             runNodes += nodesThisRestart
             if let sol, score > bestScore {
@@ -251,6 +276,7 @@ final class CPSATRepairer: @unchecked Sendable {
         precedence: [(Int, Int)],
         fixedBlocks: [(start: Date, end: Date)],
         tiers: [LexTier],
+        hint: [Int: Date]? = nil,
         tolerance: Double = 1e-6
     ) -> CPSATAssignment {
         guard !tiers.isEmpty else {
@@ -258,7 +284,8 @@ final class CPSATRepairer: @unchecked Sendable {
                 variables: variables,
                 precedence: precedence,
                 fixedBlocks: fixedBlocks,
-                scoreAssignment: { _ in 0 }
+                scoreAssignment: { _ in 0 },
+                hint: hint
             )
         }
 
@@ -292,11 +319,17 @@ final class CPSATRepairer: @unchecked Sendable {
                 }
                 return score
             }
+            // Later tiers carry the previous tier's achieved
+            // assignment forward as an incumbent hint — the lex
+            // guard rejects any regression, so the prior optimum is
+            // always a valid warm-start for the next solve.
+            let perTierHint: [Int: Date]? = idx == 0 ? hint : lastResult?.assignments
             let result = solve(
                 variables: variables,
                 precedence: precedence,
                 fixedBlocks: fixedBlocks,
-                scoreAssignment: scorer
+                scoreAssignment: scorer,
+                hint: perTierHint
             )
             totalNodes += result.nodesExplored
             totalRestarts += result.restarts
@@ -333,7 +366,8 @@ final class CPSATRepairer: @unchecked Sendable {
         scoreAssignment: (_ assignment: [Int: Date]) -> Double,
         budget: Int,
         nodesThisRestart: inout Int,
-        bestScoreSoFar: Double
+        bestScoreSoFar: Double,
+        hint: [Int: Date]? = nil
     ) -> (assignment: [Int: Date]?, score: Double, timedOut: Bool) {
         // Build a fail-first variable ordering using VSIDS-like scores.
         let order = orderVariables(variables)
@@ -375,7 +409,14 @@ final class CPSATRepairer: @unchecked Sendable {
 
             // Order values by activity hint if available, else by
             // distance from previously chosen values of predecessors.
-            let values = orderValues(for: v, current: current)
+            // A warm-start hint (when present) pushes its suggested
+            // value to the front so the incumbent is reached on the
+            // left-most branch and subsequent siblings are pruned.
+            let values = orderValues(
+                for: v,
+                current: current,
+                hint: hint?[next]
+            )
 
             for value in values {
                 nodesThisRestart += 1
@@ -528,12 +569,82 @@ final class CPSATRepairer: @unchecked Sendable {
             .map(\.0)
     }
 
-    private func orderValues(for variable: CPVariable, current: [Int: Date]) -> [Date] {
+    private func orderValues(
+        for variable: CPVariable,
+        current: [Int: Date],
+        hint: Date? = nil
+    ) -> [Date] {
         // Default heuristic: return domain in its original (caller-
         // preferred) order. A richer implementation could reorder by
         // proximity to already-assigned variables, but the domain
         // ordering is expected to already encode that.
-        variable.domain
+        guard let hint, let hintIdx = variable.domain.firstIndex(of: hint), hintIdx != 0 else {
+            return variable.domain
+        }
+        // Promote the hinted value to the front so the DFS reaches
+        // the incumbent on its first descent.
+        var promoted = variable.domain
+        let value = promoted.remove(at: hintIdx)
+        promoted.insert(value, at: 0)
+        return promoted
+    }
+
+    /// Verify that a candidate warm-start assignment satisfies the
+    /// same structural constraints the DFS checks at every node —
+    /// precedence, fixed-block overlap, pairwise gene overlap. Used
+    /// to gate the incumbent-seeding path in `solve`. Does not
+    /// examine `scoreAssignment`, so an assignment that passes here
+    /// is still allowed to lose to a better DFS result; it just
+    /// starts the race from a known-feasible point.
+    private func hintIsFeasible(
+        _ hint: [Int: Date],
+        variables: [CPVariable],
+        precedence: [(Int, Int)],
+        fixedBlocks: [(start: Date, end: Date)]
+    ) -> Bool {
+        // Index variables by geneIndex for O(1) lookup.
+        var byIndex: [Int: CPVariable] = [:]
+        byIndex.reserveCapacity(variables.count)
+        for v in variables {
+            byIndex[v.geneIndex] = v
+        }
+        // Every variable must be covered, and the domain must
+        // contain the hinted value (else the hint falls outside
+        // what the solver would ever propose).
+        for v in variables {
+            guard let value = hint[v.geneIndex] else { return false }
+            if !v.domain.contains(value) { return false }
+        }
+        // Precedence: predecessor must end before dependent starts.
+        for (pIdx, dIdx) in precedence {
+            guard
+                let pVar = byIndex[pIdx],
+                let dVar = byIndex[dIdx],
+                let pStart = hint[pIdx],
+                let dStart = hint[dIdx]
+            else { return false }
+            _ = dVar
+            if pStart.addingTimeInterval(pVar.duration) > dStart {
+                return false
+            }
+        }
+        // Fixed-block overlap.
+        for v in variables {
+            guard let start = hint[v.geneIndex] else { return false }
+            let end = start.addingTimeInterval(v.duration)
+            for f in fixedBlocks where f.start < end && start < f.end {
+                return false
+            }
+        }
+        // Pairwise gene overlap.
+        let ordered = variables.compactMap { v -> (Int, Date, Date)? in
+            guard let start = hint[v.geneIndex] else { return nil }
+            return (v.geneIndex, start, start.addingTimeInterval(v.duration))
+        }.sorted { $0.1 < $1.1 }
+        for i in 1..<ordered.count {
+            if ordered[i].1 < ordered[i - 1].2 { return false }
+        }
+        return true
     }
 
     // MARK: - Luby

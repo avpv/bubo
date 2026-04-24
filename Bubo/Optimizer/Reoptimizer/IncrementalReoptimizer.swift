@@ -56,6 +56,13 @@ final class IncrementalReoptimizer: @unchecked Sendable {
         // and learning carries through. When called directly with a
         // raw context, the default-initialized learners on `context`
         // are forwarded as-is.
+        //
+        // `cpSATRepairer` and `cpSATWindowThreshold` are carried
+        // forward too so the `AnchorSeeder` below can attempt a
+        // warm-started CP-SAT seed for the reduced (future-movable)
+        // sub-problem. When the caller omits a repairer the seeder
+        // reports `.greedy(.disabled)` and the path behaves exactly
+        // as before.
         let adjustedContext = OptimizerContext(
             fixedEvents: context.fixedEvents + frozenGenesToEvents(frozenGenes),
             movableEvents: futureMovable,
@@ -66,7 +73,9 @@ final class IncrementalReoptimizer: @unchecked Sendable {
             calendar: context.calendar,
             mutationBandit: context.mutationBandit,
             lnsStrategyBandit: context.lnsStrategyBandit,
-            contextualCrossoverHead: context.contextualCrossoverHead
+            contextualCrossoverHead: context.contextualCrossoverHead,
+            cpSATRepairer: context.cpSATRepairer,
+            cpSATWindowThreshold: context.cpSATWindowThreshold
         )
 
         guard !futureMovable.isEmpty else {
@@ -79,12 +88,36 @@ final class IncrementalReoptimizer: @unchecked Sendable {
         evaluator.evaluateAndAssign(&currentChromosome, context: adjustedContext)
         let currentFitness = currentChromosome.fitness
 
-        // 4. Create seed population from variants of current schedule
-        let seeds = createSeeds(
+        // 4. Produce the seed population.
+        //    The warm-started CP-SAT anchor comes first so it's
+        //    always in the initial set — when the current schedule
+        //    is still feasible under the new context it feeds the
+        //    solver a tight starting incumbent; when it isn't, the
+        //    lex hierarchy fixes it before GA polish. Greedy
+        //    variants of `movableGenes` fill the rest of the seed
+        //    population for local exploration around the current
+        //    state.
+        // Gates default to `cpsatEnabled: true`; the seeder itself
+        // resolves `context.cpSATRepairer == nil` to
+        // `.greedy(.disabled)`. This keeps the feature-flag decision
+        // in `BuboOptimizer.makeReoptContext(from:)` — the reopt
+        // path only has to forward the context it was given.
+        let seeder = AnchorSeeder(gates: AnchorSeeder.Gates(
+            cpsatEnabled: true,
+            windowThreshold: context.cpSATWindowThreshold
+        ))
+        let (anchorSeed, anchorProvenance) = seeder.makeAnchor(
+            context: adjustedContext,
+            mode: .reopt(currentSchedule: movableGenes)
+        )
+        logger.info("reoptimize_anchor source=\(anchorProvenance.logLabel, privacy: .public) cpsat_ms=\(anchorProvenance.cpsatDurationMs)")
+
+        var seeds = createSeeds(
             from: movableGenes,
-            count: config.populationSize / 3,
+            count: max(1, config.populationSize / 3),
             context: adjustedContext
         )
+        seeds.insert(anchorSeed, at: 0)
 
         // 5. Run GA with stability-aware fitness
         let stabilityEvaluator = makeStabilityAwareEvaluator(

@@ -281,35 +281,25 @@ final class BuboOptimizer {
         let evaluator = FitnessEvaluator.standard(preferences: prefs)
         let capturedScenarioCount = scenarioCount
 
-        // Run CP-SAT construction seeder synchronously so its result
-        // can drive the GA-config dispatch below. A successful solve
-        // lands a feasibility-optimal chromosome on the hard + mid
-        // lex tiers (inclusion, deadline, backlog) before GA starts;
-        // a timeout / infeasibility returns nil and the pipeline
-        // falls through to the plain greedy-seeded GA as it always
-        // has. The solver also injects a `CPSATRepairer` into the
-        // context so LNS repair's bandit can pick it too.
-        let cpSATStart = Date()
-        let cpSATAnchor: ScheduleChromosome?
-        if schedulingFeatures.useCPSATSeed {
-            cpSATAnchor = ScheduleChromosome.cpSeeded(context: adjustedContext)
-        } else {
-            cpSATAnchor = nil
-        }
-        // Greedy-construct fallback when CP-SAT couldn't deliver
-        // (flag off, solver timeout, infeasible on the hard
-        // constraints). The pipeline is unconditionally
-        // `anchor → GA polish/refine`; the fallback is silent so
-        // there's never an "anchor-less" branch the GA config has
-        // to reason about. `greedy(context:)` is feasibility-by-
-        // construction on our domain (working hours, fixed-event
-        // overlap, precedence via topological insertion in
-        // `greedyWithOrder`), so this always produces SOMETHING
-        // usable.
-        let anchorSeed: ScheduleChromosome = cpSATAnchor
-            ?? ScheduleChromosome.greedy(context: adjustedContext)
-        let anchorSource: String = cpSATAnchor != nil ? "cpsat" : "greedy"
-        let cpSATDurationMs = Int(Date().timeIntervalSince(cpSATStart) * 1000)
+        // Single-site anchor decision via `AnchorSeeder`: the seeder
+        // owns every CP-SAT / greedy branch (flag off, window
+        // exceeded, solver timeout, infeasible sub-problem) so both
+        // `optimize()` and `reoptimize()` produce attributable
+        // anchors through the same code path. The pipeline is
+        // unconditionally `anchor → GA polish/refine`; the fallback
+        // is always a feasibility-by-construction greedy chromosome
+        // so there's never an "anchor-less" branch the GA config
+        // has to reason about.
+        let seeder = AnchorSeeder(gates: AnchorSeeder.Gates(
+            cpsatEnabled: schedulingFeatures.useCPSATSeed,
+            windowThreshold: schedulingFeatures.cpSATWindowThreshold
+        ))
+        let (anchorSeed, anchorProvenance) = seeder.makeAnchor(
+            context: adjustedContext,
+            mode: .firstRun
+        )
+        let anchorSource = anchorProvenance.logLabel
+        let cpSATDurationMs = anchorProvenance.cpsatDurationMs
 
         // GA-config dispatch: we now always have an anchor — the GA's
         // job is to polish or refine around it. The choice between
@@ -1412,11 +1402,19 @@ final class BuboOptimizer {
         reopt.stabilityWeight = stabilityWeight
         reopt.minimumImprovement = minimumImprovement
 
+        // Wire the same CP-SAT infrastructure `optimize()` uses so
+        // the reopt path can produce a warm-started CP-SAT anchor
+        // via `AnchorSeeder`. Callers of `BuboOptimizer.reoptimize`
+        // pass raw contexts that typically don't plumb a repairer
+        // themselves; injecting it here keeps the feature-flag
+        // decision centralised in this file.
+        let reoptContext = makeReoptContext(from: context)
+
         let result = await Task.detached(priority: .userInitiated) {
             reopt.reoptimize(
                 currentSchedule: schedule,
                 trigger: trigger,
-                context: context,
+                context: reoptContext,
                 evaluator: evaluator,
                 config: .quick
             )
@@ -1442,6 +1440,7 @@ final class BuboOptimizer {
 
         let evaluator = FitnessEvaluator.standard(preferences: prefs)
         let schedule = currentSchedule
+        let reoptContext = makeReoptContext(from: context)
 
         let result = await Task.detached(priority: .userInitiated) {
             let reopt = IncrementalReoptimizer()
@@ -1451,13 +1450,44 @@ final class BuboOptimizer {
             return reopt.reoptimize(
                 currentSchedule: schedule,
                 trigger: .periodicRefresh,
-                context: context,
+                context: reoptContext,
                 evaluator: evaluator,
                 config: .instant
             )
         }.value
 
         return result?.scenarios.first?.genes
+    }
+
+    /// Produce a reopt-ready copy of a caller-supplied context that
+    /// carries the CP-SAT repairer and window threshold currently
+    /// configured via `schedulingFeatures`. Returned unchanged when
+    /// the caller already supplied a repairer (tests) or when the
+    /// feature flag is off.
+    private func makeReoptContext(from context: OptimizerContext) -> OptimizerContext {
+        if context.cpSATRepairer != nil || !schedulingFeatures.useCPSATSeed {
+            return context
+        }
+        return OptimizerContext(
+            fixedEvents: context.fixedEvents,
+            movableEvents: context.movableEvents,
+            workingHours: context.workingHours,
+            planningHorizon: context.planningHorizon,
+            preferences: context.preferences,
+            participantAvailability: context.participantAvailability,
+            calendar: context.calendar,
+            rng: context.rng,
+            mutationBandit: context.mutationBandit,
+            lnsStrategyBandit: context.lnsStrategyBandit,
+            lnsRepairBandit: context.lnsRepairBandit,
+            contextualCrossoverHead: context.contextualCrossoverHead,
+            conflictGraphHolder: context.conflictGraphHolder,
+            tabuMemory: context.tabuMemory,
+            cpSATRepairer: CPSATRepairer(),
+            cpSATWindowThreshold: schedulingFeatures.cpSATWindowThreshold,
+            slotRegistryHolder: context.slotRegistryHolder,
+            slotDomainsHolder: context.slotDomainsHolder
+        )
     }
 
     // MARK: - User Feedback (#24)
