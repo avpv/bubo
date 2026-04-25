@@ -481,7 +481,7 @@ final class BuboOptimizer {
             }
         }
 
-        var hookComponents: [EvolutionHooks<ScheduleChromosome>] = [
+        let hookComponents: [EvolutionHooks<ScheduleChromosome>] = [
             ScheduleEvolutionHooks.qualityDiversityFeeding(archive: qdArchive),
             ScheduleEvolutionHooks.qualityDiversityEmission(archive: qdArchive, emissionRate: 0.12),
             ScheduleEvolutionHooks.gradientRefinement(

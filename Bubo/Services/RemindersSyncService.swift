@@ -102,11 +102,11 @@ final class RemindersSyncService {
     init(
         settings: ReminderSettings,
         backlogService: BacklogService,
-        remindersSource: any RemindersEventSource = AppleRemindersService.shared
+        remindersSource: (any RemindersEventSource)? = nil
     ) {
         self.settings = settings
         self.backlogService = backlogService
-        self.remindersSource = remindersSource
+        self.remindersSource = remindersSource ?? AppleRemindersService.shared
         self.dismissedReminderIds = Self.loadDismissedIds()
 
         // Listen for external changes (user edits Reminders.app, iCloud sync).

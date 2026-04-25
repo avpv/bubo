@@ -61,7 +61,7 @@ final class QueryTracker: Sendable {
     /// Record that the current query depends on `input`. Idempotent
     /// — multiple reads of the same input collapse to one entry.
     func read(_ input: QueryKey) {
-        recorded.withLock { $0.insert(input) }
+        recorded.withLock { _ = $0.insert(input) }
     }
 
     /// Read snapshot of the recorded dependency set. Called by the

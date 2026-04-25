@@ -20,6 +20,7 @@ struct FetchedReminder: Sendable, Equatable {
 /// plus a handful of verbs. Notification names (`remindersDataChanged`,
 /// `authorizationDidChange`) stay on `AppleRemindersService` as static
 /// topics; tests post them directly to trigger observers.
+@MainActor
 protocol RemindersEventSource: AnyObject {
     var hasAccess: Bool { get }
 

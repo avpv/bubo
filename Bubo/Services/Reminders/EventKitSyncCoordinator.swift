@@ -199,19 +199,19 @@ final class EventKitSyncCoordinator {
             guard !Task.isCancelled else { return }
             self?.fetchAndUpdate()
 
-            calendarSource.triggerRemoteRefresh()
+            self?.calendarSource.triggerRemoteRefresh()
 
             try? await Task.sleep(for: .seconds(12))
             guard !Task.isCancelled else { return }
             self?.fetchAndUpdate()
 
-            calendarSource.triggerRemoteRefresh()
+            self?.calendarSource.triggerRemoteRefresh()
 
             try? await Task.sleep(for: .seconds(30))
             guard !Task.isCancelled else { return }
             self?.fetchAndUpdate()
 
-            calendarSource.triggerRemoteRefresh()
+            self?.calendarSource.triggerRemoteRefresh()
 
             try? await Task.sleep(for: .seconds(60))
             guard !Task.isCancelled else { return }

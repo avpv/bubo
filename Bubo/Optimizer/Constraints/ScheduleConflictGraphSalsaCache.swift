@@ -136,14 +136,6 @@ final class ScheduleConflictGraphSalsaCache: Sendable {
         )
         touchWholeGraphLRU(graphKey)
 
-        // Pre-index events by id so the reachability oracle (and
-        // metadata query below) can look up dependency lists in
-        // O(1). The oracle captures this dictionary by reference;
-        // Swift's value-semantics mean no mutation leaks.
-        let eventByIdLookup: [String: OptimizableEvent] = Dictionary(
-            uniqueKeysWithValues: events.map { ($0.id, $0) }
-        )
-
         return graphDB.query(graphKey) { tracker in
             // This closure runs only on cache miss, so timing and
             // logging live here directly — no out-of-band flag
