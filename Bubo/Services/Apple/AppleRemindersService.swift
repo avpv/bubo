@@ -171,7 +171,7 @@ final class AppleRemindersService {
             context: reminder.calendar.title,
             notes: strippedNotes,
             url: parsedURL,
-            location: reminder.structuredLocation?.title ?? reminder.location,
+            location: reminder.location,
             createdAt: reminder.creationDate ?? Date()
         )
     }
@@ -211,7 +211,6 @@ final class AppleRemindersService {
         reminder.notes = Self.composeNotes(notes: task.notes, url: task.url)
         if let loc = task.location, !loc.isEmpty {
             reminder.location = loc
-            reminder.structuredLocation = EKStructuredLocation(title: loc)
         }
 
         if let deadline = task.deadline {
@@ -269,7 +268,6 @@ final class AppleRemindersService {
         }
         if reminder.location != newLocation {
             reminder.location = newLocation
-            reminder.structuredLocation = newLocation.map { EKStructuredLocation(title: $0) }
             didChange = true
         }
         if reminder.isCompleted != shouldBeDone {

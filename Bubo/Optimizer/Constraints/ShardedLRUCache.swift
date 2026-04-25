@@ -175,10 +175,9 @@ final class ShardedLRUCache<Value: Sendable>: Sendable {
         var totalHits = 0
         var totalMisses = 0
         for shard in shards {
-            shard.withLock { state in
-                totalHits += state.hits
-                totalMisses += state.misses
-            }
+            let (h, m) = shard.withLock { state in (state.hits, state.misses) }
+            totalHits += h
+            totalMisses += m
         }
         let total = totalHits + totalMisses
         guard total > 0 else { return 0 }
@@ -190,7 +189,7 @@ final class ShardedLRUCache<Value: Sendable>: Sendable {
     var count: Int {
         var sum = 0
         for shard in shards {
-            shard.withLock { state in sum += state.entries.count }
+            sum += shard.withLock { state in state.entries.count }
         }
         return sum
     }

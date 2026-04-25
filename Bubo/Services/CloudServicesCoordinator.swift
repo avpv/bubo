@@ -41,11 +41,11 @@ final class CloudServicesCoordinator {
     private(set) var isRunning: Bool = false
 
     init(
-        cloudKit: any CloudKitSyncMonitoring = CloudKitSyncMonitor.shared,
-        keyValue: any CloudKeyValueSyncing = CloudSyncService.shared
+        cloudKit: (any CloudKitSyncMonitoring)? = nil,
+        keyValue: (any CloudKeyValueSyncing)? = nil
     ) {
-        self.cloudKit = cloudKit
-        self.keyValue = keyValue
+        self.cloudKit = cloudKit ?? CloudKitSyncMonitor.shared
+        self.keyValue = keyValue ?? CloudSyncService.shared
     }
 
     /// Start both transports. Safe to call multiple times — the

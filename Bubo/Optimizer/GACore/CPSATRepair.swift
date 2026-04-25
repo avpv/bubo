@@ -296,13 +296,14 @@ final class CPSATRepairer: @unchecked Sendable {
         var totalNoGoods = 0
 
         for (idx, tier) in tiers.enumerated() {
+            let lockedSnapshot = lockedOptima
             let scorer: @Sendable ([Int: Date]) -> Double = { assignment in
                 // Reject branches that regress on any previously-
                 // locked tier. The `-infinity` sentinel forces the
                 // CDCL-lite search to treat this as infeasible and
                 // learn a no-good, just as it would for a
                 // constraint-graph dead-end.
-                for (i, optimum) in lockedOptima.enumerated() {
+                for (i, optimum) in lockedSnapshot.enumerated() {
                     let current = tiers[i].extract(assignment)
                     if current < optimum - tolerance {
                         return -Double.infinity

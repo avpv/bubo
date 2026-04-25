@@ -617,7 +617,6 @@ struct ScheduleChromosome: Chromosome, AdaptiveMutationChromosome, Sendable {
         guard let repairer = context.cpSATRepairer else { return nil }
         guard !context.movableEvents.isEmpty else { return nil }
 
-        let cal = context.calendar
         let prefs = context.preferences
         let workingDays = prefs.workingDays
         let slotRegistry = context.ensureSlotRegistry()

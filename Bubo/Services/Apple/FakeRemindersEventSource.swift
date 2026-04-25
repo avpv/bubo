@@ -6,6 +6,7 @@ import Foundation
 /// `FakeCalendarEventSource`: record every call, expose the underlying
 /// store as `tasks` so fetches return canned slices and mutations land
 /// locally. Lives in the app target so SwiftUI previews can use it too.
+@MainActor
 final class FakeRemindersEventSource: RemindersEventSource {
     enum Invocation: Equatable {
         case fetch(listIds: [String], defaultDuration: Int)
