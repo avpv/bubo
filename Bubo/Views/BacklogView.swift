@@ -21,6 +21,11 @@ struct BacklogView: View {
     var reminderService: ReminderService
     var onScheduleTasks: () -> Void
     var onDeleteTask: ((BacklogTask) -> Void)?
+    /// Fired when the user asks to edit a task. The parent owns navigation
+    /// state and pushes the editor onto the popover stack — same pattern
+    /// as event editing — so the editor opens as a full-screen sibling
+    /// surface instead of a detached sheet floating above the list.
+    var onEditTask: ((BacklogTask) -> Void)? = nil
     /// Fired for any reversible user action (reorder, complete, cross-context
     /// drop) so the parent can surface a unified undo toast — it owns
     /// `ToastState`. nil silently disables the toast; the action still runs.
@@ -53,21 +58,14 @@ struct BacklogView: View {
     /// Birman: «информация важнее украшений» — шеврон сам несёт три смысла
     /// (collapsed / compact / expanded), без дублирующей кнопки «Show more».
     @State private var expansion: TaskListExpansion = .collapsed
-    /// Task being edited in the inspector sheet. Presenting the editor in a
-    /// sheet rather than inline removes the list's previous three-way
-    /// tangle — edit-expansion snapshot, drag-expansion snapshot, and live
-    /// `expansion` — down to one channel (drag only). Apple HIG: an inspector
-    /// is a sibling surface, not a row that grows to 10x its height inside
-    /// the list it belongs to.
-    @State private var editingTask: BacklogTask? = nil
     /// Snapshot of `expansion` captured the moment a drag starts. During a
     /// drag the list flips to `.expanded` so the user sees every reorder
     /// target at once, and the pre-drag state is restored when the drag
     /// ends.
     @State private var expansionBeforeDrag: TaskListExpansion? = nil
     /// Measured height of the hosting popover. Drives the dynamic ceiling
-    /// for the fully-expanded and editing states so large screens are not
-    /// forced into a 480pt cap. Zero until the first layout pass.
+    /// for the fully-expanded state so large screens are not forced into a
+    /// 480pt cap. Zero until the first layout pass.
     @State private var measuredHostHeight: CGFloat = 0
     /// Hover state for the Schedule pill — HIG: primary actions should read as
     /// buttons, so a subtle capsule фон появляется на наведении.
@@ -271,14 +269,6 @@ struct BacklogView: View {
         // via `NSApp.windows` lazily (not a GeometryReader on self, which
         // would cycle: list height → host height → list height).
         .background(hostHeightProbe)
-        .sheet(item: $editingTask) { task in
-            BacklogTaskInspector(
-                task: task,
-                backlogService: backlogService,
-                onDone: { editingTask = nil }
-            )
-            .environment(\.activeSkin, skin)
-        }
         .onChange(of: focusRequested) { _, requested in
             if requested {
                 isInputFocused = true
@@ -705,9 +695,11 @@ struct BacklogView: View {
         }
     }
 
-    /// Read-only row. Editing lives in the inspector sheet (`editingTask`
-    /// binding on the outer view), so the row no longer has to swap
-    /// between a display and edit representation mid-list.
+    /// Read-only row. Editing pushes a full-screen `EditTaskView` onto the
+    /// popover navigation stack via `onEditTask` — same pattern as event
+    /// editing — so the row no longer has to swap between a display and
+    /// edit representation mid-list, and the editor isn't a detached
+    /// modal floating above the list.
     @ViewBuilder
     private func taskRowBody(_ task: BacklogTask) -> some View {
         BacklogTaskRow(
@@ -718,7 +710,7 @@ struct BacklogView: View {
             canMoveDown: canMoveDown(task),
             isSprintMode: isSprintMode,
             onComplete: { completeTaskWithUndo(task) },
-            onEdit: { editingTask = task },
+            onEdit: { onEditTask?(task) },
             onDelete: { onDeleteTask?(task) },
             onFreeze: { freezeTaskWithUndo(task) },
             onDragStart: {
