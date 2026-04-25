@@ -57,6 +57,7 @@ struct MenuBarView: View {
         case list
         case detail(CalendarEvent)
         case addEvent(editing: CalendarEvent? = nil, initialType: EventType = .standard)
+        case editTask(BacklogTask)
         case timer(CalendarEvent)
         case quickAddTasks
 
@@ -70,6 +71,7 @@ struct MenuBarView: View {
             case (.list, .list): return true
             case (.detail(let a), .detail(let b)): return a.id == b.id
             case (.addEvent(let a, let t1), .addEvent(let b, let t2)): return a?.id == b?.id && t1 == t2
+            case (.editTask(let a), .editTask(let b)): return a.id == b.id
             case (.timer(let a), .timer(let b)): return a.id == b.id
             case (.quickAddTasks, .quickAddTasks): return true
             default: return false
@@ -224,6 +226,32 @@ struct MenuBarView: View {
                             removal: .move(edge: .trailing).combined(with: .opacity).combined(with: .scale(scale: 0.98))
                         )
                     )
+
+                case .editTask(let task):
+                    if let backlog = optimizerService.backlogService {
+                        // Pull the live task by id every render so external
+                        // mutations (sync, completion, dependency edits in
+                        // another row) don't get reverted by stale state.
+                        let liveTask = backlog.tasks.first(where: { $0.id == task.id }) ?? task
+                        EditTaskView(
+                            task: liveTask,
+                            backlogService: backlog,
+                            onDismiss: { navigation = .list },
+                            onSave: {
+                                navigation = .list
+                                toastState.showSuccess("Task updated", icon: "checkmark.circle.fill")
+                            }
+                        )
+                        .transition(
+                            reduceMotion ? .opacity : .asymmetric(
+                                insertion: .move(edge: .trailing).combined(with: .opacity),
+                                removal: .move(edge: .trailing).combined(with: .opacity).combined(with: .scale(scale: 0.98))
+                            )
+                        )
+                    } else {
+                        EmptyView()
+                            .onAppear { navigation = .list }
+                    }
 
                 case .quickAddTasks:
                     // Backlog is now inline — return to list and focus the task input.
@@ -613,6 +641,9 @@ struct MenuBarView: View {
                     toastState.showSuccess("\u{201C}\(task.title)\u{201D} deleted", icon: "trash.fill") {
                         backlog.restoreTask(task, at: originalIndex)
                     }
+                },
+                onEditTask: { task in
+                    navigation = .editTask(task)
                 },
                 onUndoableAction: { message, undo in
                     // Unified undo pipe for reorder / complete / context

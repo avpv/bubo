@@ -402,9 +402,9 @@ final class SlotPreviewCacheTests: XCTestCase {
     }
 }
 
-// MARK: - BacklogTaskEditRow dependency filter tests
+// MARK: - EditTaskView dependency filter tests
 
-final class BacklogTaskEditRowFilterTests: XCTestCase {
+final class EditTaskViewFilterTests: XCTestCase {
 
     private func task(_ id: String, title: String, context: String? = nil) -> BacklogTask {
         BacklogTask(id: id, title: title, durationMinutes: 60, priority: .medium, context: context)
@@ -412,13 +412,13 @@ final class BacklogTaskEditRowFilterTests: XCTestCase {
 
     func testEmptyQueryReturnsAll() {
         let tasks = [task("a", title: "Alpha"), task("b", title: "Beta")]
-        let result = BacklogTaskEditRow.filterDependencyCandidates(tasks, query: "")
+        let result = EditTaskView.filterDependencyCandidates(tasks, query: "")
         XCTAssertEqual(result.map(\.id), ["a", "b"])
     }
 
     func testSubstringMatchesTitle() {
         let tasks = [task("a", title: "Write spec"), task("b", title: "Review PR")]
-        let result = BacklogTaskEditRow.filterDependencyCandidates(tasks, query: "spec")
+        let result = EditTaskView.filterDependencyCandidates(tasks, query: "spec")
         XCTAssertEqual(result.map(\.id), ["a"])
     }
 
@@ -427,19 +427,19 @@ final class BacklogTaskEditRowFilterTests: XCTestCase {
             task("a", title: "Alpha", context: "Backend"),
             task("b", title: "Beta", context: "UI"),
         ]
-        let result = BacklogTaskEditRow.filterDependencyCandidates(tasks, query: "back")
+        let result = EditTaskView.filterDependencyCandidates(tasks, query: "back")
         XCTAssertEqual(result.map(\.id), ["a"])
     }
 
     func testSearchIsCaseInsensitive() {
         let tasks = [task("a", title: "Ship QA bundle")]
-        let result = BacklogTaskEditRow.filterDependencyCandidates(tasks, query: "SHIP")
+        let result = EditTaskView.filterDependencyCandidates(tasks, query: "SHIP")
         XCTAssertEqual(result.map(\.id), ["a"])
     }
 
     func testWhitespaceOnlyQueryReturnsAll() {
         let tasks = [task("a", title: "Alpha"), task("b", title: "Beta")]
-        let result = BacklogTaskEditRow.filterDependencyCandidates(tasks, query: "   ")
+        let result = EditTaskView.filterDependencyCandidates(tasks, query: "   ")
         XCTAssertEqual(result.map(\.id), ["a", "b"])
     }
 }
