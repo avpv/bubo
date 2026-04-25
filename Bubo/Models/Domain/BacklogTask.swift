@@ -31,6 +31,22 @@ struct BacklogTask: Identifiable, Codable, Hashable, Sendable {
     var isRecurring: Bool = false
     var recurrenceTag: String? = nil
 
+    /// Free-form description / markdown notes. Round-trips through Apple
+    /// Reminders' `notes` field so everything a user writes on iPhone
+    /// shows up here and vice versa.
+    var notes: String?
+
+    /// Optional link associated with the task (doc, ticket, meeting URL).
+    /// Stored separately so the editor can offer an "Open link" action —
+    /// Apple Reminders has no dedicated URL field in `EKReminder`, so the
+    /// sync layer round-trips this through `notes` with a sentinel line.
+    var url: URL?
+
+    /// Free-form location string (address, room, "Remote"). Paired with the
+    /// EKReminder `structuredLocation` on export so iPhone / iPad Reminders
+    /// can fire arrival alerts.
+    var location: String?
+
     /// Last mutation timestamp — used by iCloud sync to resolve conflicts
     /// when the same task was edited on two devices.  Optional for backward
     /// compatibility with data serialized before this field existed.
@@ -71,6 +87,9 @@ struct BacklogTask: Identifiable, Codable, Hashable, Sendable {
         preferredPeriod: Period? = nil,
         isRecurring: Bool = false,
         recurrenceTag: String? = nil,
+        notes: String? = nil,
+        url: URL? = nil,
+        location: String? = nil,
         createdAt: Date = Date()
     ) {
         self.id = id
@@ -85,6 +104,9 @@ struct BacklogTask: Identifiable, Codable, Hashable, Sendable {
         self.preferredPeriod = preferredPeriod
         self.isRecurring = isRecurring
         self.recurrenceTag = recurrenceTag
+        self.notes = notes
+        self.url = url
+        self.location = location
         self.createdAt = createdAt
     }
 }
