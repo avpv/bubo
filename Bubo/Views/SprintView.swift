@@ -424,7 +424,14 @@ struct SprintView: View {
                         // Первая строка в Sprint mode получает «now playing»
                         // полосу — визуальный ответ на «с чего начать?». В
                         // `.all` строки равноценны, метка не появляется.
-                        row(for: task, isPrimary: mode == .sprint && index == 0)
+                        // Hot-key digit передаётся первым maxSprintTasks
+                        // строкам в Sprint mode — checkbox tooltip учит
+                        // «press N to complete» при наведении.
+                        row(
+                            for: task,
+                            isPrimary: mode == .sprint && index == 0,
+                            sprintHotKey: (mode == .sprint && index < Self.maxSprintTasks) ? index + 1 : nil
+                        )
                     }
                     tombstones
                 }
@@ -491,7 +498,7 @@ struct SprintView: View {
     // MARK: - Task row
 
     @ViewBuilder
-    private func row(for task: BacklogTask, isPrimary: Bool) -> some View {
+    private func row(for task: BacklogTask, isPrimary: Bool, sprintHotKey: Int?) -> some View {
         HStack(spacing: 0) {
             // Sprint-mode rows get a «now playing» gutter on the left:
             // accent bar on the primary (first) row, transparent reservation
@@ -519,7 +526,8 @@ struct SprintView: View {
                 onComplete: { complete(task) },
                 onEdit: { onEditTask(task) },
                 onDelete: { delete(task) },
-                onFreeze: { freeze(task) }
+                onFreeze: { freeze(task) },
+                sprintHotKey: sprintHotKey
             )
         }
     }
