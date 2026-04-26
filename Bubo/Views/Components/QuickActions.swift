@@ -106,6 +106,11 @@ struct QuickActions: View {
                     .buttonStyle(.plain)
                     .disabled(isRunning)
                     .opacity(isRunning ? DS.Opacity.half : 1)
+                    // «Why is this chip here?» — chips swap in/out as context
+                    // shifts, and без подсказки выглядят как фокусы. Tooltip
+                    // показывает сигнал, который вынес действие в top-3,
+                    // делая ранжер видимой машинерией, а не магией.
+                    .help(scored.reason.isEmpty ? scored.action.label : scored.reason)
                 }
             }
         }

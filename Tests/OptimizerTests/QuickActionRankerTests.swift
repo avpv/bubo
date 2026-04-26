@@ -124,6 +124,38 @@ final class QuickActionRankerTests: XCTestCase {
         XCTAssertEqual(score(.alwaysAvailable, hour: 0), 0.3)
     }
 
+    // MARK: - reason
+
+    func testReasonForOverdueIncludesCount() {
+        let r = reason(.overdueExists, overdue: 3)
+        XCTAssertTrue(r.contains("3"))
+        XCTAssertTrue(r.lowercased().contains("overdue"))
+    }
+
+    func testReasonHandlesSingularPlural() {
+        XCTAssertTrue(reason(.urgentDeadline, urgent: 1).contains("1 deadline within"))
+        XCTAssertTrue(reason(.urgentDeadline, urgent: 5).contains("5 deadlines within"))
+    }
+
+    func testReasonForPendingIncludesCount() {
+        let r = reason(.pendingTasks, pending: 7)
+        XCTAssertTrue(r.contains("7"))
+        XCTAssertTrue(r.lowercased().contains("schedule"))
+    }
+
+    func testReasonForMeetingsIncludesCount() {
+        let r = reason(.meetingHeavy, meetings: 6)
+        XCTAssertTrue(r.contains("6"))
+        XCTAssertTrue(r.lowercased().contains("meeting"))
+    }
+
+    func testReasonAlwaysAvailableIsEmpty() {
+        // Tooltip falls back to the chip label, not a tautological «Always
+        // available» — the QuickActions view handles that by checking
+        // `reason.isEmpty`.
+        XCTAssertEqual(reason(.alwaysAvailable), "")
+    }
+
     // MARK: - Helpers
 
     /// Builds a `ContextInputs` with caller-supplied overrides and delegates
@@ -146,5 +178,27 @@ final class QuickActionRankerTests: XCTestCase {
             meetingsTodayCount: meetings
         )
         return QuickActionRanker.contextScore(for: signal, inputs: inputs)
+    }
+
+    /// Same shape as `score` but for the new `reason` static helper —
+    /// keeps reason tests as one-liners.
+    private func reason(
+        _ signal: ContextSignal,
+        overdue: Int = 0,
+        urgent: Int = 0,
+        pending: Int = 0,
+        meetings: Int = 0,
+        hour: Int = 9,
+        hasFocus: Bool = false
+    ) -> String {
+        let inputs = QuickActionRanker.ContextInputs(
+            overdueCount: overdue,
+            urgentCount: urgent,
+            pendingCount: pending,
+            hour: hour,
+            hasFocusToday: hasFocus,
+            meetingsTodayCount: meetings
+        )
+        return QuickActionRanker.reason(for: signal, inputs: inputs)
     }
 }
