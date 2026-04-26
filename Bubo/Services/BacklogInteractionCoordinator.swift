@@ -6,11 +6,12 @@ import UniformTypeIdentifiers
 
 /// Payload dragged out of the backlog.
 ///
-/// The drag handle uses `.onDrag` (NSItemProvider with `public.json`)
-/// to initiate the drag, and drop targets use `.dropDestination(for:)`
-/// with this type's `CodableRepresentation`. Both sides agree on the
-/// `.json` UTType so the pasteboard round-trip works without a custom
-/// UTType declaration.
+/// The row itself uses `.onDrag` (NSItemProvider with `public.json`)
+/// to initiate the drag — long-press anywhere on the row, no visible
+/// handle (Apple Reminders / Things pattern). Drop targets use
+/// `.dropDestination(for:)` with this type's `CodableRepresentation`.
+/// Both sides agree on the `.json` UTType so the pasteboard round-trip
+/// works without a custom UTType declaration.
 struct BacklogTaskDrag: Codable, Transferable, Hashable {
     let taskId: String
     let title: String

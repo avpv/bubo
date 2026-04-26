@@ -128,11 +128,8 @@ struct BacklogTaskRow: View {
 
     var body: some View {
         HStack(spacing: DS.Spacing.sm) {
-            // Drag handle and trailing controls vanish in sprint mode so the
-            // row reads as a quiet single column — «один режим, одна цель».
-            if !isSprintMode {
-                dragHandle
-            }
+            // Trailing controls vanish in sprint mode so the row reads as a
+            // quiet single column — «один режим, одна цель».
             checkbox
             content
             Spacer(minLength: DS.Spacing.xs)
@@ -152,6 +149,45 @@ struct BacklogTaskRow: View {
                 isHovered = hovering
             }
             onHoverChanged(hovering)
+        }
+        // Drag source = the entire row. Apple Reminders / Things pattern:
+        // press-and-hold lifts the row, then drag. No visible handle —
+        // `.onDrag` on macOS already gates on press-and-hold, and the cursor
+        // turns into a grab on hover. Inner Buttons still take taps because
+        // they consume mouseDown without movement.
+        .onDrag {
+            onDragStart()
+            let payload = BacklogTaskDrag(
+                taskId: task.id,
+                title: task.title,
+                durationMinutes: task.durationMinutes,
+                context: task.context
+            )
+            let provider = NSItemProvider()
+            if let data = try? JSONEncoder().encode(payload) {
+                provider.registerDataRepresentation(
+                    forTypeIdentifier: UTType.json.identifier,
+                    visibility: .ownProcess
+                ) { completion in
+                    completion(data, nil)
+                    return nil
+                }
+            }
+            return provider
+        } preview: {
+            HStack(spacing: DS.Spacing.xs) {
+                Image(systemName: "calendar.badge.plus")
+                    .font(.caption)
+                Text(task.title)
+                    .font(.caption.weight(.medium))
+                Text(DS.formatMinutes(task.durationMinutes))
+                    .font(.caption2)
+                    .foregroundStyle(skin.resolvedTextSecondary)
+            }
+            .padding(.horizontal, DS.Spacing.sm)
+            .padding(.vertical, DS.Spacing.xs)
+            .background(skin.resolvedButtonMaterial, in: Capsule())
+            .onDisappear { onDragEnd() }
         }
         .dropDestination(for: BacklogTaskDrag.self) { items, _ in
             guard let dropped = items.first, dropped.taskId != task.id else { return false }
@@ -226,62 +262,6 @@ struct BacklogTaskRow: View {
     }
 
     // MARK: - Row sub-views
-
-    /// Drag handle — the ONLY drag source on this row.
-    ///
-    /// Uses .onDrag (NSItemProvider API) instead of .draggable
-    /// (Transferable API). On macOS, .draggable() fails to start
-    /// NSDrag sessions inside popover windows and when competing
-    /// with child gestures. .onDrag uses NSItemProvider directly,
-    /// bypassing the Transferable encoding path that silently
-    /// breaks in these contexts.
-    ///
-    /// Birman: hover-only — affordance, который вечно светится, становится
-    /// шумом. Курсор и так подскажет grab при наведении; онбординг живёт
-    /// на самой цели — в `FreeSlotRow` через `canShowDragHint`.
-    private var dragHandle: some View {
-        Image(systemName: "line.3.horizontal")
-            .font(.caption2)
-            .foregroundStyle(skin.resolvedTextTertiary)
-            .frame(width: DS.Size.iconLarge, height: DS.Size.accentBarHeight)
-            .contentShape(Rectangle())
-            .opacity(isHovered ? 1 : 0)
-            .accessibilityHidden(true)
-            .onDrag {
-                onDragStart()
-                let payload = BacklogTaskDrag(
-                    taskId: task.id,
-                    title: task.title,
-                    durationMinutes: task.durationMinutes,
-                    context: task.context
-                )
-                let provider = NSItemProvider()
-                if let data = try? JSONEncoder().encode(payload) {
-                    provider.registerDataRepresentation(
-                        forTypeIdentifier: UTType.json.identifier,
-                        visibility: .ownProcess
-                    ) { completion in
-                        completion(data, nil)
-                        return nil
-                    }
-                }
-                return provider
-            } preview: {
-                HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: "calendar.badge.plus")
-                        .font(.caption)
-                    Text(task.title)
-                        .font(.caption.weight(.medium))
-                    Text(DS.formatMinutes(task.durationMinutes))
-                        .font(.caption2)
-                        .foregroundStyle(skin.resolvedTextSecondary)
-                }
-                .padding(.horizontal, DS.Spacing.sm)
-                .padding(.vertical, DS.Spacing.xs)
-                .background(skin.resolvedButtonMaterial, in: Capsule())
-                .onDisappear { onDragEnd() }
-            }
-    }
 
     /// Checkbox — complete on tap.
     /// HIG: controls should be at least 24pt on a side; the ~17pt glyph
