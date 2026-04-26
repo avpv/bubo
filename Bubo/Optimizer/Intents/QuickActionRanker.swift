@@ -39,7 +39,8 @@ struct QuickActionRanker {
         let scored = candidates.map { candidate in
             ScoredAction(
                 action: candidate,
-                score: score(candidate, inputs: inputs, now: now)
+                score: score(candidate, inputs: inputs, now: now),
+                reason: Self.reason(for: candidate.signal, inputs: inputs)
             )
         }
         return scored
@@ -57,6 +58,44 @@ struct QuickActionRanker {
         var id: String { action.id }
         let action: QuickActionCandidate
         let score: Double
+        /// Human-readable reason this action surfaced in the chip row.
+        /// Surfaced via `.help(...)` on each chip so the user can audit
+        /// «why is this here?» — Бирман: делайте машинерию видимой,
+        /// не магической. Empty string for `.alwaysAvailable` chips
+        /// (the answer would be tautological).
+        let reason: String
+    }
+
+    /// Maps a context signal + inputs to a short human-readable reason.
+    /// Used as the tooltip on each surfaced chip so users can audit
+    /// the ranker's decisions.
+    nonisolated static func reason(
+        for signal: ContextSignal,
+        inputs: ContextInputs
+    ) -> String {
+        switch signal {
+        case .overdueExists:
+            let n = inputs.overdueCount
+            return "\(n) overdue task\(n == 1 ? "" : "s")"
+        case .urgentDeadline:
+            let n = inputs.urgentCount
+            return "\(n) deadline\(n == 1 ? "" : "s") within 2 days"
+        case .pendingTasks:
+            let n = inputs.pendingCount
+            return "\(n) task\(n == 1 ? "" : "s") to schedule"
+        case .noFocusToday:
+            return "No focus block today"
+        case .meetingHeavy:
+            return "\(inputs.meetingsTodayCount) meetings today"
+        case .morningOrganize:
+            return "Morning planning window"
+        case .planTomorrow:
+            return "Plan tomorrow before signing off"
+        case .lowEnergy:
+            return "Post-lunch energy dip"
+        case .alwaysAvailable:
+            return ""
+        }
     }
 
     // MARK: - Context inputs

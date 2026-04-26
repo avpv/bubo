@@ -192,8 +192,10 @@ struct BacklogView: View {
     ///
     /// - `.compact`: sums the first `maxExpandedTasks` row heights so the
     ///   visible area always fits 4 task rows, keeping the timeline reachable.
-    /// - `.expanded`: `min(contentHeight, fullyExpandedMaxHeight)` — shows
-    ///   every task up to a generous cap, longer lists scroll internally.
+    /// - `.expanded`: internal-only — entered programmatically while a drag
+    ///   is in flight so all reorder targets are visible. Не достижимо через
+    ///   шеврон; для пользовательского «весь список» теперь служит SprintView
+    ///   (отдельный fullscreen-аффорданс в header'е).
     /// - `.collapsed`: zero (list hidden entirely).
     private var scrollMaxHeight: CGFloat {
         // Single-line row — see `compactRowHeight`. No extra inter-row
@@ -402,6 +404,14 @@ struct BacklogView: View {
                     optimizerService: optimizerService
                 )
                 .help(capacityRingTooltip)
+
+                // Numbers next to the ring — turns the colour-only signal
+                // («red, orange, green») into glanceable data («5 h / 3 h»).
+                // Tooltip stays for the «what does this mean?» path.
+                BacklogCapacityLabel(
+                    pendingMinutes: pendingWorkloadMinutes,
+                    remainingWorkdayMinutes: remainingWorkdayMinutes
+                )
             }
 
             Button {
@@ -429,6 +439,17 @@ struct BacklogView: View {
             .buttonStyle(.plain)
             .help(expansion.accessibilityHint)
 
+            // Smart-sort indicator — видимое состояние «список не в моём
+            // порядке». Раньше тоггл жил только в overflow, и пользователь
+            // мог часами пытаться понять, почему задачи переставлены: ON
+            // включал, а UI не сигналил. Теперь когда сортировка активна —
+            // в header'е появляется аккуратный wand.and.stars; клик на нём
+            // выключает обратно. Включать всё ещё через overflow (это редкое
+            // действие, не достойно постоянного места в header'е).
+            if useSmartSort {
+                smartSortIndicator
+            }
+
             // Urgent-count pill — now a real control. Clicking it toggles
             // the urgent-only filter. Middot separator visually attaches it
             // to the total count without the two numbers fighting.
@@ -440,17 +461,74 @@ struct BacklogView: View {
             Spacer()
 
             if totalCount > 0 {
-                // Overflow menu holds smart-sort + sprint (was: two cryptic
-                // icon buttons). HIG: secondary actions without a clear
-                // glyph belong in a menu with labels. One icon in the header
-                // + named actions in the dropdown is both calmer and more
-                // discoverable.
+                // Fullscreen affordance — пушит SprintView в навигационный
+                // стек popover'а. Раньше эту роль играл третий клик шеврона
+                // (`chevron.down.2`), но двойная стрелка не считывалась как
+                // «другое состояние» и упиралась в шум остальных карточек,
+                // которые при «expanded» всё равно оставались видны. Теперь
+                // — отдельная кнопка с понятной macOS-идиомой «развернуть».
+                if onEnterSprint != nil {
+                    fullscreenButton
+                }
+                // Overflow menu holds smart-sort. HIG: secondary actions
+                // without a clear glyph belong in a menu with labels.
                 headerOverflowMenu
                 scheduleButton
             }
         }
         .padding(.horizontal, DS.Spacing.sm)
         .padding(.vertical, DS.Spacing.sm)
+    }
+
+    /// Tiny accent-coloured wand pill that lights up in the header whenever
+    /// smart-sort is engaged. Clicking it disables smart-sort and returns
+    /// the list to user drag order. Only rendered when `useSmartSort == true`
+    /// — а когда выключено, контрол не нужен (включается через overflow,
+    /// и пустота в header'е лучше украшения).
+    private var smartSortIndicator: some View {
+        Button {
+            withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+                useSmartSort = false
+            }
+        } label: {
+            Image(systemName: "wand.and.stars")
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(skin.accentColor)
+                .padding(.horizontal, DS.Spacing.xs)
+                .padding(.vertical, DS.Spacing.xxs)
+                .background(
+                    Capsule().fill(skin.accentColor.opacity(DS.Opacity.lightFill))
+                )
+                .overlay(
+                    Capsule().strokeBorder(
+                        skin.accentColor.opacity(DS.Opacity.softAccent),
+                        lineWidth: DS.Border.thin
+                    )
+                )
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .help("Smart sort active — tap to show in user order")
+        .accessibilityLabel("Smart sort active — tap to disable")
+    }
+
+    /// Fullscreen button — `arrow.up.left.and.arrow.down.right` это родная
+    /// macOS-идиома «развернуть на весь экран» (та же стрелка на зелёном
+    /// светофоре окна). Пользователь видит знакомый глиф вместо магической
+    /// двойной шевронной стрелки.
+    private var fullscreenButton: some View {
+        Button {
+            onEnterSprint?()
+        } label: {
+            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(skin.resolvedTextSecondary)
+                .frame(width: DS.Size.iconSmall, height: DS.Size.iconSmall)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Open tasks fullscreen")
+        .accessibilityLabel("Open tasks fullscreen")
     }
 
     /// Red «N urgent» pill — acts as a filter toggle. Selected state gets a
@@ -503,11 +581,9 @@ struct BacklogView: View {
         )
     }
 
-    /// Overflow menu — the single home for secondary view controls
-    /// (smart-sort, sprint mode). Previously these were two bare icon
-    /// buttons in the header; Бирман: «пиктограмма без подписи —
-    /// загадка». Inside the menu each action gets a real verb and
-    /// active state shows the SF Symbol swap.
+    /// Overflow menu — secondary view controls. Sprint mode переехал в
+    /// отдельную fullscreen-кнопку рядом с шевроном — Бирман: умный layer
+    /// должен быть единственной точкой, не дублироваться в overflow.
     private var headerOverflowMenu: some View {
         Menu {
             Button {
@@ -522,14 +598,6 @@ struct BacklogView: View {
                     useSmartSort ? "Show in user order" : "Smart sort",
                     systemImage: useSmartSort ? "wand.and.stars" : "arrow.up.arrow.down"
                 )
-            }
-
-            if onEnterSprint != nil {
-                Button {
-                    onEnterSprint?()
-                } label: {
-                    Label("Sprint mode", systemImage: "bolt")
-                }
             }
         } label: {
             Image(systemName: "ellipsis")
@@ -607,17 +675,21 @@ struct BacklogView: View {
 
     // MARK: - Task List
     //
-    // Three-state disclosure, driven by `expansion`:
+    // Two-state user-facing disclosure, driven by `expansion`:
     //
     // - .collapsed: no task rows — only the header is visible,
     //   keeping the card minimal.
     // - .compact: a height-capped ScrollView, ~4 rows visible, the rest
     //   reached by internal scroll. Preserves the timeline strip below.
-    // - .expanded: cap raised to `fullyExpandedMaxHeight` (~10–11 rows);
-    //   the user explicitly traded timeline space for full visibility.
     //
-    // Birman: один шеврон-триггер несёт все три смысла, без дублирующей
-    // кнопки «Show more».
+    // `.expanded` остаётся внутренним состоянием — в него BacklogView
+    // временно переключается на время drag'а, чтобы все строки-цели
+    // реордера были видны сразу. «Полное раскрытие» как пользовательский
+    // жест переехало в SprintView (fullscreen-кнопка в header'е).
+    //
+    // Birman: один шеврон — два смысла («есть список / нет списка»);
+    // полноэкранное представление — отдельный аффорданс рядом, не третий
+    // клик той же кнопки.
 
     private var taskList: some View {
         // Discoverability hint ("drag onto a free slot") used to live here
@@ -630,8 +702,7 @@ struct BacklogView: View {
                 ScrollView {
                     VStack(spacing: 0) {
                         taskRowsContent(visibleIDs: nil)
-                        completedTombstone
-                        frozenTombstone
+                        tombstones
                     }
                 }
                 .scrollIndicators(.automatic)
@@ -725,192 +796,28 @@ struct BacklogView: View {
         .transition(.opacity.combined(with: .move(edge: .leading)))
     }
 
-    // MARK: - Completed-today tombstone
+    // MARK: - Tombstones
 
-    /// «N completed today» summary + optional expanded list of completed rows.
-    /// Hidden entirely when no tasks were completed today so it doesn't add
-    /// visual weight to the empty state.
-    ///
-    /// Birman: «квартирант, а не жилец» — свёрнуто по умолчанию; клик на
-    /// заполненный чекбокс возвращает задачу обратно в активный список.
+    /// Shared completed-today + frozen summary rows. Click on a filled
+    /// checkmark restores a task, click on a snowflake unfreezes one;
+    /// «Unfreeze all» batch-thaws.
     @ViewBuilder
-    private var completedTombstone: some View {
-        if !completedToday.isEmpty {
-            VStack(spacing: 0) {
-                Button {
-                    withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-                        showCompletedToday.toggle()
-                    }
-                } label: {
-                    HStack(spacing: DS.Spacing.xs) {
-                        Image(systemName: showCompletedToday ? "chevron.down" : "chevron.right")
-                            .font(.caption2)
-                            .contentTransition(.symbolEffect(.replace))
-                        Text("\(completedToday.count) completed today")
-                            .font(.caption2.monospacedDigit())
-                            .contentTransition(.numericText())
-                        Spacer()
-                    }
-                    .foregroundStyle(skin.resolvedTextTertiary)
-                    .padding(.horizontal, DS.Spacing.xs)
-                    .padding(.vertical, DS.Spacing.xs)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("\(completedToday.count) tasks completed today")
-                .accessibilityHint(showCompletedToday ? "Hide completed" : "Show completed")
-
-                if showCompletedToday {
-                    ForEach(completedToday) { task in
-                        completedRow(task)
-                            .transition(.opacity)
-                    }
-                }
-            }
-            .motionAwareAnimation(DS.Animation.standard, value: showCompletedToday, reduceMotion: reduceMotion)
-            .motionAwareAnimation(DS.Animation.quick, value: completedToday.map(\.id), reduceMotion: reduceMotion)
-        }
-    }
-
-    /// One completed-task row. Filled checkmark, dimmed strike-through title.
-    /// Tapping the checkmark restores the task to the active list.
-    @ViewBuilder
-    private func completedRow(_ task: BacklogTask) -> some View {
-        HStack(spacing: DS.Spacing.sm) {
-            // Reserve the same leading gutter as active rows so the checkmark
-            // column aligns vertically — keeps the two lists visually linked.
-            Color.clear
-                .frame(width: DS.Size.iconLarge, height: DS.Size.accentBarHeight)
-
-            Button {
-                uncompleteTask(task)
-            } label: {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.callout)
-                    .foregroundStyle(skin.resolvedTextTertiary)
-                    .frame(width: 24, height: 24)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help("Restore task")
-            .accessibilityLabel("Restore \u{201C}\(task.title)\u{201D}")
-
-            Text(task.title)
-                .font(.callout)
-                .foregroundStyle(skin.resolvedTextTertiary)
-                .strikethrough()
-                .lineLimit(1)
-
-            Spacer()
-        }
-        .padding(.vertical, DS.Spacing.xxs)
-        .padding(.horizontal, DS.Spacing.xs)
-        .frame(minHeight: Self.compactRowHeight)
-    }
-
-    // MARK: - Frozen tombstone
-
-    /// «N frozen» summary + on-demand list of frozen tasks. Follows the same
-    /// "квартирант, а не жилец" pattern as `completedTombstone`: hidden when
-    /// empty, collapsed by default, one tap expands.
-    ///
-    /// The header carries an "Unfreeze all" shortcut — frozen tasks are often
-    /// batch-thawed when priorities shift, and clicking ✕ on each pill would
-    /// be friction the non-destructive freeze is trying to avoid.
-    @ViewBuilder
-    private var frozenTombstone: some View {
-        let frozen = backlogService.frozen
-        if !frozen.isEmpty {
-            VStack(spacing: 0) {
-                HStack(spacing: DS.Spacing.xs) {
-                    Button {
-                        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-                            showFrozen.toggle()
-                        }
-                    } label: {
-                        HStack(spacing: DS.Spacing.xs) {
-                            Image(systemName: showFrozen ? "chevron.down" : "chevron.right")
-                                .font(.caption2)
-                                .contentTransition(.symbolEffect(.replace))
-                            Image(systemName: "snowflake")
-                                .font(.caption2)
-                            Text("\(frozen.count) frozen")
-                                .font(.caption2.monospacedDigit())
-                                .contentTransition(.numericText())
-                            Spacer()
-                        }
-                        .foregroundStyle(skin.resolvedTextTertiary)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("\(frozen.count) frozen tasks")
-
-                    Button("Unfreeze all") {
-                        // Snapshot IDs so undo knows which ones to re-freeze.
-                        let restoredIds = frozen.map(\.id)
-                        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-                            backlogService.unfreezeAll()
-                        }
-                        onUndoableAction?("Unfroze \(restoredIds.count) task\(restoredIds.count == 1 ? "" : "s")") { [backlogService] in
-                            for id in restoredIds { backlogService.freezeTask(id: id) }
-                        }
-                    }
-                    .font(.caption2)
-                    .buttonStyle(.plain)
-                    .foregroundStyle(skin.accentColor)
-                }
-                .padding(.horizontal, DS.Spacing.xs)
-                .padding(.vertical, DS.Spacing.xs)
-
-                if showFrozen {
-                    ForEach(frozen) { task in
-                        frozenRow(task)
-                            .transition(.opacity)
-                    }
-                }
-            }
-            .motionAwareAnimation(DS.Animation.standard, value: showFrozen, reduceMotion: reduceMotion)
-            .motionAwareAnimation(DS.Animation.quick, value: frozen.map(\.id), reduceMotion: reduceMotion)
-        }
-    }
-
-    /// One frozen-task row. Snowflake checkbox; tapping it unfreezes.
-    @ViewBuilder
-    private func frozenRow(_ task: BacklogTask) -> some View {
-        HStack(spacing: DS.Spacing.sm) {
-            Color.clear
-                .frame(width: DS.Size.iconLarge, height: DS.Size.accentBarHeight)
-
-            Button {
-                let snapshot = task
-                withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-                    backlogService.unfreezeTask(id: task.id)
-                }
-                onUndoableAction?("Unfroze \u{201C}\(task.title)\u{201D}") { [backlogService] in
-                    backlogService.updateTask(snapshot)
-                    backlogService.freezeTask(id: snapshot.id)
-                }
-            } label: {
-                Image(systemName: "snowflake")
-                    .font(.callout)
-                    .foregroundStyle(skin.resolvedTextTertiary)
-                    .frame(width: 24, height: 24)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help("Unfreeze task")
-            .accessibilityLabel("Unfreeze \u{201C}\(task.title)\u{201D}")
-
-            Text(task.title)
-                .font(.callout)
-                .foregroundStyle(skin.resolvedTextTertiary)
-                .lineLimit(1)
-
-            Spacer()
-        }
-        .padding(.vertical, DS.Spacing.xxs)
-        .padding(.horizontal, DS.Spacing.xs)
-        .frame(minHeight: Self.compactRowHeight)
+    private var tombstones: some View {
+        BacklogTombstones(
+            completedToday: completedToday,
+            frozen: backlogService.frozen,
+            showCompleted: $showCompletedToday,
+            showFrozen: $showFrozen,
+            // Inline backlog rows have a leading drag-handle column, so we
+            // ask the tombstone to reserve the same gutter and match the
+            // 40pt active-row height — that's what keeps the checkmark
+            // column lined up under the active list above.
+            alignedLeadingGutter: true,
+            minRowHeight: Self.compactRowHeight,
+            onUncomplete: { task in uncompleteTask(task) },
+            onUnfreezeOne: { task in unfreezeOneWithUndo(task) },
+            onUnfreezeAll: { unfreezeAllWithUndo() }
+        )
     }
 
     /// Restore a completed task to the pending list. Undo is the tombstone
@@ -922,6 +829,30 @@ struct BacklogView: View {
         restored.completedAt = nil
         withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
             backlogService.updateTask(restored)
+        }
+    }
+
+    /// Unfreeze a single task with an undo toast that re-freezes on tap.
+    private func unfreezeOneWithUndo(_ task: BacklogTask) {
+        let snapshot = task
+        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+            backlogService.unfreezeTask(id: task.id)
+        }
+        onUndoableAction?("Unfroze \u{201C}\(task.title)\u{201D}") { [backlogService] in
+            backlogService.updateTask(snapshot)
+            backlogService.freezeTask(id: snapshot.id)
+        }
+    }
+
+    /// Batch-unfreeze every frozen task. Undo re-freezes by id so the toast
+    /// reverses the operation cleanly even if the array shifts in between.
+    private func unfreezeAllWithUndo() {
+        let restoredIds = backlogService.frozen.map(\.id)
+        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+            backlogService.unfreezeAll()
+        }
+        onUndoableAction?("Unfroze \(restoredIds.count) task\(restoredIds.count == 1 ? "" : "s")") { [backlogService] in
+            for id in restoredIds { backlogService.freezeTask(id: id) }
         }
     }
 

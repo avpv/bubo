@@ -54,6 +54,12 @@ struct BacklogTaskRow: View {
     /// the owning view debounce the work without polluting row state.
     var onHoverChanged: (Bool) -> Void = { _ in }
 
+    /// Hot-key digit (1–9) used to teach SprintView's keyboard completion
+    /// shortcuts via the checkbox tooltip. nil = no shortcut for this row,
+    /// which is the case in BacklogView's inline list. SprintView passes
+    /// the row's sprint index for the first N visible tasks.
+    var sprintHotKey: Int? = nil
+
     @State private var isHovered = false
     @State private var isReorderTargeted = false
     @Environment(\.activeSkin) private var skin
@@ -275,7 +281,10 @@ struct BacklogTaskRow: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help("Mark complete")
+        // When SprintView passes a hot-key digit, append it to the tooltip
+        // so users discover «press N to complete» on first hover instead of
+        // having to read the docs. Plain «Mark complete» otherwise.
+        .help(sprintHotKey.map { "Mark complete (press \($0))" } ?? "Mark complete")
         .accessibilityLabel("Mark \u{201C}\(task.title)\u{201D} complete")
     }
 
