@@ -5,19 +5,24 @@ set -euo pipefail
 APP_NAME="Bubo"
 REPO="avpv/bubo"
 INSTALL_DIR="/Applications"
+ASSET="$APP_NAME.dmg"
 
 echo "Installing $APP_NAME (pre-release)..."
 
-# Get the newest release (including pre-releases) DMG URL
-DMG_URL=$(curl -fsSL "https://api.github.com/repos/$REPO/releases" \
-  | grep "browser_download_url.*\.dmg" \
+# Resolve the newest release tag (including pre-releases) from the public
+# Atom feed. The REST API at api.github.com is rate-limited to 60 req/hour
+# per anonymous IP and frequently returns 403 on shared/office networks.
+LATEST_TAG=$(curl -fsSL "https://github.com/$REPO/releases.atom" \
+  | grep -E -o '<id>tag:github\.com,2008:Repository/[0-9]+/[^<]+</id>' \
   | head -1 \
-  | cut -d '"' -f 4)
+  | sed -E 's#.*Repository/[0-9]+/##; s#</id>##')
 
-if [ -z "$DMG_URL" ]; then
-  echo "Error: could not find DMG in any release" >&2
+if [ -z "$LATEST_TAG" ]; then
+  echo "Error: could not determine latest release tag for $REPO" >&2
   exit 1
 fi
+
+DMG_URL="https://github.com/$REPO/releases/download/$LATEST_TAG/$ASSET"
 
 TMP_DMG=$(mktemp /tmp/Bubo.XXXXXX.dmg)
 trap 'rm -f "$TMP_DMG"; hdiutil detach "/Volumes/$APP_NAME" 2>/dev/null || true' EXIT
