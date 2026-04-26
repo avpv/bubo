@@ -439,6 +439,17 @@ struct BacklogView: View {
             .buttonStyle(.plain)
             .help(expansion.accessibilityHint)
 
+            // Smart-sort indicator — видимое состояние «список не в моём
+            // порядке». Раньше тоггл жил только в overflow, и пользователь
+            // мог часами пытаться понять, почему задачи переставлены: ON
+            // включал, а UI не сигналил. Теперь когда сортировка активна —
+            // в header'е появляется аккуратный wand.and.stars; клик на нём
+            // выключает обратно. Включать всё ещё через overflow (это редкое
+            // действие, не достойно постоянного места в header'е).
+            if useSmartSort {
+                smartSortIndicator
+            }
+
             // Urgent-count pill — now a real control. Clicking it toggles
             // the urgent-only filter. Middot separator visually attaches it
             // to the total count without the two numbers fighting.
@@ -467,6 +478,38 @@ struct BacklogView: View {
         }
         .padding(.horizontal, DS.Spacing.sm)
         .padding(.vertical, DS.Spacing.sm)
+    }
+
+    /// Tiny accent-coloured wand pill that lights up in the header whenever
+    /// smart-sort is engaged. Clicking it disables smart-sort and returns
+    /// the list to user drag order. Only rendered when `useSmartSort == true`
+    /// — а когда выключено, контрол не нужен (включается через overflow,
+    /// и пустота в header'е лучше украшения).
+    private var smartSortIndicator: some View {
+        Button {
+            withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+                useSmartSort = false
+            }
+        } label: {
+            Image(systemName: "wand.and.stars")
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(skin.accentColor)
+                .padding(.horizontal, DS.Spacing.xs)
+                .padding(.vertical, DS.Spacing.xxs)
+                .background(
+                    Capsule().fill(skin.accentColor.opacity(DS.Opacity.lightFill))
+                )
+                .overlay(
+                    Capsule().strokeBorder(
+                        skin.accentColor.opacity(DS.Opacity.softAccent),
+                        lineWidth: DS.Border.thin
+                    )
+                )
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .help("Smart sort active — tap to show in user order")
+        .accessibilityLabel("Smart sort active — tap to disable")
     }
 
     /// Fullscreen button — `arrow.up.left.and.arrow.down.right` это родная
