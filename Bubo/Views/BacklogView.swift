@@ -404,6 +404,14 @@ struct BacklogView: View {
                     optimizerService: optimizerService
                 )
                 .help(capacityRingTooltip)
+
+                // Numbers next to the ring — turns the colour-only signal
+                // («red, orange, green») into glanceable data («5 h / 3 h»).
+                // Tooltip stays for the «what does this mean?» path.
+                BacklogCapacityLabel(
+                    pendingMinutes: pendingWorkloadMinutes,
+                    remainingWorkdayMinutes: remainingWorkdayMinutes
+                )
             }
 
             Button {

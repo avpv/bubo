@@ -229,3 +229,34 @@ struct BacklogCapacityPopover: View {
         }
     }
 }
+
+// MARK: - Capacity Label
+
+/// Compact textual companion to `BacklogCapacityRing`. Shows
+/// `pending / remaining` (e.g. «5 h / 3 h») in the same row as the ring,
+/// turning the colour-only signal into glanceable numbers.
+///
+/// The user complaint that prompted this: the ring tells you «red /
+/// orange / green», but not «red by how much». The tooltip carries
+/// numbers, but only on hover — you can't plan around something you
+/// can't see.
+///
+/// Birman: цвет — это сигнал, число — данные; рядом сильнее, чем порознь.
+/// Color stays neutral on purpose: the ring carries the alarm, the label
+/// just answers «по сколько часов?».
+struct BacklogCapacityLabel: View {
+    let pendingMinutes: Int
+    let remainingWorkdayMinutes: Int
+
+    @Environment(\.activeSkin) private var skin
+
+    var body: some View {
+        Text("\(DS.formatMinutes(pendingMinutes))\u{00A0}/\u{00A0}\(DS.formatMinutes(remainingWorkdayMinutes))")
+            .font(.caption2.weight(.medium).monospacedDigit())
+            .foregroundStyle(skin.resolvedTextSecondary)
+            .contentTransition(.numericText())
+            .accessibilityLabel(
+                "\(DS.formatMinutes(pendingMinutes)) queued, \(DS.formatMinutes(remainingWorkdayMinutes)) remaining today"
+            )
+    }
+}

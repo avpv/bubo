@@ -108,6 +108,32 @@ struct SprintView: View {
         visibleTasks.reduce(0) { $0 + $1.durationMinutes }
     }
 
+    /// Projected end-of-session time: now + total visible minutes. Answers
+    /// «когда я закончу, если возьмусь прямо сейчас?» — превращает суммарную
+    /// длительность из числа в час дня. Если ETA выходит за пределы суток,
+    /// добавляется бейдж `+Nd` чтобы пользователь видел, что «всё-сегодня»
+    /// — иллюзия. Nil когда видимых задач нет.
+    private var etaLabel: String? {
+        guard !visibleTasks.isEmpty else { return nil }
+        let now = Date()
+        let eta = now.addingTimeInterval(TimeInterval(totalMinutes * 60))
+        let timeStr = eta.formatted(date: .omitted, time: .shortened)
+
+        let cal = Calendar.current
+        if cal.isDate(eta, inSameDayAs: now) {
+            return timeStr
+        }
+        let dayDelta = cal.dateComponents(
+            [.day],
+            from: cal.startOfDay(for: now),
+            to: cal.startOfDay(for: eta)
+        ).day ?? 0
+        if dayDelta >= 1 {
+            return "\(timeStr) +\(dayDelta)d"
+        }
+        return timeStr
+    }
+
     /// Tasks completed since local midnight. Same data source as BacklogView's
     /// tombstone — keeps «сделано сегодня» доступным внутри fullscreen-режима.
     private var completedToday: [BacklogTask] {
@@ -201,10 +227,11 @@ struct SprintView: View {
 
     // MARK: - Header trailing
 
-    /// Header trailing: capacity ring (общая нагрузка очереди) + count·time
-    /// текущего видимого набора. Кольцо отвечает на «влезет ли весь backlog
-    /// сегодня?», count·time — «сколько всего в текущем экране?». Два разных
-    /// вопроса, рядом, без коллизий — Бирман: «информация, не украшения».
+    /// Header trailing: capacity ring + capacity label («сколько в очереди /
+    /// сколько осталось дня») + count·time + ETA текущего видимого набора.
+    /// Кольцо отвечает на «влезет ли весь backlog?», текст рядом — на
+    /// «во сколько именно?». Бирман: цвет — это сигнал, число — данные;
+    /// рядом — сильнее, чем порознь.
     @ViewBuilder
     private var headerTrailing: some View {
         HStack(spacing: DS.Spacing.xs) {
@@ -215,6 +242,11 @@ struct SprintView: View {
                     optimizerService: optimizerService
                 )
                 .help(capacityRingTooltip)
+
+                BacklogCapacityLabel(
+                    pendingMinutes: pendingWorkloadMinutes,
+                    remainingWorkdayMinutes: remainingWorkdayMinutes
+                )
             }
 
             if !visibleTasks.isEmpty {
@@ -230,6 +262,20 @@ struct SprintView: View {
                         .font(.subheadline.weight(.regular).monospacedDigit())
                         .foregroundStyle(skin.resolvedTextSecondary)
                         .contentTransition(.numericText())
+
+                    if let etaLabel {
+                        // Стрелка как визуальный «ведёт к»: сумма минут
+                        // превращается в час окончания. Тире-стрелка ASCII
+                        // (`→`) читается мгновенно и не требует SF-иконки.
+                        Text("\u{2192}")
+                            .font(.caption2)
+                            .foregroundStyle(skin.resolvedTextTertiary)
+                        Text(etaLabel)
+                            .font(.subheadline.weight(.regular).monospacedDigit())
+                            .foregroundStyle(skin.resolvedTextSecondary)
+                            .contentTransition(.numericText())
+                            .accessibilityLabel("Estimated finish time \(etaLabel)")
+                    }
                 }
             }
         }
