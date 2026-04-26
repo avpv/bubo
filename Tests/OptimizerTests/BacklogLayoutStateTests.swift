@@ -10,16 +10,31 @@ import XCTest
 
 final class TaskListExpansionTests: XCTestCase {
 
-    func testNextCyclesCollapsedCompactExpandedCollapsed() {
+    func testNextCyclesCollapsedAndCompact() {
+        // Two-state user-facing cycle: chevron toggles between «список
+        // скрыт» и «список виден». Полное раскрытие переехало в отдельный
+        // fullscreen-аффорданс (`SprintView`) — третий клик шеврона убран.
         XCTAssertEqual(TaskListExpansion.collapsed.next, .compact)
-        XCTAssertEqual(TaskListExpansion.compact.next, .expanded)
+        XCTAssertEqual(TaskListExpansion.compact.next, .collapsed)
+    }
+
+    func testExpandedFallsBackToCollapsed() {
+        // `.expanded` остаётся внутренним состоянием для drag'а в BacklogView
+        // (на время перетаскивания список временно раскрывается полностью,
+        // чтобы все строки-цели реордера были видны). Если оно почему-то
+        // окажется в `next`, цикл должен корректно вернуть в `.collapsed`,
+        // а не зависнуть.
         XCTAssertEqual(TaskListExpansion.expanded.next, .collapsed)
     }
 
     func testIconsFollowDisclosureConvention() {
+        // `.expanded` визуально совпадает с `.compact` — пользователь шеврон
+        // в этом состоянии не видит (drag перехватывает взаимодействие), но
+        // нам важно, чтобы оно не светило двойной стрелкой при случайном
+        // ререндере.
         XCTAssertEqual(TaskListExpansion.collapsed.iconName, "chevron.right")
         XCTAssertEqual(TaskListExpansion.compact.iconName, "chevron.down")
-        XCTAssertEqual(TaskListExpansion.expanded.iconName, "chevron.down.2")
+        XCTAssertEqual(TaskListExpansion.expanded.iconName, "chevron.down")
     }
 
     func testAccessibilityHintDescribesNextState() {
@@ -27,7 +42,7 @@ final class TaskListExpansionTests: XCTestCase {
         // state — VoiceOver reads the label, then the hint predicts the
         // outcome of activating the control.
         XCTAssertEqual(TaskListExpansion.collapsed.accessibilityHint, "Show tasks")
-        XCTAssertEqual(TaskListExpansion.compact.accessibilityHint, "Show all tasks")
+        XCTAssertEqual(TaskListExpansion.compact.accessibilityHint, "Hide tasks")
         XCTAssertEqual(TaskListExpansion.expanded.accessibilityHint, "Hide tasks")
     }
 }

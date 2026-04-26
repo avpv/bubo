@@ -192,8 +192,10 @@ struct BacklogView: View {
     ///
     /// - `.compact`: sums the first `maxExpandedTasks` row heights so the
     ///   visible area always fits 4 task rows, keeping the timeline reachable.
-    /// - `.expanded`: `min(contentHeight, fullyExpandedMaxHeight)` — shows
-    ///   every task up to a generous cap, longer lists scroll internally.
+    /// - `.expanded`: internal-only — entered programmatically while a drag
+    ///   is in flight so all reorder targets are visible. Не достижимо через
+    ///   шеврон; для пользовательского «весь список» теперь служит SprintView
+    ///   (отдельный fullscreen-аффорданс в header'е).
     /// - `.collapsed`: zero (list hidden entirely).
     private var scrollMaxHeight: CGFloat {
         // Single-line row — see `compactRowHeight`. No extra inter-row
@@ -440,17 +442,42 @@ struct BacklogView: View {
             Spacer()
 
             if totalCount > 0 {
-                // Overflow menu holds smart-sort + sprint (was: two cryptic
-                // icon buttons). HIG: secondary actions without a clear
-                // glyph belong in a menu with labels. One icon in the header
-                // + named actions in the dropdown is both calmer and more
-                // discoverable.
+                // Fullscreen affordance — пушит SprintView в навигационный
+                // стек popover'а. Раньше эту роль играл третий клик шеврона
+                // (`chevron.down.2`), но двойная стрелка не считывалась как
+                // «другое состояние» и упиралась в шум остальных карточек,
+                // которые при «expanded» всё равно оставались видны. Теперь
+                // — отдельная кнопка с понятной macOS-идиомой «развернуть».
+                if onEnterSprint != nil {
+                    fullscreenButton
+                }
+                // Overflow menu holds smart-sort. HIG: secondary actions
+                // without a clear glyph belong in a menu with labels.
                 headerOverflowMenu
                 scheduleButton
             }
         }
         .padding(.horizontal, DS.Spacing.sm)
         .padding(.vertical, DS.Spacing.sm)
+    }
+
+    /// Fullscreen button — `arrow.up.left.and.arrow.down.right` это родная
+    /// macOS-идиома «развернуть на весь экран» (та же стрелка на зелёном
+    /// светофоре окна). Пользователь видит знакомый глиф вместо магической
+    /// двойной шевронной стрелки.
+    private var fullscreenButton: some View {
+        Button {
+            onEnterSprint?()
+        } label: {
+            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(skin.resolvedTextSecondary)
+                .frame(width: DS.Size.iconSmall, height: DS.Size.iconSmall)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Open tasks fullscreen")
+        .accessibilityLabel("Open tasks fullscreen")
     }
 
     /// Red «N urgent» pill — acts as a filter toggle. Selected state gets a
@@ -503,11 +530,9 @@ struct BacklogView: View {
         )
     }
 
-    /// Overflow menu — the single home for secondary view controls
-    /// (smart-sort, sprint mode). Previously these were two bare icon
-    /// buttons in the header; Бирман: «пиктограмма без подписи —
-    /// загадка». Inside the menu each action gets a real verb and
-    /// active state shows the SF Symbol swap.
+    /// Overflow menu — secondary view controls. Sprint mode переехал в
+    /// отдельную fullscreen-кнопку рядом с шевроном — Бирман: умный layer
+    /// должен быть единственной точкой, не дублироваться в overflow.
     private var headerOverflowMenu: some View {
         Menu {
             Button {
@@ -522,14 +547,6 @@ struct BacklogView: View {
                     useSmartSort ? "Show in user order" : "Smart sort",
                     systemImage: useSmartSort ? "wand.and.stars" : "arrow.up.arrow.down"
                 )
-            }
-
-            if onEnterSprint != nil {
-                Button {
-                    onEnterSprint?()
-                } label: {
-                    Label("Sprint mode", systemImage: "bolt")
-                }
             }
         } label: {
             Image(systemName: "ellipsis")
@@ -607,17 +624,21 @@ struct BacklogView: View {
 
     // MARK: - Task List
     //
-    // Three-state disclosure, driven by `expansion`:
+    // Two-state user-facing disclosure, driven by `expansion`:
     //
     // - .collapsed: no task rows — only the header is visible,
     //   keeping the card minimal.
     // - .compact: a height-capped ScrollView, ~4 rows visible, the rest
     //   reached by internal scroll. Preserves the timeline strip below.
-    // - .expanded: cap raised to `fullyExpandedMaxHeight` (~10–11 rows);
-    //   the user explicitly traded timeline space for full visibility.
     //
-    // Birman: один шеврон-триггер несёт все три смысла, без дублирующей
-    // кнопки «Show more».
+    // `.expanded` остаётся внутренним состоянием — в него BacklogView
+    // временно переключается на время drag'а, чтобы все строки-цели
+    // реордера были видны сразу. «Полное раскрытие» как пользовательский
+    // жест переехало в SprintView (fullscreen-кнопка в header'е).
+    //
+    // Birman: один шеврон — два смысла («есть список / нет списка»);
+    // полноэкранное представление — отдельный аффорданс рядом, не третий
+    // клик той же кнопки.
 
     private var taskList: some View {
         // Discoverability hint ("drag onto a free slot") used to live here
