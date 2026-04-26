@@ -208,6 +208,7 @@ struct SprintView: View {
             addTaskField
         }
         .frame(width: DS.Popover.width, height: DS.Popover.height)
+        .background(hotKeyBindings)
         .onChange(of: newTaskTitle) { _, newValue in
             parsedNewTaskTitle = BacklogTitleParser.parse(newValue)
         }
@@ -452,6 +453,39 @@ struct SprintView: View {
         }
         .multilineTextAlignment(.center)
         .padding(DS.Spacing.lg)
+    }
+
+    // MARK: - Hot-keys
+
+    /// Hidden surface that registers number-key shortcuts for completing
+    /// the first N visible Sprint tasks. Pressing «1» in Sprint mode
+    /// completes the primary row, «2» the second, etc. — same idea Things
+    /// and Linear use for keyboard-first task completion.
+    ///
+    /// Gated on `isInputFocused`: when the add-task field is active, digit
+    /// keys must be normal text input, not commands. Conditionally rendering
+    /// the buttons keeps them out of the responder chain entirely while the
+    /// field is focused.
+    ///
+    /// Mounted as `.background(...)` of the popover root so it occupies no
+    /// visual space but still participates in shortcut routing.
+    @ViewBuilder
+    private var hotKeyBindings: some View {
+        if mode == .sprint, !isInputFocused, !visibleTasks.isEmpty {
+            // SF doesn't have a more compact way to register N shortcuts
+            // dynamically, so explicit ForEach. `.frame(width: 0, height: 0)`
+            // + `.opacity(0)` makes the buttons invisible without removing
+            // them from the tree (which would also remove the shortcut).
+            ForEach(Array(visibleTasks.prefix(Self.maxSprintTasks).enumerated()), id: \.element.id) { index, task in
+                Button("Complete task \(index + 1)") {
+                    complete(task)
+                }
+                .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: [])
+                .frame(width: 0, height: 0)
+                .opacity(0)
+                .accessibilityHidden(true)
+            }
+        }
     }
 
     // MARK: - Task row
