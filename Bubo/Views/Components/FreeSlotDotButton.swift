@@ -1,18 +1,62 @@
 import SwiftUI
 
-/// Hollow companion to `ColorDotButton` for the color-filter bar. Tapping it
-/// filters the timeline to only free slots so users can quickly eyeball where
-/// they have open time. Mutually exclusive with color filters — toggling one
-/// clears the other (handled by the caller).
+/// Tri-state filter that controls whether free slots / events are shown in the
+/// timeline. Lives next to `FreeSlotDotButton` because the button is the only
+/// surface that exposes it; rendering and cycling logic stay in one place.
+enum FreeSlotFilter: CaseIterable {
+    /// Default — events and free slots both visible.
+    case all
+    /// Hide events, show only free slots so the user can eyeball open time.
+    case onlyFree
+    /// Show events, hide the "Free · Xh" rows so a busy day reads cleanly.
+    case hideFree
+
+    var isActive: Bool { self != .all }
+
+    /// Cycle order: all → onlyFree → hideFree → all.
+    func next() -> FreeSlotFilter {
+        switch self {
+        case .all: return .onlyFree
+        case .onlyFree: return .hideFree
+        case .hideFree: return .all
+        }
+    }
+}
+
+/// Hollow companion to `ColorDotButton` for the color-filter bar. Cycles
+/// through three states on tap — show all, free slots only, free slots hidden
+/// — so the same control covers both directions of the free-slot filter.
+/// Mutually exclusive with color filters: caller clears one when the other
+/// activates.
 struct FreeSlotDotButton: View {
     @Environment(\.activeSkin) private var skin
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    let isActive: Bool
+    let state: FreeSlotFilter
     var isDimmed: Bool = false
     let action: () -> Void
 
     @State private var isHovered = false
     @FocusState private var isFocused: Bool
+
+    private var isActive: Bool { state.isActive }
+
+    /// Tooltip describes the next click action so the cycle is discoverable.
+    private var helpText: String {
+        switch state {
+        case .all: return "Show free slots only"
+        case .onlyFree: return "Hide free slots"
+        case .hideFree: return "Clear filter"
+        }
+    }
+
+    /// VoiceOver label describes the *current* state, not the next action.
+    private var accessibilityText: String {
+        switch state {
+        case .all: return "Free slots filter, off"
+        case .onlyFree: return "Free slots only"
+        case .hideFree: return "Free slots hidden"
+        }
+    }
 
     var body: some View {
         Button(action: action) {
@@ -31,8 +75,13 @@ struct FreeSlotDotButton: View {
                     .frame(width: DS.Size.colorDotSize, height: DS.Size.colorDotSize)
                     .opacity(isDimmed ? 0.3 : 1.0)
 
-                // HIG: Non-color indicator for active state (inner ring).
-                if isActive {
+                // Active-state indicators — non-color so the meaning survives
+                // colorblind / monochrome modes.
+                switch state {
+                case .all:
+                    EmptyView()
+                case .onlyFree:
+                    // Inner ring → "this is the only thing showing".
                     Circle()
                         .strokeBorder(
                             skin.resolvedTextPrimary.opacity(DS.Opacity.overlayDark),
@@ -42,6 +91,14 @@ struct FreeSlotDotButton: View {
                             width: DS.Size.colorDotSize - DS.Border.medium * 2,
                             height: DS.Size.colorDotSize - DS.Border.medium * 2
                         )
+                case .hideFree:
+                    // Diagonal slash → universal "no/hidden" affordance.
+                    // Slightly longer than the diameter so it visually crosses
+                    // the ring instead of stopping flush with it.
+                    Capsule()
+                        .fill(skin.resolvedTextPrimary.opacity(DS.Opacity.overlayDark))
+                        .frame(width: DS.Size.colorDotSize + DS.Border.medium * 2, height: DS.Border.medium)
+                        .rotationEffect(.degrees(-45))
                 }
             }
             .overlay(
@@ -93,8 +150,8 @@ struct FreeSlotDotButton: View {
         .motionAwareAnimation(skin.resolvedMicroAnimation, value: isHovered, reduceMotion: reduceMotion)
         .motionAwareAnimation(skin.resolvedMicroAnimation, value: isFocused, reduceMotion: reduceMotion)
         .motionAwareAnimation(skin.resolvedMicroAnimation, value: isActive, reduceMotion: reduceMotion)
-        .help("Free slots only")
-        .accessibilityLabel("Free slots only")
+        .help(helpText)
+        .accessibilityLabel(accessibilityText)
         .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 }

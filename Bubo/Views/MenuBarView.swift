@@ -14,10 +14,11 @@ struct MenuBarView: View {
     @State private var toastState = ToastState()
     @State private var scrollPositionID: String?
     @State private var colorFilter: EventColorTag? = nil
-    /// Mutually exclusive with `colorFilter`: when true, the timeline hides
-    /// events entirely and shows only free slots so users can eyeball where
-    /// they actually have open time.
-    @State private var freeOnlyFilter: Bool = false
+    /// Mutually exclusive with `colorFilter`. Tri-state cycle on the hollow
+    /// dot button: `.all` (default) → `.onlyFree` (hide events, show only
+    /// free slots so users can eyeball open time) → `.hideFree` (show events,
+    /// hide the "Free · Xh" rows for a compact busy-day read).
+    @State private var freeSlotFilter: FreeSlotFilter = .all
 
     /// When true, BacklogView will grab focus on its "Add task…" field.
     /// Set from footer / keyboard shortcut, consumed by BacklogView.
@@ -815,8 +816,12 @@ struct MenuBarView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            // Color filter — show when at least one event has a color assigned
-            if !usedColorTags.isEmpty {
+            // Filter bar — show whenever the timeline has anything to filter.
+            // Color dots inside are still gated on `usedColorTags`, but the
+            // free-slot toggle (hollow circle) needs to be reachable even when
+            // no event is color-tagged, so users can hide / isolate the
+            // "Free · Xh" rows on a plain calendar.
+            if reminderService.nonDisintegratingEventCount > 0 {
                 colorFilterBar
             }
 
@@ -939,12 +944,12 @@ struct MenuBarView: View {
                     emptyState
                 } else if filteredEventsByDay.isEmpty {
                     VStack(spacing: DS.Spacing.sm) {
-                        Text(freeOnlyFilter ? "No free slots in working hours" : "No events with this color")
+                        Text(emptyFilteredStateMessage)
                             .font(.subheadline)
                             .foregroundStyle(skin.resolvedTextSecondary)
                         Button("Clear filter") {
                             colorFilter = nil
-                            freeOnlyFilter = false
+                            freeSlotFilter = .all
                         }
                             .buttonStyle(.bordered)
                             .controlSize(.small)
@@ -1158,7 +1163,7 @@ struct MenuBarView: View {
 
     private var colorFilterBar: some View {
         let selected = colorFilter
-        let anyFilter = selected != nil || freeOnlyFilter
+        let anyFilter = selected != nil || freeSlotFilter.isActive
         return HStack(spacing: DS.Spacing.xs) {
             ForEach(EventColorTag.allCases, id: \.self) { tag in
                 ColorDotButton(
@@ -1168,22 +1173,23 @@ struct MenuBarView: View {
                 ) {
                     Haptics.tap()
                     withAnimation(skin.resolvedMicroAnimation) {
-                        freeOnlyFilter = false
+                        freeSlotFilter = .all
                         colorFilter = (colorFilter == tag) ? nil : tag
                     }
                 }
             }
 
-            // Hollow dot = "only free slots". Mutually exclusive with the
-            // color filters above so the two modes never fight each other.
+            // Hollow dot cycles through three free-slot filter states.
+            // Mutually exclusive with the color filters above so the two
+            // modes never fight each other.
             FreeSlotDotButton(
-                isActive: freeOnlyFilter,
-                isDimmed: anyFilter && !freeOnlyFilter
+                state: freeSlotFilter,
+                isDimmed: anyFilter && !freeSlotFilter.isActive
             ) {
                 Haptics.tap()
                 withAnimation(skin.resolvedMicroAnimation) {
                     colorFilter = nil
-                    freeOnlyFilter.toggle()
+                    freeSlotFilter = freeSlotFilter.next()
                 }
             }
 
@@ -1192,7 +1198,7 @@ struct MenuBarView: View {
                     Haptics.tap()
                     withAnimation(skin.resolvedMicroAnimation) {
                         colorFilter = nil
-                        freeOnlyFilter = false
+                        freeSlotFilter = .all
                     }
                 } label: {
                     Image(systemName: "xmark.circle.fill")
@@ -1215,7 +1221,18 @@ struct MenuBarView: View {
         .padding(.horizontal, DS.Spacing.contentMargin)
         .padding(.vertical, DS.Spacing.xs)
         .animation(skin.resolvedMicroAnimation, value: colorFilter)
-        .animation(skin.resolvedMicroAnimation, value: freeOnlyFilter)
+        .animation(skin.resolvedMicroAnimation, value: freeSlotFilter)
+    }
+
+    /// Empty-state copy when the active filter combo prunes everything.
+    /// Keyed off whichever filter is the user's last action — matches the
+    /// matching "clear filter" affordance shown alongside.
+    private var emptyFilteredStateMessage: String {
+        switch freeSlotFilter {
+        case .onlyFree: return "No free slots in working hours"
+        case .hideFree: return "No events scheduled"
+        case .all: return "No events with this color"
+        }
     }
 
     private var eventList: some View {
@@ -1316,9 +1333,12 @@ struct MenuBarView: View {
         //   remaining "gaps" are filled by events of other colors in the real
         //   timeline. Rendering them as Free slots would be misleading, so
         //   hide them.
-        // • freeOnlyFilter active → hide events entirely and show only the
-        //   real free slots, so users can eyeball open time at a glance.
-        let freeSlots: [(start: Date, end: Date)] = colorFilter == nil
+        // • freeSlotFilter == .onlyFree → hide events entirely and show only
+        //   the real free slots, so users can eyeball open time at a glance.
+        // • freeSlotFilter == .hideFree → keep events, suppress the
+        //   "Free · Xh" rows so a busy day reads as a compact list.
+        let shouldComputeFreeSlots = colorFilter == nil && freeSlotFilter != .hideFree
+        let freeSlots: [(start: Date, end: Date)] = shouldComputeFreeSlots
             ? FreeSlotFinder.slots(
                 for: dayGroup.events,
                 on: dayGroup.date,
@@ -1331,7 +1351,7 @@ struct MenuBarView: View {
             events: dayGroup.events,
             freeSlots: freeSlots,
             ghost: ghost,
-            includeEvents: !freeOnlyFilter
+            includeEvents: freeSlotFilter != .onlyFree
         )
         // Pick the first `.slot` item's id inside this day — only that row
         // gets the onboarding hint. Precomputing keeps the ForEach body a
@@ -1345,7 +1365,7 @@ struct MenuBarView: View {
         // free slots (the real targets) and the expanded task list above
         // share the vertical space. One header > N thin slivers — Бирман:
         // «свернуть в строку-заголовок, а не уменьшать всё пропорционально».
-        if backlogCoordinator.isDraggingTask && !dayGroup.events.isEmpty && !freeOnlyFilter {
+        if backlogCoordinator.isDraggingTask && !dayGroup.events.isEmpty && freeSlotFilter != .onlyFree {
             collapsedEventsHeader(for: dayGroup.events)
         }
 
