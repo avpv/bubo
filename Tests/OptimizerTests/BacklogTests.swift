@@ -389,6 +389,83 @@ final class BacklogServiceTests: XCTestCase {
         XCTAssertEqual(activeIds(), ["task-a", "task-c", "task-b"])
     }
 
+    // MARK: pin / unpin
+
+    func testPinTaskAssignsRankZeroAndShowsInSmartSort() {
+        addTask("a")
+        addTask("b")
+
+        service.pinTask(id: "task-b")
+
+        let pinned = service.tasks.first { $0.id == "task-b" }
+        XCTAssertEqual(pinned?.pinnedRank, 0)
+
+        let sorted = BacklogLogic.smartSorted(service.tasks)
+        XCTAssertEqual(sorted.map(\.id).first, "task-b")
+    }
+
+    func testPinningSecondTaskShiftsExistingPinDown() {
+        addTask("a")
+        addTask("b")
+
+        service.pinTask(id: "task-a")
+        service.pinTask(id: "task-b") // newest pin → top
+
+        let a = service.tasks.first { $0.id == "task-a" }
+        let b = service.tasks.first { $0.id == "task-b" }
+        XCTAssertEqual(b?.pinnedRank, 0)
+        XCTAssertEqual(a?.pinnedRank, 1)
+    }
+
+    func testPinTaskBeforeUnpinnedAppendsToPinTail() {
+        addTask("a")
+        addTask("b")
+        addTask("c")
+        // a is pinned at rank 0; b stays unpinned. Pinning c "before b" must
+        // put c at the end of the pinned list (rank 1) so c sits above b
+        // without dethroning a.
+        service.pinTask(id: "task-a")
+        service.pinTask(id: "task-c", before: "task-b")
+
+        let a = service.tasks.first { $0.id == "task-a" }
+        let c = service.tasks.first { $0.id == "task-c" }
+        XCTAssertEqual(a?.pinnedRank, 0)
+        XCTAssertEqual(c?.pinnedRank, 1)
+
+        let sorted = BacklogLogic.smartSorted(service.tasks).map(\.id)
+        XCTAssertEqual(sorted.prefix(2).map { $0 }, ["task-a", "task-c"])
+    }
+
+    func testUnpinTaskRenumbersRemainingPins() {
+        addTask("a")
+        addTask("b")
+        addTask("c")
+        service.pinTask(id: "task-a")
+        service.pinTask(id: "task-b")
+        service.pinTask(id: "task-c") // ranks: c=0, b=1, a=2
+
+        service.unpinTask(id: "task-b")
+
+        let a = service.tasks.first { $0.id == "task-a" }
+        let b = service.tasks.first { $0.id == "task-b" }
+        let c = service.tasks.first { $0.id == "task-c" }
+        XCTAssertEqual(c?.pinnedRank, 0)
+        XCTAssertEqual(a?.pinnedRank, 1)
+        XCTAssertNil(b?.pinnedRank)
+    }
+
+    func testUnpinAllClearsEveryPin() {
+        addTask("a")
+        addTask("b")
+        service.pinTask(id: "task-a")
+        service.pinTask(id: "task-b")
+
+        service.unpinAll()
+
+        XCTAssertNil(service.tasks.first { $0.id == "task-a" }?.pinnedRank)
+        XCTAssertNil(service.tasks.first { $0.id == "task-b" }?.pinnedRank)
+    }
+
     // MARK: restoreTask(_:at:)
 
     func testRestoreTaskAtIndexPutsBackAtSamePosition() {

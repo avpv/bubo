@@ -62,6 +62,10 @@ final class PersistedBacklogTask {
     /// resolution.
     var sortOrder: Int = 0
 
+    /// User-pinned rank inside the smart-sorted list. nil for legacy rows
+    /// (decoded as "not pinned"). See `BacklogTask.pinnedRank`.
+    var pinnedRank: Int?
+
     init() {}
 
     init(from task: BacklogTask, sortOrder: Int) {
@@ -99,6 +103,7 @@ final class PersistedBacklogTask {
         self.notes = task.notes
         self.urlString = task.url?.absoluteString
         self.location = task.location
+        self.pinnedRank = task.pinnedRank
         if let sortOrder { self.sortOrder = sortOrder }
     }
 
@@ -140,6 +145,7 @@ final class PersistedBacklogTask {
             task.scheduledEventIds = [legacyId]
         }
         task.reminderCalendarItemId = reminderCalendarItemId
+        task.pinnedRank = pinnedRank
         return task
     }
 }

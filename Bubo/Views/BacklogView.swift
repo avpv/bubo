@@ -695,10 +695,13 @@ struct BacklogView: View {
             isDragging: coordinator?.draggedTask?.taskId == task.id,
             canMoveUp: canMoveUp(task),
             canMoveDown: canMoveDown(task),
+            isPinned: task.pinnedRank != nil,
             onComplete: { completeTaskWithUndo(task) },
             onEdit: { onEditTask?(task) },
             onDelete: { onDeleteTask?(task) },
             onFreeze: { freezeTaskWithUndo(task) },
+            onPinToTop: { pinTaskWithUndo(task) },
+            onUnpin: { unpinTaskWithUndo(task) },
             onDragStart: {
                 coordinator?.beginDrag(payload(for: task))
                 if !hasDragged { hasDragged = true }
@@ -1129,6 +1132,32 @@ struct BacklogView: View {
         }
         onUndoableAction?("Froze \u{201C}\(task.title)\u{201D}") { [backlogService] in
             backlogService.updateTask(snapshot)
+        }
+    }
+
+    /// Pin a task to the top of the smart-sorted list with an undo affordance.
+    /// Mirrors the gesture surfaced by drag-drop in Sprint — keyboard /
+    /// context-menu users get parity here.
+    private func pinTaskWithUndo(_ task: BacklogTask) {
+        let priorRank = task.pinnedRank
+        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+            backlogService.pinTask(id: task.id)
+        }
+        let taskId = task.id
+        onUndoableAction?("Pinned \u{201C}\(task.title)\u{201D}") { [backlogService] in
+            if priorRank == nil {
+                backlogService.unpinTask(id: taskId)
+            }
+        }
+    }
+
+    private func unpinTaskWithUndo(_ task: BacklogTask) {
+        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+            backlogService.unpinTask(id: task.id)
+        }
+        let taskId = task.id
+        onUndoableAction?("Unpinned \u{201C}\(task.title)\u{201D}") { [backlogService] in
+            backlogService.pinTask(id: taskId)
         }
     }
 

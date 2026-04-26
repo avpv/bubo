@@ -146,6 +146,71 @@ final class BacklogLogicTests: XCTestCase {
         XCTAssertEqual(sorted.first?.id, "h")
     }
 
+    // MARK: pinned smart sort
+
+    func testSmartSortPinnedFloatsAboveScore() {
+        let cal = Self.calendar()
+        let n = Self.now()
+        // Without pinning, today-deadline > no-deadline.
+        var pinned = task("pinned", priority: .low) // would otherwise be last
+        pinned.pinnedRank = 0
+        let urgent = task("today", deadline: n, priority: .high) // top by score
+        let sorted = BacklogLogic.smartSorted([urgent, pinned], now: n, calendar: cal)
+        XCTAssertEqual(sorted.map(\.id), ["pinned", "today"],
+                       "Pinned task must sit above score-driven leader")
+    }
+
+    func testSmartSortPinnedRespectsRankOrder() {
+        let cal = Self.calendar()
+        let n = Self.now()
+        var first = task("first")
+        first.pinnedRank = 0
+        var second = task("second")
+        second.pinnedRank = 1
+        let other = task("other", deadline: n, priority: .high)
+        let sorted = BacklogLogic.smartSorted([other, second, first], now: n, calendar: cal)
+        XCTAssertEqual(sorted.map(\.id), ["first", "second", "other"])
+    }
+
+    // MARK: smartReason
+
+    func testSmartReasonPinnedWinsOverDeadline() {
+        let cal = Self.calendar()
+        let n = Self.now()
+        var t = task("t", deadline: n, priority: .high)
+        t.pinnedRank = 0
+        XCTAssertEqual(BacklogLogic.smartReason(for: t, now: n, calendar: cal), "Pinned")
+    }
+
+    func testSmartReasonReportsToday() {
+        let cal = Self.calendar()
+        let n = Self.now()
+        let t = task("t", deadline: n)
+        XCTAssertEqual(BacklogLogic.smartReason(for: t, now: n, calendar: cal), "Today")
+    }
+
+    func testSmartReasonReportsTomorrow() {
+        let cal = Self.calendar()
+        let n = Self.now()
+        let tomorrow = cal.date(byAdding: .day, value: 1, to: n)!
+        let t = task("t", deadline: tomorrow)
+        XCTAssertEqual(BacklogLogic.smartReason(for: t, now: n, calendar: cal), "Tomorrow")
+    }
+
+    func testSmartReasonReportsHighPriorityWhenNoDeadline() {
+        let cal = Self.calendar()
+        let n = Self.now()
+        let t = task("t", priority: .high)
+        XCTAssertEqual(BacklogLogic.smartReason(for: t, now: n, calendar: cal), "High")
+    }
+
+    func testSmartReasonNilWhenNothingNotable() {
+        let cal = Self.calendar()
+        let n = Self.now()
+        let t = task("t", priority: .medium)
+        XCTAssertNil(BacklogLogic.smartReason(for: t, now: n, calendar: cal))
+    }
+
     // MARK: sprint cap
 
     func testSprintCappedReturnsPrefix() {

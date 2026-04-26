@@ -20,12 +20,25 @@ struct BacklogTaskRow: View {
     /// disappear, the title takes a larger font. Set by `SprintView`; the
     /// inline backlog passes the default `false`.
     var isSprintMode: Bool = false
+    /// One-word "why is this here?" caption rendered under the title in
+    /// Sprint mode (and in smart-sorted Backlog rows, when the host opts in).
+    /// nil → no caption rendered. Computed by `BacklogLogic.smartReason`.
+    var smartReason: String? = nil
+    /// True iff the task carries a non-nil `pinnedRank`. Drives the pin glyph
+    /// next to the title and toggles the "Unpin" verb in the context menu.
+    var isPinned: Bool = false
     var onComplete: () -> Void
     var onEdit: () -> Void
     var onDelete: () -> Void
     /// Fired when the user picks "Freeze" from the context menu. Optional so
     /// preview call-sites that don't care about freezing can omit it.
     var onFreeze: () -> Void = {}
+    /// Fired when the user pins this task from the context menu. Same gesture
+    /// the drag handle performs on drop in Sprint — kept as a discoverable
+    /// verb so keyboard / context-menu users get parity with drag-drop.
+    var onPinToTop: () -> Void = {}
+    /// Fired when the user removes this task's pin.
+    var onUnpin: () -> Void = {}
     /// Fired when this row enters the drag state so the parent can push the
     /// typed payload onto the shared coordinator.
     var onDragStart: () -> Void = {}
@@ -128,11 +141,10 @@ struct BacklogTaskRow: View {
 
     var body: some View {
         HStack(spacing: DS.Spacing.sm) {
-            // Drag handle and trailing controls vanish in sprint mode so the
-            // row reads as a quiet single column — «один режим, одна цель».
-            if !isSprintMode {
-                dragHandle
-            }
+            // Drag handle stays in both modes — Sprint repurposes the gesture
+            // for pin-on-drop. Trailing inline controls (chevrons, ×) still
+            // hide in Sprint to keep the row a quiet single statement.
+            dragHandle
             checkbox
             content
             Spacer(minLength: DS.Spacing.xs)
@@ -165,6 +177,16 @@ struct BacklogTaskRow: View {
         .contextMenu {
             Button("Complete") { onComplete() }
             Button("Edit") { onEdit() }
+            Divider()
+            // Pin / unpin — the keyboard-and-context-menu equivalent of the
+            // drag-to-pin gesture in Sprint. Single verb that flips by state
+            // so a user who just wants a button doesn't have to learn "drag
+            // to do this".
+            if isPinned {
+                Button("Unpin") { onUnpin() }
+            } else {
+                Button("Pin to top") { onPinToTop() }
+            }
             Divider()
             Button("Move Up") { onMoveUp() }
                 .disabled(!canMoveUp)
@@ -302,87 +324,123 @@ struct BacklogTaskRow: View {
     /// Single-line content: title + priority dot + middot-separated metadata.
     /// Title gets `layoutPriority(1)` so it holds onto space; metadata
     /// truncates first when the row narrows.
+    ///
+    /// In sprint mode the row becomes two-line: title on top, a quiet
+    /// `smartReason` caption underneath ("Today", "in 2d", "Pinned"). HIG:
+    /// information density grows with the size of the surface, and the
+    /// caption answers «почему я здесь».
     private var content: some View {
         Button(action: onEdit) {
-            HStack(spacing: DS.Spacing.xs) {
-                Text(task.title)
-                    .font(isSprintMode ? .headline.weight(.medium) : .callout)
-                    .foregroundStyle(titleColor)
-                    .lineLimit(isSprintMode ? 1 : 2)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .layoutPriority(1)
-                    .help(task.title)
-
-                // Recurring marker. If the task carries a `recurrenceTag`
-                // ("weekly review", "daily standup"), show it as human text
-                // instead of only a cryptic glyph — Бирман: «язык интерфейса —
-                // язык человека». The bare ⟲ remains for tag-less recurring
-                // tasks so the affordance is still present.
-                if task.isRecurring {
-                    HStack(spacing: DS.Spacing.xxs) {
-                        Image(systemName: "arrow.triangle.2.circlepath")
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: DS.Spacing.xs) {
+                    if isPinned {
+                        Image(systemName: "pin.fill")
                             .font(.caption2)
-                        if let tag = task.recurrenceTag,
-                           !tag.trimmingCharacters(in: .whitespaces).isEmpty {
-                            Text(tag)
-                                .font(.caption2)
-                                .lineLimit(1)
-                        }
+                            .foregroundStyle(skin.accentColor)
+                            .accessibilityLabel("Pinned")
                     }
-                    .foregroundStyle(skin.resolvedTextTertiary)
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(
-                        (task.recurrenceTag?.isEmpty == false)
-                            ? "Recurring: \(task.recurrenceTag!)"
-                            : "Recurring"
-                    )
-                }
+                    Text(task.title)
+                        .font(isSprintMode ? .headline.weight(.medium) : .callout)
+                        .foregroundStyle(titleColor)
+                        .lineLimit(isSprintMode ? 1 : 2)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .layoutPriority(1)
+                        .help(task.title)
 
-                // Dependency marker — mirrors the edit form's "depends on"
-                // section. A small arrow hints at the relationship without
-                // naming the blockers inline (titles could be long).
-                if !task.dependsOn.isEmpty {
-                    Image(systemName: "arrow.right")
-                        .font(.caption2)
+                    // Recurring marker. If the task carries a `recurrenceTag`
+                    // ("weekly review", "daily standup"), show it as human text
+                    // instead of only a cryptic glyph — Бирман: «язык интерфейса —
+                    // язык человека». The bare ⟲ remains for tag-less recurring
+                    // tasks so the affordance is still present.
+                    if task.isRecurring {
+                        HStack(spacing: DS.Spacing.xxs) {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .font(.caption2)
+                            if let tag = task.recurrenceTag,
+                               !tag.trimmingCharacters(in: .whitespaces).isEmpty {
+                                Text(tag)
+                                    .font(.caption2)
+                                    .lineLimit(1)
+                            }
+                        }
                         .foregroundStyle(skin.resolvedTextTertiary)
-                        .accessibilityLabel("Depends on \(task.dependsOn.count) task\(task.dependsOn.count == 1 ? "" : "s")")
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(
+                            (task.recurrenceTag?.isEmpty == false)
+                                ? "Recurring: \(task.recurrenceTag!)"
+                                : "Recurring"
+                        )
+                    }
+
+                    // Dependency marker — mirrors the edit form's "depends on"
+                    // section. A small arrow hints at the relationship without
+                    // naming the blockers inline (titles could be long).
+                    if !task.dependsOn.isEmpty {
+                        Image(systemName: "arrow.right")
+                            .font(.caption2)
+                            .foregroundStyle(skin.resolvedTextTertiary)
+                            .accessibilityLabel("Depends on \(task.dependsOn.count) task\(task.dependsOn.count == 1 ? "" : "s")")
+                    }
+
+                    if task.priority == .high {
+                        Circle()
+                            .fill(skin.resolvedDestructiveColor)
+                            .frame(width: DS.Size.recipeDotSize, height: DS.Size.recipeDotSize)
+                            .accessibilityLabel("High priority")
+                    }
+
+                    if !isSprintMode {
+                        metaText
+                            .font(.caption2)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+
+                    if isHovered, !isSprintMode, let secondary = secondaryMetaText {
+                        secondary
+                            .font(.caption2)
+                            .lineLimit(1)
+                            .transition(.opacity)
+                    }
+
+                    if isHovered, !isDragging, let slotPreview, !isSprintMode {
+                        Text("→ \(slotPreview)")
+                            .font(.caption2)
+                            .foregroundStyle(skin.accentColor.opacity(DS.Opacity.accentMuted))
+                            .lineLimit(1)
+                            .transition(.opacity)
+                            .accessibilityLabel("Would land at \(slotPreview)")
+                    }
                 }
 
-                if task.priority == .high {
-                    Circle()
-                        .fill(skin.resolvedDestructiveColor)
-                        .frame(width: DS.Size.recipeDotSize, height: DS.Size.recipeDotSize)
-                        .accessibilityLabel("High priority")
-                }
-
-                if !isSprintMode {
-                    metaText
+                // Why-this-rank caption. Sprint always renders the smart-sort
+                // reason — that's the whole point of the screen. Other hosts
+                // can opt in by passing a non-nil `smartReason`.
+                if isSprintMode, let reason = smartReason {
+                    Text(reason)
                         .font(.caption2)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                }
-
-                if isHovered, !isSprintMode, let secondary = secondaryMetaText {
-                    secondary
-                        .font(.caption2)
-                        .lineLimit(1)
-                        .transition(.opacity)
-                }
-
-                if isHovered, !isDragging, let slotPreview, !isSprintMode {
-                    Text("→ \(slotPreview)")
-                        .font(.caption2)
-                        .foregroundStyle(skin.accentColor.opacity(DS.Opacity.accentMuted))
-                        .lineLimit(1)
-                        .transition(.opacity)
-                        .accessibilityLabel("Would land at \(slotPreview)")
+                        .foregroundStyle(reasonColor(for: reason))
+                        .padding(.top, 1)
+                        .accessibilityLabel("Reason: \(reason)")
                 }
             }
         }
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityRowLabel)
         .accessibilityHint("Double-tap to edit")
+    }
+
+    /// Mirror the title's urgency colour onto the reason caption so a glance
+    /// at the row's left column reads as one signal. Pinned uses accent —
+    /// it's a user-driven channel, not a deadline channel.
+    private func reasonColor(for reason: String) -> Color {
+        switch reason {
+        case "Pinned": return skin.accentColor
+        case "Overdue", "Today": return skin.resolvedDestructiveColor
+        case "Tomorrow": return .orange
+        default: return skin.resolvedTextTertiary
+        }
     }
 
     /// Title colour — red when the deadline is today or overdue, orange for

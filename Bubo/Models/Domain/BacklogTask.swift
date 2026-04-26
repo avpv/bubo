@@ -74,6 +74,16 @@ struct BacklogTask: Identifiable, Codable, Hashable, Sendable {
     /// For Bubo-native tasks pushed to Reminders, this stores the created reminder's ID.
     var reminderCalendarItemId: String?
 
+    /// User-pinned rank inside the smart-sorted list. nil = not pinned and the
+    /// task takes its place via `smartScore`. A non-nil value places the task
+    /// at the top of `smartSorted`, ordered ascending by `pinnedRank`, so a
+    /// drag in Sprint or Backlog can override the algorithm without forcing
+    /// the user to give up smart sort entirely.
+    ///
+    /// Birman: «алгоритм советует, не диктует» — данные пользователя сильнее
+    /// автоматики, но автоматика остаётся включённой для всех остальных строк.
+    var pinnedRank: Int?
+
     init(
         id: String = UUID().uuidString,
         title: String,

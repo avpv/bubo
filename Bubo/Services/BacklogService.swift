@@ -419,6 +419,112 @@ final class BacklogService {
         store.reorder(fromIndex: min(fromIdx, targetIdx), tasks: tasks)
     }
 
+    // MARK: Pin / unpin
+    //
+    // Pinning is the user's manual override of `BacklogLogic.smartScore`.
+    // When the smart-sorted list is shown (Sprint, or Backlog with Smart Sort
+    // on), pinned tasks float to the top in `pinnedRank` order; everything
+    // else keeps its algorithm-derived position. Storage order is untouched —
+    // this is a parallel signal, so toggling Smart Sort off restores the
+    // user's drag order untouched.
+    //
+    // Birman: данные пользователя сильнее автоматики, но автоматика остаётся
+    // включённой для всех остальных строк.
+
+    /// Pin `id` so it lands on top of the smart-sorted list. If `before` is
+    /// non-nil, the new pin slots immediately above that pinned task; otherwise
+    /// it goes to the very top (rank 0) and existing pins shift down.
+    /// No-op if `id` is unknown.
+    func pinTask(id: String, before: String? = nil) {
+        guard tasks.contains(where: { $0.id == id }) else { return }
+        // Build the current pinned sequence in rank order.
+        var pinned = tasks
+            .enumerated()
+            .compactMap { (storageIdx, t) -> (storageIdx: Int, taskId: String, rank: Int)? in
+                guard let rank = t.pinnedRank else { return nil }
+                return (storageIdx, t.id, rank)
+            }
+            .sorted { $0.rank < $1.rank }
+        // Remove the moving id from its old slot, if it was already pinned.
+        pinned.removeAll { $0.taskId == id }
+        // Three drop semantics for the smart-sorted list:
+        //   - `before == nil`            → pin to the very top (rank 0)
+        //   - `before` is itself pinned  → insert at that pin's rank
+        //   - `before` is *unpinned*     → append to the pin list, so the new
+        //     pin lands above all unpinned tasks (and therefore above the
+        //     drop target, which is unpinned by definition). Avoids the
+        //     "every drop fights for rank 0" loop.
+        let insertAt: Int
+        if let before {
+            if let idx = pinned.firstIndex(where: { $0.taskId == before }) {
+                insertAt = idx
+            } else {
+                insertAt = pinned.count
+            }
+        } else {
+            insertAt = 0
+        }
+        pinned.insert((0, id, 0), at: insertAt)
+        // Reassign ranks 0…N-1 over the new sequence and write back any rows
+        // whose rank actually changed.
+        var changed: [Int] = []
+        for (newRank, entry) in pinned.enumerated() {
+            guard let storageIdx = tasks.firstIndex(where: { $0.id == entry.taskId }) else { continue }
+            if tasks[storageIdx].pinnedRank != newRank {
+                tasks[storageIdx].pinnedRank = newRank
+                tasks[storageIdx].modifiedAt = Date()
+                changed.append(storageIdx)
+            }
+        }
+        for i in changed {
+            store.upsert(tasks[i], at: i)
+        }
+        if !changed.isEmpty {
+            NotificationCenter.default.post(name: Self.taskUpdated, object: id)
+        }
+    }
+
+    /// Drop `id`'s pin. The remaining pins are re-numbered to a contiguous
+    /// 0…N-1 sequence so a later pin always lands in a clean slot.
+    func unpinTask(id: String) {
+        guard let idx = tasks.firstIndex(where: { $0.id == id }),
+              tasks[idx].pinnedRank != nil else { return }
+        tasks[idx].pinnedRank = nil
+        tasks[idx].modifiedAt = Date()
+        store.upsert(tasks[idx], at: idx)
+        // Re-number remaining pins.
+        var pinned = tasks
+            .enumerated()
+            .compactMap { (storageIdx, t) -> (storageIdx: Int, rank: Int)? in
+                guard let rank = t.pinnedRank else { return nil }
+                return (storageIdx, rank)
+            }
+            .sorted { $0.rank < $1.rank }
+        for (newRank, entry) in pinned.enumerated() where tasks[entry.storageIdx].pinnedRank != newRank {
+            tasks[entry.storageIdx].pinnedRank = newRank
+            tasks[entry.storageIdx].modifiedAt = Date()
+            store.upsert(tasks[entry.storageIdx], at: entry.storageIdx)
+        }
+        NotificationCenter.default.post(name: Self.taskUpdated, object: id)
+    }
+
+    /// Drop every pin. Used by tests and by an "Unpin all" affordance if we
+    /// add one later.
+    func unpinAll() {
+        var changed: [Int] = []
+        for i in tasks.indices where tasks[i].pinnedRank != nil {
+            tasks[i].pinnedRank = nil
+            tasks[i].modifiedAt = Date()
+            changed.append(i)
+        }
+        for i in changed {
+            store.upsert(tasks[i], at: i)
+        }
+        if !changed.isEmpty {
+            NotificationCenter.default.post(name: Self.taskUpdated, object: nil)
+        }
+    }
+
     /// Move `moved` to the very end of the active storage order.
     func moveTaskToEnd(id moved: String) {
         guard let fromIdx = tasks.firstIndex(where: { $0.id == moved }) else { return }

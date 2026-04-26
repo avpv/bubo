@@ -81,6 +81,11 @@ enum BacklogLogic {
 
     /// Sort a task list by `smartScore`, with a stable fallback to the
     /// original (storage) order so ties don't shuffle.
+    ///
+    /// Pinned tasks (`pinnedRank != nil`) float to the top in ascending rank
+    /// order, regardless of score. Pinning is the user's manual override:
+    /// «алгоритм советует, не диктует». Within the unpinned tail, the score
+    /// rule applies as before.
     static func smartSorted(
         _ tasks: [BacklogTask],
         now: Date = Date(),
@@ -88,11 +93,49 @@ enum BacklogLogic {
     ) -> [BacklogTask] {
         let indexed = tasks.enumerated().map { ($0.offset, $0.element) }
         return indexed.sorted { lhs, rhs in
-            let lScore = smartScore(for: lhs.1, now: now, calendar: calendar)
-            let rScore = smartScore(for: rhs.1, now: now, calendar: calendar)
-            if lScore == rScore { return lhs.0 < rhs.0 }
-            return lScore > rScore
+            switch (lhs.1.pinnedRank, rhs.1.pinnedRank) {
+            case let (l?, r?):
+                if l != r { return l < r }
+                return lhs.0 < rhs.0
+            case (_?, nil): return true
+            case (nil, _?): return false
+            case (nil, nil):
+                let lScore = smartScore(for: lhs.1, now: now, calendar: calendar)
+                let rScore = smartScore(for: rhs.1, now: now, calendar: calendar)
+                if lScore == rScore { return lhs.0 < rhs.0 }
+                return lScore > rScore
+            }
         }.map(\.1)
+    }
+
+    // MARK: Reasons (explainability)
+
+    /// One-word, human-readable reason for a task's smart-sort position.
+    /// Ordered so the strongest signal wins: pinned > today/overdue > tomorrow
+    /// > soon > priority > nothing. Used by row sub-titles in Sprint and in
+    /// the smart-sorted backlog so the user can read *why* a task is ranked
+    /// where it is without opening the editor.
+    ///
+    /// Birman: «информация, не украшение» — каждая строка отвечает на свой
+    /// вопрос «почему я здесь».
+    static func smartReason(
+        for task: BacklogTask,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> String? {
+        if task.pinnedRank != nil { return "Pinned" }
+        if let deadline = task.deadline {
+            if deadline < now { return "Overdue" }
+            if calendar.isDate(deadline, inSameDayAs: now) { return "Today" }
+            if let tomorrow = calendar.date(byAdding: .day, value: 1, to: now),
+               calendar.isDate(deadline, inSameDayAs: tomorrow) {
+                return "Tomorrow"
+            }
+            let days = calendar.dateComponents([.day], from: now, to: deadline).day ?? 0
+            if days <= 7 { return "in \(days)d" }
+        }
+        if task.priority == .high { return "High" }
+        return nil
     }
 
     // MARK: Sprint cap

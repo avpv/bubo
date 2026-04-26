@@ -261,6 +261,16 @@ struct MenuBarView: View {
                             backlogService: backlog,
                             onExit: { navigation = .list },
                             onEditTask: { task in navigation = .editTask(task) },
+                            onScheduleTasks: {
+                                // Pop the same command-palette flow the inline
+                                // Schedule pill uses, but exit Sprint first so
+                                // the palette doesn't open on top of a dimmed
+                                // sprint screen the user can't see anyway.
+                                navigation = .list
+                                withAnimation(DS.Animation.quick) {
+                                    paletteContext = PaletteContext()
+                                }
+                            },
                             onUndoableAction: { message, undo in
                                 toastState.showSuccess(message, icon: "arrow.uturn.backward", onUndo: undo)
                             }
