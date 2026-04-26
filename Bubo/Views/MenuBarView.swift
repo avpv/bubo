@@ -1568,10 +1568,60 @@ struct MenuBarView: View {
 
     // MARK: - Smart Banner
 
-    /// The first non-dismissed suggested recipe from the monitor, or nil when
-    /// nothing is worth suggesting.
+    /// Mapping from `SuggestionEngine.Signal.name` to the set of
+    /// `QuickActionCandidate.id`s that surface the same intent in the
+    /// QuickActions chip row. The two systems were named independently —
+    /// `pending-tasks` here is `schedule-tasks` there — so we keep an
+    /// explicit table rather than a brittle name-prefix match.
+    ///
+    /// Used by `activeBannerSuggestion` below to suppress the banner when
+    /// the dynamic ranker has already raised the same recipe to top-3:
+    /// otherwise the user sees «4 tasks to schedule [Run]» as both a
+    /// chip *and* a banner immediately below the Tasks card, which was
+    /// the original «тройной Schedule» complaint.
+    private static let suggestionToQuickActionIDs: [String: Set<String>] = [
+        "overdue": ["overdue"],
+        "urgent": ["deadlines"],
+        "meetings-heavy": ["batch-meetings"],
+        "pending-tasks": ["schedule-tasks"],
+        // Focus has two surface variants in the ranker — the user's own
+        // history picks one of them per `focusVariantCandidate()`. Either
+        // counts as the same suggestion being shown.
+        "no-focus": ["focus", "pomodoro"],
+        "organize-morning": ["organize"],
+    ]
+
+    /// True when the suggestion's primary contribution is already surfaced
+    /// in the top-3 QuickActions chips. We reuse the production
+    /// `QuickActionRanker` so suppression follows the same context-aware
+    /// scoring the chips do — no risk of the chip and the banner
+    /// disagreeing on what's «in the top».
+    private func isSuggestionSurfacedInQuickActions(_ suggestion: SuggestionEngine.Suggestion) -> Bool {
+        guard let backlog = optimizerService.backlogService else { return false }
+        let ranker = QuickActionRanker(
+            backlogService: backlog,
+            reminderService: reminderService,
+            intentLearner: optimizerService.intentLearner
+        )
+        let topIds = Set(ranker.rank(limit: 3).map(\.action.id))
+
+        for signalName in suggestion.contributions.keys {
+            if let actionIds = Self.suggestionToQuickActionIDs[signalName],
+               !actionIds.isDisjoint(with: topIds) {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// The first non-dismissed suggested recipe from the monitor, or nil
+    /// when nothing is worth suggesting. Returns nil also when the same
+    /// intent is already shown as a top-3 QuickAction — Бирман: «один
+    /// CTA, не три», иначе главный экран начинает дублировать сам себя.
     private var activeBannerSuggestion: SuggestionEngine.Suggestion? {
-        optimizerService.suggestionEngine?.suggestion
+        guard let suggestion = optimizerService.suggestionEngine?.suggestion else { return nil }
+        if isSuggestionSurfacedInQuickActions(suggestion) { return nil }
+        return suggestion
     }
 
     /// Execute a request immediately — no palette, no configuration.
