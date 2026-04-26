@@ -26,6 +26,11 @@ struct BacklogView: View {
     /// as event editing — so the editor opens as a full-screen sibling
     /// surface instead of a detached sheet floating above the list.
     var onEditTask: ((BacklogTask) -> Void)? = nil
+    /// Fired when the user picks "Sprint mode" from the overflow menu. The
+    /// parent owns navigation state and pushes `SprintView` onto the popover
+    /// stack — same pattern as `onEditTask` — so sprint mode replaces the
+    /// whole popover instead of just restyling backlog rows in place.
+    var onEnterSprint: (() -> Void)? = nil
     /// Fired for any reversible user action (reorder, complete, cross-context
     /// drop) so the parent can surface a unified undo toast — it owns
     /// `ToastState`. nil silently disables the toast; the action still runs.
@@ -88,10 +93,6 @@ struct BacklogView: View {
     /// `showCompletedToday`: summary row always visible, the list stays
     /// collapsed until the user asks.
     @State private var showFrozen: Bool = false
-    /// Sprint mode: collapses grouping, dims metadata, shows only the top
-    /// `Self.sprintModeMaxTasks` rows in a bigger type size. One thing on
-    /// screen at a time — Birman's «режим кассы».
-    @State private var isSprintMode: Bool = false
     /// Smart Sort: arranges active tasks by (deadline urgency + priority)
     /// instead of user drag order. Survives per session only — the stored
     /// order remains the user's canonical sequence.
@@ -154,10 +155,6 @@ struct BacklogView: View {
     /// is now one line (title + inline middot-separated metadata) instead
     /// of a two-line stack.
     static let compactRowHeight: CGFloat = 40
-
-    /// Hard cap on rows visible in sprint mode. Small on purpose: the whole
-    /// point of the mode is to see exactly what's next without a scroll.
-    static let sprintModeMaxTasks = 5
 
     /// All non-done, non-frozen tasks — the "real" active set used for
     /// totals, capacity math and onAppear heuristics. Not subject to the
@@ -527,18 +524,12 @@ struct BacklogView: View {
                 )
             }
 
-            Button {
-                withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-                    isSprintMode.toggle()
-                    if isSprintMode, expansion == .collapsed {
-                        expansion = .compact
-                    }
+            if onEnterSprint != nil {
+                Button {
+                    onEnterSprint?()
+                } label: {
+                    Label("Sprint mode", systemImage: "bolt")
                 }
-            } label: {
-                Label(
-                    isSprintMode ? "Exit sprint mode" : "Sprint mode",
-                    systemImage: isSprintMode ? "bolt.fill" : "bolt"
-                )
             }
         } label: {
             Image(systemName: "ellipsis")
@@ -661,24 +652,20 @@ struct BacklogView: View {
     /// already surfaces its context in the subtitle.
     @ViewBuilder
     private func taskRowsContent(visibleIDs: Set<String>?) -> some View {
-        // Three rendering strategies:
+        // Two rendering strategies:
         // 1. Smart Sort on — flat list ordered by `smartScore`, grouping
         //    dropped so the queue reads as a single priority list.
-        // 2. Sprint mode on — same flat list, capped at `sprintModeMaxTasks`
-        //    (combined with Smart Sort if both are enabled).
-        // 3. Default — user's drag order honoured via `groupedByContext`.
+        // 2. Default — user's drag order honoured via `groupedByContext`.
         //
+        // Sprint mode is no longer a flag here — it's a separate
+        // full-screen view (`SprintView`) reached via the overflow menu.
         // When a `visibleIDs` set is passed, only those tasks render — used
         // by animations that reveal one row at a time.
         let baseOrder: [BacklogTask] = useSmartSort ? smartSortedActiveTasks : activeTasks
-        let capped: [BacklogTask] = isSprintMode ? Array(baseOrder.prefix(Self.sprintModeMaxTasks)) : baseOrder
-        let ids: Set<String> = visibleIDs ?? Set(capped.map(\.id))
+        let ids: Set<String> = visibleIDs ?? Set(baseOrder.map(\.id))
 
-        // When Smart Sort OR Sprint Mode is on, skip grouping entirely — one
-        // flat list reads truer for both modes. Otherwise fall through to
-        // `groupedByContext`, which preserves context clustering.
-        if useSmartSort || isSprintMode {
-            ForEach(capped) { task in
+        if useSmartSort {
+            ForEach(baseOrder) { task in
                 if ids.contains(task.id) {
                     taskRowBody(task)
                 }
@@ -708,7 +695,6 @@ struct BacklogView: View {
             isDragging: coordinator?.draggedTask?.taskId == task.id,
             canMoveUp: canMoveUp(task),
             canMoveDown: canMoveDown(task),
-            isSprintMode: isSprintMode,
             onComplete: { completeTaskWithUndo(task) },
             onEdit: { onEditTask?(task) },
             onDelete: { onDeleteTask?(task) },

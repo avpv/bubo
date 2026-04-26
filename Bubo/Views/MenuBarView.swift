@@ -60,6 +60,7 @@ struct MenuBarView: View {
         case editTask(BacklogTask)
         case timer(CalendarEvent)
         case quickAddTasks
+        case sprint
 
         var isTimer: Bool {
             if case .timer = self { return true }
@@ -74,6 +75,7 @@ struct MenuBarView: View {
             case (.editTask(let a), .editTask(let b)): return a.id == b.id
             case (.timer(let a), .timer(let b)): return a.id == b.id
             case (.quickAddTasks, .quickAddTasks): return true
+            case (.sprint, .sprint): return true
             default: return false
             }
         }
@@ -240,6 +242,27 @@ struct MenuBarView: View {
                             onSave: {
                                 navigation = .list
                                 toastState.showSuccess("Task updated", icon: "checkmark.circle.fill")
+                            }
+                        )
+                        .transition(
+                            reduceMotion ? .opacity : .asymmetric(
+                                insertion: .move(edge: .trailing).combined(with: .opacity),
+                                removal: .move(edge: .trailing).combined(with: .opacity).combined(with: .scale(scale: 0.98))
+                            )
+                        )
+                    } else {
+                        EmptyView()
+                            .onAppear { navigation = .list }
+                    }
+
+                case .sprint:
+                    if let backlog = optimizerService.backlogService {
+                        SprintView(
+                            backlogService: backlog,
+                            onExit: { navigation = .list },
+                            onEditTask: { task in navigation = .editTask(task) },
+                            onUndoableAction: { message, undo in
+                                toastState.showSuccess(message, icon: "arrow.uturn.backward", onUndo: undo)
                             }
                         )
                         .transition(
@@ -644,6 +667,9 @@ struct MenuBarView: View {
                 },
                 onEditTask: { task in
                     navigation = .editTask(task)
+                },
+                onEnterSprint: {
+                    navigation = .sprint
                 },
                 onUndoableAction: { message, undo in
                     // Unified undo pipe for reorder / complete / context

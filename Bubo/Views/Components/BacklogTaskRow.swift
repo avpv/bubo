@@ -17,7 +17,8 @@ struct BacklogTaskRow: View {
     var canMoveUp: Bool = true
     var canMoveDown: Bool = true
     /// Sprint mode tints the row for calmer reading: metadata/controls
-    /// disappear, the title takes a larger font. See `BacklogView.isSprintMode`.
+    /// disappear, the title takes a larger font. Set by `SprintView`; the
+    /// inline backlog passes the default `false`.
     var isSprintMode: Bool = false
     var onComplete: () -> Void
     var onEdit: () -> Void
