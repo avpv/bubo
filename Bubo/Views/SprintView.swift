@@ -272,7 +272,7 @@ struct SprintView: View {
 
                 BacklogCapacityLabel(
                     pendingMinutes: pendingWorkloadMinutes,
-                    remainingWorkdayMinutes: remainingWorkdayMinutes
+                    optimizerService: optimizerService
                 )
             }
 

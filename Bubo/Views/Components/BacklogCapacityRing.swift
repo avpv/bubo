@@ -232,31 +232,79 @@ struct BacklogCapacityPopover: View {
 
 // MARK: - Capacity Label
 
-/// Compact textual companion to `BacklogCapacityRing`. Shows
-/// `pending / remaining` (e.g. «5 h / 3 h») in the same row as the ring,
-/// turning the colour-only signal into glanceable numbers.
+/// Compact textual companion to `BacklogCapacityRing`. Answers «успеешь
+/// ли?» in plain language instead of presenting raw `pending / remaining`
+/// numbers — «Done by 17:30», «1h over», «After hours · 3h queued».
 ///
-/// The user complaint that prompted this: the ring tells you «red /
-/// orange / green», but not «red by how much». The tooltip carries
-/// numbers, but only on hover — you can't plan around something you
-/// can't see.
+/// Why the rephrase: the ring already carries the alarm via colour, and
+/// the old «5h / 3h» label asked the reader to do the subtraction
+/// themselves. The new label collapses that arithmetic into a verdict —
+/// either you finish, or you spill, or the window's closed. Raw numbers
+/// stay reachable through the ring's popover (one click) and the tooltip
+/// for users who want them.
 ///
-/// Birman: цвет — это сигнал, число — данные; рядом сильнее, чем порознь.
-/// Color stays neutral on purpose: the ring carries the alarm, the label
-/// just answers «по сколько часов?».
+/// Birman: «информация — это интерпретация, не сырые данные». HIG: glanceable
+/// status uses words a user already thinks in. Color stays neutral; the
+/// ring carries the urgency channel.
+///
+/// `TimelineView(.everyMinute)` keeps the projected ETA from going stale
+/// while the popover sits open — a 30-minute review session shouldn't
+/// show a finish time computed at hour zero.
 struct BacklogCapacityLabel: View {
     let pendingMinutes: Int
-    let remainingWorkdayMinutes: Int
+    var optimizerService: OptimizerService
 
     @Environment(\.activeSkin) private var skin
 
     var body: some View {
-        Text("\(DS.formatMinutes(pendingMinutes))\u{00A0}/\u{00A0}\(DS.formatMinutes(remainingWorkdayMinutes))")
-            .font(.caption2.weight(.medium).monospacedDigit())
-            .foregroundStyle(skin.resolvedTextSecondary)
-            .contentTransition(.numericText())
-            .accessibilityLabel(
-                "\(DS.formatMinutes(pendingMinutes)) queued, \(DS.formatMinutes(remainingWorkdayMinutes)) remaining today"
+        TimelineView(.everyMinute) { ctx in
+            let forecast = BacklogLogic.capacityForecast(
+                pendingMinutes: pendingMinutes,
+                workingHours: optimizerService.workingHours,
+                workingDays: optimizerService.workingDays,
+                now: ctx.date
             )
+            Text(Self.label(for: forecast))
+                .font(.caption2.weight(.medium).monospacedDigit())
+                .foregroundStyle(skin.resolvedTextSecondary)
+                .contentTransition(.numericText())
+                .accessibilityLabel(Self.accessibilityLabel(for: forecast, pendingMinutes: pendingMinutes))
+        }
+    }
+
+    /// Visible verdict — kept short so it sits next to the ring without
+    /// crowding the header. The ETA case uses an en-dash-free «Done by HH:MM»
+    /// (no «—» dash to fight monospaced digits); the overflow case prefixes
+    /// the magnitude so a glance sees how much you're over.
+    static func label(for forecast: BacklogLogic.CapacityForecast) -> String {
+        switch forecast {
+        case .fits(let eta, _):
+            let timeStr = eta.formatted(date: .omitted, time: .shortened)
+            return "Done by \(timeStr)"
+        case .over(let byMinutes):
+            return "\(DS.formatMinutes(byMinutes)) over"
+        case .afterHours(let queuedMinutes):
+            return "After hours · \(DS.formatMinutes(queuedMinutes)) queued"
+        }
+    }
+
+    /// Verbose accessibility phrasing — VoiceOver reads the full sentence
+    /// (with the spare-minutes hint) instead of the compact visual form.
+    static func accessibilityLabel(
+        for forecast: BacklogLogic.CapacityForecast,
+        pendingMinutes: Int
+    ) -> String {
+        switch forecast {
+        case .fits(let eta, let spareMinutes):
+            let timeStr = eta.formatted(date: .omitted, time: .shortened)
+            if spareMinutes > 0 {
+                return "Backlog finishes at \(timeStr), \(DS.formatMinutes(spareMinutes)) to spare"
+            }
+            return "Backlog finishes at \(timeStr)"
+        case .over(let byMinutes):
+            return "Backlog over capacity by \(DS.formatMinutes(byMinutes))"
+        case .afterHours(let queuedMinutes):
+            return "Workday ended, \(DS.formatMinutes(queuedMinutes)) queued for later"
+        }
     }
 }
