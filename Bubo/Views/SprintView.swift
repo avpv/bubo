@@ -362,8 +362,7 @@ struct SprintView: View {
                     ForEach(visibleTasks) { task in
                         row(for: task)
                     }
-                    completedTombstone
-                    frozenTombstone
+                    tombstones
                 }
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.vertical, DS.Spacing.lg)
@@ -412,158 +411,44 @@ struct SprintView: View {
 
     // MARK: - Tombstones
 
-    @ViewBuilder
-    private var completedTombstone: some View {
-        if !completedToday.isEmpty {
-            VStack(spacing: 0) {
-                Button {
-                    withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-                        showCompletedToday.toggle()
-                    }
-                } label: {
-                    HStack(spacing: DS.Spacing.xs) {
-                        Image(systemName: showCompletedToday ? "chevron.down" : "chevron.right")
-                            .font(.caption2)
-                            .contentTransition(.symbolEffect(.replace))
-                        Text("\(completedToday.count) completed today")
-                            .font(.caption2.monospacedDigit())
-                            .contentTransition(.numericText())
-                        Spacer()
-                    }
-                    .foregroundStyle(skin.resolvedTextTertiary)
-                    .padding(.horizontal, DS.Spacing.xs)
-                    .padding(.vertical, DS.Spacing.xs)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("\(completedToday.count) tasks completed today")
+    /// Shared completed-today + frozen summary rows. SprintView passes the
+    /// no-gutter / no-min-height variant since its rows have no leading
+    /// drag-handle column to align with — we can't reuse BacklogView's
+    /// alignment without picking up phantom whitespace.
+    private var tombstones: some View {
+        BacklogTombstones(
+            completedToday: completedToday,
+            frozen: backlogService.frozen,
+            showCompleted: $showCompletedToday,
+            showFrozen: $showFrozen,
+            onUncomplete: { task in uncomplete(task) },
+            onUnfreezeOne: { task in unfreezeOneWithUndo(task) },
+            onUnfreezeAll: { unfreezeAllWithUndo() }
+        )
+    }
 
-                if showCompletedToday {
-                    ForEach(completedToday) { task in
-                        completedRow(task)
-                            .transition(.opacity)
-                    }
-                }
-            }
-            .motionAwareAnimation(DS.Animation.standard, value: showCompletedToday, reduceMotion: reduceMotion)
+    /// Unfreeze a single task with an undo toast that re-freezes on tap.
+    /// Same pattern as BacklogView, kept duplicated until the controllers
+    /// themselves get extracted (out of scope for this refactor).
+    private func unfreezeOneWithUndo(_ task: BacklogTask) {
+        let snapshot = task
+        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+            backlogService.unfreezeTask(id: task.id)
+        }
+        onUndoableAction?("Unfroze \u{201C}\(task.title)\u{201D}") { [backlogService] in
+            backlogService.updateTask(snapshot)
+            backlogService.freezeTask(id: snapshot.id)
         }
     }
 
-    @ViewBuilder
-    private func completedRow(_ task: BacklogTask) -> some View {
-        HStack(spacing: DS.Spacing.sm) {
-            Button {
-                uncomplete(task)
-            } label: {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.callout)
-                    .foregroundStyle(skin.resolvedTextTertiary)
-                    .frame(width: 24, height: 24)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help("Restore task")
-            .accessibilityLabel("Restore \u{201C}\(task.title)\u{201D}")
-
-            Text(task.title)
-                .font(.callout)
-                .foregroundStyle(skin.resolvedTextTertiary)
-                .strikethrough()
-                .lineLimit(1)
-
-            Spacer()
+    private func unfreezeAllWithUndo() {
+        let restoredIds = backlogService.frozen.map(\.id)
+        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+            backlogService.unfreezeAll()
         }
-        .padding(.vertical, DS.Spacing.xxs)
-        .padding(.horizontal, DS.Spacing.xs)
-    }
-
-    @ViewBuilder
-    private var frozenTombstone: some View {
-        let frozen = backlogService.frozen
-        if !frozen.isEmpty {
-            VStack(spacing: 0) {
-                HStack(spacing: DS.Spacing.xs) {
-                    Button {
-                        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-                            showFrozen.toggle()
-                        }
-                    } label: {
-                        HStack(spacing: DS.Spacing.xs) {
-                            Image(systemName: showFrozen ? "chevron.down" : "chevron.right")
-                                .font(.caption2)
-                                .contentTransition(.symbolEffect(.replace))
-                            Image(systemName: "snowflake")
-                                .font(.caption2)
-                            Text("\(frozen.count) frozen")
-                                .font(.caption2.monospacedDigit())
-                                .contentTransition(.numericText())
-                            Spacer()
-                        }
-                        .foregroundStyle(skin.resolvedTextTertiary)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("\(frozen.count) frozen tasks")
-
-                    Button("Unfreeze all") {
-                        let restoredIds = frozen.map(\.id)
-                        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-                            backlogService.unfreezeAll()
-                        }
-                        onUndoableAction?("Unfroze \(restoredIds.count) task\(restoredIds.count == 1 ? "" : "s")") { [backlogService] in
-                            for id in restoredIds { backlogService.freezeTask(id: id) }
-                        }
-                    }
-                    .font(.caption2)
-                    .buttonStyle(.plain)
-                    .foregroundStyle(skin.accentColor)
-                }
-                .padding(.horizontal, DS.Spacing.xs)
-                .padding(.vertical, DS.Spacing.xs)
-
-                if showFrozen {
-                    ForEach(frozen) { task in
-                        frozenRow(task)
-                            .transition(.opacity)
-                    }
-                }
-            }
-            .motionAwareAnimation(DS.Animation.standard, value: showFrozen, reduceMotion: reduceMotion)
+        onUndoableAction?("Unfroze \(restoredIds.count) task\(restoredIds.count == 1 ? "" : "s")") { [backlogService] in
+            for id in restoredIds { backlogService.freezeTask(id: id) }
         }
-    }
-
-    @ViewBuilder
-    private func frozenRow(_ task: BacklogTask) -> some View {
-        HStack(spacing: DS.Spacing.sm) {
-            Button {
-                let snapshot = task
-                withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-                    backlogService.unfreezeTask(id: task.id)
-                }
-                onUndoableAction?("Unfroze \u{201C}\(task.title)\u{201D}") { [backlogService] in
-                    backlogService.updateTask(snapshot)
-                    backlogService.freezeTask(id: snapshot.id)
-                }
-            } label: {
-                Image(systemName: "snowflake")
-                    .font(.callout)
-                    .foregroundStyle(skin.resolvedTextTertiary)
-                    .frame(width: 24, height: 24)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help("Unfreeze task")
-            .accessibilityLabel("Unfreeze \u{201C}\(task.title)\u{201D}")
-
-            Text(task.title)
-                .font(.callout)
-                .foregroundStyle(skin.resolvedTextTertiary)
-                .lineLimit(1)
-
-            Spacer()
-        }
-        .padding(.vertical, DS.Spacing.xxs)
-        .padding(.horizontal, DS.Spacing.xs)
     }
 
     // MARK: - Add task field

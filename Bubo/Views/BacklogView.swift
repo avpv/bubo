@@ -651,8 +651,7 @@ struct BacklogView: View {
                 ScrollView {
                     VStack(spacing: 0) {
                         taskRowsContent(visibleIDs: nil)
-                        completedTombstone
-                        frozenTombstone
+                        tombstones
                     }
                 }
                 .scrollIndicators(.automatic)
@@ -746,192 +745,28 @@ struct BacklogView: View {
         .transition(.opacity.combined(with: .move(edge: .leading)))
     }
 
-    // MARK: - Completed-today tombstone
+    // MARK: - Tombstones
 
-    /// «N completed today» summary + optional expanded list of completed rows.
-    /// Hidden entirely when no tasks were completed today so it doesn't add
-    /// visual weight to the empty state.
-    ///
-    /// Birman: «квартирант, а не жилец» — свёрнуто по умолчанию; клик на
-    /// заполненный чекбокс возвращает задачу обратно в активный список.
+    /// Shared completed-today + frozen summary rows. Click on a filled
+    /// checkmark restores a task, click on a snowflake unfreezes one;
+    /// «Unfreeze all» batch-thaws.
     @ViewBuilder
-    private var completedTombstone: some View {
-        if !completedToday.isEmpty {
-            VStack(spacing: 0) {
-                Button {
-                    withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-                        showCompletedToday.toggle()
-                    }
-                } label: {
-                    HStack(spacing: DS.Spacing.xs) {
-                        Image(systemName: showCompletedToday ? "chevron.down" : "chevron.right")
-                            .font(.caption2)
-                            .contentTransition(.symbolEffect(.replace))
-                        Text("\(completedToday.count) completed today")
-                            .font(.caption2.monospacedDigit())
-                            .contentTransition(.numericText())
-                        Spacer()
-                    }
-                    .foregroundStyle(skin.resolvedTextTertiary)
-                    .padding(.horizontal, DS.Spacing.xs)
-                    .padding(.vertical, DS.Spacing.xs)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("\(completedToday.count) tasks completed today")
-                .accessibilityHint(showCompletedToday ? "Hide completed" : "Show completed")
-
-                if showCompletedToday {
-                    ForEach(completedToday) { task in
-                        completedRow(task)
-                            .transition(.opacity)
-                    }
-                }
-            }
-            .motionAwareAnimation(DS.Animation.standard, value: showCompletedToday, reduceMotion: reduceMotion)
-            .motionAwareAnimation(DS.Animation.quick, value: completedToday.map(\.id), reduceMotion: reduceMotion)
-        }
-    }
-
-    /// One completed-task row. Filled checkmark, dimmed strike-through title.
-    /// Tapping the checkmark restores the task to the active list.
-    @ViewBuilder
-    private func completedRow(_ task: BacklogTask) -> some View {
-        HStack(spacing: DS.Spacing.sm) {
-            // Reserve the same leading gutter as active rows so the checkmark
-            // column aligns vertically — keeps the two lists visually linked.
-            Color.clear
-                .frame(width: DS.Size.iconLarge, height: DS.Size.accentBarHeight)
-
-            Button {
-                uncompleteTask(task)
-            } label: {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.callout)
-                    .foregroundStyle(skin.resolvedTextTertiary)
-                    .frame(width: 24, height: 24)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help("Restore task")
-            .accessibilityLabel("Restore \u{201C}\(task.title)\u{201D}")
-
-            Text(task.title)
-                .font(.callout)
-                .foregroundStyle(skin.resolvedTextTertiary)
-                .strikethrough()
-                .lineLimit(1)
-
-            Spacer()
-        }
-        .padding(.vertical, DS.Spacing.xxs)
-        .padding(.horizontal, DS.Spacing.xs)
-        .frame(minHeight: Self.compactRowHeight)
-    }
-
-    // MARK: - Frozen tombstone
-
-    /// «N frozen» summary + on-demand list of frozen tasks. Follows the same
-    /// "квартирант, а не жилец" pattern as `completedTombstone`: hidden when
-    /// empty, collapsed by default, one tap expands.
-    ///
-    /// The header carries an "Unfreeze all" shortcut — frozen tasks are often
-    /// batch-thawed when priorities shift, and clicking ✕ on each pill would
-    /// be friction the non-destructive freeze is trying to avoid.
-    @ViewBuilder
-    private var frozenTombstone: some View {
-        let frozen = backlogService.frozen
-        if !frozen.isEmpty {
-            VStack(spacing: 0) {
-                HStack(spacing: DS.Spacing.xs) {
-                    Button {
-                        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-                            showFrozen.toggle()
-                        }
-                    } label: {
-                        HStack(spacing: DS.Spacing.xs) {
-                            Image(systemName: showFrozen ? "chevron.down" : "chevron.right")
-                                .font(.caption2)
-                                .contentTransition(.symbolEffect(.replace))
-                            Image(systemName: "snowflake")
-                                .font(.caption2)
-                            Text("\(frozen.count) frozen")
-                                .font(.caption2.monospacedDigit())
-                                .contentTransition(.numericText())
-                            Spacer()
-                        }
-                        .foregroundStyle(skin.resolvedTextTertiary)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("\(frozen.count) frozen tasks")
-
-                    Button("Unfreeze all") {
-                        // Snapshot IDs so undo knows which ones to re-freeze.
-                        let restoredIds = frozen.map(\.id)
-                        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-                            backlogService.unfreezeAll()
-                        }
-                        onUndoableAction?("Unfroze \(restoredIds.count) task\(restoredIds.count == 1 ? "" : "s")") { [backlogService] in
-                            for id in restoredIds { backlogService.freezeTask(id: id) }
-                        }
-                    }
-                    .font(.caption2)
-                    .buttonStyle(.plain)
-                    .foregroundStyle(skin.accentColor)
-                }
-                .padding(.horizontal, DS.Spacing.xs)
-                .padding(.vertical, DS.Spacing.xs)
-
-                if showFrozen {
-                    ForEach(frozen) { task in
-                        frozenRow(task)
-                            .transition(.opacity)
-                    }
-                }
-            }
-            .motionAwareAnimation(DS.Animation.standard, value: showFrozen, reduceMotion: reduceMotion)
-            .motionAwareAnimation(DS.Animation.quick, value: frozen.map(\.id), reduceMotion: reduceMotion)
-        }
-    }
-
-    /// One frozen-task row. Snowflake checkbox; tapping it unfreezes.
-    @ViewBuilder
-    private func frozenRow(_ task: BacklogTask) -> some View {
-        HStack(spacing: DS.Spacing.sm) {
-            Color.clear
-                .frame(width: DS.Size.iconLarge, height: DS.Size.accentBarHeight)
-
-            Button {
-                let snapshot = task
-                withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-                    backlogService.unfreezeTask(id: task.id)
-                }
-                onUndoableAction?("Unfroze \u{201C}\(task.title)\u{201D}") { [backlogService] in
-                    backlogService.updateTask(snapshot)
-                    backlogService.freezeTask(id: snapshot.id)
-                }
-            } label: {
-                Image(systemName: "snowflake")
-                    .font(.callout)
-                    .foregroundStyle(skin.resolvedTextTertiary)
-                    .frame(width: 24, height: 24)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help("Unfreeze task")
-            .accessibilityLabel("Unfreeze \u{201C}\(task.title)\u{201D}")
-
-            Text(task.title)
-                .font(.callout)
-                .foregroundStyle(skin.resolvedTextTertiary)
-                .lineLimit(1)
-
-            Spacer()
-        }
-        .padding(.vertical, DS.Spacing.xxs)
-        .padding(.horizontal, DS.Spacing.xs)
-        .frame(minHeight: Self.compactRowHeight)
+    private var tombstones: some View {
+        BacklogTombstones(
+            completedToday: completedToday,
+            frozen: backlogService.frozen,
+            showCompleted: $showCompletedToday,
+            showFrozen: $showFrozen,
+            // Inline backlog rows have a leading drag-handle column, so we
+            // ask the tombstone to reserve the same gutter and match the
+            // 40pt active-row height — that's what keeps the checkmark
+            // column lined up under the active list above.
+            alignedLeadingGutter: true,
+            minRowHeight: Self.compactRowHeight,
+            onUncomplete: { task in uncompleteTask(task) },
+            onUnfreezeOne: { task in unfreezeOneWithUndo(task) },
+            onUnfreezeAll: { unfreezeAllWithUndo() }
+        )
     }
 
     /// Restore a completed task to the pending list. Undo is the tombstone
@@ -943,6 +778,30 @@ struct BacklogView: View {
         restored.completedAt = nil
         withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
             backlogService.updateTask(restored)
+        }
+    }
+
+    /// Unfreeze a single task with an undo toast that re-freezes on tap.
+    private func unfreezeOneWithUndo(_ task: BacklogTask) {
+        let snapshot = task
+        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+            backlogService.unfreezeTask(id: task.id)
+        }
+        onUndoableAction?("Unfroze \u{201C}\(task.title)\u{201D}") { [backlogService] in
+            backlogService.updateTask(snapshot)
+            backlogService.freezeTask(id: snapshot.id)
+        }
+    }
+
+    /// Batch-unfreeze every frozen task. Undo re-freezes by id so the toast
+    /// reverses the operation cleanly even if the array shifts in between.
+    private func unfreezeAllWithUndo() {
+        let restoredIds = backlogService.frozen.map(\.id)
+        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+            backlogService.unfreezeAll()
+        }
+        onUndoableAction?("Unfroze \(restoredIds.count) task\(restoredIds.count == 1 ? "" : "s")") { [backlogService] in
+            for id in restoredIds { backlogService.freezeTask(id: id) }
         }
     }
 
