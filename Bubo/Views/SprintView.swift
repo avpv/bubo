@@ -108,14 +108,18 @@ struct SprintView: View {
         visibleTasks.reduce(0) { $0 + $1.durationMinutes }
     }
 
-    /// Projected end-of-session time: now + total visible minutes. Answers
+    /// Projected end-of-session time: `now` + total visible minutes. Answers
     /// «когда я закончу, если возьмусь прямо сейчас?» — превращает суммарную
     /// длительность из числа в час дня. Если ETA выходит за пределы суток,
     /// добавляется бейдж `+Nd` чтобы пользователь видел, что «всё-сегодня»
     /// — иллюзия. Nil когда видимых задач нет.
-    private var etaLabel: String? {
+    ///
+    /// `now` принимается параметром (а не читается через `Date()`), чтобы
+    /// `TimelineView` мог пересчитывать ETA каждую минуту без перекапывания
+    /// computed-свойств. Иначе цифра залипает на момент открытия popover'а
+    /// — пользователь сидит час, ETA показывает время как при заходе.
+    private func etaLabel(now: Date) -> String? {
         guard !visibleTasks.isEmpty else { return nil }
-        let now = Date()
         let eta = now.addingTimeInterval(TimeInterval(totalMinutes * 60))
         let timeStr = eta.formatted(date: .omitted, time: .shortened)
 
@@ -263,18 +267,28 @@ struct SprintView: View {
                         .foregroundStyle(skin.resolvedTextSecondary)
                         .contentTransition(.numericText())
 
-                    if let etaLabel {
-                        // Стрелка как визуальный «ведёт к»: сумма минут
-                        // превращается в час окончания. Тире-стрелка ASCII
-                        // (`→`) читается мгновенно и не требует SF-иконки.
-                        Text("\u{2192}")
-                            .font(.caption2)
-                            .foregroundStyle(skin.resolvedTextTertiary)
-                        Text(etaLabel)
-                            .font(.subheadline.weight(.regular).monospacedDigit())
-                            .foregroundStyle(skin.resolvedTextSecondary)
-                            .contentTransition(.numericText())
-                            .accessibilityLabel("Estimated finish time \(etaLabel)")
+                    // ETA пересчитывается каждую минуту через TimelineView
+                    // — иначе цифра «протухает» сразу после открытия
+                    // popover'а: пользователь сидит 30 минут, ETA всё ещё
+                    // показывает время как при заходе. Бирман: «информация
+                    // должна жить, не быть моментальным снимком».
+                    TimelineView(.everyMinute) { ctx in
+                        if let etaLabel = etaLabel(now: ctx.date) {
+                            HStack(spacing: DS.Spacing.xxs) {
+                                // Стрелка как визуальный «ведёт к»: сумма
+                                // минут превращается в час окончания.
+                                // ASCII (`→`) читается мгновенно и не
+                                // требует SF-иконки.
+                                Text("\u{2192}")
+                                    .font(.caption2)
+                                    .foregroundStyle(skin.resolvedTextTertiary)
+                                Text(etaLabel)
+                                    .font(.subheadline.weight(.regular).monospacedDigit())
+                                    .foregroundStyle(skin.resolvedTextSecondary)
+                                    .contentTransition(.numericText())
+                                    .accessibilityLabel("Estimated finish time \(etaLabel)")
+                            }
+                        }
                     }
                 }
             }
