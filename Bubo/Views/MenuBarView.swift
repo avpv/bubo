@@ -263,6 +263,14 @@ struct MenuBarView: View {
                             optimizerService: optimizerService,
                             onExit: { navigation = .list },
                             onEditTask: { task in navigation = .editTask(task) },
+                            onScheduleTasks: {
+                                // Same hook the inline backlog uses — opens
+                                // the optimizer palette so users plan without
+                                // exiting fullscreen.
+                                withAnimation(DS.Animation.quick) {
+                                    paletteContext = PaletteContext()
+                                }
+                            },
                             onUndoableAction: { message, undo in
                                 toastState.showSuccess(message, icon: "arrow.uturn.backward", onUndo: undo)
                             }
