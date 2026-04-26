@@ -66,6 +66,14 @@ struct BacklogTombstones: View {
 
     // MARK: - Completed-today
 
+    /// Sum of completed-today task durations. Surfaced in the header even
+    /// when the list itself stays collapsed — answer to «how much mass got
+    /// done today?», not just «how many checkboxes». Glanceable progress
+    /// for users whose day is mostly small tasks vs mostly long blocks.
+    private var completedTotalMinutes: Int {
+        completedToday.reduce(0) { $0 + $1.durationMinutes }
+    }
+
     @ViewBuilder
     private var completedTombstone: some View {
         if !completedToday.isEmpty {
@@ -82,6 +90,11 @@ struct BacklogTombstones: View {
                         Text("\(completedToday.count) completed today")
                             .font(.caption2.monospacedDigit())
                             .contentTransition(.numericText())
+                        Text("·")
+                            .font(.caption2)
+                        Text(DS.formatMinutes(completedTotalMinutes))
+                            .font(.caption2.monospacedDigit())
+                            .contentTransition(.numericText())
                         Spacer()
                     }
                     .foregroundStyle(skin.resolvedTextTertiary)
@@ -90,7 +103,7 @@ struct BacklogTombstones: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("\(completedToday.count) tasks completed today")
+                .accessibilityLabel("\(completedToday.count) tasks completed today, \(DS.formatMinutes(completedTotalMinutes)) total")
                 .accessibilityHint(showCompleted ? "Hide completed" : "Show completed")
 
                 if showCompleted {
