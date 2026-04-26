@@ -260,6 +260,7 @@ struct MenuBarView: View {
                     if let backlog = optimizerService.backlogService {
                         SprintView(
                             backlogService: backlog,
+                            optimizerService: optimizerService,
                             onExit: { navigation = .list },
                             onEditTask: { task in navigation = .editTask(task) },
                             onUndoableAction: { message, undo in
