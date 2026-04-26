@@ -63,22 +63,42 @@ struct SprintView: View {
 
     @State private var showCompletedToday: Bool = false
     @State private var showFrozen: Bool = false
+    /// Urgent-only filter — narrows `.all` mode to tasks whose deadline falls
+    /// inside the urgency window. Hidden in Sprint mode (top-N smart-sort
+    /// already prioritises urgent), session-local. Mirrors BacklogView's
+    /// `urgentOnlyFilter` so users carry the same mental model across views.
+    @State private var urgentOnlyFilter: Bool = false
+    /// Smart-sort toggle — re-orders `.all` mode by `BacklogLogic.smartScore`
+    /// instead of user drag order. Sprint mode is always smart-sorted; this
+    /// toggle is only meaningful in `.all`. Session-local.
+    @State private var useSmartSort: Bool = false
 
     /// Все активные задачи (без urgent-фильтров и пр.) — общая основа для
-    /// обоих режимов. Smart-sort в `.sprint`, сырой пользовательский порядок
-    /// в `.all`. Toggle smart-sort внутри `.all` — задел на следующий заход.
+    /// обоих режимов и для расчёта capacity ring (тот должен показывать
+    /// общий груз очереди, не отфильтрованный подсет).
     private var activeTasks: [BacklogTask] {
         BacklogLogic.activeTasks(backlogService.tasks)
     }
 
-    /// Tasks visible in the current mode.
+    /// Active set after the urgent-only filter. Применяется только в `.all`
+    /// — Sprint игнорирует фильтр осознанно (top-5 smart-sort уже выводит
+    /// urgent наверх, накладывать ещё один фильтр поверх — масло на масло).
+    private var allActiveFiltered: [BacklogTask] {
+        guard urgentOnlyFilter else { return activeTasks }
+        return activeTasks.filter { BacklogLogic.isUrgent($0) }
+    }
+
+    /// Tasks visible in the current mode. Sprint всегда smart-sort + cap;
+    /// All — пользовательский порядок (или smart-sort, если toggle включён),
+    /// плюс urgent-only фильтр.
     private var visibleTasks: [BacklogTask] {
         switch mode {
         case .sprint:
             let sorted = BacklogLogic.smartSorted(activeTasks)
             return BacklogLogic.sprintCapped(sorted, max: Self.maxSprintTasks)
         case .all:
-            return activeTasks
+            let base = allActiveFiltered
+            return useSmartSort ? BacklogLogic.smartSorted(base) : base
         }
     }
 
@@ -94,11 +114,47 @@ struct SprintView: View {
         BacklogLogic.completedToday(backlogService.tasks)
     }
 
+    /// Number of urgent tasks in the active set — drives both the urgent
+    /// filter pill (visibility + label) and the auto-disengage rule when
+    /// the set dries up.
+    private var urgentCount: Int {
+        backlogService.urgent(withinDays: 2).count
+    }
+
+    /// Total scheduled minutes across the entire active queue — workload
+    /// the user would still need to fit. Used by the capacity ring; intentional
+    /// difference from `totalMinutes` (which sums only the visible set).
+    private var pendingWorkloadMinutes: Int {
+        activeTasks.reduce(0) { $0 + $1.durationMinutes }
+    }
+
+    /// Remaining minutes between now and the end of the working day.
+    private var remainingWorkdayMinutes: Int {
+        BacklogLogic.remainingWorkdayMinutes(
+            workingHours: optimizerService.workingHours,
+            workingDays: optimizerService.workingDays
+        )
+    }
+
+    private var capacityRingTooltip: String {
+        "Backlog: \(DS.formatMinutes(pendingWorkloadMinutes)); remaining today: \(DS.formatMinutes(remainingWorkdayMinutes))"
+    }
+
     /// Should the segmented mode picker render? Если задач ≤ sprint cap, оба
-    /// режима покажут одно и то же — пилюля становится шумом. Бирман:
-    /// «контрол без выбора — украшение».
+    /// режима покажут одно и то же. Но если пользователь уже выбрал `.all`,
+    /// пилюлю прятать нельзя — иначе он окажется в режиме без переключателя
+    /// обратно. Бирман: «контрол без выбора — украшение, но и контрол
+    /// без выхода — ловушка».
     private var showsModePicker: Bool {
-        activeTasks.count > Self.maxSprintTasks
+        guard !activeTasks.isEmpty else { return false }
+        return activeTasks.count > Self.maxSprintTasks || mode == .all
+    }
+
+    /// True iff a controls row needs to render (mode picker, urgent filter
+    /// pill, smart-sort toggle). Hides the row entirely on small/clean
+    /// states so the empty surface stays calm.
+    private var showsControlsRow: Bool {
+        showsModePicker || (mode == .all && (urgentCount > 0 || activeTasks.count > 1))
     }
 
     var body: some View {
@@ -111,8 +167,8 @@ struct SprintView: View {
                 trailing: AnyView(headerTrailing)
             )
 
-            if showsModePicker {
-                modePicker
+            if showsControlsRow {
+                controlsRow
                     .padding(.horizontal, DS.Spacing.lg)
                     .padding(.top, DS.Spacing.sm)
             }
@@ -125,27 +181,150 @@ struct SprintView: View {
         .onChange(of: newTaskTitle) { _, newValue in
             parsedNewTaskTitle = BacklogTitleParser.parse(newValue)
         }
+        .onChange(of: activeTasks.count) { _, _ in
+            // Auto-disengage urgent filter if the urgent set dries up — same
+            // safety net as in BacklogView, prevents stranding the user in
+            // an empty filtered view.
+            if urgentOnlyFilter, allActiveFiltered.isEmpty {
+                urgentOnlyFilter = false
+            }
+        }
+        .onChange(of: urgentCount) { _, newValue in
+            // Same safety net for the case where active count is unchanged
+            // but the last urgent task lost its urgency (deadline edited
+            // farther out) — onChange of `activeTasks.count` wouldn't fire.
+            if urgentOnlyFilter, newValue == 0 {
+                urgentOnlyFilter = false
+            }
+        }
     }
 
     // MARK: - Header trailing
 
+    /// Header trailing: capacity ring (общая нагрузка очереди) + count·time
+    /// текущего видимого набора. Кольцо отвечает на «влезет ли весь backlog
+    /// сегодня?», count·time — «сколько всего в текущем экране?». Два разных
+    /// вопроса, рядом, без коллизий — Бирман: «информация, не украшения».
     @ViewBuilder
     private var headerTrailing: some View {
-        if !visibleTasks.isEmpty {
-            HStack(spacing: DS.Spacing.xxs) {
-                Text("\(visibleTasks.count)")
-                    .font(.subheadline.weight(.medium).monospacedDigit())
-                    .foregroundStyle(skin.resolvedTextPrimary)
-                    .contentTransition(.numericText())
-                Text("·")
-                    .font(.caption2)
-                    .foregroundStyle(skin.resolvedTextTertiary)
-                Text(DS.formatMinutes(totalMinutes))
-                    .font(.subheadline.weight(.regular).monospacedDigit())
-                    .foregroundStyle(skin.resolvedTextSecondary)
-                    .contentTransition(.numericText())
+        HStack(spacing: DS.Spacing.xs) {
+            if !activeTasks.isEmpty {
+                BacklogCapacityRing(
+                    pendingMinutes: pendingWorkloadMinutes,
+                    remainingWorkdayMinutes: remainingWorkdayMinutes,
+                    optimizerService: optimizerService
+                )
+                .help(capacityRingTooltip)
+            }
+
+            if !visibleTasks.isEmpty {
+                HStack(spacing: DS.Spacing.xxs) {
+                    Text("\(visibleTasks.count)")
+                        .font(.subheadline.weight(.medium).monospacedDigit())
+                        .foregroundStyle(skin.resolvedTextPrimary)
+                        .contentTransition(.numericText())
+                    Text("·")
+                        .font(.caption2)
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                    Text(DS.formatMinutes(totalMinutes))
+                        .font(.subheadline.weight(.regular).monospacedDigit())
+                        .foregroundStyle(skin.resolvedTextSecondary)
+                        .contentTransition(.numericText())
+                }
             }
         }
+    }
+
+    // MARK: - Controls row
+
+    /// Row под header'ом: переключатель Sprint/All слева, фильтры/тоглы
+    /// справа. Фильтры показываются только в `.all` — Sprint мы держим
+    /// чистым (top-N smart-sort + спокойные строки), там не место
+    /// дополнительным контролам.
+    @ViewBuilder
+    private var controlsRow: some View {
+        HStack(spacing: DS.Spacing.sm) {
+            if showsModePicker {
+                modePicker
+                    .layoutPriority(0)
+            }
+
+            Spacer(minLength: 0)
+
+            if mode == .all {
+                if urgentCount > 0 {
+                    urgentFilterButton
+                }
+                if activeTasks.count > 1 {
+                    smartSortButton
+                }
+            }
+        }
+    }
+
+    /// Red «N urgent» pill — toggles the urgent-only filter. Filled
+    /// background while engaged so the user can see the filter is active;
+    /// hidden in Sprint mode (uncluttered focus surface) and когда нет
+    /// urgent-задач (контрол без эффекта — украшение).
+    private var urgentFilterButton: some View {
+        Button {
+            withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
+                urgentOnlyFilter.toggle()
+            }
+        } label: {
+            Text("\(urgentCount) urgent")
+                .font(.caption2.weight(.semibold).monospacedDigit())
+                .foregroundStyle(skin.resolvedDestructiveColor)
+                .contentTransition(.numericText())
+                .padding(.horizontal, DS.Spacing.xs)
+                .padding(.vertical, DS.Spacing.xxs)
+                .background(
+                    Capsule().fill(
+                        skin.resolvedDestructiveColor
+                            .opacity(urgentOnlyFilter ? DS.Opacity.lightFill : 0)
+                    )
+                )
+                .overlay(
+                    Capsule().strokeBorder(
+                        skin.resolvedDestructiveColor.opacity(urgentOnlyFilter ? DS.Opacity.softAccent : 0),
+                        lineWidth: DS.Border.thin
+                    )
+                )
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .help(urgentOnlyFilter ? "Show all tasks" : "Show only urgent tasks")
+        .accessibilityLabel(
+            urgentOnlyFilter
+                ? "Showing only urgent tasks — tap to clear filter"
+                : "\(urgentCount) urgent tasks — tap to filter"
+        )
+    }
+
+    /// Smart-sort toggle. Sprint режим всегда smart-sort'ится — этот
+    /// контрол меняет порядок только в `.all`. Иконка переключается между
+    /// «обычная сортировка» и «магия по smart-score».
+    private var smartSortButton: some View {
+        Button {
+            withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+                useSmartSort.toggle()
+            }
+        } label: {
+            Image(systemName: useSmartSort ? "wand.and.stars" : "arrow.up.arrow.down")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(useSmartSort ? skin.accentColor : skin.resolvedTextSecondary)
+                .frame(width: DS.Size.iconLarge, height: DS.Size.iconLarge)
+                .background(
+                    Circle().fill(
+                        skin.accentColor.opacity(useSmartSort ? DS.Opacity.lightFill : 0)
+                    )
+                )
+                .contentShape(Circle())
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .buttonStyle(.plain)
+        .help(useSmartSort ? "Show in user order" : "Smart sort by deadline + priority")
+        .accessibilityLabel(useSmartSort ? "Smart sort on — tap for user order" : "Smart sort off — tap to enable")
     }
 
     // MARK: - Mode picker
