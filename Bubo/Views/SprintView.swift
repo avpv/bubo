@@ -419,8 +419,11 @@ struct SprintView: View {
         } else {
             ScrollView {
                 VStack(spacing: DS.Spacing.xs) {
-                    ForEach(visibleTasks) { task in
-                        row(for: task)
+                    ForEach(Array(visibleTasks.enumerated()), id: \.element.id) { index, task in
+                        // Первая строка в Sprint mode получает «now playing»
+                        // полосу — визуальный ответ на «с чего начать?». В
+                        // `.all` строки равноценны, метка не появляется.
+                        row(for: task, isPrimary: mode == .sprint && index == 0)
                     }
                     tombstones
                 }
@@ -454,19 +457,37 @@ struct SprintView: View {
     // MARK: - Task row
 
     @ViewBuilder
-    private func row(for task: BacklogTask) -> some View {
-        BacklogTaskRow(
-            task: task,
-            isUrgent: BacklogLogic.isUrgent(task),
-            // Sprint-mode visual styling — calmer row, larger title, less
-            // metadata. Used in `.sprint`; `.all` keeps standard backlog
-            // styling so the user sees full info when reviewing the queue.
-            isSprintMode: mode == .sprint,
-            onComplete: { complete(task) },
-            onEdit: { onEditTask(task) },
-            onDelete: { delete(task) },
-            onFreeze: { freeze(task) }
-        )
+    private func row(for task: BacklogTask, isPrimary: Bool) -> some View {
+        HStack(spacing: 0) {
+            // Sprint-mode rows get a «now playing» gutter on the left:
+            // accent bar on the primary (first) row, transparent reservation
+            // on the rest so the row content stays aligned. `.all` mode skips
+            // the gutter entirely — нет primary, нет смысла резервировать
+            // место под пустую колонку.
+            if mode == .sprint {
+                Rectangle()
+                    .fill(isPrimary ? skin.accentColor : Color.clear)
+                    .frame(width: 3)
+                    .padding(.vertical, DS.Spacing.xs)
+                    .clipShape(RoundedRectangle(cornerRadius: 1.5))
+                    .padding(.trailing, DS.Spacing.xs)
+                    .accessibilityHidden(!isPrimary)
+                    .accessibilityLabel(isPrimary ? "Up next" : "")
+            }
+
+            BacklogTaskRow(
+                task: task,
+                isUrgent: BacklogLogic.isUrgent(task),
+                // Sprint-mode visual styling — calmer row, larger title,
+                // less metadata. Used in `.sprint`; `.all` keeps standard
+                // backlog styling so the user sees full info when reviewing.
+                isSprintMode: mode == .sprint,
+                onComplete: { complete(task) },
+                onEdit: { onEditTask(task) },
+                onDelete: { delete(task) },
+                onFreeze: { freeze(task) }
+            )
+        }
     }
 
     // MARK: - Tombstones
