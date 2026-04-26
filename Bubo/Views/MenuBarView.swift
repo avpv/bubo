@@ -1213,7 +1213,7 @@ struct MenuBarView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, DS.Spacing.md)
-        .padding(.vertical, DS.Spacing.sm)
+        .frame(height: DS.Size.controlHeight)
         .skinPlatter(activeSkin)
         .skinPlatterDepth(skin)
         // Level 1: unified outer content margin — aligns with header,
