@@ -25,8 +25,24 @@ import SwiftUI
 struct SprintView: View {
     var backlogService: BacklogService
     var optimizerService: OptimizerService
+    /// Calendar event source — same one inline QuickActions consumes. The
+    /// QuickActionRanker reads it together with the backlog to score
+    /// «Plan tomorrow / Schedule N / Batch …» chips, so we have to thread
+    /// it through to keep parity with the main view's optimizer entry.
+    var reminderService: ReminderService
     var onExit: () -> Void
     var onEditTask: (BacklogTask) -> Void
+    /// Fired when a ranked QuickAction executes successfully. Same payload
+    /// the inline strip uses: label for the toast, undo closure that pops
+    /// the optimizer's last applied snapshot.
+    var onOptimizerExecuted: ((_ label: String, _ undo: @escaping () -> Void) -> Void)? = nil
+    /// Fired when a ranked QuickAction returns an `infeasible` /
+    /// `noEventsToOptimize` result so the parent can surface a non-blocking
+    /// info toast.
+    var onOptimizerError: ((_ message: String) -> Void)? = nil
+    /// Fired when the user taps the primary «Optimize ⌘K» chip — opens the
+    /// command palette in the parent (same hook the inline QuickActions uses).
+    var onOpenPalette: (() -> Void)? = nil
     var onUndoableAction: ((_ message: String, _ undo: @escaping () -> Void) -> Void)? = nil
 
     @Environment(\.activeSkin) private var skin
@@ -60,6 +76,11 @@ struct SprintView: View {
     /// the title/duration pair is computed once per keystroke.
     @State private var parsedNewTaskTitle: (cleaned: String, durationMinutes: Int?) = ("", nil)
     @FocusState private var isInputFocused: Bool
+    /// Row-level keyboard focus, mirroring BacklogView. `nil` when the input
+    /// field owns focus instead. Driven by ↑/↓ between rows; ⌘↑/↓ reorders
+    /// in `.all` mode (sprint mode is curated by the machine — reorder there
+    /// would fight smart-sort).
+    @FocusState private var focusedTaskId: String?
 
     @State private var showCompletedToday: Bool = false
     @State private var showFrozen: Bool = false
@@ -184,7 +205,24 @@ struct SprintView: View {
     /// pill, smart-sort toggle). Hides the row entirely on small/clean
     /// states so the empty surface stays calm.
     private var showsControlsRow: Bool {
-        showsModePicker || (mode == .all && (urgentCount > 0 || activeTasks.count > 1))
+        if showsModePicker { return true }
+        if mode == .all, !activeTasks.isEmpty {
+            if urgentCount > 0 { return true }
+            if activeTasks.count > 1 { return true }
+        }
+        return false
+    }
+
+    /// Whether the QuickActions strip should render. Mirrors the inline
+    /// view's gate (`reminderService.nonDisintegratingEventCount > 0`):
+    /// without events to optimize against, the ranker has nothing to score
+    /// and the strip would just show a lone «Optimize ⌘K» pill — we keep
+    /// it visible anyway so the optimizer is reachable from sprint even
+    /// before the day fills with events. Hidden only when there's nothing
+    /// in the backlog to plan.
+    private var showsQuickActionsStrip: Bool {
+        !activeTasks.isEmpty
+            && (onOptimizerExecuted != nil || onOpenPalette != nil)
     }
 
     var body: some View {
@@ -199,6 +237,12 @@ struct SprintView: View {
 
             if showsControlsRow {
                 controlsRow
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.top, DS.Spacing.sm)
+            }
+
+            if showsQuickActionsStrip {
+                quickActionsStrip
                     .padding(.horizontal, DS.Spacing.lg)
                     .padding(.top, DS.Spacing.sm)
             }
@@ -250,7 +294,7 @@ struct SprintView: View {
 
                 BacklogCapacityLabel(
                     pendingMinutes: pendingWorkloadMinutes,
-                    remainingWorkdayMinutes: remainingWorkdayMinutes
+                    optimizerService: optimizerService
                 )
             }
 
@@ -298,10 +342,16 @@ struct SprintView: View {
 
     // MARK: - Controls row
 
-    /// Row под header'ом: переключатель Sprint/All слева, фильтры/тоглы
-    /// справа. Фильтры показываются только в `.all` — Sprint мы держим
-    /// чистым (top-N smart-sort + спокойные строки), там не место
-    /// дополнительным контролам.
+    /// Row под header'ом: переключатель Sprint/All слева, фильтры справа.
+    /// Urgent + smart-sort живут только в `.all` — это срезы видимого
+    /// списка, а sprint курируется машиной, накладывать поверх ещё фильтр
+    /// бессмысленно.
+    ///
+    /// Действия над всем backlog'ом (планирование) переехали в отдельный
+    /// `quickActionsStrip` под этим row'ом — раньше тут была одинокая
+    /// «Schedule»-пилюля, которая обещала действие, а отдавала палитру.
+    /// QuickActions не врёт: «Optimize ⌘K» как primary + 3 ранжированных
+    /// чипа («Plan tomorrow / Schedule N / Batch …»), как на главной.
     @ViewBuilder
     private var controlsRow: some View {
         HStack(spacing: DS.Spacing.sm) {
@@ -321,6 +371,40 @@ struct SprintView: View {
                 }
             }
         }
+    }
+
+    /// QuickActions strip — paritarian copy of the main view's optimizer
+    /// entry. Lives directly under the mode picker so users can plan or
+    /// invoke the optimizer without leaving fullscreen. Matches the
+    /// inline strip's behaviour 1:1 because it's the very same component.
+    ///
+    /// Publishes its bottom Y through `OptimizerBottomKey` so the command
+    /// palette (rendered as a sibling overlay above the navigation switch)
+    /// anchors itself just below this strip. Without this, opening the
+    /// palette from sprint would inherit the stale Y from `.list` — or
+    /// drop to zero and slide under the popover header.
+    private var quickActionsStrip: some View {
+        QuickActions(
+            optimizerService: optimizerService,
+            reminderService: reminderService,
+            onExecuted: { label, undo in
+                onOptimizerExecuted?(label, undo)
+            },
+            onError: { message in
+                onOptimizerError?(message)
+            },
+            onOpenPalette: {
+                onOpenPalette?()
+            }
+        )
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(
+                    key: OptimizerBottomKey.self,
+                    value: geo.frame(in: .named(menuBarRootCoordinateSpace)).maxY
+                )
+            }
+        )
     }
 
     /// Red «N urgent» pill — toggles the urgent-only filter. Filled
@@ -516,34 +600,58 @@ struct SprintView: View {
                     .accessibilityLabel(isPrimary ? "Up next" : "")
             }
 
+            // `.all` mode wires the full reorder/drag affordances so the
+            // fullscreen surface behaves like an expanded BacklogView — same
+            // hover chevrons, same drag-to-reorder, same context menu. Sprint
+            // mode keeps the read-only calm: machine curates the order, user
+            // can't fight it row by row.
+            let isAllMode = mode == .all
             BacklogTaskRow(
                 task: task,
                 isUrgent: BacklogLogic.isUrgent(task),
-                // Sprint-mode visual styling — calmer row, larger title,
-                // less metadata. Used in `.sprint`; `.all` keeps standard
-                // backlog styling so the user sees full info when reviewing.
+                canMoveUp: isAllMode ? canMoveUp(task) : true,
+                canMoveDown: isAllMode ? canMoveDown(task) : true,
                 isSprintMode: mode == .sprint,
                 onComplete: { complete(task) },
                 onEdit: { onEditTask(task) },
                 onDelete: { delete(task) },
                 onFreeze: { freeze(task) },
+                onReorderDrop: isAllMode ? { dropped in
+                    handleReorderDrop(dropped: dropped, targetId: task.id)
+                } : { _ in },
+                onMoveUp: isAllMode ? { moveTask(task, by: -1) } : {},
+                onMoveDown: isAllMode ? { moveTask(task, by: +1) } : {},
+                onMoveToTop: isAllMode ? { moveTaskToEdge(task, toTop: true) } : {},
+                onMoveToBottom: isAllMode ? { moveTaskToEdge(task, toTop: false) } : {},
+                isFocused: focusedTaskId == task.id,
+                onFocusPrev: { focusRow(offsetFrom: task.id, by: -1) },
+                onFocusNext: { focusRow(offsetFrom: task.id, by: +1) },
                 sprintHotKey: sprintHotKey
             )
+            .focusable()
+            .focused($focusedTaskId, equals: task.id)
+            .focusEffectDisabled()
         }
     }
 
     // MARK: - Tombstones
 
-    /// Shared completed-today + frozen summary rows. SprintView passes the
-    /// no-gutter / no-min-height variant since its rows have no leading
-    /// drag-handle column to align with — we can't reuse BacklogView's
-    /// alignment without picking up phantom whitespace.
+    /// Shared completed-today + frozen summary rows.
+    ///
+    /// `.all` mode rows mirror BacklogView 1:1, so we ask for the same
+    /// leading-gutter alignment + 40pt floor — the checkmark/snowflake
+    /// column lines up under the active rows above. `.sprint` mode rows
+    /// open with a 3pt accent bar (not the 16pt icon gutter), so reusing
+    /// `alignedLeadingGutter` there would create phantom whitespace; the
+    /// tombstones stay content-sized.
     private var tombstones: some View {
         BacklogTombstones(
             completedToday: completedToday,
             frozen: backlogService.frozen,
             showCompleted: $showCompletedToday,
             showFrozen: $showFrozen,
+            alignedLeadingGutter: mode == .all,
+            minRowHeight: mode == .all ? BacklogView.compactRowHeight : nil,
             onUncomplete: { task in uncomplete(task) },
             onUnfreezeOne: { task in unfreezeOneWithUndo(task) },
             onUnfreezeAll: { unfreezeAllWithUndo() }
@@ -622,6 +730,131 @@ struct SprintView: View {
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.md)
+    }
+
+    // MARK: - Reorder helpers (`.all` mode only)
+    //
+    // Mirror BacklogView's behaviour so users get identical reorder semantics
+    // across the two surfaces. Sprint mode never calls these — its order is
+    // owned by smart-sort and the cap.
+
+    private func canMoveUp(_ task: BacklogTask) -> Bool {
+        guard mode == .all else { return false }
+        return visibleTasks.first?.id != task.id
+            && visibleTasks.contains(where: { $0.id == task.id })
+    }
+
+    private func canMoveDown(_ task: BacklogTask) -> Bool {
+        guard mode == .all else { return false }
+        return visibleTasks.last?.id != task.id
+            && visibleTasks.contains(where: { $0.id == task.id })
+    }
+
+    /// Move keyboard focus between visible rows. Boundaries clamp silently —
+    /// no wrap-around. Identical to BacklogView so the two views share muscle
+    /// memory.
+    private func focusRow(offsetFrom currentId: String, by delta: Int) {
+        let tasks = visibleTasks
+        guard let idx = tasks.firstIndex(where: { $0.id == currentId }) else { return }
+        let target = idx + delta
+        guard target >= 0, target < tasks.count else { return }
+        focusedTaskId = tasks[target].id
+    }
+
+    /// Reorder by ±1 slot via keyboard / context menu. Honours user-order
+    /// only; in smart-sort mode the call still mutates storage order, but
+    /// the visible position depends on the score — same as BacklogView.
+    private func moveTask(_ task: BacklogTask, by delta: Int) {
+        let ordered = visibleTasks
+        guard let current = ordered.firstIndex(where: { $0.id == task.id }) else { return }
+        let target = current + delta
+        guard ordered.indices.contains(target) else { return }
+        let targetId = ordered[target].id
+
+        let previousIndex = backlogService.indexOfTask(id: task.id)
+        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+            if delta < 0 {
+                backlogService.moveTask(id: task.id, before: targetId)
+            } else if target + 1 < ordered.count {
+                backlogService.moveTask(id: task.id, before: ordered[target + 1].id)
+            } else {
+                backlogService.moveTaskToEnd(id: task.id)
+            }
+        }
+
+        let taskId = task.id
+        onUndoableAction?("Reordered \u{201C}\(task.title)\u{201D}") { [backlogService] in
+            guard let previousIndex,
+                  let current = backlogService.tasks.first(where: { $0.id == taskId })
+            else { return }
+            _ = backlogService.removeTask(id: taskId)
+            backlogService.restoreTask(current, at: previousIndex)
+        }
+    }
+
+    private func moveTaskToEdge(_ task: BacklogTask, toTop: Bool) {
+        let previousIndex = backlogService.indexOfTask(id: task.id)
+        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+            if toTop {
+                if let firstVisible = visibleTasks.first, firstVisible.id != task.id {
+                    backlogService.moveTask(id: task.id, before: firstVisible.id)
+                }
+            } else {
+                backlogService.moveTaskToEnd(id: task.id)
+            }
+        }
+        let taskId = task.id
+        onUndoableAction?("Moved \u{201C}\(task.title)\u{201D} to \(toTop ? "top" : "bottom")") { [backlogService] in
+            guard let previousIndex,
+                  let current = backlogService.tasks.first(where: { $0.id == taskId })
+            else { return }
+            _ = backlogService.removeTask(id: taskId)
+            backlogService.restoreTask(current, at: previousIndex)
+        }
+    }
+
+    /// Drop one task onto another to reorder. If the dropped task and the
+    /// target live in different context groups, the dropped task adopts the
+    /// target's context (otherwise grouping would silently undo the visual
+    /// move). Mirrors BacklogView's `handleReorderDrop` 1:1.
+    private func handleReorderDrop(dropped: BacklogTaskDrag, targetId: String) {
+        guard dropped.taskId != targetId,
+              let originalTask = backlogService.tasks.first(where: { $0.id == dropped.taskId }),
+              backlogService.tasks.contains(where: { $0.id == targetId }),
+              let target = backlogService.tasks.first(where: { $0.id == targetId })
+        else { return }
+
+        let previousIndex = backlogService.indexOfTask(id: originalTask.id)
+        let previousContext = originalTask.context
+        let contextChanged = originalTask.context != target.context
+
+        withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+            if contextChanged {
+                var updated = originalTask
+                updated.context = target.context
+                backlogService.updateTask(updated)
+            }
+            backlogService.moveTask(id: originalTask.id, before: targetId)
+        }
+
+        let taskId = originalTask.id
+        let originalSnapshot = originalTask
+        onUndoableAction?(
+            contextChanged
+                ? "Moved \u{201C}\(originalTask.title)\u{201D} to \(target.context ?? "No project")"
+                : "Reordered \u{201C}\(originalTask.title)\u{201D}"
+        ) { [backlogService] in
+            guard var current = backlogService.tasks.first(where: { $0.id == taskId }) else {
+                backlogService.restoreTask(originalSnapshot, at: previousIndex)
+                return
+            }
+            current.context = previousContext
+            backlogService.updateTask(current)
+            if let previousIndex {
+                _ = backlogService.removeTask(id: taskId)
+                backlogService.restoreTask(current, at: previousIndex)
+            }
+        }
     }
 
     // MARK: - Actions

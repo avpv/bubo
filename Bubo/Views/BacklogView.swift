@@ -405,12 +405,14 @@ struct BacklogView: View {
                 )
                 .help(capacityRingTooltip)
 
-                // Numbers next to the ring — turns the colour-only signal
-                // («red, orange, green») into glanceable data («5 h / 3 h»).
-                // Tooltip stays for the «what does this mean?» path.
+                // Verdict next to the ring — «Done by 17:30» / «1h over» /
+                // «After hours · 3h queued». Replaces the older «5h / 3h»
+                // numbers (which stay reachable through the ring's popover
+                // and tooltip) so the inline label is interpretation, not
+                // arithmetic the reader has to do themselves.
                 BacklogCapacityLabel(
                     pendingMinutes: pendingWorkloadMinutes,
-                    remainingWorkdayMinutes: remainingWorkdayMinutes
+                    optimizerService: optimizerService
                 )
             }
 

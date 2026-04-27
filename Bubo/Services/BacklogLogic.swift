@@ -135,6 +135,53 @@ enum BacklogLogic {
         return Double(pendingMinutes) / Double(remainingWorkdayMinutes)
     }
 
+    /// Three-way forecast for the capacity label — answers «успеешь ли?»
+    /// instead of presenting raw `pending / remaining` numbers. Birman:
+    /// «информация — это интерпретация, не сырые данные». The ring keeps
+    /// the colour signal; the label, fed by this enum, keeps the verdict.
+    enum CapacityForecast: Equatable {
+        /// Backlog fits in the remaining workday. `eta` is the projected
+        /// finish time (now + pending), `spareMinutes` is how much room
+        /// is left after that.
+        case fits(eta: Date, spareMinutes: Int)
+        /// Backlog won't fit in what's left of today. `byMinutes` is how
+        /// much spills over.
+        case over(byMinutes: Int)
+        /// Workday window already closed (after-hours, weekend, off day).
+        /// `queuedMinutes` is how much remains parked for later.
+        case afterHours(queuedMinutes: Int)
+    }
+
+    /// Pure forecast that the capacity label renders.
+    ///
+    /// Splits the workday into one of three states a human cares about:
+    /// will the queue finish, by when, or how much overflow. Reuses
+    /// `remainingWorkdayMinutes` so working-days/hours and the GA solver
+    /// stay in agreement — the label can't claim "Done by 17:30" on a day
+    /// the user opted out of scheduling.
+    static func capacityForecast(
+        pendingMinutes: Int,
+        workingHours: ClosedRange<Int>,
+        workingDays: Set<Int> = [],
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> CapacityForecast {
+        let remaining = remainingWorkdayMinutes(
+            workingHours: workingHours,
+            now: now,
+            calendar: calendar,
+            workingDays: workingDays
+        )
+        if remaining <= 0 {
+            return .afterHours(queuedMinutes: max(0, pendingMinutes))
+        }
+        if pendingMinutes <= remaining {
+            let eta = now.addingTimeInterval(TimeInterval(max(0, pendingMinutes) * 60))
+            return .fits(eta: eta, spareMinutes: remaining - max(0, pendingMinutes))
+        }
+        return .over(byMinutes: pendingMinutes - remaining)
+    }
+
     /// Minutes left between `now` and the end of the working day, clamped
     /// to zero once the window has closed. Shares its `workingHours`
     /// definition with `OptimizerService` so the ring and the free-slot

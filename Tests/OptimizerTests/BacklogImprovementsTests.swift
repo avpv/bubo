@@ -240,6 +240,112 @@ final class BacklogLogicTests: XCTestCase {
             6 * 60
         )
     }
+
+    // MARK: capacity forecast
+
+    func testCapacityForecastFitsReturnsETAAndSpare() {
+        let cal = Self.calendar()
+        let noon = cal.date(from: DateComponents(
+            year: 2026, month: 4, day: 11, hour: 12
+        ))!
+        // 12:00 with workday 9–18 → 360 min remaining; 90 min queued fits.
+        let forecast = BacklogLogic.capacityForecast(
+            pendingMinutes: 90,
+            workingHours: 9...18,
+            now: noon,
+            calendar: cal
+        )
+        guard case let .fits(eta, spareMinutes) = forecast else {
+            XCTFail("expected .fits, got \(forecast)")
+            return
+        }
+        XCTAssertEqual(eta, noon.addingTimeInterval(90 * 60))
+        XCTAssertEqual(spareMinutes, 360 - 90)
+    }
+
+    func testCapacityForecastFitsExactlyAtEndOfDay() {
+        let cal = Self.calendar()
+        let noon = cal.date(from: DateComponents(
+            year: 2026, month: 4, day: 11, hour: 12
+        ))!
+        // Pending exactly equals remaining → still .fits, zero spare.
+        let forecast = BacklogLogic.capacityForecast(
+            pendingMinutes: 360,
+            workingHours: 9...18,
+            now: noon,
+            calendar: cal
+        )
+        guard case let .fits(_, spareMinutes) = forecast else {
+            XCTFail("expected .fits, got \(forecast)")
+            return
+        }
+        XCTAssertEqual(spareMinutes, 0)
+    }
+
+    func testCapacityForecastOverReturnsOverflow() {
+        let cal = Self.calendar()
+        let noon = cal.date(from: DateComponents(
+            year: 2026, month: 4, day: 11, hour: 12
+        ))!
+        // 360 remaining, 500 queued → .over by 140.
+        let forecast = BacklogLogic.capacityForecast(
+            pendingMinutes: 500,
+            workingHours: 9...18,
+            now: noon,
+            calendar: cal
+        )
+        XCTAssertEqual(forecast, .over(byMinutes: 140))
+    }
+
+    func testCapacityForecastAfterHoursWhenWorkdayClosed() {
+        let cal = Self.calendar()
+        let evening = cal.date(from: DateComponents(
+            year: 2026, month: 4, day: 11, hour: 22
+        ))!
+        let forecast = BacklogLogic.capacityForecast(
+            pendingMinutes: 120,
+            workingHours: 9...18,
+            now: evening,
+            calendar: cal
+        )
+        XCTAssertEqual(forecast, .afterHours(queuedMinutes: 120))
+    }
+
+    func testCapacityForecastAfterHoursOnOffDay() {
+        let cal = Self.calendar()
+        // 2026-04-11 is a Saturday; with workingDays={2..6} (Mon–Fri) the
+        // workday window is empty, regardless of clock time.
+        let saturdayNoon = cal.date(from: DateComponents(
+            year: 2026, month: 4, day: 11, hour: 12
+        ))!
+        let forecast = BacklogLogic.capacityForecast(
+            pendingMinutes: 60,
+            workingHours: 9...18,
+            workingDays: [2, 3, 4, 5, 6],
+            now: saturdayNoon,
+            calendar: cal
+        )
+        XCTAssertEqual(forecast, .afterHours(queuedMinutes: 60))
+    }
+
+    func testCapacityForecastEmptyBacklogStillFits() {
+        let cal = Self.calendar()
+        let noon = cal.date(from: DateComponents(
+            year: 2026, month: 4, day: 11, hour: 12
+        ))!
+        let forecast = BacklogLogic.capacityForecast(
+            pendingMinutes: 0,
+            workingHours: 9...18,
+            now: noon,
+            calendar: cal
+        )
+        guard case let .fits(eta, spareMinutes) = forecast else {
+            XCTFail("expected .fits, got \(forecast)")
+            return
+        }
+        XCTAssertEqual(eta, noon)
+        XCTAssertEqual(spareMinutes, 360)
+    }
 }
 
 // MARK: - RecurrenceEngine tests
