@@ -271,23 +271,35 @@ final class EventKitSyncCoordinator {
         for i in result.indices {
             let uniqueId = result[i].id
 
-            // Both override types are applied unconditionally: when the
-            // user *removes* an override, the corresponding entry leaves
-            // the dictionary, and we want the value on the event to fall
-            // back to "no override" (nil) — not to whatever the on-disk
-            // cache last recorded. External events have no inherent
-            // colorTag / context / customReminderMinutes, so resetting
-            // to nil restores the calendar source's view of the world.
+            // Reminder-minute overrides keep the legacy two-step lookup
+            // (per-occurrence shadows series) because the existing
+            // editor writes only the per-occurrence key. Re-targeting
+            // those is a separate change.
             let seriesMins = result[i].seriesId.flatMap { overrides[$0] }
             let activeMins = overrides[uniqueId] ?? seriesMins
             result[i].customReminderMinutes = (activeMins?.isEmpty ?? true) ? nil : activeMins
 
-            let seriesAttrs = result[i].seriesId.flatMap { attributes[$0] }
-            let attr = attributes[uniqueId] ?? seriesAttrs ?? EventAttributeOverride()
+            // Color and context resolve against a single attribute key:
+            // the series id when present, otherwise the per-occurrence
+            // id. One write reaches every occurrence — the user picks a
+            // color for "this 1:1," not for "this Tuesday's instance of
+            // this 1:1." Applied unconditionally so removing the
+            // override clears the previously-applied value instead of
+            // leaving a stale cache snapshot behind.
+            let attributeKey = Self.attributeKey(for: result[i])
+            let attr = attributes[attributeKey] ?? EventAttributeOverride()
             result[i].colorTag = attr.colorTag
             result[i].context = attr.context
         }
         return result
+    }
+
+    /// Single key used to read and write attribute overrides for an
+    /// event: the series id (if the event is part of a recurring
+    /// series) or its own id otherwise. Exposed so the orchestrator
+    /// can use the same resolution when it persists a user edit.
+    static func attributeKey(for event: CalendarEvent) -> String {
+        event.seriesId ?? event.id
     }
 
     /// Persist a snapshot to the on-disk cache. Called by the

@@ -379,31 +379,39 @@ class ReminderService {
     // MARK: - External Event Attribute Overrides
 
     /// Persist user-set color/context for an event Bubo doesn't own
-    /// (Apple Calendar). Local events store these directly on the event;
-    /// external events live in EventKit so we keep a side table keyed
-    /// by `eventId`. An override with both fields nil/empty is removed.
+    /// (Apple Calendar). External events live in EventKit, so we keep a
+    /// side table keyed by `seriesId ?? event.id` — one write reaches
+    /// every occurrence of a recurring series. An override with both
+    /// fields nil/empty is removed.
     func updateEventAttributes(
-        for eventId: String,
+        for event: CalendarEvent,
         colorTag: EventColorTag?,
         context: String?
     ) {
         let trimmed = context?.trimmingCharacters(in: .whitespaces)
         let normalized = (trimmed?.isEmpty ?? true) ? nil : trimmed
         let override = EventAttributeOverride(colorTag: colorTag, context: normalized)
+        let key = EventKitSyncCoordinator.attributeKey(for: event)
         if override.isEmpty {
-            eventAttributeOverrides.removeValue(forKey: eventId)
+            eventAttributeOverrides.removeValue(forKey: key)
         } else {
-            eventAttributeOverrides[eventId] = override
+            eventAttributeOverrides[key] = override
         }
         eventAttributeOverrideStore.save(eventAttributeOverrides)
 
-        // Apply immediately so the UI reflects the change without a
-        // round-trip through EventKit, then push the updated snapshot
-        // to the on-disk cache so a cold start before the next live
-        // sync still shows the user's choice.
-        if let idx = upcomingEvents.firstIndex(where: { $0.id == eventId }) {
-            upcomingEvents[idx].colorTag = colorTag
-            upcomingEvents[idx].context = normalized
+        // Apply immediately to every visible occurrence that resolves
+        // to the same key — the editor user expects every Tuesday-1:1
+        // to repaint, not just the one they opened. Then push the
+        // updated snapshot so a cold start before the next live sync
+        // still shows the choice.
+        var changed = false
+        for i in upcomingEvents.indices
+        where EventKitSyncCoordinator.attributeKey(for: upcomingEvents[i]) == key {
+            upcomingEvents[i].colorTag = colorTag
+            upcomingEvents[i].context = normalized
+            changed = true
+        }
+        if changed {
             syncCoordinator.cacheEvents(upcomingEvents)
         }
     }
