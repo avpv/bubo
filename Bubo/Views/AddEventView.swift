@@ -256,7 +256,9 @@ struct AddEventView: View {
                     }
 
                     if showMoreOptions || isExternal {
-                        // Color
+                        // Color — editable for both local and external events.
+                        // External overrides ride alongside the EventKit row
+                        // via `EventAttributeOverrideStore` and survive sync.
                         sectionBlock {
                             VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                                 sectionLabel("Color")
@@ -276,11 +278,10 @@ struct AddEventView: View {
                             }
                             .padding(DS.Spacing.md)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .disabled(isExternal)
-                            .opacity(isExternal ? 0.6 : 1.0)
                         }
 
-                        // Context (Project / Category)
+                        // Context (Project / Category) — same dual-source story
+                        // as Color above.
                         sectionBlock {
                             VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                                 sectionLabel("Context")
@@ -290,8 +291,6 @@ struct AddEventView: View {
                             }
                             .padding(DS.Spacing.md)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .disabled(isExternal)
-                            .opacity(isExternal ? 0.6 : 1.0)
                         }
 
                         // Details
@@ -996,6 +995,11 @@ struct AddEventView: View {
         if isExternal, let event = editingEvent {
             let minutes = useCustomReminders ? reminderMinutes.sorted() : nil
             reminderService.updateLocalReminder(for: event.id, minutes: minutes)
+            reminderService.updateEventAttributes(
+                for: event.id,
+                colorTag: selectedColorTag,
+                context: contextTag
+            )
             Haptics.impact()
             onSave(true)
             return

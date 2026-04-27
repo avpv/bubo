@@ -263,6 +263,31 @@ final class PersistedExcludedOccurrence {
     }
 }
 
+// MARK: - Persisted Event Attribute Override
+
+/// Per-event override for `colorTag` and `context` on events that come
+/// from outside Bubo (Apple Calendar). Local events store these directly
+/// on `PersistedLocalEvent`; external events have nowhere to keep them
+/// because EventKit owns the row, so we keep a side table keyed by
+/// `eventId`. Same CloudKit-mirroring rules as the other models in this
+/// file: every property optional or defaulted, no unique constraints.
+@Model
+final class PersistedEventAttributeOverride {
+    var eventId: String = ""
+    var colorTagRaw: String?
+    var context: String?
+    var updatedAt: Date = Date()
+
+    init() {}
+
+    init(eventId: String, colorTag: EventColorTag?, context: String?, updatedAt: Date = Date()) {
+        self.eventId = eventId
+        self.colorTagRaw = colorTag?.rawValue
+        self.context = context
+        self.updatedAt = updatedAt
+    }
+}
+
 // MARK: - Persisted Reminder Override
 
 /// SwiftData model for per-event reminder time overrides.

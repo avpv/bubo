@@ -55,6 +55,10 @@ final class EventKitSyncCoordinator {
     /// can swap it in after `init` (avoids a chicken-and-egg with `self`
     /// in the parent's init list).
     var overridesProvider: () -> [String: [Int]] = { [:] }
+    /// Closure handing the coordinator the latest per-event color/context
+    /// overrides for external events. Same decoupling motivation as
+    /// `overridesProvider`: the coordinator doesn't import the store type.
+    var attributeOverridesProvider: () -> [String: EventAttributeOverride] = { [:] }
 
     private nonisolated(unsafe) var syncTimer: Timer?
     private nonisolated(unsafe) var pendingPostSyncTask: Task<Void, Never>?
@@ -251,12 +255,19 @@ final class EventKitSyncCoordinator {
         )
 
         let overrides = overridesProvider()
+        let attributes = attributeOverridesProvider()
         for i in events.indices {
             let uniqueId = events[i].id
             let series = events[i].seriesId.flatMap { overrides[$0] }
             let exact = overrides[uniqueId]
             if let active = exact ?? series {
                 events[i].customReminderMinutes = active.isEmpty ? nil : active
+            }
+
+            let seriesAttrs = events[i].seriesId.flatMap { attributes[$0] }
+            if let attr = attributes[uniqueId] ?? seriesAttrs {
+                events[i].colorTag = attr.colorTag
+                events[i].context = attr.context
             }
         }
         return events.sorted { $0.startDate < $1.startDate }

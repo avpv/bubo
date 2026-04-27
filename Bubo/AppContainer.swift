@@ -166,6 +166,7 @@ struct AppContainer {
             PersistedLocalEvent.self,
             PersistedExcludedOccurrence.self,
             PersistedReminderOverride.self,
+            PersistedEventAttributeOverride.self,
         ])
         let config = ModelConfiguration(
             schema: schema,
