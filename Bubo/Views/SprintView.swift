@@ -25,13 +25,24 @@ import SwiftUI
 struct SprintView: View {
     var backlogService: BacklogService
     var optimizerService: OptimizerService
+    /// Calendar event source — same one inline QuickActions consumes. The
+    /// QuickActionRanker reads it together with the backlog to score
+    /// «Plan tomorrow / Schedule N / Batch …» chips, so we have to thread
+    /// it through to keep parity with the main view's optimizer entry.
+    var reminderService: ReminderService
     var onExit: () -> Void
     var onEditTask: (BacklogTask) -> Void
-    /// Fired when the user taps "Schedule" in `.all` mode. Same hook the
-    /// inline backlog uses — opens the optimizer/palette so users don't have
-    /// to leave the fullscreen view to plan the queue. Sprint mode keeps the
-    /// header calm and omits this CTA on purpose.
-    var onScheduleTasks: (() -> Void)? = nil
+    /// Fired when a ranked QuickAction executes successfully. Same payload
+    /// the inline strip uses: label for the toast, undo closure that pops
+    /// the optimizer's last applied snapshot.
+    var onOptimizerExecuted: ((_ label: String, _ undo: @escaping () -> Void) -> Void)? = nil
+    /// Fired when a ranked QuickAction returns an `infeasible` /
+    /// `noEventsToOptimize` result so the parent can surface a non-blocking
+    /// info toast.
+    var onOptimizerError: ((_ message: String) -> Void)? = nil
+    /// Fired when the user taps the primary «Optimize ⌘K» chip — opens the
+    /// command palette in the parent (same hook the inline QuickActions uses).
+    var onOpenPalette: (() -> Void)? = nil
     var onUndoableAction: ((_ message: String, _ undo: @escaping () -> Void) -> Void)? = nil
 
     @Environment(\.activeSkin) private var skin
@@ -70,9 +81,6 @@ struct SprintView: View {
     /// in `.all` mode (sprint mode is curated by the machine — reorder there
     /// would fight smart-sort).
     @FocusState private var focusedTaskId: String?
-    /// Hover state for the Schedule pill — same pattern as BacklogView so the
-    /// affordance reads as a button at rest, brightens on hover.
-    @State private var isScheduleHovering: Bool = false
 
     @State private var showCompletedToday: Bool = false
     @State private var showFrozen: Bool = false
@@ -198,14 +206,23 @@ struct SprintView: View {
     /// states so the empty surface stays calm.
     private var showsControlsRow: Bool {
         if showsModePicker { return true }
-        if !activeTasks.isEmpty {
-            if mode == .all, urgentCount > 0 || activeTasks.count > 1 { return true }
-            // Schedule lives in both modes — see `controlsRow`. The presence
-            // of the action alone is enough to render the strip; we don't
-            // want a mode switch to be the price of «plan my tasks».
-            if onScheduleTasks != nil { return true }
+        if mode == .all, !activeTasks.isEmpty {
+            if urgentCount > 0 { return true }
+            if activeTasks.count > 1 { return true }
         }
         return false
+    }
+
+    /// Whether the QuickActions strip should render. Mirrors the inline
+    /// view's gate (`reminderService.nonDisintegratingEventCount > 0`):
+    /// without events to optimize against, the ranker has nothing to score
+    /// and the strip would just show a lone «Optimize ⌘K» pill — we keep
+    /// it visible anyway so the optimizer is reachable from sprint even
+    /// before the day fills with events. Hidden only when there's nothing
+    /// in the backlog to plan.
+    private var showsQuickActionsStrip: Bool {
+        !activeTasks.isEmpty
+            && (onOptimizerExecuted != nil || onOpenPalette != nil)
     }
 
     var body: some View {
@@ -220,6 +237,12 @@ struct SprintView: View {
 
             if showsControlsRow {
                 controlsRow
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.top, DS.Spacing.sm)
+            }
+
+            if showsQuickActionsStrip {
+                quickActionsStrip
                     .padding(.horizontal, DS.Spacing.lg)
                     .padding(.top, DS.Spacing.sm)
             }
@@ -319,13 +342,16 @@ struct SprintView: View {
 
     // MARK: - Controls row
 
-    /// Row под header'ом: переключатель Sprint/All слева, фильтры/тоглы
-    /// справа. Urgent + smart-sort показываются только в `.all` — Sprint
-    /// держим чистым (top-N smart-sort + спокойные строки), там не место
-    /// дополнительным фильтрам. Schedule, наоборот, живёт в обоих режимах:
-    /// «спланировать backlog» — это намерение того же уровня, что и «что
-    /// делать сейчас», и прятать его за переключателем означало заставить
-    /// пользователя гулять в `.all` и обратно ради одной кнопки.
+    /// Row под header'ом: переключатель Sprint/All слева, фильтры справа.
+    /// Urgent + smart-sort живут только в `.all` — это срезы видимого
+    /// списка, а sprint курируется машиной, накладывать поверх ещё фильтр
+    /// бессмысленно.
+    ///
+    /// Действия над всем backlog'ом (планирование) переехали в отдельный
+    /// `quickActionsStrip` под этим row'ом — раньше тут была одинокая
+    /// «Schedule»-пилюля, которая обещала действие, а отдавала палитру.
+    /// QuickActions не врёт: «Optimize ⌘K» как primary + 3 ранжированных
+    /// чипа («Plan tomorrow / Schedule N / Batch …»), как на главной.
     @ViewBuilder
     private var controlsRow: some View {
         HStack(spacing: DS.Spacing.sm) {
@@ -344,48 +370,41 @@ struct SprintView: View {
                     smartSortButton
                 }
             }
-
-            // Same hook the inline backlog uses — opens the optimizer
-            // palette. Visible in both modes so users never have to exit
-            // fullscreen (or flip to `.all`) to plan the queue.
-            if !activeTasks.isEmpty, onScheduleTasks != nil {
-                scheduleButton
-            }
         }
     }
 
-    /// Schedule pill — primary action in `.all` mode. Visual mirrors the
-    /// inline BacklogView button so muscle memory carries between surfaces.
-    private var scheduleButton: some View {
-        Button {
-            onScheduleTasks?()
-        } label: {
-            Text("Schedule")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(skin.accentColor)
-                .padding(.horizontal, DS.Spacing.sm)
-                .padding(.vertical, DS.Spacing.xxs)
-                .background {
-                    Capsule()
-                        .fill(skin.accentColor.opacity(isScheduleHovering ? 0.16 : DS.Opacity.lightFill))
-                }
-                .overlay {
-                    Capsule()
-                        .strokeBorder(
-                            skin.accentColor.opacity(isScheduleHovering ? DS.Opacity.softAccent : DS.Opacity.subtleBorder),
-                            lineWidth: DS.Border.thin
-                        )
-                }
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering in
-            withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
-                isScheduleHovering = hovering
+    /// QuickActions strip — paritarian copy of the main view's optimizer
+    /// entry. Lives directly under the mode picker so users can plan or
+    /// invoke the optimizer without leaving fullscreen. Matches the
+    /// inline strip's behaviour 1:1 because it's the very same component.
+    ///
+    /// Publishes its bottom Y through `OptimizerBottomKey` so the command
+    /// palette (rendered as a sibling overlay above the navigation switch)
+    /// anchors itself just below this strip. Without this, opening the
+    /// palette from sprint would inherit the stale Y from `.list` — or
+    /// drop to zero and slide under the popover header.
+    private var quickActionsStrip: some View {
+        QuickActions(
+            optimizerService: optimizerService,
+            reminderService: reminderService,
+            onExecuted: { label, undo in
+                onOptimizerExecuted?(label, undo)
+            },
+            onError: { message in
+                onOptimizerError?(message)
+            },
+            onOpenPalette: {
+                onOpenPalette?()
             }
-        }
-        .help("Schedule tasks into free slots")
-        .accessibilityLabel("Schedule tasks")
+        )
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(
+                    key: OptimizerBottomKey.self,
+                    value: geo.frame(in: .named(menuBarRootCoordinateSpace)).maxY
+                )
+            }
+        )
     }
 
     /// Red «N urgent» pill — toggles the urgent-only filter. Filled

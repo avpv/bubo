@@ -261,12 +261,22 @@ struct MenuBarView: View {
                         SprintView(
                             backlogService: backlog,
                             optimizerService: optimizerService,
+                            reminderService: reminderService,
                             onExit: { navigation = .list },
                             onEditTask: { task in navigation = .editTask(task) },
-                            onScheduleTasks: {
-                                // Same hook the inline backlog uses — opens
-                                // the optimizer palette so users plan without
-                                // exiting fullscreen.
+                            onOptimizerExecuted: { label, undo in
+                                // Same hook the inline QuickActions uses on
+                                // the main view: success toast + schedule
+                                // refresh. Keeps muscle memory consistent
+                                // when the user switches between surfaces.
+                                toastState.showSuccess(label, icon: "sparkles", onUndo: undo)
+                                notifyScheduleChange()
+                            },
+                            onOptimizerError: { message in
+                                toastState.showInfo(message, icon: "exclamationmark.triangle")
+                            },
+                            onOpenPalette: {
+                                Haptics.tap()
                                 withAnimation(DS.Animation.quick) {
                                     paletteContext = PaletteContext()
                                 }
@@ -1921,15 +1931,21 @@ private struct PermissionBannerPageDots: View {
     }
 }
 
-/// Propagates the bottom-Y of the QuickActions "Optimize" bar up to
-/// MenuBarView so the command palette overlay can anchor directly beneath it.
-private struct OptimizerBottomKey: PreferenceKey {
+/// Bottom-Y of the optimizer entry strip — the inline QuickActions card on
+/// `.list`, or the sprint-view QuickActions strip on `.sprint`. The command
+/// palette anchors itself below this Y so the «Optimize ⌘K» trigger that
+/// opened it stays visible and the palette feels glued to its origin.
+///
+/// Internal (not fileprivate) so SprintView, which lives in its own file,
+/// can publish into the same key — switching surfaces shouldn't make the
+/// palette float over the popover header.
+struct OptimizerBottomKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = max(value, nextValue())
     }
 }
 
-private let menuBarRootCoordinateSpace = "MenuBarViewRoot"
+let menuBarRootCoordinateSpace = "MenuBarViewRoot"
 
 // ColorDotButton is now a shared component in Components/ColorDotButton.swift
