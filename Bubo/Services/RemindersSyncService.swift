@@ -373,21 +373,24 @@ final class RemindersSyncService {
         let titleChanged = existing.title != remote.title
         let priorityChanged = existing.priority != remote.priority
         let deadlineChanged = existing.deadline != remote.deadline
-        let contextChanged = existing.context != remote.context
         let notesChanged = existing.notes != remote.notes
         let urlChanged = existing.url != remote.url
         let locationChanged = existing.location != remote.location
 
-        guard titleChanged || priorityChanged || deadlineChanged || contextChanged
+        guard titleChanged || priorityChanged || deadlineChanged
             || notesChanged || urlChanged || locationChanged else {
             return nil
         }
 
+        // `context` is intentionally not merged from remote: it's seeded
+        // from the reminder's calendar title at create time and after
+        // that belongs to the user (editable in `EditTaskView`).
+        // Re-applying remote on every sync would silently revert their
+        // edit. Same story for `colorTag` — Bubo owns it.
         var merged = existing
         merged.title = remote.title
         merged.priority = remote.priority
         merged.deadline = remote.deadline
-        merged.context = remote.context
         merged.notes = remote.notes
         merged.url = remote.url
         merged.location = remote.location

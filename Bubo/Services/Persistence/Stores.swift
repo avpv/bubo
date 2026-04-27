@@ -51,6 +51,32 @@ protocol ReminderOverrideStoring: AnyObject {
     func save(_ desired: [String: [Int]])
 }
 
+// MARK: Event Attribute Overrides
+
+/// User-set attributes that ride alongside an external (Apple Calendar)
+/// event without modifying the EventKit row. Mirrors the two fields
+/// `CalendarEvent` exposes to the editor for non-local events.
+struct EventAttributeOverride: Equatable, Sendable {
+    var colorTag: EventColorTag? = nil
+    var context: String? = nil
+
+    /// True when both fields are unset — the override carries no signal
+    /// and can be deleted instead of persisted.
+    var isEmpty: Bool {
+        colorTag == nil && (context?.isEmpty ?? true)
+    }
+}
+
+/// Persisted-store contract for per-event color/context overrides on
+/// external events. Same shape as `ReminderOverrideStoring`.
+@MainActor
+protocol EventAttributeOverrideStoring: AnyObject {
+    var lastError: String? { get }
+
+    func loadAll() -> [String: EventAttributeOverride]
+    func save(_ desired: [String: EventAttributeOverride])
+}
+
 // MARK: Backlog Tasks
 
 /// Persisted-store contract for backlog tasks. The mutation surface is

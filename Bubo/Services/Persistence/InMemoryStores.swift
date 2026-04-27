@@ -61,6 +61,20 @@ final class InMemoryReminderOverrideStore: ReminderOverrideStoring {
 }
 
 @MainActor
+final class InMemoryEventAttributeOverrideStore: EventAttributeOverrideStoring {
+    private(set) var lastError: String? = nil
+    private var overrides: [String: EventAttributeOverride] = [:]
+
+    init(seed: [String: EventAttributeOverride] = [:]) {
+        overrides = seed
+    }
+
+    func loadAll() -> [String: EventAttributeOverride] { overrides }
+
+    func save(_ desired: [String: EventAttributeOverride]) { overrides = desired }
+}
+
+@MainActor
 final class InMemoryBacklogTaskStore: BacklogTaskStoring {
     private struct Row {
         var task: BacklogTask

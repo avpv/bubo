@@ -49,6 +49,7 @@ class ReminderService {
         localEventStore.lastError
             ?? excludedOccurrenceStore.lastError
             ?? reminderOverrideStore.lastError
+            ?? eventAttributeOverrideStore.lastError
     }
 
     private var settings: ReminderSettings
@@ -63,6 +64,7 @@ class ReminderService {
     private let localEventStore: any LocalEventStoring
     private let excludedOccurrenceStore: any ExcludedOccurrenceStoring
     private let reminderOverrideStore: any ReminderOverrideStoring
+    private let eventAttributeOverrideStore: any EventAttributeOverrideStoring
 
     /// Calendar access abstracted for the same reason the stores are —
     /// tests need to drive create/shift calls without a real EKEventStore.
@@ -71,6 +73,7 @@ class ReminderService {
 
     private var excludedOccurrences: Set<String> = []
     private var localRemindersOverrides: [String: [Int]] = [:]
+    private var eventAttributeOverrides: [String: EventAttributeOverride] = [:]
 
     private nonisolated(unsafe) var settingsObserver: Any?
     private nonisolated(unsafe) var snoozeObserver: Any?
@@ -151,7 +154,8 @@ class ReminderService {
             eventCacheContainer: eventCacheContainer,
             localEventStore: LocalEventStore(container: userEventsContainer),
             excludedOccurrenceStore: ExcludedOccurrenceStore(container: userEventsContainer),
-            reminderOverrideStore: ReminderOverrideStore(container: userEventsContainer)
+            reminderOverrideStore: ReminderOverrideStore(container: userEventsContainer),
+            eventAttributeOverrideStore: EventAttributeOverrideStore(container: userEventsContainer)
         )
     }
 
@@ -165,12 +169,14 @@ class ReminderService {
         localEventStore: any LocalEventStoring,
         excludedOccurrenceStore: any ExcludedOccurrenceStoring,
         reminderOverrideStore: any ReminderOverrideStoring,
+        eventAttributeOverrideStore: any EventAttributeOverrideStoring,
         calendarSource: any CalendarEventSource = AppleCalendarService.shared
     ) {
         self.settings = settings
         self.localEventStore = localEventStore
         self.excludedOccurrenceStore = excludedOccurrenceStore
         self.reminderOverrideStore = reminderOverrideStore
+        self.eventAttributeOverrideStore = eventAttributeOverrideStore
         self.calendarSource = calendarSource
         self.scheduler = NotificationScheduler(settings: settings)
         self.syncCoordinator = EventKitSyncCoordinator(
@@ -184,6 +190,9 @@ class ReminderService {
         self.syncCoordinator.overridesProvider = { [weak self] in
             self?.localRemindersOverrides ?? [:]
         }
+        self.syncCoordinator.attributeOverridesProvider = { [weak self] in
+            self?.eventAttributeOverrides ?? [:]
+        }
         self.syncCoordinator.onEventsUpdated = { [weak self] events, _ in
             guard let self = self else { return }
             self.upcomingEvents = events
@@ -193,6 +202,7 @@ class ReminderService {
 
         loadLocalEvents()
         loadLocalRemindersOverrides()
+        loadEventAttributeOverrides()
         wireObservers()
     }
 
@@ -353,6 +363,7 @@ class ReminderService {
         if let idx = upcomingEvents.firstIndex(where: { $0.id == eventId }) {
             upcomingEvents[idx].customReminderMinutes = minutes
             scheduler.schedule([upcomingEvents[idx]])
+            syncCoordinator.cacheEvents(upcomingEvents)
         } else if let idx = localEvents.firstIndex(where: { $0.id == eventId }) {
             localEvents[idx].customReminderMinutes = minutes
             scheduler.schedule(
@@ -363,6 +374,64 @@ class ReminderService {
 
     private func loadLocalRemindersOverrides() {
         localRemindersOverrides = reminderOverrideStore.loadAll()
+    }
+
+    // MARK: - External Event Attribute Overrides
+
+    /// Persist user-set color/context for an event Bubo doesn't own
+    /// (Apple Calendar). External events live in EventKit, so we keep a
+    /// side table keyed by `seriesId ?? event.id` — one write reaches
+    /// every occurrence of a recurring series. An override with both
+    /// fields nil/empty is removed.
+    func updateEventAttributes(
+        for event: CalendarEvent,
+        colorTag: EventColorTag?,
+        context: String?
+    ) {
+        let trimmed = context?.trimmingCharacters(in: .whitespaces)
+        let normalized = (trimmed?.isEmpty ?? true) ? nil : trimmed
+        let override = EventAttributeOverride(colorTag: colorTag, context: normalized)
+        let key = EventKitSyncCoordinator.attributeKey(for: event)
+        if override.isEmpty {
+            eventAttributeOverrides.removeValue(forKey: key)
+        } else {
+            eventAttributeOverrides[key] = override
+        }
+        eventAttributeOverrideStore.save(eventAttributeOverrides)
+
+        // Apply immediately to every visible occurrence that resolves
+        // to the same key — the editor user expects every Tuesday-1:1
+        // to repaint, not just the one they opened. Then push the
+        // updated snapshot so a cold start before the next live sync
+        // still shows the choice.
+        var changed = false
+        for i in upcomingEvents.indices
+        where EventKitSyncCoordinator.attributeKey(for: upcomingEvents[i]) == key {
+            upcomingEvents[i].colorTag = colorTag
+            upcomingEvents[i].context = normalized
+            changed = true
+        }
+        if changed {
+            syncCoordinator.cacheEvents(upcomingEvents)
+        }
+    }
+
+    private func loadEventAttributeOverrides() {
+        eventAttributeOverrides = eventAttributeOverrideStore.loadAll()
+    }
+
+    /// Re-overlay the current override dictionaries onto the in-memory
+    /// upcoming-events snapshot. Used when the dictionaries change for
+    /// a reason other than a direct user edit (e.g. a CloudKit batch
+    /// landing edits made on another device) so the UI catches up
+    /// without waiting for the next live sync.
+    private func reapplyOverridesToUpcoming() {
+        guard !upcomingEvents.isEmpty else { return }
+        let overlaid = syncCoordinator.applyAllOverrides(to: upcomingEvents)
+        if overlaid != upcomingEvents {
+            upcomingEvents = overlaid
+            syncCoordinator.cacheEvents(upcomingEvents)
+        }
     }
 
     // MARK: - Reminder Intervals (delegated)
@@ -381,11 +450,17 @@ class ReminderService {
     private func reconcileAfterCloudImport() {
         loadLocalEvents()
         loadLocalRemindersOverrides()
+        loadEventAttributeOverrides()
         // Writing back flushes duplicate-collapse to disk so we don't
         // keep re-deduplicating on every read.
         localEventStore.save(localEvents)
         excludedOccurrenceStore.save(excludedOccurrences)
         reminderOverrideStore.save(localRemindersOverrides)
+        eventAttributeOverrideStore.save(eventAttributeOverrides)
+        // Re-overlay the freshly-imported overrides onto the upcoming
+        // events already on screen — otherwise an edit from another
+        // device wouldn't be visible until the next live sync.
+        reapplyOverridesToUpcoming()
     }
 
     // MARK: - Snooze

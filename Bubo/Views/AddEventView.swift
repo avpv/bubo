@@ -48,6 +48,17 @@ struct AddEventView: View {
     private var isEditing: Bool { editingEvent != nil }
     private var isExternal: Bool { editingEvent?.isLocalEvent == false }
 
+    /// True when the editor is open on a recurring event — either the
+    /// base of a local series (`recurrenceRule` set) or an external
+    /// occurrence whose EKEvent has recurrence rules (`seriesId` set).
+    /// Drives the "applies to every occurrence" hint shown next to the
+    /// color and context fields, since both halves of the editor write
+    /// at series scope for these events.
+    private var isEditingRecurring: Bool {
+        guard let event = editingEvent else { return false }
+        return event.seriesId != nil || event.recurrenceRule != nil
+    }
+
     private var isTitleValid: Bool {
         !title.trimmingCharacters(in: .whitespaces).isEmpty
     }
@@ -256,7 +267,9 @@ struct AddEventView: View {
                     }
 
                     if showMoreOptions || isExternal {
-                        // Color
+                        // Color — editable for both local and external events.
+                        // External overrides ride alongside the EventKit row
+                        // via `EventAttributeOverrideStore` and survive sync.
                         sectionBlock {
                             VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                                 sectionLabel("Color")
@@ -276,22 +289,25 @@ struct AddEventView: View {
                             }
                             .padding(DS.Spacing.md)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .disabled(isExternal)
-                            .opacity(isExternal ? 0.6 : 1.0)
                         }
 
-                        // Context (Project / Category)
+                        // Context (Project / Category) — same dual-source story
+                        // as Color above.
                         sectionBlock {
                             VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                                 sectionLabel("Context")
 
                                 TextField("Project or category", text: $contextTag, prompt: Text("e.g. backend, design, personal").foregroundStyle(skin.resolvedTextSecondary))
                                     .textFieldStyle(.plain)
+
+                                if isEditingRecurring {
+                                    Text("Color and context apply to every occurrence in the series.")
+                                        .font(.caption2)
+                                        .foregroundStyle(skin.resolvedTextSecondary)
+                                }
                             }
                             .padding(DS.Spacing.md)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .disabled(isExternal)
-                            .opacity(isExternal ? 0.6 : 1.0)
                         }
 
                         // Details
@@ -996,6 +1012,11 @@ struct AddEventView: View {
         if isExternal, let event = editingEvent {
             let minutes = useCustomReminders ? reminderMinutes.sorted() : nil
             reminderService.updateLocalReminder(for: event.id, minutes: minutes)
+            reminderService.updateEventAttributes(
+                for: event,
+                colorTag: selectedColorTag,
+                context: contextTag
+            )
             Haptics.impact()
             onSave(true)
             return

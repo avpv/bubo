@@ -70,7 +70,9 @@ enum RecurrenceExpander {
                         customReminderMinutes: event.customReminderMinutes,
                         recurrenceRule: event.recurrenceRule,
                         seriesId: event.id,
-                        eventType: event.eventType
+                        eventType: event.eventType,
+                        colorTag: event.colorTag,
+                        context: event.context
                     )
                     occurrences.append(occurrence)
                 }
@@ -104,7 +106,9 @@ enum RecurrenceExpander {
                                 customReminderMinutes: [0],
                                 recurrenceRule: event.recurrenceRule,
                                 seriesId: event.id,
-                                eventType: .pomodoro
+                                eventType: .pomodoro,
+                                colorTag: event.colorTag,
+                                context: event.context
                             )
                             withBreaks.append(breakEvent)
                         }
@@ -132,7 +136,9 @@ enum RecurrenceExpander {
                     customReminderMinutes: [0],
                     recurrenceRule: event.recurrenceRule,
                     seriesId: event.id,
-                    eventType: .pomodoro
+                    eventType: .pomodoro,
+                    colorTag: event.colorTag,
+                    context: event.context
                 )
                 occurrences.append(longBreakEvent)
             }

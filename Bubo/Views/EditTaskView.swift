@@ -35,6 +35,7 @@ struct EditTaskView: View {
     @State private var hasDeadline: Bool
     @State private var deadline: Date
     @State private var context: String
+    @State private var colorTag: EventColorTag?
     @State private var storyPoints: Int?
     @State private var preferredPeriod: Period?
     @State private var isRecurring: Bool
@@ -96,6 +97,7 @@ struct EditTaskView: View {
         _hasDeadline = State(initialValue: task.deadline != nil)
         _deadline = State(initialValue: task.deadline ?? Date())
         _context = State(initialValue: task.context ?? "")
+        _colorTag = State(initialValue: task.colorTag)
         _storyPoints = State(initialValue: task.storyPoints)
         _preferredPeriod = State(initialValue: task.preferredPeriod)
         _isRecurring = State(initialValue: task.isRecurring)
@@ -236,6 +238,30 @@ struct EditTaskView: View {
                                             preferredPeriod = period
                                         }
                                     }
+                                }
+                            }
+                        }
+                        .padding(DS.Spacing.md)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
+                    // Color — same vocabulary as the event editor so a
+                    // user can color-code tasks (incl. those synced from
+                    // Apple Reminders) the way they color-code events.
+                    sectionBlock {
+                        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                            sectionLabel("Color")
+
+                            HStack(spacing: DS.Spacing.xs) {
+                                ForEach(EventColorTag.allCases, id: \.self) { tag in
+                                    ColorDotButton(
+                                        tag: tag,
+                                        isActive: colorTag == tag,
+                                        action: {
+                                            Haptics.tap()
+                                            colorTag = colorTag == tag ? nil : tag
+                                        }
+                                    )
                                 }
                             }
                         }
@@ -567,6 +593,7 @@ struct EditTaskView: View {
         updated.deadline = hasDeadline ? deadline : nil
         let trimmedContext = context.trimmingCharacters(in: .whitespaces)
         updated.context = trimmedContext.isEmpty ? nil : trimmedContext
+        updated.colorTag = colorTag
         updated.storyPoints = storyPoints
         updated.preferredPeriod = preferredPeriod
         updated.isRecurring = isRecurring

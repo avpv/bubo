@@ -50,6 +50,7 @@ final class ReminderServiceTests: XCTestCase {
             localEventStore: local,
             excludedOccurrenceStore: excluded,
             reminderOverrideStore: overrides,
+            eventAttributeOverrideStore: InMemoryEventAttributeOverrideStore(),
             calendarSource: FakeCalendarEventSource()
         )
         return (service, local, excluded, overrides)
@@ -184,6 +185,7 @@ final class ReminderServiceTests: XCTestCase {
             localEventStore: InMemoryLocalEventStore(),
             excludedOccurrenceStore: InMemoryExcludedOccurrenceStore(),
             reminderOverrideStore: InMemoryReminderOverrideStore(),
+            eventAttributeOverrideStore: InMemoryEventAttributeOverrideStore(),
             calendarSource: source
         )
     }
