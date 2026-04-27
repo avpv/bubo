@@ -254,36 +254,67 @@ final class EventKitSyncCoordinator {
             onlyCalendarIds: settings.selectedCalendarIds
         )
 
+        events = applyAllOverrides(to: events)
+        return events.sorted { $0.startDate < $1.startDate }
+    }
+
+    /// Layer reminder-minute and color/context overrides onto a slice
+    /// of events. Idempotent — applying the same overrides twice is a
+    /// no-op, so it's safe to run on already-overlaid input (e.g. the
+    /// override-applied snapshot we keep in the on-disk cache). Reused
+    /// at every event-emission point: live fetch, cached load, and the
+    /// re-application path triggered by user edits.
+    func applyAllOverrides(to events: [CalendarEvent]) -> [CalendarEvent] {
         let overrides = overridesProvider()
         let attributes = attributeOverridesProvider()
-        for i in events.indices {
-            let uniqueId = events[i].id
-            let series = events[i].seriesId.flatMap { overrides[$0] }
-            let exact = overrides[uniqueId]
-            if let active = exact ?? series {
-                events[i].customReminderMinutes = active.isEmpty ? nil : active
-            }
+        var result = events
+        for i in result.indices {
+            let uniqueId = result[i].id
 
-            let seriesAttrs = events[i].seriesId.flatMap { attributes[$0] }
-            if let attr = attributes[uniqueId] ?? seriesAttrs {
-                events[i].colorTag = attr.colorTag
-                events[i].context = attr.context
-            }
+            // Both override types are applied unconditionally: when the
+            // user *removes* an override, the corresponding entry leaves
+            // the dictionary, and we want the value on the event to fall
+            // back to "no override" (nil) — not to whatever the on-disk
+            // cache last recorded. External events have no inherent
+            // colorTag / context / customReminderMinutes, so resetting
+            // to nil restores the calendar source's view of the world.
+            let seriesMins = result[i].seriesId.flatMap { overrides[$0] }
+            let activeMins = overrides[uniqueId] ?? seriesMins
+            result[i].customReminderMinutes = (activeMins?.isEmpty ?? true) ? nil : activeMins
+
+            let seriesAttrs = result[i].seriesId.flatMap { attributes[$0] }
+            let attr = attributes[uniqueId] ?? seriesAttrs ?? EventAttributeOverride()
+            result[i].colorTag = attr.colorTag
+            result[i].context = attr.context
         }
-        return events.sorted { $0.startDate < $1.startDate }
+        return result
+    }
+
+    /// Persist a snapshot to the on-disk cache. Called by the
+    /// orchestrator after a user edit mutates the in-memory event slice
+    /// so the next cold start sees the post-edit state without waiting
+    /// for a live sync.
+    func cacheEvents(_ events: [CalendarEvent]) {
+        Task { [eventCache] in
+            await eventCache.save(events: events)
+        }
     }
 
     // MARK: - Cache
 
     /// Push the cached event set into the orchestrator if a live sync
-    /// hasn't happened yet. Called once at startup.
+    /// hasn't happened yet. Called once at startup. Re-applies overrides
+    /// before emitting so that user edits made after the last live sync
+    /// (which only touched the in-memory snapshot) become visible on the
+    /// next cold start without waiting for connectivity.
     private func loadCachedEvents() {
         Task { @MainActor [weak self] in
             guard let self = self else { return }
             let cached = await self.eventCache.loadEvents()
             guard !cached.isEmpty, !self.hasCompletedLiveSync else { return }
+            let overlaid = self.applyAllOverrides(to: cached)
             self.isUsingCache = true
-            self.onEventsUpdated?(cached, .cache)
+            self.onEventsUpdated?(overlaid, .cache)
         }
     }
 }

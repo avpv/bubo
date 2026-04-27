@@ -363,6 +363,7 @@ class ReminderService {
         if let idx = upcomingEvents.firstIndex(where: { $0.id == eventId }) {
             upcomingEvents[idx].customReminderMinutes = minutes
             scheduler.schedule([upcomingEvents[idx]])
+            syncCoordinator.cacheEvents(upcomingEvents)
         } else if let idx = localEvents.firstIndex(where: { $0.id == eventId }) {
             localEvents[idx].customReminderMinutes = minutes
             scheduler.schedule(
@@ -397,15 +398,32 @@ class ReminderService {
         eventAttributeOverrideStore.save(eventAttributeOverrides)
 
         // Apply immediately so the UI reflects the change without a
-        // round-trip through EventKit.
+        // round-trip through EventKit, then push the updated snapshot
+        // to the on-disk cache so a cold start before the next live
+        // sync still shows the user's choice.
         if let idx = upcomingEvents.firstIndex(where: { $0.id == eventId }) {
             upcomingEvents[idx].colorTag = colorTag
             upcomingEvents[idx].context = normalized
+            syncCoordinator.cacheEvents(upcomingEvents)
         }
     }
 
     private func loadEventAttributeOverrides() {
         eventAttributeOverrides = eventAttributeOverrideStore.loadAll()
+    }
+
+    /// Re-overlay the current override dictionaries onto the in-memory
+    /// upcoming-events snapshot. Used when the dictionaries change for
+    /// a reason other than a direct user edit (e.g. a CloudKit batch
+    /// landing edits made on another device) so the UI catches up
+    /// without waiting for the next live sync.
+    private func reapplyOverridesToUpcoming() {
+        guard !upcomingEvents.isEmpty else { return }
+        let overlaid = syncCoordinator.applyAllOverrides(to: upcomingEvents)
+        if overlaid != upcomingEvents {
+            upcomingEvents = overlaid
+            syncCoordinator.cacheEvents(upcomingEvents)
+        }
     }
 
     // MARK: - Reminder Intervals (delegated)
@@ -431,6 +449,10 @@ class ReminderService {
         excludedOccurrenceStore.save(excludedOccurrences)
         reminderOverrideStore.save(localRemindersOverrides)
         eventAttributeOverrideStore.save(eventAttributeOverrides)
+        // Re-overlay the freshly-imported overrides onto the upcoming
+        // events already on screen — otherwise an edit from another
+        // device wouldn't be visible until the next live sync.
+        reapplyOverridesToUpcoming()
     }
 
     // MARK: - Snooze

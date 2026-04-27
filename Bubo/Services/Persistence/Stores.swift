@@ -57,8 +57,8 @@ protocol ReminderOverrideStoring: AnyObject {
 /// event without modifying the EventKit row. Mirrors the two fields
 /// `CalendarEvent` exposes to the editor for non-local events.
 struct EventAttributeOverride: Equatable, Sendable {
-    var colorTag: EventColorTag?
-    var context: String?
+    var colorTag: EventColorTag? = nil
+    var context: String? = nil
 
     /// True when both fields are unset — the override carries no signal
     /// and can be deleted instead of persisted.
