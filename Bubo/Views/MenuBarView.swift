@@ -264,17 +264,6 @@ struct MenuBarView: View {
                             reminderService: reminderService,
                             onExit: { navigation = .list },
                             onEditTask: { task in navigation = .editTask(task) },
-                            onOptimizerExecuted: { label, undo in
-                                // Same hook the inline QuickActions uses on
-                                // the main view: success toast + schedule
-                                // refresh. Keeps muscle memory consistent
-                                // when the user switches between surfaces.
-                                toastState.showSuccess(label, icon: "sparkles", onUndo: undo)
-                                notifyScheduleChange()
-                            },
-                            onOptimizerError: { message in
-                                toastState.showInfo(message, icon: "exclamationmark.triangle")
-                            },
                             onOpenPalette: {
                                 Haptics.tap()
                                 withAnimation(DS.Animation.quick) {
@@ -889,45 +878,13 @@ struct MenuBarView: View {
 
             // Backlog card — always rendered so the "+ Add task…" input
             // stays as a persistent visual anchor even when the backlog
-            // is empty.
-            //
-            // IMPORTANT: the card visual (material + border + shadow)
-            // is applied to the BACKGROUND LAYER ONLY, not to the
-            // content. The standard `.skinPlatterDepth` uses
-            // `.clipShape(RoundedRectangle)` which clips the ENTIRE
-            // content — and on macOS, `clipShape` blocks NSDrag's hit
-            // testing through the CALayer mask, which prevents
-            // `.draggable` on BacklogTaskRow from ever initiating a
-            // drag session. By moving the rounded clip to the
-            // background and the border to an overlay, the content
-            // layer (including all drag sources and drop targets)
-            // stays unclipped and fully interactive.
+            // is empty. The chrome itself lives on `.skinTasksBlockChrome`
+            // — same modifier SprintView uses, so the block reads as one
+            // recognizable surface in both collapsed-on-main and
+            // fullscreen-in-Sprint states.
             inlineBacklog(autoExpand: reminderService.nonDisintegratingEventCount == 0)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    SkinPlatterBackground(skin: activeSkin)
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
-                        .shadow(color: skin.resolvedShadowColor, radius: skin.shadowRadius, y: skin.shadowY)
-                        .shadow(color: skin.resolvedShadowColor, radius: 2, y: 1)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                        .strokeBorder(
-                            LinearGradient(
-                                colors: [
-                                    .white.opacity(skin.platterBorderOpacity * 1.5),
-                                    .white.opacity(skin.platterBorderOpacity * 0.1),
-                                    .clear,
-                                    .white.opacity(skin.platterBorderOpacity * 0.4)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: DS.Border.thin
-                        )
-                        .blendMode(.plusLighter)
-                        .allowsHitTesting(false)
-                )
+                .skinTasksBlockChrome(activeSkin)
                 .padding(.horizontal, DS.Spacing.contentMargin)
                 .padding(.top, DS.Spacing.md)
 

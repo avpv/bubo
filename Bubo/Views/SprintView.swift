@@ -5,17 +5,25 @@ import SwiftUI
 /// Full-screen Tasks view that lives inside the popover navigation stack.
 /// Reachable via the fullscreen-affordance button in `BacklogView`'s header.
 ///
-/// Replaces both the old in-place "isSprintMode" modifier on `BacklogView` and
-/// `BacklogView`'s third-state «.expanded» chevron click — раньше у нас были
-/// две дороги к одному состоянию «много задач, без таймлайна», теперь одна.
+/// Visually it is **the same Tasks card** the user sees collapsed on the main
+/// view, distended to popover height. One platter chrome (`.skinTasksBlockChrome`)
+/// wraps the whole surface — header, list, add-task field — so collapsed-on-main
+/// and fullscreen-in-Sprint read as the same object in two states. Бирман:
+/// один объект — одна форма.
 ///
 /// Design (Birman):
-/// - One thing on screen at a time. Sprint is "what's next" — everything
-///   that isn't a task is gone, including the brand chrome.
+/// - One thing on screen at a time. Sprint is "what's next" — the popover
+///   header keeps a single Exit affordance; everything else lives inside
+///   the block.
 /// - Two modes inside the same surface: `Sprint` (top-N by smart-score, calmer
 ///   row style) и `All` (полный активный список в пользовательском порядке —
 ///   именно то, что раньше делал `.expanded` BacklogView'а). Переключатель —
-///   сегментированная пилюля под header'ом.
+///   сегментированная пилюля внутри block header'а, заменяет шеврон + «Tasks N»
+///   из BacklogView'а; счётчик «Sprint 5 / All 6» несёт сам label пилюли.
+/// - QuickActions strip удалён намеренно: Sprint — режим _делать_, не
+///   _оптимизировать_. Чипы «Plan tomorrow / Schedule N / Batch» тянули
+///   наружу из режима. Ⓘ Schedule pill в header'е остаётся — открывает
+///   палитру, не уводя из Sprint.
 /// - The list itself stays inline-editable: complete with a tap, edit by
 ///   pushing the same `EditTaskView` the backlog uses, undo via toast.
 /// - Inline `+ Add task…` поле снизу — раньше пустое состояние SprintView
@@ -25,23 +33,15 @@ import SwiftUI
 struct SprintView: View {
     var backlogService: BacklogService
     var optimizerService: OptimizerService
-    /// Calendar event source — same one inline QuickActions consumes. The
-    /// QuickActionRanker reads it together with the backlog to score
-    /// «Plan tomorrow / Schedule N / Batch …» chips, so we have to thread
-    /// it through to keep parity with the main view's optimizer entry.
+    /// Calendar event source — needed by BacklogTaskRow for slot-preview
+    /// hovers on `.all` mode rows. Sprint mode itself doesn't consult it.
     var reminderService: ReminderService
     var onExit: () -> Void
     var onEditTask: (BacklogTask) -> Void
-    /// Fired when a ranked QuickAction executes successfully. Same payload
-    /// the inline strip uses: label for the toast, undo closure that pops
-    /// the optimizer's last applied snapshot.
-    var onOptimizerExecuted: ((_ label: String, _ undo: @escaping () -> Void) -> Void)? = nil
-    /// Fired when a ranked QuickAction returns an `infeasible` /
-    /// `noEventsToOptimize` result so the parent can surface a non-blocking
-    /// info toast.
-    var onOptimizerError: ((_ message: String) -> Void)? = nil
-    /// Fired when the user taps the primary «Optimize ⌘K» chip — opens the
-    /// command palette in the parent (same hook the inline QuickActions uses).
+    /// Fired when the «Schedule» pill in the block header is tapped —
+    /// same role the pill plays inside `BacklogView`. The parent opens the
+    /// command palette (`PaletteContext`) so the optimizer can plan the
+    /// queue from inside Sprint without leaving the surface.
     var onOpenPalette: (() -> Void)? = nil
     var onUndoableAction: ((_ message: String, _ undo: @escaping () -> Void) -> Void)? = nil
 
@@ -201,55 +201,30 @@ struct SprintView: View {
         return activeTasks.count > Self.maxSprintTasks || mode == .all
     }
 
-    /// True iff a controls row needs to render (mode picker, urgent filter
-    /// pill, smart-sort toggle). Hides the row entirely on small/clean
-    /// states so the empty surface stays calm.
-    private var showsControlsRow: Bool {
-        if showsModePicker { return true }
-        if mode == .all, !activeTasks.isEmpty {
-            if urgentCount > 0 { return true }
-            if activeTasks.count > 1 { return true }
-        }
-        return false
-    }
-
-    /// Whether the QuickActions strip should render. Mirrors the inline
-    /// view's gate (`reminderService.nonDisintegratingEventCount > 0`):
-    /// without events to optimize against, the ranker has nothing to score
-    /// and the strip would just show a lone «Optimize ⌘K» pill — we keep
-    /// it visible anyway so the optimizer is reachable from sprint even
-    /// before the day fills with events. Hidden only when there's nothing
-    /// in the backlog to plan.
-    private var showsQuickActionsStrip: Bool {
-        !activeTasks.isEmpty
-            && (onOptimizerExecuted != nil || onOpenPalette != nil)
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             PopoverHeader(
                 title: "Sprint",
                 showBack: true,
                 backLabel: "Exit",
-                onBack: onExit,
-                trailing: AnyView(headerTrailing)
+                onBack: onExit
             )
 
-            if showsControlsRow {
-                controlsRow
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.top, DS.Spacing.sm)
+            // Block container — same chrome as the inline Tasks card on the
+            // main view (`.skinTasksBlockChrome`). The whole Sprint surface
+            // lives inside one rounded platter so it reads as the same
+            // object the user sees collapsed on the main screen, just
+            // distended to popover height. Бирман: один объект — одна форма.
+            VStack(spacing: 0) {
+                blockHeader
+                mainContent
+                addTaskField
             }
-
-            if showsQuickActionsStrip {
-                quickActionsStrip
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.top, DS.Spacing.sm)
-            }
-
-            mainContent
-
-            addTaskField
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .skinTasksBlockChrome(skin)
+            .padding(.horizontal, DS.Spacing.contentMargin)
+            .padding(.top, DS.Spacing.md)
+            .padding(.bottom, DS.Spacing.md)
         }
         .frame(width: DS.Popover.width, height: DS.Popover.height)
         .background(hotKeyBindings)
@@ -274,16 +249,22 @@ struct SprintView: View {
         }
     }
 
-    // MARK: - Header trailing
+    // MARK: - Block header
+    //
+    // Один ряд внутри карточки, повторяющий структуру BacklogView'овского
+    // `backlogHeader` 1:1, чтобы свёрнутая Tasks-карточка на главной и
+    // распахнутый Sprint читались как один и тот же объект:
+    //
+    //   [ring] [Done by 6:18] [Sprint 5 / All 6] [→ ETA] · · · [urgent] [smart] [Schedule]
+    //
+    // Capacity ring + verdict — общий груз очереди (тот же ответ на
+    // «влезет ли всё»). Mode picker заменяет шеврон + «Tasks N» — его
+    // лейбл несёт счётчик, отдельный текст не нужен. ETA — _видимого_
+    // набора (Sprint top-N), TimelineView держит цифру живой. Schedule
+    // pill — та же, что на главной: открывает палитру.
 
-    /// Header trailing: capacity ring + capacity label («сколько в очереди /
-    /// сколько осталось дня») + count·time + ETA текущего видимого набора.
-    /// Кольцо отвечает на «влезет ли весь backlog?», текст рядом — на
-    /// «во сколько именно?». Бирман: цвет — это сигнал, число — данные;
-    /// рядом — сильнее, чем порознь.
-    @ViewBuilder
-    private var headerTrailing: some View {
-        HStack(spacing: DS.Spacing.xs) {
+    private var blockHeader: some View {
+        HStack(spacing: DS.Spacing.sm) {
             if !activeTasks.isEmpty {
                 BacklogCapacityRing(
                     pendingMinutes: pendingWorkloadMinutes,
@@ -298,70 +279,21 @@ struct SprintView: View {
                 )
             }
 
-            if !visibleTasks.isEmpty {
-                HStack(spacing: DS.Spacing.xxs) {
-                    Text("\(visibleTasks.count)")
-                        .font(.subheadline.weight(.medium).monospacedDigit())
-                        .foregroundStyle(skin.resolvedTextPrimary)
-                        .contentTransition(.numericText())
-                    Text("·")
-                        .font(.caption2)
-                        .foregroundStyle(skin.resolvedTextTertiary)
-                    Text(DS.formatMinutes(totalMinutes))
-                        .font(.subheadline.weight(.regular).monospacedDigit())
-                        .foregroundStyle(skin.resolvedTextSecondary)
-                        .contentTransition(.numericText())
-
-                    // ETA пересчитывается каждую минуту через TimelineView
-                    // — иначе цифра «протухает» сразу после открытия
-                    // popover'а: пользователь сидит 30 минут, ETA всё ещё
-                    // показывает время как при заходе. Бирман: «информация
-                    // должна жить, не быть моментальным снимком».
-                    TimelineView(.everyMinute) { ctx in
-                        if let etaLabel = etaLabel(now: ctx.date) {
-                            HStack(spacing: DS.Spacing.xxs) {
-                                // Стрелка как визуальный «ведёт к»: сумма
-                                // минут превращается в час окончания.
-                                // ASCII (`→`) читается мгновенно и не
-                                // требует SF-иконки.
-                                Text("\u{2192}")
-                                    .font(.caption2)
-                                    .foregroundStyle(skin.resolvedTextTertiary)
-                                Text(etaLabel)
-                                    .font(.subheadline.weight(.regular).monospacedDigit())
-                                    .foregroundStyle(skin.resolvedTextSecondary)
-                                    .contentTransition(.numericText())
-                                    .accessibilityLabel("Estimated finish time \(etaLabel)")
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // MARK: - Controls row
-
-    /// Row под header'ом: переключатель Sprint/All слева, фильтры справа.
-    /// Urgent + smart-sort живут только в `.all` — это срезы видимого
-    /// списка, а sprint курируется машиной, накладывать поверх ещё фильтр
-    /// бессмысленно.
-    ///
-    /// Действия над всем backlog'ом (планирование) переехали в отдельный
-    /// `quickActionsStrip` под этим row'ом — раньше тут была одинокая
-    /// «Schedule»-пилюля, которая обещала действие, а отдавала палитру.
-    /// QuickActions не врёт: «Optimize ⌘K» как primary + 3 ранжированных
-    /// чипа («Plan tomorrow / Schedule N / Batch …»), как на главной.
-    @ViewBuilder
-    private var controlsRow: some View {
-        HStack(spacing: DS.Spacing.sm) {
             if showsModePicker {
                 modePicker
                     .layoutPriority(0)
             }
 
-            Spacer(minLength: 0)
+            // Visible-set ETA chip — только в Sprint режиме: «если возьмусь
+            // прямо сейчас, top-N кончится в …». В `.all` режиме visible =
+            // backlog, ETA совпадает с capacity verdict'ом — дублирование
+            // молча убираем.
+            if mode == .sprint, !visibleTasks.isEmpty {
+                etaChip
+            }
 
+            // Урaгентский фильтр и smart-sort — срезы списка, имеют смысл
+            // только в `.all` режиме (Sprint курируется машиной).
             if mode == .all {
                 if urgentCount > 0 {
                     urgentFilterButton
@@ -370,33 +302,21 @@ struct SprintView: View {
                     smartSortButton
                 }
             }
-        }
-    }
 
-    /// QuickActions strip — paritarian copy of the main view's optimizer
-    /// entry. Lives directly under the mode picker so users can plan or
-    /// invoke the optimizer without leaving fullscreen. Matches the
-    /// inline strip's behaviour 1:1 because it's the very same component.
-    ///
-    /// Publishes its bottom Y through `OptimizerBottomKey` so the command
-    /// palette (rendered as a sibling overlay above the navigation switch)
-    /// anchors itself just below this strip. Without this, opening the
-    /// palette from sprint would inherit the stale Y from `.list` — or
-    /// drop to zero and slide under the popover header.
-    private var quickActionsStrip: some View {
-        QuickActions(
-            optimizerService: optimizerService,
-            reminderService: reminderService,
-            onExecuted: { label, undo in
-                onOptimizerExecuted?(label, undo)
-            },
-            onError: { message in
-                onOptimizerError?(message)
-            },
-            onOpenPalette: {
-                onOpenPalette?()
+            Spacer(minLength: 0)
+
+            if !activeTasks.isEmpty, onOpenPalette != nil {
+                scheduleButton
             }
-        )
+        }
+        .padding(.horizontal, DS.Spacing.sm)
+        .padding(.vertical, DS.Spacing.sm)
+        // Publish the block header's bottom Y so the command palette (a
+        // sibling overlay anchored via `OptimizerBottomKey` in MenuBarView)
+        // lands right under the header inside the Sprint block — same
+        // pattern QuickActions uses on the main view. Without this the
+        // palette inherits the stale main-view Y when ⌘K is pressed in
+        // Sprint and ends up floating inside the task list.
         .background(
             GeometryReader { geo in
                 Color.clear.preference(
@@ -405,6 +325,54 @@ struct SprintView: View {
                 )
             }
         )
+    }
+
+    /// ETA-чип у block header'а: «→ 17:30 (+1d)». TimelineView прокручивает
+    /// цифру каждую минуту, иначе она зависнет на момент открытия popover'а.
+    @ViewBuilder
+    private var etaChip: some View {
+        TimelineView(.everyMinute) { ctx in
+            if let etaLabel = etaLabel(now: ctx.date) {
+                HStack(spacing: DS.Spacing.xxs) {
+                    Text("\u{2192}")
+                        .font(.caption2)
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                    Text(etaLabel)
+                        .font(.caption.weight(.medium).monospacedDigit())
+                        .foregroundStyle(skin.resolvedTextSecondary)
+                        .contentTransition(.numericText())
+                        .accessibilityLabel("Estimated finish time \(etaLabel)")
+                }
+            }
+        }
+    }
+
+    /// Schedule pill — copy of BacklogView's `scheduleButton`. Открывает
+    /// command palette: пользователь не уходит из Sprint, чтобы запланировать
+    /// очередь — Бирман: «не отрывай человека от текущего объекта».
+    private var scheduleButton: some View {
+        Button {
+            onOpenPalette?()
+        } label: {
+            Text("Schedule")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(skin.accentColor)
+                .padding(.horizontal, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xxs)
+                .background {
+                    Capsule().fill(skin.accentColor.opacity(DS.Opacity.lightFill))
+                }
+                .overlay {
+                    Capsule().strokeBorder(
+                        skin.accentColor.opacity(DS.Opacity.subtleBorder),
+                        lineWidth: DS.Border.thin
+                    )
+                }
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .help("Open scheduler")
+        .accessibilityLabel("Open scheduler")
     }
 
     /// Red «N urgent» pill — toggles the urgent-only filter. Filled
@@ -519,8 +487,11 @@ struct SprintView: View {
                     }
                     tombstones
                 }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.lg)
+                // Inside the card chrome — match BacklogView's inner padding
+                // so the column of rows aligns visually with the inline
+                // version on the main view.
+                .padding(.horizontal, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.sm)
             }
             .scrollContentBackground(.hidden)
             .frame(maxHeight: .infinity)
@@ -728,8 +699,10 @@ struct SprintView: View {
             )
             .motionAwareAnimation(DS.Animation.quick, value: parsedNewTaskTitle.durationMinutes, reduceMotion: reduceMotion)
         }
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.md)
+        // Match BacklogView's add-field padding so the field sits at the
+        // same offset from the card edge as the inline version.
+        .padding(.horizontal, DS.Spacing.sm)
+        .padding(.vertical, DS.Spacing.sm)
     }
 
     // MARK: - Reorder helpers (`.all` mode only)
