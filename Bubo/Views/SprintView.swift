@@ -198,13 +198,12 @@ struct SprintView: View {
     /// states so the empty surface stays calm.
     private var showsControlsRow: Bool {
         if showsModePicker { return true }
-        if mode == .all {
-            if urgentCount > 0 { return true }
-            if activeTasks.count > 1 { return true }
-            // Even a single active task should expose the Schedule CTA when
-            // the parent wired one up — otherwise `.all` mode with one row
-            // strips the primary action from the surface entirely.
-            if !activeTasks.isEmpty, onScheduleTasks != nil { return true }
+        if !activeTasks.isEmpty {
+            if mode == .all, urgentCount > 0 || activeTasks.count > 1 { return true }
+            // Schedule lives in both modes — see `controlsRow`. The presence
+            // of the action alone is enough to render the strip; we don't
+            // want a mode switch to be the price of «plan my tasks».
+            if onScheduleTasks != nil { return true }
         }
         return false
     }
@@ -321,9 +320,12 @@ struct SprintView: View {
     // MARK: - Controls row
 
     /// Row под header'ом: переключатель Sprint/All слева, фильтры/тоглы
-    /// справа. Фильтры показываются только в `.all` — Sprint мы держим
-    /// чистым (top-N smart-sort + спокойные строки), там не место
-    /// дополнительным контролам.
+    /// справа. Urgent + smart-sort показываются только в `.all` — Sprint
+    /// держим чистым (top-N smart-sort + спокойные строки), там не место
+    /// дополнительным фильтрам. Schedule, наоборот, живёт в обоих режимах:
+    /// «спланировать backlog» — это намерение того же уровня, что и «что
+    /// делать сейчас», и прятать его за переключателем означало заставить
+    /// пользователя гулять в `.all` и обратно ради одной кнопки.
     @ViewBuilder
     private var controlsRow: some View {
         HStack(spacing: DS.Spacing.sm) {
@@ -341,12 +343,13 @@ struct SprintView: View {
                 if activeTasks.count > 1 {
                     smartSortButton
                 }
-                // Schedule CTA — same hook the inline backlog uses. Lives
-                // here so users never have to exit fullscreen to plan the
-                // queue. Sprint mode omits it: the top-N is the plan.
-                if onScheduleTasks != nil {
-                    scheduleButton
-                }
+            }
+
+            // Same hook the inline backlog uses — opens the optimizer
+            // palette. Visible in both modes so users never have to exit
+            // fullscreen (or flip to `.all`) to plan the queue.
+            if !activeTasks.isEmpty, onScheduleTasks != nil {
+                scheduleButton
             }
         }
     }
