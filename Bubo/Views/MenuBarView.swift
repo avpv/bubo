@@ -1904,5 +1904,3 @@ struct OptimizerBottomKey: PreferenceKey {
 }
 
 let menuBarRootCoordinateSpace = "MenuBarViewRoot"
-
-// ColorDotButton is now a shared component in Components/ColorDotButton.swift
