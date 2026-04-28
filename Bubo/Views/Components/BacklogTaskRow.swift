@@ -147,7 +147,21 @@ struct BacklogTaskRow: View {
         .padding(.horizontal, DS.Spacing.xs)
         .frame(minHeight: isSprintMode ? BacklogView.compactRowHeight + 8 : BacklogView.compactRowHeight)
         .contentShape(Rectangle())
+        // Drag pickup feedback — the source row simultaneously dims (it's
+        // ghosting at the original spot) AND lifts off via scale + shadow,
+        // so the user sees «I picked this thing up». All three changes hang
+        // on the same `isDragging` flag, owned by the parent.
         .opacity(isDragging ? DS.Opacity.tertiaryText : 1)
+        .scaleEffect(isDragging ? 1.04 : 1.0)
+        .shadow(
+            color: skin.resolvedShadowColor,
+            radius: isDragging ? 14 : 0,
+            y: isDragging ? 6 : 0
+        )
+        .animation(
+            DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion),
+            value: isDragging
+        )
         .background(rowBackground)
         .overlay { focusRing }
         .onHover { hovering in
@@ -162,6 +176,10 @@ struct BacklogTaskRow: View {
         // turns into a grab on hover. Inner Buttons still take taps because
         // they consume mouseDown without movement.
         .onDrag {
+            // Tactile «pickup» click on Force Touch trackpads — fires on the
+            // exact moment the row enters drag state, syncing with the
+            // visual scale/shadow above. No-op on regular pointers.
+            Haptics.tap()
             onDragStart()
             let payload = BacklogTaskDrag(
                 taskId: task.id,
@@ -272,15 +290,21 @@ struct BacklogTaskRow: View {
     /// Checkbox — complete on tap.
     /// HIG: controls should be at least 24pt on a side; the ~17pt glyph
     /// gets wrapped in a 24pt hit-area so the tap target is forgiving.
+    /// Squishes 8% on press (`IconPressStyle`) plus a tactile click on
+    /// Force Touch trackpads, so the «I marked it done» moment registers
+    /// before the row's removal animation even starts.
     private var checkbox: some View {
-        Button(action: onComplete) {
+        Button {
+            Haptics.tap()
+            onComplete()
+        } label: {
             Image(systemName: "circle")
                 .font(.callout)
                 .foregroundStyle(isUrgent ? skin.resolvedDestructiveColor : skin.resolvedTextSecondary)
                 .frame(width: 24, height: 24)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.iconPress)
         // When SprintView passes a hot-key digit, append it to the tooltip
         // so users discover «press N to complete» on first hover instead of
         // having to read the docs. Plain «Mark complete» otherwise.

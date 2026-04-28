@@ -540,6 +540,13 @@ struct SprintView: View {
             // them from the tree (which would also remove the shortcut).
             ForEach(Array(visibleTasks.prefix(Self.maxSprintTasks).enumerated()), id: \.element.id) { index, task in
                 Button("Complete task \(index + 1)") {
+                    // Hot-key path bypasses the row's checkbox button, so we
+                    // fire the same tactile click here. Tap-to-complete via
+                    // the checkbox already haptics from `IconPressStyle`'s
+                    // host button (`BacklogTaskRow.checkbox`); `complete()`
+                    // itself stays haptic-free so the cue follows the user
+                    // gesture, not the model mutation.
+                    Haptics.tap()
                     complete(task)
                 }
                 .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: [])
@@ -598,6 +605,20 @@ struct SprintView: View {
                 onFocusPrev: { focusRow(offsetFrom: task.id, by: -1) },
                 onFocusNext: { focusRow(offsetFrom: task.id, by: +1) },
                 sprintHotKey: sprintHotKey
+            )
+            // Primary task in Sprint mode lives on a different Z-layer:
+            // 2 % scale + soft shadow lift it visually above the rest, in the
+            // same way the Tasks-block chrome lifts above the popover. Static
+            // — no animation knob — because primary status follows the data
+            // (top of `visibleTasks`), not a discrete user action. When #1
+            // gets completed and #2 promotes, the existing complete-haptic
+            // is the single tactile signal; doubling it on promotion would
+            // give a double-tap sensation for a single user action.
+            .scaleEffect(isPrimary ? 1.02 : 1.0)
+            .shadow(
+                color: skin.resolvedShadowColor,
+                radius: isPrimary ? 6 : 0,
+                y: isPrimary ? 3 : 0
             )
             .focusable()
             .focused($focusedTaskId, equals: task.id)
@@ -850,11 +871,15 @@ struct SprintView: View {
     }
 
     private func complete(_ task: BacklogTask) {
+        // Tap-to-complete via checkbox already fires `Haptics.tap()` from
+        // the press itself (`BacklogTaskRow.checkbox` + `IconPressStyle`),
+        // so no haptic here. Hot-key completion (1-5) is the other entry
+        // path; the haptic for that case fires through the same checkbox
+        // closure when the digit-shortcut runs the row's button.
         let snapshot = task
         withAnimation(DS.Animation.motionAware(DS.Animation.entrance, reduceMotion: reduceMotion)) {
             backlogService.completeTask(id: task.id)
         }
-        Haptics.tap()
         onUndoableAction?("Completed \u{201C}\(task.title)\u{201D}") { [backlogService] in
             backlogService.updateTask(snapshot)
         }
