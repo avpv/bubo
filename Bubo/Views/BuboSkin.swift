@@ -201,19 +201,23 @@ struct PlatterGlassBorder: View {
 
 /// Encapsulates corner radius, inner glass borders, and ambient drop shadows for
 /// platters and elevated components using the skin's layout configuration.
+///
+/// Takes a `DS.Elevation` level (defaulting to `.z1` — the card plane). Pass
+/// `.z2` for modal surfaces (CommandPalette, AddEventView) so they read as
+/// «above the popover body». The contact shadow stays the same — it's the
+/// short, sharp 2pt cue that anchors the surface to whatever is below; the
+/// elevation modifier provides the longer ambient drop.
 struct SkinPlatterDepthModifier: ViewModifier {
     let skin: SkinDefinition
+    var level: DS.Elevation = .z1
 
     func body(content: Content) -> some View {
         content
             .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
             .overlay(PlatterGlassBorder(skin: skin))
-            .shadow(
-                color: skin.resolvedShadowColor,
-                radius: skin.shadowRadius,
-                y: skin.shadowY
-            )
-            // Secondary contact shadow
+            .elevation(level, skin: skin)
+            // Secondary contact shadow — short, sharp, always present so the
+            // platter «touches» the surface beneath regardless of z-plane.
             .shadow(
                 color: skin.resolvedShadowColor,
                 radius: 2,
@@ -223,9 +227,10 @@ struct SkinPlatterDepthModifier: ViewModifier {
 }
 
 extension View {
-    /// Applies the skin's corner radius, inner glass border, and ambient shadow.
-    func skinPlatterDepth(_ skin: SkinDefinition) -> some View {
-        modifier(SkinPlatterDepthModifier(skin: skin))
+    /// Applies the skin's corner radius, inner glass border, and ambient
+    /// shadow at the requested elevation plane.
+    func skinPlatterDepth(_ skin: SkinDefinition, level: DS.Elevation = .z1) -> some View {
+        modifier(SkinPlatterDepthModifier(skin: skin, level: level))
     }
 }
 

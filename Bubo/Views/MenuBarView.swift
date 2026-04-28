@@ -1785,7 +1785,8 @@ private struct PermissionBannerLabel: View {
             .padding(.vertical, DS.Spacing.sm)
             .adaptiveBadgeFill(skin.resolvedWarningColor)
             .clipShape(Capsule())
-            .shadow(color: skin.resolvedShadowColor, radius: skin.shadowRadius, y: skin.shadowY)
+            // Permission pill rides on the card plane (z1) inside the popover.
+            .elevation(.z1, skin: skin)
         }
         .buttonStyle(.plain)
         // Level 1: unified outer content margin so the pill hangs on the

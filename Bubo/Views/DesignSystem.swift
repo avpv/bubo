@@ -277,6 +277,53 @@ enum DS {
         static let toastY: CGFloat = 9
     }
 
+    // MARK: Elevation
+    //
+    // Three z-levels treated as state, not decoration. Birman: «глубина —
+    // это иерархия, а не украшение». A view declares which plane it lives
+    // on; the modifier picks the matching shadow recipe. One designer-
+    // facing knob (the level), one shadow stack, no per-call-site drift.
+    //
+    //   z0 — base surface: popover body, list rows. No drop shadow — the
+    //                      popover frame already lifts the whole surface.
+    //   z1 — cards / banners / pills floating above the body. Skin-driven
+    //        radius and Y so each skin can dial its own «paper weight».
+    //   z2 — modals / overlays / floating notifications. Deeper, bolder,
+    //        and skin-independent in the radius — these are user-attention
+    //        surfaces where the depth must read regardless of the active
+    //        skin's mood.
+
+    enum Elevation: CaseIterable {
+        case z0, z1, z2
+
+        /// Drop-shadow blur radius for this plane.
+        func radius(skin: SkinDefinition) -> CGFloat {
+            switch self {
+            case .z0: return 0
+            case .z1: return skin.shadowRadius
+            case .z2: return Shadows.toastRadius
+            }
+        }
+
+        /// Vertical offset — depth-cue light comes from above.
+        func y(skin: SkinDefinition) -> CGFloat {
+            switch self {
+            case .z0: return 0
+            case .z1: return skin.shadowY
+            case .z2: return Shadows.toastY
+            }
+        }
+
+        /// Cast shadow colour for the level. Z1 and Z2 share the skin's
+        /// shadow tint — depth difference is carried by `radius` and `y`,
+        /// not by hue. Z0 is `.clear` so the modifier is a no-op for base
+        /// surfaces (keeps call sites clean: every surface declares its
+        /// level even when it casts nothing).
+        func color(skin: SkinDefinition) -> Color {
+            self == .z0 ? .clear : skin.resolvedShadowColor
+        }
+    }
+
     // MARK: Physics
     //
     // Single source of truth for the «physical feedback» constants used
@@ -512,6 +559,27 @@ enum Haptics {
     static func alignment() {
         NSHapticFeedbackManager.defaultPerformer.perform(
             .alignment, performanceTime: .default
+        )
+    }
+}
+
+// MARK: - Elevation Modifier
+
+extension View {
+    /// Apply a depth plane to the surface. The modifier is the single
+    /// path through which `DS.Elevation`'s `radius` / `y` / `color`
+    /// recipe reaches a SwiftUI `.shadow(...)` call — no per-call-site
+    /// arithmetic, no skin field lookups in views.
+    ///
+    /// Always pass the active skin so per-skin shadow weight (the
+    /// difference between e.g. Sierra and Midnight) carries through.
+    /// Z0 is intentionally a no-op — it exists so every surface can
+    /// declare its plane explicitly, even when it casts nothing.
+    func elevation(_ level: DS.Elevation, skin: SkinDefinition) -> some View {
+        self.shadow(
+            color: level.color(skin: skin),
+            radius: level.radius(skin: skin),
+            y: level.y(skin: skin)
         )
     }
 }

@@ -105,7 +105,9 @@ struct ToastOverlay: View {
                 .padding(.vertical, DS.Spacing.md)
                 .background(skin.resolvedPlatterMaterial)
                 .clipShape(Capsule())
-                .shadow(color: skin.resolvedShadowColor, radius: DS.Shadows.toastRadius, y: DS.Shadows.toastY)
+                // Toast is a floating notification — z2 (modal/overlay plane)
+                // so it reads as «above the body», not «inside it».
+                .elevation(.z2, skin: skin)
                 .padding(.bottom, DS.Spacing.md)
                 .transition(
                     reduceMotion

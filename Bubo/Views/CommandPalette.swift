@@ -201,7 +201,9 @@ struct CommandPalette: View {
             content
         }
         .skinPlatter(skin)
-        .skinPlatterDepth(skin)
+        // Command palette is a modal surface floating above the popover body
+        // — z2 plane so its depth reads against the z1 cards underneath.
+        .skinPlatterDepth(skin, level: .z2)
         .onKeyPress(.upArrow) { move(-1); return .handled }
         .onKeyPress(.downArrow) { move(1); return .handled }
         .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
