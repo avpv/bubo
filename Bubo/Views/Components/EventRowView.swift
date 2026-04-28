@@ -111,15 +111,20 @@ struct EventRowView: View {
         )
         // Flat rectangle hover signal — no rounded pill to leak card
         // material through gaps at the row corners.
+        // `allowsHitTesting(false)` is load-bearing: a filled Rectangle
+        // overlay (even Color.clear) intercepts taps and would swallow
+        // clicks meant for the inner row Button beneath it.
         .overlay(
             Rectangle()
                 .fill(isHovered ? skin.resolvedHoverFill : Color.clear)
+                .allowsHitTesting(false)
         )
         // Freshly created highlight — brief flat glow after recipe application
         .overlay(
             Rectangle()
                 .fill(skin.accentColor.opacity(isFreshlyCreated ? 0.20 : 0))
                 .animation(.easeInOut(duration: 0.6).repeatCount(3, autoreverses: true), value: isFreshlyCreated)
+                .allowsHitTesting(false)
         )
         .onHover { hovering in
             withAnimation(skin.resolvedMicroAnimation) {
@@ -135,6 +140,7 @@ struct EventRowView: View {
             Rectangle()
                 .strokeBorder(isFocused ? skin.accentColor.opacity(DS.Opacity.overlayDark) : Color.clear, lineWidth: DS.Size.focusRingWidth)
                 .shadow(color: isFocused ? skin.accentColor.opacity(0.4) : .clear, radius: 4, x: 0, y: 0)
+                .allowsHitTesting(false)
         )
         .animation(skin.resolvedMicroAnimation, value: isFocused)
         .onKeyPress(.return) {
