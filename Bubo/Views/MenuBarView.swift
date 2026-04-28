@@ -264,12 +264,6 @@ struct MenuBarView: View {
                             reminderService: reminderService,
                             onExit: { navigation = .list },
                             onEditTask: { task in navigation = .editTask(task) },
-                            onOpenPalette: {
-                                Haptics.tap()
-                                withAnimation(DS.Animation.quick) {
-                                    paletteContext = PaletteContext()
-                                }
-                            },
                             onUndoableAction: { message, undo in
                                 toastState.showSuccess(message, icon: "arrow.uturn.backward", onUndo: undo)
                             }
@@ -662,11 +656,6 @@ struct MenuBarView: View {
                 backlogService: backlog,
                 optimizerService: optimizerService,
                 reminderService: reminderService,
-                onScheduleTasks: {
-                    withAnimation(DS.Animation.quick) {
-                        paletteContext = PaletteContext()
-                    }
-                },
                 onDeleteTask: { task in
                     let originalIndex = backlog.indexOfTask(id: task.id)
                     _ = backlog.removeTask(id: task.id)
