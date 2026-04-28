@@ -13,7 +13,8 @@ final class TaskListExpansionTests: XCTestCase {
     func testNextCyclesCollapsedAndCompact() {
         // Two-state user-facing cycle: chevron toggles between «список
         // скрыт» и «список виден». Полное раскрытие переехало в отдельный
-        // fullscreen-аффорданс (`SprintView`) — третий клик шеврона убран.
+        // fullscreen Backlog (`BacklogFullscreenView`) — третий клик шеврона
+        // убран.
         XCTAssertEqual(TaskListExpansion.collapsed.next, .compact)
         XCTAssertEqual(TaskListExpansion.compact.next, .collapsed)
     }
