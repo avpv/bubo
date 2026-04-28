@@ -78,9 +78,87 @@ enum DS {
     // MARK: Empty State
 
     // MARK: Typography
+    //
+    // One scale, four steps. Birman: «один типографический ритм».
+    //
+    //   display   — `.largeTitle` — fullscreen alert hero only.
+    //   headline  — `.title3`     — popover headers, page titles, hero card titles.
+    //   body      — `.body`       — default running text, primary row labels.
+    //   subhead   — `.footnote`   — secondary metadata, hints, badges, day-section labels.
+    //
+    // No `.caption*`, `.callout`, `.subheadline`, or `.headline` outside this enum.
+    // All helpers thread the active skin's font design (rounded by default), so
+    // surfaces inherit one voice without each view constructing `.system(...)` by hand.
 
     enum Typography {
         static let bodyLineSpacing: CGFloat = 3
+
+        // MARK: Semantic ramp
+
+        /// Hero scale — fullscreen alert only.
+        static func display(skin: SkinDefinition, weight: Font.Weight? = nil) -> Font {
+            .system(.largeTitle, design: skin.resolvedFontDesign, weight: weight ?? skin.resolvedHeadlineFontWeight)
+        }
+
+        /// Section / page / card title.
+        static func headline(skin: SkinDefinition, weight: Font.Weight? = nil) -> Font {
+            .system(.title3, design: skin.resolvedFontDesign, weight: weight ?? skin.resolvedHeadlineFontWeight)
+        }
+
+        /// Default running text.
+        static func body(skin: SkinDefinition, weight: Font.Weight? = nil) -> Font {
+            .system(.body, design: skin.resolvedFontDesign, weight: weight ?? skin.resolvedFontWeight)
+        }
+
+        /// Quiet secondary text — metadata, hints, badges.
+        static func subhead(skin: SkinDefinition, weight: Font.Weight = .regular) -> Font {
+            .system(.footnote, design: skin.resolvedFontDesign, weight: weight)
+        }
+
+        // MARK: Hero numerics
+
+        /// Variable-weight countdown for `FullScreenAlertView`. Weight grows
+        /// from `.medium` (≥ 5 min) through `.semibold` / `.bold` to `.heavy`
+        /// in the last minute, so urgency is conveyed by *weight* in addition
+        /// to colour — readable under `Reduce Motion + Increased Contrast`,
+        /// which strips animation and softens the red.
+        ///
+        /// Always uses SF Pro Rounded (`.rounded`) with `monospacedDigit()`
+        /// so digits don't jitter at 1 Hz refresh — the «friendly» face Apple
+        /// uses in Clock / Fitness countdown UI.
+        static func heroCountdown(secondsRemaining: Int) -> Font {
+            .system(.largeTitle, design: .rounded, weight: countdownWeight(for: secondsRemaining))
+                .monospacedDigit()
+        }
+
+        /// Rounded, equal-width-digit face for the in-popover ring timer.
+        /// Hero numerics share the SF Rounded face with the alert; weight is
+        /// fixed (`.bold`) because the ring already conveys progress.
+        static func heroRingDigit(size: CGFloat) -> Font {
+            .system(size: size, weight: .bold, design: .rounded)
+                .monospacedDigit()
+        }
+
+        /// Unit suffix paired with `heroRingDigit` (the «h / m / s» glyphs).
+        /// Sized as a fraction of the digit size so the ratio stays
+        /// constant when the ring scales for multi-day events.
+        static func heroRingUnit(size: CGFloat, design: Font.Design) -> Font {
+            .system(size: size * 0.45, weight: .medium, design: design)
+        }
+
+        // MARK: Internals
+
+        /// Mapping from time-remaining → font weight. Five buckets so the
+        /// transitions are perceptible without feeling twitchy.
+        static func countdownWeight(for secondsRemaining: Int) -> Font.Weight {
+            switch secondsRemaining {
+            case ...60:    return .heavy     // last minute — pure urgency
+            case ...120:   return .bold
+            case ...300:   return .semibold  // 5-minute threshold
+            case ...600:   return .medium
+            default:       return .regular   // > 10 min — calm
+            }
+        }
     }
 
     // MARK: Component Sizes
@@ -197,6 +275,53 @@ enum DS {
         // from a fullscreen alert in shadow alone.
         static let toastRadius: CGFloat = 18
         static let toastY: CGFloat = 9
+    }
+
+    // MARK: Elevation
+    //
+    // Three z-levels treated as state, not decoration. Birman: «глубина —
+    // это иерархия, а не украшение». A view declares which plane it lives
+    // on; the modifier picks the matching shadow recipe. One designer-
+    // facing knob (the level), one shadow stack, no per-call-site drift.
+    //
+    //   z0 — base surface: popover body, list rows. No drop shadow — the
+    //                      popover frame already lifts the whole surface.
+    //   z1 — cards / banners / pills floating above the body. Skin-driven
+    //        radius and Y so each skin can dial its own «paper weight».
+    //   z2 — modals / overlays / floating notifications. Deeper, bolder,
+    //        and skin-independent in the radius — these are user-attention
+    //        surfaces where the depth must read regardless of the active
+    //        skin's mood.
+
+    enum Elevation: CaseIterable {
+        case z0, z1, z2
+
+        /// Drop-shadow blur radius for this plane.
+        func radius(skin: SkinDefinition) -> CGFloat {
+            switch self {
+            case .z0: return 0
+            case .z1: return skin.shadowRadius
+            case .z2: return Shadows.toastRadius
+            }
+        }
+
+        /// Vertical offset — depth-cue light comes from above.
+        func y(skin: SkinDefinition) -> CGFloat {
+            switch self {
+            case .z0: return 0
+            case .z1: return skin.shadowY
+            case .z2: return Shadows.toastY
+            }
+        }
+
+        /// Cast shadow colour for the level. Z1 and Z2 share the skin's
+        /// shadow tint — depth difference is carried by `radius` and `y`,
+        /// not by hue. Z0 is `.clear` so the modifier is a no-op for base
+        /// surfaces (keeps call sites clean: every surface declares its
+        /// level even when it casts nothing).
+        func color(skin: SkinDefinition) -> Color {
+            self == .z0 ? .clear : skin.resolvedShadowColor
+        }
     }
 
     // MARK: Physics
@@ -438,6 +563,27 @@ enum Haptics {
     }
 }
 
+// MARK: - Elevation Modifier
+
+extension View {
+    /// Apply a depth plane to the surface. The modifier is the single
+    /// path through which `DS.Elevation`'s `radius` / `y` / `color`
+    /// recipe reaches a SwiftUI `.shadow(...)` call — no per-call-site
+    /// arithmetic, no skin field lookups in views.
+    ///
+    /// Always pass the active skin so per-skin shadow weight (the
+    /// difference between e.g. Sierra and Midnight) carries through.
+    /// Z0 is intentionally a no-op — it exists so every surface can
+    /// declare its plane explicitly, even when it casts nothing.
+    func elevation(_ level: DS.Elevation, skin: SkinDefinition) -> some View {
+        self.shadow(
+            color: level.color(skin: skin),
+            radius: level.radius(skin: skin),
+            y: level.y(skin: skin)
+        )
+    }
+}
+
 // MARK: - Motion-Aware Entrance Modifier
 
 /// Replaces the repeated `appeared` + `onAppear` boilerplate across views.
@@ -513,11 +659,15 @@ extension Text {
     /// Birman: one scale — `SectionLabel` and `DaySectionHeader` are the
     /// same typographic object, not two look-alikes. Centralising the
     /// style here guarantees they never drift apart.
+    ///
+    /// 2026 update: dropped uppercase + `tracking(0.4)`. Cap-height + letter
+    /// spacing made these read like 1990s product chrome ("PROJECTS  ·
+    /// TODAY"); a quiet semibold subhead in mixed case sits inside the
+    /// content rather than shouting from above it. Step is `.footnote`
+    /// (the smallest of the four-step ramp), not `.caption`, because
+    /// `.caption` is no longer in the typographic ramp.
     func sectionHeaderStyle() -> some View {
-        self
-            .font(.caption.weight(.semibold))
-            .textCase(.uppercase)
-            .tracking(0.4)
+        self.font(.footnote.weight(.semibold))
     }
 }
 
@@ -636,11 +786,13 @@ struct PopoverHeader: View {
                 Spacer(minLength: DS.Spacing.xs)
 
                 // Title — flexible, truncates if space runs out.
+                // Step `title3` from the four-step ramp (`largeTitle / title3 /
+                // body / footnote`). Replaces the previous `.headline` which
+                // was the same point size as body text and therefore relied
+                // on weight alone to read as a title.
                 if let title {
                     Text(title)
-                        .font(.headline)
-                        .fontWeight(skin.resolvedHeadlineFontWeight)
-                        .fontDesign(skin.resolvedFontDesign)
+                        .font(DS.Typography.headline(skin: skin))
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .layoutPriority(2)

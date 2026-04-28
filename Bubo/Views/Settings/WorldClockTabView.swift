@@ -30,7 +30,7 @@ struct WorldClockTabView: View {
 
                     if settings.isWorldClockEnabled {
                         Text("Displays a row of time pills on the main screen and event creation.")
-                            .font(.caption)
+                            .font(.footnote)
                             .foregroundStyle(skin.resolvedTextSecondary)
                     }
                 }
@@ -49,14 +49,14 @@ struct WorldClockTabView: View {
                                             Text(city.city)
                                                 .font(.body)
                                             Text(city.country)
-                                                .font(.caption)
+                                                .font(.footnote)
                                                 .foregroundStyle(skin.resolvedTextSecondary)
                                         }
 
                                         Spacer()
 
                                         Text(city.timezoneID)
-                                            .font(.caption2)
+                                            .font(.footnote)
                                             .foregroundStyle(skin.resolvedTextTertiary)
 
                                         // Reorder buttons
@@ -67,7 +67,7 @@ struct WorldClockTabView: View {
                                             }
                                         } label: {
                                             Image(systemName: "chevron.up")
-                                                .font(.caption2)
+                                                .font(.footnote)
                                                 .foregroundStyle(skin.resolvedTextSecondary)
                                         }
                                         .buttonStyle(.plain)
@@ -83,7 +83,7 @@ struct WorldClockTabView: View {
                                             }
                                         } label: {
                                             Image(systemName: "chevron.down")
-                                                .font(.caption2)
+                                                .font(.footnote)
                                                 .foregroundStyle(skin.resolvedTextSecondary)
                                         }
                                         .buttonStyle(.plain)
@@ -145,7 +145,7 @@ struct WorldClockTabView: View {
                                                     .font(.body)
                                                     .foregroundStyle(skin.resolvedTextPrimary)
                                                 Text(city.country)
-                                                    .font(.caption)
+                                                    .font(.footnote)
                                                     .foregroundStyle(skin.resolvedTextSecondary)
                                             }
 

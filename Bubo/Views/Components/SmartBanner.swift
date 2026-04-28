@@ -18,12 +18,12 @@ struct SmartBanner: View {
     var body: some View {
         HStack(spacing: DS.Spacing.sm) {
             Image(systemName: "lightbulb.max.fill")
-                .font(.caption)
+                .font(.footnote)
                 .foregroundStyle(skin.accentColor)
                 .accessibilityHidden(true)
 
             Text(reason)
-                .font(.caption)
+                .font(.footnote)
                 .foregroundStyle(skin.resolvedTextPrimary)
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -36,7 +36,7 @@ struct SmartBanner: View {
                 onRun()
             } label: {
                 Text("Run")
-                    .font(.caption.weight(.semibold))
+                    .font(.footnote.weight(.semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, DS.Spacing.sm)
                     .padding(.vertical, DS.Spacing.pillVertical)
@@ -50,7 +50,7 @@ struct SmartBanner: View {
                 onDismiss()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.caption2.weight(.semibold))
+                    .font(.footnote.weight(.semibold))
                     .foregroundStyle(skin.resolvedTextTertiary)
                     .frame(width: 16, height: 16)
                     .contentShape(Rectangle())

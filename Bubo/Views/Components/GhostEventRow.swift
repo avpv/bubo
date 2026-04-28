@@ -57,14 +57,14 @@ struct GhostEventRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "sparkles")
-                        .font(.caption2)
+                        .font(.footnote)
                         .foregroundStyle(skin.accentColor.opacity(0.9))
                     Text(title)
                         .font(.callout.weight(.medium))
                         .foregroundStyle(skin.resolvedTextPrimary.opacity(0.85))
                         .lineLimit(1)
                     Text("ghost")
-                        .font(.caption2.weight(.semibold))
+                        .font(.footnote.weight(.semibold))
                         .tracking(0.5)
                         .padding(.horizontal, DS.Spacing.xs)
                         .padding(.vertical, 1)
@@ -75,7 +75,7 @@ struct GhostEventRow: View {
                 }
 
                 Text("\(formattedRange)  ·  \(durationLabel)")
-                    .font(.caption2.monospacedDigit())
+                    .font(.footnote.monospacedDigit())
                     .foregroundStyle(skin.resolvedTextTertiary)
             }
 

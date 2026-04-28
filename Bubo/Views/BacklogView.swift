@@ -427,7 +427,7 @@ struct BacklogView: View {
                 // disclosure, цифра — за объём.
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: expansion.iconName)
-                        .font(.caption2)
+                        .font(.footnote)
                         .foregroundStyle(skin.resolvedTextSecondary)
                         .contentTransition(.symbolEffect(.replace))
 
@@ -503,7 +503,7 @@ struct BacklogView: View {
             }
         } label: {
             Image(systemName: "wand.and.stars")
-                .font(.caption2.weight(.medium))
+                .font(.footnote.weight(.medium))
                 .foregroundStyle(skin.accentColor)
                 .padding(.horizontal, DS.Spacing.xs)
                 .padding(.vertical, DS.Spacing.xxs)
@@ -532,7 +532,7 @@ struct BacklogView: View {
             onEnterFullscreen?()
         } label: {
             Image(systemName: "arrow.up.left.and.arrow.down.right")
-                .font(.caption2.weight(.medium))
+                .font(.footnote.weight(.medium))
                 .foregroundStyle(skin.resolvedTextSecondary)
                 .frame(width: DS.Size.iconSmall, height: DS.Size.iconSmall)
                 .contentShape(Rectangle())
@@ -569,7 +569,7 @@ struct BacklogView: View {
             // header) does the spacing job better, читая «count · pill»
             // как два самостоятельных объекта.
             Text("\(urgentCount) urgent")
-                .font(.caption2.weight(.semibold).monospacedDigit())
+                .font(.footnote.weight(.semibold).monospacedDigit())
                 .foregroundStyle(skin.resolvedDestructiveColor)
                 .contentTransition(.numericText())
                 .padding(.horizontal, DS.Spacing.xs)
@@ -620,7 +620,7 @@ struct BacklogView: View {
             }
         } label: {
             Image(systemName: "ellipsis")
-                .font(.caption)
+                .font(.footnote)
                 .foregroundStyle(skin.resolvedTextSecondary)
         }
         .menuStyle(.borderlessButton)
@@ -1058,7 +1058,7 @@ struct BacklogView: View {
         VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "plus")
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundStyle(isInputFocused ? AnyShapeStyle(skin.accentColor) : AnyShapeStyle(.tertiary))
 
                 // Birman: placeholder — возможность научить синтаксису, а не
@@ -1087,7 +1087,7 @@ struct BacklogView: View {
                 // видит, что понято, до того как нажмёт Return.
                 if let minutes = recognizedDurationMinutes {
                     Text(DS.formatMinutes(minutes))
-                        .font(.caption2.weight(.medium).monospacedDigit())
+                        .font(.footnote.weight(.medium).monospacedDigit())
                         .foregroundStyle(skin.accentColor)
                         .padding(.horizontal, DS.Spacing.sm)
                         .padding(.vertical, DS.Spacing.xxs)
@@ -1109,7 +1109,7 @@ struct BacklogView: View {
             // Hint for new users — disappears once they add a task.
             if activeTasks.isEmpty && !isInputFocused {
                 Text("Tasks you add here will be scheduled into free slots")
-                    .font(.caption2)
+                    .font(.footnote)
                     .foregroundStyle(skin.resolvedTextTertiary)
                     .transition(.opacity)
             }
@@ -1126,7 +1126,7 @@ struct BacklogView: View {
                     Text("\u{238B} Cancel")
                     Spacer(minLength: 0)
                 }
-                .font(.caption2)
+                .font(.footnote)
                 .foregroundStyle(skin.resolvedTextTertiary)
                 .transition(.opacity)
                 .accessibilityHidden(true)
@@ -1165,13 +1165,13 @@ struct BacklogView: View {
             } label: {
                 HStack(spacing: DS.Spacing.xxs) {
                     Text(preview)
-                        // Бump to .caption + medium weight so the main
-                        // feedback to typing isn't mistaken for a footnote.
-                        // no-slot case stays quiet (it's info, not a CTA).
-                        .font(isNoSlot ? .caption2 : .caption.weight(.medium))
+                        // Active CTA gets medium weight so the typing-driven
+                        // feedback reads as foreground; the no-slot case stays
+                        // regular weight (it's info, not a CTA).
+                        .font(isNoSlot ? .footnote : .footnote.weight(.medium))
                     if !isNoSlot {
                         Text("\u{23CE}")
-                            .font(.caption.weight(.semibold))
+                            .font(.footnote.weight(.semibold))
                             .foregroundStyle(skin.accentColor)
                     }
                 }

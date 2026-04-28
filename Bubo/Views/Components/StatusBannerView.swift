@@ -12,18 +12,19 @@ struct StatusBanner: View {
         HStack(spacing: DS.Spacing.sm) {
             Image(systemName: icon)
                 .foregroundStyle(color)
-                .font(.caption)
+                .font(.footnote)
                 .symbolRenderingMode(.hierarchical)
                 .contentTransition(.symbolEffect(.replace))
             Text(text)
-                .font(.caption)
+                .font(.footnote)
                 .foregroundStyle(skin.resolvedTextPrimary)
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.md)
         .adaptiveBadgeFill(color)
         .clipShape(Capsule())
-        .shadow(color: skin.resolvedShadowColor, radius: skin.shadowRadius, y: skin.shadowY)
+        // Status banner sits inside the popover body, on the card plane (z1).
+        .elevation(.z1, skin: skin)
         // Level 1: unified outer content margin so the banner hangs on
         // the same vertical axis as the rest of the popover chrome.
         .padding(.horizontal, DS.Spacing.contentMargin)

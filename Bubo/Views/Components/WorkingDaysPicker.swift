@@ -53,7 +53,7 @@ struct WorkingDaysPicker: View {
             toggle(weekday)
         } label: {
             Text(label)
-                .font(.caption.weight(isOn ? .semibold : .regular))
+                .font(.footnote.weight(isOn ? .semibold : .regular))
                 .foregroundStyle(
                     isOn
                         ? skin.resolvedTextPrimary

@@ -90,10 +90,10 @@ struct FreeSlotRow: View {
 
             VStack(alignment: .leading, spacing: 1) {
                 Text("Free · \(durationLabel)")
-                    .font(.caption.weight(.medium))
+                    .font(.footnote.weight(.medium))
                     .foregroundStyle(skin.resolvedTextSecondary)
                 Text(formattedRange)
-                    .font(.caption2.monospacedDigit())
+                    .font(.footnote.monospacedDigit())
                     .foregroundStyle(skin.resolvedTextTertiary)
             }
 
@@ -108,7 +108,7 @@ struct FreeSlotRow: View {
             // and a second caption would clutter the row.
             if showsDragHint {
                 Text("\u{2190} Drag a task here")
-                    .font(.caption2)
+                    .font(.footnote)
                     .foregroundStyle(skin.resolvedTextTertiary)
                     .lineLimit(1)
                     .transition(.opacity)

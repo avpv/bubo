@@ -70,11 +70,11 @@ struct EmojiPickerView: View {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(skin.resolvedTextTertiary)
-                    .font(.caption)
+                    .font(.footnote)
                     .accessibilityHidden(true)
                 TextField("Search emoji", text: $searchText)
                     .textFieldStyle(.plain)
-                    .font(.caption)
+                    .font(.footnote)
                     .accessibilityLabel("Search emojis")
                 if !searchText.isEmpty {
                     Button {
@@ -82,7 +82,7 @@ struct EmojiPickerView: View {
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(skin.resolvedTextTertiary)
-                            .font(.caption)
+                            .font(.footnote)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Clear search")
@@ -131,7 +131,7 @@ struct EmojiPickerView: View {
 
                 // Category title
                 Text(Self.categories[selectedCategory].title.uppercased())
-                    .font(.caption2.weight(.semibold))
+                    .font(.footnote.weight(.semibold))
                     .foregroundStyle(skin.resolvedTextTertiary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, DS.Spacing.md)

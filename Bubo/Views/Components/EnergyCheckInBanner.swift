@@ -16,13 +16,13 @@ struct EnergyCheckInBanner: View {
     var body: some View {
         HStack(spacing: DS.Spacing.sm) {
             Image(systemName: "bolt.fill")
-                .font(.caption)
+                .font(.footnote)
                 .foregroundStyle(skin.accentColor)
                 .symbolRenderingMode(.hierarchical)
                 .accessibilityHidden(true)
 
             Text("Energy?")
-                .font(.caption)
+                .font(.footnote)
                 .foregroundStyle(skin.resolvedTextPrimary)
                 .lineLimit(1)
 
@@ -37,7 +37,7 @@ struct EnergyCheckInBanner: View {
                         onRecord(level)
                     } label: {
                         Text("\(level)")
-                            .font(.caption.weight(.semibold).monospacedDigit())
+                            .font(.footnote.weight(.semibold).monospacedDigit())
                             .foregroundStyle(skin.accentColor)
                             .frame(width: 20, height: 20)
                             .background(
@@ -57,7 +57,7 @@ struct EnergyCheckInBanner: View {
                 onDismiss()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.caption2.weight(.semibold))
+                    .font(.footnote.weight(.semibold))
                     .foregroundStyle(skin.resolvedTextTertiary)
                     .symbolRenderingMode(.hierarchical)
                     .frame(width: 16, height: 16)

@@ -13,6 +13,15 @@ struct MenuBarView: View {
     @State private var hasStartedSync = false
     @State private var toastState = ToastState()
     @State private var scrollPositionID: String?
+
+    /// Vertical scroll offset (in points, negative as the user scrolls
+    /// down) of the event list. Consumed by `AppBackgroundLayer` to
+    /// drive a small parallax on the wallpaper — the background drifts
+    /// at ~15% of foreground velocity, giving a depth cue that the
+    /// foreground content is closer to the eye than the wallpaper.
+    /// Reset to zero when leaving the list view or when Reduce Motion
+    /// is on, so no extra paint cost on accessibility paths.
+    @State private var listScrollY: CGFloat = 0
     @State private var colorFilter: EventColorTag? = nil
     /// Mutually exclusive with `colorFilter`. Tri-state cycle on the hollow
     /// dot button: `.all` (default) → `.onlyFree` (hide events, show only
@@ -100,7 +109,8 @@ struct MenuBarView: View {
                 wallpaper: settings.selectedWallpaper,
                 customPhotoPath: settings.customBackgroundPhotoPath,
                 customPhotoOpacity: settings.customBackgroundPhotoOpacity,
-                customPhotoBlur: settings.customBackgroundPhotoBlur
+                customPhotoBlur: settings.customBackgroundPhotoBlur,
+                parallaxY: parallaxOffset
             )
 
             Group {
@@ -184,6 +194,22 @@ struct MenuBarView: View {
                         },
                         onSessionEnded: { entry in
                             optimizerService.pomodoroHistory.record(entry)
+                        },
+                        onAdjustEndDate: { event, deltaMinutes in
+                            // Scrub-the-ring extends/shortens `endDate` only.
+                            // We re-fetch the current event so successive
+                            // scrubs compose correctly (each delta applies
+                            // to the latest end-date, not to a stale capture).
+                            // Clamp the new end-date to «now + 60s» so the
+                            // user can never scrub the timer past the
+                            // present moment and have it auto-end mid-drag.
+                            guard var current = reminderService.localEvents.first(where: { $0.id == event.id }) else { return }
+                            let proposed = current.endDate.addingTimeInterval(TimeInterval(deltaMinutes * 60))
+                            let floor = Date().addingTimeInterval(60)
+                            current.endDate = max(proposed, floor)
+                            reminderService.updateLocalEvent(current)
+                            let signed = deltaMinutes > 0 ? "+\(deltaMinutes) min" : "\(deltaMinutes) min"
+                            toastState.showSuccess("End time \(signed)", icon: "timer")
                         }
                     )
                     .transition(
@@ -1029,10 +1055,10 @@ struct MenuBarView: View {
                     // compact so tasks dominate the screen.
                     HStack(spacing: DS.Spacing.sm) {
                         Image(systemName: "calendar")
-                            .font(.caption)
+                            .font(.footnote)
                             .foregroundStyle(skin.resolvedTextTertiary)
                         Text(emptyStateSubtitle)
-                            .font(.caption)
+                            .font(.footnote)
                             .foregroundStyle(skin.resolvedTextTertiary)
                         Spacer()
                         Button {
@@ -1040,7 +1066,7 @@ struct MenuBarView: View {
                             navigation = .addEvent()
                         } label: {
                             Text("Add Event")
-                                .font(.caption.weight(.medium))
+                                .font(.footnote.weight(.medium))
                         }
                         .buttonStyle(.plain)
                         .foregroundStyle(skin.accentColor)
@@ -1066,7 +1092,7 @@ struct MenuBarView: View {
                             navigation = .addEvent()
                         } label: {
                             Label("Add Event", systemImage: "plus")
-                                .font(.caption)
+                                .font(.footnote)
                                 .fontWeight(.medium)
                         }
                         .buttonStyle(.action(role: .primary, size: .compact))
@@ -1200,6 +1226,21 @@ struct MenuBarView: View {
         }
     }
 
+    /// Parallax fraction applied to `listScrollY` before it reaches the
+    /// wallpaper. 0.15 was tuned by hand: noticeably alive without
+    /// inducing the dizzying «UI is sliding under glass» feel that comes
+    /// with values past ~0.25. Returns 0 when Reduce Motion is on or
+    /// when the user is not on the list view (so navigating away resets
+    /// the wallpaper to its calm position).
+    private var parallaxOffset: CGFloat {
+        guard navigation == .list, !reduceMotion else { return 0 }
+        let raw = listScrollY * 0.15
+        // Clamp absolute parallax to ±40pt so even a long backlog scroll
+        // never drives the wallpaper outside the 8% overscan margin
+        // baked into `WallpaperBackgroundLayer.parallaxOverscan`.
+        return max(-40, min(40, raw))
+    }
+
     private var eventList: some View {
         ScrollView {
             // Timeline is not a platter card (see mainContent), so this
@@ -1269,7 +1310,17 @@ struct MenuBarView: View {
             .scrollTargetLayout()
             .id("eventListTop")
             .animation(DS.Animation.smoothSpring, value: reminderService.disintegratingEventIDs)
+            // Read the LazyVStack's position inside the scroll view's
+            // coordinate space. As the user scrolls down, `minY` grows
+            // negative; we feed that straight into `listScrollY`, then
+            // `parallaxOffset` applies the dampening + clamp.
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.frame(in: .named("eventListScroll")).minY
+            } action: { newValue in
+                listScrollY = newValue
+            }
         }
+        .coordinateSpace(.named("eventListScroll"))
         .scrollPosition(id: $scrollPositionID)
         .scrollContentBackground(.hidden)
     }
@@ -1346,6 +1397,38 @@ struct MenuBarView: View {
                     event: event,
                     reminderService: reminderService,
                     onEdit: { event in resolveEdit(event) },
+                    onRenameLocal: { event, newTitle in
+                        // Inline rename: route to `updateLocalEvent` against
+                        // the root event. For an expanded occurrence
+                        // (`seriesId != nil`) we look the root up by series
+                        // id, since `localEvents` only stores root events
+                        // and `updateLocalEvent` matches by id.
+                        let rootId = event.seriesId ?? event.id
+                        guard var root = reminderService.localEvents.first(where: { $0.id == rootId }) else { return }
+                        root.title = newTitle
+                        reminderService.updateLocalEvent(root)
+                        toastState.showSuccess("Renamed to \u{201C}\(newTitle)\u{201D}", icon: "pencil")
+                    },
+                    onReschedule: { event, deltaMinutes in
+                        // Drag-to-reschedule uses the existing snooze path,
+                        // which already shifts both `startDate` and `endDate`
+                        // by the same delta. Negative deltas (drag up =
+                        // earlier) are handled by `addingTimeInterval`. The
+                        // row gates this to local non-recurring upcoming
+                        // events, so the local-only branch in `snoozeReminder`
+                        // is the one that runs.
+                        reminderService.snoozeReminder(for: event, minutes: deltaMinutes)
+                        let signed = deltaMinutes > 0 ? "+\(deltaMinutes) min" : "\(deltaMinutes) min"
+                        let eventId = event.id
+                        toastState.showSuccess("Rescheduled (\(signed))", icon: "arrow.up.and.down.circle.fill") {
+                            // Undo: re-fetch the current event so we shift
+                            // the post-snooze dates back, not the captured
+                            // pre-snooze ones (which would compound).
+                            if let current = reminderService.localEvents.first(where: { $0.id == eventId }) {
+                                reminderService.snoozeReminder(for: current, minutes: -deltaMinutes)
+                            }
+                        }
+                    },
                     onDelete: { event in handleDelete(event) },
                     onDeleteOccurrence: { event in
                         reminderService.excludeOccurrence(occurrenceId: event.id)
@@ -1459,10 +1542,10 @@ struct MenuBarView: View {
             // any one event's title dominating — the whole group reads as
             // a single «block».
             Image(systemName: "rectangle.stack.fill")
-                .font(.caption2)
+                .font(.footnote)
                 .foregroundStyle(activeSkin.resolvedTextTertiary)
             Text("\(events.count) event\(events.count == 1 ? "" : "s") · \(DS.formatMinutes(bookedMinutes)) booked")
-                .font(.caption)
+                .font(.footnote)
                 .foregroundStyle(activeSkin.resolvedTextSecondary)
                 .lineLimit(1)
             Spacer(minLength: 0)
@@ -1771,21 +1854,22 @@ private struct PermissionBannerLabel: View {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: spec.icon)
                     .foregroundStyle(skin.resolvedWarningColor)
-                    .font(.caption)
+                    .font(.footnote)
                     .symbolRenderingMode(.hierarchical)
                 Text(spec.title)
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundStyle(skin.resolvedTextPrimary)
                 Spacer(minLength: DS.Spacing.sm)
                 Image(systemName: "chevron.right")
-                    .font(.caption2)
+                    .font(.footnote)
                     .foregroundStyle(skin.resolvedTextTertiary)
             }
             .padding(.horizontal, DS.Spacing.md)
             .padding(.vertical, DS.Spacing.sm)
             .adaptiveBadgeFill(skin.resolvedWarningColor)
             .clipShape(Capsule())
-            .shadow(color: skin.resolvedShadowColor, radius: skin.shadowRadius, y: skin.shadowY)
+            // Permission pill rides on the card plane (z1) inside the popover.
+            .elevation(.z1, skin: skin)
         }
         .buttonStyle(.plain)
         // Level 1: unified outer content margin so the pill hangs on the

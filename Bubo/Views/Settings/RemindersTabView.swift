@@ -52,7 +52,7 @@ struct RemindersTabView: View {
                 Toggle("Full-screen notification", isOn: $settings.showFullScreenAlert)
                 Toggle("System notification", isOn: $settings.showSystemNotification)
                 Text("At least one notification type should be enabled to receive meeting alerts.")
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundStyle(skin.resolvedTextSecondary)
                     .padding(.top, DS.Spacing.xs)
             }

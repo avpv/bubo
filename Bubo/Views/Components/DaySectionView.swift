@@ -31,7 +31,7 @@ struct DaySectionHeader: View {
             }
             Spacer(minLength: DS.Spacing.xs)
             Text("\(count)")
-                .font(.caption2.weight(.semibold))
+                .font(.footnote.weight(.semibold))
                 .foregroundStyle(skin.resolvedTextSecondary)
                 .padding(.horizontal, DS.Spacing.sm)
                 .padding(.vertical, DS.Spacing.xxs)

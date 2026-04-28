@@ -11,6 +11,12 @@ struct TimerScreenView: View {
     /// shape. Lets `MenuBarView` route the outcome into
     /// `PomodoroHistoryService` without pulling the service into a view.
     var onSessionEnded: ((PomodoroHistoryEntry) -> Void)? = nil
+    /// Scrub-the-ring callback: adjusts the active event's `endDate`
+    /// by a signed minute delta (positive = extend, negative = shorten).
+    /// `MenuBarView` clamps the resulting `endDate` so it never drops
+    /// below «now + 1 minute», preventing the timer from auto-ending
+    /// while the user is dragging. Pass nil to disable scrubbing.
+    var onAdjustEndDate: ((CalendarEvent, Int) -> Void)? = nil
 
     var wallpaper: WallpaperDefinition = WallpaperCatalog.none
     var customPhotoPath: String = ""
@@ -20,6 +26,16 @@ struct TimerScreenView: View {
 
     @State private var pulseRing = false
     @State private var appearedAt: Date?
+
+    /// Scrub state. A horizontal drag on the ring adjusts the event's
+    /// `endDate` in 1-minute snaps, with `Haptics.alignment()` on every
+    /// snap boundary. `scrubArmed` toggles the visual cue (a tinted
+    /// ring + delta badge); `scrubMinuteDelta` is the live signed delta
+    /// the gesture has accumulated since press-start.
+    @State private var scrubArmed = false
+    @State private var scrubMinuteDelta = 0
+    @State private var scrubLastSnap = 0
+
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.navigateHome) private var navigateHome
@@ -226,13 +242,15 @@ struct TimerScreenView: View {
                                 .blur(radius: 20)
                         }
 
-                        // Center content
+                        // Center content. Status label is the same quiet
+                        // subhead as `sectionHeaderStyle()` — mixed case, no
+                        // tracking, just `.footnote.semibold`. Birman: «один
+                        // субхед на всё приложение»; cap-height + letter
+                        // spacing made this read like 1990s product chrome.
                         VStack(spacing: DS.Spacing.sm) {
                             Text(statusLabel(now))
-                                .font(.system(.caption, design: skin.resolvedFontDesign, weight: .medium))
+                                .sectionHeaderStyle()
                                 .foregroundStyle(skin.resolvedTextTertiary)
-                                .textCase(.uppercase)
-                                .tracking(1.5)
 
                             if ended {
                                 Image(systemName: "checkmark.circle")
@@ -248,6 +266,17 @@ struct TimerScreenView: View {
                             }
                         }
                     }
+                    .scaleEffect(scrubArmed ? 1.03 : 1.0)
+                    .animation(skin.resolvedMicroAnimation, value: scrubArmed)
+                    // Horizontal drag on the ring extends or shortens the
+                    // active event's `endDate`. The gesture is masked when
+                    // the event isn't currently in progress (no «remaining
+                    // time» to scrub then) or when it isn't a local
+                    // standard event (pomodoros own a structured phase
+                    // model that isn't a simple end-date adjustment).
+                    .gesture(scrubGesture(now: now),
+                             including: canScrub(now: now) ? .gesture : .none)
+                    .overlay(scrubBadge.padding(.top, DS.Size.timerRingDiameter * 0.55))
                     .staggeredEntrance(index: 0)
 
                     // Pomodoro segment indicator — round number and work/break status.
@@ -320,17 +349,17 @@ struct TimerScreenView: View {
 
                         HStack(spacing: DS.Spacing.md) {
                             Label(event.formattedDate, systemImage: "calendar")
-                                .font(.caption)
+                                .font(.footnote)
                                 .foregroundStyle(skin.resolvedTextSecondary)
 
                             Label(event.formattedTimeRange, systemImage: "clock")
-                                .font(.caption)
+                                .font(.footnote)
                                 .foregroundStyle(skin.resolvedTextSecondary)
                         }
 
                         if let location = event.location, !location.isEmpty {
                             Label(location, systemImage: "location.fill")
-                                .font(.caption)
+                                .font(.footnote)
                                 .foregroundStyle(skin.resolvedTextSecondary)
                                 .lineLimit(1)
                                 .truncationMode(.tail)
@@ -344,7 +373,7 @@ struct TimerScreenView: View {
                                     onRepeat?(event)
                                 } label: {
                                     Label("Repeat", systemImage: "arrow.counterclockwise")
-                                        .font(.caption.weight(.medium))
+                                        .font(.footnote.weight(.medium))
                                 }
                                 .buttonStyle(.action(role: .primary, size: .compact))
 
@@ -354,7 +383,7 @@ struct TimerScreenView: View {
                                         onScheduleNext(event)
                                     } label: {
                                         Label("Plan Next", systemImage: "wand.and.stars")
-                                            .font(.caption.weight(.medium))
+                                            .font(.footnote.weight(.medium))
                                     }
                                     .buttonStyle(.action(role: .secondary, size: .compact))
                                 }
@@ -376,18 +405,98 @@ struct TimerScreenView: View {
         }
     }
 
+    // MARK: - Scrub-the-Ring (adjust event end-date by horizontal drag)
+
+    /// Pixel-to-minute conversion for ring-scrubbing. 8pt of horizontal
+    /// drag = 1 minute, so a comfortable cross-ring sweep (~180pt) covers
+    /// roughly 22 minutes — enough to «add another quick chunk» without
+    /// being so sensitive that small wrist twitches change the time.
+    private var scrubPointsPerMinute: CGFloat { 8.0 }
+
+    /// Hard cap so a single scrub gesture can extend by at most one hour
+    /// or shorten by however much the event has remaining (the commit
+    /// path clamps end-date against «now + 60s» as a final safety net).
+    private var maxScrubMinutes: Int { 60 }
+
+    private func canScrub(now: Date) -> Bool {
+        onAdjustEndDate != nil
+            && event.isLocalEvent
+            && !event.isRecurring
+            && event.eventType == .standard
+            && isInProgress(now)
+    }
+
+    private func scrubGesture(now: Date) -> some Gesture {
+        DragGesture(minimumDistance: 6, coordinateSpace: .local)
+            .onChanged { value in
+                if !scrubArmed {
+                    scrubArmed = true
+                    Haptics.impact()
+                }
+                // Horizontal axis only — vertical wiggle is ignored so
+                // the gesture reads as «winding the ring» (a horizontal
+                // metaphor) rather than «sliding it around».
+                let raw = Int((value.translation.width / scrubPointsPerMinute).rounded())
+                let clamped = max(-maxScrubMinutes, min(maxScrubMinutes, raw))
+                if clamped != scrubLastSnap {
+                    Haptics.alignment()
+                    scrubLastSnap = clamped
+                }
+                scrubMinuteDelta = clamped
+            }
+            .onEnded { _ in
+                if scrubMinuteDelta != 0 {
+                    onAdjustEndDate?(event, scrubMinuteDelta)
+                    Haptics.impact()
+                }
+                withAnimation(skin.resolvedMicroAnimation) {
+                    scrubArmed = false
+                }
+                scrubMinuteDelta = 0
+                scrubLastSnap = 0
+            }
+    }
+
+    /// Floating capsule under the ring showing the proposed end-time
+    /// shift while a scrub is in flight. Same visual recipe as the
+    /// drag-to-reschedule badge in `EventRowView` — glass capsule, accent
+    /// border, z2 elevation — so the two gestures read as a family.
+    @ViewBuilder
+    private var scrubBadge: some View {
+        if scrubArmed {
+            let signed = scrubMinuteDelta == 0
+                ? "—"
+                : (scrubMinuteDelta > 0 ? "+\(scrubMinuteDelta) min" : "\(scrubMinuteDelta) min")
+            Text(signed)
+                .font(.footnote.weight(.semibold).monospacedDigit())
+                .foregroundStyle(skin.accentColor)
+                .padding(.horizontal, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xxs)
+                .background(skin.resolvedPlatterMaterial, in: Capsule())
+                .overlay(Capsule().strokeBorder(skin.accentColor.opacity(DS.Opacity.softAccent),
+                                                 lineWidth: DS.Border.thin))
+                .elevation(.z2, skin: skin)
+                .transition(.opacity.combined(with: .scale(scale: 0.92)))
+                .accessibilityLabel("Adjust end time \(signed)")
+        }
+    }
+
     // MARK: - Subviews
 
+    /// Hero ring digits use SF Pro Rounded with `monospacedDigit()` (the
+    /// «friendly» Clock / Fitness face) instead of the `.monospaced` system
+    /// design — same equal-width digit guarantee, but the glyph shapes match
+    /// the rest of the popover instead of the slab-feel of SF Mono.
     private func timerRow(_ components: [TimeComponent], size: CGFloat) -> some View {
         HStack(spacing: DS.Spacing.xs) {
             ForEach(components, id: \.id) { comp in
                 HStack(alignment: .firstTextBaseline, spacing: 1) {
                     Text(comp.value)
-                        .font(.system(size: size, weight: .bold, design: .monospaced))
+                        .font(DS.Typography.heroRingDigit(size: size))
                         .foregroundStyle(skin.resolvedTextPrimary)
                         .contentTransition(.numericText())
                     Text(comp.unit)
-                        .font(.system(size: size * 0.45, weight: .medium, design: skin.resolvedFontDesign))
+                        .font(DS.Typography.heroRingUnit(size: size, design: skin.resolvedFontDesign))
                         .foregroundStyle(skin.resolvedTextTertiary)
                 }
             }

@@ -67,7 +67,7 @@ struct CalendarsTabView: View {
                         Spacer()
                         Text("\(viewModel.availableAppleCalendars.count) calendars")
                             .foregroundStyle(skin.resolvedTextSecondary)
-                            .font(.caption)
+                            .font(.footnote)
                     }
                 } else {
                     let status = viewModel.calendarAuthStatus
@@ -76,7 +76,7 @@ struct CalendarsTabView: View {
                             Label("Calendar access denied", systemImage: "xmark.circle.fill")
                                 .foregroundStyle(skin.resolvedDestructiveColor)
                             Text("Grant access in System Settings\u{00A0}\u{2192}\u{00A0}Privacy & Security\u{00A0}\u{2192}\u{00A0}Calendars")
-                                .font(.caption)
+                                .font(.footnote)
                                 .foregroundStyle(skin.resolvedTextSecondary)
                             Button("Open System Settings") {
                                 if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars") {
@@ -104,7 +104,7 @@ struct CalendarsTabView: View {
                 }
                 
                 Text("Bubo reads events from all accounts configured in the Calendar app \u{2014} iCloud, Google, Exchange, CalDAV, and others.")
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundStyle(skin.resolvedTextSecondary)
                     .padding(.top, DS.Spacing.xs)
             }
@@ -130,7 +130,7 @@ struct CalendarsTabView: View {
             Text(settings.selectedCalendarIds.isEmpty
                 ? "Showing all \(allCalendars.count) calendars"
                 : "Selected: \(settings.selectedCalendarIds.count) of \(allCalendars.count)")
-                .font(.caption)
+                .font(.footnote)
                 .foregroundStyle(skin.resolvedTextSecondary)
         }
 

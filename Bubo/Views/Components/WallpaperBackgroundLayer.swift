@@ -5,6 +5,19 @@ import SwiftUI
 struct WallpaperBackgroundLayer: View {
     let wallpaper: WallpaperDefinition
 
+    /// Vertical parallax offset for the wallpaper. The caller passes a
+    /// fraction of its scroll offset; we apply it as a `.offset(y:)` on
+    /// the rendered wallpaper. The wallpaper is also scaled up by
+    /// `parallaxOverscan` so the offset never exposes blank edges within
+    /// the popover bounds. See `parallaxOverscan` for the math.
+    var parallaxY: CGFloat = 0
+
+    /// Scale factor applied to the wallpaper so a parallax offset within
+    /// the popover height does not expose blank edges. With a popover of
+    /// ~600pt and a parallax range clamped at ±40pt by the caller, an 8%
+    /// overscan (≈48pt) leaves a small safety margin on every side.
+    private var parallaxOverscan: CGFloat { 1.08 }
+
     var body: some View {
         if wallpaper.id == "none" {
             Color.clear
@@ -21,7 +34,10 @@ struct WallpaperBackgroundLayer: View {
                     liveView
                 }
             }
+            .scaleEffect(parallaxOverscan)
+            .offset(y: parallaxY)
             .ignoresSafeArea()
+            .accessibilityHidden(true)
         }
     }
 
@@ -811,7 +827,7 @@ struct WallpaperPreviewCard: View {
             )
 
             Text(wallpaper.displayName)
-                .font(.caption2)
+                .font(.footnote)
                 .fontWeight(isSelected ? .semibold : .regular)
                 .foregroundStyle(isSelected ? skin.resolvedTextPrimary : skin.resolvedTextSecondary)
                 .lineLimit(1)

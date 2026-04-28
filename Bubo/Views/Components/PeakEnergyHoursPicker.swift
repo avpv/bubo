@@ -42,7 +42,7 @@ struct PeakEnergyHoursPicker: View {
             toggle(hour)
         } label: {
             Text("\(hour):00")
-                .font(.caption.weight(isOn ? .semibold : .regular))
+                .font(.footnote.weight(isOn ? .semibold : .regular))
                 .foregroundStyle(
                     isOn
                         ? skin.resolvedTextPrimary

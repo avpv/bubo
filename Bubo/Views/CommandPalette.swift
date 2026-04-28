@@ -201,7 +201,9 @@ struct CommandPalette: View {
             content
         }
         .skinPlatter(skin)
-        .skinPlatterDepth(skin)
+        // Command palette is a modal surface floating above the popover body
+        // — z2 plane so its depth reads against the z1 cards underneath.
+        .skinPlatterDepth(skin, level: .z2)
         .onKeyPress(.upArrow) { move(-1); return .handled }
         .onKeyPress(.downArrow) { move(1); return .handled }
         .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
@@ -245,7 +247,7 @@ struct CommandPalette: View {
                     }
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundStyle(skin.resolvedTextTertiary)
                 }
                 .buttonStyle(.plain)
@@ -329,7 +331,7 @@ struct CommandPalette: View {
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.red)
                         Text("Energy level is low. Defer everything except the 2 top tasks.")
-                            .font(.caption)
+                            .font(.footnote)
                             .foregroundStyle(.red.opacity(0.8))
                     }
                 }
@@ -413,7 +415,7 @@ struct CommandPalette: View {
 
                     if isTop, let preview = dryRunPreview {
                         Text(preview)
-                            .font(.caption)
+                            .font(.footnote)
                             .foregroundStyle(skin.accentColor.opacity(0.85))
                             .lineLimit(1)
                     }
@@ -430,7 +432,7 @@ struct CommandPalette: View {
                         }
                     } label: {
                         Image(systemName: "slider.horizontal.3")
-                            .font(.caption)
+                            .font(.footnote)
                             .foregroundStyle(skin.resolvedTextTertiary)
                             .frame(width: 20, height: 20)
                     }
@@ -517,10 +519,10 @@ struct CommandPalette: View {
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                         HStack(spacing: DS.Spacing.xs) {
                             Image(systemName: conflict.severity == .error ? "xmark.circle.fill" : "info.circle.fill")
-                                .font(.caption2)
+                                .font(.footnote)
                                 .foregroundStyle(conflict.severity == .error ? skin.resolvedDestructiveColor : skin.resolvedTextTertiary)
                             Text(conflict.message)
-                                .font(.caption2)
+                                .font(.footnote)
                                 .foregroundStyle(skin.resolvedTextSecondary)
                         }
                         
@@ -545,10 +547,10 @@ struct CommandPalette: View {
             if let preview = composerPreview {
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "eye.fill")
-                        .font(.caption2)
+                        .font(.footnote)
                         .foregroundStyle(skin.accentColor.opacity(0.6))
                     Text(preview)
-                        .font(.caption2)
+                        .font(.footnote)
                         .foregroundStyle(skin.accentColor.opacity(0.8))
                 }
             }
@@ -584,20 +586,20 @@ struct CommandPalette: View {
     private func stepper(_ label: String, value: Int, range: ClosedRange<Int>, step: Int, unit: String, onChange: @escaping (Int) -> Void) -> some View {
         HStack(spacing: DS.Spacing.sm) {
             Text(label)
-                .font(.caption2)
+                .font(.footnote)
                 .foregroundStyle(skin.resolvedTextSecondary)
                 .frame(width: 70, alignment: .leading)
 
             Button { onChange(max(range.lowerBound, value - step)) } label: {
-                Image(systemName: "minus").font(.caption2.weight(.bold)).frame(width: 18, height: 18)
+                Image(systemName: "minus").font(.footnote.weight(.bold)).frame(width: 18, height: 18)
             }.buttonStyle(.plain)
 
             Text("\(value)\(unit)")
-                .font(.caption.monospacedDigit().weight(.medium))
+                .font(.footnote.monospacedDigit().weight(.medium))
                 .frame(minWidth: 44)
 
             Button { onChange(min(range.upperBound, value + step)) } label: {
-                Image(systemName: "plus").font(.caption2.weight(.bold)).frame(width: 18, height: 18)
+                Image(systemName: "plus").font(.footnote.weight(.bold)).frame(width: 18, height: 18)
             }.buttonStyle(.plain)
 
             Spacer()
@@ -638,7 +640,7 @@ struct CommandPalette: View {
                 if dimmed {
                     Image(systemName: "link").font(.system(size: 7, weight: .semibold))
                 }
-                Text(label).font(.caption2.weight(.medium))
+                Text(label).font(.footnote.weight(.medium))
                 if active && !dimmed {
                     Image(systemName: "xmark").font(.system(size: 8, weight: .bold))
                 }
@@ -658,7 +660,7 @@ struct CommandPalette: View {
     private func statusView(_ label: String, intentName: String?) -> some View {
         VStack(spacing: DS.Spacing.sm) {
             Image(systemName: "hourglass")
-                .font(.largeTitle)
+                .font(.title3)
                 .foregroundStyle(skin.accentColor)
                 .symbolEffect(.pulse, isActive: true)
             if let intentName, !intentName.isEmpty {
@@ -688,7 +690,7 @@ struct CommandPalette: View {
     private func appliedView(_ events: [EventInfo], resolutions: [ActionableResolution]) -> some View {
         VStack(spacing: DS.Spacing.sm) {
             Image(systemName: "checkmark.circle.fill")
-                .font(.title)
+                .font(.title3)
                 .foregroundStyle(skin.resolvedSuccessColor)
             ForEach(events) { info in
                 HStack(spacing: DS.Spacing.xs) {
@@ -698,7 +700,7 @@ struct CommandPalette: View {
             }
             if let notice = appliedNotice {
                 Text(notice)
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundStyle(DS.Colors.textTertiary)
             }
             
@@ -737,7 +739,7 @@ struct CommandPalette: View {
     private func failedView(_ message: String, resolutions: [ActionableResolution]) -> some View {
         VStack(spacing: DS.Spacing.md) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.largeTitle)
+                .font(.title3)
                 .foregroundStyle(skin.resolvedWarningColor)
             Text(message)
                 .font(.subheadline.weight(.medium))
@@ -761,12 +763,12 @@ struct CommandPalette: View {
                 Button("Back") {
                     withAnimation(DS.Animation.quick) { phase = .picking }
                 }
-                .font(.caption.weight(.medium))
+                .font(.footnote.weight(.medium))
                 .foregroundStyle(skin.accentColor)
                 .buttonStyle(.plain)
                 
                 Button("Close") { onDismiss() }
-                    .font(.caption.weight(.medium))
+                    .font(.footnote.weight(.medium))
                     .foregroundStyle(skin.resolvedTextSecondary)
                     .buttonStyle(.plain)
             }
@@ -903,13 +905,13 @@ struct CommandPalette: View {
     private func hint(_ key: String, _ label: String) -> some View {
         HStack(spacing: DS.Spacing.xs) {
             Text(key)
-                .font(.caption2.monospaced())
+                .font(.footnote.monospaced())
                 .foregroundStyle(skin.resolvedTextSecondary)
                 .padding(.horizontal, DS.Spacing.xs)
                 .padding(.vertical, DS.Spacing.xxs)
                 .background(RoundedRectangle(cornerRadius: DS.Spacing.xs).strokeBorder(skin.resolvedTextTertiary.opacity(0.35), lineWidth: 0.5))
             Text(label)
-                .font(.caption2)
+                .font(.footnote)
                 .foregroundStyle(skin.resolvedTextTertiary)
         }
     }

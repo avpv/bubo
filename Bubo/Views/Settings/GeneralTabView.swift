@@ -86,14 +86,14 @@ struct SkinPreviewCard: View {
 
             VStack(spacing: 0) {
                 Text(skin.displayName)
-                    .font(.caption2)
+                    .font(.footnote)
                     .fontWeight(isSelected ? .semibold : .regular)
                     .foregroundStyle(isSelected ? activeSkin.resolvedTextPrimary : activeSkin.resolvedTextSecondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
                 if skin.author != "Bubo" {
                     Text("by \(skin.author)")
-                        .font(.caption2)
+                        .font(.footnote)
                         .foregroundStyle(activeSkin.resolvedTextTertiary)
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -124,7 +124,7 @@ struct CustomSkinsSection: View {
                     customSkinLoader.revealInFinder()
                 } label: {
                     Label("Open folder", systemImage: "folder")
-                        .font(.caption2)
+                        .font(.footnote)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(skin.resolvedTextSecondary)
@@ -212,7 +212,7 @@ struct BackgroundPhotoSection: View {
                     .font(.subheadline)
                     .foregroundStyle(skin.resolvedTextPrimary)
                 Text("Overrides all themes and built-in wallpapers across the app")
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundStyle(skin.resolvedTextSecondary)
             }
 
@@ -252,25 +252,25 @@ struct BackgroundPhotoSection: View {
                 VStack(spacing: 4) {
                     HStack {
                         Text("Opacity")
-                            .font(.caption)
+                            .font(.footnote)
                             .foregroundStyle(skin.resolvedTextSecondary)
                             .frame(width: 50, alignment: .leading)
                         Slider(value: $settings.customBackgroundPhotoOpacity, in: 0.05...1.0, step: 0.05)
                             .accessibilityLabel("Photo opacity")
                         Text("\(Int(settings.customBackgroundPhotoOpacity * 100))%")
-                            .font(.caption)
+                            .font(.footnote)
                             .foregroundStyle(skin.resolvedTextSecondary)
                             .frame(width: 30, alignment: .trailing)
                     }
                     HStack {
                         Text("Blur")
-                            .font(.caption)
+                            .font(.footnote)
                             .foregroundStyle(skin.resolvedTextSecondary)
                             .frame(width: 50, alignment: .leading)
                         Slider(value: $settings.customBackgroundPhotoBlur, in: 0...10, step: 0.5)
                             .accessibilityLabel("Photo blur")
                         Text(String(format: "%.1f", settings.customBackgroundPhotoBlur))
-                            .font(.caption)
+                            .font(.footnote)
                             .foregroundStyle(skin.resolvedTextSecondary)
                             .frame(width: 30, alignment: .trailing)
                     }
@@ -286,13 +286,13 @@ struct BackgroundPhotoSection: View {
                         : "Change photo\u{2026}",
                     systemImage: "photo"
                 )
-                .font(.caption)
+                .font(.footnote)
             }
             .buttonStyle(.plain)
             .foregroundStyle(skin.resolvedTextSecondary)
 
             Text("Recommended size: 720\u{00D7}1200\u{00A0}px (3:5)")
-                .font(.caption2)
+                .font(.footnote)
                 .foregroundStyle(skin.resolvedTextTertiary)
         }
     }
@@ -377,7 +377,7 @@ struct WallpaperSectionView: View {
 
             if selectedCategory == .live {
                 Label("Live wallpapers use animation and may increase energy usage", systemImage: "bolt.fill")
-                    .font(.caption2)
+                    .font(.footnote)
                     .foregroundStyle(skin.resolvedTextTertiary)
             }
         }
@@ -422,7 +422,7 @@ struct CloudSyncStatusSection: View {
                     "Restart Bubo to apply the change.",
                     systemImage: "arrow.triangle.2.circlepath"
                 )
-                .font(.caption)
+                .font(.footnote)
                 .foregroundStyle(skin.resolvedWarningColor)
             }
 
@@ -432,7 +432,7 @@ struct CloudSyncStatusSection: View {
                         ProgressView().controlSize(.small)
                     }
                     Text(viewModel.statusText)
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundStyle(
                             viewModel.statusIsWarning
                                 ? skin.resolvedWarningColor
@@ -443,7 +443,7 @@ struct CloudSyncStatusSection: View {
 
             if let persistenceError = viewModel.persistenceError {
                 Label(persistenceError, systemImage: "exclamationmark.triangle")
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundStyle(skin.resolvedWarningColor)
             }
         }
@@ -532,7 +532,7 @@ struct GeneralTabView: View {
                 if reminderService.isUsingCache {
                     Label("Using cached data", systemImage: "internaldrive")
                         .foregroundStyle(skin.resolvedWarningColor)
-                        .font(.caption)
+                        .font(.footnote)
                 }
             }
 
@@ -543,14 +543,14 @@ struct GeneralTabView: View {
                     HStack {
                         Spacer()
                         Text("Bubo \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0")")
-                            .font(.caption2)
+                            .font(.footnote)
                             .foregroundStyle(skin.resolvedTextTertiary)
                         Spacer()
                     }
                     HStack {
                         Spacer()
                         Link("GitHub Project", destination: URL(string: "https://github.com/avpv/bubo")!)
-                            .font(.caption2)
+                            .font(.footnote)
                             .accessibilityHint("Opens in your web browser")
                         Spacer()
                     }

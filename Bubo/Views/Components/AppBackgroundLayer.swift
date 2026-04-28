@@ -7,6 +7,12 @@ struct AppBackgroundLayer: View {
     var customPhotoOpacity: Double = 0.25
     var customPhotoBlur: Double = 2
 
+    /// Vertical parallax offset for the wallpaper layer. Caller threads
+    /// the host scroll view's offset through, scaled and clamped so the
+    /// wallpaper drifts behind the foreground content as the user scrolls.
+    /// The custom photo and skin layers stay fixed — the depth cue comes
+    /// from differential motion between wallpaper and content.
+    var parallaxY: CGFloat = 0
 
     /// Whether a non-trivial wallpaper is active (not "none").
     private var hasActiveWallpaper: Bool {
@@ -16,7 +22,7 @@ struct AppBackgroundLayer: View {
     var body: some View {
         ZStack {
             // Wallpaper layer (rendered first, behind everything)
-            WallpaperBackgroundLayer(wallpaper: wallpaper)
+            WallpaperBackgroundLayer(wallpaper: wallpaper, parallaxY: parallaxY)
 
             // User's custom background photo — only when no wallpaper is active
             if !hasActiveWallpaper,

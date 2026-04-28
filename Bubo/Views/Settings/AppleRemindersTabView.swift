@@ -80,7 +80,7 @@ struct AppleRemindersTabView: View {
                         Spacer()
                         Text("\(viewModel.availableRemindersLists.count) lists")
                             .foregroundStyle(skin.resolvedTextSecondary)
-                            .font(.caption)
+                            .font(.footnote)
                     }
                 } else {
                     let status = viewModel.remindersAuthStatus
@@ -89,7 +89,7 @@ struct AppleRemindersTabView: View {
                             Label("Reminders access denied", systemImage: "xmark.circle.fill")
                                 .foregroundStyle(skin.resolvedDestructiveColor)
                             Text("Grant access in System Settings\u{00A0}\u{2192}\u{00A0}Privacy & Security\u{00A0}\u{2192}\u{00A0}Reminders")
-                                .font(.caption)
+                                .font(.footnote)
                                 .foregroundStyle(skin.resolvedTextSecondary)
                             Button("Open System Settings") {
                                 if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Reminders") {
@@ -117,7 +117,7 @@ struct AppleRemindersTabView: View {
                 }
 
                 Text("Incomplete reminders from selected lists are imported into the backlog for scheduling.")
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundStyle(skin.resolvedTextSecondary)
                     .padding(.top, DS.Spacing.xs)
 
@@ -129,11 +129,11 @@ struct AppleRemindersTabView: View {
                             ProgressView()
                                 .controlSize(.small)
                             Text("Syncing…")
-                                .font(.caption)
+                                .font(.footnote)
                                 .foregroundStyle(skin.resolvedTextSecondary)
                         } else if let date = syncService.lastSyncDate {
                             Text("Last sync: \(date, style: .relative) ago")
-                                .font(.caption)
+                                .font(.footnote)
                                 .foregroundStyle(skin.resolvedTextSecondary)
                         }
 
@@ -169,7 +169,7 @@ struct AppleRemindersTabView: View {
             Text(settings.selectedRemindersListIds.isEmpty
                 ? "Importing from all \(allLists.count) lists"
                 : "Selected: \(settings.selectedRemindersListIds.count) of \(allLists.count)")
-                .font(.caption)
+                .font(.footnote)
                 .foregroundStyle(skin.resolvedTextSecondary)
         }
 
@@ -238,7 +238,7 @@ struct AppleRemindersTabView: View {
             }
 
             Text("Apple Reminders has no duration\u{00A0}\u{2014} this value is used for scheduling.")
-                .font(.caption)
+                .font(.footnote)
                 .foregroundStyle(skin.resolvedTextSecondary)
                 .padding(.top, DS.Spacing.xs)
 
@@ -251,7 +251,7 @@ struct AppleRemindersTabView: View {
             .toggleStyle(.switch)
 
             Text("When you complete an imported task in Bubo, the original reminder is marked done too.")
-                .font(.caption)
+                .font(.footnote)
                 .foregroundStyle(skin.resolvedTextSecondary)
                 .padding(.top, DS.Spacing.xs)
         }
@@ -271,7 +271,7 @@ struct AppleRemindersTabView: View {
                     Text("\(syncService.dismissedCount) reminder\(syncService.dismissedCount == 1 ? "" : "s") won\u{2019}t be re-imported")
                         .fontWeight(.medium)
                     Text("Reminders you deleted from the backlog are skipped on future syncs. Clear this list to import them again.")
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundStyle(skin.resolvedTextSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -302,7 +302,7 @@ struct AppleRemindersTabView: View {
             .toggleStyle(.switch)
 
             Text("New tasks created in Bubo are added to Apple Reminders so they appear on iPhone, iPad, and other devices via iCloud.")
-                .font(.caption)
+                .font(.footnote)
                 .foregroundStyle(skin.resolvedTextSecondary)
                 .padding(.top, DS.Spacing.xs)
 
@@ -325,7 +325,7 @@ struct AppleRemindersTabView: View {
                     .labelsHidden()
 
                     Text("New Bubo tasks are created in this Reminders list. Edits and schedule changes in Bubo also push back automatically.")
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundStyle(skin.resolvedTextSecondary)
                 }
 
@@ -338,7 +338,7 @@ struct AppleRemindersTabView: View {
                 .toggleStyle(.switch)
 
                 Text("When you remove a linked task from the backlog, its reminder is deleted from Apple Reminders too.")
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundStyle(skin.resolvedTextSecondary)
                     .padding(.top, DS.Spacing.xs)
             }

@@ -66,11 +66,11 @@ struct AITabView: View {
     private var builtInDescription: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             Label("No setup required", systemImage: "checkmark.circle.fill")
-                .font(.caption.weight(.medium))
+                .font(.footnote.weight(.medium))
                 .foregroundStyle(skin.resolvedSuccessColor)
 
             Text("AI requests go through the Bubo proxy with a daily limit per device. No API key needed.")
-                .font(.caption)
+                .font(.footnote)
                 .foregroundStyle(skin.resolvedTextSecondary)
         }
     }
@@ -78,7 +78,7 @@ struct AITabView: View {
     private var ownKeyDescription: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             Text("Requests go directly to the DeepSeek API using your key. No rate limits from Bubo, you pay per usage on your DeepSeek account.")
-                .font(.caption)
+                .font(.footnote)
                 .foregroundStyle(skin.resolvedTextSecondary)
         }
     }
@@ -88,7 +88,7 @@ struct AITabView: View {
     private var apiKeySection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
             Text("Enter your DeepSeek API key. Stored securely in your macOS Keychain.")
-                .font(.caption)
+                .font(.footnote)
                 .foregroundStyle(skin.resolvedTextSecondary)
 
             HStack(spacing: DS.Spacing.sm) {
@@ -109,7 +109,7 @@ struct AITabView: View {
                     isKeyVisible.toggle()
                 } label: {
                     Image(systemName: isKeyVisible ? "eye.slash" : "eye")
-                        .font(.caption)
+                        .font(.footnote)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(skin.resolvedTextSecondary)
@@ -139,7 +139,7 @@ struct AITabView: View {
 
                 if showSaved {
                     Label("Saved", systemImage: "checkmark.circle.fill")
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundStyle(skin.resolvedSuccessColor)
                         .transition(.opacity)
                 }
@@ -151,7 +151,7 @@ struct AITabView: View {
                     .fill(agentService.hasOwnAPIKey ? skin.resolvedSuccessColor : skin.resolvedWarningColor)
                     .frame(width: 8, height: 8)
                 Text(agentService.hasOwnAPIKey ? "API key configured" : "No API key")
-                    .font(.caption.weight(.medium))
+                    .font(.footnote.weight(.medium))
                     .foregroundStyle(skin.resolvedTextPrimary)
             }
         }
@@ -164,26 +164,26 @@ struct AITabView: View {
             if let status = agentService.rateLimitStatus {
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "chart.bar")
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundStyle(skin.accentColor)
                     Text(status)
-                        .font(.caption.weight(.medium))
+                        .font(.footnote.weight(.medium))
                         .foregroundStyle(skin.resolvedTextPrimary)
                 }
 
                 if let resetsAt = agentService.limitResetsAt {
                     Text("Resets \(resetsAt, style: .relative)")
-                        .font(.caption2)
+                        .font(.footnote)
                         .foregroundStyle(skin.resolvedTextSecondary)
                 }
             } else {
                 Text("Usage info will appear after your first request.")
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundStyle(skin.resolvedTextSecondary)
             }
 
             Text("Switch to \u{201C}Own API key\u{201D} mode for unlimited usage.")
-                .font(.caption2)
+                .font(.footnote)
                 .foregroundStyle(skin.resolvedTextTertiary)
         }
     }
@@ -193,35 +193,35 @@ struct AITabView: View {
     private var privacySection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             Text("The AI assistant converts your text descriptions into schedule recipes. Here's what is and isn't sent:")
-                .font(.caption)
+                .font(.footnote)
                 .foregroundStyle(skin.resolvedTextSecondary)
 
             VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                 Label("Your text prompt", systemImage: "arrow.up.circle")
-                    .font(.caption2)
+                    .font(.footnote)
                     .foregroundStyle(skin.resolvedTextSecondary)
                 Label("Recipe schema (how recipes work)", systemImage: "arrow.up.circle")
-                    .font(.caption2)
+                    .font(.footnote)
                     .foregroundStyle(skin.resolvedTextSecondary)
                 Label {
                     Text("Your calendar events").strikethrough()
                 } icon: {
                     Image(systemName: "xmark.circle")
                 }
-                .font(.caption2)
+                .font(.footnote)
                 .foregroundStyle(skin.resolvedTextTertiary)
                 Label {
                     Text("Your personal data").strikethrough()
                 } icon: {
                     Image(systemName: "xmark.circle")
                 }
-                .font(.caption2)
+                .font(.footnote)
                 .foregroundStyle(skin.resolvedTextTertiary)
             }
 
             if agentService.mode == .builtIn {
                 Text("In built-in mode, an anonymous device ID is sent for rate limiting. It is not linked to your identity.")
-                    .font(.caption2)
+                    .font(.footnote)
                     .foregroundStyle(skin.resolvedTextTertiary)
             }
         }

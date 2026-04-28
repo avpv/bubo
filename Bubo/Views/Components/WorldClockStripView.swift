@@ -228,7 +228,7 @@ private struct WorldClockPill: View {
     var body: some View {
         HStack(spacing: DS.Spacing.xs) {
             Text(city.city)
-                .font(.system(.caption2, design: skin.resolvedFontDesign, weight: skin.resolvedFontWeight))
+                .font(.system(.footnote, design: skin.resolvedFontDesign, weight: skin.resolvedFontWeight))
                 .foregroundStyle(skin.resolvedTextSecondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -241,12 +241,12 @@ private struct WorldClockPill: View {
             }
 
             Text(timeString)
-                .font(.system(.caption, design: .monospaced, weight: .semibold))
+                .font(.system(.footnote, design: .monospaced, weight: .semibold))
                 .foregroundStyle(skin.resolvedTextPrimary)
 
             if !offsetLabel.isEmpty {
                 Text(offsetLabel)
-                    .font(.system(.caption2, design: .monospaced, weight: skin.resolvedFontWeight))
+                    .font(.system(.footnote, design: .monospaced, weight: skin.resolvedFontWeight))
                     .foregroundStyle(skin.resolvedTextTertiary)
             }
         }

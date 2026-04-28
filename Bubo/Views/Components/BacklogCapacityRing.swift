@@ -206,12 +206,12 @@ struct BacklogCapacityPopover: View {
             // so nobody thinks they're tweaking a backlog-only knob.
             VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                 Text("Workday")
-                    .font(.caption.weight(.semibold))
+                    .font(.footnote.weight(.semibold))
                     .foregroundStyle(skin.resolvedTextSecondary)
 
                 HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.sm) {
                     Text("Hours")
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundStyle(skin.resolvedTextSecondary)
                         .frame(width: 60, alignment: .leading)
                     Picker("Start", selection: $service.workingHoursStart) {
@@ -236,13 +236,13 @@ struct BacklogCapacityPopover: View {
 
                 VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                     Text("Days")
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundStyle(skin.resolvedTextSecondary)
                     WorkingDaysPicker(selection: $service.workingDays)
                 }
 
                 Text("Applies to all planning — also in Settings › Optimizer.")
-                    .font(.caption2)
+                    .font(.footnote)
                     .foregroundStyle(skin.resolvedTextTertiary)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, DS.Spacing.xxs)
@@ -256,11 +256,11 @@ struct BacklogCapacityPopover: View {
     private func capacityRow(label: String, value: String) -> some View {
         HStack {
             Text(label)
-                .font(.caption)
+                .font(.footnote)
                 .foregroundStyle(skin.resolvedTextSecondary)
             Spacer(minLength: DS.Spacing.sm)
             Text(value)
-                .font(.caption.monospacedDigit())
+                .font(.footnote.monospacedDigit())
                 .foregroundStyle(skin.resolvedTextPrimary)
         }
     }
@@ -306,7 +306,7 @@ struct BacklogCapacityLabel: View {
             // assistive-tech path already had.
             let verbose = Self.accessibilityLabel(for: forecast, pendingMinutes: pendingMinutes)
             Text(Self.label(for: forecast))
-                .font(.caption2.weight(.medium).monospacedDigit())
+                .font(.footnote.weight(.medium).monospacedDigit())
                 .foregroundStyle(skin.resolvedTextSecondary)
                 .contentTransition(.numericText())
                 .help(verbose)

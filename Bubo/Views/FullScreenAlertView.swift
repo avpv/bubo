@@ -52,34 +52,53 @@ struct FullScreenAlertView: View {
 
                 bellIcon
 
-                // HIG: Use semantic text styles that scale with Dynamic Type
+                // HIG: Use semantic text styles that scale with Dynamic Type.
+                // Hero `display` step from the four-step ramp — fullscreen
+                // alert is the only surface licensed to use it.
                 Text(headerText(secondsRemaining))
-                    .font(.system(.largeTitle, design: skin.resolvedFontDesign, weight: skin.resolvedHeadlineFontWeight))
+                    .font(DS.Typography.display(skin: skin))
                     .foregroundStyle(DS.Colors.onOverlay)
 
-                // Live countdown timer
+                // Live countdown timer.
+                //
+                // Birman: «срочность — это не только цвет». Weight ramps from
+                // `.regular` (calm, > 10 min) → `.medium` → `.semibold` (5 min
+                // threshold) → `.bold` → `.heavy` (last minute). The user reads
+                // urgency on a second channel that survives Reduce Motion +
+                // Increased Contrast, where the red is desaturated and the
+                // animation is stripped.
+                //
+                // Face: SF Pro Rounded with `monospacedDigit()` instead of the
+                // monospaced design — the friendly Clock / Fitness countdown
+                // face, but digits stay equal width so 1-Hz updates don't
+                // shimmy. The weight transition is cross-faded.
                 Text(countdownText(secondsRemaining))
-                    .font(.system(.largeTitle, design: .monospaced, weight: .heavy))
+                    .font(DS.Typography.heroCountdown(secondsRemaining: secondsRemaining))
                     .scaleEffect(1.5)
                     .foregroundStyle(countdownDisplayColor(secondsRemaining))
                     .shadow(color: countdownDisplayColor(secondsRemaining).opacity(0.5), radius: DS.Shadows.buttonRadius)
                     .contentTransition(.numericText())
                     .motionAwareAnimation(.linear(duration: 0.3), value: secondsRemaining, reduceMotion: reduceMotion)
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.4),
+                               value: DS.Typography.countdownWeight(for: secondsRemaining))
 
+                // Event title sits on the `headline` step (`.title3`) of the
+                // four-step ramp — title2 / title were extra rungs that made
+                // the alert read as «six sizes shouting at me».
                 Text(event.title)
-                    .font(.system(.title, design: skin.resolvedFontDesign, weight: skin.resolvedHeadlineFontWeight))
+                    .font(DS.Typography.headline(skin: skin))
                     .foregroundStyle(DS.Colors.onOverlay)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, DS.Alert.titlePadding)
 
                 HStack(spacing: DS.Spacing.xl) {
                     Label(event.formattedTimeRange, systemImage: "clock.fill")
-                        .font(.title2)
+                        .font(DS.Typography.body(skin: skin))
                         .foregroundStyle(DS.Colors.onOverlay.opacity(0.9))
 
                     if let location = event.location, !location.isEmpty {
                         Label(location, systemImage: "location.fill")
-                            .font(.title2)
+                            .font(DS.Typography.body(skin: skin))
                             .foregroundStyle(DS.Colors.onOverlay.opacity(0.9))
                     }
                 }
@@ -98,7 +117,7 @@ struct FullScreenAlertView: View {
                                 onDismiss()
                             } label: {
                                 Label("Join \(serviceName)", systemImage: "video.fill")
-                                    .font(.system(.title2, design: skin.resolvedFontDesign, weight: skin.resolvedHeadlineFontWeight))
+                                    .font(DS.Typography.headline(skin: skin))
                                     .foregroundStyle(DS.contrastingForeground(for: skinAccent))
                                     .padding(.horizontal, DS.Alert.joinButtonPadding)
                                     .padding(.vertical, DS.Spacing.lg)
@@ -132,7 +151,7 @@ struct FullScreenAlertView: View {
                             onDismiss()
                         }) {
                             Text("Dismiss")
-                                .font(.system(.title2, design: skin.resolvedFontDesign, weight: skin.resolvedHeadlineFontWeight))
+                                .font(DS.Typography.headline(skin: skin))
                                 .foregroundStyle(dismissHovered ? skinAccent : DS.Colors.overlayBackground)
                                 .padding(.horizontal, DS.Alert.dismissButtonPadding)
                                 .padding(.vertical, DS.Spacing.lg)
@@ -158,7 +177,7 @@ struct FullScreenAlertView: View {
                     if !adaptiveSnoozeOptions(secondsRemaining).isEmpty {
                         HStack(spacing: DS.Spacing.md) {
                             Text("Snooze for")
-                                .font(.system(.callout, design: skin.resolvedFontDesign, weight: .medium))
+                                .font(DS.Typography.body(skin: skin, weight: .medium))
                                 .foregroundStyle(DS.Colors.onOverlay.opacity(DS.Opacity.tertiaryText))
 
                             ForEach(adaptiveSnoozeOptions(secondsRemaining), id: \.self) { minutes in
@@ -167,7 +186,7 @@ struct FullScreenAlertView: View {
                                     onSnooze(minutes)
                                 } label: {
                                     Text(DS.formatMinutes(minutes))
-                                        .font(.system(.callout, design: skin.resolvedFontDesign, weight: skin.resolvedFontWeight))
+                                        .font(DS.Typography.body(skin: skin))
                                         .foregroundStyle(DS.Colors.onOverlay)
                                         .padding(.horizontal, DS.Spacing.xl)
                                         .padding(.vertical, DS.Spacing.sm)
@@ -190,7 +209,7 @@ struct FullScreenAlertView: View {
                 }
 
                 Text(event.meetingLink != nil ? "Enter to join \u{00B7} Esc to dismiss" : "Press Enter or Esc to dismiss")
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundStyle(DS.Colors.onOverlay.opacity(DS.Opacity.tertiaryText))
                     .accessibilityHidden(true)
 

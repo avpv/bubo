@@ -142,7 +142,7 @@ struct RecurrencePickerView: View {
             // Summary
             if let built = buildStandardRule(freq) {
                 Label(built.displayText, systemImage: "repeat")
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundStyle(skin.resolvedTextSecondary)
             }
         }
@@ -277,7 +277,7 @@ private struct WeekdayChip: View {
             action()
         } label: {
             Text(day.shortName)
-                .font(.caption2)
+                .font(.footnote)
                 .fontWeight(.medium)
                 .padding(.horizontal, DS.Spacing.sm)
                 .padding(.vertical, DS.Spacing.xs)

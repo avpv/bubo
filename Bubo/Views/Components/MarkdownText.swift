@@ -77,7 +77,7 @@ struct MarkdownText: View {
 
         case .codeBlock(let code, _):
             Text(code)
-                .font(.system(.caption, design: .monospaced))
+                .font(.system(.footnote, design: .monospaced))
                 .padding(DS.Spacing.md)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(skin.resolvedHoverFill)
@@ -133,7 +133,7 @@ struct MarkdownText: View {
             GridRow {
                 ForEach(0..<columnCount, id: \.self) { col in
                     Text(inlineMarkdown(header[col]))
-                        .font(.caption)
+                        .font(.footnote)
                         .fontWeight(skin.resolvedHeadlineFontWeight)
                         .frame(maxWidth: .infinity, alignment: gridAlignment(alignments, col))
                 }
@@ -147,7 +147,7 @@ struct MarkdownText: View {
                     ForEach(0..<columnCount, id: \.self) { col in
                         let cell = col < rows[rowIdx].count ? rows[rowIdx][col] : ""
                         Text(inlineMarkdown(cell))
-                            .font(.caption)
+                            .font(.footnote)
                             .frame(maxWidth: .infinity, alignment: gridAlignment(alignments, col))
                     }
                 }
