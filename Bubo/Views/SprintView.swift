@@ -473,15 +473,13 @@ struct SprintView: View {
             ScrollView {
                 VStack(spacing: DS.Spacing.xs) {
                     ForEach(Array(visibleTasks.enumerated()), id: \.element.id) { index, task in
-                        // Первая строка в Sprint mode получает «now playing»
-                        // полосу — визуальный ответ на «с чего начать?». В
-                        // `.all` строки равноценны, метка не появляется.
                         // Hot-key digit передаётся первым maxSprintTasks
                         // строкам в Sprint mode — checkbox tooltip учит
-                        // «press N to complete» при наведении.
+                        // «press N to complete» при наведении. Никаких
+                        // дополнительных «primary»-атрибутов: все строки
+                        // равноценны, порядок задаёт smart-sort.
                         row(
                             for: task,
-                            isPrimary: mode == .sprint && index == 0,
                             sprintHotKey: (mode == .sprint && index < Self.maxSprintTasks) ? index + 1 : nil
                         )
                     }
@@ -521,7 +519,7 @@ struct SprintView: View {
 
     /// Hidden surface that registers number-key shortcuts for completing
     /// the first N visible Sprint tasks. Pressing «1» in Sprint mode
-    /// completes the primary row, «2» the second, etc. — same idea Things
+    /// completes the first row, «2» the second, etc. — same idea Things
     /// and Linear use for keyboard-first task completion.
     ///
     /// Gated on `isInputFocused`: when the add-task field is active, digit
@@ -559,71 +557,44 @@ struct SprintView: View {
 
     // MARK: - Task row
 
+    /// Builds one task row for either Sprint or All mode. Все строки
+    /// равноценны: «primary»-понятия больше нет, никакого визуального
+    /// выделения первой строки. Порядок диктует smart-sort (Sprint) или
+    /// пользовательский drag (All), и этого достаточно — глаз и так читает
+    /// сверху вниз.
     @ViewBuilder
-    private func row(for task: BacklogTask, isPrimary: Bool, sprintHotKey: Int?) -> some View {
-        HStack(spacing: 0) {
-            // Sprint-mode rows get a «now playing» gutter on the left:
-            // accent bar on the primary (first) row, transparent reservation
-            // on the rest so the row content stays aligned. `.all` mode skips
-            // the gutter entirely — нет primary, нет смысла резервировать
-            // место под пустую колонку.
-            if mode == .sprint {
-                Rectangle()
-                    .fill(isPrimary ? skin.accentColor : Color.clear)
-                    .frame(width: 3)
-                    .padding(.vertical, DS.Spacing.xs)
-                    .clipShape(RoundedRectangle(cornerRadius: 1.5))
-                    .padding(.trailing, DS.Spacing.xs)
-                    .accessibilityHidden(!isPrimary)
-                    .accessibilityLabel(isPrimary ? "Up next" : "")
-            }
-
-            // `.all` mode wires the full reorder/drag affordances so the
-            // fullscreen surface behaves like an expanded BacklogView — same
-            // hover chevrons, same drag-to-reorder, same context menu. Sprint
-            // mode keeps the read-only calm: machine curates the order, user
-            // can't fight it row by row.
-            let isAllMode = mode == .all
-            BacklogTaskRow(
-                task: task,
-                isUrgent: BacklogLogic.isUrgent(task),
-                canMoveUp: isAllMode ? canMoveUp(task) : true,
-                canMoveDown: isAllMode ? canMoveDown(task) : true,
-                isSprintMode: mode == .sprint,
-                onComplete: { complete(task) },
-                onEdit: { onEditTask(task) },
-                onDelete: { delete(task) },
-                onFreeze: { freeze(task) },
-                onReorderDrop: isAllMode ? { dropped in
-                    handleReorderDrop(dropped: dropped, targetId: task.id)
-                } : { _ in },
-                onMoveUp: isAllMode ? { moveTask(task, by: -1) } : {},
-                onMoveDown: isAllMode ? { moveTask(task, by: +1) } : {},
-                onMoveToTop: isAllMode ? { moveTaskToEdge(task, toTop: true) } : {},
-                onMoveToBottom: isAllMode ? { moveTaskToEdge(task, toTop: false) } : {},
-                isFocused: focusedTaskId == task.id,
-                onFocusPrev: { focusRow(offsetFrom: task.id, by: -1) },
-                onFocusNext: { focusRow(offsetFrom: task.id, by: +1) },
-                sprintHotKey: sprintHotKey
-            )
-            // Primary task in Sprint mode lives on a different Z-layer:
-            // 2 % scale + soft shadow lift it visually above the rest, in the
-            // same way the Tasks-block chrome lifts above the popover. Static
-            // — no animation knob — because primary status follows the data
-            // (top of `visibleTasks`), not a discrete user action. When #1
-            // gets completed and #2 promotes, the existing complete-haptic
-            // is the single tactile signal; doubling it on promotion would
-            // give a double-tap sensation for a single user action.
-            .scaleEffect(isPrimary ? 1.02 : 1.0)
-            .shadow(
-                color: skin.resolvedShadowColor,
-                radius: isPrimary ? 6 : 0,
-                y: isPrimary ? 3 : 0
-            )
-            .focusable()
-            .focused($focusedTaskId, equals: task.id)
-            .focusEffectDisabled()
-        }
+    private func row(for task: BacklogTask, sprintHotKey: Int?) -> some View {
+        // `.all` mode wires the full reorder/drag affordances so the
+        // fullscreen surface behaves like an expanded BacklogView — same
+        // hover chevrons, same drag-to-reorder, same context menu. Sprint
+        // mode keeps the read-only calm: machine curates the order, user
+        // can't fight it row by row.
+        let isAllMode = mode == .all
+        BacklogTaskRow(
+            task: task,
+            isUrgent: BacklogLogic.isUrgent(task),
+            canMoveUp: isAllMode ? canMoveUp(task) : true,
+            canMoveDown: isAllMode ? canMoveDown(task) : true,
+            isSprintMode: mode == .sprint,
+            onComplete: { complete(task) },
+            onEdit: { onEditTask(task) },
+            onDelete: { delete(task) },
+            onFreeze: { freeze(task) },
+            onReorderDrop: isAllMode ? { dropped in
+                handleReorderDrop(dropped: dropped, targetId: task.id)
+            } : { _ in },
+            onMoveUp: isAllMode ? { moveTask(task, by: -1) } : {},
+            onMoveDown: isAllMode ? { moveTask(task, by: +1) } : {},
+            onMoveToTop: isAllMode ? { moveTaskToEdge(task, toTop: true) } : {},
+            onMoveToBottom: isAllMode ? { moveTaskToEdge(task, toTop: false) } : {},
+            isFocused: focusedTaskId == task.id,
+            onFocusPrev: { focusRow(offsetFrom: task.id, by: -1) },
+            onFocusNext: { focusRow(offsetFrom: task.id, by: +1) },
+            sprintHotKey: sprintHotKey
+        )
+        .focusable()
+        .focused($focusedTaskId, equals: task.id)
+        .focusEffectDisabled()
     }
 
     // MARK: - Tombstones
