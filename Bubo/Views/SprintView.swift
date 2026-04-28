@@ -585,11 +585,11 @@ struct SprintView: View {
 
     // MARK: - Add task field
 
-    /// Inline add-task field. Узкий клон того, что в inline BacklogView, без
-    /// ghost-preview (timeline здесь нет, предсказывать слот некуда), но
-    /// с тем же распознаванием duration в стиле «Write report 30m». Empty-state
-    /// раньше был тупиком — приходилось возвращаться в inline-карточку ради
-    /// добавления.
+    /// Inline add-task field. Mirror of BacklogView's, без ghost-preview
+    /// (timeline здесь нет, предсказывать слот некуда). Включает три
+    /// одинаковых с inline-версией affordances: syntax-teaching placeholder
+    /// в пустом состоянии, empty-state hint, focused-state shortcut hint —
+    /// чтобы карточка-fullscreen и inline-карточка обучали одинаково.
     private var addTaskField: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
             HStack(spacing: DS.Spacing.sm) {
@@ -597,7 +597,7 @@ struct SprintView: View {
                     .font(.caption)
                     .foregroundStyle(isInputFocused ? AnyShapeStyle(skin.accentColor) : AnyShapeStyle(.tertiary))
 
-                TextField("Add task\u{2026}", text: $newTaskTitle)
+                TextField(addTaskPlaceholder, text: $newTaskTitle)
                     .textFieldStyle(.plain)
                     .font(.callout)
                     .focused($isInputFocused)
@@ -628,11 +628,48 @@ struct SprintView: View {
                     .fill(skin.accentColor.opacity(isInputFocused ? DS.Opacity.lightFill : DS.Opacity.subtleFill))
             )
             .motionAwareAnimation(DS.Animation.quick, value: parsedNewTaskTitle.durationMinutes, reduceMotion: reduceMotion)
+
+            // Hint for new users — disappears once they add a task. Same
+            // copy as inline BacklogView so the empty-state lesson is
+            // identical across surfaces.
+            if activeTasks.isEmpty && !isInputFocused {
+                Text("Tasks you add here will be scheduled into free slots")
+                    .font(.caption2)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                    .transition(.opacity)
+            }
+
+            // Focused-state shortcut hint. HIG: discoverable shortcuts —
+            // surface the two keys that matter (submit + cancel) exactly
+            // while the field is active, then get out of the way. Birman:
+            // подсказка живёт в том же месте, что и поле.
+            if isInputFocused {
+                HStack(spacing: DS.Spacing.xs) {
+                    Text("\u{23CE} Add")
+                    Text("·").foregroundStyle(skin.resolvedTextTertiary.opacity(DS.Opacity.half))
+                    Text("\u{238B} Cancel")
+                    Spacer(minLength: 0)
+                }
+                .font(.caption2)
+                .foregroundStyle(skin.resolvedTextTertiary)
+                .transition(.opacity)
+                .accessibilityHidden(true)
+            }
         }
         // Match BacklogView's add-field padding so the field sits at the
         // same offset from the card edge as the inline version.
         .padding(.horizontal, DS.Spacing.sm)
         .padding(.vertical, DS.Spacing.sm)
+        .motionAwareAnimation(DS.Animation.quick, value: isInputFocused, reduceMotion: reduceMotion)
+    }
+
+    /// TextField placeholder. Teaching syntax when the backlog is empty
+    /// («try: Write report 30m»), compact «Add task…» otherwise. Identical
+    /// copy to inline BacklogView.
+    private var addTaskPlaceholder: String {
+        activeTasks.isEmpty
+            ? "Add task — try: Write report 30m"
+            : "Add task\u{2026}"
     }
 
     // MARK: - Reorder helpers
