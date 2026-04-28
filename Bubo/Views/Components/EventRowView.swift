@@ -46,16 +46,31 @@ struct EventRowView: View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
         let now = context.date
         HStack(alignment: .center, spacing: 0) {
-            // Urgency accent bar — color reflects time-to-start when no color tag is set
-            urgencyBar(now)
+            // Tappable body — wrapped in a Button so SwiftUI cleanly
+            // routes inner button taps (delete, reminder, join) to their
+            // own actions. A parent `.onTapGesture` collides with the
+            // hover-revealed minus button (taps fall through to "open
+            // details"); using BacklogTaskRow's plain-Button pattern
+            // avoids the gesture-priority issue entirely.
+            Button {
+                Haptics.tap()
+                onTap?(event)
+            } label: {
+                HStack(alignment: .center, spacing: 0) {
+                    // Urgency accent bar — color reflects time-to-start when no color tag is set
+                    urgencyBar(now)
 
-            // Time indicator
-            timeColumn(now)
+                    // Time indicator
+                    timeColumn(now)
 
-            // Event details
-            eventDetails
+                    // Event details
+                    eventDetails
 
-            Spacer(minLength: DS.Spacing.md)
+                    Spacer(minLength: DS.Spacing.md)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
 
             // Join meeting — always visible when meeting link exists
             if let meetingURL = event.meetingLink {
@@ -106,11 +121,6 @@ struct EventRowView: View {
                 .fill(skin.accentColor.opacity(isFreshlyCreated ? 0.20 : 0))
                 .animation(.easeInOut(duration: 0.6).repeatCount(3, autoreverses: true), value: isFreshlyCreated)
         )
-        .contentShape(Rectangle())
-        .onTapGesture {
-            Haptics.tap()
-            onTap?(event)
-        }
         .onHover { hovering in
             withAnimation(skin.resolvedMicroAnimation) {
                 isHovered = hovering
@@ -378,6 +388,10 @@ struct EventRowView: View {
             }
 
             if isLocal {
+                // Match BacklogTaskRow's xmark hover-affordance for a single
+                // delete language across the app — the prior filled-minus
+                // glyph also outweighed its peer icons (bell, chevron) and
+                // read as the row's primary action.
                 if event.isRecurring {
                     Menu {
                         Button("Delete This Event Only", role: .destructive) {
@@ -389,9 +403,8 @@ struct EventRowView: View {
                             triggerDeleteWithDisintegration { onDeleteSeries?(event) }
                         }
                     } label: {
-                        Image(systemName: "minus.circle.fill")
-                            .font(.system(size: DS.Size.iconLarge, weight: .medium))
-                            .symbolRenderingMode(.hierarchical)
+                        Image(systemName: "xmark")
+                            .font(.system(size: DS.Size.iconMedium, weight: .medium))
                             .foregroundStyle(skin.resolvedDestructiveColor)
                     }
                     .buttonStyle(.borderless)
@@ -404,9 +417,8 @@ struct EventRowView: View {
                         Haptics.impact()
                         triggerDeleteWithDisintegration { onDelete?(event) }
                     } label: {
-                        Image(systemName: "minus.circle.fill")
-                            .font(.system(size: DS.Size.iconLarge, weight: .medium))
-                            .symbolRenderingMode(.hierarchical)
+                        Image(systemName: "xmark")
+                            .font(.system(size: DS.Size.iconMedium, weight: .medium))
                             .foregroundStyle(skin.resolvedDestructiveColor)
                     }
                     .buttonStyle(.borderless)
