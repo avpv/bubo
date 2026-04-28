@@ -1,5 +1,4 @@
 import SwiftUI
-import UniformTypeIdentifiers
 #if canImport(AppKit)
 import AppKit
 #endif
@@ -189,33 +188,15 @@ struct BacklogTaskRow: View {
         }
         // Drag source = the entire row. Apple Reminders / Things pattern:
         // press-and-hold lifts the row, then drag. No visible handle —
-        // `.onDrag` on macOS already gates on press-and-hold, and the cursor
-        // turns into a grab on hover. Inner Buttons still take taps because
-        // they consume mouseDown without movement.
-        .onDrag {
-            // Tactile «pickup» click on Force Touch trackpads — fires on the
-            // exact moment the row enters drag state, syncing with the
-            // visual scale/shadow above. No-op on regular pointers.
-            Haptics.tap()
-            onDragStart()
-            let payload = BacklogTaskDrag(
-                taskId: task.id,
-                title: task.title,
-                durationMinutes: task.durationMinutes,
-                context: task.context
-            )
-            let provider = NSItemProvider()
-            if let data = try? JSONEncoder().encode(payload) {
-                provider.registerDataRepresentation(
-                    forTypeIdentifier: UTType.json.identifier,
-                    visibility: .ownProcess
-                ) { completion in
-                    completion(data, nil)
-                    return nil
-                }
-            }
-            return provider
-        } preview: {
+        // `.draggable` on macOS already gates on press-and-hold, and the
+        // cursor turns into a grab on hover. Inner Buttons still take taps
+        // because they consume mouseDown without movement.
+        //
+        // `.draggable` over the older `.onDrag` because the drop targets
+        // (`FreeSlotRow`, the reorder destination below) already speak
+        // Transferable via `dropDestination(for:)`. Same protocol on both
+        // ends means no NSItemProvider/UTType bridging in the middle.
+        .draggable(makeDragPayload()) {
             // Drag preview thumb — this is what the user actually «holds»
             // in their hand: the floating representation that follows the
             // cursor. It gets the scale + shadow lift (`DS.Physics.dragPreview*`)
@@ -317,6 +298,28 @@ struct BacklogTaskRow: View {
                 return .ignored
             }
         }
+    }
+
+    // MARK: - Drag payload
+
+    /// Build the typed payload for `.draggable`. Passing the call expression
+    /// (not a literal value) into `.draggable`'s `@autoclosure` parameter
+    /// means SwiftUI re-evaluates this each time the drag starts — the only
+    /// place we can hang the «pickup» haptic and the coordinator
+    /// notification so they fire on the actual drag, not on every body
+    /// re-render.
+    private func makeDragPayload() -> BacklogTaskDrag {
+        // Tactile «pickup» click on Force Touch trackpads — fires on the
+        // exact moment the row enters drag state, syncing with the visual
+        // dim above. No-op on regular pointers.
+        Haptics.tap()
+        onDragStart()
+        return BacklogTaskDrag(
+            taskId: task.id,
+            title: task.title,
+            durationMinutes: task.durationMinutes,
+            context: task.context
+        )
     }
 
     // MARK: - Row sub-views

@@ -52,13 +52,18 @@ final class BacklogInteractionCoordinator {
     var isDraggingTask: Bool { draggedTask != nil }
 
     /// Watchdog that ends the drag the moment the user releases the left
-    /// mouse button. Belt-and-braces backup for the SwiftUI drag-preview
-    /// lifecycle (`.onDrag preview: { ... .onDisappear { ... } }`) — on
-    /// macOS that callback doesn't reliably fire when the drag is cancelled
-    /// (cursor dropped outside any registered destination, Esc pressed mid-
-    /// drag). Without this watchdog, `draggedTask` stays non-nil after a
-    /// cancelled drag, so the timeline keeps showing the collapsed-events
-    /// header and free slots only — events look like they vanished.
+    /// mouse button. Defence-in-depth backup for the SwiftUI drag-preview
+    /// lifecycle (`.draggable(_:preview:) { ... .onDisappear { ... } }`),
+    /// which on macOS still has reports of not firing reliably when the
+    /// drag is cancelled (cursor dropped outside any registered
+    /// destination, Esc pressed mid-drag). Without this, `draggedTask` can
+    /// stay non-nil after a cancelled drag — the timeline then keeps
+    /// showing the collapsed-events header and free slots only, and the
+    /// events look like they vanished.
+    ///
+    /// Once the `.draggable` migration has soaked on real hardware and the
+    /// preview's `onDisappear` proves reliable, this watchdog can be
+    /// deleted — `endDrag()` from the preview lifecycle is enough.
     private var dragReleaseWatchdog: Task<Void, Never>?
 
     /// Wrapping the mutation in `withAnimation` means every subscriber
