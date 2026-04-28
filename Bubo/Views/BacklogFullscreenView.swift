@@ -17,7 +17,7 @@ import SwiftUI
 ///   Отдельных «режимов» нет — это просто та же карточка задач, что и
 ///   на главной, но во весь popover. Бирман: одно действие — одна форма;
 ///   режим-переключатель внутри карточки только запутывал.
-/// - Schedule, urgent filter, smart-sort, drag-reorder, keyboard reorder —
+/// - Urgent filter, smart-sort, drag-reorder, keyboard reorder —
 ///   всё, что есть в inline BacklogView, доступно и здесь.
 /// - The list itself stays inline-editable: complete with a tap, edit by
 ///   pushing the same `EditTaskView` the backlog uses, undo via toast.
@@ -37,11 +37,6 @@ struct BacklogFullscreenView: View {
     var reminderService: ReminderService
     var onExit: () -> Void
     var onEditTask: (BacklogTask) -> Void
-    /// Fired when the «Schedule» pill in the block header is tapped —
-    /// same role the pill plays inside `BacklogView`. The parent opens the
-    /// command palette (`PaletteContext`) so the optimizer can plan the
-    /// queue without leaving fullscreen.
-    var onOpenPalette: (() -> Void)? = nil
     var onUndoableAction: ((_ message: String, _ undo: @escaping () -> Void) -> Void)? = nil
 
     @Environment(\.activeSkin) private var skin
@@ -263,10 +258,6 @@ struct BacklogFullscreenView: View {
             }
 
             Spacer(minLength: 0)
-
-            if !activeTasks.isEmpty, onOpenPalette != nil {
-                scheduleButton
-            }
         }
         .padding(.horizontal, DS.Spacing.sm)
         .padding(.vertical, DS.Spacing.sm)
@@ -305,39 +296,6 @@ struct BacklogFullscreenView: View {
                 }
             }
         }
-    }
-
-    /// Schedule pill — copy of BacklogView's `scheduleButton`. Открывает
-    /// command palette: пользователь не уходит из fullscreen-Backlog'а, чтобы
-    /// запланировать очередь — Бирман: «не отрывай человека от текущего
-    /// объекта».
-    private var scheduleButton: some View {
-        // Зеркалирует BacklogView.scheduleButton: иконка вместо «Schedule»,
-        // та же accent-капсула. Хедер так же узок, как у inline-карточки,
-        // текстовая pill там обрезалась.
-        Button {
-            onOpenPalette?()
-        } label: {
-            Image(systemName: "calendar.badge.plus")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(skin.accentColor)
-                .frame(width: DS.Size.iconSmall, height: DS.Size.iconSmall)
-                .padding(.horizontal, DS.Spacing.xs)
-                .padding(.vertical, DS.Spacing.xxs)
-                .background {
-                    Capsule().fill(skin.accentColor.opacity(DS.Opacity.lightFill))
-                }
-                .overlay {
-                    Capsule().strokeBorder(
-                        skin.accentColor.opacity(DS.Opacity.subtleBorder),
-                        lineWidth: DS.Border.thin
-                    )
-                }
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .help("Open scheduler")
-        .accessibilityLabel("Open scheduler")
     }
 
     /// Red «N urgent» pill — toggles the urgent-only filter. Filled

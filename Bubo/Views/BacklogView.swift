@@ -19,7 +19,6 @@ struct BacklogView: View {
     var backlogService: BacklogService
     var optimizerService: OptimizerService
     var reminderService: ReminderService
-    var onScheduleTasks: () -> Void
     var onDeleteTask: ((BacklogTask) -> Void)?
     /// Fired when the user asks to edit a task. The parent owns navigation
     /// state and pushes the editor onto the popover stack — same pattern
@@ -71,9 +70,6 @@ struct BacklogView: View {
     /// for the fully-expanded state so large screens are not forced into a
     /// 480pt cap. Zero until the first layout pass.
     @State private var measuredHostHeight: CGFloat = 0
-    /// Hover state for the Schedule pill — HIG: primary actions should read as
-    /// buttons, so a subtle capsule фон появляется на наведении.
-    @State private var isScheduleHovering: Bool = false
     /// Textual ghost — complements the ghost block on the timeline so
     /// assistive technologies and compact layouts still get "Today 14:00".
     /// The label itself lives in `slotPreviewCache`; `ghostPreviewText`
@@ -485,7 +481,6 @@ struct BacklogView: View {
                 // Overflow menu holds smart-sort. HIG: secondary actions
                 // without a clear glyph belong in a menu with labels.
                 headerOverflowMenu
-                scheduleButton
             }
         }
         .padding(.horizontal, DS.Spacing.sm)
@@ -666,48 +661,6 @@ struct BacklogView: View {
         let workload = pendingWorkloadMinutes
         let remaining = remainingWorkdayMinutes
         return "Backlog: \(DS.formatMinutes(workload)); remaining today: \(DS.formatMinutes(remaining))"
-    }
-
-    /// HIG: главное действие должно читаться как кнопка и в покое, не только
-    /// на hover. Subtle fill + hairline border = affordance без тяжёлой
-    /// заливки; оба канала усиливаются на hover, так что жест наведения
-    /// остаётся информативным.
-    private var scheduleButton: some View {
-        // Иконка вместо текстовой pill: на 360pt popover'е «Schedule»
-        // обрезалась в «Sche…» — это failure layout. SF Symbol несёт тот же
-        // смысл, влезает в любую ширину и сохраняет accent-капсулу как
-        // affordance «это primary action». Tooltip раскрывает значение для
-        // тех, кто видит экран впервые.
-        Button {
-            onScheduleTasks()
-        } label: {
-            Image(systemName: "calendar.badge.plus")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(skin.accentColor)
-                .frame(width: DS.Size.iconSmall, height: DS.Size.iconSmall)
-                .padding(.horizontal, DS.Spacing.xs)
-                .padding(.vertical, DS.Spacing.xxs)
-                .background {
-                    Capsule()
-                        .fill(skin.accentColor.opacity(isScheduleHovering ? 0.16 : DS.Opacity.lightFill))
-                }
-                .overlay {
-                    Capsule()
-                        .strokeBorder(
-                            skin.accentColor.opacity(isScheduleHovering ? DS.Opacity.softAccent : DS.Opacity.subtleBorder),
-                            lineWidth: DS.Border.thin
-                        )
-                }
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .help("Schedule tasks into your day")
-        .accessibilityLabel("Schedule tasks")
-        .onHover { hovering in
-            withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
-                isScheduleHovering = hovering
-            }
-        }
     }
 
     // MARK: - Task List
