@@ -204,6 +204,56 @@ extension View {
     }
 }
 
+// MARK: - Tasks-block chrome (drag-safe platter)
+//
+// Visual identity for the Tasks card surface used in two places:
+//   • Inline on the main view, wrapping `BacklogView`.
+//   • Fullscreen inside `SprintView`, wrapping the same content distended
+//     to popover height.
+// One source of truth keeps the block recognizably the same object across
+// collapsed and expanded states — Бирман: «один объект — одна форма».
+//
+// Why not `.skinPlatterDepth`? That modifier `clipShape`s the content
+// itself, and on macOS the CALayer mask blocks NSDrag's hit testing —
+// any `.draggable` row underneath would never initiate a drag session.
+// We move the rounded clip onto the BACKGROUND layer so content stays
+// unclipped and fully interactive.
+
+extension View {
+    /// Drag-safe Tasks-block chrome: same rounded platter background, glass
+    /// border and ambient shadows as `skinPlatterDepth`, but the rounded clip
+    /// lives on the background layer so `.draggable` rows underneath remain
+    /// hit-testable. Used by both `BacklogView` (inline card) and
+    /// `SprintView` (fullscreen block).
+    func skinTasksBlockChrome(_ skin: SkinDefinition) -> some View {
+        self
+            .background(
+                SkinPlatterBackground(skin: skin)
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
+                    .shadow(color: skin.resolvedShadowColor, radius: skin.shadowRadius, y: skin.shadowY)
+                    .shadow(color: skin.resolvedShadowColor, radius: 2, y: 1)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [
+                                .white.opacity(skin.platterBorderOpacity * 1.5),
+                                .white.opacity(skin.platterBorderOpacity * 0.1),
+                                .clear,
+                                .white.opacity(skin.platterBorderOpacity * 0.4)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: DS.Border.thin
+                    )
+                    .blendMode(.plusLighter)
+                    .allowsHitTesting(false)
+            )
+    }
+}
+
 // MARK: - Environment Key
 
 private struct ActiveSkinKey: EnvironmentKey {

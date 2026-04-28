@@ -190,9 +190,44 @@ enum DS {
         static let glowRadius: CGFloat = 20
         static let buttonRadius: CGFloat = 12
 
-        // Toast
-        static let toastRadius: CGFloat = 12
-        static let toastY: CGFloat = 6
+        // Toast — sits between the Tasks-block chrome (`shadowRadius=16`,
+        // `shadowY=8`) and the full-screen alert (`glowRadius=20`).
+        // 18/9 reads as «slightly above the card» without colliding with
+        // the alert depth. Earlier 20/10 made toast indistinguishable
+        // from a fullscreen alert in shadow alone.
+        static let toastRadius: CGFloat = 18
+        static let toastY: CGFloat = 9
+    }
+
+    // MARK: Physics
+    //
+    // Single source of truth for the «physical feedback» constants used
+    // across drag-pickup, drop-receive and press interactions in
+    // `BacklogTaskRow`, `FreeSlotRow` and `IconPressStyle`. Centralised
+    // so a designer dialing «all physical effects 30% softer» edits one
+    // file, not five.
+
+    enum Physics {
+        /// Drag-preview thumb — slight scale-up that reads as «lifted off
+        /// the page» in the floating thumb that follows the cursor. The
+        /// source row stays at 1.0 and only dims (`Opacity.tertiaryText`)
+        /// so we don't claim two contradictory states for one object.
+        static let dragPreviewScale: CGFloat = 1.04
+        static let dragPreviewShadowRadius: CGFloat = 14
+        static let dragPreviewShadowY: CGFloat = 6
+
+        /// Free-slot drop-target — soft shadow only, no scale. Border +
+        /// fill already convey «I'm receiving you»; adding a third
+        /// channel (scale) on top of those two pushed the slot into
+        /// over-stated territory and overlapped neighbouring rows
+        /// because `.scaleEffect` doesn't reflow layout.
+        static let dropTargetShadowRadius: CGFloat = 8
+        static let dropTargetShadowY: CGFloat = 3
+
+        /// Press-feedback scale for naked-glyph buttons (`IconPressStyle`).
+        /// 0.92 reads as a satisfying squish without becoming twitchy at
+        /// 60Hz refresh.
+        static let pressedIconScale: CGFloat = 0.92
     }
 
     // MARK: Animation
@@ -796,4 +831,51 @@ extension ButtonStyle where Self == ActionButtonStyle {
     static func action(role: ActionButtonRole = .primary, size: ActionButtonSize = .flexible) -> ActionButtonStyle {
         ActionButtonStyle(role: role, size: size)
     }
+}
+
+// MARK: - Icon Press Style
+//
+// `.buttonStyle(.plain)` strips macOS's default press feedback, which is fine
+// for chromeless icon buttons (row checkboxes, hover-revealed chevrons) but
+// loses the «press registered» physical cue. `IconPressStyle` is the same
+// chromeless surface plus a single moment of feedback: the icon squishes 8%
+// while the mouse is held, then springs back. No background, no shadow —
+// purpose-built for naked-glyph buttons that already live inside a row of
+// their own visual treatment.
+//
+// Pair with `Haptics.tap()` in the action closure for a coherent
+// visual + tactile «click» — see `BacklogTaskRow.checkbox`.
+struct IconPressStyle: ButtonStyle {
+    /// How far down the icon goes while held. Default uses the shared
+    /// `DS.Physics.pressedIconScale` token so all chromeless buttons in
+    /// the app squish the same amount.
+    var pressedScale: CGFloat = DS.Physics.pressedIconScale
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Asymmetric easing — physical fingers accelerate INTO a press
+    /// (`.easeIn`) and the spring decelerates OUT (`.easeOut`). A single
+    /// `.easeOut` for both directions reads «mechanical»; the asymmetric
+    /// pair feels «soft». Evaluation time: SwiftUI sees the new value of
+    /// `configuration.isPressed`, so true-direction = press (easeIn),
+    /// false-direction = release (easeOut).
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed && !reduceMotion ? pressedScale : 1.0)
+            .animation(
+                reduceMotion
+                    ? nil
+                    : (configuration.isPressed
+                        ? .easeIn(duration: 0.10)
+                        : .easeOut(duration: 0.18)),
+                value: configuration.isPressed
+            )
+    }
+}
+
+extension ButtonStyle where Self == IconPressStyle {
+    /// Chromeless icon button with a press-scale feedback. Replaces
+    /// `.plain` on naked-glyph triggers (checkbox, hover chevrons) where the
+    /// click should feel physical without growing chrome.
+    static var iconPress: IconPressStyle { IconPressStyle() }
 }

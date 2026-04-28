@@ -131,6 +131,20 @@ struct FreeSlotRow: View {
         .frame(minHeight: DS.Size.eventRowMinHeight)
         .padding(.vertical, DS.Spacing.xxs)
         .padding(.horizontal, DS.Spacing.sm)
+        // Receive feedback for an in-flight drag — the slot lifts via a
+        // soft drop-target shadow when a draggable hovers over it. Border
+        // + fill already convey colour identity («I'm receiving»);
+        // shadow adds the «I'm above the row» depth. Earlier this had a
+        // 1.02 scaleEffect too, but `.scaleEffect` doesn't reflow layout
+        // — the targeted slot would visually overlap its neighbours,
+        // and four channels (border, fill, scale, shadow) for one state
+        // pushed the receive feedback into over-stated territory.
+        .shadow(
+            color: skin.resolvedShadowColor,
+            radius: isDropTargeted ? DS.Physics.dropTargetShadowRadius : 0,
+            y: isDropTargeted ? DS.Physics.dropTargetShadowY : 0
+        )
+        .animation(skin.resolvedMicroAnimation, value: isDropTargeted)
         // Level 4 (final): flat row inside the timeline platter card —
         // same visual framework as EventRowView. The idle dashed pill
         // border is gone: the dashed vertical bar on the left + the
@@ -148,6 +162,12 @@ struct FreeSlotRow: View {
         .contentShape(Rectangle())
         .dropDestination(for: BacklogTaskDrag.self) { items, _ in
             guard let drag = items.first, onTaskDropped != nil else { return false }
+            // Snap-tick on a successful drop — `.alignment` is the macOS
+            // haptic pattern designed exactly for «cosied into a slot»
+            // moments (Apple uses it for guides snapping in Keynote /
+            // alignment in Final Cut). No-op without a Force Touch
+            // trackpad.
+            Haptics.alignment()
             onTaskDropped?(drag)
             return true
         } isTargeted: { targeted in

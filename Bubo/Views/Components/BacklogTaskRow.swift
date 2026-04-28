@@ -147,7 +147,18 @@ struct BacklogTaskRow: View {
         .padding(.horizontal, DS.Spacing.xs)
         .frame(minHeight: isSprintMode ? BacklogView.compactRowHeight + 8 : BacklogView.compactRowHeight)
         .contentShape(Rectangle())
+        // Drag pickup feedback (source side): the source row ONLY dims
+        // while in flight — it stays in place as a ghost so the user sees
+        // «this is where it came from». Scale + shadow live on the drag
+        // preview thumb (`.onDrag preview:` below) where they belong:
+        // the thumb is the lifted, in-flight representation. Two visual
+        // states for one object would conflict — dim says «I'm here in
+        // memory», thumb says «I'm in your hand».
         .opacity(isDragging ? DS.Opacity.tertiaryText : 1)
+        .animation(
+            DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion),
+            value: isDragging
+        )
         .background(rowBackground)
         .overlay { focusRing }
         .onHover { hovering in
@@ -162,6 +173,10 @@ struct BacklogTaskRow: View {
         // turns into a grab on hover. Inner Buttons still take taps because
         // they consume mouseDown without movement.
         .onDrag {
+            // Tactile «pickup» click on Force Touch trackpads — fires on the
+            // exact moment the row enters drag state, syncing with the
+            // visual scale/shadow above. No-op on regular pointers.
+            Haptics.tap()
             onDragStart()
             let payload = BacklogTaskDrag(
                 taskId: task.id,
@@ -181,6 +196,11 @@ struct BacklogTaskRow: View {
             }
             return provider
         } preview: {
+            // Drag preview thumb — this is what the user actually «holds»
+            // in their hand: the floating representation that follows the
+            // cursor. It gets the scale + shadow lift (`DS.Physics.dragPreview*`)
+            // because IT is the lifted object. Source row stays at 1.0 and
+            // dims (above) — two roles, two visual states, no conflict.
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: "calendar.badge.plus")
                     .font(.caption)
@@ -193,10 +213,22 @@ struct BacklogTaskRow: View {
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, DS.Spacing.xs)
             .background(skin.resolvedButtonMaterial, in: Capsule())
+            .scaleEffect(DS.Physics.dragPreviewScale)
+            .shadow(
+                color: skin.resolvedShadowColor,
+                radius: DS.Physics.dragPreviewShadowRadius,
+                y: DS.Physics.dragPreviewShadowY
+            )
             .onDisappear { onDragEnd() }
         }
         .dropDestination(for: BacklogTaskDrag.self) { items, _ in
             guard let dropped = items.first, dropped.taskId != task.id else { return false }
+            // Same snap-tick as `FreeSlotRow` drop — drag-to-reorder and
+            // drag-onto-slot are physically the same «object cosied into a
+            // place» moment, so they should feel identical on Force Touch.
+            // Asymmetric haptics for symmetric gestures was a known
+            // imbalance after the first physical-feedback pass.
+            Haptics.alignment()
             onReorderDrop(dropped)
             return true
         } isTargeted: { targeted in
@@ -272,15 +304,21 @@ struct BacklogTaskRow: View {
     /// Checkbox — complete on tap.
     /// HIG: controls should be at least 24pt on a side; the ~17pt glyph
     /// gets wrapped in a 24pt hit-area so the tap target is forgiving.
+    /// Squishes 8% on press (`IconPressStyle`) plus a tactile click on
+    /// Force Touch trackpads, so the «I marked it done» moment registers
+    /// before the row's removal animation even starts.
     private var checkbox: some View {
-        Button(action: onComplete) {
+        Button {
+            Haptics.tap()
+            onComplete()
+        } label: {
             Image(systemName: "circle")
                 .font(.callout)
                 .foregroundStyle(isUrgent ? skin.resolvedDestructiveColor : skin.resolvedTextSecondary)
                 .frame(width: 24, height: 24)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.iconPress)
         // When SprintView passes a hot-key digit, append it to the tooltip
         // so users discover «press N to complete» on first hover instead of
         // having to read the docs. Plain «Mark complete» otherwise.
