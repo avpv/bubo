@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import SwiftUI
 import UniformTypeIdentifiers
@@ -50,6 +51,21 @@ final class BacklogInteractionCoordinator {
 
     var isDraggingTask: Bool { draggedTask != nil }
 
+    /// Watchdog that ends the drag the moment the user releases the left
+    /// mouse button. Defence-in-depth backup for the SwiftUI drag-preview
+    /// lifecycle (`.draggable(_:preview:) { ... .onDisappear { ... } }`),
+    /// which on macOS still has reports of not firing reliably when the
+    /// drag is cancelled (cursor dropped outside any registered
+    /// destination, Esc pressed mid-drag). Without this, `draggedTask` can
+    /// stay non-nil after a cancelled drag — the timeline then keeps
+    /// showing the collapsed-events header and free slots only, and the
+    /// events look like they vanished.
+    ///
+    /// Once the `.draggable` migration has soaked on real hardware and the
+    /// preview's `onDisappear` proves reliable, this watchdog can be
+    /// deleted — `endDrag()` from the preview lifecycle is enough.
+    private var dragReleaseWatchdog: Task<Void, Never>?
+
     /// Wrapping the mutation in `withAnimation` means every subscriber
     /// (BacklogView's expansion, MenuBarView's collapsed-events header,
     /// FreeSlotRow's drop-awaiting border, any future consumers) animates
@@ -59,9 +75,12 @@ final class BacklogInteractionCoordinator {
         withAnimation(DS.Animation.standard) {
             draggedTask = payload
         }
+        startDragReleaseWatchdog()
     }
 
     func endDrag() {
+        dragReleaseWatchdog?.cancel()
+        dragReleaseWatchdog = nil
         withAnimation(DS.Animation.standard) {
             draggedTask = nil
             // Drag-initiated ghost (from FreeSlotRow's drop-target hover)
@@ -71,6 +90,30 @@ final class BacklogInteractionCoordinator {
             // a slot as "filled" after the fact.
             ghostSlot = nil
             ghostTitle = nil
+        }
+    }
+
+    /// Poll the global mouse-button state until the left button is no
+    /// longer held, then finalise the drag. `NSEvent.pressedMouseButtons`
+    /// is a real-time query that works during AppKit's modal drag loop,
+    /// where regular SwiftUI/NSEvent monitor callbacks are unreliable.
+    /// 80 ms is below the perceptual threshold for "the timeline froze"
+    /// while staying cheap enough not to register on the runloop.
+    private func startDragReleaseWatchdog() {
+        dragReleaseWatchdog?.cancel()
+        dragReleaseWatchdog = Task { @MainActor [weak self] in
+            let pollInterval: UInt64 = 80_000_000 // 80 ms
+            // One tick of grace so we don't sample before AppKit has
+            // committed the mouse button into "drag in progress" state.
+            try? await Task.sleep(nanoseconds: pollInterval)
+            while !Task.isCancelled {
+                guard let self, self.draggedTask != nil else { return }
+                if NSEvent.pressedMouseButtons & 0x1 == 0 {
+                    self.endDrag()
+                    return
+                }
+                try? await Task.sleep(nanoseconds: pollInterval)
+            }
         }
     }
 
