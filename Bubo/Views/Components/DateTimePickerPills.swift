@@ -101,7 +101,7 @@ struct DateTimePickerPills: View {
             .popover(isPresented: $showTimePopover, arrowEdge: .bottom) {
                 VStack(spacing: DS.Spacing.sm) {
                     Text("Select Time")
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundStyle(skin.resolvedTextSecondary)
 
                     if let range = range {

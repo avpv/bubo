@@ -277,7 +277,7 @@ struct EventRowView: View {
             NSWorkspace.shared.open(url)
         } label: {
             Label("Join", systemImage: "video.fill")
-                .font(.caption2)
+                .font(.footnote)
                 .fontWeight(.medium)
         }
         .buttonStyle(.action(role: .primary, size: .compact))
@@ -314,18 +314,18 @@ struct EventRowView: View {
         VStack(spacing: DS.Spacing.xxs) {
             HStack(spacing: 0) {
                 Text(event.formattedTime)
-                    .font(.system(.caption, design: skin.resolvedFontDesign, weight: .bold))
+                    .font(.system(.footnote, design: skin.resolvedFontDesign, weight: .bold))
                     .foregroundStyle(skin.resolvedTextPrimary)
                 Text("–")
-                    .font(.system(.caption, design: skin.resolvedFontDesign, weight: .bold))
+                    .font(.system(.footnote, design: skin.resolvedFontDesign, weight: .bold))
                     .foregroundStyle(skin.resolvedTextSecondary)
                 Text(event.formattedEndTime)
-                    .font(.system(.caption, design: skin.resolvedFontDesign, weight: .regular))
+                    .font(.system(.footnote, design: skin.resolvedFontDesign, weight: .regular))
                     .foregroundStyle(skin.resolvedTextSecondary)
             }
 
             Text(timeUntilText(now))
-                .font(.system(.caption2, design: skin.resolvedFontDesign, weight: .semibold))
+                .font(.system(.footnote, design: skin.resolvedFontDesign, weight: .semibold))
                 .foregroundStyle(skin.isClassic ? skin.resolvedTextSecondary : skin.accentColor) // Highlight countdown
                 .contentTransition(.numericText())
         }
@@ -359,7 +359,7 @@ struct EventRowView: View {
                 // alongside would duplicate the same information.
                 if let location = event.location, !location.isEmpty {
                     Label(location, systemImage: "mappin")
-                        .font(.caption2)
+                        .font(.footnote)
                         .foregroundStyle(skin.resolvedTextSecondary)
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -367,7 +367,7 @@ struct EventRowView: View {
 
                 if let calName = event.calendarName {
                     Text(calName)
-                        .font(.caption2)
+                        .font(.footnote)
                         .foregroundStyle(skin.resolvedTextTertiary)
                 }
             }

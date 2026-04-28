@@ -1029,10 +1029,10 @@ struct MenuBarView: View {
                     // compact so tasks dominate the screen.
                     HStack(spacing: DS.Spacing.sm) {
                         Image(systemName: "calendar")
-                            .font(.caption)
+                            .font(.footnote)
                             .foregroundStyle(skin.resolvedTextTertiary)
                         Text(emptyStateSubtitle)
-                            .font(.caption)
+                            .font(.footnote)
                             .foregroundStyle(skin.resolvedTextTertiary)
                         Spacer()
                         Button {
@@ -1040,7 +1040,7 @@ struct MenuBarView: View {
                             navigation = .addEvent()
                         } label: {
                             Text("Add Event")
-                                .font(.caption.weight(.medium))
+                                .font(.footnote.weight(.medium))
                         }
                         .buttonStyle(.plain)
                         .foregroundStyle(skin.accentColor)
@@ -1066,7 +1066,7 @@ struct MenuBarView: View {
                             navigation = .addEvent()
                         } label: {
                             Label("Add Event", systemImage: "plus")
-                                .font(.caption)
+                                .font(.footnote)
                                 .fontWeight(.medium)
                         }
                         .buttonStyle(.action(role: .primary, size: .compact))
@@ -1459,10 +1459,10 @@ struct MenuBarView: View {
             // any one event's title dominating — the whole group reads as
             // a single «block».
             Image(systemName: "rectangle.stack.fill")
-                .font(.caption2)
+                .font(.footnote)
                 .foregroundStyle(activeSkin.resolvedTextTertiary)
             Text("\(events.count) event\(events.count == 1 ? "" : "s") · \(DS.formatMinutes(bookedMinutes)) booked")
-                .font(.caption)
+                .font(.footnote)
                 .foregroundStyle(activeSkin.resolvedTextSecondary)
                 .lineLimit(1)
             Spacer(minLength: 0)
@@ -1771,14 +1771,14 @@ private struct PermissionBannerLabel: View {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: spec.icon)
                     .foregroundStyle(skin.resolvedWarningColor)
-                    .font(.caption)
+                    .font(.footnote)
                     .symbolRenderingMode(.hierarchical)
                 Text(spec.title)
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundStyle(skin.resolvedTextPrimary)
                 Spacer(minLength: DS.Spacing.sm)
                 Image(systemName: "chevron.right")
-                    .font(.caption2)
+                    .font(.footnote)
                     .foregroundStyle(skin.resolvedTextTertiary)
             }
             .padding(.horizontal, DS.Spacing.md)

@@ -226,13 +226,15 @@ struct TimerScreenView: View {
                                 .blur(radius: 20)
                         }
 
-                        // Center content
+                        // Center content. Status label is the same quiet
+                        // subhead as `sectionHeaderStyle()` — mixed case, no
+                        // tracking, just `.footnote.semibold`. Birman: «один
+                        // субхед на всё приложение»; cap-height + letter
+                        // spacing made this read like 1990s product chrome.
                         VStack(spacing: DS.Spacing.sm) {
                             Text(statusLabel(now))
-                                .font(.system(.caption, design: skin.resolvedFontDesign, weight: .medium))
+                                .sectionHeaderStyle()
                                 .foregroundStyle(skin.resolvedTextTertiary)
-                                .textCase(.uppercase)
-                                .tracking(1.5)
 
                             if ended {
                                 Image(systemName: "checkmark.circle")
@@ -320,17 +322,17 @@ struct TimerScreenView: View {
 
                         HStack(spacing: DS.Spacing.md) {
                             Label(event.formattedDate, systemImage: "calendar")
-                                .font(.caption)
+                                .font(.footnote)
                                 .foregroundStyle(skin.resolvedTextSecondary)
 
                             Label(event.formattedTimeRange, systemImage: "clock")
-                                .font(.caption)
+                                .font(.footnote)
                                 .foregroundStyle(skin.resolvedTextSecondary)
                         }
 
                         if let location = event.location, !location.isEmpty {
                             Label(location, systemImage: "location.fill")
-                                .font(.caption)
+                                .font(.footnote)
                                 .foregroundStyle(skin.resolvedTextSecondary)
                                 .lineLimit(1)
                                 .truncationMode(.tail)
@@ -344,7 +346,7 @@ struct TimerScreenView: View {
                                     onRepeat?(event)
                                 } label: {
                                     Label("Repeat", systemImage: "arrow.counterclockwise")
-                                        .font(.caption.weight(.medium))
+                                        .font(.footnote.weight(.medium))
                                 }
                                 .buttonStyle(.action(role: .primary, size: .compact))
 
@@ -354,7 +356,7 @@ struct TimerScreenView: View {
                                         onScheduleNext(event)
                                     } label: {
                                         Label("Plan Next", systemImage: "wand.and.stars")
-                                            .font(.caption.weight(.medium))
+                                            .font(.footnote.weight(.medium))
                                     }
                                     .buttonStyle(.action(role: .secondary, size: .compact))
                                 }
@@ -378,16 +380,20 @@ struct TimerScreenView: View {
 
     // MARK: - Subviews
 
+    /// Hero ring digits use SF Pro Rounded with `monospacedDigit()` (the
+    /// «friendly» Clock / Fitness face) instead of the `.monospaced` system
+    /// design — same equal-width digit guarantee, but the glyph shapes match
+    /// the rest of the popover instead of the slab-feel of SF Mono.
     private func timerRow(_ components: [TimeComponent], size: CGFloat) -> some View {
         HStack(spacing: DS.Spacing.xs) {
             ForEach(components, id: \.id) { comp in
                 HStack(alignment: .firstTextBaseline, spacing: 1) {
                     Text(comp.value)
-                        .font(.system(size: size, weight: .bold, design: .monospaced))
+                        .font(DS.Typography.heroRingDigit(size: size))
                         .foregroundStyle(skin.resolvedTextPrimary)
                         .contentTransition(.numericText())
                     Text(comp.unit)
-                        .font(.system(size: size * 0.45, weight: .medium, design: skin.resolvedFontDesign))
+                        .font(DS.Typography.heroRingUnit(size: size, design: skin.resolvedFontDesign))
                         .foregroundStyle(skin.resolvedTextTertiary)
                 }
             }

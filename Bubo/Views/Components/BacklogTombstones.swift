@@ -85,15 +85,15 @@ struct BacklogTombstones: View {
                 } label: {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: showCompleted ? "chevron.down" : "chevron.right")
-                            .font(.caption2)
+                            .font(.footnote)
                             .contentTransition(.symbolEffect(.replace))
                         Text("\(completedToday.count) completed today")
-                            .font(.caption2.monospacedDigit())
+                            .font(.footnote.monospacedDigit())
                             .contentTransition(.numericText())
                         Text("·")
-                            .font(.caption2)
+                            .font(.footnote)
                         Text(DS.formatMinutes(completedTotalMinutes))
-                            .font(.caption2.monospacedDigit())
+                            .font(.footnote.monospacedDigit())
                             .contentTransition(.numericText())
                         Spacer()
                     }
@@ -169,12 +169,12 @@ struct BacklogTombstones: View {
                     } label: {
                         HStack(spacing: DS.Spacing.xs) {
                             Image(systemName: showFrozen ? "chevron.down" : "chevron.right")
-                                .font(.caption2)
+                                .font(.footnote)
                                 .contentTransition(.symbolEffect(.replace))
                             Image(systemName: "snowflake")
-                                .font(.caption2)
+                                .font(.footnote)
                             Text("\(frozen.count) frozen")
-                                .font(.caption2.monospacedDigit())
+                                .font(.footnote.monospacedDigit())
                                 .contentTransition(.numericText())
                             Spacer()
                         }
@@ -187,7 +187,7 @@ struct BacklogTombstones: View {
                     Button("Unfreeze all") {
                         onUnfreezeAll()
                     }
-                    .font(.caption2)
+                    .font(.footnote)
                     .buttonStyle(.plain)
                     .foregroundStyle(skin.accentColor)
                 }

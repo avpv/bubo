@@ -78,11 +78,11 @@ struct ToastOverlay: View {
             if let toast = toastState.current {
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: toast.icon)
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundStyle(toast.color(for: skin))
                         .contentTransition(.symbolEffect(.replace))
                     Text(toast.text)
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundStyle(skin.resolvedTextPrimary)
 
                     // HIG: Provide undo for destructive actions
@@ -93,7 +93,7 @@ struct ToastOverlay: View {
                             toastState.dismiss()
                         } label: {
                             Text("Undo")
-                                .font(.caption)
+                                .font(.footnote)
                                 .fontWeight(skin.resolvedFontWeight)
                                 .foregroundStyle(skin.accentColor)
                         }

@@ -223,11 +223,11 @@ struct BacklogTaskRow: View {
             // dims (above) — two roles, two visual states, no conflict.
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: "calendar.badge.plus")
-                    .font(.caption)
+                    .font(.footnote)
                 Text(task.title)
-                    .font(.caption.weight(.medium))
+                    .font(.footnote.weight(.medium))
                 Text(DS.formatMinutes(task.durationMinutes))
-                    .font(.caption2)
+                    .font(.footnote)
                     .foregroundStyle(skin.resolvedTextSecondary)
             }
             .padding(.horizontal, DS.Spacing.sm)
@@ -392,11 +392,11 @@ struct BacklogTaskRow: View {
                 if task.isRecurring {
                     HStack(spacing: DS.Spacing.xxs) {
                         Image(systemName: "arrow.triangle.2.circlepath")
-                            .font(.caption2)
+                            .font(.footnote)
                         if let tag = task.recurrenceTag,
                            !tag.trimmingCharacters(in: .whitespaces).isEmpty {
                             Text(tag)
-                                .font(.caption2)
+                                .font(.footnote)
                                 .lineLimit(1)
                         }
                     }
@@ -414,7 +414,7 @@ struct BacklogTaskRow: View {
                 // naming the blockers inline (titles could be long).
                 if !task.dependsOn.isEmpty {
                     Image(systemName: "arrow.right")
-                        .font(.caption2)
+                        .font(.footnote)
                         .foregroundStyle(skin.resolvedTextTertiary)
                         .accessibilityLabel("Depends on \(task.dependsOn.count) task\(task.dependsOn.count == 1 ? "" : "s")")
                 }
@@ -437,20 +437,20 @@ struct BacklogTaskRow: View {
                         .accessibilityHidden(true)
                 }
                 metaText
-                    .font(.caption2)
+                    .font(.footnote)
                     .lineLimit(1)
                     .truncationMode(.tail)
 
                 if isHovered, let secondary = secondaryMetaText {
                     secondary
-                        .font(.caption2)
+                        .font(.footnote)
                         .lineLimit(1)
                         .transition(.opacity)
                 }
 
                 if isHovered, !isDragging, let slotPreview {
                     Text("→ \(slotPreview)")
-                        .font(.caption2)
+                        .font(.footnote)
                         .foregroundStyle(skin.accentColor.opacity(DS.Opacity.accentMuted))
                         .lineLimit(1)
                         .transition(.opacity)
@@ -485,7 +485,7 @@ struct BacklogTaskRow: View {
         HStack(spacing: DS.Spacing.xxs) {
             Button(action: onMoveUp) {
                 Image(systemName: "chevron.up")
-                    .font(.caption2)
+                    .font(.footnote)
                     .foregroundStyle(canMoveUp ? skin.resolvedTextSecondary : skin.resolvedTextTertiary.opacity(DS.Opacity.half))
             }
             .buttonStyle(.plain)
@@ -495,7 +495,7 @@ struct BacklogTaskRow: View {
 
             Button(action: onMoveDown) {
                 Image(systemName: "chevron.down")
-                    .font(.caption2)
+                    .font(.footnote)
                     .foregroundStyle(canMoveDown ? skin.resolvedTextSecondary : skin.resolvedTextTertiary.opacity(DS.Opacity.half))
             }
             .buttonStyle(.plain)
@@ -505,7 +505,7 @@ struct BacklogTaskRow: View {
 
             Button(action: onDelete) {
                 Image(systemName: "xmark")
-                    .font(.caption2)
+                    .font(.footnote)
                     .foregroundStyle(skin.resolvedTextTertiary)
             }
             .buttonStyle(.plain)

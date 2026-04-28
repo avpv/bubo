@@ -52,7 +52,7 @@ struct OptimizerTabView: View {
                         }
 
                         Text("Applies to every planning surface — calendar reflow, today's plan, and the weekly backlog roll-up. The capacity ring on the Tasks list uses the same window to compare pending workload against remaining minutes.")
-                            .font(.caption)
+                            .font(.footnote)
                             .foregroundStyle(skin.resolvedTextSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -63,7 +63,7 @@ struct OptimizerTabView: View {
                         VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                             Text("Default duration")
                             Text("Used when a task is added without a duration suffix (e.g. “write report 30m”).")
-                                .font(.caption)
+                                .font(.footnote)
                                 .foregroundStyle(skin.resolvedTextSecondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
@@ -84,7 +84,7 @@ struct OptimizerTabView: View {
                             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                                 Text("Peak energy hours")
                                 Text("When you're most productive — pick one or more")
-                                    .font(.caption)
+                                    .font(.footnote)
                                     .foregroundStyle(skin.resolvedTextSecondary)
                             }
                             PeakEnergyHoursPicker(
@@ -105,7 +105,7 @@ struct OptimizerTabView: View {
                             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                                 Text("Lunch window")
                                 Text("Keep this time free for lunch")
-                                    .font(.caption)
+                                    .font(.footnote)
                                     .foregroundStyle(skin.resolvedTextSecondary)
                             }
                             Spacer()
@@ -140,7 +140,7 @@ struct OptimizerTabView: View {
                 SettingsPlatter("Learning") {
                     let feedbackCount = optimizerService.optimizer.preferenceLearner.feedbackHistory.count
                     Text("Feedback collected: \(feedbackCount) action(s)")
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundStyle(skin.resolvedTextSecondary)
 
                     Button("Reset Learned Preferences", role: .destructive) {

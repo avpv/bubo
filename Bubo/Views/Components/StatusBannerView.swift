@@ -12,11 +12,11 @@ struct StatusBanner: View {
         HStack(spacing: DS.Spacing.sm) {
             Image(systemName: icon)
                 .foregroundStyle(color)
-                .font(.caption)
+                .font(.footnote)
                 .symbolRenderingMode(.hierarchical)
                 .contentTransition(.symbolEffect(.replace))
             Text(text)
-                .font(.caption)
+                .font(.footnote)
                 .foregroundStyle(skin.resolvedTextPrimary)
         }
         .padding(.horizontal, DS.Spacing.lg)

@@ -294,10 +294,10 @@ struct EditTaskView: View {
                         } label: {
                             HStack(spacing: DS.Spacing.xs) {
                                 Text("More options")
-                                    .font(.caption.weight(.medium))
+                                    .font(.footnote.weight(.medium))
                                     .foregroundStyle(skinAccent)
                                 Image(systemName: showMoreOptions ? "chevron.up" : "chevron.down")
-                                    .font(.caption2)
+                                    .font(.footnote)
                                     .foregroundStyle(skinAccent)
                                 Spacer()
                             }
@@ -327,7 +327,7 @@ struct EditTaskView: View {
 
                                 HStack(spacing: DS.Spacing.xs) {
                                     Image(systemName: "link")
-                                        .font(.caption)
+                                        .font(.footnote)
                                         .foregroundStyle(skin.resolvedTextTertiary)
                                     TextField(
                                         "Link",
@@ -341,7 +341,7 @@ struct EditTaskView: View {
                                             NSWorkspace.shared.open(url)
                                         } label: {
                                             Image(systemName: "arrow.up.right.square")
-                                                .font(.caption)
+                                                .font(.footnote)
                                                 .foregroundStyle(skin.accentColor)
                                         }
                                         .buttonStyle(.plain)
@@ -391,7 +391,7 @@ struct EditTaskView: View {
                                                 .font(.callout)
                                                 .foregroundStyle(skin.resolvedTextPrimary)
                                             Text("Reset to pending instead of done on completion")
-                                                .font(.caption2)
+                                                .font(.footnote)
                                                 .foregroundStyle(skin.resolvedTextTertiary)
                                         }
                                     }
@@ -477,7 +477,7 @@ struct EditTaskView: View {
     private func chipButton(label: String, isActive: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label)
-                .font(.caption.weight(.medium))
+                .font(.footnote.weight(.medium))
                 .foregroundStyle(isActive ? DS.contrastingForeground(for: skin.accentColor) : skin.resolvedTextPrimary)
                 .padding(.horizontal, DS.Spacing.sm)
                 .padding(.vertical, DS.Spacing.pillVertical)
@@ -519,11 +519,11 @@ struct EditTaskView: View {
                 HStack(spacing: DS.Spacing.xs) {
                     if allCandidates.count >= Self.dependencySearchThreshold {
                         Image(systemName: "magnifyingglass")
-                            .font(.caption2)
+                            .font(.footnote)
                             .foregroundStyle(skin.resolvedTextTertiary)
                         TextField("Filter", text: $dependencyQuery)
                             .textFieldStyle(.plain)
-                            .font(.caption)
+                            .font(.footnote)
                             .frame(maxWidth: 140)
                     }
                     Picker("Add dependency", selection: Binding(
@@ -552,7 +552,7 @@ struct EditTaskView: View {
                 }
             } else if dependsOn.isEmpty {
                 Text("No other active tasks to depend on.")
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundStyle(skin.resolvedTextSecondary)
             }
         }
@@ -562,14 +562,14 @@ struct EditTaskView: View {
         let depTitle = backlogService.tasks.first(where: { $0.id == depId })?.title ?? "Unknown"
         return HStack(spacing: DS.Spacing.xxs) {
             Text(depTitle)
-                .font(.caption)
+                .font(.footnote)
                 .lineLimit(1)
                 .foregroundStyle(skin.resolvedTextPrimary)
             Button {
                 dependsOn.removeAll { $0 == depId }
             } label: {
                 Image(systemName: "xmark")
-                    .font(.caption2)
+                    .font(.footnote)
                     .foregroundStyle(skin.resolvedTextTertiary)
             }
             .buttonStyle(.plain)

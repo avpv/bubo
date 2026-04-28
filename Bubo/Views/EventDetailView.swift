@@ -21,7 +21,7 @@ struct EventDetailView: View {
 
     private func pomodoroBadge(_ text: String, icon: String, color: Color) -> some View {
         Label(text, systemImage: icon)
-            .font(.caption2)
+            .font(.footnote)
             .padding(.horizontal, DS.Spacing.md)
             .padding(.vertical, DS.Spacing.xs)
             .adaptiveBadgeFill(color)
@@ -125,7 +125,7 @@ struct EventDetailView: View {
                     if let description = event.description, !description.isEmpty {
                         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                             Label("Notes", systemImage: "note.text")
-                                .font(.caption)
+                                .font(.footnote)
                                 .fontWeight(.medium)
                                 .foregroundStyle(skin.resolvedTextTertiary)
                             MarkdownText(text: description)
@@ -143,7 +143,7 @@ struct EventDetailView: View {
                     // Calendar name
                     if let calName = event.calendarName {
                         Label(calName, systemImage: "tray.full")
-                            .font(.caption)
+                            .font(.footnote)
                             .foregroundStyle(DS.Colors.calendarLabel)
                     }
 
@@ -152,7 +152,7 @@ struct EventDetailView: View {
                         recurrenceSection(rule)
                     } else if event.eventType == .pomodoro {
                         Label("Pomodoro", systemImage: "timer")
-                            .font(.caption)
+                            .font(.footnote)
                             .fontWeight(.medium)
                             .foregroundStyle(skin.resolvedTextTertiary)
                     }
@@ -275,7 +275,7 @@ struct EventDetailView: View {
 
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(label)
-                    .font(.caption2)
+                    .font(.footnote)
                     .foregroundStyle(skin.resolvedTextTertiary)
 
                 HStack(spacing: DS.Spacing.xs) {
@@ -303,7 +303,7 @@ struct EventDetailView: View {
                 .foregroundStyle(skin.resolvedTextPrimary)
                 .contentTransition(.numericText())
             Text(unit)
-                .font(.system(.caption, design: .monospaced))
+                .font(.system(.footnote, design: .monospaced))
                 .foregroundStyle(skin.resolvedTextSecondary)
         }
     }
@@ -317,7 +317,7 @@ struct EventDetailView: View {
                 event.eventType == .pomodoro ? "Pomodoro" : "Repeats",
                 systemImage: event.eventType == .pomodoro ? "timer" : "repeat"
             )
-            .font(.caption)
+            .font(.footnote)
             .fontWeight(.medium)
             .foregroundStyle(skin.resolvedTextTertiary)
 
@@ -341,7 +341,7 @@ struct EventDetailView: View {
                 HStack(spacing: DS.Spacing.xs) {
                     ForEach(Weekday.allCases.filter { rule.weekdays.contains($0) }, id: \.self) { day in
                         Text(day.shortName)
-                            .font(.caption2)
+                            .font(.footnote)
                             .padding(.horizontal, DS.Spacing.md)
                             .padding(.vertical, DS.Spacing.xs)
                             .background(skinAccent.opacity(DS.Opacity.mediumFill))
@@ -359,14 +359,14 @@ struct EventDetailView: View {
     private func remindersSection(_ reminders: [Int]) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             Label("Reminders", systemImage: "bell.fill")
-                .font(.caption)
+                .font(.footnote)
                 .fontWeight(.medium)
                 .foregroundStyle(skin.resolvedTextTertiary)
 
             HStack(spacing: DS.Spacing.xs) {
                 ForEach(reminders.sorted(), id: \.self) { min in
                     Text(DS.formatMinutes(min))
-                        .font(.caption)
+                        .font(.footnote)
                         .padding(.horizontal, DS.Spacing.md)
                         .padding(.vertical, DS.Spacing.xs)
                         .adaptiveBadgeFill(skin.resolvedTextSecondary)

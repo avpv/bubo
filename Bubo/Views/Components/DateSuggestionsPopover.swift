@@ -52,7 +52,7 @@ struct DateSuggestionsPopover: View {
             } else {
                 VStack(alignment: .leading, spacing: 0) {
                     Text("Suggestions")
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundStyle(skin.resolvedTextSecondary)
                         .padding(.horizontal, DS.Spacing.lg)
                         .padding(.top, DS.Spacing.md)
@@ -79,7 +79,7 @@ struct DateSuggestionsPopover: View {
                                 Text("Custom\u{2026}")
                                     .foregroundStyle(skin.resolvedTextPrimary)
                                 Text("Use the calendar to pick a date")
-                                    .font(.caption)
+                                    .font(.footnote)
                                     .foregroundStyle(skin.resolvedTextSecondary)
                             }
                             Spacer()
@@ -106,7 +106,7 @@ struct DateSuggestionsPopover: View {
                     Text(title)
                         .foregroundStyle(skin.resolvedTextPrimary)
                     Text(subtitle)
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundStyle(skin.resolvedTextSecondary)
                 }
                 Spacer()

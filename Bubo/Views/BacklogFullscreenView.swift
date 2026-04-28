@@ -286,10 +286,10 @@ struct BacklogFullscreenView: View {
             if let etaLabel = etaLabel(now: ctx.date) {
                 HStack(spacing: DS.Spacing.xxs) {
                     Text("\u{2192}")
-                        .font(.caption2)
+                        .font(.footnote)
                         .foregroundStyle(skin.resolvedTextTertiary)
                     Text(etaLabel)
-                        .font(.caption.weight(.medium).monospacedDigit())
+                        .font(.footnote.weight(.medium).monospacedDigit())
                         .foregroundStyle(skin.resolvedTextSecondary)
                         .contentTransition(.numericText())
                         .accessibilityLabel("Estimated finish time \(etaLabel)")
@@ -312,7 +312,7 @@ struct BacklogFullscreenView: View {
             }
         } label: {
             Text("\(urgentCount) urgent")
-                .font(.caption2.weight(.semibold).monospacedDigit())
+                .font(.footnote.weight(.semibold).monospacedDigit())
                 .foregroundStyle(skin.resolvedDestructiveColor)
                 .contentTransition(.numericText())
                 .padding(.horizontal, DS.Spacing.xs)
@@ -353,7 +353,7 @@ struct BacklogFullscreenView: View {
             }
         } label: {
             Image(systemName: useSmartSort ? "wand.and.stars" : "arrow.up.arrow.down")
-                .font(.caption.weight(.medium))
+                .font(.footnote.weight(.medium))
                 .foregroundStyle(useSmartSort ? skin.accentColor : skin.resolvedTextSecondary)
                 .frame(width: DS.Size.iconLarge, height: DS.Size.iconLarge)
                 .background(
@@ -552,7 +552,7 @@ struct BacklogFullscreenView: View {
         VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "plus")
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundStyle(isInputFocused ? AnyShapeStyle(skin.accentColor) : AnyShapeStyle(.tertiary))
 
                 TextField(addTaskPlaceholder, text: $newTaskTitle)
@@ -568,7 +568,7 @@ struct BacklogFullscreenView: View {
 
                 if let minutes = parsedNewTaskTitle.durationMinutes {
                     Text(DS.formatMinutes(minutes))
-                        .font(.caption2.weight(.medium).monospacedDigit())
+                        .font(.footnote.weight(.medium).monospacedDigit())
                         .foregroundStyle(skin.accentColor)
                         .padding(.horizontal, DS.Spacing.sm)
                         .padding(.vertical, DS.Spacing.xxs)
@@ -592,7 +592,7 @@ struct BacklogFullscreenView: View {
             // identical across surfaces.
             if activeTasks.isEmpty && !isInputFocused {
                 Text("Tasks you add here will be scheduled into free slots")
-                    .font(.caption2)
+                    .font(.footnote)
                     .foregroundStyle(skin.resolvedTextTertiary)
                     .transition(.opacity)
             }
@@ -608,7 +608,7 @@ struct BacklogFullscreenView: View {
                     Text("\u{238B} Cancel")
                     Spacer(minLength: 0)
                 }
-                .font(.caption2)
+                .font(.footnote)
                 .foregroundStyle(skin.resolvedTextTertiary)
                 .transition(.opacity)
                 .accessibilityHidden(true)

@@ -811,7 +811,7 @@ struct WallpaperPreviewCard: View {
             )
 
             Text(wallpaper.displayName)
-                .font(.caption2)
+                .font(.footnote)
                 .fontWeight(isSelected ? .semibold : .regular)
                 .foregroundStyle(isSelected ? skin.resolvedTextPrimary : skin.resolvedTextSecondary)
                 .lineLimit(1)

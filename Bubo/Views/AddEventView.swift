@@ -234,7 +234,7 @@ struct AddEventView: View {
 
                                 if !addToCalendar {
                                     Text("Event will be stored locally in Bubo only")
-                                        .font(.caption)
+                                        .font(.footnote)
                                         .foregroundStyle(skin.resolvedTextSecondary)
                                 }
                             }
@@ -253,10 +253,10 @@ struct AddEventView: View {
                             } label: {
                                 HStack(spacing: DS.Spacing.xs) {
                                     Text("More options")
-                                        .font(.caption.weight(.medium))
+                                        .font(.footnote.weight(.medium))
                                         .foregroundStyle(skinAccent)
                                     Image(systemName: showMoreOptions ? "chevron.up" : "chevron.down")
-                                        .font(.caption2)
+                                        .font(.footnote)
                                         .foregroundStyle(skinAccent)
                                     Spacer()
                                 }
@@ -302,7 +302,7 @@ struct AddEventView: View {
 
                                 if isEditingRecurring {
                                     Text("Color and context apply to every occurrence in the series.")
-                                        .font(.caption2)
+                                        .font(.footnote)
                                         .foregroundStyle(skin.resolvedTextSecondary)
                                 }
                             }
@@ -397,7 +397,7 @@ struct AddEventView: View {
                                                     reminderMinutes.append(preset)
                                                 } label: {
                                                     Text(DS.formatMinutes(preset))
-                                                        .font(.caption)
+                                                        .font(.footnote)
                                                 }
                                                 .buttonStyle(.action(role: .secondary, size: .compact))
                                             }
@@ -578,10 +578,10 @@ struct AddEventView: View {
                             .controlSize(.small)
                     } else {
                         Image(systemName: "wand.and.stars")
-                            .font(.caption)
+                            .font(.footnote)
                     }
                     Text("Find Best Time")
-                        .font(.caption.weight(.medium))
+                        .font(.footnote.weight(.medium))
                 }
                 .foregroundStyle(skin.accentColor)
             }
@@ -600,14 +600,14 @@ struct AddEventView: View {
                                 HStack(spacing: DS.Spacing.sm) {
                                     if index == 0 {
                                         Image(systemName: "star.fill")
-                                            .font(.caption2)
+                                            .font(.footnote)
                                             .foregroundStyle(skin.accentColor)
                                     }
                                     Text(DS.timeFormatter.string(from: gene.startTime))
-                                        .font(.caption.weight(.medium).monospacedDigit())
+                                        .font(.footnote.weight(.medium).monospacedDigit())
                                         .foregroundStyle(skin.resolvedTextPrimary)
                                     Text("(\(Int(scenario.fitness * 100))%)")
-                                        .font(.caption2)
+                                        .font(.footnote)
                                         .foregroundStyle(skin.resolvedTextSecondary)
                                     Spacer()
                                 }
@@ -702,7 +702,7 @@ struct AddEventView: View {
                     // Birman: подзаголовок объясняет, что произойдёт, без
                     // необходимости знать слово "Pomodoro" заранее.
                     Text("Split into focused work + break sessions")
-                        .font(.caption2)
+                        .font(.footnote)
                         .foregroundStyle(skin.resolvedTextTertiary)
                 }
             }
@@ -779,13 +779,13 @@ struct AddEventView: View {
                     "Total: \(DS.formatMinutes(pomodoroTotalMinutes))",
                     systemImage: "clock"
                 )
-                .font(.caption)
+                .font(.footnote)
                 .foregroundStyle(skin.resolvedTextSecondary)
 
                 Spacer()
 
                 Link("Learn about Pomodoro combinations", destination: URL(string: "https://github.com/avpv/bubo/blob/HEAD/docs/Pomodoro.md")!)
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundStyle(skin.accentColor)
                     .accessibilityHint("Opens in your web browser")
             }
@@ -856,10 +856,10 @@ struct AddEventView: View {
                 let totalBreak = pomodoroTotalMinutes - totalWork
                 if totalBreak > 0 {
                     Text("\(totalWork):\(totalBreak)")
-                        .font(.system(.caption2, design: .monospaced, weight: .medium))
+                        .font(.system(.footnote, design: .monospaced, weight: .medium))
                         .foregroundStyle(skin.resolvedTextTertiary)
                     + Text(" work:rest")
-                        .font(.caption2)
+                        .font(.footnote)
                         .foregroundStyle(skin.resolvedTextTertiary)
                 }
             }
@@ -891,7 +891,7 @@ struct AddEventView: View {
                         .overlay {
                             if segWidth > 30 {
                                 Text("\(segment.minutes)\u{00A0}m")
-                                    .font(.system(.caption2, design: skin.resolvedFontDesign, weight: .semibold))
+                                    .font(.system(.footnote, design: skin.resolvedFontDesign, weight: .semibold))
                                     .foregroundStyle(DS.contrastingForeground(for: color))
                             }
                         }
@@ -932,7 +932,7 @@ struct AddEventView: View {
                         .frame(width: 1.5, height: 16)
                         .frame(width: 12)
                     Text("\(segments.count - 4) more")
-                        .font(.system(.caption2, design: skin.resolvedFontDesign))
+                        .font(.system(.footnote, design: skin.resolvedFontDesign))
                         .foregroundStyle(skin.resolvedTextTertiary)
                 }
                 ForEach(Array(segments.suffix(2).enumerated()), id: \.offset) { idx, segment in
@@ -977,10 +977,10 @@ struct AddEventView: View {
             // Right: time and label
             VStack(alignment: .leading, spacing: 1) {
                 Text("\(DS.timeFormatter.string(from: start)) – \(DS.timeFormatter.string(from: end))")
-                    .font(.system(.caption, design: .monospaced, weight: .medium))
+                    .font(.system(.footnote, design: .monospaced, weight: .medium))
                     .foregroundStyle(skin.resolvedTextPrimary)
                 Text("\(label) · \(segment.minutes)\u{00A0}min")
-                    .font(.caption2)
+                    .font(.footnote)
                     .foregroundStyle(skin.resolvedTextSecondary)
             }
             .padding(.bottom, isLast ? 0 : DS.Spacing.xs)
@@ -993,7 +993,7 @@ struct AddEventView: View {
                 .font(.system(size: 8, weight: .medium))
                 .foregroundStyle(color)
             Text(label)
-                .font(.caption2)
+                .font(.footnote)
                 .foregroundStyle(skin.resolvedTextSecondary)
         }
     }

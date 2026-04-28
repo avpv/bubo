@@ -56,15 +56,15 @@ struct QuickActions: View {
                                     .tint(primaryForeground)
                             } else {
                                 Image(systemName: "sparkles")
-                                    .font(.caption2.weight(.semibold))
+                                    .font(.footnote.weight(.semibold))
                             }
                         }
                         .frame(width: DS.Size.iconSmall, height: DS.Size.iconSmall)
                         Text("Optimize")
-                            .font(.caption.weight(.medium))
+                            .font(.footnote.weight(.medium))
                             .lineLimit(1)
                         Text("⌘K")
-                            .font(.caption2.monospaced())
+                            .font(.footnote.monospaced())
                             .foregroundStyle(primaryForeground.opacity(DS.Opacity.accentMuted))
                     }
                     .fixedSize()
@@ -92,7 +92,7 @@ struct QuickActions: View {
                         run(scored.action)
                     } label: {
                         Text(scored.action.label)
-                            .font(.caption.weight(.medium))
+                            .font(.footnote.weight(.medium))
                             .lineLimit(1)
                             .fixedSize()
                             .foregroundStyle(skin.accentColor)
