@@ -566,30 +566,32 @@ struct BacklogView: View {
                 }
             }
         } label: {
-            HStack(spacing: DS.Spacing.xxs) {
-                Text("·")
-                    .font(.caption2)
-                    .foregroundStyle(skin.resolvedTextTertiary)
-                Text("\(urgentCount) urgent")
-                    .font(.caption2.weight(.semibold).monospacedDigit())
-                    .foregroundStyle(skin.resolvedDestructiveColor)
-                    .contentTransition(.numericText())
-            }
-            .padding(.horizontal, DS.Spacing.xs)
-            .padding(.vertical, DS.Spacing.xxs)
-            .background(
-                Capsule().fill(
-                    skin.resolvedDestructiveColor
-                        .opacity(urgentOnlyFilter ? DS.Opacity.lightFill : 0)
+            // Middot was a leftover from the «Tasks N · 1 urgent» layout —
+            // it visually attached the urgent pill to the count when both
+            // shared a label. With the «Tasks» word gone, the middot now
+            // glues two separate controls together instead of separating
+            // them. The natural HStack gap (`DS.Spacing.sm` from the
+            // header) does the spacing job better, читая «count · pill»
+            // как два самостоятельных объекта.
+            Text("\(urgentCount) urgent")
+                .font(.caption2.weight(.semibold).monospacedDigit())
+                .foregroundStyle(skin.resolvedDestructiveColor)
+                .contentTransition(.numericText())
+                .padding(.horizontal, DS.Spacing.xs)
+                .padding(.vertical, DS.Spacing.xxs)
+                .background(
+                    Capsule().fill(
+                        skin.resolvedDestructiveColor
+                            .opacity(urgentOnlyFilter ? DS.Opacity.lightFill : 0)
+                    )
                 )
-            )
-            .overlay(
-                Capsule().strokeBorder(
-                    skin.resolvedDestructiveColor.opacity(urgentOnlyFilter ? DS.Opacity.softAccent : 0),
-                    lineWidth: DS.Border.thin
+                .overlay(
+                    Capsule().strokeBorder(
+                        skin.resolvedDestructiveColor.opacity(urgentOnlyFilter ? DS.Opacity.softAccent : 0),
+                        lineWidth: DS.Border.thin
+                    )
                 )
-            )
-            .contentShape(Capsule())
+                .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .help(urgentOnlyFilter ? "Show all tasks" : "Show only urgent tasks")

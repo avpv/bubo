@@ -300,11 +300,17 @@ struct BacklogCapacityLabel: View {
                 workingDays: optimizerService.workingDays,
                 now: ctx.date
             )
+            // Tooltip mirrors the VoiceOver phrasing — verdict in compact
+            // form on screen, full sentence on hover. Pointer users get
+            // the same «30 min to spare» / «over by 1h» context the
+            // assistive-tech path already had.
+            let verbose = Self.accessibilityLabel(for: forecast, pendingMinutes: pendingMinutes)
             Text(Self.label(for: forecast))
                 .font(.caption2.weight(.medium).monospacedDigit())
                 .foregroundStyle(skin.resolvedTextSecondary)
                 .contentTransition(.numericText())
-                .accessibilityLabel(Self.accessibilityLabel(for: forecast, pendingMinutes: pendingMinutes))
+                .help(verbose)
+                .accessibilityLabel(verbose)
         }
     }
 
