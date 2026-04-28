@@ -4,8 +4,8 @@ import Foundation
 
 /// Pure functions that derive presentation state from a `BacklogTask` array.
 ///
-/// Extracted out of `BacklogView` so smart-sort, urgent-filter, sprint-cap
-/// and capacity math can be tested without standing up a SwiftUI host. The
+/// Extracted out of `BacklogView` so smart-sort, urgent-filter and
+/// capacity math can be tested without standing up a SwiftUI host. The
 /// view keeps its computed properties but delegates to these helpers.
 ///
 /// All functions are deterministic and depend only on their inputs — no
@@ -93,15 +93,6 @@ enum BacklogLogic {
             if lScore == rScore { return lhs.0 < rhs.0 }
             return lScore > rScore
         }.map(\.1)
-    }
-
-    // MARK: Sprint cap
-
-    /// Cap a task list at `max` items — the pattern used by sprint mode,
-    /// which shows "what's next" in a bigger type size without scrolling.
-    static func sprintCapped(_ tasks: [BacklogTask], max: Int) -> [BacklogTask] {
-        guard max > 0 else { return [] }
-        return Array(tasks.prefix(max))
     }
 
     // MARK: Tombstone sets

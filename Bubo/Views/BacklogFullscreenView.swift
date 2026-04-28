@@ -1,75 +1,56 @@
 import SwiftUI
 
-// MARK: - Sprint View
+// MARK: - Backlog Fullscreen View
 
-/// Full-screen Tasks view that lives inside the popover navigation stack.
+/// Full-screen Backlog view that lives inside the popover navigation stack.
 /// Reachable via the fullscreen-affordance button in `BacklogView`'s header.
 ///
 /// Visually it is **the same Tasks card** the user sees collapsed on the main
 /// view, distended to popover height. One platter chrome (`.skinTasksBlockChrome`)
 /// wraps the whole surface — header, list, add-task field — so collapsed-on-main
-/// and fullscreen-in-Sprint read as the same object in two states. Бирман:
+/// and fullscreen-Backlog read as the same object in two states. Бирман:
 /// один объект — одна форма.
 ///
-/// Design (Birman):
-/// - One thing on screen at a time. Sprint is "what's next" — the popover
-///   header keeps a single Exit affordance; everything else lives inside
-///   the block.
-/// - Two modes inside the same surface: `Sprint` (top-N by smart-score, calmer
-///   row style) и `All` (полный активный список в пользовательском порядке —
-///   именно то, что раньше делал `.expanded` BacklogView'а). Переключатель —
-///   сегментированная пилюля внутри block header'а, заменяет шеврон + «Tasks N»
-///   из BacklogView'а; счётчик «Sprint 5 / All 6» несёт сам label пилюли.
-/// - QuickActions strip удалён намеренно: Sprint — режим _делать_, не
-///   _оптимизировать_. Чипы «Plan tomorrow / Schedule N / Batch» тянули
-///   наружу из режима. Ⓘ Schedule pill в header'е остаётся — открывает
-///   палитру, не уводя из Sprint.
+/// Design:
+/// - Полноразмерный Backlog: показывает весь активный список в
+///   пользовательском порядке (или в smart-sort, если включён toggle).
+///   Отдельных «режимов» нет — это просто та же карточка задач, что и
+///   на главной, но во весь popover. Бирман: одно действие — одна форма;
+///   режим-переключатель внутри карточки только запутывал.
+/// - Schedule, urgent filter, smart-sort, drag-reorder, keyboard reorder —
+///   всё, что есть в inline BacklogView, доступно и здесь.
 /// - The list itself stays inline-editable: complete with a tap, edit by
 ///   pushing the same `EditTaskView` the backlog uses, undo via toast.
-/// - Inline `+ Add task…` поле снизу — раньше пустое состояние SprintView
-///   было тупиком, заставляло возвращаться в backlog ради добавления.
+/// - Inline `+ Add task…` поле снизу — пустое состояние не должно быть
+///   тупиком; добавлять задачу можно прямо отсюда.
 /// - Completed-today / frozen tombstones — те же квартиранты, что и в
-///   backlog'е, чтобы история сегодняшнего дня не терялась при переключении.
-struct SprintView: View {
+///   inline Backlog'е, чтобы история сегодняшнего дня не терялась при
+///   переходе в fullscreen.
+/// - Hot-keys 1–9 — быстрое завершение N-й видимой задачи. Это надстройка
+///   к inline Backlog'у (там цифры заняты обычным вводом в add-field), но
+///   для fullscreen-режима они уместны: руки уже на клавиатуре.
+struct BacklogFullscreenView: View {
     var backlogService: BacklogService
     var optimizerService: OptimizerService
-    /// Calendar event source — needed by BacklogTaskRow for slot-preview
-    /// hovers on `.all` mode rows. Sprint mode itself doesn't consult it.
+    /// Calendar event source — surfaced for parity with the inline backlog;
+    /// reserved for future cross-context affordances inside fullscreen.
     var reminderService: ReminderService
     var onExit: () -> Void
     var onEditTask: (BacklogTask) -> Void
     /// Fired when the «Schedule» pill in the block header is tapped —
     /// same role the pill plays inside `BacklogView`. The parent opens the
     /// command palette (`PaletteContext`) so the optimizer can plan the
-    /// queue from inside Sprint without leaving the surface.
+    /// queue without leaving fullscreen.
     var onOpenPalette: (() -> Void)? = nil
     var onUndoableAction: ((_ message: String, _ undo: @escaping () -> Void) -> Void)? = nil
 
     @Environment(\.activeSkin) private var skin
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// Hard cap on rows visible in `.sprint` mode. Small on purpose: «sprint»
-    /// — это «что прямо сейчас», а не весь список. Для всего списка есть
-    /// `.all`. Cap намеренно оставлен константой; делать его настройкой —
-    /// отдельная история, которая не должна тормозить рефакторинг view.
-    static let maxSprintTasks = 5
-
-    enum Mode: String, Hashable, CaseIterable {
-        case sprint
-        case all
-
-        var label: String {
-            switch self {
-            case .sprint: return "Sprint"
-            case .all:    return "All"
-            }
-        }
-    }
-
-    /// Текущий режим. Пилюля переключает между «top-5» и «full active list».
-    /// Sprint — дефолт: пользователь сюда заходит ради фокуса, а не ради
-    /// просмотра всех задач разом (для этого есть BacklogView'овский chevron).
-    @State private var mode: Mode = .sprint
+    /// Hot-keys are bound to the first N visible rows. 9 covers the digit
+    /// keyboard 1…9; tasks beyond that need scrolling and a click. Same
+    /// «keyboard-first completion» idea as Things and Linear.
+    static let maxHotKeyTasks = 9
 
     @State private var newTaskTitle = ""
     /// Cached parse result for `newTaskTitle`. Updated from `onChange` so
@@ -77,54 +58,43 @@ struct SprintView: View {
     @State private var parsedNewTaskTitle: (cleaned: String, durationMinutes: Int?) = ("", nil)
     @FocusState private var isInputFocused: Bool
     /// Row-level keyboard focus, mirroring BacklogView. `nil` when the input
-    /// field owns focus instead. Driven by ↑/↓ between rows; ⌘↑/↓ reorders
-    /// in `.all` mode (sprint mode is curated by the machine — reorder there
-    /// would fight smart-sort).
+    /// field owns focus instead. Driven by ↑/↓ between rows; ⌘↑/↓ reorders.
     @FocusState private var focusedTaskId: String?
 
     @State private var showCompletedToday: Bool = false
     @State private var showFrozen: Bool = false
-    /// Urgent-only filter — narrows `.all` mode to tasks whose deadline falls
-    /// inside the urgency window. Hidden in Sprint mode (top-N smart-sort
-    /// already prioritises urgent), session-local. Mirrors BacklogView's
+    /// Urgent-only filter — narrows the list to tasks whose deadline falls
+    /// inside the urgency window. Session-local. Mirrors BacklogView's
     /// `urgentOnlyFilter` so users carry the same mental model across views.
     @State private var urgentOnlyFilter: Bool = false
-    /// Smart-sort toggle — re-orders `.all` mode by `BacklogLogic.smartScore`
-    /// instead of user drag order. Sprint mode is always smart-sorted; this
-    /// toggle is only meaningful in `.all`. Session-local.
+    /// Smart-sort toggle — re-orders the list by `BacklogLogic.smartScore`
+    /// instead of user drag order. Session-local.
     @State private var useSmartSort: Bool = false
 
     /// Все активные задачи (без urgent-фильтров и пр.) — общая основа для
-    /// обоих режимов и для расчёта capacity ring (тот должен показывать
-    /// общий груз очереди, не отфильтрованный подсет).
+    /// расчёта capacity ring (тот показывает общий груз очереди, а не
+    /// отфильтрованный подсет).
     private var activeTasks: [BacklogTask] {
         BacklogLogic.activeTasks(backlogService.tasks)
     }
 
-    /// Active set after the urgent-only filter. Применяется только в `.all`
-    /// — Sprint игнорирует фильтр осознанно (top-5 smart-sort уже выводит
-    /// urgent наверх, накладывать ещё один фильтр поверх — масло на масло).
-    private var allActiveFiltered: [BacklogTask] {
+    /// Active set after the urgent-only filter — common base for the visible
+    /// list and the auto-disengage rule when the urgent set dries up.
+    private var activeFiltered: [BacklogTask] {
         guard urgentOnlyFilter else { return activeTasks }
         return activeTasks.filter { BacklogLogic.isUrgent($0) }
     }
 
-    /// Tasks visible in the current mode. Sprint всегда smart-sort + cap;
-    /// All — пользовательский порядок (или smart-sort, если toggle включён),
-    /// плюс urgent-only фильтр.
+    /// Tasks rendered in the list. Пользовательский порядок (или smart-sort,
+    /// если toggle включён), плюс urgent-only фильтр. Параллельно inline
+    /// BacklogView'у — один и тот же мысленный набор задач, просто на весь
+    /// popover.
     private var visibleTasks: [BacklogTask] {
-        switch mode {
-        case .sprint:
-            let sorted = BacklogLogic.smartSorted(activeTasks)
-            return BacklogLogic.sprintCapped(sorted, max: Self.maxSprintTasks)
-        case .all:
-            let base = allActiveFiltered
-            return useSmartSort ? BacklogLogic.smartSorted(base) : base
-        }
+        useSmartSort ? BacklogLogic.smartSorted(activeFiltered) : activeFiltered
     }
 
-    /// Total scheduled minutes across the visible set — surfaces «how big is
-    /// this session?» (sprint) or «how big is the whole queue?» (all).
+    /// Total scheduled minutes across the visible set — drives the ETA chip
+    /// («когда закончится backlog, если браться сейчас»).
     private var totalMinutes: Int {
         visibleTasks.reduce(0) { $0 + $1.durationMinutes }
     }
@@ -191,29 +161,23 @@ struct SprintView: View {
         "Backlog: \(DS.formatMinutes(pendingWorkloadMinutes)); remaining today: \(DS.formatMinutes(remainingWorkdayMinutes))"
     }
 
-    /// Should the segmented mode picker render? Если задач ≤ sprint cap, оба
-    /// режима покажут одно и то же. Но если пользователь уже выбрал `.all`,
-    /// пилюлю прятать нельзя — иначе он окажется в режиме без переключателя
-    /// обратно. Бирман: «контрол без выбора — украшение, но и контрол
-    /// без выхода — ловушка».
-    private var showsModePicker: Bool {
-        guard !activeTasks.isEmpty else { return false }
-        return activeTasks.count > Self.maxSprintTasks || mode == .all
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             PopoverHeader(
-                title: "Sprint",
+                title: "Backlog",
                 showBack: true,
-                backLabel: "Exit",
+                // HIG: back label = название предыдущего экрана. Возвращаемся
+                // в основной popover (today + timeline + inline backlog
+                // card) — это «Today», не «Backlog» (полноэкранная форма
+                // которого мы сейчас и есть).
+                backLabel: "Today",
                 onBack: onExit
             )
 
             // Block container — same chrome as the inline Tasks card on the
-            // main view (`.skinTasksBlockChrome`). The whole Sprint surface
-            // lives inside one rounded platter so it reads as the same
-            // object the user sees collapsed on the main screen, just
+            // main view (`.skinTasksBlockChrome`). The whole fullscreen
+            // surface lives inside one rounded platter so it reads as the
+            // same object the user sees collapsed on the main screen, just
             // distended to popover height. Бирман: один объект — одна форма.
             VStack(spacing: 0) {
                 blockHeader
@@ -235,7 +199,7 @@ struct SprintView: View {
             // Auto-disengage urgent filter if the urgent set dries up — same
             // safety net as in BacklogView, prevents stranding the user in
             // an empty filtered view.
-            if urgentOnlyFilter, allActiveFiltered.isEmpty {
+            if urgentOnlyFilter, activeFiltered.isEmpty {
                 urgentOnlyFilter = false
             }
         }
@@ -251,17 +215,15 @@ struct SprintView: View {
 
     // MARK: - Block header
     //
-    // Один ряд внутри карточки, повторяющий структуру BacklogView'овского
-    // `backlogHeader` 1:1, чтобы свёрнутая Tasks-карточка на главной и
-    // распахнутый Sprint читались как один и тот же объект:
+    // Один ряд внутри карточки, зеркало BacklogView'овского `backlogHeader`:
     //
-    //   [ring] [Done by 6:18] [Sprint 5 / All 6] [→ ETA] · · · [urgent] [smart] [Schedule]
+    //   [ring] [Done by 6:18] [count] [→ ETA] [urgent] [smart] [⊕]
     //
-    // Capacity ring + verdict — общий груз очереди (тот же ответ на
-    // «влезет ли всё»). Mode picker заменяет шеврон + «Tasks N» — его
-    // лейбл несёт счётчик, отдельный текст не нужен. ETA — _видимого_
-    // набора (Sprint top-N), TimelineView держит цифру живой. Schedule
-    // pill — та же, что на главной: открывает палитру.
+    // Capacity ring + verdict — общий груз очереди. Total count — то же
+    // число, что в inline-карточке (без чеврона: здесь раскрытие/свёртка
+    // не нужны — это и есть полная карточка). ETA показывает, во сколько
+    // закончится backlog, если взяться прямо сейчас, и обновляется через
+    // TimelineView. Schedule-иконка открывает палитру.
 
     private var blockHeader: some View {
         HStack(spacing: DS.Spacing.sm) {
@@ -277,30 +239,27 @@ struct SprintView: View {
                     pendingMinutes: pendingWorkloadMinutes,
                     optimizerService: optimizerService
                 )
+
+                // Total count — same role as the chevron+count button in
+                // inline Backlog. Здесь нет disclosure (карточка и так во
+                // весь popover), поэтому это не button, а просто число.
+                Text("\(activeTasks.count)")
+                    .font(.subheadline.weight(.medium).monospacedDigit())
+                    .foregroundStyle(skin.resolvedTextPrimary)
+                    .contentTransition(.numericText())
+                    .help("\(activeTasks.count) task\(activeTasks.count == 1 ? "" : "s") in backlog")
+                    .accessibilityLabel("\(activeTasks.count) tasks")
             }
 
-            if showsModePicker {
-                modePicker
-                    .layoutPriority(0)
-            }
-
-            // Visible-set ETA chip — только в Sprint режиме: «если возьмусь
-            // прямо сейчас, top-N кончится в …». В `.all` режиме visible =
-            // backlog, ETA совпадает с capacity verdict'ом — дублирование
-            // молча убираем.
-            if mode == .sprint, !visibleTasks.isEmpty {
+            if !visibleTasks.isEmpty {
                 etaChip
             }
 
-            // Урaгентский фильтр и smart-sort — срезы списка, имеют смысл
-            // только в `.all` режиме (Sprint курируется машиной).
-            if mode == .all {
-                if urgentCount > 0 {
-                    urgentFilterButton
-                }
-                if activeTasks.count > 1 {
-                    smartSortButton
-                }
+            if urgentCount > 0 {
+                urgentFilterButton
+            }
+            if activeTasks.count > 1 {
+                smartSortButton
             }
 
             Spacer(minLength: 0)
@@ -313,10 +272,10 @@ struct SprintView: View {
         .padding(.vertical, DS.Spacing.sm)
         // Publish the block header's bottom Y so the command palette (a
         // sibling overlay anchored via `OptimizerBottomKey` in MenuBarView)
-        // lands right under the header inside the Sprint block — same
+        // lands right under the header inside the fullscreen block — same
         // pattern QuickActions uses on the main view. Without this the
         // palette inherits the stale main-view Y when ⌘K is pressed in
-        // Sprint and ends up floating inside the task list.
+        // fullscreen and ends up floating inside the task list.
         .background(
             GeometryReader { geo in
                 Color.clear.preference(
@@ -327,7 +286,8 @@ struct SprintView: View {
         )
     }
 
-    /// ETA-чип у block header'а: «→ 17:30 (+1d)». TimelineView прокручивает
+    /// ETA-чип у block header'а: «→ 17:30 (+1d)» — когда закончится весь
+    /// видимый backlog, если браться сейчас. TimelineView прокручивает
     /// цифру каждую минуту, иначе она зависнет на момент открытия popover'а.
     @ViewBuilder
     private var etaChip: some View {
@@ -348,16 +308,21 @@ struct SprintView: View {
     }
 
     /// Schedule pill — copy of BacklogView's `scheduleButton`. Открывает
-    /// command palette: пользователь не уходит из Sprint, чтобы запланировать
-    /// очередь — Бирман: «не отрывай человека от текущего объекта».
+    /// command palette: пользователь не уходит из fullscreen-Backlog'а, чтобы
+    /// запланировать очередь — Бирман: «не отрывай человека от текущего
+    /// объекта».
     private var scheduleButton: some View {
+        // Зеркалирует BacklogView.scheduleButton: иконка вместо «Schedule»,
+        // та же accent-капсула. Хедер так же узок, как у inline-карточки,
+        // текстовая pill там обрезалась.
         Button {
             onOpenPalette?()
         } label: {
-            Text("Schedule")
-                .font(.caption.weight(.medium))
+            Image(systemName: "calendar.badge.plus")
+                .font(.caption.weight(.semibold))
                 .foregroundStyle(skin.accentColor)
-                .padding(.horizontal, DS.Spacing.sm)
+                .frame(width: DS.Size.iconSmall, height: DS.Size.iconSmall)
+                .padding(.horizontal, DS.Spacing.xs)
                 .padding(.vertical, DS.Spacing.xxs)
                 .background {
                     Capsule().fill(skin.accentColor.opacity(DS.Opacity.lightFill))
@@ -377,13 +342,12 @@ struct SprintView: View {
 
     /// Red «N urgent» pill — toggles the urgent-only filter. Filled
     /// background while engaged so the user can see the filter is active;
-    /// hidden in Sprint mode (uncluttered focus surface) and когда нет
-    /// urgent-задач (контрол без эффекта — украшение).
+    /// hidden когда нет urgent-задач (контрол без эффекта — украшение).
     private var urgentFilterButton: some View {
         Button {
             // `.levelChange` haptic for filter mode switch — discrete
             // state change «list narrows / list opens up», not a
-            // micro-click. Same pattern on every Sprint/Backlog toggle.
+            // micro-click. Same pattern on every Backlog filter toggle.
             Haptics.impact()
             withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
                 urgentOnlyFilter.toggle()
@@ -418,9 +382,9 @@ struct SprintView: View {
         )
     }
 
-    /// Smart-sort toggle. Sprint режим всегда smart-sort'ится — этот
-    /// контрол меняет порядок только в `.all`. Иконка переключается между
-    /// «обычная сортировка» и «магия по smart-score».
+    /// Smart-sort toggle. Иконка переключается между «обычная сортировка»
+    /// (пользовательский drag-порядок) и «магия по smart-score» (deadline +
+    /// priority). Зеркало того же toggle в overflow-меню inline Backlog'а.
     private var smartSortButton: some View {
         Button {
             // `.levelChange` for sort-order switch — list reorders, not a
@@ -447,36 +411,6 @@ struct SprintView: View {
         .accessibilityLabel(useSmartSort ? "Smart sort on — tap for user order" : "Smart sort off — tap to enable")
     }
 
-    // MARK: - Mode picker
-
-    private var modePicker: some View {
-        SegmentedPillPicker(
-            options: Mode.allCases,
-            selection: Binding(
-                get: { mode },
-                set: { newMode in
-                    // `.levelChange` haptic for the discrete view-mode
-                    // switch (Sprint↔All). Skip if the binding fires with
-                    // the same value — SwiftUI sometimes echoes selections
-                    // from animation cycles, and a haptic per echo would
-                    // feel like Morse code on the trackpad.
-                    if newMode != mode {
-                        Haptics.impact()
-                    }
-                    withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-                        mode = newMode
-                    }
-                }
-            ),
-            labelProvider: { mode -> String in
-                switch mode {
-                case .sprint: return "Sprint \(min(activeTasks.count, Self.maxSprintTasks))"
-                case .all:    return "All \(activeTasks.count)"
-                }
-            }
-        )
-    }
-
     // MARK: - Main content
 
     @ViewBuilder
@@ -488,14 +422,14 @@ struct SprintView: View {
             ScrollView {
                 VStack(spacing: DS.Spacing.xs) {
                     ForEach(Array(visibleTasks.enumerated()), id: \.element.id) { index, task in
-                        // Hot-key digit передаётся первым maxSprintTasks
-                        // строкам в Sprint mode — checkbox tooltip учит
-                        // «press N to complete» при наведении. Никаких
-                        // дополнительных «primary»-атрибутов: все строки
-                        // равноценны, порядок задаёт smart-sort.
+                        // Hot-key digit передаётся первым `maxHotKeyTasks`
+                        // строкам — checkbox tooltip учит «press N to
+                        // complete» при наведении. Все строки равноценны,
+                        // порядок задаёт user drag (или smart-sort, если
+                        // включён).
                         row(
                             for: task,
-                            sprintHotKey: (mode == .sprint && index < Self.maxSprintTasks) ? index + 1 : nil
+                            hotKey: index < Self.maxHotKeyTasks ? index + 1 : nil
                         )
                     }
                     tombstones
@@ -519,7 +453,7 @@ struct SprintView: View {
             Image(systemName: "checkmark.circle")
                 .font(.system(size: 36, weight: .light))
                 .foregroundStyle(skin.resolvedTextTertiary)
-            Text("Nothing to sprint on")
+            Text("Backlog is empty")
                 .font(.headline)
                 .foregroundStyle(skin.resolvedTextPrimary)
             Text("Add a task below to get going.")
@@ -533,9 +467,11 @@ struct SprintView: View {
     // MARK: - Hot-keys
 
     /// Hidden surface that registers number-key shortcuts for completing
-    /// the first N visible Sprint tasks. Pressing «1» in Sprint mode
-    /// completes the first row, «2» the second, etc. — same idea Things
-    /// and Linear use for keyboard-first task completion.
+    /// the first N visible tasks. Pressing «1» completes the first row,
+    /// «2» the second, etc. — same idea Things and Linear use for
+    /// keyboard-first completion. Available только во fullscreen-Backlog'е,
+    /// потому что в inline-варианте цифры заняты обычным вводом в
+    /// add-field над таймлайном.
     ///
     /// Gated on `isInputFocused`: when the add-task field is active, digit
     /// keys must be normal text input, not commands. Conditionally rendering
@@ -546,12 +482,12 @@ struct SprintView: View {
     /// visual space but still participates in shortcut routing.
     @ViewBuilder
     private var hotKeyBindings: some View {
-        if mode == .sprint, !isInputFocused, !visibleTasks.isEmpty {
+        if !isInputFocused, !visibleTasks.isEmpty {
             // SF doesn't have a more compact way to register N shortcuts
             // dynamically, so explicit ForEach. `.frame(width: 0, height: 0)`
             // + `.opacity(0)` makes the buttons invisible without removing
             // them from the tree (which would also remove the shortcut).
-            ForEach(Array(visibleTasks.prefix(Self.maxSprintTasks).enumerated()), id: \.element.id) { index, task in
+            ForEach(Array(visibleTasks.prefix(Self.maxHotKeyTasks).enumerated()), id: \.element.id) { index, task in
                 Button("Complete task \(index + 1)") {
                     // Hot-key path bypasses the row's checkbox button, so we
                     // fire the same tactile click here. Tap-to-complete via
@@ -572,40 +508,32 @@ struct SprintView: View {
 
     // MARK: - Task row
 
-    /// Builds one task row for either Sprint or All mode. Все строки
-    /// равноценны: «primary»-понятия больше нет, никакого визуального
-    /// выделения первой строки. Порядок диктует smart-sort (Sprint) или
-    /// пользовательский drag (All), и этого достаточно — глаз и так читает
-    /// сверху вниз.
+    /// Builds one task row. Полные reorder/drag affordances — то же поведение,
+    /// что в inline BacklogView'е: hover-чевроны, drag-to-reorder, контекстное
+    /// меню. Все строки равноценны, порядок диктует пользовательский drag
+    /// (или smart-sort, если включён).
     @ViewBuilder
-    private func row(for task: BacklogTask, sprintHotKey: Int?) -> some View {
-        // `.all` mode wires the full reorder/drag affordances so the
-        // fullscreen surface behaves like an expanded BacklogView — same
-        // hover chevrons, same drag-to-reorder, same context menu. Sprint
-        // mode keeps the read-only calm: machine curates the order, user
-        // can't fight it row by row.
-        let isAllMode = mode == .all
+    private func row(for task: BacklogTask, hotKey: Int?) -> some View {
         BacklogTaskRow(
             task: task,
             isUrgent: BacklogLogic.isUrgent(task),
-            canMoveUp: isAllMode ? canMoveUp(task) : true,
-            canMoveDown: isAllMode ? canMoveDown(task) : true,
-            isSprintMode: mode == .sprint,
+            canMoveUp: canMoveUp(task),
+            canMoveDown: canMoveDown(task),
             onComplete: { complete(task) },
             onEdit: { onEditTask(task) },
             onDelete: { delete(task) },
             onFreeze: { freeze(task) },
-            onReorderDrop: isAllMode ? { dropped in
+            onReorderDrop: { dropped in
                 handleReorderDrop(dropped: dropped, targetId: task.id)
-            } : { _ in },
-            onMoveUp: isAllMode ? { moveTask(task, by: -1) } : {},
-            onMoveDown: isAllMode ? { moveTask(task, by: +1) } : {},
-            onMoveToTop: isAllMode ? { moveTaskToEdge(task, toTop: true) } : {},
-            onMoveToBottom: isAllMode ? { moveTaskToEdge(task, toTop: false) } : {},
+            },
+            onMoveUp: { moveTask(task, by: -1) },
+            onMoveDown: { moveTask(task, by: +1) },
+            onMoveToTop: { moveTaskToEdge(task, toTop: true) },
+            onMoveToBottom: { moveTaskToEdge(task, toTop: false) },
             isFocused: focusedTaskId == task.id,
             onFocusPrev: { focusRow(offsetFrom: task.id, by: -1) },
             onFocusNext: { focusRow(offsetFrom: task.id, by: +1) },
-            sprintHotKey: sprintHotKey
+            sprintHotKey: hotKey
         )
         .focusable()
         .focused($focusedTaskId, equals: task.id)
@@ -614,22 +542,17 @@ struct SprintView: View {
 
     // MARK: - Tombstones
 
-    /// Shared completed-today + frozen summary rows.
-    ///
-    /// `.all` mode rows mirror BacklogView 1:1, so we ask for the same
-    /// leading-gutter alignment + 40pt floor — the checkmark/snowflake
-    /// column lines up under the active rows above. `.sprint` mode rows
-    /// open with a 3pt accent bar (not the 16pt icon gutter), so reusing
-    /// `alignedLeadingGutter` there would create phantom whitespace; the
-    /// tombstones stay content-sized.
+    /// Shared completed-today + frozen summary rows. Mirror BacklogView 1:1
+    /// — same leading-gutter alignment + 40pt floor, so the checkmark/snowflake
+    /// column lines up under the active rows above.
     private var tombstones: some View {
         BacklogTombstones(
             completedToday: completedToday,
             frozen: backlogService.frozen,
             showCompleted: $showCompletedToday,
             showFrozen: $showFrozen,
-            alignedLeadingGutter: mode == .all,
-            minRowHeight: mode == .all ? BacklogView.compactRowHeight : nil,
+            alignedLeadingGutter: true,
+            minRowHeight: BacklogView.compactRowHeight,
             onUncomplete: { task in uncomplete(task) },
             onUnfreezeOne: { task in unfreezeOneWithUndo(task) },
             onUnfreezeAll: { unfreezeAllWithUndo() }
@@ -662,11 +585,11 @@ struct SprintView: View {
 
     // MARK: - Add task field
 
-    /// Inline add-task field. Узкий клон того, что в BacklogView, без
-    /// ghost-preview (timeline здесь нет, предсказывать слот некуда), но
-    /// с тем же распознаванием duration в стиле «Write report 30m». Раньше
-    /// SprintView был тупиком в empty-state — приходилось возвращаться в
-    /// backlog ради добавления.
+    /// Inline add-task field. Mirror of BacklogView's, без ghost-preview
+    /// (timeline здесь нет, предсказывать слот некуда). Включает три
+    /// одинаковых с inline-версией affordances: syntax-teaching placeholder
+    /// в пустом состоянии, empty-state hint, focused-state shortcut hint —
+    /// чтобы карточка-fullscreen и inline-карточка обучали одинаково.
     private var addTaskField: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
             HStack(spacing: DS.Spacing.sm) {
@@ -674,7 +597,7 @@ struct SprintView: View {
                     .font(.caption)
                     .foregroundStyle(isInputFocused ? AnyShapeStyle(skin.accentColor) : AnyShapeStyle(.tertiary))
 
-                TextField("Add task\u{2026}", text: $newTaskTitle)
+                TextField(addTaskPlaceholder, text: $newTaskTitle)
                     .textFieldStyle(.plain)
                     .font(.callout)
                     .focused($isInputFocused)
@@ -705,28 +628,62 @@ struct SprintView: View {
                     .fill(skin.accentColor.opacity(isInputFocused ? DS.Opacity.lightFill : DS.Opacity.subtleFill))
             )
             .motionAwareAnimation(DS.Animation.quick, value: parsedNewTaskTitle.durationMinutes, reduceMotion: reduceMotion)
+
+            // Hint for new users — disappears once they add a task. Same
+            // copy as inline BacklogView so the empty-state lesson is
+            // identical across surfaces.
+            if activeTasks.isEmpty && !isInputFocused {
+                Text("Tasks you add here will be scheduled into free slots")
+                    .font(.caption2)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                    .transition(.opacity)
+            }
+
+            // Focused-state shortcut hint. HIG: discoverable shortcuts —
+            // surface the two keys that matter (submit + cancel) exactly
+            // while the field is active, then get out of the way. Birman:
+            // подсказка живёт в том же месте, что и поле.
+            if isInputFocused {
+                HStack(spacing: DS.Spacing.xs) {
+                    Text("\u{23CE} Add")
+                    Text("·").foregroundStyle(skin.resolvedTextTertiary.opacity(DS.Opacity.half))
+                    Text("\u{238B} Cancel")
+                    Spacer(minLength: 0)
+                }
+                .font(.caption2)
+                .foregroundStyle(skin.resolvedTextTertiary)
+                .transition(.opacity)
+                .accessibilityHidden(true)
+            }
         }
         // Match BacklogView's add-field padding so the field sits at the
         // same offset from the card edge as the inline version.
         .padding(.horizontal, DS.Spacing.sm)
         .padding(.vertical, DS.Spacing.sm)
+        .motionAwareAnimation(DS.Animation.quick, value: isInputFocused, reduceMotion: reduceMotion)
     }
 
-    // MARK: - Reorder helpers (`.all` mode only)
+    /// TextField placeholder. Teaching syntax when the backlog is empty
+    /// («try: Write report 30m»), compact «Add task…» otherwise. Identical
+    /// copy to inline BacklogView.
+    private var addTaskPlaceholder: String {
+        activeTasks.isEmpty
+            ? "Add task — try: Write report 30m"
+            : "Add task\u{2026}"
+    }
+
+    // MARK: - Reorder helpers
     //
     // Mirror BacklogView's behaviour so users get identical reorder semantics
-    // across the two surfaces. Sprint mode never calls these — its order is
-    // owned by smart-sort and the cap.
+    // across the two surfaces.
 
     private func canMoveUp(_ task: BacklogTask) -> Bool {
-        guard mode == .all else { return false }
-        return visibleTasks.first?.id != task.id
+        visibleTasks.first?.id != task.id
             && visibleTasks.contains(where: { $0.id == task.id })
     }
 
     private func canMoveDown(_ task: BacklogTask) -> Bool {
-        guard mode == .all else { return false }
-        return visibleTasks.last?.id != task.id
+        visibleTasks.last?.id != task.id
             && visibleTasks.contains(where: { $0.id == task.id })
     }
 
@@ -859,9 +816,9 @@ struct SprintView: View {
     private func complete(_ task: BacklogTask) {
         // Tap-to-complete via checkbox already fires `Haptics.tap()` from
         // the press itself (`BacklogTaskRow.checkbox` + `IconPressStyle`),
-        // so no haptic here. Hot-key completion (1-5) is the other entry
-        // path; the haptic for that case fires through the same checkbox
-        // closure when the digit-shortcut runs the row's button.
+        // so no haptic here. Hot-key completion (digits 1-9) is the other
+        // entry path; the haptic for that case fires from the digit-shortcut
+        // button before delegating into `complete(_:)`.
         let snapshot = task
         withAnimation(DS.Animation.motionAware(DS.Animation.entrance, reduceMotion: reduceMotion)) {
             backlogService.completeTask(id: task.id)

@@ -146,23 +146,6 @@ final class BacklogLogicTests: XCTestCase {
         XCTAssertEqual(sorted.first?.id, "h")
     }
 
-    // MARK: sprint cap
-
-    func testSprintCappedReturnsPrefix() {
-        let tasks = (0..<10).map { task("t\($0)") }
-        XCTAssertEqual(BacklogLogic.sprintCapped(tasks, max: 3).map(\.id), ["t0", "t1", "t2"])
-    }
-
-    func testSprintCappedZeroReturnsEmpty() {
-        let tasks = [task("a")]
-        XCTAssertTrue(BacklogLogic.sprintCapped(tasks, max: 0).isEmpty)
-    }
-
-    func testSprintCappedOverflowReturnsAll() {
-        let tasks = [task("a"), task("b")]
-        XCTAssertEqual(BacklogLogic.sprintCapped(tasks, max: 99).map(\.id), ["a", "b"])
-    }
-
     // MARK: completed today
 
     func testCompletedTodayIncludesOnlyDoneAfterStartOfDay() {

@@ -16,10 +16,6 @@ struct BacklogTaskRow: View {
     /// the menu entries cleanly on the first and last rows.
     var canMoveUp: Bool = true
     var canMoveDown: Bool = true
-    /// Sprint mode tints the row for calmer reading: metadata/controls
-    /// disappear, the title takes a larger font. Set by `SprintView`; the
-    /// inline backlog passes the default `false`.
-    var isSprintMode: Bool = false
     var onComplete: () -> Void
     var onEdit: () -> Void
     var onDelete: () -> Void
@@ -54,16 +50,35 @@ struct BacklogTaskRow: View {
     /// the owning view debounce the work without polluting row state.
     var onHoverChanged: (Bool) -> Void = { _ in }
 
-    /// Hot-key digit (1–9) used to teach SprintView's keyboard completion
-    /// shortcuts via the checkbox tooltip. nil = no shortcut for this row,
-    /// which is the case in BacklogView's inline list. SprintView passes
-    /// the row's sprint index for the first N visible tasks.
+    /// Hot-key digit (1–9) used to teach the fullscreen Backlog's keyboard
+    /// completion shortcuts via the checkbox tooltip. nil = no shortcut for
+    /// this row — the case for inline BacklogView, where digit keys belong
+    /// to the add-task field instead.
     var sprintHotKey: Int? = nil
 
     @State private var isHovered = false
     @State private var isReorderTargeted = false
+    /// True for the brief moment between «user tapped checkbox» and «row
+    /// disappears from the active list». During this window the title gets
+    /// a strikethrough, the row dims, and the checkbox glyph swaps to a
+    /// filled checkmark — the same «I marked it done» frame Things and
+    /// Reminders show. Skipped under `reduceMotion`.
+    @State private var isCompleting = false
     @Environment(\.activeSkin) private var skin
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Delay between the strikethrough appearing and `onComplete()` firing
+    /// (which removes the row from the list). Long enough to register as a
+    /// confirmation frame, short enough not to feel like lag.
+    private static let completionAnimationDuration: TimeInterval = 0.28
+
+    /// True when the task has a deadline that's already passed. Drives the
+    /// pulsing red dot in the meta row — overdue is a louder signal than
+    /// «today», so it gets motion in addition to the red text colour.
+    private var isOverdue: Bool {
+        guard let deadline = task.deadline else { return false }
+        return deadline < Date()
+    }
 
     /// Single primary metric for the collapsed row.
     ///
@@ -134,18 +149,23 @@ struct BacklogTaskRow: View {
 
     var body: some View {
         HStack(spacing: DS.Spacing.sm) {
-            // Trailing controls vanish in sprint mode so the row reads as a
-            // quiet single column — «один режим, одна цель».
             checkbox
+            // Dim everything except the checkbox while completion is in
+            // flight: title takes the strikethrough, metadata fades to
+            // tertiary, controls become non-interactive. The checkbox
+            // itself stays at full opacity so the «filled checkmark»
+            // success glyph reads loud and clear — this is the moment the
+            // user just clicked. Same idea as Things' completion frame.
             content
+                .opacity(isCompleting ? DS.Opacity.tertiaryText : 1)
             Spacer(minLength: DS.Spacing.xs)
-            if !isSprintMode {
-                controls
-            }
+            controls
+                .opacity(isCompleting ? DS.Opacity.tertiaryText : 1)
+                .allowsHitTesting(!isCompleting)
         }
         .padding(.vertical, DS.Spacing.xxs)
         .padding(.horizontal, DS.Spacing.xs)
-        .frame(minHeight: isSprintMode ? BacklogView.compactRowHeight + 8 : BacklogView.compactRowHeight)
+        .frame(minHeight: BacklogView.compactRowHeight)
         .contentShape(Rectangle())
         // Drag pickup feedback (source side): the source row ONLY dims
         // while in flight — it stays in place as a ghost so the user sees
@@ -310,18 +330,40 @@ struct BacklogTaskRow: View {
     private var checkbox: some View {
         Button {
             Haptics.tap()
-            onComplete()
+            // Reduce Motion: no confirmation frame — `onComplete()` fires
+            // immediately and the row removes via the standard animation.
+            // Otherwise: light up the strikethrough + filled glyph, hold
+            // for `completionAnimationDuration`, then complete. Guarded
+            // by `isCompleting` so a double-tap doesn't fire onComplete()
+            // twice (the second tap would try to complete an already-removed
+            // task, which is harmless but pollutes the undo stream).
+            guard !isCompleting else { return }
+            if reduceMotion {
+                onComplete()
+                return
+            }
+            withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+                isCompleting = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.completionAnimationDuration) {
+                onComplete()
+            }
         } label: {
-            Image(systemName: "circle")
+            Image(systemName: isCompleting ? "checkmark.circle.fill" : "circle")
                 .font(.callout)
-                .foregroundStyle(isUrgent ? skin.resolvedDestructiveColor : skin.resolvedTextSecondary)
+                .foregroundStyle(
+                    isCompleting
+                        ? AnyShapeStyle(skin.accentColor)
+                        : AnyShapeStyle(isUrgent ? skin.resolvedDestructiveColor : skin.resolvedTextSecondary)
+                )
                 .frame(width: 24, height: 24)
                 .contentShape(Rectangle())
+                .contentTransition(.symbolEffect(.replace))
         }
         .buttonStyle(.iconPress)
-        // When SprintView passes a hot-key digit, append it to the tooltip
-        // so users discover «press N to complete» on first hover instead of
-        // having to read the docs. Plain «Mark complete» otherwise.
+        // When the fullscreen Backlog passes a hot-key digit, append it to
+        // the tooltip so users discover «press N to complete» on first hover
+        // instead of having to read the docs. Plain «Mark complete» otherwise.
         .help(sprintHotKey.map { "Mark complete (press \($0))" } ?? "Mark complete")
         .accessibilityLabel("Mark \u{201C}\(task.title)\u{201D} complete")
     }
@@ -333,9 +375,10 @@ struct BacklogTaskRow: View {
         Button(action: onEdit) {
             HStack(spacing: DS.Spacing.xs) {
                 Text(task.title)
-                    .font(isSprintMode ? .headline.weight(.medium) : .callout)
+                    .font(.callout)
                     .foregroundStyle(titleColor)
-                    .lineLimit(isSprintMode ? 1 : 2)
+                    .strikethrough(isCompleting, color: skin.resolvedTextSecondary)
+                    .lineLimit(2)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
                     .layoutPriority(1)
@@ -383,21 +426,29 @@ struct BacklogTaskRow: View {
                         .accessibilityLabel("High priority")
                 }
 
-                if !isSprintMode {
-                    metaText
-                        .font(.caption2)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+                // Overdue gets a pulsing red dot before the meta text:
+                // urgency должна _кричать_, а не шептать капсом. Текст
+                // «Overdue» уже красный, но статичный текст легко пропустить
+                // взглядом — пульсация выделяет «эта задача требует решения
+                // _сейчас_». Пульс отключается при `accessibilityReduceMotion`,
+                // остаётся ровный красный dot.
+                if isOverdue {
+                    OverduePulseDot(reduceMotion: reduceMotion)
+                        .accessibilityHidden(true)
                 }
+                metaText
+                    .font(.caption2)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
 
-                if isHovered, !isSprintMode, let secondary = secondaryMetaText {
+                if isHovered, let secondary = secondaryMetaText {
                     secondary
                         .font(.caption2)
                         .lineLimit(1)
                         .transition(.opacity)
                 }
 
-                if isHovered, !isDragging, let slotPreview, !isSprintMode {
+                if isHovered, !isDragging, let slotPreview {
                     Text("→ \(slotPreview)")
                         .font(.caption2)
                         .foregroundStyle(skin.accentColor.opacity(DS.Opacity.accentMuted))
@@ -496,5 +547,29 @@ struct BacklogTaskRow: View {
         // Birman: язык интерфейса — язык человека. "in 5 days" вместо "5d".
         // `.relative(presentation: .numeric)` локализовано, без ручной сборки.
         return date.formatted(.relative(presentation: .numeric))
+    }
+}
+
+// MARK: - Overdue Pulse Dot
+
+/// Red dot that softly pulses opacity to draw the eye to overdue tasks.
+/// Sits before the meta text in the row footer. Static (no animation) when
+/// `reduceMotion` is on — colour alone still flags the state.
+private struct OverduePulseDot: View {
+    let reduceMotion: Bool
+    @Environment(\.activeSkin) private var skin
+    @State private var pulsing = false
+
+    var body: some View {
+        Circle()
+            .fill(skin.resolvedDestructiveColor)
+            .frame(width: DS.Size.recipeDotSize, height: DS.Size.recipeDotSize)
+            .opacity(reduceMotion ? 1 : (pulsing ? 0.35 : 1))
+            .onAppear {
+                guard !reduceMotion else { return }
+                withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                    pulsing = true
+                }
+            }
     }
 }

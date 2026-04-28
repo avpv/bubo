@@ -61,7 +61,7 @@ struct MenuBarView: View {
         case editTask(BacklogTask)
         case timer(CalendarEvent)
         case quickAddTasks
-        case sprint
+        case backlog
 
         var isTimer: Bool {
             if case .timer = self { return true }
@@ -76,7 +76,7 @@ struct MenuBarView: View {
             case (.editTask(let a), .editTask(let b)): return a.id == b.id
             case (.timer(let a), .timer(let b)): return a.id == b.id
             case (.quickAddTasks, .quickAddTasks): return true
-            case (.sprint, .sprint): return true
+            case (.backlog, .backlog): return true
             default: return false
             }
         }
@@ -256,9 +256,9 @@ struct MenuBarView: View {
                             .onAppear { navigation = .list }
                     }
 
-                case .sprint:
+                case .backlog:
                     if let backlog = optimizerService.backlogService {
-                        SprintView(
+                        BacklogFullscreenView(
                             backlogService: backlog,
                             optimizerService: optimizerService,
                             reminderService: reminderService,
@@ -677,8 +677,8 @@ struct MenuBarView: View {
                 onEditTask: { task in
                     navigation = .editTask(task)
                 },
-                onEnterSprint: {
-                    navigation = .sprint
+                onEnterFullscreen: {
+                    navigation = .backlog
                 },
                 onUndoableAction: { message, undo in
                     // Unified undo pipe for reorder / complete / context
@@ -879,9 +879,9 @@ struct MenuBarView: View {
             // Backlog card — always rendered so the "+ Add task…" input
             // stays as a persistent visual anchor even when the backlog
             // is empty. The chrome itself lives on `.skinTasksBlockChrome`
-            // — same modifier SprintView uses, so the block reads as one
-            // recognizable surface in both collapsed-on-main and
-            // fullscreen-in-Sprint states.
+            // — same modifier the fullscreen Backlog uses, so the block
+            // reads as one recognizable surface in both collapsed-on-main
+            // and fullscreen states.
             inlineBacklog(autoExpand: reminderService.nonDisintegratingEventCount == 0)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .skinTasksBlockChrome(activeSkin)
@@ -1889,13 +1889,13 @@ private struct PermissionBannerPageDots: View {
 }
 
 /// Bottom-Y of the optimizer entry strip — the inline QuickActions card on
-/// `.list`, or the sprint-view QuickActions strip on `.sprint`. The command
-/// palette anchors itself below this Y so the «Optimize ⌘K» trigger that
-/// opened it stays visible and the palette feels glued to its origin.
+/// `.list`, or the fullscreen Backlog's block header on `.backlog`. The
+/// command palette anchors itself below this Y so the «Optimize ⌘K» trigger
+/// that opened it stays visible and the palette feels glued to its origin.
 ///
-/// Internal (not fileprivate) so SprintView, which lives in its own file,
-/// can publish into the same key — switching surfaces shouldn't make the
-/// palette float over the popover header.
+/// Internal (not fileprivate) so the fullscreen Backlog, which lives in its
+/// own file, can publish into the same key — switching surfaces shouldn't
+/// make the palette float over the popover header.
 struct OptimizerBottomKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
@@ -1904,5 +1904,3 @@ struct OptimizerBottomKey: PreferenceKey {
 }
 
 let menuBarRootCoordinateSpace = "MenuBarViewRoot"
-
-// ColorDotButton is now a shared component in Components/ColorDotButton.swift

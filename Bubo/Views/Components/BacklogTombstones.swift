@@ -4,14 +4,14 @@ import SwiftUI
 
 /// Shared «квартирант, а не жилец» summary rows for completed-today and
 /// frozen tasks. Used by both the inline `BacklogView` (under the active
-/// list) and the fullscreen `SprintView` (at the bottom of its scroll).
+/// list) and the `BacklogFullscreenView` (at the bottom of its scroll).
 ///
 /// Pre-extraction the two views had ~150 lines of near-identical tombstone
 /// code each, kept in sync by hand. Whenever someone touched the snowflake
 /// row in one place we'd have to remember the other; in practice the two
-/// drifted (SprintView lost the leading-gutter alignment, the row-height
-/// floor, etc.) and the views looked subtly different even though they
-/// were rendering the same data.
+/// drifted (the fullscreen variant had lost the leading-gutter alignment
+/// and row-height floor) and the views looked subtly different even though
+/// they were rendering the same data.
 ///
 /// Design (Birman):
 /// - Both tombstones are summaries first, lists second: chevron + count
@@ -22,9 +22,9 @@ import SwiftUI
 ///   a click on the snowflake unfreezes. No confirm dialogs — undo lives
 ///   in the toast pipe owned by the parent.
 /// - Visual continuity with the active list above is opt-in (the
-///   `alignedLeadingGutter` and `minRowHeight` knobs) so SprintView,
-///   which has no leading icon column to line up with, doesn't pay for
-///   alignment it doesn't need.
+///   `alignedLeadingGutter` and `minRowHeight` knobs). Both surfaces now
+///   pass them; the knobs stay so callers without a leading icon column
+///   wouldn't have to pay for alignment they don't need.
 struct BacklogTombstones: View {
     let completedToday: [BacklogTask]
     let frozen: [BacklogTask]
@@ -34,14 +34,14 @@ struct BacklogTombstones: View {
     /// When true, completed/frozen rows render with a leading gutter that
     /// matches the leading-icon column of active task rows in `BacklogView`,
     /// so the checkmark/snowflake column visually aligns with the active
-    /// rows above. `SprintView` passes `false` — its rows have no leading
-    /// column to align with.
+    /// rows above. Both surfaces currently pass `true`; the default stays
+    /// `false` for any future caller without an icon column to align with.
     var alignedLeadingGutter: Bool = false
 
-    /// Floor for tombstone-row height. BacklogView passes its
-    /// `compactRowHeight` (40pt) so completed/frozen rows match the active
-    /// row height above them; SprintView leaves it nil and lets content
-    /// size dictate.
+    /// Floor for tombstone-row height. Callers pass `BacklogView.compactRowHeight`
+    /// (40pt) so completed/frozen rows match the active row height above
+    /// them; default `nil` lets content size dictate for callers that don't
+    /// need vertical alignment.
     var minRowHeight: CGFloat? = nil
 
     /// Restore a completed task to the active list. Parent owns the

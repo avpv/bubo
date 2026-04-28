@@ -156,33 +156,58 @@ extension View {
 
 // MARK: - Platter Shape & Depth (HIG 2026)
 
+/// Inner glass border used on platter surfaces.
+///
+/// Honours `accessibilityReduceTransparency` by swapping the white-opacity
+/// gradient + `plusLighter` blend for a solid `separatorColor` stroke when
+/// the setting is on. The decorative glassmorphism disappears, but the
+/// platter still has a visible edge — HIG: «Reduce Transparency substitutes
+/// more opaque backgrounds for translucent ones; keep affordances visible».
+///
+/// Single source of truth for the border so `SkinPlatterDepthModifier` and
+/// `skinTasksBlockChrome` stay in lockstep when the rules change.
+struct PlatterGlassBorder: View {
+    let skin: SkinDefinition
+
+    @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
+        if reduceTransparency {
+            shape.strokeBorder(
+                Color(nsColor: .separatorColor),
+                lineWidth: DS.Border.thin
+            )
+        } else {
+            shape
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [
+                            .white.opacity(skin.platterBorderOpacity * 1.5),
+                            .white.opacity(skin.platterBorderOpacity * 0.1),
+                            .clear,
+                            .white.opacity(skin.platterBorderOpacity * 0.4)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: DS.Border.thin
+                )
+                .blendMode(contrast == .increased ? .normal : .plusLighter)
+        }
+    }
+}
+
 /// Encapsulates corner radius, inner glass borders, and ambient drop shadows for
 /// platters and elevated components using the skin's layout configuration.
 struct SkinPlatterDepthModifier: ViewModifier {
     let skin: SkinDefinition
 
-    @Environment(\.colorSchemeContrast) private var contrast
-
     func body(content: Content) -> some View {
         content
             .clipShape(RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                    .strokeBorder(
-                        LinearGradient(
-                            colors: [
-                                .white.opacity(skin.platterBorderOpacity * 1.5),
-                                .white.opacity(skin.platterBorderOpacity * 0.1),
-                                .clear,
-                                .white.opacity(skin.platterBorderOpacity * 0.4)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: DS.Border.thin
-                    )
-                    .blendMode(contrast == .increased ? .normal : .plusLighter)
-            )
+            .overlay(PlatterGlassBorder(skin: skin))
             .shadow(
                 color: skin.resolvedShadowColor,
                 radius: skin.shadowRadius,
@@ -208,7 +233,8 @@ extension View {
 //
 // Visual identity for the Tasks card surface used in two places:
 //   • Inline on the main view, wrapping `BacklogView`.
-//   • Fullscreen inside `SprintView`, wrapping the same content distended
+//   • Fullscreen inside the fullscreen Backlog view
+//     (`BacklogFullscreenView`), wrapping the same content distended
 //     to popover height.
 // One source of truth keeps the block recognizably the same object across
 // collapsed and expanded states — Бирман: «один объект — одна форма».
@@ -223,8 +249,8 @@ extension View {
     /// Drag-safe Tasks-block chrome: same rounded platter background, glass
     /// border and ambient shadows as `skinPlatterDepth`, but the rounded clip
     /// lives on the background layer so `.draggable` rows underneath remain
-    /// hit-testable. Used by both `BacklogView` (inline card) and
-    /// `SprintView` (fullscreen block).
+    /// hit-testable. Used by both `BacklogView` (inline card) and the
+    /// fullscreen Backlog (`BacklogFullscreenView`).
     func skinTasksBlockChrome(_ skin: SkinDefinition) -> some View {
         self
             .background(
@@ -234,21 +260,7 @@ extension View {
                     .shadow(color: skin.resolvedShadowColor, radius: 2, y: 1)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: DS.Size.cornerRadius, style: .continuous)
-                    .strokeBorder(
-                        LinearGradient(
-                            colors: [
-                                .white.opacity(skin.platterBorderOpacity * 1.5),
-                                .white.opacity(skin.platterBorderOpacity * 0.1),
-                                .clear,
-                                .white.opacity(skin.platterBorderOpacity * 0.4)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: DS.Border.thin
-                    )
-                    .blendMode(.plusLighter)
+                PlatterGlassBorder(skin: skin)
                     .allowsHitTesting(false)
             )
     }
