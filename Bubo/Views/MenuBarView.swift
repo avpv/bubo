@@ -194,6 +194,22 @@ struct MenuBarView: View {
                         },
                         onSessionEnded: { entry in
                             optimizerService.pomodoroHistory.record(entry)
+                        },
+                        onAdjustEndDate: { event, deltaMinutes in
+                            // Scrub-the-ring extends/shortens `endDate` only.
+                            // We re-fetch the current event so successive
+                            // scrubs compose correctly (each delta applies
+                            // to the latest end-date, not to a stale capture).
+                            // Clamp the new end-date to «now + 60s» so the
+                            // user can never scrub the timer past the
+                            // present moment and have it auto-end mid-drag.
+                            guard var current = reminderService.localEvents.first(where: { $0.id == event.id }) else { return }
+                            let proposed = current.endDate.addingTimeInterval(TimeInterval(deltaMinutes * 60))
+                            let floor = Date().addingTimeInterval(60)
+                            current.endDate = max(proposed, floor)
+                            reminderService.updateLocalEvent(current)
+                            let signed = deltaMinutes > 0 ? "+\(deltaMinutes) min" : "\(deltaMinutes) min"
+                            toastState.showSuccess("End time \(signed)", icon: "timer")
                         }
                     )
                     .transition(

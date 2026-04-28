@@ -11,6 +11,12 @@ struct TimerScreenView: View {
     /// shape. Lets `MenuBarView` route the outcome into
     /// `PomodoroHistoryService` without pulling the service into a view.
     var onSessionEnded: ((PomodoroHistoryEntry) -> Void)? = nil
+    /// Scrub-the-ring callback: adjusts the active event's `endDate`
+    /// by a signed minute delta (positive = extend, negative = shorten).
+    /// `MenuBarView` clamps the resulting `endDate` so it never drops
+    /// below «now + 1 minute», preventing the timer from auto-ending
+    /// while the user is dragging. Pass nil to disable scrubbing.
+    var onAdjustEndDate: ((CalendarEvent, Int) -> Void)? = nil
 
     var wallpaper: WallpaperDefinition = WallpaperCatalog.none
     var customPhotoPath: String = ""
@@ -20,6 +26,16 @@ struct TimerScreenView: View {
 
     @State private var pulseRing = false
     @State private var appearedAt: Date?
+
+    /// Scrub state. A horizontal drag on the ring adjusts the event's
+    /// `endDate` in 1-minute snaps, with `Haptics.alignment()` on every
+    /// snap boundary. `scrubArmed` toggles the visual cue (a tinted
+    /// ring + delta badge); `scrubMinuteDelta` is the live signed delta
+    /// the gesture has accumulated since press-start.
+    @State private var scrubArmed = false
+    @State private var scrubMinuteDelta = 0
+    @State private var scrubLastSnap = 0
+
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.navigateHome) private var navigateHome
@@ -250,6 +266,17 @@ struct TimerScreenView: View {
                             }
                         }
                     }
+                    .scaleEffect(scrubArmed ? 1.03 : 1.0)
+                    .animation(skin.resolvedMicroAnimation, value: scrubArmed)
+                    // Horizontal drag on the ring extends or shortens the
+                    // active event's `endDate`. The gesture is masked when
+                    // the event isn't currently in progress (no «remaining
+                    // time» to scrub then) or when it isn't a local
+                    // standard event (pomodoros own a structured phase
+                    // model that isn't a simple end-date adjustment).
+                    .gesture(scrubGesture(now: now),
+                             including: canScrub(now: now) ? .gesture : .none)
+                    .overlay(scrubBadge.padding(.top, DS.Size.timerRingDiameter * 0.55))
                     .staggeredEntrance(index: 0)
 
                     // Pomodoro segment indicator — round number and work/break status.
@@ -375,6 +402,82 @@ struct TimerScreenView: View {
                 .padding(.top, DS.Spacing.lg)
                 .padding(.bottom, DS.Spacing.xl)
             }
+        }
+    }
+
+    // MARK: - Scrub-the-Ring (adjust event end-date by horizontal drag)
+
+    /// Pixel-to-minute conversion for ring-scrubbing. 8pt of horizontal
+    /// drag = 1 minute, so a comfortable cross-ring sweep (~180pt) covers
+    /// roughly 22 minutes — enough to «add another quick chunk» without
+    /// being so sensitive that small wrist twitches change the time.
+    private var scrubPointsPerMinute: CGFloat { 8.0 }
+
+    /// Hard cap so a single scrub gesture can extend by at most one hour
+    /// or shorten by however much the event has remaining (the commit
+    /// path clamps end-date against «now + 60s» as a final safety net).
+    private var maxScrubMinutes: Int { 60 }
+
+    private func canScrub(now: Date) -> Bool {
+        onAdjustEndDate != nil
+            && event.isLocalEvent
+            && !event.isRecurring
+            && event.eventType == .standard
+            && isInProgress(now)
+    }
+
+    private func scrubGesture(now: Date) -> some Gesture {
+        DragGesture(minimumDistance: 6, coordinateSpace: .local)
+            .onChanged { value in
+                if !scrubArmed {
+                    scrubArmed = true
+                    Haptics.impact()
+                }
+                // Horizontal axis only — vertical wiggle is ignored so
+                // the gesture reads as «winding the ring» (a horizontal
+                // metaphor) rather than «sliding it around».
+                let raw = Int((value.translation.width / scrubPointsPerMinute).rounded())
+                let clamped = max(-maxScrubMinutes, min(maxScrubMinutes, raw))
+                if clamped != scrubLastSnap {
+                    Haptics.alignment()
+                    scrubLastSnap = clamped
+                }
+                scrubMinuteDelta = clamped
+            }
+            .onEnded { _ in
+                if scrubMinuteDelta != 0 {
+                    onAdjustEndDate?(event, scrubMinuteDelta)
+                    Haptics.impact()
+                }
+                withAnimation(skin.resolvedMicroAnimation) {
+                    scrubArmed = false
+                }
+                scrubMinuteDelta = 0
+                scrubLastSnap = 0
+            }
+    }
+
+    /// Floating capsule under the ring showing the proposed end-time
+    /// shift while a scrub is in flight. Same visual recipe as the
+    /// drag-to-reschedule badge in `EventRowView` — glass capsule, accent
+    /// border, z2 elevation — so the two gestures read as a family.
+    @ViewBuilder
+    private var scrubBadge: some View {
+        if scrubArmed {
+            let signed = scrubMinuteDelta == 0
+                ? "—"
+                : (scrubMinuteDelta > 0 ? "+\(scrubMinuteDelta) min" : "\(scrubMinuteDelta) min")
+            Text(signed)
+                .font(.footnote.weight(.semibold).monospacedDigit())
+                .foregroundStyle(skin.accentColor)
+                .padding(.horizontal, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xxs)
+                .background(skin.resolvedPlatterMaterial, in: Capsule())
+                .overlay(Capsule().strokeBorder(skin.accentColor.opacity(DS.Opacity.softAccent),
+                                                 lineWidth: DS.Border.thin))
+                .elevation(.z2, skin: skin)
+                .transition(.opacity.combined(with: .scale(scale: 0.92)))
+                .accessibilityLabel("Adjust end time \(signed)")
         }
     }
 
