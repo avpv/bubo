@@ -1381,6 +1381,18 @@ struct MenuBarView: View {
                     event: event,
                     reminderService: reminderService,
                     onEdit: { event in resolveEdit(event) },
+                    onRenameLocal: { event, newTitle in
+                        // Inline rename: route to `updateLocalEvent` against
+                        // the root event. For an expanded occurrence
+                        // (`seriesId != nil`) we look the root up by series
+                        // id, since `localEvents` only stores root events
+                        // and `updateLocalEvent` matches by id.
+                        let rootId = event.seriesId ?? event.id
+                        guard var root = reminderService.localEvents.first(where: { $0.id == rootId }) else { return }
+                        root.title = newTitle
+                        reminderService.updateLocalEvent(root)
+                        toastState.showSuccess("Renamed to \u{201C}\(newTitle)\u{201D}", icon: "pencil")
+                    },
                     onDelete: { event in handleDelete(event) },
                     onDeleteOccurrence: { event in
                         reminderService.excludeOccurrence(occurrenceId: event.id)

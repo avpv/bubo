@@ -76,7 +76,11 @@ enum TaskStatus: String, Codable, Hashable, Sendable, CaseIterable {
 
 struct CalendarEvent: Identifiable, Codable, Hashable, Sendable {
     var id: String
-    let title: String
+    /// Mutable so inline-rename in `EventRowView` can mutate a copy and
+    /// hand it to `ReminderService.updateLocalEvent`. Was `let` before
+    /// the inline-edit feature; nothing in the codebase depends on the
+    /// title being immutable.
+    var title: String
     var startDate: Date
     var endDate: Date
     let location: String?

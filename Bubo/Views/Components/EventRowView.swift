@@ -8,6 +8,11 @@ struct EventRowView: View {
     var onDeleteOccurrence: ((CalendarEvent) -> Void)? = nil
     var onDeleteSeries: ((CalendarEvent) -> Void)? = nil
     var onTap: ((CalendarEvent) -> Void)? = nil
+    /// Inline rename for local (Bubo-owned) events. Apple Calendar events
+    /// are read-only as far as title-rewrites go, so callers should leave
+    /// this nil for them. The callback fires on Enter or blur with a
+    /// trimmed, non-empty title that differs from the current one.
+    var onRenameLocal: ((CalendarEvent, String) -> Void)? = nil
 
     // Task actions
     var onCompleteTask: ((CalendarEvent) -> Void)? = nil
@@ -34,6 +39,15 @@ struct EventRowView: View {
     @State private var isFadingOut = false
     @State private var pendingDeleteAction: (() -> Void)?
     @FocusState private var isFocused: Bool
+
+    /// Inline-rename state. `isEditingTitle` flips on a double-click on
+    /// the title text and toggles the rendering of `eventDetails` between
+    /// a `Text` and a `TextField`. While editing, the parent `Button`
+    /// wrapper is bypassed so TextField clicks reach AppKit's text engine
+    /// instead of being captured by the row tap-handler.
+    @State private var isEditingTitle = false
+    @State private var titleDraft = ""
+    @FocusState private var titleFieldFocused: Bool
     @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.activeSkin) private var skin
 
@@ -52,25 +66,23 @@ struct EventRowView: View {
             // hover-revealed minus button (taps fall through to "open
             // details"); using BacklogTaskRow's plain-Button pattern
             // avoids the gesture-priority issue entirely.
-            Button {
-                Haptics.tap()
-                onTap?(event)
-            } label: {
-                HStack(alignment: .center, spacing: 0) {
-                    // Urgency accent bar — color reflects time-to-start when no color tag is set
-                    urgencyBar(now)
-
-                    // Time indicator
-                    timeColumn(now)
-
-                    // Event details
-                    eventDetails
-
-                    Spacer(minLength: DS.Spacing.md)
+            //
+            // While the title is being inline-edited, the parent Button
+            // is intentionally bypassed: a TextField nested inside a
+            // SwiftUI `Button` doesn't receive cursor-placement clicks,
+            // so we render the row content directly and let AppKit's
+            // text engine own the clicks for the duration of the edit.
+            if isEditingTitle {
+                rowContent(now: now)
+            } else {
+                Button {
+                    Haptics.tap()
+                    onTap?(event)
+                } label: {
+                    rowContent(now: now)
                 }
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
 
             // Join meeting — always visible when meeting link exists
             if let meetingURL = event.meetingLink {
@@ -78,7 +90,7 @@ struct EventRowView: View {
             }
 
             // Other actions on hover — slide in from right
-            if isHovered {
+            if isHovered && !isEditingTitle {
                 hoverActions
             }
         }
@@ -333,16 +345,25 @@ struct EventRowView: View {
         .padding(.trailing, DS.Spacing.xs)
     }
 
+    // MARK: - Row Content (shared between tappable + inline-edit modes)
+
+    @ViewBuilder
+    private func rowContent(now: Date) -> some View {
+        HStack(alignment: .center, spacing: 0) {
+            urgencyBar(now)
+            timeColumn(now)
+            eventDetails
+            Spacer(minLength: DS.Spacing.md)
+        }
+        .contentShape(Rectangle())
+    }
+
     // MARK: - Event Details
 
     private var eventDetails: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
             HStack(spacing: DS.Spacing.xs) {
-                Text(event.title)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .lineLimit(2)
-                    .truncationMode(.tail)
+                titleField
 
                 if let segment = event.pomodoroSegment {
                     Image(systemName: segment.iconName)
@@ -372,6 +393,92 @@ struct EventRowView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Title (display + inline-edit)
+
+    /// Title cell. Renders a `TextField` while `isEditingTitle` is true,
+    /// otherwise a `Text` carrying a `simultaneousGesture` for double-tap
+    /// rename — single taps still propagate to the parent row Button.
+    /// Inline edit is gated to local (Bubo-owned) events; Apple Calendar
+    /// titles are read-only.
+    @ViewBuilder
+    private var titleField: some View {
+        if isEditingTitle {
+            TextField("", text: $titleDraft)
+                .textFieldStyle(.plain)
+                .font(.subheadline.weight(.medium))
+                .focused($titleFieldFocused)
+                .onSubmit { commitTitleEdit() }
+                .onExitCommand { cancelTitleEdit() }
+                .onChange(of: titleFieldFocused) { _, isFocused in
+                    // Blur (clicking elsewhere or tabbing out) commits,
+                    // matching Finder rename behaviour. Pressing Esc
+                    // takes the cancel path before this fires because
+                    // `cancelTitleEdit()` clears `isEditingTitle` first.
+                    if !isFocused && isEditingTitle {
+                        commitTitleEdit()
+                    }
+                }
+                .padding(.vertical, 1)
+                .padding(.horizontal, DS.Spacing.xs)
+                .background(
+                    RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius)
+                        .fill(skin.resolvedHoverFill)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius)
+                        .strokeBorder(skin.accentColor.opacity(DS.Opacity.softAccent),
+                                       lineWidth: DS.Border.standard)
+                )
+                .accessibilityLabel("Edit event title")
+        } else {
+            Text(event.title)
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .lineLimit(2)
+                .truncationMode(.tail)
+                .simultaneousGesture(
+                    TapGesture(count: 2)
+                        .onEnded {
+                            beginTitleEditIfAllowed()
+                        }
+                )
+        }
+    }
+
+    private var canRenameInline: Bool {
+        event.isLocalEvent && onRenameLocal != nil
+    }
+
+    private func beginTitleEditIfAllowed() {
+        guard canRenameInline else { return }
+        Haptics.tap()
+        titleDraft = event.title
+        isEditingTitle = true
+        // Defer focusing one runloop tick so the TextField is in the
+        // hierarchy by the time we ask SwiftUI to focus it.
+        DispatchQueue.main.async { titleFieldFocused = true }
+    }
+
+    private func commitTitleEdit() {
+        let trimmed = titleDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Empty title or unchanged title → cancel quietly. An empty
+        // rename is treated as «I changed my mind», not «delete me».
+        if trimmed.isEmpty || trimmed == event.title {
+            cancelTitleEdit()
+            return
+        }
+        onRenameLocal?(event, trimmed)
+        Haptics.impact()
+        isEditingTitle = false
+        titleFieldFocused = false
+    }
+
+    private func cancelTitleEdit() {
+        isEditingTitle = false
+        titleFieldFocused = false
+        titleDraft = ""
     }
 
     // MARK: - Hover Actions
