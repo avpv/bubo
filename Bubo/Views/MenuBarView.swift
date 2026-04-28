@@ -1393,6 +1393,26 @@ struct MenuBarView: View {
                         reminderService.updateLocalEvent(root)
                         toastState.showSuccess("Renamed to \u{201C}\(newTitle)\u{201D}", icon: "pencil")
                     },
+                    onReschedule: { event, deltaMinutes in
+                        // Drag-to-reschedule uses the existing snooze path,
+                        // which already shifts both `startDate` and `endDate`
+                        // by the same delta. Negative deltas (drag up =
+                        // earlier) are handled by `addingTimeInterval`. The
+                        // row gates this to local non-recurring upcoming
+                        // events, so the local-only branch in `snoozeReminder`
+                        // is the one that runs.
+                        reminderService.snoozeReminder(for: event, minutes: deltaMinutes)
+                        let signed = deltaMinutes > 0 ? "+\(deltaMinutes) min" : "\(deltaMinutes) min"
+                        let eventId = event.id
+                        toastState.showSuccess("Rescheduled (\(signed))", icon: "arrow.up.and.down.circle.fill") {
+                            // Undo: re-fetch the current event so we shift
+                            // the post-snooze dates back, not the captured
+                            // pre-snooze ones (which would compound).
+                            if let current = reminderService.localEvents.first(where: { $0.id == eventId }) {
+                                reminderService.snoozeReminder(for: current, minutes: -deltaMinutes)
+                            }
+                        }
+                    },
                     onDelete: { event in handleDelete(event) },
                     onDeleteOccurrence: { event in
                         reminderService.excludeOccurrence(occurrenceId: event.id)
