@@ -1889,13 +1889,13 @@ private struct PermissionBannerPageDots: View {
 }
 
 /// Bottom-Y of the optimizer entry strip — the inline QuickActions card on
-/// `.list`, or the sprint-view QuickActions strip on `.sprint`. The command
-/// palette anchors itself below this Y so the «Optimize ⌘K» trigger that
-/// opened it stays visible and the palette feels glued to its origin.
+/// `.list`, or the fullscreen Backlog's block header on `.sprint`. The
+/// command palette anchors itself below this Y so the «Optimize ⌘K» trigger
+/// that opened it stays visible and the palette feels glued to its origin.
 ///
-/// Internal (not fileprivate) so SprintView, which lives in its own file,
-/// can publish into the same key — switching surfaces shouldn't make the
-/// palette float over the popover header.
+/// Internal (not fileprivate) so the fullscreen Backlog, which lives in its
+/// own file, can publish into the same key — switching surfaces shouldn't
+/// make the palette float over the popover header.
 struct OptimizerBottomKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {

@@ -26,10 +26,9 @@ struct BacklogView: View {
     /// as event editing — so the editor opens as a full-screen sibling
     /// surface instead of a detached sheet floating above the list.
     var onEditTask: ((BacklogTask) -> Void)? = nil
-    /// Fired when the user picks "Sprint mode" from the overflow menu. The
-    /// parent owns navigation state and pushes `SprintView` onto the popover
-    /// stack — same pattern as `onEditTask` — so sprint mode replaces the
-    /// whole popover instead of just restyling backlog rows in place.
+    /// Fired when the user taps the fullscreen-affordance in the Tasks
+    /// header. The parent owns navigation state and pushes the fullscreen
+    /// Backlog onto the popover stack — same pattern as `onEditTask`.
     var onEnterSprint: (() -> Void)? = nil
     /// Fired for any reversible user action (reorder, complete, cross-context
     /// drop) so the parent can surface a unified undo toast — it owns
@@ -194,8 +193,8 @@ struct BacklogView: View {
     ///   visible area always fits 4 task rows, keeping the timeline reachable.
     /// - `.expanded`: internal-only — entered programmatically while a drag
     ///   is in flight so all reorder targets are visible. Не достижимо через
-    ///   шеврон; для пользовательского «весь список» теперь служит SprintView
-    ///   (отдельный fullscreen-аффорданс в header'е).
+    ///   шеврон; для пользовательского «весь список» теперь служит
+    ///   fullscreen Backlog (отдельный аффорданс в header'е).
     /// - `.collapsed`: zero (list hidden entirely).
     private var scrollMaxHeight: CGFloat {
         // Single-line row — see `compactRowHeight`. No extra inter-row
@@ -395,8 +394,8 @@ struct BacklogView: View {
             // Capacity ring FIRST — it answers the main question «влезет
             // ли сегодня» и раньше терялось между иконок справа. HIG: put
             // glanceable status where the eye lands first, not buried in
-            // trailing controls. Birman: кольцо — это первая «подпись» к
-            // слову Tasks, не украшение на периферии.
+            // trailing controls. Birman: кольцо — это _идентификатор_
+            // карточки, а не украшение на периферии.
             if totalCount > 0 {
                 BacklogCapacityRing(
                     pendingMinutes: pendingWorkloadMinutes,
@@ -425,25 +424,29 @@ struct BacklogView: View {
                     expansion = expansion.next
                 }
             } label: {
+                // Слово «Tasks» убрано: capacity ring + verdict-метка слева
+                // уже несут смысл «это блок задач», а отдельная подпись на
+                // 360pt popover'е обрезалась в «Ta…». Бирман: не подписывай
+                // то, что и так понятно. Chevron остаётся — он отвечает за
+                // disclosure, цифра — за объём.
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: expansion.iconName)
                         .font(.caption2)
                         .foregroundStyle(skin.resolvedTextSecondary)
                         .contentTransition(.symbolEffect(.replace))
-                    Text("Tasks")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(skin.resolvedTextPrimary)
 
                     // Total count — always shown, tabular digits so the number
                     // doesn't jitter horizontally when `.numericText()` rolls.
                     Text("\(totalCount)")
-                        .font(.subheadline.weight(.regular).monospacedDigit())
-                        .foregroundStyle(skin.resolvedTextTertiary)
+                        .font(.subheadline.weight(.medium).monospacedDigit())
+                        .foregroundStyle(skin.resolvedTextPrimary)
                         .contentTransition(.numericText())
                 }
             }
             .buttonStyle(.plain)
             .help(expansion.accessibilityHint)
+            .accessibilityLabel("\(totalCount) tasks")
+            .accessibilityHint(expansion.accessibilityHint)
 
             // Smart-sort indicator — видимое состояние «список не в моём
             // порядке». Раньше тоггл жил только в overflow, и пользователь
@@ -467,11 +470,10 @@ struct BacklogView: View {
             Spacer()
 
             if totalCount > 0 {
-                // Fullscreen affordance — пушит SprintView в навигационный
-                // стек popover'а. Раньше эту роль играл третий клик шеврона
-                // (`chevron.down.2`), но двойная стрелка не считывалась как
-                // «другое состояние» и упиралась в шум остальных карточек,
-                // которые при «expanded» всё равно оставались видны. Теперь
+                // Fullscreen affordance — пушит fullscreen Backlog в
+                // навигационный стек popover'а. Раньше эту роль играл
+                // третий клик шеврона (`chevron.down.2`), но двойная
+                // стрелка не считывалась как «другое состояние». Теперь
                 // — отдельная кнопка с понятной macOS-идиомой «развернуть».
                 if onEnterSprint != nil {
                     fullscreenButton
@@ -594,9 +596,9 @@ struct BacklogView: View {
         )
     }
 
-    /// Overflow menu — secondary view controls. Sprint mode переехал в
-    /// отдельную fullscreen-кнопку рядом с шевроном — Бирман: умный layer
-    /// должен быть единственной точкой, не дублироваться в overflow.
+    /// Overflow menu — secondary view controls. Fullscreen-режим переехал
+    /// в отдельную кнопку рядом с шевроном — Бирман: умный layer должен
+    /// быть единственной точкой, не дублироваться в overflow.
     private var headerOverflowMenu: some View {
         Menu {
             Button {
@@ -660,13 +662,19 @@ struct BacklogView: View {
     /// заливки; оба канала усиливаются на hover, так что жест наведения
     /// остаётся информативным.
     private var scheduleButton: some View {
+        // Иконка вместо текстовой pill: на 360pt popover'е «Schedule»
+        // обрезалась в «Sche…» — это failure layout. SF Symbol несёт тот же
+        // смысл, влезает в любую ширину и сохраняет accent-капсулу как
+        // affordance «это primary action». Tooltip раскрывает значение для
+        // тех, кто видит экран впервые.
         Button {
             onScheduleTasks()
         } label: {
-            Text("Schedule")
-                .font(.caption.weight(.medium))
+            Image(systemName: "calendar.badge.plus")
+                .font(.caption.weight(.semibold))
                 .foregroundStyle(skin.accentColor)
-                .padding(.horizontal, DS.Spacing.sm)
+                .frame(width: DS.Size.iconSmall, height: DS.Size.iconSmall)
+                .padding(.horizontal, DS.Spacing.xs)
                 .padding(.vertical, DS.Spacing.xxs)
                 .background {
                     Capsule()
@@ -682,6 +690,8 @@ struct BacklogView: View {
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        .help("Schedule tasks into your day")
+        .accessibilityLabel("Schedule tasks")
         .onHover { hovering in
             withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
                 isScheduleHovering = hovering
@@ -701,7 +711,7 @@ struct BacklogView: View {
     // `.expanded` остаётся внутренним состоянием — в него BacklogView
     // временно переключается на время drag'а, чтобы все строки-цели
     // реордера были видны сразу. «Полное раскрытие» как пользовательский
-    // жест переехало в SprintView (fullscreen-кнопка в header'е).
+    // жест переехало во fullscreen Backlog (кнопка в header'е).
     //
     // Birman: один шеврон — два смысла («есть список / нет списка»);
     // полноэкранное представление — отдельный аффорданс рядом, не третий
@@ -744,8 +754,7 @@ struct BacklogView: View {
         //    dropped so the queue reads as a single priority list.
         // 2. Default — user's drag order honoured via `groupedByContext`.
         //
-        // Sprint mode is no longer a flag here — it's a separate
-        // full-screen view (`SprintView`) reached via the overflow menu.
+        // Fullscreen Backlog is a sibling navigation target, not a flag here.
         // When a `visibleIDs` set is passed, only those tasks render — used
         // by animations that reveal one row at a time.
         let baseOrder: [BacklogTask] = useSmartSort ? smartSortedActiveTasks : activeTasks
