@@ -14,8 +14,15 @@ struct BacklogCapacityRing: View {
     var optimizerService: OptimizerService
 
     @Environment(\.activeSkin) private var skin
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isPopoverPresented = false
     @State private var isHovered = false
+    /// Flips to true once `.onAppear` fires. Drives the entrance draw —
+    /// the ring strokes from 0 to the current fraction over ~0.4s the
+    /// first time the view enters the hierarchy, instead of snapping into
+    /// place. Subsequent fraction changes still animate via `.animation`
+    /// below; this state only gates the very first frame.
+    @State private var hasAppeared = false
 
     /// Ratio of workload to available time. Guards against division-by-zero
     /// when the workday is over (remaining = 0): in that case, any workload
@@ -25,6 +32,15 @@ struct BacklogCapacityRing: View {
             pendingMinutes: pendingMinutes,
             remainingWorkdayMinutes: remainingWorkdayMinutes
         )
+    }
+
+    /// Trim end-point that the ring actually renders. Stays at 0 until
+    /// `.onAppear` flips `hasAppeared`, then snaps (under `reduceMotion`)
+    /// or eases (otherwise) to the live fraction. Clamped at 0.05 so an
+    /// empty/tiny backlog still leaves a visible nub on the ring.
+    private var displayedTrim: Double {
+        guard hasAppeared else { return 0 }
+        return min(max(fraction, 0.05), 1.0)
     }
 
     private var color: Color {
@@ -75,15 +91,35 @@ struct BacklogCapacityRing: View {
                 Circle()
                     .stroke(skin.resolvedTextTertiary.opacity(isHovered ? 0.45 : 0.25), lineWidth: 2)
                 Circle()
-                    .trim(from: 0, to: min(max(fraction, 0.05), 1.0))
+                    .trim(from: 0, to: displayedTrim)
                     .stroke(color, style: StrokeStyle(lineWidth: 2, lineCap: .round))
                     .rotationEffect(.degrees(-90))
+                    // Smooth runtime fraction changes too — adding a task,
+                    // completing one, editing duration. Без этого кольцо
+                    // прыгало мгновенно при каждом mutation.
+                    .animation(
+                        reduceMotion ? .linear(duration: 0.01) : .easeInOut(duration: 0.3),
+                        value: displayedTrim
+                    )
             }
             .frame(width: 14, height: 14)
             .padding(4)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .onAppear {
+            // Entrance draw: 0 → fraction over ~0.4s the first time the
+            // ring shows up. `withAnimation` here animates the change in
+            // `hasAppeared`, which `displayedTrim` reads. Reduce Motion
+            // skips the easing — the value snaps in place.
+            if reduceMotion {
+                hasAppeared = true
+            } else {
+                withAnimation(.easeOut(duration: 0.4)) {
+                    hasAppeared = true
+                }
+            }
+        }
         .onHover { isHovered = $0 }
         .accessibilityLabel("Backlog capacity")
         .accessibilityValue("\(Int(fraction * 100)) percent of remaining workday")
