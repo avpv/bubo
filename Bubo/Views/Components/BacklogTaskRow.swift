@@ -147,17 +147,14 @@ struct BacklogTaskRow: View {
         .padding(.horizontal, DS.Spacing.xs)
         .frame(minHeight: isSprintMode ? BacklogView.compactRowHeight + 8 : BacklogView.compactRowHeight)
         .contentShape(Rectangle())
-        // Drag pickup feedback — the source row simultaneously dims (it's
-        // ghosting at the original spot) AND lifts off via scale + shadow,
-        // so the user sees «I picked this thing up». All three changes hang
-        // on the same `isDragging` flag, owned by the parent.
+        // Drag pickup feedback (source side): the source row ONLY dims
+        // while in flight — it stays in place as a ghost so the user sees
+        // «this is where it came from». Scale + shadow live on the drag
+        // preview thumb (`.onDrag preview:` below) where they belong:
+        // the thumb is the lifted, in-flight representation. Two visual
+        // states for one object would conflict — dim says «I'm here in
+        // memory», thumb says «I'm in your hand».
         .opacity(isDragging ? DS.Opacity.tertiaryText : 1)
-        .scaleEffect(isDragging ? 1.04 : 1.0)
-        .shadow(
-            color: skin.resolvedShadowColor,
-            radius: isDragging ? 14 : 0,
-            y: isDragging ? 6 : 0
-        )
         .animation(
             DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion),
             value: isDragging
@@ -199,6 +196,11 @@ struct BacklogTaskRow: View {
             }
             return provider
         } preview: {
+            // Drag preview thumb — this is what the user actually «holds»
+            // in their hand: the floating representation that follows the
+            // cursor. It gets the scale + shadow lift (`DS.Physics.dragPreview*`)
+            // because IT is the lifted object. Source row stays at 1.0 and
+            // dims (above) — two roles, two visual states, no conflict.
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: "calendar.badge.plus")
                     .font(.caption)
@@ -211,10 +213,22 @@ struct BacklogTaskRow: View {
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, DS.Spacing.xs)
             .background(skin.resolvedButtonMaterial, in: Capsule())
+            .scaleEffect(DS.Physics.dragPreviewScale)
+            .shadow(
+                color: skin.resolvedShadowColor,
+                radius: DS.Physics.dragPreviewShadowRadius,
+                y: DS.Physics.dragPreviewShadowY
+            )
             .onDisappear { onDragEnd() }
         }
         .dropDestination(for: BacklogTaskDrag.self) { items, _ in
             guard let dropped = items.first, dropped.taskId != task.id else { return false }
+            // Same snap-tick as `FreeSlotRow` drop — drag-to-reorder and
+            // drag-onto-slot are physically the same «object cosied into a
+            // place» moment, so they should feel identical on Force Touch.
+            // Asymmetric haptics for symmetric gestures was a known
+            // imbalance after the first physical-feedback pass.
+            Haptics.alignment()
             onReorderDrop(dropped)
             return true
         } isTargeted: { targeted in

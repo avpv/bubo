@@ -381,6 +381,10 @@ struct SprintView: View {
     /// urgent-задач (контрол без эффекта — украшение).
     private var urgentFilterButton: some View {
         Button {
+            // `.levelChange` haptic for filter mode switch — discrete
+            // state change «list narrows / list opens up», not a
+            // micro-click. Same pattern on every Sprint/Backlog toggle.
+            Haptics.impact()
             withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
                 urgentOnlyFilter.toggle()
             }
@@ -419,6 +423,9 @@ struct SprintView: View {
     /// «обычная сортировка» и «магия по smart-score».
     private var smartSortButton: some View {
         Button {
+            // `.levelChange` for sort-order switch — list reorders, not a
+            // micro-click on a button.
+            Haptics.impact()
             withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
                 useSmartSort.toggle()
             }
@@ -448,6 +455,14 @@ struct SprintView: View {
             selection: Binding(
                 get: { mode },
                 set: { newMode in
+                    // `.levelChange` haptic for the discrete view-mode
+                    // switch (Sprint↔All). Skip if the binding fires with
+                    // the same value — SwiftUI sometimes echoes selections
+                    // from animation cycles, and a haptic per echo would
+                    // feel like Morse code on the trackpad.
+                    if newMode != mode {
+                        Haptics.impact()
+                    }
                     withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
                         mode = newMode
                     }

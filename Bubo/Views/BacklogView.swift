@@ -417,6 +417,10 @@ struct BacklogView: View {
             }
 
             Button {
+                // `.levelChange` for the chevron — collapsed/compact is a
+                // discrete card-state change, same magnitude as the
+                // urgent / smart-sort toggles below.
+                Haptics.impact()
                 withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
                     expansion = expansion.next
                 }
@@ -489,6 +493,10 @@ struct BacklogView: View {
     /// и пустота в header'е лучше украшения).
     private var smartSortIndicator: some View {
         Button {
+            // Same `.levelChange` for the inverse path — turn smart-sort
+            // off via the active-state pill. Both directions of the
+            // smart-sort toggle now haptic identically.
+            Haptics.impact()
             withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
                 useSmartSort = false
             }
@@ -539,6 +547,9 @@ struct BacklogView: View {
     @ViewBuilder
     private func urgentFilterButton(urgentCount: Int) -> some View {
         Button {
+            // `.levelChange` haptic — list narrows/opens, discrete state
+            // change. Mirrors `SprintView.urgentFilterButton`.
+            Haptics.impact()
             withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
                 urgentOnlyFilter.toggle()
                 // Engaging the filter while the list is collapsed would hide
@@ -589,6 +600,9 @@ struct BacklogView: View {
     private var headerOverflowMenu: some View {
         Menu {
             Button {
+                // `.levelChange` for sort-order switch — list reorders,
+                // discrete state change. Mirrors `SprintView.smartSortButton`.
+                Haptics.impact()
                 withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
                     useSmartSort.toggle()
                     if useSmartSort, expansion == .collapsed {

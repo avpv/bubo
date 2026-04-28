@@ -131,16 +131,18 @@ struct FreeSlotRow: View {
         .frame(minHeight: DS.Size.eventRowMinHeight)
         .padding(.vertical, DS.Spacing.xxs)
         .padding(.horizontal, DS.Spacing.sm)
-        // Receive feedback for an in-flight drag — the slot subtly «выдвигается
-        // навстречу» when a draggable hovers over it: 2 % scale + soft shadow
-        // means «I'm receiving you». Animation hangs on the same
-        // `isDropTargeted` flag the border + fill already react to, so all
-        // three signals (scale, shadow, border) move in sync.
-        .scaleEffect(isDropTargeted ? 1.02 : 1.0)
+        // Receive feedback for an in-flight drag — the slot lifts via a
+        // soft drop-target shadow when a draggable hovers over it. Border
+        // + fill already convey colour identity («I'm receiving»);
+        // shadow adds the «I'm above the row» depth. Earlier this had a
+        // 1.02 scaleEffect too, but `.scaleEffect` doesn't reflow layout
+        // — the targeted slot would visually overlap its neighbours,
+        // and four channels (border, fill, scale, shadow) for one state
+        // pushed the receive feedback into over-stated territory.
         .shadow(
             color: skin.resolvedShadowColor,
-            radius: isDropTargeted ? 8 : 0,
-            y: isDropTargeted ? 3 : 0
+            radius: isDropTargeted ? DS.Physics.dropTargetShadowRadius : 0,
+            y: isDropTargeted ? DS.Physics.dropTargetShadowY : 0
         )
         .animation(skin.resolvedMicroAnimation, value: isDropTargeted)
         // Level 4 (final): flat row inside the timeline platter card —

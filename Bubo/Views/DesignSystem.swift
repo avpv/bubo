@@ -190,13 +190,44 @@ enum DS {
         static let glowRadius: CGFloat = 20
         static let buttonRadius: CGFloat = 12
 
-        // Toast — depth has to read deeper than the Tasks-block chrome
-        // (`skinTasksBlockChrome` uses `shadowRadius=16`, `shadowY=8`)
-        // because toasts sit on a higher Z-layer than the cards they
-        // overlay. A shallower toast shadow makes the message look
-        // _embedded_ in the card instead of _floating above_ it.
-        static let toastRadius: CGFloat = 20
-        static let toastY: CGFloat = 10
+        // Toast — sits between the Tasks-block chrome (`shadowRadius=16`,
+        // `shadowY=8`) and the full-screen alert (`glowRadius=20`).
+        // 18/9 reads as «slightly above the card» without colliding with
+        // the alert depth. Earlier 20/10 made toast indistinguishable
+        // from a fullscreen alert in shadow alone.
+        static let toastRadius: CGFloat = 18
+        static let toastY: CGFloat = 9
+    }
+
+    // MARK: Physics
+    //
+    // Single source of truth for the «physical feedback» constants used
+    // across drag-pickup, drop-receive and press interactions in
+    // `BacklogTaskRow`, `FreeSlotRow` and `IconPressStyle`. Centralised
+    // so a designer dialing «all physical effects 30% softer» edits one
+    // file, not five.
+
+    enum Physics {
+        /// Drag-preview thumb — slight scale-up that reads as «lifted off
+        /// the page» in the floating thumb that follows the cursor. The
+        /// source row stays at 1.0 and only dims (`Opacity.tertiaryText`)
+        /// so we don't claim two contradictory states for one object.
+        static let dragPreviewScale: CGFloat = 1.04
+        static let dragPreviewShadowRadius: CGFloat = 14
+        static let dragPreviewShadowY: CGFloat = 6
+
+        /// Free-slot drop-target — soft shadow only, no scale. Border +
+        /// fill already convey «I'm receiving you»; adding a third
+        /// channel (scale) on top of those two pushed the slot into
+        /// over-stated territory and overlapped neighbouring rows
+        /// because `.scaleEffect` doesn't reflow layout.
+        static let dropTargetShadowRadius: CGFloat = 8
+        static let dropTargetShadowY: CGFloat = 3
+
+        /// Press-feedback scale for naked-glyph buttons (`IconPressStyle`).
+        /// 0.92 reads as a satisfying squish without becoming twitchy at
+        /// 60Hz refresh.
+        static let pressedIconScale: CGFloat = 0.92
     }
 
     // MARK: Animation
@@ -815,18 +846,28 @@ extension ButtonStyle where Self == ActionButtonStyle {
 // Pair with `Haptics.tap()` in the action closure for a coherent
 // visual + tactile «click» — see `BacklogTaskRow.checkbox`.
 struct IconPressStyle: ButtonStyle {
-    /// How far down the icon goes while held. 0.92 reads as a satisfying
-    /// «pressed in» without any animation appearing twitchy at the macOS
-    /// 60Hz refresh rate.
-    var pressedScale: CGFloat = 0.92
+    /// How far down the icon goes while held. Default uses the shared
+    /// `DS.Physics.pressedIconScale` token so all chromeless buttons in
+    /// the app squish the same amount.
+    var pressedScale: CGFloat = DS.Physics.pressedIconScale
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    /// Asymmetric easing — physical fingers accelerate INTO a press
+    /// (`.easeIn`) and the spring decelerates OUT (`.easeOut`). A single
+    /// `.easeOut` for both directions reads «mechanical»; the asymmetric
+    /// pair feels «soft». Evaluation time: SwiftUI sees the new value of
+    /// `configuration.isPressed`, so true-direction = press (easeIn),
+    /// false-direction = release (easeOut).
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed && !reduceMotion ? pressedScale : 1.0)
             .animation(
-                reduceMotion ? nil : .easeOut(duration: 0.12),
+                reduceMotion
+                    ? nil
+                    : (configuration.isPressed
+                        ? .easeIn(duration: 0.10)
+                        : .easeOut(duration: 0.18)),
                 value: configuration.isPressed
             )
     }
