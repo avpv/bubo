@@ -29,7 +29,7 @@ struct BacklogView: View {
     /// Fired when the user taps the fullscreen-affordance in the Tasks
     /// header. The parent owns navigation state and pushes the fullscreen
     /// Backlog onto the popover stack — same pattern as `onEditTask`.
-    var onEnterSprint: (() -> Void)? = nil
+    var onEnterFullscreen: (() -> Void)? = nil
     /// Fired for any reversible user action (reorder, complete, cross-context
     /// drop) so the parent can surface a unified undo toast — it owns
     /// `ToastState`. nil silently disables the toast; the action still runs.
@@ -475,7 +475,7 @@ struct BacklogView: View {
                 // третий клик шеврона (`chevron.down.2`), но двойная
                 // стрелка не считывалась как «другое состояние». Теперь
                 // — отдельная кнопка с понятной macOS-идиомой «развернуть».
-                if onEnterSprint != nil {
+                if onEnterFullscreen != nil {
                     fullscreenButton
                 }
                 // Overflow menu holds smart-sort. HIG: secondary actions
@@ -530,7 +530,7 @@ struct BacklogView: View {
     /// двойной шевронной стрелки.
     private var fullscreenButton: some View {
         Button {
-            onEnterSprint?()
+            onEnterFullscreen?()
         } label: {
             Image(systemName: "arrow.up.left.and.arrow.down.right")
                 .font(.caption2.weight(.medium))
@@ -550,7 +550,7 @@ struct BacklogView: View {
     private func urgentFilterButton(urgentCount: Int) -> some View {
         Button {
             // `.levelChange` haptic — list narrows/opens, discrete state
-            // change. Mirrors `SprintView.urgentFilterButton`.
+            // change. Mirrors `BacklogFullscreenView.urgentFilterButton`.
             Haptics.impact()
             withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
                 urgentOnlyFilter.toggle()
@@ -603,7 +603,7 @@ struct BacklogView: View {
         Menu {
             Button {
                 // `.levelChange` for sort-order switch — list reorders,
-                // discrete state change. Mirrors `SprintView.smartSortButton`.
+                // discrete state change. Mirrors `BacklogFullscreenView.smartSortButton`.
                 Haptics.impact()
                 withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
                     useSmartSort.toggle()

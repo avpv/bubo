@@ -233,8 +233,9 @@ extension View {
 //
 // Visual identity for the Tasks card surface used in two places:
 //   • Inline on the main view, wrapping `BacklogView`.
-//   • Fullscreen inside the fullscreen Backlog view (`SprintView`),
-//     wrapping the same content distended to popover height.
+//   • Fullscreen inside the fullscreen Backlog view
+//     (`BacklogFullscreenView`), wrapping the same content distended
+//     to popover height.
 // One source of truth keeps the block recognizably the same object across
 // collapsed and expanded states — Бирман: «один объект — одна форма».
 //
@@ -249,7 +250,7 @@ extension View {
     /// border and ambient shadows as `skinPlatterDepth`, but the rounded clip
     /// lives on the background layer so `.draggable` rows underneath remain
     /// hit-testable. Used by both `BacklogView` (inline card) and the
-    /// fullscreen Backlog (`SprintView` file).
+    /// fullscreen Backlog (`BacklogFullscreenView`).
     func skinTasksBlockChrome(_ skin: SkinDefinition) -> some View {
         self
             .background(

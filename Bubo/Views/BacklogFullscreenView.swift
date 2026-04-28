@@ -29,7 +29,7 @@ import SwiftUI
 /// - Hot-keys 1–9 — быстрое завершение N-й видимой задачи. Это надстройка
 ///   к inline Backlog'у (там цифры заняты обычным вводом в add-field), но
 ///   для fullscreen-режима они уместны: руки уже на клавиатуре.
-struct SprintView: View {
+struct BacklogFullscreenView: View {
     var backlogService: BacklogService
     var optimizerService: OptimizerService
     /// Calendar event source — surfaced for parity with the inline backlog;
