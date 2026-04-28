@@ -247,6 +247,7 @@ struct BacklogFullscreenView: View {
                     .font(.subheadline.weight(.medium).monospacedDigit())
                     .foregroundStyle(skin.resolvedTextPrimary)
                     .contentTransition(.numericText())
+                    .help("\(activeTasks.count) task\(activeTasks.count == 1 ? "" : "s") in backlog")
                     .accessibilityLabel("\(activeTasks.count) tasks")
             }
 

@@ -444,7 +444,11 @@ struct BacklogView: View {
                 }
             }
             .buttonStyle(.plain)
-            .help(expansion.accessibilityHint)
+            // Tooltip carries both pieces — what the number means and what
+            // a click does — since the «Tasks» label was removed from the
+            // glyph itself. Without it the chevron+number was a mystery
+            // pair on hover.
+            .help("\(totalCount) task\(totalCount == 1 ? "" : "s") \u{00B7} \(expansion.accessibilityHint.lowercased())")
             .accessibilityLabel("\(totalCount) tasks")
             .accessibilityHint(expansion.accessibilityHint)
 
@@ -625,8 +629,13 @@ struct BacklogView: View {
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .fixedSize()
-        .help("More options")
-        .accessibilityLabel("More task list options")
+        // Specific to what the menu contains — sort options. The generic
+        // «More options» wording invited curiosity without delivering on
+        // it; users hovered, opened, and only saw a single toggle. HIG:
+        // tooltips should describe what the control does, not where it
+        // sits in the layout.
+        .help(useSmartSort ? "Sort: smart (deadline + priority)" : "Sort options")
+        .accessibilityLabel("Task list sort options")
     }
 
     // MARK: - Capacity ring helpers
