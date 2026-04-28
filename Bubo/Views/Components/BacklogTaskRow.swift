@@ -63,8 +63,19 @@ struct BacklogTaskRow: View {
 
     @State private var isHovered = false
     @State private var isReorderTargeted = false
+    /// True for the brief moment between «user tapped checkbox» and «row
+    /// disappears from the active list». During this window the title gets
+    /// a strikethrough, the row dims, and the checkbox glyph swaps to a
+    /// filled checkmark — the same «I marked it done» frame Things and
+    /// Reminders show. Skipped under `reduceMotion`.
+    @State private var isCompleting = false
     @Environment(\.activeSkin) private var skin
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Delay between the strikethrough appearing and `onComplete()` firing
+    /// (which removes the row from the list). Long enough to register as a
+    /// confirmation frame, short enough not to feel like lag.
+    private static let completionAnimationDuration: TimeInterval = 0.28
 
     /// True when the task has a deadline that's already passed. Drives the
     /// pulsing red dot in the meta row — overdue is a louder signal than
@@ -146,10 +157,19 @@ struct BacklogTaskRow: View {
             // Trailing controls vanish in calm-row variant so the row reads
             // as a quiet single column. Currently always shown.
             checkbox
+            // Dim everything except the checkbox while completion is in
+            // flight: title takes the strikethrough, metadata fades to
+            // tertiary, controls become non-interactive. The checkbox
+            // itself stays at full opacity so the «filled checkmark»
+            // success glyph reads loud and clear — this is the moment the
+            // user just clicked. Same idea as Things' completion frame.
             content
+                .opacity(isCompleting ? DS.Opacity.tertiaryText : 1)
             Spacer(minLength: DS.Spacing.xs)
             if !isSprintMode {
                 controls
+                    .opacity(isCompleting ? DS.Opacity.tertiaryText : 1)
+                    .allowsHitTesting(!isCompleting)
             }
         }
         .padding(.vertical, DS.Spacing.xxs)
@@ -319,13 +339,35 @@ struct BacklogTaskRow: View {
     private var checkbox: some View {
         Button {
             Haptics.tap()
-            onComplete()
+            // Reduce Motion: no confirmation frame — `onComplete()` fires
+            // immediately and the row removes via the standard animation.
+            // Otherwise: light up the strikethrough + filled glyph, hold
+            // for `completionAnimationDuration`, then complete. Guarded
+            // by `isCompleting` so a double-tap doesn't fire onComplete()
+            // twice (the second tap would try to complete an already-removed
+            // task, which is harmless but pollutes the undo stream).
+            guard !isCompleting else { return }
+            if reduceMotion {
+                onComplete()
+                return
+            }
+            withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+                isCompleting = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.completionAnimationDuration) {
+                onComplete()
+            }
         } label: {
-            Image(systemName: "circle")
+            Image(systemName: isCompleting ? "checkmark.circle.fill" : "circle")
                 .font(.callout)
-                .foregroundStyle(isUrgent ? skin.resolvedDestructiveColor : skin.resolvedTextSecondary)
+                .foregroundStyle(
+                    isCompleting
+                        ? AnyShapeStyle(skin.accentColor)
+                        : AnyShapeStyle(isUrgent ? skin.resolvedDestructiveColor : skin.resolvedTextSecondary)
+                )
                 .frame(width: 24, height: 24)
                 .contentShape(Rectangle())
+                .contentTransition(.symbolEffect(.replace))
         }
         .buttonStyle(.iconPress)
         // When the fullscreen Backlog passes a hot-key digit, append it to
@@ -344,6 +386,7 @@ struct BacklogTaskRow: View {
                 Text(task.title)
                     .font(isSprintMode ? .headline.weight(.medium) : .callout)
                     .foregroundStyle(titleColor)
+                    .strikethrough(isCompleting, color: skin.resolvedTextSecondary)
                     .lineLimit(isSprintMode ? 1 : 2)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
