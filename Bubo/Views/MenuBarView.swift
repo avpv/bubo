@@ -13,6 +13,15 @@ struct MenuBarView: View {
     @State private var hasStartedSync = false
     @State private var toastState = ToastState()
     @State private var scrollPositionID: String?
+
+    /// Vertical scroll offset (in points, negative as the user scrolls
+    /// down) of the event list. Consumed by `AppBackgroundLayer` to
+    /// drive a small parallax on the wallpaper — the background drifts
+    /// at ~15% of foreground velocity, giving a depth cue that the
+    /// foreground content is closer to the eye than the wallpaper.
+    /// Reset to zero when leaving the list view or when Reduce Motion
+    /// is on, so no extra paint cost on accessibility paths.
+    @State private var listScrollY: CGFloat = 0
     @State private var colorFilter: EventColorTag? = nil
     /// Mutually exclusive with `colorFilter`. Tri-state cycle on the hollow
     /// dot button: `.all` (default) → `.onlyFree` (hide events, show only
@@ -100,7 +109,8 @@ struct MenuBarView: View {
                 wallpaper: settings.selectedWallpaper,
                 customPhotoPath: settings.customBackgroundPhotoPath,
                 customPhotoOpacity: settings.customBackgroundPhotoOpacity,
-                customPhotoBlur: settings.customBackgroundPhotoBlur
+                customPhotoBlur: settings.customBackgroundPhotoBlur,
+                parallaxY: parallaxOffset
             )
 
             Group {
@@ -1200,6 +1210,21 @@ struct MenuBarView: View {
         }
     }
 
+    /// Parallax fraction applied to `listScrollY` before it reaches the
+    /// wallpaper. 0.15 was tuned by hand: noticeably alive without
+    /// inducing the dizzying «UI is sliding under glass» feel that comes
+    /// with values past ~0.25. Returns 0 when Reduce Motion is on or
+    /// when the user is not on the list view (so navigating away resets
+    /// the wallpaper to its calm position).
+    private var parallaxOffset: CGFloat {
+        guard navigation == .list, !reduceMotion else { return 0 }
+        let raw = listScrollY * 0.15
+        // Clamp absolute parallax to ±40pt so even a long backlog scroll
+        // never drives the wallpaper outside the 8% overscan margin
+        // baked into `WallpaperBackgroundLayer.parallaxOverscan`.
+        return max(-40, min(40, raw))
+    }
+
     private var eventList: some View {
         ScrollView {
             // Timeline is not a platter card (see mainContent), so this
@@ -1269,7 +1294,17 @@ struct MenuBarView: View {
             .scrollTargetLayout()
             .id("eventListTop")
             .animation(DS.Animation.smoothSpring, value: reminderService.disintegratingEventIDs)
+            // Read the LazyVStack's position inside the scroll view's
+            // coordinate space. As the user scrolls down, `minY` grows
+            // negative; we feed that straight into `listScrollY`, then
+            // `parallaxOffset` applies the dampening + clamp.
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.frame(in: .named("eventListScroll")).minY
+            } action: { newValue in
+                listScrollY = newValue
+            }
         }
+        .coordinateSpace(.named("eventListScroll"))
         .scrollPosition(id: $scrollPositionID)
         .scrollContentBackground(.hidden)
     }
