@@ -192,7 +192,14 @@ struct EventRowView: View {
         // `including: .none` masks the gesture out for non-rescheduable
         // shapes (recurring, external, or in-progress events) so the
         // parent ScrollView keeps full scroll priority for them.
-        .gesture(rescheduleGesture, including: canDrag ? .gesture : .none)
+        //
+        // Use `.simultaneousGesture` (not `.gesture`) so the inner row
+        // Button's tap recognition keeps running alongside the long-press
+        // detector. Plain `.gesture` claims priority and, on macOS, the
+        // LongPressGesture absorbs the click during its 0.35s window —
+        // by the time it fails on release the Button has already missed
+        // the mouse-up, leaving `onTap` unfired and the row feeling dead.
+        .simultaneousGesture(rescheduleGesture, including: canDrag ? .gesture : .none)
         // Surface the proposed new time as an overlay capsule near the
         // leading edge of the row. The badge fades in as soon as the
         // drag arms, even at zero delta — that's how the user knows the
