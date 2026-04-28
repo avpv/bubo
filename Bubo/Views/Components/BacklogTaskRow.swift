@@ -16,11 +16,6 @@ struct BacklogTaskRow: View {
     /// the menu entries cleanly on the first and last rows.
     var canMoveUp: Bool = true
     var canMoveDown: Bool = true
-    /// Calm-row variant: metadata/controls disappear, the title takes a
-    /// larger font. Currently unused — fullscreen Backlog renders the same
-    /// row treatment as inline. Kept as a flag so a future focus-mode can
-    /// reintroduce the calm style without re-plumbing the row.
-    var isSprintMode: Bool = false
     var onComplete: () -> Void
     var onEdit: () -> Void
     var onDelete: () -> Void
@@ -154,8 +149,6 @@ struct BacklogTaskRow: View {
 
     var body: some View {
         HStack(spacing: DS.Spacing.sm) {
-            // Trailing controls vanish in calm-row variant so the row reads
-            // as a quiet single column. Currently always shown.
             checkbox
             // Dim everything except the checkbox while completion is in
             // flight: title takes the strikethrough, metadata fades to
@@ -166,15 +159,13 @@ struct BacklogTaskRow: View {
             content
                 .opacity(isCompleting ? DS.Opacity.tertiaryText : 1)
             Spacer(minLength: DS.Spacing.xs)
-            if !isSprintMode {
-                controls
-                    .opacity(isCompleting ? DS.Opacity.tertiaryText : 1)
-                    .allowsHitTesting(!isCompleting)
-            }
+            controls
+                .opacity(isCompleting ? DS.Opacity.tertiaryText : 1)
+                .allowsHitTesting(!isCompleting)
         }
         .padding(.vertical, DS.Spacing.xxs)
         .padding(.horizontal, DS.Spacing.xs)
-        .frame(minHeight: isSprintMode ? BacklogView.compactRowHeight + 8 : BacklogView.compactRowHeight)
+        .frame(minHeight: BacklogView.compactRowHeight)
         .contentShape(Rectangle())
         // Drag pickup feedback (source side): the source row ONLY dims
         // while in flight — it stays in place as a ghost so the user sees
@@ -384,10 +375,10 @@ struct BacklogTaskRow: View {
         Button(action: onEdit) {
             HStack(spacing: DS.Spacing.xs) {
                 Text(task.title)
-                    .font(isSprintMode ? .headline.weight(.medium) : .callout)
+                    .font(.callout)
                     .foregroundStyle(titleColor)
                     .strikethrough(isCompleting, color: skin.resolvedTextSecondary)
-                    .lineLimit(isSprintMode ? 1 : 2)
+                    .lineLimit(2)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
                     .layoutPriority(1)
@@ -435,31 +426,29 @@ struct BacklogTaskRow: View {
                         .accessibilityLabel("High priority")
                 }
 
-                if !isSprintMode {
-                    // Overdue gets a pulsing red dot before the meta text:
-                    // urgency должна _кричать_, а не шептать капсом.
-                    // Текст «Overdue» уже красный, но статичный текст легко
-                    // пропустить взглядом — пульсация выделяет «эта задача
-                    // требует решения _сейчас_». Пульс отключается при
-                    // `accessibilityReduceMotion`, остаётся ровный красный dot.
-                    if isOverdue {
-                        OverduePulseDot(reduceMotion: reduceMotion)
-                            .accessibilityHidden(true)
-                    }
-                    metaText
-                        .font(.caption2)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+                // Overdue gets a pulsing red dot before the meta text:
+                // urgency должна _кричать_, а не шептать капсом. Текст
+                // «Overdue» уже красный, но статичный текст легко пропустить
+                // взглядом — пульсация выделяет «эта задача требует решения
+                // _сейчас_». Пульс отключается при `accessibilityReduceMotion`,
+                // остаётся ровный красный dot.
+                if isOverdue {
+                    OverduePulseDot(reduceMotion: reduceMotion)
+                        .accessibilityHidden(true)
                 }
+                metaText
+                    .font(.caption2)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
 
-                if isHovered, !isSprintMode, let secondary = secondaryMetaText {
+                if isHovered, let secondary = secondaryMetaText {
                     secondary
                         .font(.caption2)
                         .lineLimit(1)
                         .transition(.opacity)
                 }
 
-                if isHovered, !isDragging, let slotPreview, !isSprintMode {
+                if isHovered, !isDragging, let slotPreview {
                     Text("→ \(slotPreview)")
                         .font(.caption2)
                         .foregroundStyle(skin.accentColor.opacity(DS.Opacity.accentMuted))
