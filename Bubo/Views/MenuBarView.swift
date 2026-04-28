@@ -1397,6 +1397,19 @@ struct MenuBarView: View {
                     event: event,
                     reminderService: reminderService,
                     onEdit: { event in resolveEdit(event) },
+                    onDelete: { event in handleDelete(event) },
+                    onDeleteOccurrence: { event in
+                        reminderService.excludeOccurrence(occurrenceId: event.id)
+                        toastState.showSuccess("\u{201C}\(event.title)\u{201D} removed", icon: "trash.fill")
+                    },
+                    onDeleteSeries: { event in
+                        let seriesId = event.seriesId ?? event.id
+                        reminderService.removeLocalEvent(id: seriesId)
+                        toastState.showSuccess("All \u{201C}\(event.title)\u{201D} deleted", icon: "trash.fill")
+                    },
+                    onTap: { event in
+                        navigation = .detail(event)
+                    },
                     onRenameLocal: { event, newTitle in
                         // Inline rename: route to `updateLocalEvent` against
                         // the root event. For an expanded occurrence
@@ -1428,19 +1441,6 @@ struct MenuBarView: View {
                                 reminderService.snoozeReminder(for: current, minutes: -deltaMinutes)
                             }
                         }
-                    },
-                    onDelete: { event in handleDelete(event) },
-                    onDeleteOccurrence: { event in
-                        reminderService.excludeOccurrence(occurrenceId: event.id)
-                        toastState.showSuccess("\u{201C}\(event.title)\u{201D} removed", icon: "trash.fill")
-                    },
-                    onDeleteSeries: { event in
-                        let seriesId = event.seriesId ?? event.id
-                        reminderService.removeLocalEvent(id: seriesId)
-                        toastState.showSuccess("All \u{201C}\(event.title)\u{201D} deleted", icon: "trash.fill")
-                    },
-                    onTap: { event in
-                        navigation = .detail(event)
                     },
                     onCompleteTask: { event in
                         var completed = event
