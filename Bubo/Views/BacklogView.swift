@@ -392,61 +392,71 @@ struct BacklogView: View {
             // glanceable status where the eye lands first, not buried in
             // trailing controls. Birman: кольцо — это _идентификатор_
             // карточки, а не украшение на периферии.
-            if totalCount > 0 {
-                BacklogCapacityRing(
-                    pendingMinutes: pendingWorkloadMinutes,
-                    remainingWorkdayMinutes: remainingWorkdayMinutes,
-                    optimizerService: optimizerService
-                )
-                .help(capacityRingTooltip)
+            //
+            // Ring + chevron+count live in the SAME inner HStack with the
+            // tight `.xs` gap so they read as one paired unit — кольцо
+            // отвечает «сколько часов», цифра рядом — «сколько задач», и
+            // обе метрики идентифицируют карточку. Verdict-label следует
+            // дальше через обычный `.sm` отступ.
+            HStack(spacing: DS.Spacing.xs) {
+                if totalCount > 0 {
+                    BacklogCapacityRing(
+                        pendingMinutes: pendingWorkloadMinutes,
+                        remainingWorkdayMinutes: remainingWorkdayMinutes,
+                        optimizerService: optimizerService
+                    )
+                    .help(capacityRingTooltip)
+                }
 
-                // Verdict next to the ring — «Done by 17:30» / «1h over» /
-                // «After hours · 3h queued». Replaces the older «5h / 3h»
-                // numbers (which stay reachable through the ring's popover
-                // and tooltip) so the inline label is interpretation, not
-                // arithmetic the reader has to do themselves.
+                Button {
+                    // `.levelChange` for the chevron — collapsed/compact is a
+                    // discrete card-state change, same magnitude as the
+                    // urgent / smart-sort toggles below.
+                    Haptics.impact()
+                    withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+                        expansion = expansion.next
+                    }
+                } label: {
+                    // Слово «Tasks» убрано: capacity ring + verdict-метка слева
+                    // уже несут смысл «это блок задач», а отдельная подпись на
+                    // 360pt popover'е обрезалась в «Ta…». Бирман: не подписывай
+                    // то, что и так понятно. Chevron остаётся — он отвечает за
+                    // disclosure, цифра — за объём.
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: expansion.iconName)
+                            .font(.footnote)
+                            .foregroundStyle(skin.resolvedTextSecondary)
+                            .contentTransition(.symbolEffect(.replace))
+
+                        // Total count — always shown, tabular digits so the number
+                        // doesn't jitter horizontally when `.numericText()` rolls.
+                        Text("\(totalCount)")
+                            .font(.subheadline.weight(.medium).monospacedDigit())
+                            .foregroundStyle(skin.resolvedTextPrimary)
+                            .contentTransition(.numericText())
+                    }
+                }
+                .buttonStyle(.plain)
+                // Tooltip carries both pieces — what the number means and what
+                // a click does — since the «Tasks» label was removed from the
+                // glyph itself. Without it the chevron+number was a mystery
+                // pair on hover.
+                .help("\(totalCount) task\(totalCount == 1 ? "" : "s") \u{00B7} \(expansion.accessibilityHint.lowercased())")
+                .accessibilityLabel("\(totalCount) tasks")
+                .accessibilityHint(expansion.accessibilityHint)
+            }
+
+            // Verdict next to the ring/count cluster — «Done by 17:30» /
+            // «1h over» / «After hours · 3h queued». Replaces the older
+            // «5h / 3h» numbers (which stay reachable through the ring's
+            // popover and tooltip) so the inline label is interpretation,
+            // not arithmetic the reader has to do themselves.
+            if totalCount > 0 {
                 BacklogCapacityLabel(
                     pendingMinutes: pendingWorkloadMinutes,
                     optimizerService: optimizerService
                 )
             }
-
-            Button {
-                // `.levelChange` for the chevron — collapsed/compact is a
-                // discrete card-state change, same magnitude as the
-                // urgent / smart-sort toggles below.
-                Haptics.impact()
-                withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-                    expansion = expansion.next
-                }
-            } label: {
-                // Слово «Tasks» убрано: capacity ring + verdict-метка слева
-                // уже несут смысл «это блок задач», а отдельная подпись на
-                // 360pt popover'е обрезалась в «Ta…». Бирман: не подписывай
-                // то, что и так понятно. Chevron остаётся — он отвечает за
-                // disclosure, цифра — за объём.
-                HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: expansion.iconName)
-                        .font(.footnote)
-                        .foregroundStyle(skin.resolvedTextSecondary)
-                        .contentTransition(.symbolEffect(.replace))
-
-                    // Total count — always shown, tabular digits so the number
-                    // doesn't jitter horizontally when `.numericText()` rolls.
-                    Text("\(totalCount)")
-                        .font(.subheadline.weight(.medium).monospacedDigit())
-                        .foregroundStyle(skin.resolvedTextPrimary)
-                        .contentTransition(.numericText())
-                }
-            }
-            .buttonStyle(.plain)
-            // Tooltip carries both pieces — what the number means and what
-            // a click does — since the «Tasks» label was removed from the
-            // glyph itself. Without it the chevron+number was a mystery
-            // pair on hover.
-            .help("\(totalCount) task\(totalCount == 1 ? "" : "s") \u{00B7} \(expansion.accessibilityHint.lowercased())")
-            .accessibilityLabel("\(totalCount) tasks")
-            .accessibilityHint(expansion.accessibilityHint)
 
             // Smart-sort indicator — видимое состояние «список не в моём
             // порядке». Раньше тоггл жил только в overflow, и пользователь
