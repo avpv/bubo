@@ -27,10 +27,20 @@ struct FullScreenAlertView: View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
         let secondsRemaining = max(Int(event.startDate.timeIntervalSince(context.date)), 0)
         ZStack {
-            // Background: material + skin-tinted overlay
-            Rectangle()
-                .fill(DS.Materials.overlay)
-                .ignoresSafeArea()
+            // Background: material + skin-tinted overlay.
+            // The chrome stack is normally three layers — `.ultraThinMaterial`
+            // for live-blur, a chrome-coloured opacity wash, and a radial
+            // skin glow. Under Reduce Motion or Increased Contrast the wash
+            // jumps to 80%, which leaves the blur effectively invisible —
+            // and the material is the most expensive of the three to
+            // composite full-screen on Retina. Skip it in those modes:
+            // accessibility users get a calmer scene and the GPU saves a
+            // pass on the codepath that's specifically meant to be lighter.
+            if !reduceMotion && contrast != .increased {
+                Rectangle()
+                    .fill(DS.Materials.overlay)
+                    .ignoresSafeArea()
+            }
 
             DS.Colors.overlayBackground
                 .opacity(contrast == .increased ? DS.Opacity.overlayDark : DS.Opacity.overlayLight)
@@ -143,6 +153,7 @@ struct FullScreenAlertView: View {
                             .onHover { joinHovered = $0 }
                             .keyboardShortcut(.return, modifiers: [])
                             .accessibilityLabel("Join \(serviceName)")
+                            .accessibilityHint("Press Return")
                         }
 
                         // Dismiss button — white pill with skin accent on hover
@@ -171,6 +182,7 @@ struct FullScreenAlertView: View {
                         .onHover { dismissHovered = $0 }
                         .keyboardShortcut(event.meetingLink != nil ? .escape : .return, modifiers: [])
                         .accessibilityLabel("Dismiss alert")
+                        .accessibilityHint(event.meetingLink != nil ? "Press Escape" : "Press Return or Escape")
                     }
 
                     // Snooze row — adaptive to remaining time

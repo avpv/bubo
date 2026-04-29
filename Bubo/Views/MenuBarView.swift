@@ -123,12 +123,7 @@ struct MenuBarView: View {
                                 scrollPositionID = nil
                             }
                         }
-                        .transition(
-                            reduceMotion ? .opacity : .asymmetric(
-                                insertion: .move(edge: .leading).combined(with: .opacity),
-                                removal: .move(edge: .leading).combined(with: .opacity).combined(with: .scale(scale: 0.98))
-                            )
-                        )
+                        .transition(navigationTransition(.pushRoot))
 
                 case .detail(let event):
                     EventDetailView(
@@ -164,12 +159,7 @@ struct MenuBarView: View {
                             navigation = .timer(event)
                         }
                     )
-                    .transition(
-                        reduceMotion ? .opacity : .asymmetric(
-                            insertion: .move(edge: .trailing).combined(with: .opacity),
-                            removal: .move(edge: .trailing).combined(with: .opacity).combined(with: .scale(scale: 0.98))
-                        )
-                    )
+                    .transition(navigationTransition(.pushChild))
 
                 case .timer(let event):
                     TimerScreenView(
@@ -212,12 +202,7 @@ struct MenuBarView: View {
                             toastState.showSuccess("End time \(signed)", icon: "timer")
                         }
                     )
-                    .transition(
-                        reduceMotion ? .opacity : .asymmetric(
-                            insertion: .move(edge: .trailing).combined(with: .opacity),
-                            removal: .move(edge: .trailing).combined(with: .opacity).combined(with: .scale(scale: 0.98))
-                        )
-                    )
+                    .transition(navigationTransition(.pushChild))
 
                 case .addEvent(let editing, let initialType):
                     AddEventView(
@@ -249,12 +234,7 @@ struct MenuBarView: View {
                         settings: settings,
                         optimizerService: optimizerService
                     )
-                    .transition(
-                        reduceMotion ? .opacity : .asymmetric(
-                            insertion: .move(edge: .trailing).combined(with: .opacity),
-                            removal: .move(edge: .trailing).combined(with: .opacity).combined(with: .scale(scale: 0.98))
-                        )
-                    )
+                    .transition(navigationTransition(.modal))
 
                 case .editTask(let task):
                     if let backlog = optimizerService.backlogService {
@@ -271,12 +251,7 @@ struct MenuBarView: View {
                                 toastState.showSuccess("Task updated", icon: "checkmark.circle.fill")
                             }
                         )
-                        .transition(
-                            reduceMotion ? .opacity : .asymmetric(
-                                insertion: .move(edge: .trailing).combined(with: .opacity),
-                                removal: .move(edge: .trailing).combined(with: .opacity).combined(with: .scale(scale: 0.98))
-                            )
-                        )
+                        .transition(navigationTransition(.modal))
                     } else {
                         EmptyView()
                             .onAppear { navigation = .list }
@@ -294,12 +269,7 @@ struct MenuBarView: View {
                                 toastState.showSuccess(message, icon: "arrow.uturn.backward", onUndo: undo)
                             }
                         )
-                        .transition(
-                            reduceMotion ? .opacity : .asymmetric(
-                                insertion: .move(edge: .trailing).combined(with: .opacity),
-                                removal: .move(edge: .trailing).combined(with: .opacity).combined(with: .scale(scale: 0.98))
-                            )
-                        )
+                        .transition(navigationTransition(.modal))
                     } else {
                         EmptyView()
                             .onAppear { navigation = .list }
@@ -462,6 +432,48 @@ struct MenuBarView: View {
     /// Count of visible (non-disintegrating) events for a day group.
     private func visibleEventCount(for events: [CalendarEvent]) -> Int {
         events.filter { !reminderService.disintegratingEventIDs.contains($0.id) }.count
+    }
+
+    // MARK: - Navigation Transition
+
+    /// Two-metaphor router for navigation transitions, replacing six
+    /// hand-rolled `asymmetric(...)` blocks at the switch sites.
+    ///
+    /// HIG splits hierarchy navigation (`push`: drill-down on the same
+    /// axis the user reads on) from presentation (`modal`: a sheet rising
+    /// from below). When everything slid in from the trailing edge — as
+    /// the previous code did for `.detail`, `.timer`, `.addEvent`,
+    /// `.editTask` and `.backlog` alike — the user got the same physical
+    /// cue for «I went one level deeper» and «I opened a form», which
+    /// flattens the mental model.
+    ///
+    /// Birman: одна метафора — одно ощущение. Push и modal — это два
+    /// разных жеста, и анимация должна это сообщать.
+    private enum NavigationTransitionKind {
+        case pushRoot   // base: list slides out leading, returns leading.
+        case pushChild  // drill-down: detail / timer.
+        case modal      // sheet: addEvent / editTask / backlog (other mode).
+    }
+
+    private func navigationTransition(_ kind: NavigationTransitionKind) -> AnyTransition {
+        if reduceMotion { return .opacity }
+        switch kind {
+        case .pushRoot:
+            return .asymmetric(
+                insertion: .move(edge: .leading).combined(with: .opacity),
+                removal: .move(edge: .leading).combined(with: .opacity).combined(with: .scale(scale: 0.98))
+            )
+        case .pushChild:
+            return .asymmetric(
+                insertion: .move(edge: .trailing).combined(with: .opacity),
+                removal: .move(edge: .trailing).combined(with: .opacity).combined(with: .scale(scale: 0.98))
+            )
+        case .modal:
+            return .asymmetric(
+                insertion: .move(edge: .bottom).combined(with: .opacity),
+                removal: .move(edge: .bottom).combined(with: .opacity).combined(with: .scale(scale: 0.98))
+            )
+        }
     }
 
     // MARK: - Helpers
@@ -781,34 +793,38 @@ struct MenuBarView: View {
         VStack(alignment: .leading, spacing: 0) {
             PopoverHeader(
                 title: dayProgressTitle,
-                trailing: AnyView(
-                    HStack(spacing: DS.Spacing.sm) {
-                        statusIndicators
-
-                        if isScrolledFromTop {
-                            Button {
-                                Haptics.tap()
-                                withAnimation(DS.Animation.smoothSpring) {
-                                    scrollProxy.scrollTo("eventListTop", anchor: .top)
-                                }
-                                Task {
-                                    try? await Task.sleep(for: .milliseconds(400))
-                                    withAnimation(DS.Animation.smoothSpring) {
-                                        scrollPositionID = nil
-                                    }
-                                }
-                            } label: {
-                                Image(systemName: "arrow.up")
-                                    .font(.system(size: DS.Size.iconSmall, weight: .semibold))
-                                    .foregroundStyle(skin.resolvedTextSecondary)
-                            }
-                            .buttonStyle(.borderless)
-                            .help("Scroll to top")
-                            .accessibilityLabel("Scroll to top")
-                            .transition(.scale.combined(with: .opacity))
+                // Leading: jump-to-today pill, surfaced only when the user
+                // has scrolled past today's section. Replaces the OwlIcon
+                // brand mark that used to live here — the menu-bar glyph
+                // already identifies the app, so the slot is freed for a
+                // navigational action. The same predicate (`isScrolledFromTop`)
+                // that previously gated a trailing arrow now gates this
+                // labeled control: «scroll back home» is more legible as
+                // "Today" than as a corner chevron.
+                leading: isScrolledFromTop ? AnyView(
+                    Button {
+                        Haptics.tap()
+                        withAnimation(DS.Animation.smoothSpring) {
+                            scrollProxy.scrollTo("eventListTop", anchor: .top)
                         }
+                        Task {
+                            try? await Task.sleep(for: .milliseconds(400))
+                            withAnimation(DS.Animation.smoothSpring) {
+                                scrollPositionID = nil
+                            }
+                        }
+                    } label: {
+                        Label("Today", systemImage: "arrow.up")
+                            .font(.system(size: DS.Size.iconSmall, weight: .semibold))
+                            .foregroundStyle(skin.resolvedTextSecondary)
+                            .labelStyle(.titleAndIcon)
                     }
-                )
+                    .buttonStyle(.borderless)
+                    .help("Jump to today")
+                    .accessibilityLabel("Jump to today")
+                    .transition(.scale.combined(with: .opacity))
+                ) : nil,
+                trailing: AnyView(statusIndicators)
             )
 
             // Status messages — show at most one banner to avoid stacking (HIG: keep primary content visible)
@@ -891,32 +907,38 @@ struct MenuBarView: View {
                 .padding(.top, DS.Spacing.md)
             }
 
-            // Backlog card — always rendered so the "+ Add task…" input
-            // stays as a persistent visual anchor even when the backlog
-            // is empty. The chrome itself lives on `.skinTasksBlockChrome`
-            // — same modifier the fullscreen Backlog uses, so the block
-            // reads as one recognizable surface in both collapsed-on-main
-            // and fullscreen states.
-            inlineBacklog(autoExpand: reminderService.nonDisintegratingEventCount == 0)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .skinTasksBlockChrome(activeSkin)
-                .padding(.horizontal, DS.Spacing.contentMargin)
-                .padding(.top, DS.Spacing.md)
+            // Backlog placement is conditional on whether the timeline
+            // has anything to surface:
+            //
+            //   * count == 0 → backlog is the focal content, expanded
+            //                  above the timeline empty-state.
+            //   * count > 0  → timeline becomes primary; backlog moves
+            //                  below it as a compact persistent input
+            //                  anchor, just above the footer.
+            //
+            // Birman/HIG: главный экран отвечает на главный вопрос —
+            // «когда у меня следующая встреча?». Раньше Backlog съедал
+            // ~120pt над таймлайном даже в дни, к которым задачи отноше-
+            // ния не имеют. Теперь карточка занимает primary-area только
+            // когда расписание пустое; в остальное время живёт sticky-
+            // footer'ом — «+ Add task…» поле остаётся доступным.
+            let hasEvents = reminderService.nonDisintegratingEventCount > 0
 
-            // Thin separator between the Backlog card above and the
-            // flat Timeline area below. Matches the visual role of
-            // the SkinSeparator above the footer: a quiet one-pixel
-            // rule that signals "this is where one region ends and
-            // the next one begins", without reintroducing a heavy
-            // card container around the Timeline. Inset by
-            // `contentMargin` so it aligns with the Backlog card
-            // edges above and the content axis of the Timeline below.
-            // Vertical `md` top padding preserves the existing
-            // Backlog → Timeline gap; the LazyVStack's own internal
-            // top padding takes care of the gap below the separator.
-            SkinSeparator()
-                .padding(.horizontal, DS.Spacing.contentMargin)
-                .padding(.top, DS.Spacing.md)
+            if !hasEvents {
+                inlineBacklog(autoExpand: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .skinTasksBlockChrome(activeSkin)
+                    .padding(.horizontal, DS.Spacing.contentMargin)
+                    .padding(.top, DS.Spacing.md)
+
+                // Quiet rule between the focal Backlog card and the
+                // empty-state region below. Inset by `contentMargin`
+                // so it aligns with the Backlog card edges and the
+                // content axis of what follows.
+                SkinSeparator()
+                    .padding(.horizontal, DS.Spacing.contentMargin)
+                    .padding(.top, DS.Spacing.md)
+            }
 
             // Events — fill remaining space so header stays pinned.
             // Timeline is intentionally NOT wrapped in a platter card:
@@ -924,14 +946,14 @@ struct MenuBarView: View {
             // patterns (Mail message list, Finder file list, Calendar
             // event list, Reminders) put primary content directly on
             // the window surface rather than inside a nested card.
-            // Cards are reserved for the secondary blocks above
-            // (QuickActions, Backlog) which act like grouped-list
-            // sections; Timeline fills the main area directly so it
-            // reads as "the screen" rather than "one of the sections".
-            // Individual event rows stay flat (no per-row platter
-            // background) — also the native macOS List convention.
+            // Cards are reserved for the secondary blocks (QuickActions,
+            // Backlog) which act like grouped-list sections; Timeline
+            // fills the main area directly so it reads as "the screen"
+            // rather than "one of the sections". Individual event rows
+            // stay flat (no per-row platter background) — also the
+            // native macOS List convention.
             Group {
-                if reminderService.nonDisintegratingEventCount == 0 {
+                if !hasEvents {
                     emptyState
                 } else if filteredEventsByDay.isEmpty {
                     VStack(spacing: DS.Spacing.sm) {
@@ -951,7 +973,21 @@ struct MenuBarView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .animation(DS.Animation.smoothSpring, value: reminderService.nonDisintegratingEventCount == 0)
+            .animation(DS.Animation.smoothSpring, value: hasEvents)
+
+            // Bottom-placement Backlog — compact, persistent input
+            // anchor when the timeline owns the primary area. Sits
+            // immediately above the footer with its own card chrome,
+            // so the «+ Add task…» field remains a one-glance target
+            // without competing with the day list for vertical space.
+            if hasEvents {
+                inlineBacklog(autoExpand: false)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .skinTasksBlockChrome(activeSkin)
+                    .padding(.horizontal, DS.Spacing.contentMargin)
+                    .padding(.top, DS.Spacing.md)
+                    .padding(.bottom, DS.Spacing.sm)
+            }
 
             SkinSeparator()
             footerActions
@@ -1155,8 +1191,20 @@ struct MenuBarView: View {
     private var colorFilterBar: some View {
         let selected = colorFilter
         let anyFilter = selected != nil || freeSlotFilter.isActive
+        // Birman: показывать кнопки фильтра только для значений, которые
+        // встречаются в данных. Если активный фильтр вышел из набора
+        // (последнее событие этого цвета было удалено), всё равно держим
+        // его в списке — иначе пользователь увидит «отфильтровано до пусто»
+        // и не найдёт кнопку, чтобы это снять.
+        let tagsToShow: [EventColorTag] = {
+            var tags = usedColorTags
+            if let s = selected, !tags.contains(s) {
+                tags.append(s)
+            }
+            return tags
+        }()
         return HStack(spacing: DS.Spacing.xs) {
-            ForEach(EventColorTag.allCases, id: \.self) { tag in
+            ForEach(tagsToShow, id: \.self) { tag in
                 ColorDotButton(
                     tag: tag,
                     isActive: selected == tag,

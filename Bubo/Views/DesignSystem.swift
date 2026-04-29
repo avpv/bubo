@@ -660,14 +660,16 @@ extension Text {
     /// same typographic object, not two look-alikes. Centralising the
     /// style here guarantees they never drift apart.
     ///
-    /// 2026 update: dropped uppercase + `tracking(0.4)`. Cap-height + letter
-    /// spacing made these read like 1990s product chrome ("PROJECTS  ·
-    /// TODAY"); a quiet semibold subhead in mixed case sits inside the
-    /// content rather than shouting from above it. Step is `.footnote`
-    /// (the smallest of the four-step ramp), not `.caption`, because
-    /// `.caption` is no longer in the typographic ramp.
+    /// Step is `.body.weight(.semibold)` — sits one full size above
+    /// metadata (`.footnote`/subhead step) rather than relying on weight
+    /// alone to distinguish itself from the secondary text it groups.
+    /// Apple does the same in Settings/Mail group headers. Mixed case,
+    /// no uppercase, no `tracking()` — uppercase + letter-spacing read
+    /// like 1990s product chrome ("PROJECTS  ·  TODAY") and the
+    /// four-step ramp deliberately keeps section labels inside the
+    /// content tone, not above it.
     func sectionHeaderStyle() -> some View {
-        self.font(.footnote.weight(.semibold))
+        self.font(.body.weight(.semibold))
     }
 }
 
@@ -752,6 +754,13 @@ struct PopoverHeader: View {
     /// HIG: Back button should display the title of the previous screen.
     var backLabel: String = "Back"
     var onBack: (() -> Void)? = nil
+    /// Optional functional control for the leading slot on root screens.
+    /// When `showBack` is `true` the back button takes the slot and this
+    /// value is ignored. When neither is provided the slot is balanced
+    /// with an empty width so the title stays centred.
+    /// Birman: бренд-иконка в попапе — повторение того, что пользователь
+    /// только что кликнул в menu bar. Слот ценен — отдадим его функции.
+    var leading: AnyView? = nil
     var trailing: AnyView? = nil
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -764,8 +773,10 @@ struct PopoverHeader: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: DS.Spacing.sm) {
-                // Leading: back button OR owl icon (mutually exclusive — one symbol
-                // at a time, not two).
+                // Leading: back button on sub-screens; caller-supplied control
+                // on root screens; balanced empty space otherwise so the
+                // title stays centred. No vestigial brand mark — the menu-bar
+                // glyph already identifies the app.
                 Group {
                     if showBack {
                         Button {
@@ -776,9 +787,10 @@ struct PopoverHeader: View {
                         }
                         .buttonStyle(.borderless)
                         .keyboardShortcut(.escape, modifiers: [])
+                    } else if let leading {
+                        leading
                     } else {
-                        OwlIcon(size: DS.Size.headerIcon)
-                            .foregroundStyle(skin.accentColor)
+                        Color.clear.frame(width: DS.Size.iconLarge, height: 1)
                     }
                 }
                 .layoutPriority(0)
