@@ -12,8 +12,14 @@ cask "bubo" do
   app "Bubo.app"
 
   postflight do
+    # Only strip com.apple.quarantine. `xattr -cr` would also drop
+    # com.apple.macl, the attribute macOS uses to bind TCC permissions
+    # (Calendar, Reminders, Accessibility, …) to the signed binary;
+    # losing it forces the user to re-grant every permission on each
+    # reinstall and leaves the app in a half-broken state on first launch.
     system_command "/usr/bin/xattr",
-                   args: ["-cr", "#{appdir}/Bubo.app"]
+                   args: ["-dr", "com.apple.quarantine", "#{appdir}/Bubo.app"],
+                   must_succeed: false
   end
 
   zap trash: [
