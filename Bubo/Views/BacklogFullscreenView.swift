@@ -553,7 +553,7 @@ struct BacklogFullscreenView: View {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "plus")
                     .font(.footnote)
-                    .foregroundStyle(isInputFocused ? AnyShapeStyle(skin.accentColor) : AnyShapeStyle(.tertiary))
+                    .foregroundStyle(isInputFocused ? AnyShapeStyle(skin.accentColor) : AnyShapeStyle(skin.resolvedTextSecondary))
 
                 TextField(addTaskPlaceholder, text: $newTaskTitle)
                     .textFieldStyle(.plain)
@@ -584,6 +584,16 @@ struct BacklogFullscreenView: View {
             .background(
                 RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
                     .fill(skin.accentColor.opacity(isInputFocused ? DS.Opacity.lightFill : DS.Opacity.subtleFill))
+            )
+            // Idle stroke makes the input read as a field on every wallpaper.
+            // Mirrors the inline BacklogView treatment so both backlog modes
+            // share the same affordance language.
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
+                    .strokeBorder(
+                        skin.accentColor.opacity(isInputFocused ? DS.Opacity.softAccent : DS.Opacity.subtleBorder),
+                        lineWidth: isInputFocused ? DS.Border.selection : DS.Border.standard
+                    )
             )
             .motionAwareAnimation(DS.Animation.quick, value: parsedNewTaskTitle.durationMinutes, reduceMotion: reduceMotion)
 

@@ -1076,7 +1076,7 @@ struct BacklogView: View {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "plus")
                     .font(.footnote)
-                    .foregroundStyle(isInputFocused ? AnyShapeStyle(skin.accentColor) : AnyShapeStyle(.tertiary))
+                    .foregroundStyle(isInputFocused ? AnyShapeStyle(skin.accentColor) : AnyShapeStyle(skin.resolvedTextSecondary))
 
                 // Birman: placeholder — возможность научить синтаксису, а не
                 // просто пустое «Add task…». На фокусе остаётся краткий
@@ -1121,7 +1121,21 @@ struct BacklogView: View {
                 RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
                     .fill(skin.accentColor.opacity(isInputFocused ? DS.Opacity.lightFill : DS.Opacity.subtleFill))
             )
+            // Idle stroke makes the input read as a field on every wallpaper —
+            // without it, the low-opacity fill alone can disappear into busy
+            // or dark backgrounds. On focus the stroke thickens and brightens
+            // to the accent so the state change is unmistakable. Birman:
+            // «поле должно выглядеть как полем», и состояние должно быть
+            // постоянно видимым.
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
+                    .strokeBorder(
+                        skin.accentColor.opacity(isInputFocused ? DS.Opacity.softAccent : DS.Opacity.subtleBorder),
+                        lineWidth: isInputFocused ? DS.Border.selection : DS.Border.standard
+                    )
+            )
             .motionAwareAnimation(DS.Animation.quick, value: recognizedDurationMinutes, reduceMotion: reduceMotion)
+            .motionAwareAnimation(DS.Animation.quick, value: isInputFocused, reduceMotion: reduceMotion)
 
             // Hint for new users — disappears once they add a task.
             if activeTasks.isEmpty && !isInputFocused {
