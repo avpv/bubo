@@ -305,12 +305,26 @@ struct BacklogCapacityLabel: View {
             // the same «30 min to spare» / «over by 1h» context the
             // assistive-tech path already had.
             let verbose = Self.accessibilityLabel(for: forecast, pendingMinutes: pendingMinutes)
-            Text(Self.label(for: forecast))
-                .font(.footnote.weight(.medium).monospacedDigit())
-                .foregroundStyle(skin.resolvedTextSecondary)
-                .contentTransition(.numericText())
-                .help(verbose)
-                .accessibilityLabel(verbose)
+            HStack(spacing: DS.Spacing.xxs) {
+                // Warning glyph escalates the «over» verdict from a quiet
+                // text label to something the eye catches in peripheral
+                // vision. Destructive tint pairs with the ring's red sector
+                // and the «N urgent» pill — same colour channel = same
+                // category of bad news.
+                if case .over = forecast {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.footnote)
+                        .foregroundStyle(skin.resolvedDestructiveColor)
+                        .accessibilityHidden(true)
+                }
+                Text(Self.label(for: forecast))
+                    .font(.footnote.weight(.medium).monospacedDigit())
+                    .foregroundStyle(skin.resolvedTextSecondary)
+                    .contentTransition(.numericText())
+            }
+            .help(verbose)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(verbose)
         }
     }
 
@@ -324,7 +338,7 @@ struct BacklogCapacityLabel: View {
             let timeStr = eta.formatted(date: .omitted, time: .shortened)
             return "Done by \(timeStr)"
         case .over(let byMinutes):
-            return "\(DS.formatMinutes(byMinutes)) over"
+            return "\(DS.formatMinutes(byMinutes)) over capacity"
         case .afterHours(let queuedMinutes):
             return "After hours · \(DS.formatMinutes(queuedMinutes)) queued"
         }

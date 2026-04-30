@@ -400,15 +400,22 @@ struct BacklogView: View {
                 )
                 .help(capacityRingTooltip)
 
-                // Verdict next to the ring — «Done by 17:30» / «1h over» /
-                // «After hours · 3h queued». Replaces the older «5h / 3h»
-                // numbers (which stay reachable through the ring's popover
-                // and tooltip) so the inline label is interpretation, not
-                // arithmetic the reader has to do themselves.
+                // Verdict next to the ring — «Done by 17:30» / «1h over
+                // capacity» / «After hours · 3h queued». Replaces the older
+                // «5h / 3h» numbers (which stay reachable through the ring's
+                // popover and tooltip) so the inline label is interpretation,
+                // not arithmetic the reader has to do themselves.
                 BacklogCapacityLabel(
                     pendingMinutes: pendingWorkloadMinutes,
                     optimizerService: optimizerService
                 )
+
+                // Middot separator between the verdict and the count —
+                // turns the run-on «9h over capacity 14 1 urgent» into three
+                // visually-separated facts. Birman: middot is the standard
+                // Russian/Mac typographic glue between commensurate items;
+                // the eye reads each side as its own object.
+                headerSeparator
             }
 
             Button {
@@ -420,30 +427,26 @@ struct BacklogView: View {
                     expansion = expansion.next
                 }
             } label: {
-                // Слово «Tasks» убрано: capacity ring + verdict-метка слева
-                // уже несут смысл «это блок задач», а отдельная подпись на
-                // 360pt popover'е обрезалась в «Ta…». Бирман: не подписывай
-                // то, что и так понятно. Chevron остаётся — он отвечает за
-                // disclosure, цифра — за объём.
+                // Count + plural «task/tasks» word. The previous
+                // bare-number layout relied on the capacity verdict to imply
+                // «это про задачи», which broke when the verdict was a time
+                // («Done by 17:30») and left «14» dangling without a noun.
+                // The count now stands on its own as a self-describing fact.
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: expansion.iconName)
                         .font(.footnote)
                         .foregroundStyle(skin.resolvedTextSecondary)
                         .contentTransition(.symbolEffect(.replace))
 
-                    // Total count — always shown, tabular digits so the number
-                    // doesn't jitter horizontally when `.numericText()` rolls.
-                    Text("\(totalCount)")
+                    Text("\(totalCount) task\(totalCount == 1 ? "" : "s")")
                         .font(.subheadline.weight(.medium).monospacedDigit())
                         .foregroundStyle(skin.resolvedTextPrimary)
                         .contentTransition(.numericText())
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                 }
             }
             .buttonStyle(.plain)
-            // Tooltip carries both pieces — what the number means and what
-            // a click does — since the «Tasks» label was removed from the
-            // glyph itself. Without it the chevron+number was a mystery
-            // pair on hover.
             .help("\(totalCount) task\(totalCount == 1 ? "" : "s") \u{00B7} \(expansion.accessibilityHint.lowercased())")
             .accessibilityLabel("\(totalCount) tasks")
             .accessibilityHint(expansion.accessibilityHint)
@@ -460,10 +463,13 @@ struct BacklogView: View {
             }
 
             // Urgent-count pill — now a real control. Clicking it toggles
-            // the urgent-only filter. Middot separator visually attaches it
-            // to the total count without the two numbers fighting.
+            // the urgent-only filter. The leading middot visually frames
+            // the pill as a third sibling fact next to the verdict and the
+            // count, so the row reads as «verdict · count · urgent» —
+            // three separable thoughts instead of one runny line.
             // Birman: «информация — это кнопка», иначе это просто краска.
             if urgentCount > 0 {
+                headerSeparator
                 urgentFilterButton(urgentCount: urgentCount)
             }
 
@@ -521,6 +527,17 @@ struct BacklogView: View {
         .buttonStyle(.plain)
         .help("Smart sort active — tap to show in user order")
         .accessibilityLabel("Smart sort active — tap to disable")
+    }
+
+    /// Middot divider used between the three header facts (verdict, count,
+    /// urgent). Tertiary tint so it reads as punctuation, not a sibling
+    /// piece of information. `accessibilityHidden` keeps VoiceOver from
+    /// announcing «middle dot» between every field.
+    private var headerSeparator: some View {
+        Text("\u{00B7}")
+            .font(.footnote)
+            .foregroundStyle(skin.resolvedTextTertiary)
+            .accessibilityHidden(true)
     }
 
     /// Fullscreen button — `arrow.up.left.and.arrow.down.right` это родная
