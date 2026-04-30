@@ -55,6 +55,16 @@ struct BacklogTaskRow: View {
     /// to the add-task field instead.
     var sprintHotKey: Int? = nil
 
+    /// User's default task duration (from `OptimizerService`). Drives the
+    /// «hide `1 h`» rule: when the row's only meta would be the default
+    /// duration and another trailing-meta is present (recurrence,
+    /// dependency, priority dot), the duration is suppressed so the
+    /// list reads as a clean column of titles. Birman: don't print the
+    /// obvious — every task uses 1 h unless told otherwise; saying so on
+    /// every line is noise. When no other meta is present, duration is
+    /// kept so the row's right column isn't empty.
+    var defaultTaskDurationMinutes: Int = 60
+
     @State private var isHovered = false
     @State private var isReorderTargeted = false
     /// True for the brief moment between «user tapped checkbox» and «row
@@ -83,19 +93,45 @@ struct BacklogTaskRow: View {
     ///
     /// Birman: "one piece of information, not a salad." The deadline wins
     /// whenever it's set — it's the most actionable answer to "should I do
-    /// this now?" — and gets the urgency colour (red today/overdue,
-    /// standard secondary otherwise). Without a deadline, duration fills
-    /// in; it's always useful for "does this fit in my next slot?"
+    /// this now?" — and reads in plain secondary tint. Urgency is carried
+    /// by the leading red stripe (see `urgentStripe` overlay below) so
+    /// printing the deadline text in destructive red would duplicate the
+    /// signal. Birman: «не дублируй сигнал состояния». The pulsing
+    /// `OverduePulseDot` next to the text remains — overdue is a subtype
+    /// of urgent that earns a motion cue on top of the stripe.
+    /// Without a deadline, duration fills in; always useful for
+    /// "does this fit in my next slot?"
     private var metaText: Text {
         if let deadline = task.deadline {
-            let color: Color = isUrgent
-                ? skin.resolvedDestructiveColor
-                : skin.resolvedTextSecondary
             return Text(deadlineLabel(deadline))
-                .foregroundStyle(color)
+                .foregroundStyle(skin.resolvedTextSecondary)
         }
         return Text(DS.formatMinutes(task.durationMinutes))
             .foregroundStyle(skin.resolvedTextSecondary)
+    }
+
+    /// Whether the row carries any non-deadline trailing metadata that the
+    /// user can scan for «is this task different from the default?»
+    /// Recurrence, dependency, and priority all qualify — overdue is
+    /// deadline-only and handled in the deadline branch.
+    private var hasNonDurationMeta: Bool {
+        task.isRecurring
+            || !task.dependsOn.isEmpty
+            || task.priority == .high
+    }
+
+    /// Whether the row should render `metaText`. Hides the default-duration
+    /// label («1 h») when another piece of meta is already telling the
+    /// reader something — avoids the «wall of identical 1 h» effect on
+    /// deadline-less rows. Always shows when:
+    /// - the task has a deadline (the deadline IS the meta),
+    /// - the duration differs from the user's default,
+    /// - or no other meta is present (otherwise the right column would be
+    ///   visually empty, which Birman calls «загадочный пробел»).
+    private var shouldShowMetaText: Bool {
+        if task.deadline != nil { return true }
+        if task.durationMinutes != defaultTaskDurationMinutes { return true }
+        return !hasNonDurationMeta
     }
 
     /// Everything that was pushed off the primary line — duration (when
@@ -179,6 +215,21 @@ struct BacklogTaskRow: View {
             value: isDragging
         )
         .background(rowBackground)
+        .overlay(alignment: .leading) {
+            // Single-channel urgency signal — a 2pt red bar on the leading
+            // edge of the row. Replaces the previous deadline-text-color
+            // duplication. Birman: «один сигнал на состояние». The stripe
+            // sits inside the row's outer frame so it doesn't shift the
+            // baseline; vertical inset keeps it visually inside the
+            // rounded corners.
+            if isUrgent {
+                RoundedRectangle(cornerRadius: 1, style: .continuous)
+                    .fill(skin.resolvedDestructiveColor)
+                    .frame(width: 2)
+                    .padding(.vertical, DS.Spacing.xxs)
+                    .accessibilityHidden(true)
+            }
+        }
         .overlay { focusRing }
         .onHover { hovering in
             withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
@@ -439,10 +490,12 @@ struct BacklogTaskRow: View {
                     OverduePulseDot(reduceMotion: reduceMotion)
                         .accessibilityHidden(true)
                 }
-                metaText
-                    .font(.footnote)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                if shouldShowMetaText {
+                    metaText
+                        .font(.footnote)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
 
                 if isHovered, let secondary = secondaryMetaText {
                     secondary

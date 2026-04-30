@@ -822,6 +822,7 @@ struct BacklogView: View {
             isDragging: coordinator?.draggedTask?.taskId == task.id,
             canMoveUp: canMoveUp(task),
             canMoveDown: canMoveDown(task),
+            defaultTaskDurationMinutes: optimizerService.defaultTaskDurationMinutes,
             onComplete: { completeTaskWithUndo(task) },
             onEdit: { onEditTask?(task) },
             onDelete: { onDeleteTask?(task) },
