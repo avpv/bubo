@@ -67,6 +67,14 @@ struct BacklogTaskRow: View {
     /// deadline. nil = no urgency-toggle path (read-only context).
     var onToggleUrgent: (() -> Void)? = nil
 
+    /// True for ~0.5\u{00A0}s after the user drops this row via drag. Renders
+    /// a brief accent-coloured outline so the eye finds the new resting
+    /// position even when the drop crossed the capacity-section boundary.
+    /// Caller toggles back to false after the animation window closes.
+    /// `accessibilityReduceMotion` collapses the animation to an instant
+    /// flash via the row's existing motion-aware modifier path.
+    var wasJustDropped: Bool = false
+
     /// User's default task duration (from `OptimizerService`). Drives the
     /// «hide `1 h`» rule: when the row's only meta would be the default
     /// duration and another trailing-meta is present (recurrence,
@@ -267,6 +275,22 @@ struct BacklogTaskRow: View {
             }
         }
         .overlay { focusRing }
+        .overlay {
+            // Drop-pulse outline: a brief accent-coloured ring that flashes
+            // for ~0.5\u{00A0}s after the user drops this row via drag, so
+            // the eye finds the landing spot when the row crossed the
+            // fits → spill-over boundary. Driven by `wasJustDropped` set
+            // by the parent in `handleReorderDrop`.
+            if wasJustDropped {
+                RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
+                    .strokeBorder(skin.accentColor.opacity(DS.Opacity.softAccent), lineWidth: DS.Border.selection)
+                    .transition(.opacity)
+            }
+        }
+        .animation(
+            DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion),
+            value: wasJustDropped
+        )
         .onHover { hovering in
             withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
                 isHovered = hovering

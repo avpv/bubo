@@ -109,6 +109,15 @@ struct BacklogView: View {
     /// Session-local only; survives popover close, not app restart.
     @State private var urgentOnlyFilter: Bool = false
 
+    /// ID of the row that was just dropped via drag — set in
+    /// `handleReorderDrop`, cleared 0.5 s later via a `Task`. Drives a
+    /// brief accent-coloured outline on the row so the user can see
+    /// where their dropped task landed (especially when it crossed the
+    /// fits → spill-over boundary). Birman: «постоянная мягкая
+    /// обратная связь» — `reduceMotion` honoured by the `.animation`
+    /// wrapper at the row level.
+    @State private var lastDroppedTaskId: String? = nil
+
     /// Shared cache for "where would a task of N minutes land?" lookups.
     /// Both the per-row hover hint and the ghost preview under the input
     /// read from this single source, so they always agree and a calendar
@@ -839,6 +848,7 @@ struct BacklogView: View {
             isDragging: coordinator?.draggedTask?.taskId == task.id,
             canMoveUp: canMoveUp(task),
             canMoveDown: canMoveDown(task),
+            wasJustDropped: lastDroppedTaskId == task.id,
             defaultTaskDurationMinutes: optimizerService.defaultTaskDurationMinutes,
             onComplete: { completeTaskWithUndo(task) },
             onEdit: { onEditTask?(task) },
@@ -973,6 +983,20 @@ struct BacklogView: View {
         }
         hasDragged = true
         coordinator?.endDrag()
+
+        // Pulse outline on the dropped row so the eye can find where it
+        // landed if it crossed sections. The 0.5 s window is enough to
+        // register without lingering. `reduceMotion` rules out the
+        // animation and falls back to an instant flash via the row's
+        // own motion-aware modifier.
+        let droppedId = originalTask.id
+        lastDroppedTaskId = droppedId
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(500))
+            if lastDroppedTaskId == droppedId {
+                lastDroppedTaskId = nil
+            }
+        }
 
         // Undo: restore index + context in one step.
         let taskId = originalTask.id
@@ -1237,12 +1261,20 @@ struct BacklogView: View {
             .motionAwareAnimation(DS.Animation.quick, value: recognizedDurationMinutes, reduceMotion: reduceMotion)
             .motionAwareAnimation(DS.Animation.quick, value: isInputFocused, reduceMotion: reduceMotion)
 
-            // Hint for new users — disappears once they add a task.
+            // Hint for new users — disappears once they add a task. Birman:
+            // empty state should onboard, not blank-out. Two phrasings:
+            //   • All-empty (no tombstones, no frozen) → action-oriented
+            //     instruction with both add paths named (type vs drag) so
+            //     the user sees what they can do.
+            //   • Has tombstones / frozen tasks (so they've used the
+            //     backlog before) → quieter «No tasks queued» — they know
+            //     the affordance, just need the empty-state acknowledged.
             if activeTasks.isEmpty && !isInputFocused {
-                Text("Tasks you add here will be scheduled into free slots")
+                Text(emptyBacklogHint)
                     .font(.footnote)
                     .foregroundStyle(skin.resolvedTextTertiary)
                     .transition(.opacity)
+                    .accessibilityLabel(emptyBacklogHint)
             }
 
             // Focused-state shortcut hint. HIG: discoverable shortcuts —
@@ -1274,6 +1306,21 @@ struct BacklogView: View {
         activeTasks.isEmpty
             ? "Add task — try: Write report 30m"
             : "Add task\u{2026}"
+    }
+
+    /// Plan: 2-tier hint under the empty backlog. First-time users (no
+    /// completed-today, no frozen tombstones — i.e. never used the backlog
+    /// at all) get the action-oriented onboarding copy that names both
+    /// add paths. Returning users with at least one tombstone get the
+    /// quieter «No tasks queued» line — they know the affordance, just
+    /// need the empty-state acknowledged.
+    private var emptyBacklogHint: String {
+        let hasEverUsedBacklog = !completedToday.isEmpty
+            || !backlogService.frozen.isEmpty
+        if hasEverUsedBacklog {
+            return "No tasks queued."
+        }
+        return "Type below to add a task, or drag one in from the timeline."
     }
 
     // MARK: - Ghost Preview
