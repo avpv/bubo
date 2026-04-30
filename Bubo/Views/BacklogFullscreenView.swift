@@ -430,34 +430,32 @@ struct BacklogFullscreenView: View {
             // span the partition: the first task in `fitting` gets index 1,
             // and indices keep counting through the marker into `overflowing`
             // so digit-press still completes the Nth row the user sees.
-            let partition = BacklogLogic.capacityPartition(
-                visibleTasks,
+            let plan = BacklogLogic.CapacitySectionPlan(
+                orderedTasks: visibleTasks,
                 remainingWorkdayMinutes: remainingWorkdayMinutes
             )
-            let overflowMinutes = partition.overflowing.reduce(0) { $0 + $1.durationMinutes }
-            let overflowHasUrgent = partition.overflowing.contains(where: { BacklogLogic.isUrgent($0) })
-            let fittingCount = partition.fitting.count
+            let fittingCount = plan.fitting.count
 
             ScrollView {
                 VStack(spacing: DS.Spacing.xs) {
-                    ForEach(Array(partition.fitting.enumerated()), id: \.element.id) { index, task in
+                    ForEach(Array(plan.fitting.enumerated()), id: \.element.id) { index, task in
                         row(
                             for: task,
                             hotKey: index < Self.maxHotKeyTasks ? index + 1 : nil
                         )
                     }
 
-                    if !partition.overflowing.isEmpty {
+                    if plan.hasOverflow {
                         SpillOverMarker(
-                            overflowMinutes: overflowMinutes,
-                            overflowCount: partition.overflowing.count,
+                            overflowMinutes: plan.overflowMinutes,
+                            overflowCount: plan.overflowing.count,
                             onSchedule: { await onScheduleBacklog?() },
-                            onFocusOnDeadlines: overflowHasUrgent ? { await onFocusOnDeadlines?() } : nil
+                            onFocusOnDeadlines: plan.overflowHasUrgent ? { await onFocusOnDeadlines?() } : nil
                         )
                         .transition(.opacity)
                     }
 
-                    ForEach(Array(partition.overflowing.enumerated()), id: \.element.id) { index, task in
+                    ForEach(Array(plan.overflowing.enumerated()), id: \.element.id) { index, task in
                         let absoluteIndex = fittingCount + index
                         row(
                             for: task,
@@ -670,7 +668,7 @@ struct BacklogFullscreenView: View {
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
                     .strokeBorder(
-                        skin.accentColor.opacity(isInputFocused ? DS.Opacity.softAccent : DS.Opacity.subtleBorder),
+                        skin.accentColor.opacity(isInputFocused ? DS.Opacity.softAccent : DS.Opacity.borderIdle),
                         lineWidth: isInputFocused ? DS.Border.selection : DS.Border.standard
                     )
             )

@@ -843,20 +843,18 @@ struct BacklogView: View {
         }
         let ids: Set<String> = visibleIDs ?? Set(baseOrder.map(\.id))
 
-        let partition = BacklogLogic.capacityPartition(
-            baseOrder,
+        let plan = BacklogLogic.CapacitySectionPlan(
+            orderedTasks: baseOrder,
             remainingWorkdayMinutes: remainingWorkdayMinutes
         )
-        let overflowMinutes = partition.overflowing.reduce(0) { $0 + $1.durationMinutes }
-        let overflowHasUrgent = partition.overflowing.contains(where: { isUrgent($0) })
 
-        ForEach(partition.fitting) { task in
+        ForEach(plan.fitting) { task in
             if ids.contains(task.id) {
                 taskRowBody(task)
             }
         }
 
-        if !partition.overflowing.isEmpty {
+        if plan.hasOverflow {
             // Fade the marker to half opacity while a row is being dragged
             // so the user sees the boundaries are recomputing — they're
             // about to re-bucket when the drop lands. `reduceMotion`
@@ -865,10 +863,10 @@ struct BacklogView: View {
             // marker now, but the principle is the same.
             let isDragging = coordinator?.isDraggingTask == true
             SpillOverMarker(
-                overflowMinutes: overflowMinutes,
-                overflowCount: partition.overflowing.count,
+                overflowMinutes: plan.overflowMinutes,
+                overflowCount: plan.overflowing.count,
                 onSchedule: { await onScheduleBacklog?() },
-                onFocusOnDeadlines: overflowHasUrgent ? { await onFocusOnDeadlines?() } : nil
+                onFocusOnDeadlines: plan.overflowHasUrgent ? { await onFocusOnDeadlines?() } : nil
             )
             .padding(.horizontal, DS.Spacing.sm)
             .opacity(isDragging ? DS.Opacity.half : 1)
@@ -876,7 +874,7 @@ struct BacklogView: View {
             .transition(.opacity)
         }
 
-        ForEach(partition.overflowing) { task in
+        ForEach(plan.overflowing) { task in
             if ids.contains(task.id) {
                 taskRowBody(task)
             }
@@ -1303,7 +1301,7 @@ struct BacklogView: View {
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
                     .strokeBorder(
-                        skin.accentColor.opacity(isInputFocused ? DS.Opacity.softAccent : DS.Opacity.subtleBorder),
+                        skin.accentColor.opacity(isInputFocused ? DS.Opacity.softAccent : DS.Opacity.borderIdle),
                         lineWidth: isInputFocused ? DS.Border.selection : DS.Border.standard
                     )
             )

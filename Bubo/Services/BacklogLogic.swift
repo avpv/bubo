@@ -201,6 +201,35 @@ enum BacklogLogic {
         return (fit, over)
     }
 
+    /// Partition signals consumed by the spill-over marker render path.
+    /// Bundles `capacityPartition`'s output with the two derived numbers
+    /// every caller computes anyway — total overflow minutes and whether
+    /// any urgent task spills over (drives the conditional «focus on
+    /// deadlines first» action-link). Single source of truth for both
+    /// `BacklogView` and `BacklogFullscreenView`, so a future change to
+    /// urgency rules or a new derived signal lands in one place.
+    struct CapacitySectionPlan: Equatable {
+        let fitting: [BacklogTask]
+        let overflowing: [BacklogTask]
+        let overflowMinutes: Int
+        let overflowHasUrgent: Bool
+
+        var hasOverflow: Bool { !overflowing.isEmpty }
+
+        /// Build the plan from the user's chosen order (smart-sorted or
+        /// storage). Pure — no Date() — so it tests cleanly.
+        init(orderedTasks: [BacklogTask], remainingWorkdayMinutes: Int) {
+            let partition = BacklogLogic.capacityPartition(
+                orderedTasks,
+                remainingWorkdayMinutes: remainingWorkdayMinutes
+            )
+            self.fitting = partition.fitting
+            self.overflowing = partition.overflowing
+            self.overflowMinutes = partition.overflowing.reduce(0) { $0 + $1.durationMinutes }
+            self.overflowHasUrgent = partition.overflowing.contains(where: { BacklogLogic.isUrgent($0) })
+        }
+    }
+
     /// Minutes left between `now` and the end of the working day, clamped
     /// to zero once the window has closed. Shares its `workingHours`
     /// definition with `OptimizerService` so the ring and the free-slot

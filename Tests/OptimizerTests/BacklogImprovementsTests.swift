@@ -385,6 +385,51 @@ final class BacklogLogicTests: XCTestCase {
         XCTAssertEqual(result.overflowing.map(\.id), ["a"])
     }
 
+    // MARK: capacity section plan
+
+    func testCapacitySectionPlanComputesOverflowMinutes() {
+        let tasks = [
+            task("a", duration: 60),
+            task("b", duration: 90),
+            task("c", duration: 45),
+        ]
+        let plan = BacklogLogic.CapacitySectionPlan(
+            orderedTasks: tasks,
+            remainingWorkdayMinutes: 60
+        )
+        XCTAssertEqual(plan.fitting.map(\.id), ["a"])
+        XCTAssertEqual(plan.overflowing.map(\.id), ["b", "c"])
+        XCTAssertEqual(plan.overflowMinutes, 90 + 45)
+    }
+
+    func testCapacitySectionPlanFlagsUrgentInOverflow() {
+        let cal = Self.calendar()
+        let dueToday = cal.date(from: DateComponents(
+            year: 2026, month: 4, day: 11, hour: 17
+        ))!
+        let tasks = [
+            task("a", duration: 60),
+            task("urgent", deadline: dueToday, duration: 90),
+        ]
+        let plan = BacklogLogic.CapacitySectionPlan(
+            orderedTasks: tasks,
+            remainingWorkdayMinutes: 60
+        )
+        XCTAssertTrue(plan.overflowHasUrgent)
+        XCTAssertTrue(plan.hasOverflow)
+    }
+
+    func testCapacitySectionPlanReportsNoOverflowWhenAllFit() {
+        let tasks = [task("a", duration: 30), task("b", duration: 30)]
+        let plan = BacklogLogic.CapacitySectionPlan(
+            orderedTasks: tasks,
+            remainingWorkdayMinutes: 240
+        )
+        XCTAssertFalse(plan.hasOverflow)
+        XCTAssertEqual(plan.overflowMinutes, 0)
+        XCTAssertFalse(plan.overflowHasUrgent)
+    }
+
     // MARK: capacity label suffix
 
     func testCapacityLabelSuffixIsEmptyWhenNoOverflow() {

@@ -129,15 +129,24 @@ struct SpillOverMarker: View {
 
     // MARK: - Copy
 
-    /// Plural-aware volume description. Birman: «говори о конкретном объекте,
-    /// не об абстракции». Single-task overflow says so explicitly; otherwise
-    /// the volume in time tends to be more useful (a glance answers «how
-    /// much did I overcommit by»).
+    /// Plural-aware volume description. Birman: «говори о конкретном
+    /// объекте, не об абстракции» — match the most concrete framing for
+    /// the data shape:
+    ///
+    /// - 1 task → «1 task spills over» (the single thing, named)
+    /// - 2–4 tasks AND ≤ 4 h total → «N tasks spill over» (a small set
+    ///   the reader can hold in their head)
+    /// - otherwise → «X h spill over» (volume dominates; counting tasks
+    ///   doesn't help once it's a stack)
     private var volumeText: String {
-        if overflowCount == 1 {
+        switch overflowCount {
+        case 1:
             return "1\u{00A0}task spills\u{00A0}over"
+        case 2...4 where overflowMinutes <= 240:
+            return "\(overflowCount)\u{00A0}tasks spill\u{00A0}over"
+        default:
+            return "\(DS.formatMinutes(overflowMinutes)) spill\u{00A0}over"
         }
-        return "\(DS.formatMinutes(overflowMinutes)) spill\u{00A0}over"
     }
 
     private var accessibilityLabel: String {

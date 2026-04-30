@@ -253,6 +253,13 @@ enum DS {
         // Borders & strokes
         static let faintBorder: Double = 0.1
         static let subtleBorder: Double = 0.15
+        /// Idle stroke for input fields that need to read as fields on
+        /// every wallpaper. Slightly louder than `subtleBorder` so dark
+        /// or busy backgrounds don't swallow the affordance, still quiet
+        /// enough to read as «input», not «button». Used by the
+        /// `+ Add task…` field's idle border in both backlog modes.
+        /// Birman: «поле должно выглядеть как полем».
+        static let borderIdle: Double = 0.18
         static let glassBorder: Double = 0.2
 
         /// Soft accent — louder than `subtleBorder`, quieter than `half`.
