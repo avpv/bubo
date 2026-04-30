@@ -1376,7 +1376,24 @@ struct MenuBarView: View {
     ) -> some View {
         let visibleCount = visibleEventCount(for: dayGroup.events)
 
-        DaySectionHeader(date: dayGroup.date, count: visibleCount)
+        DaySectionHeader(date: dayGroup.date, count: visibleCount) {
+            // Day-scope optimizer entry — only renders on «Today» since the
+            // intents (Organize today, Find focus, Low energy day…) operate
+            // on the current day's schedule. Other days keep the plain
+            // header. Birman: «команды живут рядом со своим объектом».
+            if Calendar.current.isDateInToday(dayGroup.date) {
+                PlanDayMenu(
+                    runRequest: { request, label in
+                        await runQuickAction(request, label: label)
+                    },
+                    openMore: {
+                        paletteContext = PaletteContext()
+                    },
+                    isEmptyDay: dayGroup.events.isEmpty
+                        && (optimizerService.backlogService?.tasks.isEmpty ?? true)
+                )
+            }
+        }
             // `sm` leading keeps the day title hanging 8pt out from the
             // first event's accent bar — same column as the free-slot
             // dashed guide. Level 1: top padding is now applied by the
