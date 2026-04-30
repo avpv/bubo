@@ -9,6 +9,13 @@ struct EventDetailView: View {
     var onDeleteSeries: ((CalendarEvent) -> Void)? = nil
     var onDeleteOccurrence: ((CalendarEvent) -> Void)? = nil
     var onTimer: ((CalendarEvent) -> Void)? = nil
+    /// Open the command palette seeded with this event (per-event scope
+    /// optimizer entry — footer Menu's «Reschedule…» item).
+    var onReschedule: ((CalendarEvent) -> Void)? = nil
+    /// Run the optimizer's «extend to adjacent free slot» preset for this
+    /// event. Surfaces in the footer Menu — disabled for read-only
+    /// external events (the optimizer can't move them).
+    var onExtend: ((CalendarEvent) -> Void)? = nil
 
     @State private var showDeleteConfirmation = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -173,37 +180,61 @@ struct EventDetailView: View {
             // Actions (only for local events)
             SkinSeparator()
 
+            // Single primary CTA: «Edit ▾» Menu hosts every per-event action
+            // (Edit details, Reschedule, Extend, Delete). Birman: «не плодь
+            // кнопки» — the existing chevron-button affordance reveals
+            // scope-appropriate items rather than crowding the footer with
+            // three primary buttons. Read-only external events get only the
+            // Reschedule path enabled — the optimizer can't move them, but
+            // the palette still composes a move via Apple-Calendar APIs.
             HStack {
-                if isLocal {
-                    if event.isRecurring {
-                        // Recurring events still need confirmation to choose scope
-                        Button(role: .destructive) {
-                            Haptics.impact()
-                            showDeleteConfirmation = true
-                        } label: {
-                            Label("Delete", systemImage: "trash")
-                        }
-                        .buttonStyle(.action(role: .destructive))
-                    } else {
-                        // Single events: delete immediately with undo toast
-                        Button(role: .destructive) {
-                            Haptics.impact()
-                            onDelete?(event)
-                        } label: {
-                            Label("Delete", systemImage: "trash")
-                        }
-                        .buttonStyle(.action(role: .destructive))
-                    }
-                }
-
                 Spacer()
 
-                Button {
-                    Haptics.tap()
-                    onEdit?(event)
+                Menu {
+                    Button {
+                        Haptics.tap()
+                        onEdit?(event)
+                    } label: {
+                        Label("Edit details\u{2026}", systemImage: "pencil")
+                    }
+                    .disabled(!isLocal)
+
+                    if onReschedule != nil {
+                        Button {
+                            Haptics.tap()
+                            onReschedule?(event)
+                        } label: {
+                            Label("Reschedule\u{2026}", systemImage: "calendar.badge.clock")
+                        }
+                    }
+
+                    if onExtend != nil {
+                        Button {
+                            Haptics.tap()
+                            onExtend?(event)
+                        } label: {
+                            Label("Extend to next free slot", systemImage: "arrow.right.to.line")
+                        }
+                        .disabled(!isLocal)
+                    }
+
+                    if isLocal {
+                        Divider()
+                        Button(role: .destructive) {
+                            Haptics.impact()
+                            if event.isRecurring {
+                                showDeleteConfirmation = true
+                            } else {
+                                onDelete?(event)
+                            }
+                        } label: {
+                            Label("Delete\u{2026}", systemImage: "trash")
+                        }
+                    }
                 } label: {
                     Label("Edit", systemImage: "pencil")
                 }
+                .menuStyle(.button)
                 .buttonStyle(.action(role: .primary))
                 .keyboardShortcut(.defaultAction)
             }
