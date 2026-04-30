@@ -9,8 +9,21 @@ struct MenuBarView: View {
     var agentService: AgentService
     var remindersSyncService: RemindersSyncService
 
+    @Environment(\.openSettings) private var openSettings
+
     @State private var navigation: Navigation = .list
     @State private var hasStartedSync = false
+    /// Becomes true 3\u{00A0}s after the first popover open, regardless of
+    /// whether the EventKit sync has produced events yet. Used to escalate
+    /// the «Syncing calendars…» panel into «Sync taking long» so the user
+    /// has a path to action when the system actually is stuck.
+    @State private var initialSyncTimeoutFired = false
+    /// Becomes true the first time `reminderService` reports a non-empty
+    /// event list, marking the sync as «produced something». Used to drop
+    /// out of the syncing panel once data lands, even before the 3\u{00A0}s
+    /// timeout. Once latched, never resets — the panel is one-shot per
+    /// app launch, not a recurring spinner on every empty state.
+    @State private var initialSyncDataArrived = false
     @State private var toastState = ToastState()
     @State private var scrollPositionID: String?
 
@@ -440,6 +453,22 @@ struct MenuBarView: View {
                 try? await Task.sleep(for: .seconds(5)) // wait for sync
                 await optimizerService.runWeekMockSimulator(reminderService: reminderService)
             }
+            // Escalate the «Syncing calendars…» panel to a long-running
+            // hint after 3\u{00A0}s. If data arrives sooner, the panel
+            // disappears via `initialSyncDataArrived` and the user never
+            // sees the «taking long» copy.
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(3))
+                initialSyncTimeoutFired = true
+            }
+        }
+        .onChange(of: reminderService.allEvents.isEmpty) { _, isEmpty in
+            // Latch on the first non-empty event list — we treat that as
+            // «sync produced something», which is enough to drop the
+            // syncing panel. We don't unlatch when events go back to
+            // empty later (e.g. user filters everything out); the panel
+            // is one-shot per app launch.
+            if !isEmpty { initialSyncDataArrived = true }
         }
         .onReceive(NotificationCenter.default.publisher(for: AppleCalendarService.authorizationDidChange)) { note in
             // Trust the grant result if the service posted one — the
@@ -974,7 +1003,17 @@ struct MenuBarView: View {
             // background) — also the native macOS List convention.
             Group {
                 if reminderService.nonDisintegratingEventCount == 0 {
-                    emptyState
+                    // Cold start: while the first sync is running, surface a
+                    // brief «Syncing calendars…» panel instead of jumping
+                    // straight to the empty state. Without this the popover
+                    // reads identically to «no events scheduled today», and
+                    // the user has no signal that anything is loading.
+                    // Birman: «постоянная мягкая обратная связь».
+                    if showSyncingState {
+                        syncingState
+                    } else {
+                        emptyState
+                    }
                 } else if filteredEventsByDay.isEmpty {
                     VStack(spacing: DS.Spacing.sm) {
                         Text(emptyFilteredStateMessage)
@@ -1087,6 +1126,61 @@ struct MenuBarView: View {
         }
 
         return "No upcoming events"
+    }
+
+    /// Whether the «Syncing calendars…» panel should replace the empty
+    /// state on cold start. Active while we've kicked off a sync but
+    /// haven't yet seen any events arrive AND haven't escalated to the
+    /// «taking long» message via the 3\u{00A0}s timeout. Permission
+    /// banners (no access) take precedence — the empty popover with a
+    /// permission banner already explains itself.
+    private var showSyncingState: Bool {
+        guard hasStartedSync else { return false }
+        guard !initialSyncDataArrived else { return false }
+        // Don't shadow the existing permission banner — it already names
+        // the cause and offers a fix.
+        guard permissionBannerSpecs.isEmpty else { return false }
+        return reminderService.allEvents.isEmpty
+    }
+
+    /// Cold-start sync panel — quiet `ProgressView` + caption. After
+    /// 3\u{00A0}s without data the caption escalates to a long-running
+    /// hint with a link to the system Calendars settings.
+    @ViewBuilder
+    private var syncingState: some View {
+        VStack(spacing: DS.Spacing.md) {
+            ProgressView()
+                .controlSize(.regular)
+            if initialSyncTimeoutFired {
+                VStack(spacing: DS.Spacing.xs) {
+                    Text("Sync is taking longer than usual.")
+                        .font(.subheadline)
+                        .foregroundStyle(skin.resolvedTextSecondary)
+                    Button {
+                        Haptics.tap()
+                        SettingsViewModel.pendingPane = .calendars
+                        openSettings()
+                        NSApp.activate()
+                    } label: {
+                        Text("Check Calendar Settings \u{2192}")
+                            .font(.footnote.weight(.medium))
+                            .foregroundStyle(skin.accentColor)
+                    }
+                    .buttonStyle(.plain)
+                }
+            } else {
+                Text("Syncing calendars\u{2026}")
+                    .font(.subheadline)
+                    .foregroundStyle(skin.resolvedTextSecondary)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.vertical, DS.Spacing.xxl)
+        .transition(.opacity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(initialSyncTimeoutFired
+            ? "Sync is taking longer than usual. Tap to check Calendar settings."
+            : "Syncing calendars")
     }
 
     private var emptyState: some View {

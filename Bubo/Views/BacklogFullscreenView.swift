@@ -387,8 +387,15 @@ struct BacklogFullscreenView: View {
                 .contentTransition(.symbolEffect(.replace))
         }
         .buttonStyle(.plain)
-        .help(useSmartSort ? "Show in user order" : "Smart sort by deadline + priority")
-        .accessibilityLabel(useSmartSort ? "Smart sort on — tap for user order" : "Smart sort off — tap to enable")
+        // Capacity sections compose on top of the sort order, so when
+        // smart-sort is active each group (fits / spill-over) reads
+        // priority-first within itself. Tooltip explains the interaction.
+        .help(useSmartSort
+            ? "Sorted by priority within each capacity group. Tap to show in user order."
+            : "Smart sort by deadline + priority")
+        .accessibilityLabel(useSmartSort
+            ? "Smart sort on, ordered by priority within capacity groups — tap for user order"
+            : "Smart sort off — tap to enable")
     }
 
     // MARK: - Main content

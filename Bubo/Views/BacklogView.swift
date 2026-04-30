@@ -537,8 +537,13 @@ struct BacklogView: View {
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .help("Smart sort active — tap to show in user order")
-        .accessibilityLabel("Smart sort active — tap to disable")
+        // The capacity sections (FITS / spill-over) are computed AFTER
+        // smart-sort runs, so within each group the rows are smart-sorted
+        // and across groups the boundary marks the capacity cutoff. The
+        // tooltip names that interaction so the user understands the «two
+        // tops of priority» they see when both signals are active.
+        .help("Smart sort active — sorted by priority within each capacity group. Tap to show in user order.")
+        .accessibilityLabel("Smart sort active, ordered by priority within capacity groups — tap to disable")
     }
 
     /// Middot divider used between the three header facts (verdict, count,
@@ -795,6 +800,13 @@ struct BacklogView: View {
         }
 
         if !partition.overflowing.isEmpty {
+            // Fade the marker to half opacity while a row is being dragged
+            // so the user sees the boundaries are recomputing — they're
+            // about to re-bucket when the drop lands. `reduceMotion`
+            // collapses the fade to a constant opacity (no transition).
+            // The plan called for fading section labels; we have only one
+            // marker now, but the principle is the same.
+            let isDragging = coordinator?.isDraggingTask == true
             SpillOverMarker(
                 overflowMinutes: overflowMinutes,
                 overflowCount: partition.overflowing.count,
@@ -802,6 +814,8 @@ struct BacklogView: View {
                 onFocusOnDeadlines: overflowHasUrgent ? { await onFocusOnDeadlines?() } : nil
             )
             .padding(.horizontal, DS.Spacing.sm)
+            .opacity(isDragging ? DS.Opacity.half : 1)
+            .motionAwareAnimation(DS.Animation.quick, value: isDragging, reduceMotion: reduceMotion)
             .transition(.opacity)
         }
 
