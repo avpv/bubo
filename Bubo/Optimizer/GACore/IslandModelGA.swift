@@ -442,6 +442,21 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
         // Islands without a bias entry get the un-touched baseline.
         let preferences = biasedPreferences(for: islandIndex)
 
+        // Give each island its own CPSATRepairer. The repairer's
+        // `solve()` resets shared `noGoods` / `variableActivity` /
+        // `runNodes` at the start of every call and `depthFirst` /
+        // `orderVariables` read those same dictionaries from inside
+        // the DFS without holding the repairer's lock — concurrent
+        // solves from `evolveIslands`'s `concurrentPerform` therefore
+        // race on a Dictionary's COW buffer and crash with
+        // EXC_BAD_ACCESS inside `Collection.map`. The state machine
+        // is per-solve anyway (no learning is preserved across calls),
+        // so each island can own a fresh instance with no behavioural
+        // difference vs. the sharing it replaces.
+        let perIslandRepairer = context.cpSATRepairer.map {
+            CPSATRepairer(config: $0.config)
+        }
+
         return OptimizerContext(
             fixedEvents: context.fixedEvents,
             movableEvents: context.movableEvents,
@@ -460,7 +475,7 @@ final class IslandModelGA<C: Chromosome>: @unchecked Sendable {
             contextualCrossoverHead: context.contextualCrossoverHead,
             conflictGraphHolder: context.conflictGraphHolder,
             tabuMemory: context.tabuMemory,
-            cpSATRepairer: context.cpSATRepairer,
+            cpSATRepairer: perIslandRepairer,
             cpSATWindowThreshold: context.cpSATWindowThreshold,
             slotRegistryHolder: context.slotRegistryHolder,
             slotDomainsHolder: context.slotDomainsHolder

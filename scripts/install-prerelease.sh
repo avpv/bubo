@@ -38,7 +38,12 @@ rm -rf "$INSTALL_DIR/$APP_NAME.app"
 cp -R "/Volumes/$APP_NAME/$APP_NAME.app" "$INSTALL_DIR/"
 
 echo "Removing quarantine flag..."
-xattr -cr "$INSTALL_DIR/$APP_NAME.app"
+# Only strip com.apple.quarantine. `xattr -cr` would also drop
+# `com.apple.macl`, the attribute macOS uses to bind TCC permissions
+# (Calendar, Reminders, Accessibility, …) to the signed binary; losing
+# it forces the user to re-grant every permission on each reinstall and
+# leaves the app in a half-broken state on first launch.
+xattr -dr com.apple.quarantine "$INSTALL_DIR/$APP_NAME.app" 2>/dev/null || true
 
 hdiutil detach "/Volumes/$APP_NAME" -quiet
 
