@@ -77,6 +77,11 @@ struct BacklogFullscreenView: View {
     /// instead of user drag order. Session-local.
     @State private var useSmartSort: Bool = false
 
+    /// Task whose deadline is currently being edited via the row's
+    /// «Set deadline…» context-menu item. Mirrors `BacklogView` so both
+    /// modes host the same inline picker.
+    @State private var deadlinePickerTask: BacklogTask? = nil
+
     /// Все активные задачи (без urgent-фильтров и пр.) — общая основа для
     /// расчёта capacity ring (тот показывает общий груз очереди, а не
     /// отфильтрованный подсет).
@@ -208,6 +213,20 @@ struct BacklogFullscreenView: View {
         }
         .frame(width: DS.Popover.width, height: DS.Popover.height)
         .background(hotKeyBindings)
+        // Inline deadline picker — mirrors the inline `BacklogView` so the
+        // «Set deadline…» context-menu item produces the same popover in
+        // both backlog modes.
+        .popover(item: $deadlinePickerTask, arrowEdge: .top) { task in
+            DeadlinePickerPopover(
+                initialDeadline: task.deadline,
+                title: task.title,
+                onSave: { newDeadline in
+                    updateTaskDeadline(task: task, to: newDeadline)
+                    deadlinePickerTask = nil
+                },
+                onCancel: { deadlinePickerTask = nil }
+            )
+        }
         .onChange(of: newTaskTitle) { _, newValue in
             parsedNewTaskTitle = BacklogTitleParser.parse(newValue)
         }
@@ -542,6 +561,7 @@ struct BacklogFullscreenView: View {
                 handleReorderDrop(dropped: dropped, targetId: task.id)
             },
             onReschedule: onRescheduleTask.map { handler in { handler(task) } },
+            onSetDeadline: { deadlinePickerTask = task },
             onToggleUrgent: { toggleUrgent(task) },
             onMoveUp: { moveTask(task, by: -1) },
             onMoveDown: { moveTask(task, by: +1) },
@@ -869,6 +889,29 @@ struct BacklogFullscreenView: View {
             backlogService.freezeTask(id: task.id)
         }
         onUndoableAction?("Froze \u{201C}\(task.title)\u{201D}") { [backlogService] in
+            backlogService.updateTask(snapshot)
+        }
+    }
+
+    /// Update a task's deadline via the inline picker. Mirrors
+    /// `BacklogView.updateTaskDeadline` so both backlog modes share the
+    /// same undo + toast pipeline.
+    private func updateTaskDeadline(task: BacklogTask, to newDeadline: Date?) {
+        let snapshot = task
+        var updated = task
+        updated.deadline = newDeadline
+        guard updated != snapshot else { return }
+        withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
+            backlogService.updateTask(updated)
+        }
+        let label: String
+        if let deadline = newDeadline {
+            let formatted = deadline.formatted(date: .abbreviated, time: .shortened)
+            label = "Set deadline on \u{201C}\(task.title)\u{201D} to \(formatted)"
+        } else {
+            label = "Cleared deadline on \u{201C}\(task.title)\u{201D}"
+        }
+        onUndoableAction?(label) { [backlogService] in
             backlogService.updateTask(snapshot)
         }
     }

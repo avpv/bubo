@@ -60,6 +60,10 @@ struct BacklogTaskRow: View {
     /// «Schedule "<title>"» / «Find best time» suggestions. nil = no
     /// reschedule path (palette unavailable).
     var onReschedule: (() -> Void)? = nil
+    /// Open a date-picker popover for this task's deadline. Driven by the
+    /// row's context menu (Set deadline…). nil = no inline picker —
+    /// `Edit details…` still opens the full editor with a deadline field.
+    var onSetDeadline: (() -> Void)? = nil
     /// Toggle the urgency stripe by setting (or clearing) a today-end
     /// deadline. Driven from the row's context menu — Birman: «явное
     /// действие должно совпадать с явным сигналом», so the «Mark urgent»
@@ -354,12 +358,16 @@ struct BacklogTaskRow: View {
 
             // Per-task scope optimizer actions — Birman: «команды живут
             // рядом со своим объектом». «Reschedule» seeds ⌘K with this
-            // task; «Mark urgent» toggles a today deadline (the same
-            // deadline that drives the leading red stripe).
-            if onReschedule != nil || canToggleUrgent {
+            // task; «Set deadline» opens an inline date picker; «Mark
+            // urgent» toggles a today deadline (the same deadline that
+            // drives the leading red stripe).
+            if onReschedule != nil || onSetDeadline != nil || canToggleUrgent {
                 Divider()
                 if let reschedule = onReschedule {
                     Button("Reschedule\u{2026}") { reschedule() }
+                }
+                if let setDeadline = onSetDeadline {
+                    Button("Set deadline\u{2026}") { setDeadline() }
                 }
                 if canToggleUrgent, let toggle = onToggleUrgent {
                     Button(urgencyToggleLabel) { toggle() }

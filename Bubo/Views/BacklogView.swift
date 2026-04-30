@@ -118,6 +118,12 @@ struct BacklogView: View {
     /// wrapper at the row level.
     @State private var lastDroppedTaskId: String? = nil
 
+    /// Task whose deadline is currently being edited via the inline
+    /// `Set deadline…` popover. Set from the row's context-menu callback,
+    /// cleared on save / cancel. Hosts the popover anchor — using `.sheet`
+    /// would feel heavier than the operation deserves.
+    @State private var deadlinePickerTask: BacklogTask? = nil
+
     /// Shared cache for "where would a task of N minutes land?" lookups.
     /// Both the per-row hover hint and the ghost preview under the input
     /// read from this single source, so they always agree and a calendar
@@ -379,6 +385,48 @@ struct BacklogView: View {
             coordinator?.endDrag()
             ghostPreviewTask?.cancel()
             slotPreviewCache.cancelAll()
+        }
+        // Inline deadline picker for the row's «Set deadline…» context-menu
+        // item. Anchors on the BacklogView root rather than per-row
+        // because SwiftUI's `.contextMenu` + `.popover(item:)` on the same
+        // row fight for presentation; a view-level popover is the standard
+        // workaround. Save → `updateTask` + undo toast; Cancel discards.
+        .popover(item: $deadlinePickerTask, arrowEdge: .top) { task in
+            DeadlinePickerPopover(
+                initialDeadline: task.deadline,
+                title: task.title,
+                onSave: { newDeadline in
+                    updateTaskDeadline(task: task, to: newDeadline)
+                    deadlinePickerTask = nil
+                },
+                onCancel: { deadlinePickerTask = nil }
+            )
+        }
+    }
+
+    /// Update the task's `deadline` and surface an undo toast — the same
+    /// pattern as `toggleUrgent`. Snapshot before mutation so the undo
+    /// closure can restore exact state regardless of subsequent edits.
+    private func updateTaskDeadline(task: BacklogTask, to newDeadline: Date?) {
+        let snapshot = task
+        var updated = task
+        updated.deadline = newDeadline
+        guard updated != snapshot else { return }
+        withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
+            backlogService.updateTask(updated)
+        }
+        let label: String
+        if let deadline = newDeadline {
+            // Birman: вердикт-toast говорит человеку «куда я попал», а не
+            // показывает технический timestamp. Today / Tomorrow / weekday
+            // / abbreviated date — same vocabulary as the row meta itself.
+            let formatted = deadline.formatted(date: .abbreviated, time: .shortened)
+            label = "Set deadline on \u{201C}\(task.title)\u{201D} to \(formatted)"
+        } else {
+            label = "Cleared deadline on \u{201C}\(task.title)\u{201D}"
+        }
+        onUndoableAction?(label) { [backlogService] in
+            backlogService.updateTask(snapshot)
         }
     }
 
@@ -863,6 +911,7 @@ struct BacklogView: View {
                 handleReorderDrop(dropped: dropped, targetId: task.id)
             },
             onReschedule: onRescheduleTask.map { handler in { handler(task) } },
+            onSetDeadline: { deadlinePickerTask = task },
             onToggleUrgent: { toggleUrgent(task) },
             onMoveUp: { moveTask(task, by: -1) },
             onMoveDown: { moveTask(task, by: +1) },
