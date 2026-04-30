@@ -45,23 +45,31 @@ struct IntentPresets {
             .planWeek,
             .scheduleBacklog,
         ]),
+        // Focus = `findFocus` with various durations. The former
+        // `deepWork(180)` was a duplicate of `findFocus(180, .morning)`
+        // with marginally different weights — consolidated into
+        // `findFocus` per the «no half-measures» plan.
         Category(id: "focus", name: "Focus", presets: [
             .findFocus(),
-            .deepWork(),
+            .findFocus(minutes: 180, period: .morning),
             .pomodoroBlock,
             .focusBurstBlock(),
         ]),
+        // Deadlines collapsed to a single canonical preset. The former
+        // `deadlineCrunch` was a parameterised extreme (max 2 meetings/
+        // day) — reachable through ⌘K by composing `deadlineMode` +
+        // `maxMeetings(perDay: 2)`.
         Category(id: "deadlines", name: "Deadlines", presets: [
             .deadlineMode,
-            .deadlineCrunch,
         ]),
         Category(id: "meetings", name: "Meetings", presets: [
             .batchMeetingsPreset,
             .meetingBuffer(),
         ]),
+        // Energy: the former `morningPersonPreset` was the morning case
+        // of `findFocus(period: .morning)` — consolidated.
         Category(id: "energy", name: "Energy", presets: [
             .lowEnergyDay,
-            .morningPersonPreset,
         ]),
         Category(id: "adjust", name: "Adjustments", presets: [
             .lateStart(),
@@ -122,15 +130,12 @@ extension OptimizationRequest {
         )
     }
 
-    static func deepWork(minutes: Int = 180) -> OptimizationRequest {
-        OptimizationRequest(
-            .focusBlock(minutes: minutes, period: .morning),
-            .horizon(.today), .findSlotsForBacklog,
-            .prioritizeFocus(weight: 2.5), .minimizeContextSwitching(),
-            .speed(.balanced), .scenarios(count: 1),
-            name: "Deep work block"
-        )
-    }
+    // `deepWork(minutes:)` was deleted in the consolidation pass —
+    // it was structurally a `findFocus(minutes:, period: .morning)`
+    // with marginally heavier focus weight + context-switching, and
+    // showing both side-by-side in `Plan day ▾` would have given the
+    // user two adjacent menu items that did the same thing. Use
+    // `findFocus(minutes: 180, period: .morning)` instead.
 
     static let pomodoroBlock = OptimizationRequest(
         .pomodoroSession,
@@ -162,12 +167,10 @@ extension OptimizationRequest {
         name: "Deadline mode"
     )
 
-    static let deadlineCrunch = OptimizationRequest(
-        .horizon(.today), .prioritizeDeadlines(weight: 5.0),
-        .stability(.full), .speed(.thorough),
-        .maxMeetings(perDay: 2), .scenarios(count: 1),
-        name: "Deadline crunch"
-    )
+    // `deadlineCrunch` was deleted in the consolidation pass — it
+    // was a higher-weight + max-meetings variant of `deadlineMode`,
+    // reachable now through `⌘K` by composing the canonical
+    // `deadlineMode` with `.maxMeetings(perDay: 2)` directly.
 
     // MARK: - Meetings
 
@@ -196,12 +199,9 @@ extension OptimizationRequest {
         name: "Low energy day"
     )
 
-    static let morningPersonPreset = OptimizationRequest(
-        .horizon(.today), .morningPerson,
-        .peakEnergy(hour: 9), .stability(.normal),
-        .speed(.balanced), .scenarios(count: 2),
-        name: "Morning person"
-    )
+    // `morningPersonPreset` was deleted in the consolidation pass — it
+    // was the morning-period case of `findFocus(period: .morning)`,
+    // already reachable as a leaf of «Find focus» in `Plan day ▾`.
 
     // MARK: - Adjustments
 
