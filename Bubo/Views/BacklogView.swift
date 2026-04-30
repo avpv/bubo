@@ -36,6 +36,14 @@ struct BacklogView: View {
     /// HIG: every destructive or hard-to-discover action gets an undo path.
     /// Birman: undo instead of confirmation dialogs.
     var onUndoableAction: ((_ message: String, _ undo: @escaping () -> Void) -> Void)? = nil
+    /// Schedule the unscheduled backlog onto the calendar via the optimizer.
+    /// Async so the spill-over marker can show a loading spinner inline
+    /// during the run. Wired from `MenuBarView.runQuickAction(.scheduleBacklog,…)`.
+    var onScheduleBacklog: (() async -> Void)? = nil
+    /// Run the deadline-mode preset. Surfaces as the conditional second
+    /// action-link in the spill-over marker when overflow contains urgent
+    /// tasks. Wired from `MenuBarView.runQuickAction(.deadlineMode,…)`.
+    var onFocusOnDeadlines: (() async -> Void)? = nil
     /// External trigger: set to `true` to focus the "Add task…" field.
     /// BacklogView resets it to `false` after grabbing focus.
     @Binding var focusRequested: Bool
@@ -743,31 +751,60 @@ struct BacklogView: View {
     /// already surfaces its context in the subtitle.
     @ViewBuilder
     private func taskRowsContent(visibleIDs: Set<String>?) -> some View {
-        // Two rendering strategies:
-        // 1. Smart Sort on — flat list ordered by `smartScore`, grouping
-        //    dropped so the queue reads as a single priority list.
-        // 2. Default — user's drag order honoured via `groupedByContext`.
+        // Single rendering path: the visible task list partitioned by
+        // capacity. Smart-sort flattens to score order; otherwise we honour
+        // the user's drag order via `groupedByContext` (which clusters but
+        // doesn't print headers — context is already on each row's subtitle).
+        // Capacity sections compose on top of whichever order applies.
         //
-        // Fullscreen Backlog is a sibling navigation target, not a flag here.
-        // When a `visibleIDs` set is passed, only those tasks render — used
-        // by animations that reveal one row at a time.
-        let baseOrder: [BacklogTask] = useSmartSort ? smartSortedActiveTasks : activeTasks
+        // Birman: «иерархия из природы данных» — sections fall out of the
+        // capacity math; nothing to label as «FITS» (that's the obvious
+        // default). Only the overflow gets a printed marker line because
+        // that's the surprise the reader needs to see.
+        let baseOrder: [BacklogTask]
+        if useSmartSort {
+            baseOrder = smartSortedActiveTasks
+        } else {
+            // Honour `groupedByContext` ordering, but respect the urgent-only
+            // filter so the partition doesn't include rows the user has
+            // hidden — otherwise the marker would read «9h spill over» while
+            // showing a list that doesn't contain those 9h.
+            let grouped = backlogService.groupedByContext.flatMap(\.tasks)
+            if urgentOnlyFilter {
+                baseOrder = grouped.filter { isUrgent($0) }
+            } else {
+                baseOrder = grouped
+            }
+        }
         let ids: Set<String> = visibleIDs ?? Set(baseOrder.map(\.id))
 
-        if useSmartSort {
-            ForEach(baseOrder) { task in
-                if ids.contains(task.id) {
-                    taskRowBody(task)
-                }
+        let partition = BacklogLogic.capacityPartition(
+            baseOrder,
+            remainingWorkdayMinutes: remainingWorkdayMinutes
+        )
+        let overflowMinutes = partition.overflowing.reduce(0) { $0 + $1.durationMinutes }
+        let overflowHasUrgent = partition.overflowing.contains(where: { isUrgent($0) })
+
+        ForEach(partition.fitting) { task in
+            if ids.contains(task.id) {
+                taskRowBody(task)
             }
-        } else {
-            let grouped = backlogService.groupedByContext
-            ForEach(grouped, id: \.context) { group in
-                ForEach(group.tasks) { task in
-                    if ids.contains(task.id) {
-                        taskRowBody(task)
-                    }
-                }
+        }
+
+        if !partition.overflowing.isEmpty {
+            SpillOverMarker(
+                overflowMinutes: overflowMinutes,
+                overflowCount: partition.overflowing.count,
+                onSchedule: { await onScheduleBacklog?() },
+                onFocusOnDeadlines: overflowHasUrgent ? { await onFocusOnDeadlines?() } : nil
+            )
+            .padding(.horizontal, DS.Spacing.sm)
+            .transition(.opacity)
+        }
+
+        ForEach(partition.overflowing) { task in
+            if ids.contains(task.id) {
+                taskRowBody(task)
             }
         }
     }

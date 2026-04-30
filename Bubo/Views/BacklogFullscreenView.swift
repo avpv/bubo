@@ -38,6 +38,14 @@ struct BacklogFullscreenView: View {
     var onExit: () -> Void
     var onEditTask: (BacklogTask) -> Void
     var onUndoableAction: ((_ message: String, _ undo: @escaping () -> Void) -> Void)? = nil
+    /// Schedule the unscheduled backlog onto the calendar via the optimizer.
+    /// Async so the spill-over marker can show a loading spinner inline
+    /// during the run. Wired from `MenuBarView.runQuickAction(.scheduleBacklog,…)`.
+    var onScheduleBacklog: (() async -> Void)? = nil
+    /// Run the deadline-mode preset. Surfaces as the conditional second
+    /// action-link in the spill-over marker when overflow contains urgent
+    /// tasks. Wired from `MenuBarView.runQuickAction(.deadlineMode,…)`.
+    var onFocusOnDeadlines: (() async -> Void)? = nil
 
     @Environment(\.activeSkin) private var skin
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -388,19 +396,46 @@ struct BacklogFullscreenView: View {
             emptyState
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
+            // Capacity sections — matches the inline `BacklogView` layout.
+            // Hot-key indices (1–9 for the first nine VISIBLE rows) need to
+            // span the partition: the first task in `fitting` gets index 1,
+            // and indices keep counting through the marker into `overflowing`
+            // so digit-press still completes the Nth row the user sees.
+            let partition = BacklogLogic.capacityPartition(
+                visibleTasks,
+                remainingWorkdayMinutes: remainingWorkdayMinutes
+            )
+            let overflowMinutes = partition.overflowing.reduce(0) { $0 + $1.durationMinutes }
+            let overflowHasUrgent = partition.overflowing.contains(where: { BacklogLogic.isUrgent($0) })
+            let fittingCount = partition.fitting.count
+
             ScrollView {
                 VStack(spacing: DS.Spacing.xs) {
-                    ForEach(Array(visibleTasks.enumerated()), id: \.element.id) { index, task in
-                        // Hot-key digit передаётся первым `maxHotKeyTasks`
-                        // строкам — checkbox tooltip учит «press N to
-                        // complete» при наведении. Все строки равноценны,
-                        // порядок задаёт user drag (или smart-sort, если
-                        // включён).
+                    ForEach(Array(partition.fitting.enumerated()), id: \.element.id) { index, task in
                         row(
                             for: task,
                             hotKey: index < Self.maxHotKeyTasks ? index + 1 : nil
                         )
                     }
+
+                    if !partition.overflowing.isEmpty {
+                        SpillOverMarker(
+                            overflowMinutes: overflowMinutes,
+                            overflowCount: partition.overflowing.count,
+                            onSchedule: { await onScheduleBacklog?() },
+                            onFocusOnDeadlines: overflowHasUrgent ? { await onFocusOnDeadlines?() } : nil
+                        )
+                        .transition(.opacity)
+                    }
+
+                    ForEach(Array(partition.overflowing.enumerated()), id: \.element.id) { index, task in
+                        let absoluteIndex = fittingCount + index
+                        row(
+                            for: task,
+                            hotKey: absoluteIndex < Self.maxHotKeyTasks ? absoluteIndex + 1 : nil
+                        )
+                    }
+
                     tombstones
                 }
                 // Inside the card chrome — match BacklogView's inner padding

@@ -292,6 +292,12 @@ struct MenuBarView: View {
                             onEditTask: { task in navigation = .editTask(task) },
                             onUndoableAction: { message, undo in
                                 toastState.showSuccess(message, icon: "arrow.uturn.backward", onUndo: undo)
+                            },
+                            onScheduleBacklog: {
+                                await runQuickAction(.scheduleBacklog, label: "Scheduled backlog")
+                            },
+                            onFocusOnDeadlines: {
+                                await runQuickAction(.deadlineMode, label: "Focused on deadlines")
                             }
                         )
                         .transition(
@@ -701,6 +707,12 @@ struct MenuBarView: View {
                     // the same toast reads as "you can undo this" across
                     // different action kinds.
                     toastState.showSuccess(message, icon: "arrow.uturn.backward", onUndo: undo)
+                },
+                onScheduleBacklog: {
+                    await runQuickAction(.scheduleBacklog, label: "Scheduled backlog")
+                },
+                onFocusOnDeadlines: {
+                    await runQuickAction(.deadlineMode, label: "Focused on deadlines")
                 },
                 focusRequested: $focusTaskInput,
                 autoExpand: autoExpand
@@ -1275,7 +1287,7 @@ struct MenuBarView: View {
                         request: suggestion.request,
                         reason: suggestion.reason,
                         onRun: {
-                            runQuickAction(suggestion.request, label: suggestion.reason)
+                            Task { await runQuickAction(suggestion.request, label: suggestion.reason) }
                         },
                         onDismiss: {
                             withAnimation(DS.Animation.quick) {
@@ -1673,18 +1685,21 @@ struct MenuBarView: View {
 
     /// Execute a request immediately — no palette, no configuration.
     /// One tap → done → undo toast. Birman: "sequential magic."
-    private func runQuickAction(_ request: OptimizationRequest, label: String) {
-        Task {
-            let result = await optimizerService.executeRequest(request, reminderService: reminderService)
-            if case .success = result, !optimizerService.scenarios.isEmpty {
-                optimizerService.applyScenario(at: 0, to: reminderService)
-                toastState.showSuccess(label, icon: "sparkles") {
-                    optimizerService.undoLast(reminderService: reminderService)
-                }
-                notifyScheduleChange()
-            } else if let error = result.errorMessage {
-                toastState.showInfo(error, icon: "exclamationmark.triangle")
+    ///
+    /// Async so callers (e.g. the spill-over marker action-link) can await
+    /// and surface a loading spinner during the optimizer call. Fire-and-
+    /// forget callers wrap in `Task { ... }`.
+    @MainActor
+    private func runQuickAction(_ request: OptimizationRequest, label: String) async {
+        let result = await optimizerService.executeRequest(request, reminderService: reminderService)
+        if case .success = result, !optimizerService.scenarios.isEmpty {
+            optimizerService.applyScenario(at: 0, to: reminderService)
+            toastState.showSuccess(label, icon: "sparkles") {
+                optimizerService.undoLast(reminderService: reminderService)
             }
+            notifyScheduleChange()
+        } else if let error = result.errorMessage {
+            toastState.showInfo(error, icon: "exclamationmark.triangle")
         }
     }
 
