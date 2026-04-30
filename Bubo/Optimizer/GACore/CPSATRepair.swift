@@ -122,14 +122,28 @@ final class CPSATRepairer: @unchecked Sendable {
     }
 
     let config: Configuration
-    private let lock = NSLock()
-    private var noGoods: [NoGoodClause] = []
-    private var variableActivity: [Int: Double] = [:]
-    private var runRestarts: Int = 0
-    private var runNodes: Int = 0
 
     init(config: Configuration = .default) {
         self.config = config
+    }
+
+    /// Per-solve scratch state. Lives for the duration of one
+    /// `solve()` call only — all the dictionaries the DFS reads and
+    /// mutates are stored here instead of on the repairer itself, so
+    /// two concurrent `solve()` invocations on the same instance can't
+    /// race on a shared Dictionary's COW buffer. The previous design
+    /// kept this state at instance level behind an `NSLock`, but
+    /// `orderVariables`, `hitsNoGood`, and `bumpVariable` all read
+    /// `variableActivity` / `noGoods` from inside the DFS without
+    /// holding the lock, so a concurrent reset in another thread's
+    /// `solve()` reliably crashed `Collection.map` with EXC_BAD_ACCESS.
+    /// Per-call state removes the shared dependency entirely; no lock
+    /// is needed because nothing on `self` is mutated.
+    private final class SolveState {
+        var noGoods: [NoGoodClause] = []
+        var variableActivity: [Int: Double] = [:]
+        var runRestarts: Int = 0
+        var runNodes: Int = 0
     }
 
     // MARK: - Solve
@@ -153,12 +167,7 @@ final class CPSATRepairer: @unchecked Sendable {
         scoreAssignment: (_ assignment: [Int: Date]) -> Double,
         hint: [Int: Date]? = nil
     ) -> CPSATAssignment {
-        lock.lock()
-        noGoods.removeAll(keepingCapacity: true)
-        variableActivity.removeAll(keepingCapacity: true)
-        runRestarts = 0
-        runNodes = 0
-        lock.unlock()
+        let state = SolveState()
 
         var best: [Int: Date]? = nil
         var bestScore = -Double.infinity
@@ -181,8 +190,8 @@ final class CPSATRepairer: @unchecked Sendable {
         var lubyIdx = 1
         var nodesThisRestart = 0
 
-        while runNodes < config.totalNodeBudget {
-            let restartBudget = min(budget, config.totalNodeBudget - runNodes)
+        while state.runNodes < config.totalNodeBudget {
+            let restartBudget = min(budget, config.totalNodeBudget - state.runNodes)
             nodesThisRestart = 0
 
             let (sol, score, timedOut) = depthFirst(
@@ -193,9 +202,10 @@ final class CPSATRepairer: @unchecked Sendable {
                 budget: restartBudget,
                 nodesThisRestart: &nodesThisRestart,
                 bestScoreSoFar: bestScore,
-                hint: hint
+                hint: hint,
+                state: state
             )
-            runNodes += nodesThisRestart
+            state.runNodes += nodesThisRestart
             if let sol, score > bestScore {
                 best = sol
                 bestScore = score
@@ -206,25 +216,25 @@ final class CPSATRepairer: @unchecked Sendable {
                 break
             }
 
-            runRestarts += 1
+            state.runRestarts += 1
             // Decay activity for learned clauses and variable scores
             // so the next restart explores fresh territory.
-            decayActivity()
+            decayActivity(state: state)
             // Schedule next budget.
             if config.useLubySequence {
                 budget = lubyValue(lubyIdx) * config.restartInitialBudget
                 lubyIdx += 1
             } else {
-                budget = min(budget * 2, config.totalNodeBudget - runNodes)
+                budget = min(budget * 2, config.totalNodeBudget - state.runNodes)
             }
         }
 
         return CPSATAssignment(
             assignments: best ?? [:],
-            nodesExplored: runNodes,
-            restarts: runRestarts,
-            noGoodsLearned: noGoods.count,
-            wasTimedOut: best == nil || runNodes >= config.totalNodeBudget
+            nodesExplored: state.runNodes,
+            restarts: state.runRestarts,
+            noGoodsLearned: state.noGoods.count,
+            wasTimedOut: best == nil || state.runNodes >= config.totalNodeBudget
         )
     }
 
@@ -368,10 +378,11 @@ final class CPSATRepairer: @unchecked Sendable {
         budget: Int,
         nodesThisRestart: inout Int,
         bestScoreSoFar: Double,
-        hint: [Int: Date]? = nil
+        hint: [Int: Date]? = nil,
+        state: SolveState
     ) -> (assignment: [Int: Date]?, score: Double, timedOut: Bool) {
         // Build a fail-first variable ordering using VSIDS-like scores.
-        let order = orderVariables(variables)
+        let order = orderVariables(variables, state: state)
         var current: [Int: Date] = [:]
         var bestLocal: [Int: Date]? = nil
         var bestLocalScore = bestScoreSoFar
@@ -429,8 +440,8 @@ final class CPSATRepairer: @unchecked Sendable {
                 current[next] = value
                 // Check no-goods first.
                 let hash = domainHashes[next]?[value] ?? 0
-                if hitsNoGood(current: current, geneIndex: next, valueHash: hash) {
-                    bumpVariable(next)
+                if hitsNoGood(current: current, geneIndex: next, valueHash: hash, state: state) {
+                    bumpVariable(next, state: state)
                     current.removeValue(forKey: next)
                     continue
                 }
@@ -447,7 +458,7 @@ final class CPSATRepairer: @unchecked Sendable {
                         }
                     }
                     if conflict {
-                        recordNoGood(current: current, geneIndex: next, valueHash: hash)
+                        recordNoGood(current: current, geneIndex: next, valueHash: hash, state: state)
                         current.removeValue(forKey: next)
                         continue
                     }
@@ -459,7 +470,7 @@ final class CPSATRepairer: @unchecked Sendable {
                     break
                 }
                 if overlap {
-                    recordNoGood(current: current, geneIndex: next, valueHash: hash)
+                    recordNoGood(current: current, geneIndex: next, valueHash: hash, state: state)
                     current.removeValue(forKey: next)
                     continue
                 }
@@ -473,7 +484,7 @@ final class CPSATRepairer: @unchecked Sendable {
                     }
                 }
                 if other {
-                    recordNoGood(current: current, geneIndex: next, valueHash: hash)
+                    recordNoGood(current: current, geneIndex: next, valueHash: hash, state: state)
                     current.removeValue(forKey: next)
                     continue
                 }
@@ -490,12 +501,15 @@ final class CPSATRepairer: @unchecked Sendable {
 
     // MARK: - No-good learning
 
-    private func hitsNoGood(current: [Int: Date], geneIndex: Int, valueHash: Int) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        guard !noGoods.isEmpty else { return false }
+    private func hitsNoGood(
+        current: [Int: Date],
+        geneIndex: Int,
+        valueHash: Int,
+        state: SolveState
+    ) -> Bool {
+        guard !state.noGoods.isEmpty else { return false }
         let pending = NoGoodClause.Literal(geneIndex: geneIndex, valueHash: valueHash)
-        for (i, clause) in noGoods.enumerated() {
+        for (i, clause) in state.noGoods.enumerated() {
             if clause.literals.contains(pending) {
                 // Every other literal in the clause must be satisfied
                 // by `current` for the clause to fire.
@@ -510,7 +524,7 @@ final class CPSATRepairer: @unchecked Sendable {
                     return true
                 }
                 if matches {
-                    noGoods[i].activity += config.activityBumpStep
+                    state.noGoods[i].activity += config.activityBumpStep
                     return true
                 }
             }
@@ -518,13 +532,16 @@ final class CPSATRepairer: @unchecked Sendable {
         return false
     }
 
-    private func recordNoGood(current: [Int: Date], geneIndex: Int, valueHash: Int) {
-        lock.lock()
-        defer { lock.unlock() }
-        if noGoods.count >= config.maxNoGoods {
+    private func recordNoGood(
+        current: [Int: Date],
+        geneIndex: Int,
+        valueHash: Int,
+        state: SolveState
+    ) {
+        if state.noGoods.count >= config.maxNoGoods {
             // Evict the lowest-activity clause.
-            if let minIdx = noGoods.indices.min(by: { noGoods[$0].activity < noGoods[$1].activity }) {
-                noGoods.remove(at: minIdx)
+            if let minIdx = state.noGoods.indices.min(by: { state.noGoods[$0].activity < state.noGoods[$1].activity }) {
+                state.noGoods.remove(at: minIdx)
             }
         }
         var literals = Set<NoGoodClause.Literal>()
@@ -535,33 +552,29 @@ final class CPSATRepairer: @unchecked Sendable {
         for (k, _) in current where k != geneIndex {
             literals.insert(NoGoodClause.Literal(geneIndex: k, valueHash: 0))
         }
-        noGoods.append(NoGoodClause(literals: literals, activity: config.activityBumpStep))
+        state.noGoods.append(NoGoodClause(literals: literals, activity: config.activityBumpStep))
     }
 
     // MARK: - Heuristics
 
-    private func bumpVariable(_ geneIndex: Int) {
-        lock.lock()
-        defer { lock.unlock() }
-        variableActivity[geneIndex, default: 0] += config.activityBumpStep
+    private func bumpVariable(_ geneIndex: Int, state: SolveState) {
+        state.variableActivity[geneIndex, default: 0] += config.activityBumpStep
     }
 
-    private func decayActivity() {
-        lock.lock()
-        defer { lock.unlock() }
+    private func decayActivity(state: SolveState) {
         let d = 1 - config.activityDecay
-        for i in noGoods.indices {
-            noGoods[i].activity *= d
+        for i in state.noGoods.indices {
+            state.noGoods[i].activity *= d
         }
-        for k in variableActivity.keys {
-            variableActivity[k] = (variableActivity[k] ?? 0) * d
+        for k in state.variableActivity.keys {
+            state.variableActivity[k] = (state.variableActivity[k] ?? 0) * d
         }
     }
 
-    private func orderVariables(_ variables: [CPVariable]) -> [Int] {
+    private func orderVariables(_ variables: [CPVariable], state: SolveState) -> [Int] {
         // VSIDS-like: highest-activity first, then smallest-domain, then original.
         variables
-            .map { ($0.geneIndex, variableActivity[$0.geneIndex] ?? 0, $0.domain.count) }
+            .map { ($0.geneIndex, state.variableActivity[$0.geneIndex] ?? 0, $0.domain.count) }
             .sorted { a, b in
                 if a.1 != b.1 { return a.1 > b.1 }
                 if a.2 != b.2 { return a.2 < b.2 }
