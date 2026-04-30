@@ -373,16 +373,16 @@ struct BacklogCapacityLabel: View {
         switch forecast {
         case .over, .afterHours:
             return overflowingCount == 1
-                ? "\u{00A0}·\u{00A0}1 task doesn't fit"
-                : "\u{00A0}·\u{00A0}\(overflowingCount) don't fit"
+                ? "\u{00A0}·\u{00A0}1\u{00A0}task doesn't\u{00A0}fit"
+                : "\u{00A0}·\u{00A0}\(overflowingCount)\u{00A0}don't\u{00A0}fit"
         case .fits:
             // ETA + leftover overflow shouldn't happen in practice (`.fits`
             // means everything fits), but if a partition rounds differently
             // than the forecast, we'd rather show the discrepancy than
             // silently lie. Fall back to the same plural-aware form.
             return overflowingCount == 1
-                ? "\u{00A0}·\u{00A0}1 task doesn't fit"
-                : "\u{00A0}·\u{00A0}\(overflowingCount) don't fit"
+                ? "\u{00A0}·\u{00A0}1\u{00A0}task doesn't\u{00A0}fit"
+                : "\u{00A0}·\u{00A0}\(overflowingCount)\u{00A0}don't\u{00A0}fit"
         }
     }
 

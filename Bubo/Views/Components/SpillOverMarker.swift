@@ -135,15 +135,15 @@ struct SpillOverMarker: View {
     /// much did I overcommit by»).
     private var volumeText: String {
         if overflowCount == 1 {
-            return "1\u{00A0}task spills over"
+            return "1\u{00A0}task spills\u{00A0}over"
         }
-        return "\(DS.formatMinutes(overflowMinutes)) spill over"
+        return "\(DS.formatMinutes(overflowMinutes)) spill\u{00A0}over"
     }
 
     private var accessibilityLabel: String {
         var parts: [String] = []
         if overflowCount == 1 {
-            parts.append("1 task spills over today")
+            parts.append("1\u{00A0}task spills over today")
         } else {
             parts.append("\(DS.formatMinutes(overflowMinutes)) spill over today")
         }

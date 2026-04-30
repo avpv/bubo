@@ -384,6 +384,96 @@ final class BacklogLogicTests: XCTestCase {
         XCTAssertTrue(result.fitting.isEmpty)
         XCTAssertEqual(result.overflowing.map(\.id), ["a"])
     }
+
+    // MARK: capacity label suffix
+
+    func testCapacityLabelSuffixIsEmptyWhenNoOverflow() {
+        let forecast = BacklogLogic.CapacityForecast.fits(eta: Self.now(), spareMinutes: 60)
+        XCTAssertEqual(
+            BacklogCapacityLabel.suffix(forecast: forecast, overflowingCount: 0),
+            ""
+        )
+    }
+
+    func testCapacityLabelSuffixSingularForOneTask() {
+        let forecast = BacklogLogic.CapacityForecast.over(byMinutes: 60)
+        let suffix = BacklogCapacityLabel.suffix(forecast: forecast, overflowingCount: 1)
+        // Birman: «1 task doesn't fit» — singular noun, no plural-S.
+        XCTAssertTrue(suffix.contains("1\u{00A0}task"))
+        XCTAssertTrue(suffix.contains("doesn't"))
+    }
+
+    func testCapacityLabelSuffixPluralForMany() {
+        let forecast = BacklogLogic.CapacityForecast.over(byMinutes: 240)
+        let suffix = BacklogCapacityLabel.suffix(forecast: forecast, overflowingCount: 11)
+        // Plural form drops the noun, just «11 don't fit».
+        XCTAssertTrue(suffix.contains("11"))
+        XCTAssertTrue(suffix.contains("don't"))
+        XCTAssertFalse(suffix.contains("task"))
+    }
+
+    func testCapacityLabelSuffixUsesNonBreakingSpaceBeforeMiddot() {
+        let forecast = BacklogLogic.CapacityForecast.over(byMinutes: 60)
+        let suffix = BacklogCapacityLabel.suffix(forecast: forecast, overflowingCount: 3)
+        // The leading «\u{00A0}·\u{00A0}» glues the suffix to the
+        // preceding verdict so a line break never lands between them.
+        XCTAssertTrue(suffix.hasPrefix("\u{00A0}·\u{00A0}"))
+    }
+
+    // MARK: capacity label verdict
+
+    func testCapacityLabelFitsReadsAsDoneByTime() {
+        let cal = Self.calendar()
+        let noon = cal.date(from: DateComponents(
+            year: 2026, month: 4, day: 11, hour: 12
+        ))!
+        let forecast = BacklogLogic.CapacityForecast.fits(eta: noon, spareMinutes: 0)
+        let label = BacklogCapacityLabel.label(for: forecast)
+        // The exact rendered time depends on the test environment locale,
+        // but the «Done by» prefix is invariant.
+        XCTAssertTrue(label.hasPrefix("Done by"))
+    }
+
+    func testCapacityLabelOverReadsAsXOverCapacity() {
+        let forecast = BacklogLogic.CapacityForecast.over(byMinutes: 60)
+        let label = BacklogCapacityLabel.label(for: forecast)
+        XCTAssertTrue(label.contains("over capacity"))
+        XCTAssertTrue(label.contains("1\u{00A0}h"))
+    }
+
+    func testCapacityLabelAfterHoursReadsAsQueued() {
+        let forecast = BacklogLogic.CapacityForecast.afterHours(queuedMinutes: 90)
+        let label = BacklogCapacityLabel.label(for: forecast)
+        XCTAssertTrue(label.hasPrefix("After hours"))
+        XCTAssertTrue(label.contains("queued"))
+        XCTAssertTrue(label.contains("1\u{00A0}h\u{00A0}30\u{00A0}min"))
+    }
+
+    // MARK: capacity label accessibility
+
+    func testCapacityLabelAccessibilityIncludesOverflowCount() {
+        let forecast = BacklogLogic.CapacityForecast.over(byMinutes: 60)
+        let voiceOver = BacklogCapacityLabel.accessibilityLabel(
+            for: forecast,
+            pendingMinutes: 240,
+            overflowingCount: 3
+        )
+        XCTAssertTrue(voiceOver.contains("over capacity"))
+        // VoiceOver phrasing names «N tasks don't fit today» so the
+        // assistive-tech reader hears the count without parsing
+        // arithmetic.
+        XCTAssertTrue(voiceOver.contains("3 tasks don't fit today"))
+    }
+
+    func testCapacityLabelAccessibilityOmitsCountWhenZero() {
+        let forecast = BacklogLogic.CapacityForecast.fits(eta: Self.now(), spareMinutes: 60)
+        let voiceOver = BacklogCapacityLabel.accessibilityLabel(
+            for: forecast,
+            pendingMinutes: 60,
+            overflowingCount: 0
+        )
+        XCTAssertFalse(voiceOver.contains("don't fit"))
+    }
 }
 
 // MARK: - RecurrenceEngine tests

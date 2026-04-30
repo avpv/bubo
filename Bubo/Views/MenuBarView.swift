@@ -1233,6 +1233,30 @@ struct MenuBarView: View {
                         }
                         .buttonStyle(.action(role: .primary, size: .compact))
                         .padding(.top, DS.Spacing.md)
+
+                        // Quiet escape hatch for the «I have a calendar
+                        // connected but nothing's showing» case — taps
+                        // straight into the calendar-picker pane so the
+                        // user can verify they enabled the right calendars.
+                        // Shown only when permission is granted (an
+                        // existing permission banner already explains the
+                        // permission case) so we never offer a settings
+                        // link the user can't act on.
+                        if calendarHasAccess && settings.isCalendarSyncEnabled {
+                            Button {
+                                Haptics.tap()
+                                SettingsViewModel.pendingPane = .calendars
+                                openSettings()
+                                NSApp.activate()
+                            } label: {
+                                Text("Adjust which calendars are visible \u{2192}")
+                                    .font(.footnote)
+                                    .foregroundStyle(skin.resolvedTextTertiary)
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.top, DS.Spacing.sm)
+                            .accessibilityLabel("Open Calendar Settings to pick which calendars are visible")
+                        }
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, DS.Spacing.xxl)
