@@ -506,6 +506,9 @@ struct BacklogTaskRow: View {
                         }
                     }
                     .foregroundStyle(skin.resolvedTextTertiary)
+                    .help((task.recurrenceTag?.isEmpty == false)
+                        ? "Recurring task: \(task.recurrenceTag!)"
+                        : "Recurring task")
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(
                         (task.recurrenceTag?.isEmpty == false)

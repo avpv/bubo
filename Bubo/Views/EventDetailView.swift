@@ -63,6 +63,7 @@ struct EventDetailView: View {
                                 .font(.system(size: DS.Size.iconMedium, weight: .medium))
                                 .foregroundStyle(skin.resolvedTextSecondary)
                                 .contentTransition(.symbolEffect(.replace))
+                                .help("Recurring event")
                                 .accessibilityLabel("Recurring event")
                         }
                     }
