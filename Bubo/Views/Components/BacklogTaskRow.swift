@@ -55,6 +55,18 @@ struct BacklogTaskRow: View {
     /// to the add-task field instead.
     var sprintHotKey: Int? = nil
 
+    /// Reschedule this task via the command palette (per-task scope optimizer
+    /// entry point). Opens ⌘K seeded with the task so it lands on the
+    /// «Schedule "<title>"» / «Find best time» suggestions. nil = no
+    /// reschedule path (palette unavailable).
+    var onReschedule: (() -> Void)? = nil
+    /// Toggle the urgency stripe by setting (or clearing) a today-end
+    /// deadline. Driven from the row's context menu — Birman: «явное
+    /// действие должно совпадать с явным сигналом», so the «Mark urgent»
+    /// label flips to «Clear urgent» when the task already has today's
+    /// deadline. nil = no urgency-toggle path (read-only context).
+    var onToggleUrgent: (() -> Void)? = nil
+
     /// User's default task duration (from `OptimizerService`). Drives the
     /// «hide `1 h`» rule: when the row's only meta would be the default
     /// duration and another trailing-meta is present (recurrence,
@@ -118,6 +130,30 @@ struct BacklogTaskRow: View {
         task.isRecurring
             || !task.dependsOn.isEmpty
             || task.priority == .high
+    }
+
+    /// Whether the «Mark urgent / Clear urgent» context-menu item is
+    /// applicable. The toggle has a clean semantic only when the task either
+    /// has no deadline (Mark urgent → set today) or already has today's
+    /// deadline (Clear urgent → unset). When the task has a future deadline,
+    /// «Mark urgent» would silently overwrite the user's planned date and
+    /// «Clear urgent» wouldn't apply, so we hide the action — Birman: «не
+    /// предлагай выбор без смысла».
+    private var canToggleUrgent: Bool {
+        guard onToggleUrgent != nil else { return false }
+        guard let deadline = task.deadline else { return true }
+        return Calendar.current.isDateInToday(deadline)
+    }
+
+    /// «Mark urgent» when no deadline, «Clear urgent» when the deadline is
+    /// today. The label flips to match the action — Birman: «постоянная
+    /// видимость состояния».
+    private var urgencyToggleLabel: String {
+        if let deadline = task.deadline,
+           Calendar.current.isDateInToday(deadline) {
+            return "Clear urgent"
+        }
+        return "Mark urgent"
     }
 
     /// Whether the row should render `metaText`. Hides the default-duration
@@ -290,7 +326,22 @@ struct BacklogTaskRow: View {
         }
         .contextMenu {
             Button("Complete") { onComplete() }
-            Button("Edit") { onEdit() }
+            Button("Edit details\u{2026}") { onEdit() }
+
+            // Per-task scope optimizer actions — Birman: «команды живут
+            // рядом со своим объектом». «Reschedule» seeds ⌘K with this
+            // task; «Mark urgent» toggles a today deadline (the same
+            // deadline that drives the leading red stripe).
+            if onReschedule != nil || canToggleUrgent {
+                Divider()
+                if let reschedule = onReschedule {
+                    Button("Reschedule\u{2026}") { reschedule() }
+                }
+                if canToggleUrgent, let toggle = onToggleUrgent {
+                    Button(urgencyToggleLabel) { toggle() }
+                }
+            }
+
             Divider()
             Button("Move Up") { onMoveUp() }
                 .disabled(!canMoveUp)

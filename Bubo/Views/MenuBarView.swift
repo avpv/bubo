@@ -94,6 +94,10 @@ struct MenuBarView: View {
     /// Context for the command palette overlay. nil = hidden.
     struct PaletteContext: Equatable {
         var seedEvent: CalendarEvent? = nil
+        /// Per-task seed — set when the user opens the palette from a
+        /// backlog row's right-click → «Reschedule…». Routes to the
+        /// task-specific suggestions in `CommandPalette.suggestions`.
+        var seedTask: BacklogTask? = nil
         var seedSlotMinutes: Int? = nil
         var seedSlotStart: Date? = nil
         var seedSlotEnd: Date? = nil
@@ -298,6 +302,10 @@ struct MenuBarView: View {
                             },
                             onFocusOnDeadlines: {
                                 await runQuickAction(.deadlineMode, label: "Focused on deadlines")
+                            },
+                            onRescheduleTask: { task in
+                                navigation = .list
+                                paletteContext = PaletteContext(seedTask: task)
                             }
                         )
                         .transition(
@@ -334,6 +342,7 @@ struct MenuBarView: View {
                     reminderService: reminderService,
                     agentService: agentService,
                     seedEvent: context.seedEvent,
+                    seedTask: context.seedTask,
                     seedSlotMinutes: context.seedSlotMinutes,
                     seedSlotStart: context.seedSlotStart,
                     seedSlotEnd: context.seedSlotEnd,
@@ -713,6 +722,9 @@ struct MenuBarView: View {
                 },
                 onFocusOnDeadlines: {
                     await runQuickAction(.deadlineMode, label: "Focused on deadlines")
+                },
+                onRescheduleTask: { task in
+                    paletteContext = PaletteContext(seedTask: task)
                 },
                 focusRequested: $focusTaskInput,
                 autoExpand: autoExpand

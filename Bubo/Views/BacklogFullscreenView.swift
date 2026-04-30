@@ -46,6 +46,9 @@ struct BacklogFullscreenView: View {
     /// action-link in the spill-over marker when overflow contains urgent
     /// tasks. Wired from `MenuBarView.runQuickAction(.deadlineMode,…)`.
     var onFocusOnDeadlines: (() async -> Void)? = nil
+    /// Open the command palette seeded with a single task (per-task scope
+    /// optimizer entry — context menu's «Reschedule…» on a row).
+    var onRescheduleTask: ((BacklogTask) -> Void)? = nil
 
     @Environment(\.activeSkin) private var skin
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -531,6 +534,8 @@ struct BacklogFullscreenView: View {
             onReorderDrop: { dropped in
                 handleReorderDrop(dropped: dropped, targetId: task.id)
             },
+            onReschedule: onRescheduleTask.map { handler in { handler(task) } },
+            onToggleUrgent: { toggleUrgent(task) },
             onMoveUp: { moveTask(task, by: -1) },
             onMoveDown: { moveTask(task, by: +1) },
             onMoveToTop: { moveTaskToEdge(task, toTop: true) },
@@ -857,6 +862,31 @@ struct BacklogFullscreenView: View {
             backlogService.freezeTask(id: task.id)
         }
         onUndoableAction?("Froze \u{201C}\(task.title)\u{201D}") { [backlogService] in
+            backlogService.updateTask(snapshot)
+        }
+    }
+
+    /// Toggle urgent state via today-end deadline. Mirrors the inline
+    /// `BacklogView.toggleUrgent` so the context-menu acts identically in
+    /// both modes.
+    private func toggleUrgent(_ task: BacklogTask) {
+        let snapshot = task
+        var updated = task
+        let calendar = Calendar.current
+        if let deadline = task.deadline, calendar.isDateInToday(deadline) {
+            updated.deadline = nil
+        } else {
+            updated.deadline = calendar.date(
+                bySettingHour: 23, minute: 59, second: 0, of: Date()
+            ) ?? Date()
+        }
+        withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
+            backlogService.updateTask(updated)
+        }
+        let label = updated.deadline == nil
+            ? "Cleared urgent on \u{201C}\(task.title)\u{201D}"
+            : "Marked \u{201C}\(task.title)\u{201D} urgent"
+        onUndoableAction?(label) { [backlogService] in
             backlogService.updateTask(snapshot)
         }
     }
