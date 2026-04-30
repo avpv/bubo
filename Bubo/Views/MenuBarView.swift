@@ -1697,26 +1697,15 @@ struct MenuBarView: View {
         "organize-morning": ["organize"],
     ]
 
-    /// True when the suggestion's primary contribution is already surfaced
-    /// in the top-3 QuickActions chips. We reuse the production
-    /// `QuickActionRanker` so suppression follows the same context-aware
-    /// scoring the chips do — no risk of the chip and the banner
-    /// disagreeing on what's «in the top».
+    /// Historically suppressed banner suggestions that were already visible
+    /// as floating QuickActions chips. With the chip strip collapsed to a
+    /// single `Optimize ⌘K` button (per-task, per-event, backlog and
+    /// day-scope intents migrated to their own surfaces), there's nothing
+    /// to dedupe — banners can always surface a contextual suggestion when
+    /// it qualifies. Returns `false` unconditionally now; kept around so
+    /// future changes can re-enable suppression without restructuring the
+    /// banner pipeline.
     private func isSuggestionSurfacedInQuickActions(_ suggestion: SuggestionEngine.Suggestion) -> Bool {
-        guard let backlog = optimizerService.backlogService else { return false }
-        let ranker = QuickActionRanker(
-            backlogService: backlog,
-            reminderService: reminderService,
-            intentLearner: optimizerService.intentLearner
-        )
-        let topIds = Set(ranker.rank(limit: 3).map(\.action.id))
-
-        for signalName in suggestion.contributions.keys {
-            if let actionIds = Self.suggestionToQuickActionIDs[signalName],
-               !actionIds.isDisjoint(with: topIds) {
-                return true
-            }
-        }
         return false
     }
 
