@@ -288,6 +288,11 @@ struct BacklogCapacityPopover: View {
 /// show a finish time computed at hour zero.
 struct BacklogCapacityLabel: View {
     let pendingMinutes: Int
+    /// Count of tasks that don't fit in the remaining workday. Used to
+    /// surface the suffix «· N don't fit» next to the verdict so the reader
+    /// gets the count without doing arithmetic. Pass 0 when nothing
+    /// overflows; the suffix collapses on its own.
+    var overflowingCount: Int = 0
     var optimizerService: OptimizerService
 
     @Environment(\.activeSkin) private var skin
@@ -304,7 +309,11 @@ struct BacklogCapacityLabel: View {
             // form on screen, full sentence on hover. Pointer users get
             // the same «30 min to spare» / «over by 1h» context the
             // assistive-tech path already had.
-            let verbose = Self.accessibilityLabel(for: forecast, pendingMinutes: pendingMinutes)
+            let verbose = Self.accessibilityLabel(
+                for: forecast,
+                pendingMinutes: pendingMinutes,
+                overflowingCount: overflowingCount
+            )
             HStack(spacing: DS.Spacing.xxs) {
                 // Warning glyph escalates the «over» verdict from a quiet
                 // text label to something the eye catches in peripheral
@@ -317,11 +326,21 @@ struct BacklogCapacityLabel: View {
                         .foregroundStyle(skin.resolvedDestructiveColor)
                         .accessibilityHidden(true)
                 }
+
+                // Two-tier verdict: ETA / over-by reads first (secondary
+                // tint), the suffix «· N don't fit» reads quieter (tertiary)
+                // so the eye lands on the answer, then descends to the
+                // qualifier. Birman: «слои информации — главное крупнее».
+                // Concatenated `Text` keeps both halves on the same baseline
+                // and lets `numericText()` transitions animate digits in
+                // both halves smoothly.
                 Text(Self.label(for: forecast))
-                    .font(.footnote.weight(.medium).monospacedDigit())
                     .foregroundStyle(skin.resolvedTextSecondary)
-                    .contentTransition(.numericText())
+                + Text(Self.suffix(forecast: forecast, overflowingCount: overflowingCount))
+                    .foregroundStyle(skin.resolvedTextTertiary)
             }
+            .font(.footnote.weight(.medium).monospacedDigit())
+            .contentTransition(.numericText())
             .help(verbose)
             .accessibilityElement(children: .combine)
             .accessibilityLabel(verbose)
@@ -344,23 +363,55 @@ struct BacklogCapacityLabel: View {
         }
     }
 
+    /// Suffix that names the overflow count in plain English. Returns the
+    /// empty string when nothing overflows so the verdict collapses to its
+    /// short form. Plural-aware. Birman: «не заставляй считать в уме» —
+    /// the reader sees the count directly instead of subtracting fits from
+    /// total.
+    static func suffix(forecast: BacklogLogic.CapacityForecast, overflowingCount: Int) -> String {
+        guard overflowingCount > 0 else { return "" }
+        switch forecast {
+        case .over, .afterHours:
+            return overflowingCount == 1
+                ? "\u{00A0}·\u{00A0}1 task doesn't fit"
+                : "\u{00A0}·\u{00A0}\(overflowingCount) don't fit"
+        case .fits:
+            // ETA + leftover overflow shouldn't happen in practice (`.fits`
+            // means everything fits), but if a partition rounds differently
+            // than the forecast, we'd rather show the discrepancy than
+            // silently lie. Fall back to the same plural-aware form.
+            return overflowingCount == 1
+                ? "\u{00A0}·\u{00A0}1 task doesn't fit"
+                : "\u{00A0}·\u{00A0}\(overflowingCount) don't fit"
+        }
+    }
+
     /// Verbose accessibility phrasing — VoiceOver reads the full sentence
     /// (with the spare-minutes hint) instead of the compact visual form.
     static func accessibilityLabel(
         for forecast: BacklogLogic.CapacityForecast,
-        pendingMinutes: Int
+        pendingMinutes: Int,
+        overflowingCount: Int = 0
     ) -> String {
+        let countSuffix: String
+        if overflowingCount > 0 {
+            countSuffix = overflowingCount == 1
+                ? ". 1 task doesn't fit today."
+                : ". \(overflowingCount) tasks don't fit today."
+        } else {
+            countSuffix = ""
+        }
         switch forecast {
         case .fits(let eta, let spareMinutes):
             let timeStr = eta.formatted(date: .omitted, time: .shortened)
             if spareMinutes > 0 {
-                return "Backlog finishes at \(timeStr), \(DS.formatMinutes(spareMinutes)) to spare"
+                return "Backlog finishes at \(timeStr), \(DS.formatMinutes(spareMinutes)) to spare\(countSuffix)"
             }
-            return "Backlog finishes at \(timeStr)"
+            return "Backlog finishes at \(timeStr)\(countSuffix)"
         case .over(let byMinutes):
-            return "Backlog over capacity by \(DS.formatMinutes(byMinutes))"
+            return "Backlog over capacity by \(DS.formatMinutes(byMinutes))\(countSuffix)"
         case .afterHours(let queuedMinutes):
-            return "Workday ended, \(DS.formatMinutes(queuedMinutes)) queued for later"
+            return "Workday ended, \(DS.formatMinutes(queuedMinutes)) queued for later\(countSuffix)"
         }
     }
 }

@@ -173,6 +173,34 @@ enum BacklogLogic {
         return .over(byMinutes: pendingMinutes - remaining)
     }
 
+    /// Greedy partition of the active task list into what fits in the
+    /// remaining workday and what spills over. Order-preserving: walks
+    /// the list in given order and keeps each task in `fitting` while
+    /// the running budget allows; everything past the cutoff lands in
+    /// `overflowing`. Pure function — no Date(), no environment reads.
+    ///
+    /// Used by the inline capacity verdict (`K don't fit`) and by the
+    /// spill-over marker line in the Backlog. Caller chooses the order
+    /// (smart-sorted vs storage order); the partition is computed on
+    /// whatever it gets.
+    static func capacityPartition(
+        _ tasks: [BacklogTask],
+        remainingWorkdayMinutes: Int
+    ) -> (fitting: [BacklogTask], overflowing: [BacklogTask]) {
+        var budget = max(0, remainingWorkdayMinutes)
+        var fit: [BacklogTask] = []
+        var over: [BacklogTask] = []
+        for task in tasks {
+            if task.durationMinutes <= budget {
+                fit.append(task)
+                budget -= task.durationMinutes
+            } else {
+                over.append(task)
+            }
+        }
+        return (fit, over)
+    }
+
     /// Minutes left between `now` and the end of the working day, clamped
     /// to zero once the window has closed. Shares its `workingHours`
     /// definition with `OptimizerService` so the ring and the free-slot

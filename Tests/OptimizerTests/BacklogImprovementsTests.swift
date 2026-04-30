@@ -329,6 +329,61 @@ final class BacklogLogicTests: XCTestCase {
         XCTAssertEqual(eta, noon)
         XCTAssertEqual(spareMinutes, 360)
     }
+
+    // MARK: capacity partition
+
+    func testCapacityPartitionAllFit() {
+        let tasks = [task("a", duration: 30), task("b", duration: 60), task("c", duration: 30)]
+        let result = BacklogLogic.capacityPartition(tasks, remainingWorkdayMinutes: 240)
+        XCTAssertEqual(result.fitting.map(\.id), ["a", "b", "c"])
+        XCTAssertTrue(result.overflowing.isEmpty)
+    }
+
+    func testCapacityPartitionAllOverflow() {
+        let tasks = [task("a", duration: 60), task("b", duration: 60)]
+        let result = BacklogLogic.capacityPartition(tasks, remainingWorkdayMinutes: 0)
+        XCTAssertTrue(result.fitting.isEmpty)
+        XCTAssertEqual(result.overflowing.map(\.id), ["a", "b"])
+    }
+
+    func testCapacityPartitionPreservesOrder() {
+        // Greedy fill walks left-to-right, so a small task that comes after
+        // a too-big one still spills — partition is order-respecting, not
+        // best-fit packing. Lets the caller pick the order (smart-sort vs
+        // storage) and predict the result.
+        let tasks = [
+            task("big",   duration: 90),
+            task("small", duration: 30),
+            task("tiny",  duration: 15),
+        ]
+        let result = BacklogLogic.capacityPartition(tasks, remainingWorkdayMinutes: 60)
+        XCTAssertTrue(result.fitting.isEmpty)
+        XCTAssertEqual(result.overflowing.map(\.id), ["big", "small", "tiny"])
+    }
+
+    func testCapacityPartitionGreedyCutoff() {
+        // 60 min budget, 30+30+30. First two fit exactly (60 min consumed),
+        // third spills.
+        let tasks = [task("a", duration: 30), task("b", duration: 30), task("c", duration: 30)]
+        let result = BacklogLogic.capacityPartition(tasks, remainingWorkdayMinutes: 60)
+        XCTAssertEqual(result.fitting.map(\.id), ["a", "b"])
+        XCTAssertEqual(result.overflowing.map(\.id), ["c"])
+    }
+
+    func testCapacityPartitionEmpty() {
+        let result = BacklogLogic.capacityPartition([], remainingWorkdayMinutes: 240)
+        XCTAssertTrue(result.fitting.isEmpty)
+        XCTAssertTrue(result.overflowing.isEmpty)
+    }
+
+    func testCapacityPartitionNegativeBudgetClamps() {
+        // Budget passed in negative (caller used a stale pre-clamped value)
+        // — partition should treat it as zero, not propagate the error.
+        let tasks = [task("a", duration: 30)]
+        let result = BacklogLogic.capacityPartition(tasks, remainingWorkdayMinutes: -120)
+        XCTAssertTrue(result.fitting.isEmpty)
+        XCTAssertEqual(result.overflowing.map(\.id), ["a"])
+    }
 }
 
 // MARK: - RecurrenceEngine tests

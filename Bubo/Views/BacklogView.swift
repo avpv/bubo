@@ -407,6 +407,7 @@ struct BacklogView: View {
                 // not arithmetic the reader has to do themselves.
                 BacklogCapacityLabel(
                     pendingMinutes: pendingWorkloadMinutes,
+                    overflowingCount: overflowingTaskCount,
                     optimizerService: optimizerService
                 )
 
@@ -661,6 +662,18 @@ struct BacklogView: View {
         // backlog, not a UI-filtered subset. Otherwise toggling the urgent
         // filter would make the ring falsely turn green.
         allActiveTasks.reduce(0) { $0 + $1.durationMinutes }
+    }
+
+    /// Number of active tasks that don't fit in the remaining workday —
+    /// drives the «· N don't fit» suffix on the capacity verdict so the
+    /// reader doesn't have to subtract fits from the total. Computed off
+    /// `allActiveTasks` (not the urgent-filtered view) for the same reason
+    /// `pendingWorkloadMinutes` does — capacity is about the whole queue.
+    private var overflowingTaskCount: Int {
+        BacklogLogic.capacityPartition(
+            allActiveTasks,
+            remainingWorkdayMinutes: remainingWorkdayMinutes
+        ).overflowing.count
     }
 
     /// Remaining minutes between "now" and the end of the working day.

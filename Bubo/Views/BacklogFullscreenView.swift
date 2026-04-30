@@ -152,6 +152,16 @@ struct BacklogFullscreenView: View {
         )
     }
 
+    /// Count of active tasks that don't fit in the remaining workday.
+    /// Drives the «· N don't fit» suffix on the capacity verdict so the
+    /// user reads the overflow count directly instead of subtracting.
+    private var overflowingTaskCount: Int {
+        BacklogLogic.capacityPartition(
+            activeTasks,
+            remainingWorkdayMinutes: remainingWorkdayMinutes
+        ).overflowing.count
+    }
+
     private var capacityRingTooltip: String {
         "Backlog: \(DS.formatMinutes(pendingWorkloadMinutes)); remaining today: \(DS.formatMinutes(remainingWorkdayMinutes))"
     }
@@ -232,6 +242,7 @@ struct BacklogFullscreenView: View {
 
                 BacklogCapacityLabel(
                     pendingMinutes: pendingWorkloadMinutes,
+                    overflowingCount: overflowingTaskCount,
                     optimizerService: optimizerService
                 )
 
