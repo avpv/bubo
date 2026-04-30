@@ -189,17 +189,16 @@ struct EventRowView: View {
         // Scroll-aware transition: fade/scale as items enter/exit viewport
         .eventScrollTransition()
         // Drag-to-reschedule gesture (long-press 0.35s → vertical drag).
-        // `including: .none` masks the gesture out for non-rescheduable
-        // shapes (recurring, external, or in-progress events) so the
-        // parent ScrollView keeps full scroll priority for them.
-        //
-        // Use `.simultaneousGesture` (not `.gesture`) so the inner row
-        // Button's tap recognition keeps running alongside the long-press
-        // detector. Plain `.gesture` claims priority and, on macOS, the
-        // LongPressGesture absorbs the click during its 0.35s window —
-        // by the time it fails on release the Button has already missed
-        // the mouse-up, leaving `onTap` unfired and the row feeling dead.
-        .simultaneousGesture(rescheduleGesture, including: canDrag ? .gesture : .none)
+        // The mask is `.all` when the row is rescheduable so the Button's
+        // tap recognition keeps running in parallel with the long-press
+        // detector — both gestures fire on the same input stream. For
+        // non-rescheduable rows we mask in `.subviews`, which disables
+        // *this* simultaneous gesture while leaving the inner Button's
+        // tap fully active. The earlier `including: .gesture` reading
+        // looked right but actually means «enable the added gesture and
+        // disable all other gestures on the view» — i.e. it switched the
+        // Button off, leaving the row feeling dead on a quick click.
+        .simultaneousGesture(rescheduleGesture, including: canDrag ? .all : .subviews)
         // Surface the proposed new time as an overlay capsule near the
         // leading edge of the row. The badge fades in as soon as the
         // drag arms, even at zero delta — that's how the user knows the
