@@ -742,10 +742,17 @@ struct BacklogTaskRow: View {
         guard let deadline = task.deadline else { return skin.resolvedTextPrimary }
         let cal = Calendar.current
         if deadline < Date() || cal.isDateInToday(deadline) {
+            // Today / overdue → saturated destructive red. The strongest
+            // urgency signal in the row's title.
             return skin.resolvedDestructiveColor
         }
         if cal.isDateInTomorrow(deadline) {
-            return .orange
+            // Tomorrow → desaturated red of the same family
+            // (`urgentColor`). Same hue as the row's left stripe and
+            // the «N urgent» pill, so all three signals read as «this
+            // task is time-sensitive» without competing for the same
+            // visual weight as truly destructive surfaces.
+            return skin.resolvedUrgentColor
         }
         return skin.resolvedTextPrimary
     }
