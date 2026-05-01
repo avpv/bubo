@@ -1709,6 +1709,16 @@ struct MenuBarView: View {
                         withAnimation(DS.Animation.quick) {
                             optimizerService.toggleLock(eventId: event.id)
                         }
+                    },
+                    isExcluded: optimizerService.isExcluded(eventId: event.id),
+                    onToggleExclude: { event in
+                        // Excluded events are absent from the optimizer's
+                        // input — useful when the user is planning around
+                        // a meeting they might cancel. Same persistent-
+                        // set + auto-inject pattern as lock.
+                        withAnimation(DS.Animation.quick) {
+                            optimizerService.toggleExclude(eventId: event.id)
+                        }
                     }
                 )
                 }

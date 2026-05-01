@@ -46,6 +46,19 @@ struct EventRowView: View {
     /// hidden (preview surfaces, read-only events).
     var onToggleLock: ((CalendarEvent) -> Void)? = nil
 
+    /// True when this event is in the user's excluded set — the
+    /// optimizer skips it on every run via the implicit
+    /// `.exclude(eventIds:)` intent the host service injects. Different
+    /// from `isLocked`: locked events stay visible to the GA but are
+    /// pinned in place, excluded events are pretended-not-to-exist.
+    /// Useful for «I might cancel this, plan around its absence».
+    var isExcluded: Bool = false
+    /// Toggle this event's excluded state. Surfaced as a context-menu
+    /// item rather than a row icon — exclude is the rarer choice and
+    /// having a second leading icon next to lock would crowd the row.
+    /// nil = item hidden.
+    var onToggleExclude: ((CalendarEvent) -> Void)? = nil
+
     /// When true, the row plays a brief highlight glow to draw attention
     /// to newly created/changed events after recipe application.
     var isFreshlyCreated: Bool = false
@@ -261,6 +274,29 @@ struct EventRowView: View {
 
             if isLocal {
                 Divider()
+
+                // Optimizer-visibility toggle. Lock has a row affordance
+                // already (the inline icon next to the title); exclude is
+                // the rarer companion («planning around a maybe-cancelled
+                // event») so it lives only in the menu. Both flow through
+                // `OptimizerService.lockedEventIds` / `excludedEventIds`
+                // and inject the corresponding intents on every Run.
+                if let onToggleExclude {
+                    Button {
+                        Haptics.impact()
+                        onToggleExclude(event)
+                    } label: {
+                        Label(
+                            isExcluded
+                                ? "Include in optimization"
+                                : "Exclude from optimization",
+                            systemImage: isExcluded ? "eye" : "eye.slash"
+                        )
+                    }
+                    .help(isExcluded
+                          ? "Currently hidden from the optimizer — re-include to plan around it"
+                          : "Optimizer plans around this event as if it doesn't exist")
+                }
 
                 // Task actions
                 if event.isTask, event.taskStatus != .done, let onCompleteTask {

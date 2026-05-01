@@ -39,19 +39,29 @@ final class OptimizerService {
     /// «keep this event fixed» into the command palette for each one.
     /// Birman: «правила — это объекты на экране» — the lock icon IS
     /// the intent.
-    private(set) var lockedEventIds: Set<String> = Self.loadLockedEventIds()
+    private(set) var lockedEventIds: Set<String> = Self.loadIds(key: Self.lockedEventIdsKey)
+
+    /// Set of event ids the user has explicitly **excluded** from
+    /// optimization via the per-event context menu in `EventRowView`.
+    /// Persisted in `UserDefaults` like `lockedEventIds`. The two sets
+    /// are semantically distinct — locked = «pin in place», excluded =
+    /// «pretend it doesn't exist» — so the GA receives both intents
+    /// when both are non-empty. An event in both sets behaves like
+    /// excluded (the stricter intent wins inside the IntentCompiler).
+    private(set) var excludedEventIds: Set<String> = Self.loadIds(key: Self.excludedEventIdsKey)
 
     private static let lockedEventIdsKey = "BuboOptimizerLockedEventIds"
+    private static let excludedEventIdsKey = "BuboOptimizerExcludedEventIds"
 
-    private static func loadLockedEventIds() -> Set<String> {
-        guard let raw = UserDefaults.standard.array(forKey: lockedEventIdsKey) as? [String] else {
+    private static func loadIds(key: String) -> Set<String> {
+        guard let raw = UserDefaults.standard.array(forKey: key) as? [String] else {
             return []
         }
         return Set(raw)
     }
 
-    private func persistLockedEventIds() {
-        UserDefaults.standard.set(Array(lockedEventIds), forKey: Self.lockedEventIdsKey)
+    private func persist(_ ids: Set<String>, key: String) {
+        UserDefaults.standard.set(Array(ids), forKey: key)
     }
 
     /// Toggle this event's locked state. Source-of-truth for the per-
@@ -63,13 +73,28 @@ final class OptimizerService {
         } else {
             lockedEventIds.insert(eventId)
         }
-        persistLockedEventIds()
+        persist(lockedEventIds, key: Self.lockedEventIdsKey)
+    }
+
+    /// Toggle this event's excluded state. Companion to `toggleLock` for
+    /// the «exclude from optimization» context-menu item in EventRowView.
+    func toggleExclude(eventId: String) {
+        if excludedEventIds.contains(eventId) {
+            excludedEventIds.remove(eventId)
+        } else {
+            excludedEventIds.insert(eventId)
+        }
+        persist(excludedEventIds, key: Self.excludedEventIdsKey)
     }
 
     /// Whether this event is currently locked. Cheap O(1) lookup —
     /// safe to call from `EventRowView` on every render.
     func isLocked(eventId: String) -> Bool {
         lockedEventIds.contains(eventId)
+    }
+
+    func isExcluded(eventId: String) -> Bool {
+        excludedEventIds.contains(eventId)
     }
 
     /// IDs of events created in the most recent application.
@@ -243,6 +268,9 @@ final class OptimizerService {
         var effectiveRequest = request
         if !lockedEventIds.isEmpty {
             effectiveRequest.add(.keepFixed(eventIds: Array(lockedEventIds)))
+        }
+        if !excludedEventIds.isEmpty {
+            effectiveRequest.add(.exclude(eventIds: Array(excludedEventIds)))
         }
 
         activeRequestName = request.name
