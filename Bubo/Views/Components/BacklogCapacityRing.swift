@@ -339,7 +339,12 @@ struct BacklogCapacityLabel: View {
                 + Text(Self.suffix(forecast: forecast, overflowingCount: overflowingCount))
                     .foregroundStyle(skin.resolvedTextTertiary)
             }
-            .font(.footnote.weight(.medium).monospacedDigit())
+            // `DS.Typography.metric` — the verdict carries the
+            // numeric facts of the day («Done by 17:30», «4 h 32 min
+            // over», «3 h 12 min queued»). Single voice for inline
+            // numerics across the backlog header so the prose («Done
+            // by») and the digits («17:30») share one rhythm.
+            .font(DS.Typography.metric(skin: skin))
             .contentTransition(.numericText())
             .help(verbose)
             .accessibilityElement(children: .combine)

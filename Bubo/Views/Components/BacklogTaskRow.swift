@@ -589,8 +589,13 @@ struct BacklogTaskRow: View {
                         .accessibilityHidden(true)
                 }
                 if shouldShowMetaText {
+                    // `DS.Typography.metric` — meta text in this slot is
+                    // always a numeric/temporal fact («1 h», «in 2 days»,
+                    // «Today», «Overdue»). Single voice with the inline
+                    // header digits so a glance down the column sees one
+                    // rhythm of data, not a mix of font weights.
                     metaText
-                        .font(.footnote)
+                        .font(DS.Typography.metric(skin: skin))
                         .lineLimit(1)
                         .truncationMode(.tail)
                 }

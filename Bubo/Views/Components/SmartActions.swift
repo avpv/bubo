@@ -64,14 +64,39 @@ struct SmartActions: View {
     @State private var showingPlanDayPopover = false
 
     var body: some View {
-        switch resolvedState {
-        case .hard:
-            hardRow
-        case .soft(let s):
-            softRow(s)
-        case .calm:
-            calmRow
+        Group {
+            switch resolvedState {
+            case .hard:
+                hardRow
+            case .soft(let s):
+                softRow(s)
+            case .calm:
+                calmRow
+            }
         }
+        // `DS.Animation.machineWork` — slow ease-out, no bounce. State
+        // transitions here read as «machine reasoning»: forecast flips
+        // from .fits to .over because the user added a long task, the
+        // calm `Plan day…` row is replaced by the hard «Schedule
+        // overflow» row. Bounce would feel playful when the goal is a
+        // calm reasoning beat. The hash key combines the three signals
+        // that drive `resolvedState`.
+        .animation(DS.Animation.machineWork, value: stateHash)
+    }
+
+    /// Stable hash that ticks whenever `resolvedState` would change. Used
+    /// as the `value:` for `.animation(machineWork, ...)`. Hashing
+    /// `forecast` is enough for hard/calm transitions; we add the
+    /// suggestion's name (when present) so soft → soft swaps animate.
+    private var stateHash: Int {
+        var hasher = Hasher()
+        switch forecast {
+        case .fits:           hasher.combine(0)
+        case .over:           hasher.combine(1)
+        case .afterHours:     hasher.combine(2)
+        }
+        hasher.combine(suggestion?.reason ?? "")
+        return hasher.finalize()
     }
 
     // MARK: - State resolution
