@@ -134,6 +134,18 @@ struct BacklogTaskRow: View {
         return f
     }()
 
+    /// Compact uppercase tag for the `preferredPeriod` badge. Mirrors
+    /// the Period.displayLabel shape but in a tiny abbreviated form so
+    /// the badge can sit alongside other meta without crowding the row.
+    private static func periodBadgeLabel(_ period: Period) -> String {
+        switch period {
+        case .night:     return "NIGHT"
+        case .morning:   return "AM"
+        case .afternoon: return "PM"
+        case .evening:   return "EVE"
+        }
+    }
+
     /// True when the task has a deadline that's already passed. Drives the
     /// pulsing red dot in the meta row — overdue is a louder signal than
     /// «today», so it gets motion in addition to the red text colour.
@@ -603,6 +615,23 @@ struct BacklogTaskRow: View {
                         .font(.footnote)
                         .foregroundStyle(skin.resolvedTextTertiary)
                         .accessibilityLabel("Depends on \(task.dependsOn.count) task\(task.dependsOn.count == 1 ? "" : "s")")
+                }
+
+                // Preferred-period badge — reifies the `preferredPeriod`
+                // field that the optimizer already reads. «AM» / «PM» /
+                // «EVE» / «NIGHT» as a tiny uppercase tag in the
+                // machineHint voice; the user sees the constraint they
+                // set without opening the edit form. Birman: «правило
+                // должно быть видимо там, где оно действует».
+                if let period = task.preferredPeriod {
+                    Text(Self.periodBadgeLabel(period))
+                        .font(DS.Typography.machineHint)
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                        .padding(.horizontal, DS.Spacing.xxs)
+                        .background(
+                            Capsule().fill(skin.resolvedTextTertiary.opacity(0.08))
+                        )
+                        .accessibilityLabel("Prefers \(period.displayLabel)")
                 }
 
                 if task.priority == .high {
