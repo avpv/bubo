@@ -535,7 +535,11 @@ struct BacklogView: View {
                         .contentTransition(.symbolEffect(.replace))
 
                     Text("\(totalCount) task\(totalCount == 1 ? "" : "s")")
-                        .font(.subheadline.weight(.medium).monospacedDigit())
+                        // `DS.Typography.metric` — single voice for inline
+                        // numeric facts. Matches the `Done by HH:MM` digits
+                        // in `BacklogCapacityLabel` so all numbers in the
+                        // header read as one row of data.
+                        .font(DS.Typography.metric(skin: skin))
                         .foregroundStyle(skin.resolvedTextPrimary)
                         .contentTransition(.numericText())
                         .lineLimit(1)
@@ -719,15 +723,20 @@ struct BacklogView: View {
             // them. The natural HStack gap (`DS.Spacing.sm` from the
             // header) does the spacing job better, читая «count · pill»
             // как два самостоятельных объекта.
+            // `urgentColor` (desaturated red) sits in the same family as
+            // the over-capacity ring's saturated red but at lower
+            // intensity, so the two no longer fight for the same eye fix.
+            // The ring keeps the «something is broken» voice; this pill
+            // says «N items are time-sensitive» — informational urgency.
             Text("\(urgentCount) urgent")
                 .font(.footnote.weight(.semibold).monospacedDigit())
-                .foregroundStyle(skin.resolvedDestructiveColor)
+                .foregroundStyle(skin.resolvedUrgentColor)
                 .contentTransition(.numericText())
                 .padding(.horizontal, DS.Spacing.xs)
                 .padding(.vertical, DS.Spacing.xxs)
                 .background(
                     Capsule().fill(
-                        skin.resolvedDestructiveColor
+                        skin.resolvedUrgentColor
                             .opacity(urgentOnlyFilter ? DS.Opacity.lightFill : 0)
                     )
                 )

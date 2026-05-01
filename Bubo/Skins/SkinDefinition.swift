@@ -375,6 +375,36 @@ struct SkinDefinition: Identifiable, Equatable {
     var resolvedSuccessColor: Color { Color(nsColor: .systemGreen) }
     var resolvedWarningColor: Color { Color(nsColor: .systemOrange) }
 
+    // MARK: - Urgent vs Destructive (two intensities of the same hue)
+    //
+    // Before this split, the same `systemRed` was painted onto three things
+    // at once: the over-capacity ring, the urgent-task left stripe, and the
+    // «1 urgent» pill in the header. Three full-saturation reds compete for
+    // the same eye-fix and the page reads as «alarm» when only one signal is
+    // actually destructive.
+    //
+    // The fix is **one hue, two intensities**:
+    //   - `resolvedDestructiveColor`  — saturated red. *The* hard problem
+    //     («over capacity», failed sync). Used by the capacity ring's
+    //     `.over` band and by the warning triangle.
+    //   - `resolvedUrgentColor` — same hue, desaturated. Informational
+    //     («this task is due soon»). Used by the left stripe of urgent
+    //     `BacklogTaskRow`s and by the «N urgent» header pill.
+    //
+    // The eye reads the two as related (same family) without competing.
+    // Birman: «один сигнал — один цвет; интенсивность кодирует приоритет,
+    // не оттенок».
+    //
+    // Both default to derivations of `systemRed` so existing skins keep
+    // their current look without per-skin JSON edits — a future revision
+    // can override per skin when the `capacityRamp` lands.
+    var resolvedUrgentColor: Color {
+        // 0.7 alpha damps the saturation just enough that the urgent stripe
+        // and pill read as «warm but lower-priority», while still being
+        // unambiguously of the red family.
+        Color(nsColor: .systemRed).opacity(0.7)
+    }
+
     // MARK: - Text colors (system)
 
     var resolvedTextPrimary: Color { Color(nsColor: .labelColor) }

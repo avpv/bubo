@@ -179,8 +179,11 @@ struct SmartActions: View {
                         .frame(width: DS.Size.iconSmall)
                     Text("More\u{2026}")
                     Spacer(minLength: 0)
+                    // Shared «machine speech» voice — same hint shape as the
+                    // calm-state row's trailing slot, so the keyboard cue
+                    // reads consistently across both surfaces.
                     Text("\u{2318}K")
-                        .font(.footnote.monospaced())
+                        .font(DS.Typography.machineHint)
                         .foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, DS.Spacing.sm)

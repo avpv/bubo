@@ -271,8 +271,15 @@ struct BacklogTaskRow: View {
             // baseline; vertical inset keeps it visually inside the
             // rounded corners.
             if isUrgent {
+                // `urgentColor` is the desaturated counterpart of
+                // `destructiveColor` — same hue family, lower intensity.
+                // The stripe says «due soon, prioritise», not «something
+                // is broken» (which the saturated red is reserved for —
+                // capacity overflow ring, overdue titles). One stripe in
+                // the saturated red would compete with the over-capacity
+                // ring; this split lets both coexist without crowding.
                 RoundedRectangle(cornerRadius: 1, style: .continuous)
-                    .fill(skin.resolvedDestructiveColor)
+                    .fill(skin.resolvedUrgentColor)
                     .frame(width: 2)
                     .padding(.vertical, DS.Spacing.xxs)
                     .accessibilityHidden(true)
@@ -491,7 +498,12 @@ struct BacklogTaskRow: View {
                 .foregroundStyle(
                     isCompleting
                         ? AnyShapeStyle(skin.accentColor)
-                        : AnyShapeStyle(isUrgent ? skin.resolvedDestructiveColor : skin.resolvedTextSecondary)
+                        // Same urgent-vs-destructive split as the left
+                        // stripe: the complete-button on an urgent row
+                        // shares the urgency family, but at the lower
+                        // intensity (`urgentColor`) so it doesn't shout
+                        // alongside truly destructive surfaces.
+                        : AnyShapeStyle(isUrgent ? skin.resolvedUrgentColor : skin.resolvedTextSecondary)
                 )
                 .frame(width: 24, height: 24)
                 .contentShape(Rectangle())

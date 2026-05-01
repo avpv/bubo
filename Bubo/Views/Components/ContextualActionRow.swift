@@ -61,8 +61,14 @@ struct ContextualActionRow: View {
                         .truncationMode(.tail)
 
                     if let subtext, !subtext.isEmpty {
+                        // `DS.Typography.machineHint` — monospaced footnote
+                        // in tertiary; this is the «machine speech» voice
+                        // (subtext under SmartActions, ghost-slot hints,
+                        // duration guesses, ⌘K). Single shared voice so the
+                        // user learns to recognise «this is the computer
+                        // thinking out loud», never their own input.
                         Text(subtext)
-                            .font(.footnote)
+                            .font(DS.Typography.machineHint)
                             .foregroundStyle(skin.resolvedTextTertiary)
                             .lineLimit(1)
                             .truncationMode(.tail)
@@ -94,8 +100,11 @@ struct ContextualActionRow: View {
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(skin.accentColor)
         case .discover:
+            // Same `machineHint` voice as the row's subtext — the ⌘K hint is
+            // a quiet «by the way, the keyboard works too», not a primary
+            // action label.
             Text("\u{2318}K")
-                .font(.footnote.monospaced())
+                .font(DS.Typography.machineHint)
                 .foregroundStyle(skin.resolvedTextTertiary)
         }
     }

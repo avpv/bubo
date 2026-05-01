@@ -296,7 +296,10 @@ struct BacklogFullscreenView: View {
                 // inline Backlog. Здесь нет disclosure (карточка и так во
                 // весь popover), поэтому это не button, а просто число.
                 Text("\(activeTasks.count)")
-                    .font(.subheadline.weight(.medium).monospacedDigit())
+                    // `DS.Typography.metric` — same voice as the inline
+                    // header's count, so collapsed-on-main and fullscreen
+                    // backlog read as one numeric rhythm.
+                    .font(DS.Typography.metric(skin: skin))
                     .foregroundStyle(skin.resolvedTextPrimary)
                     .contentTransition(.numericText())
                     .help("\(activeTasks.count) task\(activeTasks.count == 1 ? "" : "s") in backlog")
@@ -368,21 +371,25 @@ struct BacklogFullscreenView: View {
                 urgentOnlyFilter.toggle()
             }
         } label: {
+            // Mirror of the inline `BacklogView` urgent pill — same
+            // `urgentColor` (desaturated) so the over-capacity ring's
+            // saturated red stays the only «destructive» surface in the
+            // header and the urgent pill reads as informational.
             Text("\(urgentCount) urgent")
                 .font(.footnote.weight(.semibold).monospacedDigit())
-                .foregroundStyle(skin.resolvedDestructiveColor)
+                .foregroundStyle(skin.resolvedUrgentColor)
                 .contentTransition(.numericText())
                 .padding(.horizontal, DS.Spacing.xs)
                 .padding(.vertical, DS.Spacing.xxs)
                 .background(
                     Capsule().fill(
-                        skin.resolvedDestructiveColor
+                        skin.resolvedUrgentColor
                             .opacity(urgentOnlyFilter ? DS.Opacity.lightFill : 0)
                     )
                 )
                 .overlay(
                     Capsule().strokeBorder(
-                        skin.resolvedDestructiveColor.opacity(urgentOnlyFilter ? DS.Opacity.softAccent : 0),
+                        skin.resolvedUrgentColor.opacity(urgentOnlyFilter ? DS.Opacity.softAccent : 0),
                         lineWidth: DS.Border.thin
                     )
                 )
