@@ -482,13 +482,13 @@ struct EventRowView: View {
     private func urgencyBar(_ now: Date) -> some View {
         ZStack {
             if let tag = event.colorTag {
-                Capsule()
+                RoundedRectangle(cornerRadius: DS.Size.previewMicroRadius, style: .continuous)
                     .fill(tag.color.opacity(event.isUpcoming ? 0.5 : 0.3))
                     .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
             } else {
                 // No user-assigned color: show an unfilled outline so the bar
                 // remains a visible shape without injecting a color accent.
-                Capsule()
+                RoundedRectangle(cornerRadius: DS.Size.previewMicroRadius, style: .continuous)
                     .strokeBorder(skin.resolvedTextTertiary.opacity(0.5), lineWidth: 1)
                     .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
             }
