@@ -262,6 +262,31 @@ struct SmartActions: View {
                     .padding(.horizontal, DS.Spacing.md)
                     .padding(.top, DS.Spacing.xxs)
             }
+
+            // Scenario-count footer — surfaced when the optimizer
+            // returned more than one scenario. Pure information for
+            // now: «GA explored these alternatives, picked #1». A
+            // follow-up commit promotes it to a cycling control once
+            // OptimizerService grows a `switchToScenario(at:)` method
+            // that swaps without losing the scenarios array.
+            if applied.scenarioCount > 1 {
+                Divider()
+                    .padding(.top, DS.Spacing.xs)
+                HStack(spacing: DS.Spacing.xs) {
+                    ForEach(0..<applied.scenarioCount, id: \.self) { idx in
+                        Circle()
+                            .fill(idx == applied.appliedScenarioIndex
+                                  ? skin.accentColor
+                                  : skin.resolvedTextTertiary.opacity(0.4))
+                            .frame(width: 5, height: 5)
+                    }
+                    Text("Scenario \(applied.appliedScenarioIndex + 1) of \(applied.scenarioCount)")
+                        .font(DS.Typography.machineHint)
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                }
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.top, DS.Spacing.xs)
+            }
         }
     }
 

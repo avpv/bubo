@@ -336,6 +336,13 @@ struct AppliedRequestSummary: Sendable {
     /// the human-readable summary («Moved 4 tasks»). Zero when the
     /// applied scenario was an empty schedule.
     let taskCount: Int
+    /// How many scenarios the optimizer returned for this request. The
+    /// applied one is at `appliedScenarioIndex`; the rest are
+    /// alternatives the user can swap into via the reasoning-row's
+    /// `· · ·` cycle indicator. Both default to 1 / 0 when scenarios
+    /// aren't relevant for the run.
+    let scenarioCount: Int
+    let appliedScenarioIndex: Int
 
     /// Whether this summary is still recent enough to surface in the UI.
     /// 8-second window matches the typical undo-toast lifetime — once

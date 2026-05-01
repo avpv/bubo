@@ -462,7 +462,9 @@ final class OptimizerService {
                 request: request,
                 label: activeRequestName ?? request.name ?? "Optimization",
                 appliedAt: Date(),
-                taskCount: scenario.activeGenes.count
+                taskCount: scenario.activeGenes.count,
+                scenarioCount: scenarios.count,
+                appliedScenarioIndex: index
             )
         }
 
