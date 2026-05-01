@@ -1763,27 +1763,6 @@ struct MenuBarView: View {
             collapsedEventsHeader(for: dayGroup.events)
         }
 
-        // Pomodoro neighbour map for this day. Walk events in
-        // chronological order and record, for each event, whether its
-        // immediately previous / next neighbour (in the same `events`
-        // list) shares the same pomodoroSessionBaseId. The map drives
-        // `EventRowView`'s `hasPomodoroNeighbourBefore` /
-        // `hasPomodoroNeighbourAfter` props so consecutive same-session
-        // segments render with one shared bracketed container.
-        let pomoNeighbours: [String: (before: Bool, after: Bool)] = {
-            var result: [String: (before: Bool, after: Bool)] = [:]
-            let sorted = dayGroup.events.sorted { $0.startDate < $1.startDate }
-            for (idx, event) in sorted.enumerated() {
-                guard let base = event.pomodoroSessionBaseId else { continue }
-                let prevSame: Bool = idx > 0
-                    && sorted[idx - 1].pomodoroSessionBaseId == base
-                let nextSame: Bool = idx + 1 < sorted.count
-                    && sorted[idx + 1].pomodoroSessionBaseId == base
-                result[event.id] = (before: prevSame, after: nextSame)
-            }
-            return result
-        }()
-
         ForEach(interleaved, id: \.id) { item in
             switch item {
             case .event(let event):
@@ -1900,8 +1879,6 @@ struct MenuBarView: View {
                         // intent here; act on it where the user runs.
                         optimizerService.setFlex(percent: percent, eventId: event.id)
                     },
-                    hasPomodoroNeighbourBefore: pomoNeighbours[event.id]?.before ?? false,
-                    hasPomodoroNeighbourAfter: pomoNeighbours[event.id]?.after ?? false,
                     onConvertToPomodoro: { event in
                         convertEventToPomodoro(event)
                     },
