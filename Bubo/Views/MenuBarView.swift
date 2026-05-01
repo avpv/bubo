@@ -1697,7 +1697,19 @@ struct MenuBarView: View {
                     onConvertToPomodoro: { event in
                         convertEventToPomodoro(event)
                     },
-                    isFreshlyCreated: optimizerService.freshlyCreatedEventIds.contains(event.id)
+                    isFreshlyCreated: optimizerService.freshlyCreatedEventIds.contains(event.id),
+                    isLocked: optimizerService.isLocked(eventId: event.id),
+                    onToggleLock: { event in
+                        // Persistent toggle in `OptimizerService`. Next
+                        // optimizer run reads `lockedEventIds` and
+                        // injects an implicit `.keepFixed(...)` so the
+                        // GA leaves this event alone. Local Bubo events
+                        // benefit the most — Apple-Calendar events the
+                        // user can't move from inside the app anyway.
+                        withAnimation(DS.Animation.quick) {
+                            optimizerService.toggleLock(eventId: event.id)
+                        }
+                    }
                 )
                 }
             case .slot(let start, let end):

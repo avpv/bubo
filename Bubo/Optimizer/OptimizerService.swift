@@ -30,6 +30,48 @@ final class OptimizerService {
     /// which intents drove the change. Cleared by `undoLast`.
     private(set) var lastAppliedRequest: AppliedRequestSummary? = nil
 
+    /// Set of event ids the user has explicitly locked via the per-row
+    /// lock affordance in `EventRowView`. Persisted in `UserDefaults`
+    /// so locks survive app relaunches. Read by `executeRequest` to
+    /// inject an implicit `.keepFixed(eventIds: ...)` intent into every
+    /// optimizer run, so the GA never moves these events on user-
+    /// triggered passes. Mirrors what would otherwise require typing
+    /// «keep this event fixed» into the command palette for each one.
+    /// Birman: «правила — это объекты на экране» — the lock icon IS
+    /// the intent.
+    private(set) var lockedEventIds: Set<String> = Self.loadLockedEventIds()
+
+    private static let lockedEventIdsKey = "BuboOptimizerLockedEventIds"
+
+    private static func loadLockedEventIds() -> Set<String> {
+        guard let raw = UserDefaults.standard.array(forKey: lockedEventIdsKey) as? [String] else {
+            return []
+        }
+        return Set(raw)
+    }
+
+    private func persistLockedEventIds() {
+        UserDefaults.standard.set(Array(lockedEventIds), forKey: Self.lockedEventIdsKey)
+    }
+
+    /// Toggle this event's locked state. Source-of-truth for the per-
+    /// row lock affordance. Persists immediately so the next launch
+    /// reflects the user's choice.
+    func toggleLock(eventId: String) {
+        if lockedEventIds.contains(eventId) {
+            lockedEventIds.remove(eventId)
+        } else {
+            lockedEventIds.insert(eventId)
+        }
+        persistLockedEventIds()
+    }
+
+    /// Whether this event is currently locked. Cheap O(1) lookup —
+    /// safe to call from `EventRowView` on every render.
+    func isLocked(eventId: String) -> Bool {
+        lockedEventIds.contains(eventId)
+    }
+
     /// IDs of events created in the most recent application.
     /// Used by EventRowView to highlight freshly created events.
     private(set) var freshlyCreatedEventIds: Set<String> = []
@@ -189,6 +231,20 @@ final class OptimizerService {
         isOptimizing = true
         defer { isOptimizing = false }
         error = nil
+
+        // Inject the user's locked event ids as an implicit
+        // `.keepFixed(...)` so every optimizer pass respects the
+        // per-event lock affordance set in `EventRowView`. Original
+        // `request` is captured for `activeRequest` (used by the
+        // reasoning surface) before mutation, so the user-visible
+        // intent list stays clean — locks are infrastructure, not a
+        // narrative bullet point. Birman: «правила, которые видны на
+        // экране, не должны звучать в повторе».
+        var effectiveRequest = request
+        if !lockedEventIds.isEmpty {
+            effectiveRequest.add(.keepFixed(eventIds: Array(lockedEventIds)))
+        }
+
         activeRequestName = request.name
         activeRequest = request
 
@@ -200,7 +256,7 @@ final class OptimizerService {
         compiler.subgraphRegistry = subgraphRegistry
         compiler.energyCheckInService = energyCheckInService
         compiler.pomodoroHistory = pomodoroHistory
-        let result = await compiler.execute(request, defaultWorkingHours: workingHours)
+        let result = await compiler.execute(effectiveRequest, defaultWorkingHours: workingHours)
 
         switch result {
         case .success(let optimizerResult):

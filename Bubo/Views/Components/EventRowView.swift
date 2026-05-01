@@ -33,6 +33,19 @@ struct EventRowView: View {
     /// non-trivial transformation, not a silent mutation.
     var onConvertToPomodoro: ((CalendarEvent) -> Void)? = nil
 
+    /// True when this event is in the user's locked set — the optimizer
+    /// will skip it on every run via the implicit `.keepFixed(eventIds:)`
+    /// intent the host service injects. Drives the on-row lock affordance:
+    /// solid lock when locked, hollow on hover when not. Reifies the
+    /// `keepFixed` / `stability` intents as a per-event surface, so
+    /// «protect this from the optimizer» is one tap, not a search through
+    /// the command palette. Birman: «правила — это объекты на экране».
+    var isLocked: Bool = false
+    /// Toggle this event's locked state. Wired from `MenuBarView` to
+    /// `OptimizerService.toggleLock(eventId:)`. nil = the affordance is
+    /// hidden (preview surfaces, read-only events).
+    var onToggleLock: ((CalendarEvent) -> Void)? = nil
+
     /// When true, the row plays a brief highlight glow to draw attention
     /// to newly created/changed events after recipe application.
     var isFreshlyCreated: Bool = false
@@ -415,6 +428,32 @@ struct EventRowView: View {
                         .foregroundStyle(pomodoroSegmentColor(segment))
                         .contentTransition(.symbolEffect(.replace))
                         .accessibilityLabel(segment.label)
+                }
+
+                // Lock affordance — solid lock when this event is in
+                // the user's locked set (the optimizer skips it on
+                // every run via the implicit `.keepFixed` intent the
+                // host injects); hollow lock revealed on hover otherwise
+                // so the affordance is discoverable without ever shouting.
+                // Tap toggles the persistent set in `OptimizerService`.
+                if onToggleLock != nil, isLocked || isHovered {
+                    Button {
+                        Haptics.tap()
+                        onToggleLock?(event)
+                    } label: {
+                        Image(systemName: isLocked ? "lock.fill" : "lock.open")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(isLocked
+                                             ? skin.accentColor
+                                             : skin.resolvedTextTertiary)
+                            .contentTransition(.symbolEffect(.replace))
+                    }
+                    .buttonStyle(.plain)
+                    .help(isLocked
+                          ? "Locked — optimizer will not move this event"
+                          : "Lock to prevent the optimizer from moving this event")
+                    .accessibilityLabel(isLocked ? "Locked" : "Unlocked")
+                    .transition(.opacity)
                 }
             }
 
