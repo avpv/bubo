@@ -187,24 +187,6 @@ struct MenuBarView: View {
                         },
                         onTimer: { event in
                             navigation = .timer(event)
-                        },
-                        onReschedule: { event in
-                            navigation = .list
-                            paletteContext = PaletteContext(seedEvent: event)
-                        },
-                        onExtend: { event in
-                            navigation = .list
-                            Task {
-                                await runQuickAction(
-                                    OptimizationRequest(
-                                        .onlyOptimize(eventIds: [event.id]),
-                                        .findSlotsForBacklog,
-                                        .horizon(.today), .speed(.quick), .scenarios(count: 1),
-                                        name: "Extend"
-                                    ),
-                                    label: "Extended \u{201C}\(event.title)\u{201D}"
-                                )
-                            }
                         }
                     )
                     .transition(
