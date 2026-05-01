@@ -59,7 +59,7 @@ struct WeekStripView: View {
     @ViewBuilder
     private func dayDot(_ day: DayLoad) -> some View {
         let isActive = Calendar.current.isDate(day.date, inSameDayAs: selectedDay)
-        let label = Self.dayLabelFormatter.string(from: day.date)
+        let label = Self.label(for: day.date)
         let isToday = Calendar.current.isDateInToday(day.date)
         Button {
             Haptics.tap()
@@ -109,15 +109,18 @@ struct WeekStripView: View {
 
     // MARK: - Strings
 
-    private static let dayLabelFormatter: DateFormatter = {
-        let f = DateFormatter()
-        // Two-letter short weekday (Mo, Tu, We, Th, Fr, Sa, Su) per
-        // Unicode TR35. The narrow "EEEEE" form collapses Tue/Thu
-        // and Sat/Sun to the same letter, which left the strip
-        // ambiguous at a glance.
-        f.dateFormat = "EEEEEE"
-        return f
-    }()
+    /// Three-letter English weekday labels, indexed by Foundation's
+    /// 1…7 weekday convention (1 = Sun). Matches `WorkingDaysPicker`
+    /// so the same chips read identically across the popover and the
+    /// week strip.
+    private static let weekdayLabels: [String] = [
+        "", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
+    ]
+
+    private static func label(for date: Date) -> String {
+        let weekday = Calendar.current.component(.weekday, from: date)
+        return weekdayLabels[weekday]
+    }
 
     private func tooltip(for day: DayLoad, isActive: Bool) -> String {
         let workload = DS.formatMinutes(day.workloadMinutes)
