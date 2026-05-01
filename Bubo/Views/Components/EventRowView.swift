@@ -481,17 +481,13 @@ struct EventRowView: View {
     @ViewBuilder
     private func urgencyBar(_ now: Date) -> some View {
         ZStack {
-            if let tag = event.colorTag {
-                RoundedRectangle(cornerRadius: DS.Size.previewMicroRadius, style: .continuous)
-                    .fill(tag.color.opacity(event.isUpcoming ? 0.5 : 0.3))
-                    .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
-            } else {
-                // No user-assigned color: show an unfilled outline so the bar
-                // remains a visible shape without injecting a color accent.
-                RoundedRectangle(cornerRadius: DS.Size.previewMicroRadius, style: .continuous)
-                    .strokeBorder(skin.resolvedTextTertiary.opacity(0.5), lineWidth: 1)
-                    .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
-            }
+            RoundedRectangle(cornerRadius: DS.Size.previewMicroRadius, style: .continuous)
+                .strokeBorder(
+                    (event.colorTag?.color ?? skin.resolvedTextTertiary)
+                        .opacity(event.colorTag == nil ? 0.5 : (event.isUpcoming ? 0.8 : 0.55)),
+                    lineWidth: 1
+                )
+                .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
 
             // Pomodoro session container — only the head and tail of
             // a contiguous run of same-session segments draw the
