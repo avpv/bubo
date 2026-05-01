@@ -660,6 +660,19 @@ struct BacklogTaskRow: View {
                         .accessibilityLabel("Prefers \(period.displayLabel)")
                 }
 
+                // Notes / link indicator — silent presence cue for tasks
+                // that carry context beyond the title. Single tertiary
+                // glyph matches the dependency arrow's visual weight,
+                // so the right-side meta strip stays a calm column of
+                // small symbols rather than a parade of competing
+                // icons. Edit form surfaces the actual content.
+                if (task.notes?.isEmpty == false) || task.url != nil {
+                    Image(systemName: task.url != nil ? "link" : "doc.text")
+                        .font(.footnote)
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                        .accessibilityLabel(task.url != nil ? "Has link" : "Has notes")
+                }
+
                 if task.priority == .high {
                     Circle()
                         .fill(skin.resolvedDestructiveColor)
