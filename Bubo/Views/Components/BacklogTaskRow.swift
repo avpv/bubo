@@ -184,11 +184,32 @@ struct BacklogTaskRow: View {
     /// "does this fit in my next slot?"
     private var metaText: Text {
         if let deadline = task.deadline {
+            // Mirror the `titleColor` urgency split for the deadline-
+            // relative text in the meta column: today/overdue inherits
+            // the destructive red; tomorrow inherits the urgent
+            // (desaturated) red; future deadlines stay calm secondary.
+            // Single colour family across title + meta means a glance
+            // down the row reads urgency consistently in both columns.
             return Text(deadlineLabel(deadline))
-                .foregroundStyle(skin.resolvedTextSecondary)
+                .foregroundStyle(deadlineMetaColor(deadline))
         }
         return Text(DS.formatMinutes(task.durationMinutes))
             .foregroundStyle(skin.resolvedTextSecondary)
+    }
+
+    /// Color for the deadline-relative meta text. Pairs with `titleColor`
+    /// so the title and the «in 2 days» label share the same urgency
+    /// language — the eye reads them as one signal, not two competing
+    /// tints.
+    private func deadlineMetaColor(_ deadline: Date) -> Color {
+        let cal = Calendar.current
+        if deadline < Date() || cal.isDateInToday(deadline) {
+            return skin.resolvedDestructiveColor
+        }
+        if cal.isDateInTomorrow(deadline) {
+            return skin.resolvedUrgentColor
+        }
+        return skin.resolvedTextSecondary
     }
 
     /// Whether the row carries any non-deadline trailing metadata that the
