@@ -63,9 +63,14 @@ struct BacklogCapacityRing: View {
         case ..<1.0:
             return skin.accentColor
         case ..<1.2:
+            // Tight band: workload approaches but doesn't yet exceed
+            // the day. Light theme uses the skin's warning colour so
+            // the ramp respects per-skin overrides; dark theme keeps
+            // the higher-luminance amber for legibility against the
+            // popover's dark glass.
             return isDark
-                ? Color(red: 1.00, green: 0.72, blue: 0.18) // amber — higher luminance than system .orange
-                : .orange
+                ? Color(red: 1.00, green: 0.72, blue: 0.18)
+                : skin.resolvedWarningColor
         default:
             return skin.resolvedDestructiveColor
         }
