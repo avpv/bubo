@@ -34,6 +34,16 @@ struct EventRowView: View {
     /// at the per-event level without making the user type into
     /// the palette. nil = sub-menu hidden, falls back to `onAddPrep`.
     var onAddPrepQuick: ((CalendarEvent, Int) -> Void)? = nil
+
+    /// Current flex percent for this event (0 = rigid, 25 / 50 are
+    /// the canonical sub-menu options). Drives the sub-menu's
+    /// disabled state on the active option and the optional
+    /// «flex-on» indicator next to the lock icon.
+    var flexPercent: Int = 0
+    /// Set the per-event flex percent. Wired via
+    /// `OptimizerService.setFlex(percent:eventId:)`. nil = sub-menu
+    /// hidden.
+    var onSetFlex: ((CalendarEvent, Int) -> Void)? = nil
     /// Convert a standard event into a Pomodoro session (work + break
     /// intervals). Routed through the edit form so the user can tune
     /// work/break/rounds before committing — Birman: explicit control on a
@@ -313,6 +323,31 @@ struct EventRowView: View {
                     .help(isExcluded
                           ? "Currently hidden from the optimizer — re-include to plan around it"
                           : "Optimizer plans around this event as if it doesn't exist")
+                }
+
+                if let setFlex = onSetFlex {
+                    // Per-event flex sub-menu. `Rigid` = optimizer keeps
+                    // the duration as-is (the default). `Flex ±25%` /
+                    // `Flex ±50%` mean «GA may shrink or grow this
+                    // event by N% of its current duration» — scoped
+                    // via OptimizerService.flexIntent + onlyOptimize.
+                    // Reifies the per-event variant of the global
+                    // `flexDuration` intent without forcing the user
+                    // through the palette.
+                    Menu {
+                        Button("Rigid") { setFlex(event, 0) }
+                            .disabled(flexPercent == 0)
+                        Button("Flex \u{00b1}25%") { setFlex(event, 25) }
+                            .disabled(flexPercent == 25)
+                        Button("Flex \u{00b1}50%") { setFlex(event, 50) }
+                            .disabled(flexPercent == 50)
+                    } label: {
+                        Label(
+                            flexPercent > 0 ? "Flex (\u{00b1}\(flexPercent)%)" : "Flex duration",
+                            systemImage: "arrow.left.and.right"
+                        )
+                    }
+                    .help("Allow the optimizer to resize this event's duration when applying scope-this-event runs")
                 }
 
                 // Task actions

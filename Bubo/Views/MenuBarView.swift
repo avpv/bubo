@@ -1880,7 +1880,17 @@ struct MenuBarView: View {
                         }
                     },
                     energyAtStartHour: optimizerService.energyCheckInService?
-                        .predictEnergy(atHour: Calendar.current.component(.hour, from: event.startTime))
+                        .predictEnergy(atHour: Calendar.current.component(.hour, from: event.startTime)),
+                    flexPercent: optimizerService.flex(eventId: event.id),
+                    onSetFlex: { event, percent in
+                        // Persist the per-event flex preference. Doesn't
+                        // run the optimizer immediately — flex applies
+                        // when the user explicitly scopes a Run to this
+                        // event (Reschedule from the row's other menu
+                        // items, or via the palette). Birman: persist
+                        // intent here; act on it where the user runs.
+                        optimizerService.setFlex(percent: percent, eventId: event.id)
+                    }
                 )
                 }
             case .slot(let start, let end):
