@@ -271,6 +271,19 @@ struct BacklogView: View {
         parsedNewTaskTitle.durationMinutes
     }
 
+    /// «What does this verb usually take?» — surfaced only when the
+    /// explicit parser found nothing AND the cleaned title's first word
+    /// is in `BacklogTitleParser.durationGuessTable`. Drives the quiet
+    /// `~30m` chip in `addTaskField`, in the `machineHint` voice. Returns
+    /// nil for both the «no input yet» case and «parser already caught
+    /// the duration» case so the two chips are mutually exclusive.
+    private var guessedDurationMinutes: Int? {
+        guard parsedNewTaskTitle.durationMinutes == nil else { return nil }
+        let cleaned = parsedNewTaskTitle.cleaned
+        guard !cleaned.isEmpty else { return nil }
+        return BacklogTitleParser.guessDuration(for: cleaned)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header + list stay visible as long as *any* bucket has tasks
@@ -1338,7 +1351,13 @@ struct BacklogView: View {
 
                 // Parsed-duration chip — появляется в тот момент, когда
                 // парсер распознаёт «30m», «1h30m» и т.п. Пользователь
-                // видит, что понято, до того как нажмёт Return.
+                // видит, что понято, до того как нажмёт Return. When the
+                // user *didn't* type a duration but the verb is in the
+                // guess table («call», «review», «write»…), surface the
+                // machine's prediction with a leading «~» in the
+                // `machineHint` voice — quietly, never as an accent
+                // capsule. Birman: «пусть потеет машина», но угадка
+                // должна выглядеть как угадка, не как введённое.
                 if let minutes = recognizedDurationMinutes {
                     Text(DS.formatMinutes(minutes))
                         .font(.footnote.weight(.medium).monospacedDigit())
@@ -1350,6 +1369,12 @@ struct BacklogView: View {
                         )
                         .transition(.opacity.combined(with: .scale(scale: 0.9)))
                         .accessibilityLabel("Parsed duration: \(DS.formatMinutes(minutes))")
+                } else if let guess = guessedDurationMinutes {
+                    Text("~\(DS.formatMinutes(guess))")
+                        .font(DS.Typography.machineHint)
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                        .transition(.opacity)
+                        .accessibilityLabel("Guessed duration: about \(DS.formatMinutes(guess))")
                 }
             }
             .padding(.horizontal, DS.Spacing.sm)
