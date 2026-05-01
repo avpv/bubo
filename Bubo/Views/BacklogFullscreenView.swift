@@ -841,6 +841,15 @@ struct BacklogFullscreenView: View {
             proposedSlot: proposedSlot,
             onFindSlot: onScheduleTask.map { handler in { handler(task) } },
             onSplitTask: onSplitTask.map { handler in { handler(task) } },
+            onSnoozeByDays: { days in
+                var updated = task
+                let cal = Calendar.current
+                let base = task.deadline ?? cal.startOfDay(for: Date())
+                if let pushed = cal.date(byAdding: .day, value: days, to: base) {
+                    updated.deadline = pushed
+                    backlogService.updateTask(updated)
+                }
+            },
             onSetPreferredPeriod: { period in
                 var updated = task
                 updated.preferredPeriod = period

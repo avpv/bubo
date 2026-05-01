@@ -89,6 +89,14 @@ struct BacklogTaskRow: View {
     /// the per-row level. nil = action hidden.
     var onSplitTask: (() -> Void)? = nil
 
+    /// «Snooze for…» — push the task's deadline forward by a fixed
+    /// number of days (1 / 3 / 7) from a sub-menu. Reifies the manual
+    /// «I can't get to this today, push it forward» action that the
+    /// AutoDeferService does automatically — but here the user owns
+    /// the timing. Mirrors the «Set deadline…» flow but is one-tap
+    /// for the common «push it back N days» case. nil = sub-menu hidden.
+    var onSnoozeByDays: ((Int) -> Void)? = nil
+
     /// Reschedule this task via the command palette (per-task scope optimizer
     /// entry point). Opens ⌘K seeded with the task so it lands on the
     /// «Schedule "<title>"» / «Find best time» suggestions. nil = no
@@ -465,6 +473,14 @@ struct BacklogTaskRow: View {
                 if let split = onSplitTask, task.durationMinutes >= 90 {
                     Button("Split into shorter blocks") { split() }
                         .help("Run the optimizer to chunk this task into 2+ sequential blocks")
+                }
+                if let snooze = onSnoozeByDays {
+                    Menu("Snooze for\u{2026}") {
+                        Button("1 day")  { snooze(1) }
+                        Button("3 days") { snooze(3) }
+                        Button("1 week") { snooze(7) }
+                    }
+                    .help("Push the deadline forward by a fixed number of days")
                 }
                 if let setPeriod = onSetPreferredPeriod {
                     // Sub-menu — period preferences are infrequent edits
