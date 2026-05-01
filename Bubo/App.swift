@@ -4,6 +4,11 @@ import SwiftData
 private class MenuBarIconCache {
     var count: Int = -1
     var skinID: String = ""
+    /// J2: integer density bucket (0…10) — fraction of today's
+    /// working window already booked. Cached alongside count + skin
+    /// so the icon repaints when «load» visibly changes but stays
+    /// stable across small updates.
+    var densityBucket: Int = -1
     var image: NSImage?
 }
 private let sharedIconCache = MenuBarIconCache()
@@ -117,7 +122,11 @@ struct BuboApp: App {
 
     private var menuBarIcon: NSImage {
         let currentSkinID = settings.selectedSkinID
-        if sharedIconCache.count == 0, sharedIconCache.skinID == currentSkinID, let img = sharedIconCache.image {
+        let bucket = densityBucket
+        if sharedIconCache.count == 0,
+           sharedIconCache.skinID == currentSkinID,
+           sharedIconCache.densityBucket == bucket,
+           let img = sharedIconCache.image {
             return img
         }
 
@@ -130,12 +139,14 @@ struct BuboApp: App {
                 ? self.resolvedIconColor(isDark: isDark)
                 : (isDark ? NSColor.white.cgColor : NSColor.black.cgColor)
             self.drawOwl(in: ctx, size: rect.width, color: color)
+            self.drawDensityBar(in: ctx, size: rect.width, color: color, bucket: bucket)
             return true
         }
         image.isTemplate = !useSkinIcon
 
         sharedIconCache.count = 0
         sharedIconCache.skinID = currentSkinID
+        sharedIconCache.densityBucket = bucket
         sharedIconCache.image = image
 
         return image
@@ -145,11 +156,82 @@ struct BuboApp: App {
         reminderService.badgeCount
     }
 
+    /// J2: today's booked fraction quantised to 0…10. Encodes the
+    /// menu-bar icon's density bar through SHAPE (length), not colour
+    /// (§7). Returns 0 outside working hours so the icon doesn't
+    /// pretend to be dense at midnight. Cached at this granularity
+    /// so the bar grows in noticeable, calm steps instead of
+    /// flickering on every small recompute.
+    private var densityBucket: Int {
+        let cal = Calendar.current
+        let now = Date()
+        let workingStartHour = max(0, optimizerServiceWorkingStartFallback)
+        let workingEndHour = min(24, optimizerServiceWorkingEndFallback)
+        guard workingEndHour > workingStartHour else { return 0 }
+        let hour = cal.component(.hour, from: now)
+        guard hour >= workingStartHour, hour < workingEndHour else { return 0 }
+
+        let todayStart = cal.date(bySettingHour: workingStartHour, minute: 0, second: 0, of: now) ?? now
+        let todayEnd = cal.date(bySettingHour: workingEndHour, minute: 0, second: 0, of: now) ?? now
+        let windowSeconds = max(1, todayEnd.timeIntervalSince(todayStart))
+
+        let bookedSeconds = reminderService.allEvents.reduce(0.0) { acc, event in
+            // Clip each event into the working window before summing —
+            // an early-morning event shouldn't inflate today's bar.
+            let start = max(event.startDate, todayStart)
+            let end = min(event.endDate, todayEnd)
+            guard end > start else { return acc }
+            return acc + end.timeIntervalSince(start)
+        }
+        let fraction = max(0, min(1, bookedSeconds / windowSeconds))
+        return Int((fraction * 10).rounded())
+    }
+
+    /// Working-hours fallback. The optimizer's working hours live in
+    /// `OptimizerService` which is wired up at the menu-bar layer,
+    /// not here in `BuboApp`. To avoid wiring an extra dependency
+    /// just for the icon, we default to `9…18` — the same range
+    /// `OptimizerService.workingHoursDefault` uses. If the user has
+    /// customised their hours in Settings, the icon's density bar
+    /// will still read «correctly enough» (it's a shape signal,
+    /// not a precise gauge).
+    private var optimizerServiceWorkingStartFallback: Int { 9 }
+    private var optimizerServiceWorkingEndFallback: Int { 18 }
+
+    /// J2: paint a thin bar at the bottom of the icon proportional
+    /// to today's booked fraction. Length encodes density; shape,
+    /// not colour, so the cue survives §7 (semantic colour rules).
+    /// Bucket 0 = invisible (calm day or out-of-hours).
+    private func drawDensityBar(in ctx: CGContext, size s: CGFloat, color: CGColor, bucket: Int) {
+        guard bucket > 0 else { return }
+        let fraction = CGFloat(bucket) / 10.0
+        // Bar lives in the bottom 7% strip of the icon — small enough
+        // to read as «metadata», large enough to perceive at a glance.
+        let barHeight: CGFloat = max(1.0, s * 0.07)
+        let maxBarWidth: CGFloat = s * 0.7
+        let barWidth = maxBarWidth * fraction
+        let x = (s - maxBarWidth) / 2
+        let y: CGFloat = 0
+        // Quiet strip in the same template colour as the owl glyph,
+        // so Light/Dark mode + skin tinting flow through without a
+        // separate asset. Slightly subdued vs. the owl itself so the
+        // bird remains the primary mark.
+        ctx.saveGState()
+        ctx.setAlpha(0.55)
+        ctx.setFillColor(color)
+        ctx.fill(CGRect(x: x, y: y, width: barWidth, height: barHeight))
+        ctx.restoreGState()
+    }
+
     private func menuBarIconWithBadge(count: Int) -> NSImage {
         guard count > 0 else { return menuBarIcon }
 
         let currentSkinID = settings.selectedSkinID
-        if sharedIconCache.count == count, sharedIconCache.skinID == currentSkinID, let img = sharedIconCache.image {
+        let bucket = densityBucket
+        if sharedIconCache.count == count,
+           sharedIconCache.skinID == currentSkinID,
+           sharedIconCache.densityBucket == bucket,
+           let img = sharedIconCache.image {
             return img
         }
 
@@ -182,6 +264,7 @@ struct BuboApp: App {
             ctx.saveGState()
             ctx.translateBy(x: 0, y: bottomOverflow + 2)
             self.drawOwl(in: ctx, size: iconSize, color: iconColor)
+            self.drawDensityBar(in: ctx, size: iconSize, color: iconColor, bucket: bucket)
             ctx.restoreGState()
 
             let badgeX = iconSize - overlapX
@@ -222,6 +305,7 @@ struct BuboApp: App {
 
         sharedIconCache.count = count
         sharedIconCache.skinID = currentSkinID
+        sharedIconCache.densityBucket = bucket
         sharedIconCache.image = image
 
         return image

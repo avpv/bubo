@@ -5,6 +5,20 @@ struct FullScreenAlertView: View {
     let minutesBefore: Int
     let onDismiss: () -> Void
     let onSnooze: (Int) -> Void
+    /// J4: optional «Next» hint — surfaced quietly under the time row
+    /// when there's a back-to-back event starting within ~10 min after
+    /// the current one ends. Lets the user know «I have to be on time
+    /// because something else is right behind this» before they tap
+    /// Join. nil = no hint (no qualifying next event).
+    var nextEvent: CalendarEvent? = nil
+
+    /// J1: optional Join handler. When set, the «Join …» button +
+    /// Return key call this instead of `onDismiss`, letting the host
+    /// (`AppDelegate`) hand the alert off to a follow-up ribbon
+    /// (`JoinRibbonView`) instead of vanishing entirely. nil = legacy
+    /// behaviour: opening the URL and dismissing the alert in one
+    /// gesture.
+    var onJoin: ((URL) -> Void)? = nil
 
     @State private var isVisible = false
     @State private var joinHovered = false
@@ -103,6 +117,24 @@ struct FullScreenAlertView: View {
                     }
                 }
 
+                // J4: heads-up about the next back-to-back event.
+                // Quiet single-line hint — the user is reading the
+                // primary alert, this is a contextual aside, not a
+                // second doménominate (§1).
+                if let next = nextEvent {
+                    HStack(spacing: DS.Spacing.sm) {
+                        Image(systemName: "arrow.right.to.line.alt")
+                            .font(.footnote)
+                            .foregroundStyle(DS.Colors.onOverlay.opacity(DS.Opacity.tertiaryText))
+                        Text("Next \u{00B7} \(next.title) at \(next.formattedTime)")
+                            .font(.footnote)
+                            .foregroundStyle(DS.Colors.onOverlay.opacity(DS.Opacity.tertiaryText))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                    .accessibilityLabel("Next event after this: \(next.title) at \(next.formattedTime)")
+                }
+
                 Spacer()
 
                 // Action buttons — inline snooze for quick access
@@ -113,8 +145,7 @@ struct FullScreenAlertView: View {
                         if let meetingURL = event.meetingLink, let serviceName = event.meetingServiceName {
                             Button {
                                 Haptics.impact()
-                                NSWorkspace.shared.open(meetingURL)
-                                onDismiss()
+                                handleJoin(url: meetingURL)
                             } label: {
                                 Label("Join \(serviceName)", systemImage: "video.fill")
                                     .font(DS.Typography.headline(skin: skin))
@@ -224,9 +255,10 @@ struct FullScreenAlertView: View {
         }
         .onKeyPress(.return) {
             if let meetingURL = event.meetingLink {
-                NSWorkspace.shared.open(meetingURL)
+                handleJoin(url: meetingURL)
+            } else {
+                onDismiss()
             }
-            onDismiss()
             return .handled
         }
         .focusable()
@@ -244,6 +276,20 @@ struct FullScreenAlertView: View {
                     isVisible = true
                 }
             }
+        }
+    }
+
+    /// J1: routed Join handler. When the host wired `onJoin`, defer
+    /// the meeting-URL open + dismiss orchestration to it (lets it
+    /// show a follow-up ribbon). Falls back to the legacy «open +
+    /// dismiss» flow when no handler is provided so callers that
+    /// haven't been migrated still work.
+    private func handleJoin(url: URL) {
+        if let onJoin {
+            onJoin(url)
+        } else {
+            NSWorkspace.shared.open(url)
+            onDismiss()
         }
     }
 

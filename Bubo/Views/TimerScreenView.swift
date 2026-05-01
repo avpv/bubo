@@ -18,6 +18,14 @@ struct TimerScreenView: View {
     /// while the user is dragging. Pass nil to disable scrubbing.
     var onAdjustEndDate: ((CalendarEvent, Int) -> Void)? = nil
 
+    /// J9: pause-the-ring callback. Shifts BOTH `startDate` and
+    /// `endDate` forward by the given minute delta (always positive
+    /// from the gesture path), effectively «pausing» the Pomodoro by
+    /// the dragged amount — the work segment resumes from where it
+    /// was, just N minutes later in wall time. Pass nil to disable
+    /// the gesture entirely.
+    var onShiftSchedule: ((CalendarEvent, Int) -> Void)? = nil
+
     var wallpaper: WallpaperDefinition = WallpaperCatalog.none
     var customPhotoPath: String = ""
     var customPhotoOpacity: Double = 0.25
@@ -35,6 +43,19 @@ struct TimerScreenView: View {
     @State private var scrubArmed = false
     @State private var scrubMinuteDelta = 0
     @State private var scrubLastSnap = 0
+
+    /// J9: vertical-drag axis lock. Set on the first `.onChanged` of a
+    /// drag, cleared on `.onEnded`. Lets us route subsequent updates
+    /// to either the existing horizontal scrub (endDate only) or the
+    /// new pause path (start + end together) without flickering between
+    /// the two as the user's drag wobbles. `pauseMinuteDelta` mirrors
+    /// `scrubMinuteDelta` for the pause path; only positive values
+    /// are accepted (drag-down = pause, drag-up doesn't unpause —
+    /// undo via toast or scrub-back-with-horizontal).
+    @State private var dragAxisLocked = false
+    @State private var dragAxisIsVertical = false
+    @State private var pauseMinuteDelta = 0
+    @State private var pauseLastSnap = 0
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
@@ -419,33 +440,69 @@ struct TimerScreenView: View {
     private var maxScrubMinutes: Int { 60 }
 
     private func canScrub(now: Date) -> Bool {
-        onAdjustEndDate != nil
-            && event.isLocalEvent
+        // Either path needs at least one of the two callbacks wired —
+        // the gesture composes both axes into one DragGesture, then
+        // routes per-axis once the user picks a direction.
+        guard onAdjustEndDate != nil || onShiftSchedule != nil else { return false }
+        return event.isLocalEvent
             && !event.isRecurring
-            && event.eventType == .standard
+            && (event.eventType == .standard || event.eventType == .pomodoro)
             && isInProgress(now)
     }
+
+    /// J9: drag-down threshold (in points) before the vertical pause
+    /// path is considered a deliberate gesture. Higher than the 6pt
+    /// horizontal threshold because a vertical wobble is more common
+    /// than a vertical commit.
+    private var pausePointsPerMinute: CGFloat { 8.0 }
+
+    /// Cap on a single pause gesture — same hour-long window as the
+    /// horizontal scrub, expressed positive-only.
+    private var maxPauseMinutes: Int { 60 }
 
     private func scrubGesture(now: Date) -> some Gesture {
         DragGesture(minimumDistance: 6, coordinateSpace: .local)
             .onChanged { value in
-                if !scrubArmed {
+                // Lock the axis on the first frame of the gesture —
+                // whichever delta is larger wins. Stops mid-drag
+                // wobble from flickering between the two paths.
+                if !dragAxisLocked {
+                    dragAxisLocked = true
+                    dragAxisIsVertical = abs(value.translation.height) > abs(value.translation.width)
                     scrubArmed = true
                     Haptics.impact()
                 }
-                // Horizontal axis only — vertical wiggle is ignored so
-                // the gesture reads as «winding the ring» (a horizontal
-                // metaphor) rather than «sliding it around».
-                let raw = Int((value.translation.width / scrubPointsPerMinute).rounded())
-                let clamped = max(-maxScrubMinutes, min(maxScrubMinutes, raw))
-                if clamped != scrubLastSnap {
-                    Haptics.alignment()
-                    scrubLastSnap = clamped
+
+                if dragAxisIsVertical, onShiftSchedule != nil {
+                    // J9 path: drag-down only (positive translation.height
+                    // means cursor moved DOWN in SwiftUI). Drag-up returns
+                    // a negative value and we floor at 0 — the ring
+                    // doesn't «un-pause» retroactively.
+                    let raw = Int((value.translation.height / pausePointsPerMinute).rounded())
+                    let clamped = max(0, min(maxPauseMinutes, raw))
+                    if clamped != pauseLastSnap {
+                        Haptics.alignment()
+                        pauseLastSnap = clamped
+                    }
+                    pauseMinuteDelta = clamped
+                } else if onAdjustEndDate != nil {
+                    // Horizontal scrub — extend / shorten endDate.
+                    let raw = Int((value.translation.width / scrubPointsPerMinute).rounded())
+                    let clamped = max(-maxScrubMinutes, min(maxScrubMinutes, raw))
+                    if clamped != scrubLastSnap {
+                        Haptics.alignment()
+                        scrubLastSnap = clamped
+                    }
+                    scrubMinuteDelta = clamped
                 }
-                scrubMinuteDelta = clamped
             }
             .onEnded { _ in
-                if scrubMinuteDelta != 0 {
+                if dragAxisIsVertical {
+                    if pauseMinuteDelta > 0 {
+                        onShiftSchedule?(event, pauseMinuteDelta)
+                        Haptics.impact()
+                    }
+                } else if scrubMinuteDelta != 0 {
                     onAdjustEndDate?(event, scrubMinuteDelta)
                     Haptics.impact()
                 }
@@ -454,6 +511,10 @@ struct TimerScreenView: View {
                 }
                 scrubMinuteDelta = 0
                 scrubLastSnap = 0
+                pauseMinuteDelta = 0
+                pauseLastSnap = 0
+                dragAxisLocked = false
+                dragAxisIsVertical = false
             }
     }
 
@@ -464,10 +525,21 @@ struct TimerScreenView: View {
     @ViewBuilder
     private var scrubBadge: some View {
         if scrubArmed {
-            let signed = scrubMinuteDelta == 0
-                ? "—"
-                : (scrubMinuteDelta > 0 ? "+\(scrubMinuteDelta) min" : "\(scrubMinuteDelta) min")
-            Text(signed)
+            // Two voices on one badge: «+5 min» (horizontal scrub →
+            // end-date extend) vs «Pause +5 min» (vertical drag →
+            // shift the whole window). The verb prefix on the pause
+            // path tells the user the gesture is doing something
+            // structurally different from scrub.
+            let label: String = {
+                if dragAxisIsVertical {
+                    if pauseMinuteDelta == 0 { return "Pause \u{2014}" }
+                    return "Pause +\(pauseMinuteDelta) min"
+                } else {
+                    if scrubMinuteDelta == 0 { return "\u{2014}" }
+                    return scrubMinuteDelta > 0 ? "+\(scrubMinuteDelta) min" : "\(scrubMinuteDelta) min"
+                }
+            }()
+            Text(label)
                 .font(.footnote.weight(.semibold).monospacedDigit())
                 .foregroundStyle(skin.accentColor)
                 .padding(.horizontal, DS.Spacing.sm)
@@ -477,7 +549,9 @@ struct TimerScreenView: View {
                                                  lineWidth: DS.Border.thin))
                 .elevation(.z2, skin: skin)
                 .transition(.opacity.combined(with: .scale(scale: 0.92)))
-                .accessibilityLabel("Adjust end time \(signed)")
+                .accessibilityLabel(dragAxisIsVertical
+                    ? "Pause Pomodoro by \(pauseMinuteDelta) minutes"
+                    : "Adjust end time \(label)")
         }
     }
 

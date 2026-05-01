@@ -30,6 +30,30 @@ struct FreeSlotRow: View {
     /// at least once the hint vanishes permanently even if the flag stays true.
     var canShowDragHint: Bool = false
 
+    // MARK: - J3: contextual actions
+    //
+    // Right-click on a free slot offers 2-3 verbs for the slot:
+    // start the top backlog task right here, run a Pomodoro, or
+    // protect it as a focus block. The host passes pre-resolved
+    // candidates so we don't reach back into BacklogService /
+    // OptimizerService from a row component — Birman: row knows
+    // the slot, host knows the schedule.
+
+    /// Top backlog task that fits this slot (duration ≤ slot length).
+    /// nil = no candidate; the «Start top task» entry is hidden.
+    var topBacklogCandidate: BacklogTaskDrag? = nil
+
+    /// Place the candidate task into this slot (same path as drop).
+    var onStartTopTask: ((BacklogTaskDrag) -> Void)? = nil
+
+    /// Start a Pomodoro inside this slot — host decides the rounds /
+    /// duration shape from `PomodoroDefaults.suggested(for:)`.
+    var onStartPomodoro: ((Date, Date) -> Void)? = nil
+
+    /// Lock the slot as a Focus block (creates a local event with
+    /// Focus title + blue color tag — same path as `fillSlotWithFocus`).
+    var onLockAsFocus: ((Date, Date) -> Void)? = nil
+
     @State private var isHovered: Bool = false
     @State private var isDropTargeted: Bool = false
     /// Mirrors `BuboBacklogHasDragged` used by `BacklogView`. Sharing the key
@@ -215,6 +239,41 @@ struct FreeSlotRow: View {
                 .animation(.easeInOut(duration: 0.25), value: isAwaitingDrop)
         )
         .accessibilityElement(children: .combine)
+        // J3: right-click menu — quick verbs scoped to this slot.
+        // Surfaces only the entries the host has actually wired
+        // (and only when there's a real candidate for the «top
+        // task» entry), so the menu reads as a curated list rather
+        // than a wall of greyed-out items. §9 (direct manipulation)
+        // is preserved: every action targets this slot specifically.
+        .contextMenu {
+            if let candidate = topBacklogCandidate, let handler = onStartTopTask {
+                Button {
+                    Haptics.tap()
+                    handler(candidate)
+                } label: {
+                    let trimmed = candidate.title.count > 24
+                        ? String(candidate.title.prefix(24)) + "\u{2026}"
+                        : candidate.title
+                    Label("Start \u{201C}\(trimmed)\u{201D} here", systemImage: "play.circle.fill")
+                }
+            }
+            if let handler = onStartPomodoro, durationMinutes >= 25 {
+                Button {
+                    Haptics.tap()
+                    handler(start, end)
+                } label: {
+                    Label("Start Pomodoro here", systemImage: "timer")
+                }
+            }
+            if let handler = onLockAsFocus {
+                Button {
+                    Haptics.tap()
+                    handler(start, end)
+                } label: {
+                    Label("Lock as Focus block", systemImage: "shield")
+                }
+            }
+        }
     }
 
     /// Background fill: hover > drop-targeted > drag-awaiting > clear.

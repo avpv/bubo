@@ -51,6 +51,14 @@ struct EventRowView: View {
     /// non-trivial transformation, not a silent mutation.
     var onConvertToPomodoro: ((CalendarEvent) -> Void)? = nil
 
+    /// Cross-cutting #4: clone this event as a one-off draft into a
+    /// future free slot. Copies title, duration, location, color tag,
+    /// reminders, and Pomodoro shape (when present) — not the original
+    /// time, calendar binding, or recurrence. Hidden when nil; surfaced
+    /// only for local events (we don't silently duplicate someone
+    /// else's calendar entry).
+    var onRepeatLikeThis: ((CalendarEvent) -> Void)? = nil
+
     /// True when this event is in the user's locked set — the optimizer
     /// will skip it on every run via the implicit `.keepFixed(eventIds:)`
     /// intent the host service injects. Drives the on-row lock affordance:
@@ -401,6 +409,20 @@ struct EventRowView: View {
                         onConvertToPomodoro(event)
                     } label: {
                         Label("Convert to Pomodoro", systemImage: "timer")
+                    }
+                }
+
+                // Cross-cutting #4: «Repeat from this event…» — clone the
+                // current event's shape into a future free slot. Useful
+                // when the user wants a similar block again without
+                // re-typing duration, reminders, location, and Pomodoro
+                // config. Routed via the optimizer through the host's
+                // callback, which can pre-fill `AddEventView` instead.
+                if let onRepeatLikeThis {
+                    Button {
+                        onRepeatLikeThis(event)
+                    } label: {
+                        Label("Repeat from this event\u{2026}", systemImage: "arrow.counterclockwise.circle")
                     }
                 }
 
@@ -782,12 +804,21 @@ struct EventRowView: View {
             let delta = dragMinuteDelta
             let proposed = event.startDate.addingTimeInterval(TimeInterval(delta * 60))
             let signed = delta == 0 ? "—" : (delta > 0 ? "+\(delta)m" : "\(delta)m")
+            // J6: surface a quiet «⌥ ripples next» hint while dragging
+            // so the user discovers the modifier-key escalation. Only
+            // shown when the user has actually moved the row (delta
+            // ≠ 0); otherwise the badge stays minimal.
             HStack(spacing: DS.Spacing.xs) {
                 Text(signed).font(.footnote.weight(.semibold))
                     .foregroundStyle(skin.accentColor)
                 Text(DS.timeFormatter.string(from: proposed))
                     .font(.footnote.monospacedDigit())
                     .foregroundStyle(skin.resolvedTextSecondary)
+                if delta != 0 {
+                    Text("\u{00B7} \u{2325} ripples")
+                        .font(DS.Typography.machineHint)
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                }
             }
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, DS.Spacing.xxs)

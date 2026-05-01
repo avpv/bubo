@@ -67,6 +67,12 @@ struct MenuBarView: View {
         return Set(stored)
     }()
 
+    /// J10: ISO-8601 day string («2026-05-01») that the user already
+    /// dismissed the end-of-day prompt for. Stored in UserDefaults so
+    /// closing + reopening the popover doesn't resurrect the banner the
+    /// same evening. Read once on appear, written on the dismiss tap.
+    @AppStorage("BuboEODBannerDismissedDay") private var eodDismissedDay: String = ""
+
     /// Cached EventKit permission snapshots driving the permission banners.
     /// EventKit exposes auth status only as a non-observable static call, so
     /// the view body cannot reactively re-evaluate it. Mirroring it into
@@ -87,7 +93,7 @@ struct MenuBarView: View {
     enum Navigation: Equatable {
         case list
         case detail(CalendarEvent)
-        case addEvent(editing: CalendarEvent? = nil, initialType: EventType = .standard)
+        case addEvent(editing: CalendarEvent? = nil, initialType: EventType = .standard, prefillFrom: CalendarEvent? = nil)
         case editTask(BacklogTask)
         case timer(CalendarEvent)
         case quickAddTasks
@@ -102,7 +108,8 @@ struct MenuBarView: View {
             switch (lhs, rhs) {
             case (.list, .list): return true
             case (.detail(let a), .detail(let b)): return a.id == b.id
-            case (.addEvent(let a, let t1), .addEvent(let b, let t2)): return a?.id == b?.id && t1 == t2
+            case (.addEvent(let a, let t1, let p1), .addEvent(let b, let t2, let p2)):
+                return a?.id == b?.id && t1 == t2 && p1?.id == p2?.id
             case (.editTask(let a), .editTask(let b)): return a.id == b.id
             case (.timer(let a), .timer(let b)): return a.id == b.id
             case (.quickAddTasks, .quickAddTasks): return true
@@ -253,6 +260,31 @@ struct MenuBarView: View {
                             reminderService.updateLocalEvent(current)
                             let signed = deltaMinutes > 0 ? "+\(deltaMinutes) min" : "\(deltaMinutes) min"
                             toastState.showSuccess("End time \(signed)", icon: "timer")
+                        },
+                        onShiftSchedule: { event, deltaMinutes in
+                            // J9: vertical-drag pause. Shift BOTH
+                            // start and end forward by `deltaMinutes`
+                            // — the work segment resumes from where
+                            // it was, just N minutes later in wall
+                            // time. Re-fetch the current event so
+                            // multiple pauses compose correctly. Undo
+                            // toast restores the prior schedule.
+                            guard let current = reminderService.localEvents.first(where: { $0.id == event.id }) else { return }
+                            let priorStart = current.startDate
+                            let priorEnd = current.endDate
+                            var shifted = current
+                            shifted.startDate = priorStart.addingTimeInterval(TimeInterval(deltaMinutes * 60))
+                            shifted.endDate = priorEnd.addingTimeInterval(TimeInterval(deltaMinutes * 60))
+                            reminderService.updateLocalEvent(shifted)
+                            toastState.showSuccess(
+                                "Paused +\(deltaMinutes)\u{00A0}min",
+                                icon: "pause.circle"
+                            ) {
+                                guard var rolled = reminderService.localEvents.first(where: { $0.id == event.id }) else { return }
+                                rolled.startDate = priorStart
+                                rolled.endDate = priorEnd
+                                reminderService.updateLocalEvent(rolled)
+                            }
                         }
                     )
                     .transition(
@@ -262,8 +294,9 @@ struct MenuBarView: View {
                         )
                     )
 
-                case .addEvent(let editing, let initialType):
+                case .addEvent(let editing, let initialType, let prefillFrom):
                     AddEventView(
+                        prefillFromEvent: prefillFrom,
                         reminderService: reminderService,
                         editingEvent: editing,
                         initialEventType: initialType,
@@ -467,6 +500,17 @@ struct MenuBarView: View {
                             icon: "sparkles",
                             onUndo: undo
                         )
+                    },
+                    onOpenEvent: { event in
+                        // Cross-cutting #2: jump from the palette to the
+                        // event detail. The palette dismiss happens in
+                        // the row tap itself; we only flip navigation
+                        // here. The detail view's own back button
+                        // returns to the list.
+                        withAnimation(DS.Animation.quick) {
+                            paletteContext = nil
+                            navigation = .detail(event)
+                        }
                     }
                 )
                 // The Backlog card now publishes `OptimizerBottomKey`
@@ -607,6 +651,23 @@ struct MenuBarView: View {
             let noun = count == 1 ? "task" : "tasks"
             toastState.showInfo("Imported \(count)\u{00A0}\(noun) from Reminders", icon: "checklist")
         }
+        .onReceive(NotificationCenter.default.publisher(for: .didCaptureBacklogTask)) { notification in
+            // J5: text captured via the global hotkey lands here. We
+            // own the BacklogService at this layer, so the insert plus
+            // its undo toast both live in one place. Trimming/empty
+            // gating already happened in `QuickCaptureView.commit`.
+            guard let text = notification.userInfo?["text"] as? String,
+                  let backlog = optimizerService.backlogService else { return }
+            let task = BacklogTask(title: text)
+            backlog.addTask(task)
+            let trimmed = text.count > 32 ? String(text.prefix(32)) + "\u{2026}" : text
+            toastState.showSuccess(
+                "Added \u{201C}\(trimmed)\u{201D}",
+                icon: "plus.circle.fill"
+            ) {
+                _ = backlog.removeTask(id: task.id)
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: BacklogService.taskCompleted)) { notification in
             // Fires only for user-initiated completions in Bubo (the external-
             // mirror path uses `silentlyComplete`, which bypasses this).
@@ -616,6 +677,32 @@ struct MenuBarView: View {
             let message = title.map { "\u{201C}\($0)\u{201D} marked done" } ?? "Marked done"
             toastState.showSuccess(message, icon: "checkmark.circle.fill")
         }
+    }
+
+    /// Cross-cutting: data-driven auto-expand for the inline backlog.
+    /// Expand when:
+    ///   - the day is empty (existing behaviour — nothing to look at,
+    ///     so the backlog gets the spotlight), OR
+    ///   - today has at least one free slot ≥ 25 min and the backlog has
+    ///     pending tasks the user could drop into it. The 25 min
+    ///     threshold matches the Classic Pomodoro work segment, so
+    ///     «here's an open block big enough to actually use» becomes a
+    ///     visible affordance instead of a scroll-and-expand chore.
+    private var shouldAutoExpandBacklog: Bool {
+        if reminderService.nonDisintegratingEventCount == 0 { return true }
+        guard let backlog = optimizerService.backlogService,
+              !backlog.pending.isEmpty else { return false }
+        let cal = Calendar.current
+        let today = reminderService.eventsByDay
+            .first(where: { cal.isDateInToday($0.date) })
+        guard let group = today else { return false }
+        let slots = FreeSlotFinder.slots(
+            for: group.events,
+            on: group.date,
+            workingHours: optimizerService.workingHours,
+            minSlotMinutes: 25
+        )
+        return !slots.isEmpty
     }
 
     // MARK: - Filtered Events
@@ -727,6 +814,163 @@ struct MenuBarView: View {
                 reminderService.updateLocalEvent(originalSnapshot)
             }
         )
+    }
+
+    /// Cross-cutting #4: build a new draft event from the shape of an
+    /// existing one. Copies title, duration, location, description,
+    /// color tag, reminders, event type, and Pomodoro config; resets id,
+    /// recurrence, calendar binding, and series metadata so the draft
+    /// reads as a brand-new event. The new start defaults to «now
+    /// rounded up to the next 15-min boundary», which `AddEventView`
+    /// will then offer to slot via «Find best time» / drag.
+    private func cloneAsDraft(_ source: CalendarEvent) -> CalendarEvent {
+        let cal = Calendar.current
+        let now = Date()
+        // Round forward to the nearest 15-min mark — same granularity
+        // the optimizer's free-slot finder works in, so the user can
+        // tap «Find best time» and not see a confusing 14-min jump.
+        let minute = cal.component(.minute, from: now)
+        let bumped = (minute / 15 + 1) * 15
+        let nextSlot: Date = {
+            var components = cal.dateComponents([.year, .month, .day, .hour], from: now)
+            components.minute = bumped % 60
+            components.hour = (components.hour ?? 0) + (bumped >= 60 ? 1 : 0)
+            return cal.date(from: components) ?? now.addingTimeInterval(15 * 60)
+        }()
+        let duration = max(15 * 60, source.endDate.timeIntervalSince(source.startDate))
+
+        // Start from a copy so we inherit every field (including
+        // defaults that may grow over time) and then override only
+        // what the clone semantics demand.
+        var draft = source
+        draft.id = UUID().uuidString
+        draft.title = source.title
+        draft.startDate = nextSlot
+        draft.endDate = nextSlot.addingTimeInterval(duration)
+        draft.customReminderMinutes = source.customReminderMinutes
+        draft.recurrenceRule = nil
+        draft.seriesId = nil
+        draft.taskStatus = .todo
+        draft.completedAt = nil
+        draft.dependsOn = []
+        draft.isMovable = true
+        draft.deadline = nil
+        draft.pomodoroTaskSequence = []
+        // Pomodoro shape: copy the recurrence rule's pomodoro fields
+        // (interval / rounds / longBreak) so the cloned timer keeps
+        // the same rhythm. Non-pomodoro events leave this nil.
+        if source.eventType == .pomodoro, let rule = source.recurrenceRule, rule.pomodoroMode {
+            draft.recurrenceRule = RecurrenceRule(
+                frequency: .minutely,
+                interval: rule.interval,
+                end: rule.end,
+                pomodoroMode: true,
+                pomodoroLongBreak: rule.pomodoroLongBreak
+            )
+        }
+        return draft
+    }
+
+    /// J6: ripple-shift every local, movable, non-recurring event that
+    /// starts AFTER `anchor` on the same calendar day by `minutes`.
+    /// Caps the number of events touched to 5 so a single drag can't
+    /// cascade through a packed afternoon. Returns the ids actually
+    /// shifted, so the caller can reverse the ripple in undo.
+    private func rippleShiftLaterEvents(after anchor: CalendarEvent, minutes: Int) -> [String] {
+        guard minutes != 0 else { return [] }
+        let cal = Calendar.current
+        // Anchor's *post-shift* day still defines the ripple scope —
+        // we ripple within the same calendar day, regardless of which
+        // direction the user dragged.
+        let day = anchor.startDate
+
+        let rippleCap = 5
+        let candidates = reminderService.localEvents
+            .filter { $0.id != anchor.id }
+            .filter { cal.isDate($0.startDate, inSameDayAs: day) }
+            .filter { $0.startDate >= anchor.endDate }
+            .filter { $0.recurrenceRule == nil && $0.seriesId == nil }
+            .filter { $0.eventType != .pomodoro }
+            .filter { $0.endDate > Date() }
+            .sorted { $0.startDate < $1.startDate }
+            .prefix(rippleCap)
+
+        var rippled: [String] = []
+        for event in candidates {
+            reminderService.snoozeReminder(for: event, minutes: minutes)
+            rippled.append(event.id)
+        }
+        return rippled
+    }
+
+    /// J3: top backlog candidate for a slot of `slotMinutes`, used as
+    /// the «Start … here» entry in `FreeSlotRow`'s right-click menu.
+    /// Returns the highest-priority pending task whose duration fits
+    /// inside the slot. nil = no candidate, so the menu omits the
+    /// row entirely. Reuses `BacklogTaskDrag` so the same downstream
+    /// path (`handleTaskDrop`) handles both drag-drop and right-click
+    /// — single code path, single set of undo semantics.
+    private func topBacklogCandidate(forSlotMinutes slotMinutes: Int) -> BacklogTaskDrag? {
+        guard let backlog = optimizerService.backlogService else { return nil }
+        let candidate = backlog.pending
+            .filter { $0.durationMinutes > 0 && $0.durationMinutes <= slotMinutes }
+            .sorted { lhs, rhs in
+                // Deadline-first (sooner wins), then priority (high first),
+                // then position in the user's drag-ordered list.
+                let lhsDeadline = lhs.deadline ?? .distantFuture
+                let rhsDeadline = rhs.deadline ?? .distantFuture
+                if lhsDeadline != rhsDeadline { return lhsDeadline < rhsDeadline }
+                if lhs.priority != rhs.priority {
+                    return lhs.priority.numericValue > rhs.priority.numericValue
+                }
+                return false
+            }
+            .first
+        guard let task = candidate else { return nil }
+        return BacklogTaskDrag(
+            taskId: task.id,
+            title: task.title,
+            durationMinutes: task.durationMinutes,
+            context: task.context
+        )
+    }
+
+    /// J3: start a Pomodoro in the given slot. Picks the standard
+    /// shape from `PomodoroDefaults.suggested(for:)` so the rounds /
+    /// work / break match the slot length, then registers the same
+    /// undo-toast as the other slot-filling paths.
+    private func startPomodoroInSlot(start: Date, end: Date) {
+        Haptics.tap()
+        let slotMinutes = max(0, Int(end.timeIntervalSince(start) / 60))
+        let defaults = PomodoroDefaults.suggested(for: slotMinutes)
+        let eventId = "pomodoro-\(UUID().uuidString)"
+        let workEnd = start.addingTimeInterval(TimeInterval(defaults.work * 60))
+        var event = CalendarEvent(
+            id: eventId,
+            title: "Pomodoro",
+            startDate: start,
+            endDate: workEnd,
+            location: nil,
+            description: nil,
+            calendarName: nil,
+            eventType: .pomodoro,
+            colorTag: .red
+        )
+        event.recurrenceRule = RecurrenceRule(
+            frequency: .minutely,
+            interval: defaults.cycleMinutes,
+            end: .afterCount(defaults.rounds),
+            pomodoroMode: true,
+            pomodoroLongBreak: defaults.longBreak
+        )
+        reminderService.addLocalEvent(event)
+        toastState.showSuccess(
+            "Pomodoro: \(defaults.rounds) \u{00D7} \(defaults.work)\u{00A0}min",
+            icon: "timer"
+        ) {
+            reminderService.removeLocalEvent(id: eventId)
+        }
+        notifyScheduleChange(created: true)
     }
 
     /// Create a focus block directly in the given slot, bypassing the optimizer.
@@ -1114,6 +1358,22 @@ struct MenuBarView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
+            // J10: end-of-day carry-forward prompt. Visible only after
+            // the user's working hours have closed for today, with at
+            // least one unfinished pending task, and only until they
+            // dismiss it for the day. One tap → batch carry + undo
+            // toast. Same `xs` vertical padding as the StatusBanners
+            // above so the banner sits in the same tier.
+            if shouldShowEndOfDayBanner {
+                EndOfDayBanner(
+                    unfinishedCount: eodUnfinishedCount,
+                    onCarry: { carryUnfinishedToTomorrow() },
+                    onDismiss: { dismissEndOfDayBannerForToday() }
+                )
+                .padding(.horizontal, DS.Spacing.contentMargin)
+                .padding(.vertical, DS.Spacing.xs)
+            }
+
             // Filter bar — show whenever the timeline has anything to filter.
             // Color dots inside are still gated on `usedColorTags`, but the
             // free-slot toggle (hollow circle) needs to be reachable even when
@@ -1144,7 +1404,7 @@ struct MenuBarView: View {
             // — same modifier the fullscreen Backlog uses, so the block
             // reads as one recognizable surface in both collapsed-on-main
             // and fullscreen states.
-            inlineBacklog(autoExpand: reminderService.nonDisintegratingEventCount == 0)
+            inlineBacklog(autoExpand: shouldAutoExpandBacklog)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .skinTasksBlockChrome(activeSkin)
                 // Re-publish `OptimizerBottomKey` from the Backlog
@@ -1808,15 +2068,41 @@ struct MenuBarView: View {
                         // row gates this to local non-recurring upcoming
                         // events, so the local-only branch in `snoozeReminder`
                         // is the one that runs.
+                        //
+                        // J6: when Option (⌥) is held at gesture commit, we
+                        // ALSO ripple-shift every later event on the same
+                        // calendar day by the same delta, so a knock-on
+                        // schedule change moves with the user instead of
+                        // colliding into them. Read the modifier state
+                        // synchronously — `NSEvent.modifierFlags` reflects
+                        // the live keyboard state at the moment this
+                        // handler runs.
+                        let optionHeld = NSEvent.modifierFlags.contains(.option)
                         reminderService.snoozeReminder(for: event, minutes: deltaMinutes)
+
+                        var rippledIds: [String] = []
+                        if optionHeld {
+                            rippledIds = rippleShiftLaterEvents(after: event, minutes: deltaMinutes)
+                        }
+
                         let signed = deltaMinutes > 0 ? "+\(deltaMinutes) min" : "\(deltaMinutes) min"
+                        let headline = rippledIds.isEmpty
+                            ? "Rescheduled (\(signed))"
+                            : "Rescheduled (\(signed)) · rippled \(rippledIds.count)"
                         let eventId = event.id
-                        toastState.showSuccess("Rescheduled (\(signed))", icon: "arrow.up.and.down.circle.fill") {
+                        toastState.showSuccess(headline, icon: "arrow.up.and.down.circle.fill") {
                             // Undo: re-fetch the current event so we shift
                             // the post-snooze dates back, not the captured
                             // pre-snooze ones (which would compound).
                             if let current = reminderService.localEvents.first(where: { $0.id == eventId }) {
                                 reminderService.snoozeReminder(for: current, minutes: -deltaMinutes)
+                            }
+                            // Reverse the ripple in the same order; same
+                            // re-fetch caveat as above.
+                            for id in rippledIds {
+                                if let current = reminderService.localEvents.first(where: { $0.id == id }) {
+                                    reminderService.snoozeReminder(for: current, minutes: -deltaMinutes)
+                                }
                             }
                         }
                     },
@@ -1882,6 +2168,20 @@ struct MenuBarView: View {
                     onConvertToPomodoro: { event in
                         convertEventToPomodoro(event)
                     },
+                    onRepeatLikeThis: { event in
+                        // Pre-fill `AddEventView` with the shape of the
+                        // current event so the user lands on a fresh
+                        // draft instead of typing duration / location /
+                        // reminders again. The clone strips id,
+                        // recurrence, calendar binding, and series
+                        // metadata — see `cloneAsDraft(_:)`.
+                        let draft = cloneAsDraft(event)
+                        navigation = .addEvent(
+                            editing: nil,
+                            initialType: draft.eventType,
+                            prefillFrom: draft
+                        )
+                    },
                     isLocked: optimizerService.isLocked(eventId: event.id),
                     onToggleLock: { event in
                         // Persistent toggle in `OptimizerService`. Next
@@ -1946,7 +2246,17 @@ struct MenuBarView: View {
                         onTaskDropped: { drag in
                             handleTaskDrop(drag: drag, slotStart: start, slotEnd: end)
                         },
-                        canShowDragHint: item.id == hintSlotId
+                        canShowDragHint: item.id == hintSlotId,
+                        topBacklogCandidate: topBacklogCandidate(forSlotMinutes: Int(end.timeIntervalSince(start) / 60)),
+                        onStartTopTask: { drag in
+                            handleTaskDrop(drag: drag, slotStart: start, slotEnd: end)
+                        },
+                        onStartPomodoro: { slotStart, slotEnd in
+                            startPomodoroInSlot(start: slotStart, end: slotEnd)
+                        },
+                        onLockAsFocus: { slotStart, slotEnd in
+                            fillSlotWithFocus(start: slotStart, end: slotEnd)
+                        }
                     )
                 }
             case .ghost(let start, let end, let title):
@@ -2166,6 +2476,93 @@ struct MenuBarView: View {
             // expose a sync rollback path.
             Task { await report.undo() }
         }
+    }
+
+    // MARK: - End-of-Day Banner (J10)
+
+    /// J10 placement gate. Visible only when:
+    ///   1. The day has already crossed `workingHours.upperBound` (so the
+    ///      banner doesn't pop up at lunch), AND
+    ///   2. The user hasn't dismissed it for today yet, AND
+    ///   3. There's actual unfinished work to carry — pending tasks the
+    ///      user has likely been ignoring through the day.
+    private var shouldShowEndOfDayBanner: Bool {
+        let cal = Calendar.current
+        let now = Date()
+        let currentHour = cal.component(.hour, from: now)
+        let currentMinute = cal.component(.minute, from: now)
+        // A whole-hour comparison reads "after 18:00" as currentHour >=
+        // workingHoursEnd; the minute check keeps the banner from
+        // appearing right at the boundary on the dot — wait until 5 min
+        // past the close, so a popover open at exactly the bell doesn't
+        // greet the user with a wind-down nag.
+        let pastEnd = currentHour > optimizerService.workingHoursEnd
+            || (currentHour == optimizerService.workingHoursEnd && currentMinute >= 5)
+        guard pastEnd else { return false }
+        guard eodDismissedDay != Self.dayKey(for: now) else { return false }
+        return eodUnfinishedCount > 0
+    }
+
+    /// Number of pending backlog tasks at the moment the banner is
+    /// rendered. Excludes scheduled / done / frozen — only the rows the
+    /// user would actually want pushed forward.
+    private var eodUnfinishedCount: Int {
+        optimizerService.backlogService?.pending.count ?? 0
+    }
+
+    /// Stamp the current calendar day as «banner dismissed» — the
+    /// `@AppStorage` write triggers a re-render, the gate above flips
+    /// false, and the banner fades. Resets implicitly tomorrow because
+    /// the day-key string no longer matches.
+    private func dismissEndOfDayBannerForToday() {
+        eodDismissedDay = Self.dayKey(for: Date())
+    }
+
+    /// J10: bulk carry-forward. Each pending task gets its `createdAt`
+    /// refreshed (so «stale» logic doesn't punish it on day N+1) and a
+    /// single undo toast restores the prior `createdAt` values atomically.
+    /// Doesn't touch deadlines or schedule slots — those are deliberate
+    /// commitments, not «didn't get to it today» drift.
+    private func carryUnfinishedToTomorrow() {
+        guard let backlog = optimizerService.backlogService else { return }
+        let now = Date()
+        let pending = backlog.pending
+        guard !pending.isEmpty else { return }
+
+        // Snapshot pre-carry state so undo restores `createdAt` exactly.
+        let snapshots = pending.map { $0 }
+
+        for var task in pending {
+            task.createdAt = now
+            backlog.updateTask(task)
+        }
+
+        let count = snapshots.count
+        let headline = count == 1
+            ? "Carried 1 task to tomorrow"
+            : "Carried \(count) tasks to tomorrow"
+        toastState.showSuccess(headline, icon: "arrow.uturn.backward") {
+            for original in snapshots {
+                backlog.updateTask(original)
+            }
+        }
+        dismissEndOfDayBannerForToday()
+    }
+
+    /// Compact «YYYY-MM-DD» key used to scope the banner's dismissal to
+    /// a single calendar day. Locale-independent (we don't want a
+    /// locale change between sessions to resurrect the banner). Static
+    /// so the same formatter is reused across calls.
+    private static let dayKeyFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = .current
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
+    private static func dayKey(for date: Date) -> String {
+        dayKeyFormatter.string(from: date)
     }
 
     /// forget callers wrap in `Task { ... }`.
