@@ -939,17 +939,25 @@ struct BacklogView: View {
             remainingWorkdayMinutes: remainingWorkdayMinutes
         )
 
-        // Naive proposed slots for the overflow set — populates the
-        // `→ HH:MM` ghost-hint in each overflowing row's trailing meta
-        // column. Cheap greedy walk; the shadow optimizer (planned)
-        // replaces this with the GA's real per-task `start`. Empty for
-        // the fitting set (those rows already say «when» implicitly by
-        // sitting before the boundary).
-        let proposedSlots = BacklogLogic.naiveProposedSlots(
+        // Proposed slots for the overflow set, surfaced as `→ HH:MM`
+        // ghost-hints in each overflowing row. Source priority:
+        //   1. `shadowProposal` (the GA's actual per-task assignments
+        //      from the background pre-compute) — preferred when fresh.
+        //   2. `naiveProposedSlots` — greedy fallback used when no
+        //      shadow proposal is cached yet, or when it doesn't cover
+        //      the overflow set.
+        // Result is unioned: any overflow task whose id isn't in the
+        // shadow map falls back to the naive slot, so the user always
+        // sees a hint even before the GA's first preview lands.
+        let shadowSlots = BacklogLogic.proposedSlotsFromShadow(
+            optimizerService.shadowProposal
+        )
+        let naiveSlots = BacklogLogic.naiveProposedSlots(
             overflowingTasks: plan.overflowing,
             workingHours: optimizerService.workingHours,
             workingDays: optimizerService.workingDays
         )
+        let proposedSlots = naiveSlots.merging(shadowSlots) { _, shadow in shadow }
 
         ForEach(plan.fitting) { task in
             if ids.contains(task.id) {

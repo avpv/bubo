@@ -690,14 +690,19 @@ struct BacklogFullscreenView: View {
             )
             let fittingCount = plan.fitting.count
 
-            // Naive proposed slots for the overflow set — same per-task
-            // ghost-hint as the inline `BacklogView`; the fullscreen
-            // surface gets the same «machine has worked it out» voice.
-            let proposedSlots = BacklogLogic.naiveProposedSlots(
+            // Same shadow-first / naive-fallback merge as the inline
+            // BacklogView. Once the shadowProposal lands in either
+            // place, both surfaces inherit the GA's actual per-task
+            // slots without further wiring.
+            let shadowSlots = BacklogLogic.proposedSlotsFromShadow(
+                optimizerService.shadowProposal
+            )
+            let naiveSlots = BacklogLogic.naiveProposedSlots(
                 overflowingTasks: plan.overflowing,
                 workingHours: optimizerService.workingHours,
                 workingDays: optimizerService.workingDays
             )
+            let proposedSlots = naiveSlots.merging(shadowSlots) { _, shadow in shadow }
 
             ScrollView {
                 VStack(spacing: DS.Spacing.xs) {
