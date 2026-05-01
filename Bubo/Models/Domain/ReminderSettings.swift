@@ -91,6 +91,15 @@ class ReminderSettings: Codable {
     /// Opt-in for safety — imported tasks get added to `dismissedReminderIds` instead.
     var remindersDeletionSync: Bool { didSet { scheduleSave() } }
 
+    /// The Reminders list the user is currently focused on, drawn from the
+    /// backlog header's project picker. `nil` = «All Tasks» (no filter).
+    /// When set, the backlog filters its rows to that list's tasks and new
+    /// tasks created from the inline add-field land in this list (overriding
+    /// the global `remindersExportListId` for the duration of the focus).
+    /// Persisted so the user's «which list am I working in?» state survives
+    /// app restarts — same idea as Reminders.app's selected sidebar item.
+    var activeProjectListId: String? { didSet { scheduleSave() } }
+
     // World Clock
     var isWorldClockEnabled: Bool { didSet { scheduleSave() } }
     var worldClockCityIDs: [String] { didSet { scheduleSave() } }
@@ -110,6 +119,7 @@ class ReminderSettings: Codable {
         case showBadgeCount, badgeCountMode, badgeTimeWindowHours
         case isRemindersSyncEnabled, selectedRemindersListIds, remindersCompletionSync, remindersDefaultDurationMinutes
         case remindersExportEnabled, remindersExportListId, remindersDeletionSync
+        case activeProjectListId
         case isWorldClockEnabled, worldClockCityIDs
     }
 
@@ -140,6 +150,7 @@ class ReminderSettings: Codable {
         self.remindersExportEnabled = false
         self.remindersExportListId = nil
         self.remindersDeletionSync = false
+        self.activeProjectListId = nil
         self.isWorldClockEnabled = false
         self.worldClockCityIDs = []
     }
@@ -169,6 +180,7 @@ class ReminderSettings: Codable {
         remindersExportEnabled = try container.decodeIfPresent(Bool.self, forKey: .remindersExportEnabled) ?? false
         remindersExportListId = try container.decodeIfPresent(String.self, forKey: .remindersExportListId)
         remindersDeletionSync = try container.decodeIfPresent(Bool.self, forKey: .remindersDeletionSync) ?? false
+        activeProjectListId = try container.decodeIfPresent(String.self, forKey: .activeProjectListId)
         isWorldClockEnabled = try container.decodeIfPresent(Bool.self, forKey: .isWorldClockEnabled) ?? false
         worldClockCityIDs = try container.decodeIfPresent([String].self, forKey: .worldClockCityIDs) ?? []
     }
@@ -197,6 +209,7 @@ class ReminderSettings: Codable {
         try container.encode(remindersExportEnabled, forKey: .remindersExportEnabled)
         try container.encodeIfPresent(remindersExportListId, forKey: .remindersExportListId)
         try container.encode(remindersDeletionSync, forKey: .remindersDeletionSync)
+        try container.encodeIfPresent(activeProjectListId, forKey: .activeProjectListId)
         try container.encode(isWorldClockEnabled, forKey: .isWorldClockEnabled)
         try container.encode(worldClockCityIDs, forKey: .worldClockCityIDs)
     }
@@ -275,6 +288,7 @@ class ReminderSettings: Codable {
         remindersExportEnabled = fresh.remindersExportEnabled
         remindersExportListId = fresh.remindersExportListId
         remindersDeletionSync = fresh.remindersDeletionSync
+        activeProjectListId = fresh.activeProjectListId
         isWorldClockEnabled = fresh.isWorldClockEnabled
         worldClockCityIDs = fresh.worldClockCityIDs
 

@@ -115,6 +115,49 @@ final class AppleRemindersService {
             .map { (account: $0.key, lists: $0.value) }
     }
 
+    // MARK: - Create List
+
+    /// Creates a new Reminders list (EKCalendar with `.reminder` entityType)
+    /// in the user's default Reminders source — usually iCloud, falling back
+    /// to Local. Used by the backlog header's project picker «+ New
+    /// Project…» to give Bubo a Reminders.app-style way to spin up an
+    /// empty project without leaving the app. Returns the created list's
+    /// `calendarIdentifier` so callers can immediately set it as the
+    /// active project.
+    ///
+    /// Errors propagate: EventKit can refuse if the source is read-only
+    /// (rare for the user's iCloud / Local sources but possible for
+    /// shared accounts) or if the title collides on the same source.
+    func createList(name: String) throws -> String {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            throw NSError(
+                domain: "AppleRemindersService",
+                code: 400,
+                userInfo: [NSLocalizedDescriptionKey: "List name can't be empty."]
+            )
+        }
+        // Pick a writable source. `defaultCalendarForNewReminders` may be
+        // nil if no list exists yet, so we fall back to the first source
+        // that EventKit reports as a reminders host.
+        let source: EKSource? = store.defaultCalendarForNewReminders()?.source
+            ?? store.sources.first(where: { src in
+                src.sourceType == .calDAV || src.sourceType == .local || src.sourceType == .exchange
+            })
+        guard let source else {
+            throw NSError(
+                domain: "AppleRemindersService",
+                code: 500,
+                userInfo: [NSLocalizedDescriptionKey: "No writable Reminders source available."]
+            )
+        }
+        let calendar = EKCalendar(for: .reminder, eventStore: store)
+        calendar.title = trimmed
+        calendar.source = source
+        try store.saveCalendar(calendar, commit: true)
+        return calendar.calendarIdentifier
+    }
+
     // MARK: - Fetch Incomplete Reminders
 
     /// Fetches all incomplete reminders from the specified lists (or all lists if empty).
