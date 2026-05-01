@@ -345,51 +345,6 @@ struct MenuBarView: View {
                             onRunRequest: { request, label in
                                 await runQuickAction(request, label: label)
                             },
-                            onOpenPalette: {
-                                Haptics.tap()
-                                withAnimation(DS.Animation.quick) {
-                                    paletteContext = PaletteContext()
-                                }
-                            },
-                            onSwitchScenario: { index in
-                                optimizerService.switchToAppliedScenario(
-                                    at: index,
-                                    to: reminderService
-                                )
-                            },
-                            onLockTodaysEvents: {
-                                // Same bulk-lock as the inline view; the
-                                // user gets the same toast on success and
-                                // the rows light up with solid lock icons
-                                // when they return to the main popover.
-                                let cal = Calendar.current
-                                let todaysIds = reminderService.allEvents
-                                    .filter { cal.isDateInToday($0.startTime) }
-                                    .map(\.id)
-                                let preCount = optimizerService.lockedEventIds.count
-                                for id in todaysIds {
-                                    if !optimizerService.isLocked(eventId: id) {
-                                        optimizerService.toggleLock(eventId: id)
-                                    }
-                                }
-                                let added = optimizerService.lockedEventIds.count - preCount
-                                if added > 0 {
-                                    toastState.showSuccess(
-                                        added == 1 ? "Locked 1 event" : "Locked \(added) events",
-                                        icon: "lock.fill"
-                                    ) {
-                                        for id in todaysIds where optimizerService.isLocked(eventId: id) {
-                                            optimizerService.toggleLock(eventId: id)
-                                        }
-                                    }
-                                } else {
-                                    toastState.showInfo("Today's events are already locked", icon: "lock.fill")
-                                }
-                            },
-                            onRescheduleTask: { task in
-                                navigation = .list
-                                paletteContext = PaletteContext(seedTask: task)
-                            },
                             onScheduleTask: { task in
                                 // Per-task scope: same pipe as the inline
                                 // BacklogView's `onScheduleTask`. We don't
@@ -417,6 +372,51 @@ struct MenuBarView: View {
                                         : task.title
                                     await runQuickAction(req, label: "Split \u{201C}\(trimmed)\u{201D}")
                                 }
+                            },
+                            onOpenPalette: {
+                                Haptics.tap()
+                                withAnimation(DS.Animation.quick) {
+                                    paletteContext = PaletteContext()
+                                }
+                            },
+                            onSwitchScenario: { index in
+                                optimizerService.switchToAppliedScenario(
+                                    at: index,
+                                    to: reminderService
+                                )
+                            },
+                            onLockTodaysEvents: {
+                                // Same bulk-lock as the inline view; the
+                                // user gets the same toast on success and
+                                // the rows light up with solid lock icons
+                                // when they return to the main popover.
+                                let cal = Calendar.current
+                                let todaysIds = reminderService.allEvents
+                                    .filter { cal.isDateInToday($0.startDate) }
+                                    .map(\.id)
+                                let preCount = optimizerService.lockedEventIds.count
+                                for id in todaysIds {
+                                    if !optimizerService.isLocked(eventId: id) {
+                                        optimizerService.toggleLock(eventId: id)
+                                    }
+                                }
+                                let added = optimizerService.lockedEventIds.count - preCount
+                                if added > 0 {
+                                    toastState.showSuccess(
+                                        added == 1 ? "Locked 1 event" : "Locked \(added) events",
+                                        icon: "lock.fill"
+                                    ) {
+                                        for id in todaysIds where optimizerService.isLocked(eventId: id) {
+                                            optimizerService.toggleLock(eventId: id)
+                                        }
+                                    }
+                                } else {
+                                    toastState.showInfo("Today's events are already locked", icon: "lock.fill")
+                                }
+                            },
+                            onRescheduleTask: { task in
+                                navigation = .list
+                                paletteContext = PaletteContext(seedTask: task)
                             }
                         )
                         .transition(
@@ -892,59 +892,6 @@ struct MenuBarView: View {
                     // free, identical semantics across all three states.
                     await runQuickAction(request, label: label)
                 },
-                onOpenPalette: {
-                    Haptics.tap()
-                    withAnimation(DS.Animation.quick) {
-                        paletteContext = PaletteContext()
-                    }
-                },
-                onSwitchScenario: { index in
-                    // Hop the just-applied scenario to a different
-                    // index in the same `scenarios` array. The
-                    // service handles rollback + reapply atomically;
-                    // the toast pipe stays untouched (the user has
-                    // already seen the original toast and will see
-                    // the reasoning popover update in place).
-                    optimizerService.switchToAppliedScenario(
-                        at: index,
-                        to: reminderService
-                    )
-                },
-                onLockTodaysEvents: {
-                    // Bulk-lock every event currently on today's
-                    // schedule — same persistent set the per-row lock
-                    // affordance writes to, so the rows light up with
-                    // their solid lock icon immediately.
-                    let cal = Calendar.current
-                    let todaysIds = reminderService.allEvents
-                        .filter { cal.isDateInToday($0.startTime) }
-                        .map(\.id)
-                    let preCount = optimizerService.lockedEventIds.count
-                    for id in todaysIds {
-                        if !optimizerService.isLocked(eventId: id) {
-                            optimizerService.toggleLock(eventId: id)
-                        }
-                    }
-                    let added = optimizerService.lockedEventIds.count - preCount
-                    if added > 0 {
-                        toastState.showSuccess(
-                            added == 1 ? "Locked 1 event" : "Locked \(added) events",
-                            icon: "lock.fill"
-                        ) {
-                            // Undo: unlock everything we just locked.
-                            for id in todaysIds {
-                                if optimizerService.isLocked(eventId: id) {
-                                    optimizerService.toggleLock(eventId: id)
-                                }
-                            }
-                        }
-                    } else {
-                        toastState.showInfo("Today's events are already locked", icon: "lock.fill")
-                    }
-                },
-                onRescheduleTask: { task in
-                    paletteContext = PaletteContext(seedTask: task)
-                },
                 onScheduleTask: { task in
                     // Per-task `findSlotsForBacklog` — same async pipe as
                     // the backlog-wide path, scoped to one task via
@@ -976,6 +923,59 @@ struct MenuBarView: View {
                             : task.title
                         await runQuickAction(req, label: "Split \u{201C}\(trimmed)\u{201D}")
                     }
+                },
+                onOpenPalette: {
+                    Haptics.tap()
+                    withAnimation(DS.Animation.quick) {
+                        paletteContext = PaletteContext()
+                    }
+                },
+                onSwitchScenario: { index in
+                    // Hop the just-applied scenario to a different
+                    // index in the same `scenarios` array. The
+                    // service handles rollback + reapply atomically;
+                    // the toast pipe stays untouched (the user has
+                    // already seen the original toast and will see
+                    // the reasoning popover update in place).
+                    optimizerService.switchToAppliedScenario(
+                        at: index,
+                        to: reminderService
+                    )
+                },
+                onLockTodaysEvents: {
+                    // Bulk-lock every event currently on today's
+                    // schedule — same persistent set the per-row lock
+                    // affordance writes to, so the rows light up with
+                    // their solid lock icon immediately.
+                    let cal = Calendar.current
+                    let todaysIds = reminderService.allEvents
+                        .filter { cal.isDateInToday($0.startDate) }
+                        .map(\.id)
+                    let preCount = optimizerService.lockedEventIds.count
+                    for id in todaysIds {
+                        if !optimizerService.isLocked(eventId: id) {
+                            optimizerService.toggleLock(eventId: id)
+                        }
+                    }
+                    let added = optimizerService.lockedEventIds.count - preCount
+                    if added > 0 {
+                        toastState.showSuccess(
+                            added == 1 ? "Locked 1 event" : "Locked \(added) events",
+                            icon: "lock.fill"
+                        ) {
+                            // Undo: unlock everything we just locked.
+                            for id in todaysIds {
+                                if optimizerService.isLocked(eventId: id) {
+                                    optimizerService.toggleLock(eventId: id)
+                                }
+                            }
+                        }
+                    } else {
+                        toastState.showInfo("Today's events are already locked", icon: "lock.fill")
+                    }
+                },
+                onRescheduleTask: { task in
+                    paletteContext = PaletteContext(seedTask: task)
                 },
                 focusRequested: $focusTaskInput,
                 autoExpand: autoExpand
@@ -1772,7 +1772,7 @@ struct MenuBarView: View {
         // segments render with one shared bracketed container.
         let pomoNeighbours: [String: (before: Bool, after: Bool)] = {
             var result: [String: (before: Bool, after: Bool)] = [:]
-            let sorted = dayGroup.events.sorted { $0.startTime < $1.startTime }
+            let sorted = dayGroup.events.sorted { $0.startDate < $1.startDate }
             for (idx, event) in sorted.enumerated() {
                 guard let base = event.pomodoroSessionBaseId else { continue }
                 let prevSame: Bool = idx > 0
@@ -1917,7 +1917,7 @@ struct MenuBarView: View {
                         }
                     },
                     energyAtStartHour: optimizerService.energyCheckInService?
-                        .predictEnergy(atHour: Calendar.current.component(.hour, from: event.startTime)),
+                        .predictEnergy(atHour: Calendar.current.component(.hour, from: event.startDate)),
                     flexPercent: optimizerService.flex(eventId: event.id),
                     onSetFlex: { event, percent in
                         // Persist the per-event flex preference. Doesn't

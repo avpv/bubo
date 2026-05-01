@@ -180,9 +180,9 @@ extension WeekStripView.DayLoad {
                 .reduce(0) { $0 + $1.durationMinutes }
 
             let eventMinutes = events
-                .filter { calendar.isDate($0.startTime, inSameDayAs: day) }
+                .filter { calendar.isDate($0.startDate, inSameDayAs: day) }
                 .reduce(0) { acc, ev in
-                    acc + max(0, Int(ev.endTime.timeIntervalSince(ev.startTime) / 60))
+                    acc + max(0, Int(ev.endDate.timeIntervalSince(ev.startDate) / 60))
                 }
 
             return WeekStripView.DayLoad(
