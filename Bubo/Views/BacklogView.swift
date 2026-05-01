@@ -59,6 +59,11 @@ struct BacklogView: View {
     /// the global `⌘K` shortcut both end up here. Replaces the standalone
     /// `Optimize ⌘K` chip that used to live above the timeline.
     var onOpenPalette: (() -> Void)? = nil
+    /// Cycle the just-applied scenario to a different index. Wired
+    /// from `MenuBarView` to `OptimizerService.switchToAppliedScenario(at:)`.
+    /// Surfaces only when the GA returned ≥2 scenarios; nil means the
+    /// scenario picker is rendered as static dots.
+    var onSwitchScenario: ((Int) -> Void)? = nil
     /// Open the command palette seeded with a single task (per-task scope
     /// optimizer entry — context menu's «Reschedule…» on a row).
     var onRescheduleTask: ((BacklogTask) -> Void)? = nil
@@ -641,7 +646,8 @@ struct BacklogView: View {
             onRunRequest: { request, label in
                 await onRunRequest?(request, label)
             },
-            onOpenPalette: { onOpenPalette?() }
+            onOpenPalette: { onOpenPalette?() },
+            onSwitchScenario: onSwitchScenario
         )
         .padding(.horizontal, DS.Spacing.sm)
     }

@@ -514,6 +514,59 @@ final class OptimizerService {
         selectedScenarioIndex = nil
     }
 
+    // MARK: - Scenario switching (post-apply)
+
+    /// Swap the currently-applied scenario for a different one in the
+    /// same `scenarios` array, without losing the array (and without
+    /// the user having to undo + re-run from scratch). Used by
+    /// `SmartActions`'s reasoning-row scenario cycle: the GA returned
+    /// 2-3 alternatives, the user wants to flip between them.
+    ///
+    /// Implementation rolls back the previously-applied scenario the
+    /// same way `undoLast` does (delete created events, restore
+    /// `previousGenes`, unschedule linked backlog rows), then applies
+    /// the new scenario through the regular `applyScenario(at:to:)`
+    /// path. The new run captures its own `lastSnapshot` whose
+    /// `previousGenes` matches the *original* baseline — so a single
+    /// undo from this state still rolls all the way back to before any
+    /// scenario was applied, regardless of how many times the user
+    /// cycled.
+    ///
+    /// Returns true on success, false when the inputs are out of
+    /// bounds or no snapshot exists to roll back from.
+    @discardableResult
+    func switchToAppliedScenario(
+        at index: Int,
+        to reminderService: ReminderService
+    ) -> Bool {
+        guard let snapshot = lastSnapshot else { return false }
+        guard index >= 0, index < scenarios.count else { return false }
+        guard index != selectedScenarioIndex else { return true }
+
+        // Roll back the existing apply. Identical surface area to
+        // `undoLast` minus the state-clearing — we want to preserve
+        // `scenarios` and `activeRequest` so the second `applyScenario`
+        // below has the context it needs.
+        for eventId in snapshot.createdEventIds {
+            reminderService.removeLocalEvent(id: eventId)
+        }
+        for gene in snapshot.appliedGenes {
+            backlogService?.unschedule(id: gene.eventId)
+        }
+        optimizer.currentSchedule = snapshot.previousGenes
+
+        // Snapshot the scenarios array because `applyScenario` would
+        // otherwise overwrite `previousGenes` with the just-restored
+        // state — which we want — but downstream observers might race.
+        let preservedScenarios = scenarios
+        applyScenario(at: index, to: reminderService)
+        if scenarios.isEmpty {
+            scenarios = preservedScenarios
+        }
+
+        return true
+    }
+
     // MARK: - Scenario Info
 
     var selectedScenario: ScheduleScenario? {

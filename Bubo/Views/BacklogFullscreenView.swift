@@ -56,6 +56,8 @@ struct BacklogFullscreenView: View {
     /// Open the command palette — `SmartActions` calm-state `More…` and
     /// the global `⌘K` shortcut both end up here.
     var onOpenPalette: (() -> Void)? = nil
+    /// See `BacklogView.onSwitchScenario`.
+    var onSwitchScenario: ((Int) -> Void)? = nil
     /// Open the command palette seeded with a single task (per-task scope
     /// optimizer entry — context menu's «Reschedule…» on a row).
     var onRescheduleTask: ((BacklogTask) -> Void)? = nil
@@ -523,7 +525,8 @@ struct BacklogFullscreenView: View {
             onRunRequest: { request, label in
                 await onRunRequest?(request, label)
             },
-            onOpenPalette: { onOpenPalette?() }
+            onOpenPalette: { onOpenPalette?() },
+            onSwitchScenario: onSwitchScenario
         )
         .padding(.horizontal, DS.Spacing.sm)
     }

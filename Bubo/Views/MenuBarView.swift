@@ -343,6 +343,12 @@ struct MenuBarView: View {
                                     paletteContext = PaletteContext()
                                 }
                             },
+                            onSwitchScenario: { index in
+                                optimizerService.switchToAppliedScenario(
+                                    at: index,
+                                    to: reminderService
+                                )
+                            },
                             onRescheduleTask: { task in
                                 navigation = .list
                                 paletteContext = PaletteContext(seedTask: task)
@@ -821,6 +827,18 @@ struct MenuBarView: View {
                     withAnimation(DS.Animation.quick) {
                         paletteContext = PaletteContext()
                     }
+                },
+                onSwitchScenario: { index in
+                    // Hop the just-applied scenario to a different
+                    // index in the same `scenarios` array. The
+                    // service handles rollback + reapply atomically;
+                    // the toast pipe stays untouched (the user has
+                    // already seen the original toast and will see
+                    // the reasoning popover update in place).
+                    optimizerService.switchToAppliedScenario(
+                        at: index,
+                        to: reminderService
+                    )
                 },
                 onRescheduleTask: { task in
                     paletteContext = PaletteContext(seedTask: task)

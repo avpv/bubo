@@ -68,6 +68,12 @@ struct SmartActions: View {
     /// the global `⌘K` shortcut path).
     let onOpenPalette: () -> Void
 
+    /// Cycle the applied scenario to a specific index in the existing
+    /// `scenarios` array. Wired from `MenuBarView` to
+    /// `OptimizerService.switchToAppliedScenario(at:)`. nil = cycling
+    /// is disabled (preview surfaces without an optimizer service).
+    var onSwitchScenario: ((Int) -> Void)? = nil
+
     @State private var showingPlanDayPopover = false
     @State private var showingReasoningPopover = false
 
@@ -263,23 +269,37 @@ struct SmartActions: View {
                     .padding(.top, DS.Spacing.xxs)
             }
 
-            // Scenario-count footer — surfaced when the optimizer
-            // returned more than one scenario. Pure information for
-            // now: «GA explored these alternatives, picked #1». A
-            // follow-up commit promotes it to a cycling control once
-            // OptimizerService grows a `switchToScenario(at:)` method
-            // that swaps without losing the scenarios array.
+            // Scenario picker — surfaced when the optimizer returned
+            // more than one scenario. Each dot is a button that swaps
+            // the active genes for the corresponding scenario via
+            // `onSwitchScenario`. Wired through `OptimizerService`'s
+            // `switchToAppliedScenario(at:)` which handles the
+            // rollback + reapply atomically (events removed, undo
+            // snapshot rebased, scenarios array preserved).
             if applied.scenarioCount > 1 {
                 Divider()
                     .padding(.top, DS.Spacing.xs)
                 HStack(spacing: DS.Spacing.xs) {
                     ForEach(0..<applied.scenarioCount, id: \.self) { idx in
-                        Circle()
-                            .fill(idx == applied.appliedScenarioIndex
-                                  ? skin.accentColor
-                                  : skin.resolvedTextTertiary.opacity(0.4))
-                            .frame(width: 5, height: 5)
+                        Button {
+                            guard idx != applied.appliedScenarioIndex else { return }
+                            Haptics.tap()
+                            onSwitchScenario?(idx)
+                        } label: {
+                            Circle()
+                                .fill(idx == applied.appliedScenarioIndex
+                                      ? skin.accentColor
+                                      : skin.resolvedTextTertiary.opacity(0.4))
+                                .frame(width: 8, height: 8)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .help(idx == applied.appliedScenarioIndex
+                              ? "Currently applied"
+                              : "Switch to scenario \(idx + 1)")
+                        .disabled(onSwitchScenario == nil)
                     }
+                    Spacer(minLength: DS.Spacing.sm)
                     Text("Scenario \(applied.appliedScenarioIndex + 1) of \(applied.scenarioCount)")
                         .font(DS.Typography.machineHint)
                         .foregroundStyle(skin.resolvedTextTertiary)
