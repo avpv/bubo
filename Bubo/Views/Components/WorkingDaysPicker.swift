@@ -38,9 +38,17 @@ struct WorkingDaysPicker: View {
     ]
 
     var body: some View {
-        HStack(spacing: DS.Spacing.xs) {
-            ForEach(Self.days, id: \.weekday) { day in
-                chip(for: day.weekday, label: day.label)
+        // Seven chips don't always fit the popover's fixed width
+        // (e.g. 320pt), where the trailing chips would otherwise
+        // wrap their labels mid-word ("Mo\nn"). A horizontal
+        // ScrollView keeps every chip readable on tight layouts
+        // while staying invisible on wider hosts where the row
+        // already fits.
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: DS.Spacing.xs) {
+                ForEach(Self.days, id: \.weekday) { day in
+                    chip(for: day.weekday, label: day.label)
+                }
             }
         }
     }
@@ -59,6 +67,8 @@ struct WorkingDaysPicker: View {
                         ? skin.resolvedTextPrimary
                         : skin.resolvedTextSecondary
                 )
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
                 .padding(.vertical, 6)
                 .padding(.horizontal, 10)
                 .background(
