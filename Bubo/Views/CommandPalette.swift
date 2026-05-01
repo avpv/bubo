@@ -20,6 +20,7 @@ struct CommandPalette: View {
     var agentService: AgentService
 
     var seedEvent: CalendarEvent? = nil
+    var seedTask: BacklogTask? = nil
     var seedSlotMinutes: Int? = nil
     var seedSlotStart: Date? = nil
     var seedSlotEnd: Date? = nil
@@ -88,6 +89,32 @@ struct CommandPalette: View {
                         .findSlotsForBacklog,
                         .horizon(.today), .speed(.quick), .scenarios(count: 1),
                         name: "Find better time"
+                    )
+                ),
+            ]
+        }
+
+        // Per-task scope: row's right-click → «Reschedule…» seeds the task
+        // here. The optimizer schedules just this one backlog task into a
+        // free slot, mirroring the per-event «Reschedule» flow above.
+        if let task = seedTask {
+            return [
+                SmartSuggestion(
+                    label: "Schedule \u{201C}\(task.title)\u{201D}",
+                    request: OptimizationRequest(
+                        .includeBacklogTasks(ids: [task.id]),
+                        .horizon(.today), .speed(.quick), .scenarios(count: 3),
+                        name: "Schedule task"
+                    )
+                ),
+                SmartSuggestion(
+                    label: "Find best time",
+                    request: OptimizationRequest(
+                        .includeBacklogTasks(ids: [task.id]),
+                        .findSlotsForBacklog,
+                        .prioritizeFocus(),
+                        .horizon(.today), .speed(.quick), .scenarios(count: 1),
+                        name: "Find best time"
                     )
                 ),
             ]

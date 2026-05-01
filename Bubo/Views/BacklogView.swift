@@ -36,6 +36,17 @@ struct BacklogView: View {
     /// HIG: every destructive or hard-to-discover action gets an undo path.
     /// Birman: undo instead of confirmation dialogs.
     var onUndoableAction: ((_ message: String, _ undo: @escaping () -> Void) -> Void)? = nil
+    /// Schedule the unscheduled backlog onto the calendar via the optimizer.
+    /// Async so the spill-over marker can show a loading spinner inline
+    /// during the run. Wired from `MenuBarView.runQuickAction(.scheduleBacklog,…)`.
+    var onScheduleBacklog: (() async -> Void)? = nil
+    /// Run the deadline-mode preset. Surfaces as the conditional second
+    /// action-link in the spill-over marker when overflow contains urgent
+    /// tasks. Wired from `MenuBarView.runQuickAction(.deadlineMode,…)`.
+    var onFocusOnDeadlines: (() async -> Void)? = nil
+    /// Open the command palette seeded with a single task (per-task scope
+    /// optimizer entry — context menu's «Reschedule…» on a row).
+    var onRescheduleTask: ((BacklogTask) -> Void)? = nil
     /// External trigger: set to `true` to focus the "Add task…" field.
     /// BacklogView resets it to `false` after grabbing focus.
     @Binding var focusRequested: Bool
@@ -97,6 +108,21 @@ struct BacklogView: View {
     /// counter in the header — Бирман: «информация, а не украшение».
     /// Session-local only; survives popover close, not app restart.
     @State private var urgentOnlyFilter: Bool = false
+
+    /// ID of the row that was just dropped via drag — set in
+    /// `handleReorderDrop`, cleared 0.5 s later via a `Task`. Drives a
+    /// brief accent-coloured outline on the row so the user can see
+    /// where their dropped task landed (especially when it crossed the
+    /// fits → spill-over boundary). Birman: «постоянная мягкая
+    /// обратная связь» — `reduceMotion` honoured by the `.animation`
+    /// wrapper at the row level.
+    @State private var lastDroppedTaskId: String? = nil
+
+    /// Task whose deadline is currently being edited via the inline
+    /// `Set deadline…` popover. Set from the row's context-menu callback,
+    /// cleared on save / cancel. Hosts the popover anchor — using `.sheet`
+    /// would feel heavier than the operation deserves.
+    @State private var deadlinePickerTask: BacklogTask? = nil
 
     /// Shared cache for "where would a task of N minutes land?" lookups.
     /// Both the per-row hover hint and the ghost preview under the input
@@ -360,6 +386,48 @@ struct BacklogView: View {
             ghostPreviewTask?.cancel()
             slotPreviewCache.cancelAll()
         }
+        // Inline deadline picker for the row's «Set deadline…» context-menu
+        // item. Anchors on the BacklogView root rather than per-row
+        // because SwiftUI's `.contextMenu` + `.popover(item:)` on the same
+        // row fight for presentation; a view-level popover is the standard
+        // workaround. Save → `updateTask` + undo toast; Cancel discards.
+        .popover(item: $deadlinePickerTask, arrowEdge: .top) { task in
+            DeadlinePickerPopover(
+                initialDeadline: task.deadline,
+                title: task.title,
+                onSave: { newDeadline in
+                    updateTaskDeadline(task: task, to: newDeadline)
+                    deadlinePickerTask = nil
+                },
+                onCancel: { deadlinePickerTask = nil }
+            )
+        }
+    }
+
+    /// Update the task's `deadline` and surface an undo toast — the same
+    /// pattern as `toggleUrgent`. Snapshot before mutation so the undo
+    /// closure can restore exact state regardless of subsequent edits.
+    private func updateTaskDeadline(task: BacklogTask, to newDeadline: Date?) {
+        let snapshot = task
+        var updated = task
+        updated.deadline = newDeadline
+        guard updated != snapshot else { return }
+        withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
+            backlogService.updateTask(updated)
+        }
+        let label: String
+        if let deadline = newDeadline {
+            // Birman: вердикт-toast говорит человеку «куда я попал», а не
+            // показывает технический timestamp. Today / Tomorrow / weekday
+            // / abbreviated date — same vocabulary as the row meta itself.
+            let formatted = deadline.formatted(date: .abbreviated, time: .shortened)
+            label = "Set deadline on \u{201C}\(task.title)\u{201D} to \(formatted)"
+        } else {
+            label = "Cleared deadline on \u{201C}\(task.title)\u{201D}"
+        }
+        onUndoableAction?(label) { [backlogService] in
+            backlogService.updateTask(snapshot)
+        }
     }
 
     /// Invisible background view that reads the hosting window's visible
@@ -400,15 +468,23 @@ struct BacklogView: View {
                 )
                 .help(capacityRingTooltip)
 
-                // Verdict next to the ring — «Done by 17:30» / «1h over» /
-                // «After hours · 3h queued». Replaces the older «5h / 3h»
-                // numbers (which stay reachable through the ring's popover
-                // and tooltip) so the inline label is interpretation, not
-                // arithmetic the reader has to do themselves.
+                // Verdict next to the ring — «Done by 17:30» / «1h over
+                // capacity» / «After hours · 3h queued». Replaces the older
+                // «5h / 3h» numbers (which stay reachable through the ring's
+                // popover and tooltip) so the inline label is interpretation,
+                // not arithmetic the reader has to do themselves.
                 BacklogCapacityLabel(
                     pendingMinutes: pendingWorkloadMinutes,
+                    overflowingCount: overflowingTaskCount,
                     optimizerService: optimizerService
                 )
+
+                // Middot separator between the verdict and the count —
+                // turns the run-on «9h over capacity 14 1 urgent» into three
+                // visually-separated facts. Birman: middot is the standard
+                // Russian/Mac typographic glue between commensurate items;
+                // the eye reads each side as its own object.
+                headerSeparator
             }
 
             Button {
@@ -420,30 +496,26 @@ struct BacklogView: View {
                     expansion = expansion.next
                 }
             } label: {
-                // Слово «Tasks» убрано: capacity ring + verdict-метка слева
-                // уже несут смысл «это блок задач», а отдельная подпись на
-                // 360pt popover'е обрезалась в «Ta…». Бирман: не подписывай
-                // то, что и так понятно. Chevron остаётся — он отвечает за
-                // disclosure, цифра — за объём.
+                // Count + plural «task/tasks» word. The previous
+                // bare-number layout relied on the capacity verdict to imply
+                // «это про задачи», which broke when the verdict was a time
+                // («Done by 17:30») and left «14» dangling without a noun.
+                // The count now stands on its own as a self-describing fact.
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: expansion.iconName)
                         .font(.footnote)
                         .foregroundStyle(skin.resolvedTextSecondary)
                         .contentTransition(.symbolEffect(.replace))
 
-                    // Total count — always shown, tabular digits so the number
-                    // doesn't jitter horizontally when `.numericText()` rolls.
-                    Text("\(totalCount)")
+                    Text("\(totalCount) task\(totalCount == 1 ? "" : "s")")
                         .font(.subheadline.weight(.medium).monospacedDigit())
                         .foregroundStyle(skin.resolvedTextPrimary)
                         .contentTransition(.numericText())
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                 }
             }
             .buttonStyle(.plain)
-            // Tooltip carries both pieces — what the number means and what
-            // a click does — since the «Tasks» label was removed from the
-            // glyph itself. Without it the chevron+number was a mystery
-            // pair on hover.
             .help("\(totalCount) task\(totalCount == 1 ? "" : "s") \u{00B7} \(expansion.accessibilityHint.lowercased())")
             .accessibilityLabel("\(totalCount) tasks")
             .accessibilityHint(expansion.accessibilityHint)
@@ -460,10 +532,13 @@ struct BacklogView: View {
             }
 
             // Urgent-count pill — now a real control. Clicking it toggles
-            // the urgent-only filter. Middot separator visually attaches it
-            // to the total count without the two numbers fighting.
+            // the urgent-only filter. The leading middot visually frames
+            // the pill as a third sibling fact next to the verdict and the
+            // count, so the row reads as «verdict · count · urgent» —
+            // three separable thoughts instead of one runny line.
             // Birman: «информация — это кнопка», иначе это просто краска.
             if urgentCount > 0 {
+                headerSeparator
                 urgentFilterButton(urgentCount: urgentCount)
             }
 
@@ -519,8 +594,24 @@ struct BacklogView: View {
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .help("Smart sort active — tap to show in user order")
-        .accessibilityLabel("Smart sort active — tap to disable")
+        // The capacity sections (FITS / spill-over) are computed AFTER
+        // smart-sort runs, so within each group the rows are smart-sorted
+        // and across groups the boundary marks the capacity cutoff. The
+        // tooltip names that interaction so the user understands the «two
+        // tops of priority» they see when both signals are active.
+        .help("Smart sort active — sorted by priority within each capacity group. Tap to show in user order.")
+        .accessibilityLabel("Smart sort active, ordered by priority within capacity groups — tap to disable")
+    }
+
+    /// Middot divider used between the three header facts (verdict, count,
+    /// urgent). Tertiary tint so it reads as punctuation, not a sibling
+    /// piece of information. `accessibilityHidden` keeps VoiceOver from
+    /// announcing «middle dot» between every field.
+    private var headerSeparator: some View {
+        Text("\u{00B7}")
+            .font(.footnote)
+            .foregroundStyle(skin.resolvedTextTertiary)
+            .accessibilityHidden(true)
     }
 
     /// Fullscreen button — `arrow.up.left.and.arrow.down.right` это родная
@@ -646,6 +737,18 @@ struct BacklogView: View {
         allActiveTasks.reduce(0) { $0 + $1.durationMinutes }
     }
 
+    /// Number of active tasks that don't fit in the remaining workday —
+    /// drives the «· N don't fit» suffix on the capacity verdict so the
+    /// reader doesn't have to subtract fits from the total. Computed off
+    /// `allActiveTasks` (not the urgent-filtered view) for the same reason
+    /// `pendingWorkloadMinutes` does — capacity is about the whole queue.
+    private var overflowingTaskCount: Int {
+        BacklogLogic.capacityPartition(
+            allActiveTasks,
+            remainingWorkdayMinutes: remainingWorkdayMinutes
+        ).overflowing.count
+    }
+
     /// Remaining minutes between "now" and the end of the working day.
     /// Clamped to zero past the workday so the ring stays at 100% after hours
     /// instead of going negative. Uses `OptimizerService.workingHours` — the
@@ -713,31 +816,67 @@ struct BacklogView: View {
     /// already surfaces its context in the subtitle.
     @ViewBuilder
     private func taskRowsContent(visibleIDs: Set<String>?) -> some View {
-        // Two rendering strategies:
-        // 1. Smart Sort on — flat list ordered by `smartScore`, grouping
-        //    dropped so the queue reads as a single priority list.
-        // 2. Default — user's drag order honoured via `groupedByContext`.
+        // Single rendering path: the visible task list partitioned by
+        // capacity. Smart-sort flattens to score order; otherwise we honour
+        // the user's drag order via `groupedByContext` (which clusters but
+        // doesn't print headers — context is already on each row's subtitle).
+        // Capacity sections compose on top of whichever order applies.
         //
-        // Fullscreen Backlog is a sibling navigation target, not a flag here.
-        // When a `visibleIDs` set is passed, only those tasks render — used
-        // by animations that reveal one row at a time.
-        let baseOrder: [BacklogTask] = useSmartSort ? smartSortedActiveTasks : activeTasks
+        // Birman: «иерархия из природы данных» — sections fall out of the
+        // capacity math; nothing to label as «FITS» (that's the obvious
+        // default). Only the overflow gets a printed marker line because
+        // that's the surprise the reader needs to see.
+        let baseOrder: [BacklogTask]
+        if useSmartSort {
+            baseOrder = smartSortedActiveTasks
+        } else {
+            // Honour `groupedByContext` ordering, but respect the urgent-only
+            // filter so the partition doesn't include rows the user has
+            // hidden — otherwise the marker would read «9h spill over» while
+            // showing a list that doesn't contain those 9h.
+            let grouped = backlogService.groupedByContext.flatMap(\.tasks)
+            if urgentOnlyFilter {
+                baseOrder = grouped.filter { isUrgent($0) }
+            } else {
+                baseOrder = grouped
+            }
+        }
         let ids: Set<String> = visibleIDs ?? Set(baseOrder.map(\.id))
 
-        if useSmartSort {
-            ForEach(baseOrder) { task in
-                if ids.contains(task.id) {
-                    taskRowBody(task)
-                }
+        let plan = BacklogLogic.CapacitySectionPlan(
+            orderedTasks: baseOrder,
+            remainingWorkdayMinutes: remainingWorkdayMinutes
+        )
+
+        ForEach(plan.fitting) { task in
+            if ids.contains(task.id) {
+                taskRowBody(task)
             }
-        } else {
-            let grouped = backlogService.groupedByContext
-            ForEach(grouped, id: \.context) { group in
-                ForEach(group.tasks) { task in
-                    if ids.contains(task.id) {
-                        taskRowBody(task)
-                    }
-                }
+        }
+
+        if plan.hasOverflow {
+            // Fade the marker to half opacity while a row is being dragged
+            // so the user sees the boundaries are recomputing — they're
+            // about to re-bucket when the drop lands. `reduceMotion`
+            // collapses the fade to a constant opacity (no transition).
+            // The plan called for fading section labels; we have only one
+            // marker now, but the principle is the same.
+            let isDragging = coordinator?.isDraggingTask == true
+            SpillOverMarker(
+                overflowMinutes: plan.overflowMinutes,
+                overflowCount: plan.overflowing.count,
+                onSchedule: { await onScheduleBacklog?() },
+                onFocusOnDeadlines: plan.overflowHasUrgent ? { await onFocusOnDeadlines?() } : nil
+            )
+            .padding(.horizontal, DS.Spacing.sm)
+            .opacity(isDragging ? DS.Opacity.half : 1)
+            .motionAwareAnimation(DS.Animation.quick, value: isDragging, reduceMotion: reduceMotion)
+            .transition(.opacity)
+        }
+
+        ForEach(plan.overflowing) { task in
+            if ids.contains(task.id) {
+                taskRowBody(task)
             }
         }
     }
@@ -755,6 +894,8 @@ struct BacklogView: View {
             isDragging: coordinator?.draggedTask?.taskId == task.id,
             canMoveUp: canMoveUp(task),
             canMoveDown: canMoveDown(task),
+            wasJustDropped: lastDroppedTaskId == task.id,
+            defaultTaskDurationMinutes: optimizerService.defaultTaskDurationMinutes,
             onComplete: { completeTaskWithUndo(task) },
             onEdit: { onEditTask?(task) },
             onDelete: { onDeleteTask?(task) },
@@ -767,6 +908,9 @@ struct BacklogView: View {
             onReorderDrop: { dropped in
                 handleReorderDrop(dropped: dropped, targetId: task.id)
             },
+            onReschedule: onRescheduleTask.map { handler in { handler(task) } },
+            onSetDeadline: { deadlinePickerTask = task },
+            onToggleUrgent: { toggleUrgent(task) },
             onMoveUp: { moveTask(task, by: -1) },
             onMoveDown: { moveTask(task, by: +1) },
             onMoveToTop: { moveTaskToEdge(task, toTop: true) },
@@ -886,6 +1030,20 @@ struct BacklogView: View {
         }
         hasDragged = true
         coordinator?.endDrag()
+
+        // Pulse outline on the dropped row so the eye can find where it
+        // landed if it crossed sections. The 0.5 s window is enough to
+        // register without lingering. `reduceMotion` rules out the
+        // animation and falls back to an instant flash via the row's
+        // own motion-aware modifier.
+        let droppedId = originalTask.id
+        lastDroppedTaskId = droppedId
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(500))
+            if lastDroppedTaskId == droppedId {
+                lastDroppedTaskId = nil
+            }
+        }
 
         // Undo: restore index + context in one step.
         let taskId = originalTask.id
@@ -1052,6 +1210,36 @@ struct BacklogView: View {
         }
     }
 
+    /// Toggle the «urgent» state on a task by setting (or clearing) a
+    /// today-end deadline. The context-menu only surfaces this action when
+    /// the task either has no deadline or already has today's deadline (see
+    /// `BacklogTaskRow.canToggleUrgent`), so we never silently overwrite a
+    /// user-planned future deadline. Persists via `updateTask` and pipes
+    /// through the standard undo toast so a misclick is a single Cmd-Z away.
+    private func toggleUrgent(_ task: BacklogTask) {
+        let snapshot = task
+        var updated = task
+        let calendar = Calendar.current
+        if let deadline = task.deadline, calendar.isDateInToday(deadline) {
+            updated.deadline = nil
+        } else {
+            // End of today — keeps the task urgent for the rest of the
+            // workday without claiming an unrealistic morning slot.
+            updated.deadline = calendar.date(
+                bySettingHour: 23, minute: 59, second: 0, of: Date()
+            ) ?? Date()
+        }
+        withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
+            backlogService.updateTask(updated)
+        }
+        let label = updated.deadline == nil
+            ? "Cleared urgent on \u{201C}\(task.title)\u{201D}"
+            : "Marked \u{201C}\(task.title)\u{201D} urgent"
+        onUndoableAction?(label) { [backlogService] in
+            backlogService.updateTask(snapshot)
+        }
+    }
+
     // MARK: - Add Task Field
 
     private var addTaskField: some View {
@@ -1059,7 +1247,7 @@ struct BacklogView: View {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "plus")
                     .font(.footnote)
-                    .foregroundStyle(isInputFocused ? AnyShapeStyle(skin.accentColor) : AnyShapeStyle(.tertiary))
+                    .foregroundStyle(isInputFocused ? AnyShapeStyle(skin.accentColor) : AnyShapeStyle(skin.resolvedTextSecondary))
 
                 // Birman: placeholder — возможность научить синтаксису, а не
                 // просто пустое «Add task…». На фокусе остаётся краткий
@@ -1104,14 +1292,36 @@ struct BacklogView: View {
                 RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
                     .fill(skin.accentColor.opacity(isInputFocused ? DS.Opacity.lightFill : DS.Opacity.subtleFill))
             )
+            // Idle stroke makes the input read as a field on every wallpaper —
+            // without it, the low-opacity fill alone can disappear into busy
+            // or dark backgrounds. On focus the stroke thickens and brightens
+            // to the accent so the state change is unmistakable. Birman:
+            // «поле должно выглядеть как полем», и состояние должно быть
+            // постоянно видимым.
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
+                    .strokeBorder(
+                        skin.accentColor.opacity(isInputFocused ? DS.Opacity.softAccent : DS.Opacity.borderIdle),
+                        lineWidth: isInputFocused ? DS.Border.selection : DS.Border.standard
+                    )
+            )
             .motionAwareAnimation(DS.Animation.quick, value: recognizedDurationMinutes, reduceMotion: reduceMotion)
+            .motionAwareAnimation(DS.Animation.quick, value: isInputFocused, reduceMotion: reduceMotion)
 
-            // Hint for new users — disappears once they add a task.
+            // Hint for new users — disappears once they add a task. Birman:
+            // empty state should onboard, not blank-out. Two phrasings:
+            //   • All-empty (no tombstones, no frozen) → action-oriented
+            //     instruction with both add paths named (type vs drag) so
+            //     the user sees what they can do.
+            //   • Has tombstones / frozen tasks (so they've used the
+            //     backlog before) → quieter «No tasks queued» — they know
+            //     the affordance, just need the empty-state acknowledged.
             if activeTasks.isEmpty && !isInputFocused {
-                Text("Tasks you add here will be scheduled into free slots")
+                Text(emptyBacklogHint)
                     .font(.footnote)
                     .foregroundStyle(skin.resolvedTextTertiary)
                     .transition(.opacity)
+                    .accessibilityLabel(emptyBacklogHint)
             }
 
             // Focused-state shortcut hint. HIG: discoverable shortcuts —
@@ -1143,6 +1353,21 @@ struct BacklogView: View {
         activeTasks.isEmpty
             ? "Add task — try: Write report 30m"
             : "Add task\u{2026}"
+    }
+
+    /// Plan: 2-tier hint under the empty backlog. First-time users (no
+    /// completed-today, no frozen tombstones — i.e. never used the backlog
+    /// at all) get the action-oriented onboarding copy that names both
+    /// add paths. Returning users with at least one tombstone get the
+    /// quieter «No tasks queued» line — they know the affordance, just
+    /// need the empty-state acknowledged.
+    private var emptyBacklogHint: String {
+        let hasEverUsedBacklog = !completedToday.isEmpty
+            || !backlogService.frozen.isEmpty
+        if hasEverUsedBacklog {
+            return "No tasks queued."
+        }
+        return "Type below to add a task, or drag one in from the timeline."
     }
 
     // MARK: - Ghost Preview

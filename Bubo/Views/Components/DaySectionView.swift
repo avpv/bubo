@@ -1,9 +1,23 @@
 import SwiftUI
 
 /// Section header used inside the MenuBarView List
-struct DaySectionHeader: View {
+struct DaySectionHeader<Trailing: View>: View {
     let date: Date
     let count: Int
+    /// Optional trailing accessory rendered after the count badge —
+    /// used by the «Today» row to host the day-scope `Plan day ▾` menu
+    /// next to its data. Other days pass `EmptyView` (default).
+    let trailing: Trailing
+
+    init(
+        date: Date,
+        count: Int,
+        @ViewBuilder trailing: () -> Trailing = { EmptyView() }
+    ) {
+        self.date = date
+        self.count = count
+        self.trailing = trailing()
+    }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
@@ -38,6 +52,8 @@ struct DaySectionHeader: View {
                 .adaptiveBadgeFill(skin.resolvedTextSecondary)
                 .clipShape(Capsule())
                 .contentTransition(.numericText())
+
+            trailing
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(dayTitle), \(count) \(count == 1 ? "event" : "events")")

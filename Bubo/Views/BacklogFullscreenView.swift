@@ -38,6 +38,17 @@ struct BacklogFullscreenView: View {
     var onExit: () -> Void
     var onEditTask: (BacklogTask) -> Void
     var onUndoableAction: ((_ message: String, _ undo: @escaping () -> Void) -> Void)? = nil
+    /// Schedule the unscheduled backlog onto the calendar via the optimizer.
+    /// Async so the spill-over marker can show a loading spinner inline
+    /// during the run. Wired from `MenuBarView.runQuickAction(.scheduleBacklog,…)`.
+    var onScheduleBacklog: (() async -> Void)? = nil
+    /// Run the deadline-mode preset. Surfaces as the conditional second
+    /// action-link in the spill-over marker when overflow contains urgent
+    /// tasks. Wired from `MenuBarView.runQuickAction(.deadlineMode,…)`.
+    var onFocusOnDeadlines: (() async -> Void)? = nil
+    /// Open the command palette seeded with a single task (per-task scope
+    /// optimizer entry — context menu's «Reschedule…» on a row).
+    var onRescheduleTask: ((BacklogTask) -> Void)? = nil
 
     @Environment(\.activeSkin) private var skin
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -65,6 +76,11 @@ struct BacklogFullscreenView: View {
     /// Smart-sort toggle — re-orders the list by `BacklogLogic.smartScore`
     /// instead of user drag order. Session-local.
     @State private var useSmartSort: Bool = false
+
+    /// Task whose deadline is currently being edited via the row's
+    /// «Set deadline…» context-menu item. Mirrors `BacklogView` so both
+    /// modes host the same inline picker.
+    @State private var deadlinePickerTask: BacklogTask? = nil
 
     /// Все активные задачи (без urgent-фильтров и пр.) — общая основа для
     /// расчёта capacity ring (тот показывает общий груз очереди, а не
@@ -152,6 +168,16 @@ struct BacklogFullscreenView: View {
         )
     }
 
+    /// Count of active tasks that don't fit in the remaining workday.
+    /// Drives the «· N don't fit» suffix on the capacity verdict so the
+    /// user reads the overflow count directly instead of subtracting.
+    private var overflowingTaskCount: Int {
+        BacklogLogic.capacityPartition(
+            activeTasks,
+            remainingWorkdayMinutes: remainingWorkdayMinutes
+        ).overflowing.count
+    }
+
     private var capacityRingTooltip: String {
         "Backlog: \(DS.formatMinutes(pendingWorkloadMinutes)); remaining today: \(DS.formatMinutes(remainingWorkdayMinutes))"
     }
@@ -187,6 +213,20 @@ struct BacklogFullscreenView: View {
         }
         .frame(width: DS.Popover.width, height: DS.Popover.height)
         .background(hotKeyBindings)
+        // Inline deadline picker — mirrors the inline `BacklogView` so the
+        // «Set deadline…» context-menu item produces the same popover in
+        // both backlog modes.
+        .popover(item: $deadlinePickerTask, arrowEdge: .top) { task in
+            DeadlinePickerPopover(
+                initialDeadline: task.deadline,
+                title: task.title,
+                onSave: { newDeadline in
+                    updateTaskDeadline(task: task, to: newDeadline)
+                    deadlinePickerTask = nil
+                },
+                onCancel: { deadlinePickerTask = nil }
+            )
+        }
         .onChange(of: newTaskTitle) { _, newValue in
             parsedNewTaskTitle = BacklogTitleParser.parse(newValue)
         }
@@ -232,6 +272,7 @@ struct BacklogFullscreenView: View {
 
                 BacklogCapacityLabel(
                     pendingMinutes: pendingWorkloadMinutes,
+                    overflowingCount: overflowingTaskCount,
                     optimizerService: optimizerService
                 )
 
@@ -365,8 +406,15 @@ struct BacklogFullscreenView: View {
                 .contentTransition(.symbolEffect(.replace))
         }
         .buttonStyle(.plain)
-        .help(useSmartSort ? "Show in user order" : "Smart sort by deadline + priority")
-        .accessibilityLabel(useSmartSort ? "Smart sort on — tap for user order" : "Smart sort off — tap to enable")
+        // Capacity sections compose on top of the sort order, so when
+        // smart-sort is active each group (fits / spill-over) reads
+        // priority-first within itself. Tooltip explains the interaction.
+        .help(useSmartSort
+            ? "Sorted by priority within each capacity group. Tap to show in user order."
+            : "Smart sort by deadline + priority")
+        .accessibilityLabel(useSmartSort
+            ? "Smart sort on, ordered by priority within capacity groups — tap for user order"
+            : "Smart sort off — tap to enable")
     }
 
     // MARK: - Main content
@@ -377,19 +425,44 @@ struct BacklogFullscreenView: View {
             emptyState
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
+            // Capacity sections — matches the inline `BacklogView` layout.
+            // Hot-key indices (1–9 for the first nine VISIBLE rows) need to
+            // span the partition: the first task in `fitting` gets index 1,
+            // and indices keep counting through the marker into `overflowing`
+            // so digit-press still completes the Nth row the user sees.
+            let plan = BacklogLogic.CapacitySectionPlan(
+                orderedTasks: visibleTasks,
+                remainingWorkdayMinutes: remainingWorkdayMinutes
+            )
+            let fittingCount = plan.fitting.count
+
             ScrollView {
                 VStack(spacing: DS.Spacing.xs) {
-                    ForEach(Array(visibleTasks.enumerated()), id: \.element.id) { index, task in
-                        // Hot-key digit передаётся первым `maxHotKeyTasks`
-                        // строкам — checkbox tooltip учит «press N to
-                        // complete» при наведении. Все строки равноценны,
-                        // порядок задаёт user drag (или smart-sort, если
-                        // включён).
+                    ForEach(Array(plan.fitting.enumerated()), id: \.element.id) { index, task in
                         row(
                             for: task,
                             hotKey: index < Self.maxHotKeyTasks ? index + 1 : nil
                         )
                     }
+
+                    if plan.hasOverflow {
+                        SpillOverMarker(
+                            overflowMinutes: plan.overflowMinutes,
+                            overflowCount: plan.overflowing.count,
+                            onSchedule: { await onScheduleBacklog?() },
+                            onFocusOnDeadlines: plan.overflowHasUrgent ? { await onFocusOnDeadlines?() } : nil
+                        )
+                        .transition(.opacity)
+                    }
+
+                    ForEach(Array(plan.overflowing.enumerated()), id: \.element.id) { index, task in
+                        let absoluteIndex = fittingCount + index
+                        row(
+                            for: task,
+                            hotKey: absoluteIndex < Self.maxHotKeyTasks ? absoluteIndex + 1 : nil
+                        )
+                    }
+
                     tombstones
                 }
                 // Inside the card chrome — match BacklogView's inner padding
@@ -477,6 +550,7 @@ struct BacklogFullscreenView: View {
             isUrgent: BacklogLogic.isUrgent(task),
             canMoveUp: canMoveUp(task),
             canMoveDown: canMoveDown(task),
+            defaultTaskDurationMinutes: optimizerService.defaultTaskDurationMinutes,
             onComplete: { complete(task) },
             onEdit: { onEditTask(task) },
             onDelete: { delete(task) },
@@ -484,6 +558,9 @@ struct BacklogFullscreenView: View {
             onReorderDrop: { dropped in
                 handleReorderDrop(dropped: dropped, targetId: task.id)
             },
+            onReschedule: onRescheduleTask.map { handler in { handler(task) } },
+            onSetDeadline: { deadlinePickerTask = task },
+            onToggleUrgent: { toggleUrgent(task) },
             onMoveUp: { moveTask(task, by: -1) },
             onMoveDown: { moveTask(task, by: +1) },
             onMoveToTop: { moveTaskToEdge(task, toTop: true) },
@@ -553,7 +630,7 @@ struct BacklogFullscreenView: View {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "plus")
                     .font(.footnote)
-                    .foregroundStyle(isInputFocused ? AnyShapeStyle(skin.accentColor) : AnyShapeStyle(.tertiary))
+                    .foregroundStyle(isInputFocused ? AnyShapeStyle(skin.accentColor) : AnyShapeStyle(skin.resolvedTextSecondary))
 
                 TextField(addTaskPlaceholder, text: $newTaskTitle)
                     .textFieldStyle(.plain)
@@ -584,6 +661,16 @@ struct BacklogFullscreenView: View {
             .background(
                 RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
                     .fill(skin.accentColor.opacity(isInputFocused ? DS.Opacity.lightFill : DS.Opacity.subtleFill))
+            )
+            // Idle stroke makes the input read as a field on every wallpaper.
+            // Mirrors the inline BacklogView treatment so both backlog modes
+            // share the same affordance language.
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
+                    .strokeBorder(
+                        skin.accentColor.opacity(isInputFocused ? DS.Opacity.softAccent : DS.Opacity.borderIdle),
+                        lineWidth: isInputFocused ? DS.Border.selection : DS.Border.standard
+                    )
             )
             .motionAwareAnimation(DS.Animation.quick, value: parsedNewTaskTitle.durationMinutes, reduceMotion: reduceMotion)
 
@@ -800,6 +887,54 @@ struct BacklogFullscreenView: View {
             backlogService.freezeTask(id: task.id)
         }
         onUndoableAction?("Froze \u{201C}\(task.title)\u{201D}") { [backlogService] in
+            backlogService.updateTask(snapshot)
+        }
+    }
+
+    /// Update a task's deadline via the inline picker. Mirrors
+    /// `BacklogView.updateTaskDeadline` so both backlog modes share the
+    /// same undo + toast pipeline.
+    private func updateTaskDeadline(task: BacklogTask, to newDeadline: Date?) {
+        let snapshot = task
+        var updated = task
+        updated.deadline = newDeadline
+        guard updated != snapshot else { return }
+        withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
+            backlogService.updateTask(updated)
+        }
+        let label: String
+        if let deadline = newDeadline {
+            let formatted = deadline.formatted(date: .abbreviated, time: .shortened)
+            label = "Set deadline on \u{201C}\(task.title)\u{201D} to \(formatted)"
+        } else {
+            label = "Cleared deadline on \u{201C}\(task.title)\u{201D}"
+        }
+        onUndoableAction?(label) { [backlogService] in
+            backlogService.updateTask(snapshot)
+        }
+    }
+
+    /// Toggle urgent state via today-end deadline. Mirrors the inline
+    /// `BacklogView.toggleUrgent` so the context-menu acts identically in
+    /// both modes.
+    private func toggleUrgent(_ task: BacklogTask) {
+        let snapshot = task
+        var updated = task
+        let calendar = Calendar.current
+        if let deadline = task.deadline, calendar.isDateInToday(deadline) {
+            updated.deadline = nil
+        } else {
+            updated.deadline = calendar.date(
+                bySettingHour: 23, minute: 59, second: 0, of: Date()
+            ) ?? Date()
+        }
+        withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
+            backlogService.updateTask(updated)
+        }
+        let label = updated.deadline == nil
+            ? "Cleared urgent on \u{201C}\(task.title)\u{201D}"
+            : "Marked \u{201C}\(task.title)\u{201D} urgent"
+        onUndoableAction?(label) { [backlogService] in
             backlogService.updateTask(snapshot)
         }
     }

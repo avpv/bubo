@@ -55,6 +55,40 @@ struct BacklogTaskRow: View {
     /// to the add-task field instead.
     var sprintHotKey: Int? = nil
 
+    /// Reschedule this task via the command palette (per-task scope optimizer
+    /// entry point). Opens ⌘K seeded with the task so it lands on the
+    /// «Schedule "<title>"» / «Find best time» suggestions. nil = no
+    /// reschedule path (palette unavailable).
+    var onReschedule: (() -> Void)? = nil
+    /// Open a date-picker popover for this task's deadline. Driven by the
+    /// row's context menu (Set deadline…). nil = no inline picker —
+    /// `Edit details…` still opens the full editor with a deadline field.
+    var onSetDeadline: (() -> Void)? = nil
+    /// Toggle the urgency stripe by setting (or clearing) a today-end
+    /// deadline. Driven from the row's context menu — Birman: «явное
+    /// действие должно совпадать с явным сигналом», so the «Mark urgent»
+    /// label flips to «Clear urgent» when the task already has today's
+    /// deadline. nil = no urgency-toggle path (read-only context).
+    var onToggleUrgent: (() -> Void)? = nil
+
+    /// True for ~0.5\u{00A0}s after the user drops this row via drag. Renders
+    /// a brief accent-coloured outline so the eye finds the new resting
+    /// position even when the drop crossed the capacity-section boundary.
+    /// Caller toggles back to false after the animation window closes.
+    /// `accessibilityReduceMotion` collapses the animation to an instant
+    /// flash via the row's existing motion-aware modifier path.
+    var wasJustDropped: Bool = false
+
+    /// User's default task duration (from `OptimizerService`). Drives the
+    /// «hide `1 h`» rule: when the row's only meta would be the default
+    /// duration and another trailing-meta is present (recurrence,
+    /// dependency, priority dot), the duration is suppressed so the
+    /// list reads as a clean column of titles. Birman: don't print the
+    /// obvious — every task uses 1 h unless told otherwise; saying so on
+    /// every line is noise. When no other meta is present, duration is
+    /// kept so the row's right column isn't empty.
+    var defaultTaskDurationMinutes: Int = 60
+
     @State private var isHovered = false
     @State private var isReorderTargeted = false
     /// True for the brief moment between «user tapped checkbox» and «row
@@ -83,19 +117,69 @@ struct BacklogTaskRow: View {
     ///
     /// Birman: "one piece of information, not a salad." The deadline wins
     /// whenever it's set — it's the most actionable answer to "should I do
-    /// this now?" — and gets the urgency colour (red today/overdue,
-    /// standard secondary otherwise). Without a deadline, duration fills
-    /// in; it's always useful for "does this fit in my next slot?"
+    /// this now?" — and reads in plain secondary tint. Urgency is carried
+    /// by the leading red stripe (see `urgentStripe` overlay below) so
+    /// printing the deadline text in destructive red would duplicate the
+    /// signal. Birman: «не дублируй сигнал состояния». The pulsing
+    /// `OverduePulseDot` next to the text remains — overdue is a subtype
+    /// of urgent that earns a motion cue on top of the stripe.
+    /// Without a deadline, duration fills in; always useful for
+    /// "does this fit in my next slot?"
     private var metaText: Text {
         if let deadline = task.deadline {
-            let color: Color = isUrgent
-                ? skin.resolvedDestructiveColor
-                : skin.resolvedTextSecondary
             return Text(deadlineLabel(deadline))
-                .foregroundStyle(color)
+                .foregroundStyle(skin.resolvedTextSecondary)
         }
         return Text(DS.formatMinutes(task.durationMinutes))
             .foregroundStyle(skin.resolvedTextSecondary)
+    }
+
+    /// Whether the row carries any non-deadline trailing metadata that the
+    /// user can scan for «is this task different from the default?»
+    /// Recurrence, dependency, and priority all qualify — overdue is
+    /// deadline-only and handled in the deadline branch.
+    private var hasNonDurationMeta: Bool {
+        task.isRecurring
+            || !task.dependsOn.isEmpty
+            || task.priority == .high
+    }
+
+    /// Whether the «Mark urgent / Clear urgent» context-menu item is
+    /// applicable. The toggle has a clean semantic only when the task either
+    /// has no deadline (Mark urgent → set today) or already has today's
+    /// deadline (Clear urgent → unset). When the task has a future deadline,
+    /// «Mark urgent» would silently overwrite the user's planned date and
+    /// «Clear urgent» wouldn't apply, so we hide the action — Birman: «не
+    /// предлагай выбор без смысла».
+    private var canToggleUrgent: Bool {
+        guard onToggleUrgent != nil else { return false }
+        guard let deadline = task.deadline else { return true }
+        return Calendar.current.isDateInToday(deadline)
+    }
+
+    /// «Mark urgent» when no deadline, «Clear urgent» when the deadline is
+    /// today. The label flips to match the action — Birman: «постоянная
+    /// видимость состояния».
+    private var urgencyToggleLabel: String {
+        if let deadline = task.deadline,
+           Calendar.current.isDateInToday(deadline) {
+            return "Clear urgent"
+        }
+        return "Mark urgent"
+    }
+
+    /// Whether the row should render `metaText`. Hides the default-duration
+    /// label («1 h») when another piece of meta is already telling the
+    /// reader something — avoids the «wall of identical 1 h» effect on
+    /// deadline-less rows. Always shows when:
+    /// - the task has a deadline (the deadline IS the meta),
+    /// - the duration differs from the user's default,
+    /// - or no other meta is present (otherwise the right column would be
+    ///   visually empty, which Birman calls «загадочный пробел»).
+    private var shouldShowMetaText: Bool {
+        if task.deadline != nil { return true }
+        if task.durationMinutes != defaultTaskDurationMinutes { return true }
+        return !hasNonDurationMeta
     }
 
     /// Everything that was pushed off the primary line — duration (when
@@ -179,7 +263,38 @@ struct BacklogTaskRow: View {
             value: isDragging
         )
         .background(rowBackground)
+        .overlay(alignment: .leading) {
+            // Single-channel urgency signal — a 2pt red bar on the leading
+            // edge of the row. Replaces the previous deadline-text-color
+            // duplication. Birman: «один сигнал на состояние». The stripe
+            // sits inside the row's outer frame so it doesn't shift the
+            // baseline; vertical inset keeps it visually inside the
+            // rounded corners.
+            if isUrgent {
+                RoundedRectangle(cornerRadius: 1, style: .continuous)
+                    .fill(skin.resolvedDestructiveColor)
+                    .frame(width: 2)
+                    .padding(.vertical, DS.Spacing.xxs)
+                    .accessibilityHidden(true)
+            }
+        }
         .overlay { focusRing }
+        .overlay {
+            // Drop-pulse outline: a brief accent-coloured ring that flashes
+            // for ~0.5\u{00A0}s after the user drops this row via drag, so
+            // the eye finds the landing spot when the row crossed the
+            // fits → spill-over boundary. Driven by `wasJustDropped` set
+            // by the parent in `handleReorderDrop`.
+            if wasJustDropped {
+                RoundedRectangle(cornerRadius: DS.Size.subtleCornerRadius, style: .continuous)
+                    .strokeBorder(skin.accentColor.opacity(DS.Opacity.softAccent), lineWidth: DS.Border.selection)
+                    .transition(.opacity)
+            }
+        }
+        .animation(
+            DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion),
+            value: wasJustDropped
+        )
         .onHover { hovering in
             withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
                 isHovered = hovering
@@ -239,7 +354,26 @@ struct BacklogTaskRow: View {
         }
         .contextMenu {
             Button("Complete") { onComplete() }
-            Button("Edit") { onEdit() }
+            Button("Edit details\u{2026}") { onEdit() }
+
+            // Per-task scope optimizer actions — Birman: «команды живут
+            // рядом со своим объектом». «Reschedule» seeds ⌘K with this
+            // task; «Set deadline» opens an inline date picker; «Mark
+            // urgent» toggles a today deadline (the same deadline that
+            // drives the leading red stripe).
+            if onReschedule != nil || onSetDeadline != nil || canToggleUrgent {
+                Divider()
+                if let reschedule = onReschedule {
+                    Button("Reschedule\u{2026}") { reschedule() }
+                }
+                if let setDeadline = onSetDeadline {
+                    Button("Set deadline\u{2026}") { setDeadline() }
+                }
+                if canToggleUrgent, let toggle = onToggleUrgent {
+                    Button(urgencyToggleLabel) { toggle() }
+                }
+            }
+
             Divider()
             Button("Move Up") { onMoveUp() }
                 .disabled(!canMoveUp)
@@ -404,6 +538,9 @@ struct BacklogTaskRow: View {
                         }
                     }
                     .foregroundStyle(skin.resolvedTextTertiary)
+                    .help((task.recurrenceTag?.isEmpty == false)
+                        ? "Recurring task: \(task.recurrenceTag!)"
+                        : "Recurring task")
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(
                         (task.recurrenceTag?.isEmpty == false)
@@ -439,10 +576,12 @@ struct BacklogTaskRow: View {
                     OverduePulseDot(reduceMotion: reduceMotion)
                         .accessibilityHidden(true)
                 }
-                metaText
-                    .font(.footnote)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                if shouldShowMetaText {
+                    metaText
+                        .font(.footnote)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
 
                 if isHovered, let secondary = secondaryMetaText {
                     secondary

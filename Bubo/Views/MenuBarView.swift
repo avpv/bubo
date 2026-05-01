@@ -9,8 +9,21 @@ struct MenuBarView: View {
     var agentService: AgentService
     var remindersSyncService: RemindersSyncService
 
+    @Environment(\.openSettings) private var openSettings
+
     @State private var navigation: Navigation = .list
     @State private var hasStartedSync = false
+    /// Becomes true 3\u{00A0}s after the first popover open, regardless of
+    /// whether the EventKit sync has produced events yet. Used to escalate
+    /// the «Syncing calendars…» panel into «Sync taking long» so the user
+    /// has a path to action when the system actually is stuck.
+    @State private var initialSyncTimeoutFired = false
+    /// Becomes true the first time `reminderService` reports a non-empty
+    /// event list, marking the sync as «produced something». Used to drop
+    /// out of the syncing panel once data lands, even before the 3\u{00A0}s
+    /// timeout. Once latched, never resets — the panel is one-shot per
+    /// app launch, not a recurring spinner on every empty state.
+    @State private var initialSyncDataArrived = false
     @State private var toastState = ToastState()
     @State private var scrollPositionID: String?
 
@@ -94,6 +107,10 @@ struct MenuBarView: View {
     /// Context for the command palette overlay. nil = hidden.
     struct PaletteContext: Equatable {
         var seedEvent: CalendarEvent? = nil
+        /// Per-task seed — set when the user opens the palette from a
+        /// backlog row's right-click → «Reschedule…». Routes to the
+        /// task-specific suggestions in `CommandPalette.suggestions`.
+        var seedTask: BacklogTask? = nil
         var seedSlotMinutes: Int? = nil
         var seedSlotStart: Date? = nil
         var seedSlotEnd: Date? = nil
@@ -162,6 +179,24 @@ struct MenuBarView: View {
                         },
                         onTimer: { event in
                             navigation = .timer(event)
+                        },
+                        onReschedule: { event in
+                            navigation = .list
+                            paletteContext = PaletteContext(seedEvent: event)
+                        },
+                        onExtend: { event in
+                            navigation = .list
+                            Task {
+                                await runQuickAction(
+                                    OptimizationRequest(
+                                        .onlyOptimize(eventIds: [event.id]),
+                                        .findSlotsForBacklog,
+                                        .horizon(.today), .speed(.quick), .scenarios(count: 1),
+                                        name: "Extend"
+                                    ),
+                                    label: "Extended \u{201C}\(event.title)\u{201D}"
+                                )
+                            }
                         }
                     )
                     .transition(
@@ -292,6 +327,16 @@ struct MenuBarView: View {
                             onEditTask: { task in navigation = .editTask(task) },
                             onUndoableAction: { message, undo in
                                 toastState.showSuccess(message, icon: "arrow.uturn.backward", onUndo: undo)
+                            },
+                            onScheduleBacklog: {
+                                await runQuickAction(.scheduleBacklog, label: "Scheduled backlog")
+                            },
+                            onFocusOnDeadlines: {
+                                await runQuickAction(.deadlineMode, label: "Focused on deadlines")
+                            },
+                            onRescheduleTask: { task in
+                                navigation = .list
+                                paletteContext = PaletteContext(seedTask: task)
                             }
                         )
                         .transition(
@@ -328,6 +373,7 @@ struct MenuBarView: View {
                     reminderService: reminderService,
                     agentService: agentService,
                     seedEvent: context.seedEvent,
+                    seedTask: context.seedTask,
                     seedSlotMinutes: context.seedSlotMinutes,
                     seedSlotStart: context.seedSlotStart,
                     seedSlotEnd: context.seedSlotEnd,
@@ -407,6 +453,22 @@ struct MenuBarView: View {
                 try? await Task.sleep(for: .seconds(5)) // wait for sync
                 await optimizerService.runWeekMockSimulator(reminderService: reminderService)
             }
+            // Escalate the «Syncing calendars…» panel to a long-running
+            // hint after 3\u{00A0}s. If data arrives sooner, the panel
+            // disappears via `initialSyncDataArrived` and the user never
+            // sees the «taking long» copy.
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(3))
+                initialSyncTimeoutFired = true
+            }
+        }
+        .onChange(of: reminderService.allEvents.isEmpty) { _, isEmpty in
+            // Latch on the first non-empty event list — we treat that as
+            // «sync produced something», which is enough to drop the
+            // syncing panel. We don't unlatch when events go back to
+            // empty later (e.g. user filters everything out); the panel
+            // is one-shot per app launch.
+            if !isEmpty { initialSyncDataArrived = true }
         }
         .onReceive(NotificationCenter.default.publisher(for: AppleCalendarService.authorizationDidChange)) { note in
             // Trust the grant result if the service posted one — the
@@ -702,6 +764,15 @@ struct MenuBarView: View {
                     // different action kinds.
                     toastState.showSuccess(message, icon: "arrow.uturn.backward", onUndo: undo)
                 },
+                onScheduleBacklog: {
+                    await runQuickAction(.scheduleBacklog, label: "Scheduled backlog")
+                },
+                onFocusOnDeadlines: {
+                    await runQuickAction(.deadlineMode, label: "Focused on deadlines")
+                },
+                onRescheduleTask: { task in
+                    paletteContext = PaletteContext(seedTask: task)
+                },
                 focusRequested: $focusTaskInput,
                 autoExpand: autoExpand
             )
@@ -932,7 +1003,17 @@ struct MenuBarView: View {
             // background) — also the native macOS List convention.
             Group {
                 if reminderService.nonDisintegratingEventCount == 0 {
-                    emptyState
+                    // Cold start: while the first sync is running, surface a
+                    // brief «Syncing calendars…» panel instead of jumping
+                    // straight to the empty state. Without this the popover
+                    // reads identically to «no events scheduled today», and
+                    // the user has no signal that anything is loading.
+                    // Birman: «постоянная мягкая обратная связь».
+                    if showSyncingState {
+                        syncingState
+                    } else {
+                        emptyState
+                    }
                 } else if filteredEventsByDay.isEmpty {
                     VStack(spacing: DS.Spacing.sm) {
                         Text(emptyFilteredStateMessage)
@@ -1047,6 +1128,61 @@ struct MenuBarView: View {
         return "No upcoming events"
     }
 
+    /// Whether the «Syncing calendars…» panel should replace the empty
+    /// state on cold start. Active while we've kicked off a sync but
+    /// haven't yet seen any events arrive AND haven't escalated to the
+    /// «taking long» message via the 3\u{00A0}s timeout. Permission
+    /// banners (no access) take precedence — the empty popover with a
+    /// permission banner already explains itself.
+    private var showSyncingState: Bool {
+        guard hasStartedSync else { return false }
+        guard !initialSyncDataArrived else { return false }
+        // Don't shadow the existing permission banner — it already names
+        // the cause and offers a fix.
+        guard permissionBannerSpecs.isEmpty else { return false }
+        return reminderService.allEvents.isEmpty
+    }
+
+    /// Cold-start sync panel — quiet `ProgressView` + caption. After
+    /// 3\u{00A0}s without data the caption escalates to a long-running
+    /// hint with a link to the system Calendars settings.
+    @ViewBuilder
+    private var syncingState: some View {
+        VStack(spacing: DS.Spacing.md) {
+            ProgressView()
+                .controlSize(.regular)
+            if initialSyncTimeoutFired {
+                VStack(spacing: DS.Spacing.xs) {
+                    Text("Sync is taking longer than usual.")
+                        .font(.subheadline)
+                        .foregroundStyle(skin.resolvedTextSecondary)
+                    Button {
+                        Haptics.tap()
+                        SettingsViewModel.pendingPane = .calendars
+                        openSettings()
+                        NSApp.activate()
+                    } label: {
+                        Text("Check Calendar Settings \u{2192}")
+                            .font(.footnote.weight(.medium))
+                            .foregroundStyle(skin.accentColor)
+                    }
+                    .buttonStyle(.plain)
+                }
+            } else {
+                Text("Syncing calendars\u{2026}")
+                    .font(.subheadline)
+                    .foregroundStyle(skin.resolvedTextSecondary)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.vertical, DS.Spacing.xxl)
+        .transition(.opacity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(initialSyncTimeoutFired
+            ? "Sync is taking longer than usual. Tap to check Calendar settings."
+            : "Syncing calendars")
+    }
+
     private var emptyState: some View {
         ScrollView {
             VStack(spacing: 0) {
@@ -1097,6 +1233,30 @@ struct MenuBarView: View {
                         }
                         .buttonStyle(.action(role: .primary, size: .compact))
                         .padding(.top, DS.Spacing.md)
+
+                        // Quiet escape hatch for the «I have a calendar
+                        // connected but nothing's showing» case — taps
+                        // straight into the calendar-picker pane so the
+                        // user can verify they enabled the right calendars.
+                        // Shown only when permission is granted (an
+                        // existing permission banner already explains the
+                        // permission case) so we never offer a settings
+                        // link the user can't act on.
+                        if calendarHasAccess && settings.isCalendarSyncEnabled {
+                            Button {
+                                Haptics.tap()
+                                SettingsViewModel.pendingPane = .calendars
+                                openSettings()
+                                NSApp.activate()
+                            } label: {
+                                Text("Adjust which calendars are visible \u{2192}")
+                                    .font(.footnote)
+                                    .foregroundStyle(skin.resolvedTextTertiary)
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.top, DS.Spacing.sm)
+                            .accessibilityLabel("Open Calendar Settings to pick which calendars are visible")
+                        }
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, DS.Spacing.xxl)
@@ -1275,7 +1435,7 @@ struct MenuBarView: View {
                         request: suggestion.request,
                         reason: suggestion.reason,
                         onRun: {
-                            runQuickAction(suggestion.request, label: suggestion.reason)
+                            Task { await runQuickAction(suggestion.request, label: suggestion.reason) }
                         },
                         onDismiss: {
                             withAnimation(DS.Animation.quick) {
@@ -1334,7 +1494,24 @@ struct MenuBarView: View {
     ) -> some View {
         let visibleCount = visibleEventCount(for: dayGroup.events)
 
-        DaySectionHeader(date: dayGroup.date, count: visibleCount)
+        DaySectionHeader(date: dayGroup.date, count: visibleCount) {
+            // Day-scope optimizer entry — only renders on «Today» since the
+            // intents (Organize today, Find focus, Low energy day…) operate
+            // on the current day's schedule. Other days keep the plain
+            // header. Birman: «команды живут рядом со своим объектом».
+            if Calendar.current.isDateInToday(dayGroup.date) {
+                PlanDayMenu(
+                    runRequest: { request, label in
+                        await runQuickAction(request, label: label)
+                    },
+                    openMore: {
+                        paletteContext = PaletteContext()
+                    },
+                    isEmptyDay: dayGroup.events.isEmpty
+                        && (optimizerService.backlogService?.tasks.isEmpty ?? true)
+                )
+            }
+        }
             // `sm` leading keeps the day title hanging 8pt out from the
             // first event's accent bar — same column as the free-slot
             // dashed guide. Level 1: top padding is now applied by the
@@ -1638,26 +1815,15 @@ struct MenuBarView: View {
         "organize-morning": ["organize"],
     ]
 
-    /// True when the suggestion's primary contribution is already surfaced
-    /// in the top-3 QuickActions chips. We reuse the production
-    /// `QuickActionRanker` so suppression follows the same context-aware
-    /// scoring the chips do — no risk of the chip and the banner
-    /// disagreeing on what's «in the top».
+    /// Historically suppressed banner suggestions that were already visible
+    /// as floating QuickActions chips. With the chip strip collapsed to a
+    /// single `Optimize ⌘K` button (per-task, per-event, backlog and
+    /// day-scope intents migrated to their own surfaces), there's nothing
+    /// to dedupe — banners can always surface a contextual suggestion when
+    /// it qualifies. Returns `false` unconditionally now; kept around so
+    /// future changes can re-enable suppression without restructuring the
+    /// banner pipeline.
     private func isSuggestionSurfacedInQuickActions(_ suggestion: SuggestionEngine.Suggestion) -> Bool {
-        guard let backlog = optimizerService.backlogService else { return false }
-        let ranker = QuickActionRanker(
-            backlogService: backlog,
-            reminderService: reminderService,
-            intentLearner: optimizerService.intentLearner
-        )
-        let topIds = Set(ranker.rank(limit: 3).map(\.action.id))
-
-        for signalName in suggestion.contributions.keys {
-            if let actionIds = Self.suggestionToQuickActionIDs[signalName],
-               !actionIds.isDisjoint(with: topIds) {
-                return true
-            }
-        }
         return false
     }
 
@@ -1673,18 +1839,21 @@ struct MenuBarView: View {
 
     /// Execute a request immediately — no palette, no configuration.
     /// One tap → done → undo toast. Birman: "sequential magic."
-    private func runQuickAction(_ request: OptimizationRequest, label: String) {
-        Task {
-            let result = await optimizerService.executeRequest(request, reminderService: reminderService)
-            if case .success = result, !optimizerService.scenarios.isEmpty {
-                optimizerService.applyScenario(at: 0, to: reminderService)
-                toastState.showSuccess(label, icon: "sparkles") {
-                    optimizerService.undoLast(reminderService: reminderService)
-                }
-                notifyScheduleChange()
-            } else if let error = result.errorMessage {
-                toastState.showInfo(error, icon: "exclamationmark.triangle")
+    ///
+    /// Async so callers (e.g. the spill-over marker action-link) can await
+    /// and surface a loading spinner during the optimizer call. Fire-and-
+    /// forget callers wrap in `Task { ... }`.
+    @MainActor
+    private func runQuickAction(_ request: OptimizationRequest, label: String) async {
+        let result = await optimizerService.executeRequest(request, reminderService: reminderService)
+        if case .success = result, !optimizerService.scenarios.isEmpty {
+            optimizerService.applyScenario(at: 0, to: reminderService)
+            toastState.showSuccess(label, icon: "sparkles") {
+                optimizerService.undoLast(reminderService: reminderService)
             }
+            notifyScheduleChange()
+        } else if let error = result.errorMessage {
+            toastState.showInfo(error, icon: "exclamationmark.triangle")
         }
     }
 

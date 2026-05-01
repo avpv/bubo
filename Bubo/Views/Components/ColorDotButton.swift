@@ -94,9 +94,15 @@ struct ColorDotButton: View {
         .motionAwareAnimation(skin.resolvedMicroAnimation, value: isHovered, reduceMotion: reduceMotion)
         .motionAwareAnimation(skin.resolvedMicroAnimation, value: isFocused, reduceMotion: reduceMotion)
         .motionAwareAnimation(skin.resolvedMicroAnimation, value: isActive, reduceMotion: reduceMotion)
-        // HIG: Don't use color as the only differentiator — show name on hover
-        .help(tag.rawValue)
-        .accessibilityLabel(tag.rawValue)
+        // Birman: tooltip names the action, not just the colour. Active
+        // state inverts the verb so the tooltip stays in sync with what a
+        // click would do («Show all» when the filter is on, «Filter by
+        // <colour>» when it's off). Без объяснения color dot читается как
+        // украшение, а не как кнопка фильтра.
+        .help(isActive ? "Show all events" : "Filter by \(tag.rawValue) tag")
+        .accessibilityLabel(isActive
+            ? "\(tag.rawValue) filter active — tap to clear"
+            : "Filter by \(tag.rawValue) tag")
         .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 }

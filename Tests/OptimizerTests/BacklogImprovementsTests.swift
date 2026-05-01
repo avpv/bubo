@@ -329,6 +329,196 @@ final class BacklogLogicTests: XCTestCase {
         XCTAssertEqual(eta, noon)
         XCTAssertEqual(spareMinutes, 360)
     }
+
+    // MARK: capacity partition
+
+    func testCapacityPartitionAllFit() {
+        let tasks = [task("a", duration: 30), task("b", duration: 60), task("c", duration: 30)]
+        let result = BacklogLogic.capacityPartition(tasks, remainingWorkdayMinutes: 240)
+        XCTAssertEqual(result.fitting.map(\.id), ["a", "b", "c"])
+        XCTAssertTrue(result.overflowing.isEmpty)
+    }
+
+    func testCapacityPartitionAllOverflow() {
+        let tasks = [task("a", duration: 60), task("b", duration: 60)]
+        let result = BacklogLogic.capacityPartition(tasks, remainingWorkdayMinutes: 0)
+        XCTAssertTrue(result.fitting.isEmpty)
+        XCTAssertEqual(result.overflowing.map(\.id), ["a", "b"])
+    }
+
+    func testCapacityPartitionPreservesOrder() {
+        // Greedy fill walks left-to-right, so a small task that comes after
+        // a too-big one still spills — partition is order-respecting, not
+        // best-fit packing. Lets the caller pick the order (smart-sort vs
+        // storage) and predict the result.
+        let tasks = [
+            task("big",   duration: 90),
+            task("small", duration: 30),
+            task("tiny",  duration: 15),
+        ]
+        let result = BacklogLogic.capacityPartition(tasks, remainingWorkdayMinutes: 60)
+        XCTAssertTrue(result.fitting.isEmpty)
+        XCTAssertEqual(result.overflowing.map(\.id), ["big", "small", "tiny"])
+    }
+
+    func testCapacityPartitionGreedyCutoff() {
+        // 60 min budget, 30+30+30. First two fit exactly (60 min consumed),
+        // third spills.
+        let tasks = [task("a", duration: 30), task("b", duration: 30), task("c", duration: 30)]
+        let result = BacklogLogic.capacityPartition(tasks, remainingWorkdayMinutes: 60)
+        XCTAssertEqual(result.fitting.map(\.id), ["a", "b"])
+        XCTAssertEqual(result.overflowing.map(\.id), ["c"])
+    }
+
+    func testCapacityPartitionEmpty() {
+        let result = BacklogLogic.capacityPartition([], remainingWorkdayMinutes: 240)
+        XCTAssertTrue(result.fitting.isEmpty)
+        XCTAssertTrue(result.overflowing.isEmpty)
+    }
+
+    func testCapacityPartitionNegativeBudgetClamps() {
+        // Budget passed in negative (caller used a stale pre-clamped value)
+        // — partition should treat it as zero, not propagate the error.
+        let tasks = [task("a", duration: 30)]
+        let result = BacklogLogic.capacityPartition(tasks, remainingWorkdayMinutes: -120)
+        XCTAssertTrue(result.fitting.isEmpty)
+        XCTAssertEqual(result.overflowing.map(\.id), ["a"])
+    }
+
+    // MARK: capacity section plan
+
+    func testCapacitySectionPlanComputesOverflowMinutes() {
+        let tasks = [
+            task("a", duration: 60),
+            task("b", duration: 90),
+            task("c", duration: 45),
+        ]
+        let plan = BacklogLogic.CapacitySectionPlan(
+            orderedTasks: tasks,
+            remainingWorkdayMinutes: 60
+        )
+        XCTAssertEqual(plan.fitting.map(\.id), ["a"])
+        XCTAssertEqual(plan.overflowing.map(\.id), ["b", "c"])
+        XCTAssertEqual(plan.overflowMinutes, 90 + 45)
+    }
+
+    func testCapacitySectionPlanFlagsUrgentInOverflow() {
+        let cal = Self.calendar()
+        let dueToday = cal.date(from: DateComponents(
+            year: 2026, month: 4, day: 11, hour: 17
+        ))!
+        let tasks = [
+            task("a", duration: 60),
+            task("urgent", deadline: dueToday, duration: 90),
+        ]
+        let plan = BacklogLogic.CapacitySectionPlan(
+            orderedTasks: tasks,
+            remainingWorkdayMinutes: 60
+        )
+        XCTAssertTrue(plan.overflowHasUrgent)
+        XCTAssertTrue(plan.hasOverflow)
+    }
+
+    func testCapacitySectionPlanReportsNoOverflowWhenAllFit() {
+        let tasks = [task("a", duration: 30), task("b", duration: 30)]
+        let plan = BacklogLogic.CapacitySectionPlan(
+            orderedTasks: tasks,
+            remainingWorkdayMinutes: 240
+        )
+        XCTAssertFalse(plan.hasOverflow)
+        XCTAssertEqual(plan.overflowMinutes, 0)
+        XCTAssertFalse(plan.overflowHasUrgent)
+    }
+
+    // MARK: capacity label suffix
+
+    func testCapacityLabelSuffixIsEmptyWhenNoOverflow() {
+        let forecast = BacklogLogic.CapacityForecast.fits(eta: Self.now(), spareMinutes: 60)
+        XCTAssertEqual(
+            BacklogCapacityLabel.suffix(forecast: forecast, overflowingCount: 0),
+            ""
+        )
+    }
+
+    func testCapacityLabelSuffixSingularForOneTask() {
+        let forecast = BacklogLogic.CapacityForecast.over(byMinutes: 60)
+        let suffix = BacklogCapacityLabel.suffix(forecast: forecast, overflowingCount: 1)
+        // Birman: «1 task doesn't fit» — singular noun, no plural-S.
+        XCTAssertTrue(suffix.contains("1\u{00A0}task"))
+        XCTAssertTrue(suffix.contains("doesn't"))
+    }
+
+    func testCapacityLabelSuffixPluralForMany() {
+        let forecast = BacklogLogic.CapacityForecast.over(byMinutes: 240)
+        let suffix = BacklogCapacityLabel.suffix(forecast: forecast, overflowingCount: 11)
+        // Plural form drops the noun, just «11 don't fit».
+        XCTAssertTrue(suffix.contains("11"))
+        XCTAssertTrue(suffix.contains("don't"))
+        XCTAssertFalse(suffix.contains("task"))
+    }
+
+    func testCapacityLabelSuffixUsesNonBreakingSpaceBeforeMiddot() {
+        let forecast = BacklogLogic.CapacityForecast.over(byMinutes: 60)
+        let suffix = BacklogCapacityLabel.suffix(forecast: forecast, overflowingCount: 3)
+        // The leading «\u{00A0}·\u{00A0}» glues the suffix to the
+        // preceding verdict so a line break never lands between them.
+        XCTAssertTrue(suffix.hasPrefix("\u{00A0}·\u{00A0}"))
+    }
+
+    // MARK: capacity label verdict
+
+    func testCapacityLabelFitsReadsAsDoneByTime() {
+        let cal = Self.calendar()
+        let noon = cal.date(from: DateComponents(
+            year: 2026, month: 4, day: 11, hour: 12
+        ))!
+        let forecast = BacklogLogic.CapacityForecast.fits(eta: noon, spareMinutes: 0)
+        let label = BacklogCapacityLabel.label(for: forecast)
+        // The exact rendered time depends on the test environment locale,
+        // but the «Done by» prefix is invariant.
+        XCTAssertTrue(label.hasPrefix("Done by"))
+    }
+
+    func testCapacityLabelOverReadsAsXOverCapacity() {
+        let forecast = BacklogLogic.CapacityForecast.over(byMinutes: 60)
+        let label = BacklogCapacityLabel.label(for: forecast)
+        XCTAssertTrue(label.contains("over capacity"))
+        XCTAssertTrue(label.contains("1\u{00A0}h"))
+    }
+
+    func testCapacityLabelAfterHoursReadsAsQueued() {
+        let forecast = BacklogLogic.CapacityForecast.afterHours(queuedMinutes: 90)
+        let label = BacklogCapacityLabel.label(for: forecast)
+        XCTAssertTrue(label.hasPrefix("After hours"))
+        XCTAssertTrue(label.contains("queued"))
+        XCTAssertTrue(label.contains("1\u{00A0}h\u{00A0}30\u{00A0}min"))
+    }
+
+    // MARK: capacity label accessibility
+
+    func testCapacityLabelAccessibilityIncludesOverflowCount() {
+        let forecast = BacklogLogic.CapacityForecast.over(byMinutes: 60)
+        let voiceOver = BacklogCapacityLabel.accessibilityLabel(
+            for: forecast,
+            pendingMinutes: 240,
+            overflowingCount: 3
+        )
+        XCTAssertTrue(voiceOver.contains("over capacity"))
+        // VoiceOver phrasing names «N tasks don't fit today» so the
+        // assistive-tech reader hears the count without parsing
+        // arithmetic.
+        XCTAssertTrue(voiceOver.contains("3 tasks don't fit today"))
+    }
+
+    func testCapacityLabelAccessibilityOmitsCountWhenZero() {
+        let forecast = BacklogLogic.CapacityForecast.fits(eta: Self.now(), spareMinutes: 60)
+        let voiceOver = BacklogCapacityLabel.accessibilityLabel(
+            for: forecast,
+            pendingMinutes: 60,
+            overflowingCount: 0
+        )
+        XCTAssertFalse(voiceOver.contains("don't fit"))
+    }
 }
 
 // MARK: - RecurrenceEngine tests
