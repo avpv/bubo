@@ -44,6 +44,15 @@ struct SmartActions: View {
     /// is suggested.
     let suggestion: SuggestionEngine.Suggestion?
 
+    /// Optional «if you Run now this is what'd happen» preview from the
+    /// background `OptimizerService.shadowProposal`. When set and recent,
+    /// the Hard row's subtext picks up a delta hint («would finish by
+    /// 19:30 · 4 tasks moved»). Lets the user see the outcome of a Run
+    /// before committing — Birman: «человек видит результат, не
+    /// команду». nil = subtext falls back to the simple overflow
+    /// volume («4 tasks · 4 h 32 min over»).
+    let shadowProposal: ScheduleScenario?
+
     /// Lightweight summary of the most recently applied optimization,
     /// kept fresh for ~8 s by `OptimizerService.lastAppliedRequest`. When
     /// set and `isFresh`, the row swaps from its three regular states
@@ -162,12 +171,44 @@ struct SmartActions: View {
 
     private var hardSubtext: String? {
         let volume = DS.formatMinutes(overflowMinutes)
+
+        // When a fresh shadow proposal is available, surface its
+        // projected end-time as a delta hint. The user sees what Run
+        // would actually do — «would finish by 19:30, 4 tasks moved» —
+        // not just «4 h over». Birman: «человек видит результат, не
+        // команду». Falls back to the volume-only subtext when no
+        // shadow exists yet.
+        if let projection = shadowProjectionDescription {
+            switch overflowingCount {
+            case 0:  return projection
+            case 1:  return "1 task · \(projection)"
+            default: return "\(overflowingCount) tasks · \(projection)"
+            }
+        }
+
         switch overflowingCount {
         case 0:  return nil
         case 1:  return "1 task · \(volume) over"
         default: return "\(overflowingCount) tasks · \(volume) over"
         }
     }
+
+    /// Latest end-time across the shadow scenario's active genes,
+    /// formatted as «would finish by 19:30». Returns nil when no
+    /// shadow proposal is cached or the scenario carries no genes.
+    private var shadowProjectionDescription: String? {
+        guard let scenario = shadowProposal else { return nil }
+        let endTimes = scenario.activeGenes.map(\.endTime)
+        guard let latest = endTimes.max() else { return nil }
+        return "would finish by \(Self.shortTime.string(from: latest))"
+    }
+
+    private static let shortTime: DateFormatter = {
+        let f = DateFormatter()
+        f.timeStyle = .short
+        f.dateStyle = .none
+        return f
+    }()
 
     // MARK: - Reasoning surface (Done · why?)
 
