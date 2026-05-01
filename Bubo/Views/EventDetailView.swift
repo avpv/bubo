@@ -10,10 +10,10 @@ struct EventDetailView: View {
     var onDeleteOccurrence: ((CalendarEvent) -> Void)? = nil
     var onTimer: ((CalendarEvent) -> Void)? = nil
     /// Open the command palette seeded with this event (per-event scope
-    /// optimizer entry — footer Menu's «Reschedule…» item).
+    /// optimizer entry — header overflow menu's «Reschedule…» item).
     var onReschedule: ((CalendarEvent) -> Void)? = nil
     /// Run the optimizer's «extend to adjacent free slot» preset for this
-    /// event. Surfaces in the footer Menu — disabled for read-only
+    /// event. Surfaces in the header overflow menu — disabled for read-only
     /// external events (the optimizer can't move them).
     var onExtend: ((CalendarEvent) -> Void)? = nil
 
@@ -80,6 +80,35 @@ struct EventDetailView: View {
                                 .font(.subheadline)
                                 .foregroundStyle(skin.resolvedTextSecondary)
                                 .accessibilityLabel("Time: \(event.formattedTimeRange)")
+
+                            // Optimizer-driven time actions live inside the
+                            // time platter — contextual home for «Reschedule»
+                            // and «Extend» since both manipulate when the
+                            // event lives, not what it is. Compact secondary
+                            // buttons keep visual weight subordinate to the
+                            // time facts they sit beneath.
+                            if onReschedule != nil || (onExtend != nil && isLocal) {
+                                HStack(spacing: DS.Spacing.sm) {
+                                    if onReschedule != nil {
+                                        Button {
+                                            Haptics.tap()
+                                            onReschedule?(event)
+                                        } label: {
+                                            Label("Reschedule", systemImage: "calendar.badge.clock")
+                                        }
+                                        .buttonStyle(.action(role: .secondary, size: .compact))
+                                    }
+                                    if onExtend != nil && isLocal {
+                                        Button {
+                                            Haptics.tap()
+                                            onExtend?(event)
+                                        } label: {
+                                            Label("Extend", systemImage: "arrow.right.to.line")
+                                        }
+                                        .buttonStyle(.action(role: .secondary, size: .compact))
+                                    }
+                                }
+                            }
                         }
 
                         // Live countdown with seconds — tap to open timer screen
@@ -181,63 +210,35 @@ struct EventDetailView: View {
             // Actions (only for local events)
             SkinSeparator()
 
-            // Single primary CTA: «Edit ▾» Menu hosts every per-event action
-            // (Edit details, Reschedule, Extend, Delete). Birman: «не плодь
-            // кнопки» — the existing chevron-button affordance reveals
-            // scope-appropriate items rather than crowding the footer with
-            // three primary buttons. Read-only external events get only the
-            // Reschedule path enabled — the optimizer can't move them, but
-            // the palette still composes a move via Apple-Calendar APIs.
-            HStack {
+            // Two explicit footer buttons: Delete (destructive) and Edit
+            // (primary). Optimizer paths (Reschedule / Extend) live in the
+            // command palette — they don't belong on a per-event detail
+            // screen where the user expects basic edit affordances.
+            HStack(spacing: DS.Spacing.sm) {
                 Spacer()
 
-                Menu {
+                if isLocal {
+                    Button(role: .destructive) {
+                        Haptics.impact()
+                        if event.isRecurring {
+                            showDeleteConfirmation = true
+                        } else {
+                            onDelete?(event)
+                        }
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                    .buttonStyle(.action(role: .destructive))
+
                     Button {
                         Haptics.tap()
                         onEdit?(event)
                     } label: {
-                        Label("Edit details\u{2026}", systemImage: "pencil")
+                        Label("Edit", systemImage: "pencil")
                     }
-                    .disabled(!isLocal)
-
-                    if onReschedule != nil {
-                        Button {
-                            Haptics.tap()
-                            onReschedule?(event)
-                        } label: {
-                            Label("Reschedule\u{2026}", systemImage: "calendar.badge.clock")
-                        }
-                    }
-
-                    if onExtend != nil {
-                        Button {
-                            Haptics.tap()
-                            onExtend?(event)
-                        } label: {
-                            Label("Extend to next free slot", systemImage: "arrow.right.to.line")
-                        }
-                        .disabled(!isLocal)
-                    }
-
-                    if isLocal {
-                        Divider()
-                        Button(role: .destructive) {
-                            Haptics.impact()
-                            if event.isRecurring {
-                                showDeleteConfirmation = true
-                            } else {
-                                onDelete?(event)
-                            }
-                        } label: {
-                            Label("Delete\u{2026}", systemImage: "trash")
-                        }
-                    }
-                } label: {
-                    Label("Edit", systemImage: "pencil")
+                    .buttonStyle(.action(role: .primary))
+                    .keyboardShortcut(.defaultAction)
                 }
-                .menuStyle(.button)
-                .buttonStyle(.action(role: .primary))
-                .keyboardShortcut(.defaultAction)
             }
             .padding(.horizontal, DS.Spacing.lg)
             .frame(height: DS.Size.actionFooterHeight)
