@@ -1928,6 +1928,31 @@ struct MenuBarView: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.96)))
             }
         }
+
+        // After-hours / wind-down marker for today: when the latest
+        // event ends past `workingHours.upperBound`, surface a quiet
+        // «After hours» caption below the day's events. Reifies the
+        // optimizer's `noEventsAfter` / `windDown` family at the
+        // surface where it actually matters — past the boundary, the
+        // user sees that the schedule has spilled into protected time.
+        // Today only: future days share the rule and the repetition
+        // would just be visual noise.
+        if Calendar.current.isDateInToday(dayGroup.date),
+           let lastEvent = dayGroup.events.last,
+           Calendar.current.component(.hour, from: lastEvent.endDate) >= optimizerService.workingHours.upperBound {
+            HStack(spacing: DS.Spacing.xs) {
+                Image(systemName: "moon.zzz")
+                    .font(.footnote)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                Text("After hours")
+                    .font(DS.Typography.machineHint)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, DS.Spacing.sm)
+            .padding(.top, DS.Spacing.xxs)
+            .accessibilityLabel("After working hours")
+        }
     }
 
     /// One-line collapsed summary of a day's events — rendered in place
