@@ -317,27 +317,20 @@ struct BacklogView: View {
                 || isInputFocused
                 || !completedToday.isEmpty
                 || !backlogService.frozen.isEmpty {
-                backlogHeader
-                // Capacity verdict — «Done by 17:30» / «X h over capacity» /
-                // «After hours · X queued» — lives on its own row directly
-                // under the header. Pulled out of the header HStack so the
-                // red «over capacity» warning no longer crowds the controls
-                // row (count, fullscreen, overflow); the diagnosis gets its
-                // own line of breathing room while the header stays a clean
-                // row of glanceable facts and actions.
-                if !allActiveTasks.isEmpty {
-                    BacklogCapacityLabel(
-                        pendingMinutes: pendingWorkloadMinutes,
-                        overflowingCount: 0,
-                        optimizerService: optimizerService
-                    )
-                    .padding(.horizontal, DS.Spacing.sm)
-                    .padding(.bottom, DS.Spacing.sm)
-                }
-                // Urgent pill — own row, mirrors `BacklogFullscreenView`.
-                // Раньше жил внутри header'а с middot-сепаратором и спорил
-                // с over-capacity warning'ом за один и тот же красный канал.
-                urgentRow
+                BacklogHeader(
+                    mode: .inline(
+                        expansion: $expansion,
+                        onEnterFullscreen: onEnterFullscreen
+                    ),
+                    totalCount: allActiveTasks.count,
+                    urgentCount: backlogService.urgent(withinDays: 2).count,
+                    pendingMinutes: pendingWorkloadMinutes,
+                    remainingWorkdayMinutes: remainingWorkdayMinutes,
+                    optimizerService: optimizerService,
+                    capacityRingTooltip: capacityRingTooltip,
+                    useSmartSort: $useSmartSort,
+                    urgentOnlyFilter: $urgentOnlyFilter
+                )
                 // SmartActions sits directly between the diagnosis (header
                 // verdict + capacity ring) and the evidence (task list).
                 // Birman: «прямое действие на месте проблемы». Renders one
@@ -520,93 +513,6 @@ struct BacklogView: View {
             }
     }
 
-    // MARK: - Header
-
-    private var backlogHeader: some View {
-        let totalCount = allActiveTasks.count
-        let urgentCount = backlogService.urgent(withinDays: 2).count
-
-        return HStack(spacing: DS.Spacing.sm) {
-            // Capacity ring FIRST — it answers the main question «влезет
-            // ли сегодня» и раньше терялось между иконок справа. HIG: put
-            // glanceable status where the eye lands first, not buried in
-            // trailing controls. Birman: кольцо — это _идентификатор_
-            // карточки, а не украшение на периферии.
-            if totalCount > 0 {
-                BacklogCapacityRing(
-                    pendingMinutes: pendingWorkloadMinutes,
-                    remainingWorkdayMinutes: remainingWorkdayMinutes,
-                    optimizerService: optimizerService
-                )
-                .help(capacityRingTooltip)
-            }
-
-            Button {
-                // `.levelChange` for the chevron — collapsed/compact is a
-                // discrete card-state change, same magnitude as the
-                // urgent / smart-sort toggles below.
-                Haptics.impact()
-                withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-                    expansion = expansion.next
-                }
-            } label: {
-                // Count + plural «task/tasks» word. The previous
-                // bare-number layout relied on the capacity verdict to imply
-                // «это про задачи», which broke when the verdict was a time
-                // («Done by 17:30») and left «14» dangling without a noun.
-                // The count now stands on its own as a self-describing fact.
-                HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: expansion.iconName)
-                        .font(.footnote)
-                        .foregroundStyle(skin.resolvedTextSecondary)
-                        .contentTransition(.symbolEffect(.replace))
-
-                    Text("\(totalCount) task\(totalCount == 1 ? "" : "s")")
-                        // `DS.Typography.metric` — single voice for inline
-                        // numeric facts. Matches the `Done by HH:MM` digits
-                        // in `BacklogCapacityLabel` so all numbers in the
-                        // header read as one row of data.
-                        .font(DS.Typography.metric(skin: skin))
-                        .foregroundStyle(skin.resolvedTextPrimary)
-                        .contentTransition(.numericText())
-                        .lineLimit(1)
-                        .fixedSize(horizontal: true, vertical: false)
-                }
-            }
-            .buttonStyle(.plain)
-            .help("\(totalCount) task\(totalCount == 1 ? "" : "s") \u{00B7} \(expansion.accessibilityHint.lowercased())")
-            .accessibilityLabel("\(totalCount) tasks")
-            .accessibilityHint(expansion.accessibilityHint)
-
-            // Smart-sort toggle — always visible when there's more than one
-            // task to sort. Зеркало `BacklogFullscreenView.smartSortButton`:
-            // один контрол на оба направления toggle'а вместо рассинхрона
-            // «indicator only when ON + overflow item to turn ON».
-            if totalCount > 1 {
-                smartSortButton
-            }
-
-            // Urgent pill переехал на свою строку под capacity verdict'ом —
-            // см. `urgentRow` в body. Зеркалит fullscreen mode, где красный
-            // канал тоже отдельной строкой не спорит с over-capacity ring'ом.
-
-            Spacer()
-
-            // Fullscreen affordance — пушит fullscreen Backlog в
-            // навигационный стек popover'а. Раньше эту роль играл
-            // третий клик шеврона (`chevron.down.2`), но двойная
-            // стрелка не считывалась как «другое состояние». Теперь
-            // — отдельная кнопка с понятной macOS-идиомой «развернуть».
-            // Overflow-menu здесь больше нет: его единственный пункт
-            // (smart-sort) переехал в видимый button рядом с count.
-            if totalCount > 0, onEnterFullscreen != nil {
-                fullscreenButton
-            }
-        }
-        .padding(.horizontal, DS.Spacing.sm)
-        .padding(.vertical, DS.Spacing.sm)
-    }
-
     /// Single contextual row directly under the header that absorbs the
     /// four legacy optimizer entry points (SmartBanner, SpillOverMarker,
     /// QuickActions chip, PlanDayMenu) into one adaptive surface. Reads
@@ -642,139 +548,6 @@ struct BacklogView: View {
             onLockTodaysEvents: onLockTodaysEvents
         )
         .padding(.horizontal, DS.Spacing.sm)
-    }
-
-    /// Smart-sort toggle — always-visible button mirroring
-    /// `BacklogFullscreenView.smartSortButton`. Раньше тут жил indicator,
-    /// который появлялся только когда smart-sort уже включён, и включали его
-    /// через overflow-меню — два контрола для одного toggle, режимы
-    /// рассинхронились. Теперь один и тот же button в обоих режимах:
-    /// `arrow.up.arrow.down` когда выключено, `wand.and.stars` когда активно.
-    private var smartSortButton: some View {
-        Button {
-            // `.levelChange` for sort-order switch — list reorders, discrete
-            // state change. Same haptic on both directions of the toggle.
-            Haptics.impact()
-            withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-                useSmartSort.toggle()
-                // Engaging smart-sort while collapsed would hide the
-                // reordered list — open to `.compact` so the new order is
-                // immediately visible.
-                if useSmartSort, expansion == .collapsed {
-                    expansion = .compact
-                }
-            }
-        } label: {
-            Image(systemName: useSmartSort ? "wand.and.stars" : "arrow.up.arrow.down")
-                .font(.footnote.weight(.medium))
-                .foregroundStyle(useSmartSort ? skin.accentColor : skin.resolvedTextSecondary)
-                .frame(width: DS.Size.iconLarge, height: DS.Size.iconLarge)
-                .background(
-                    Circle().fill(
-                        skin.accentColor.opacity(useSmartSort ? DS.Opacity.lightFill : 0)
-                    )
-                )
-                .contentShape(Circle())
-                .contentTransition(.symbolEffect(.replace))
-        }
-        .buttonStyle(.plain)
-        // Capacity sections (FITS / spill-over) compose on top of sort, so
-        // when smart-sort is active each group reads priority-first within
-        // itself. Tooltip explains the interaction so the user understands
-        // the «two tops of priority» they see when both signals are active.
-        .help(useSmartSort
-            ? "Sorted by priority within each capacity group. Tap to show in user order."
-            : "Smart sort by deadline + priority")
-        .accessibilityLabel(useSmartSort
-            ? "Smart sort on, ordered by priority within capacity groups — tap for user order"
-            : "Smart sort off — tap to enable")
-    }
-
-    /// Urgent pill row — sits directly under the capacity verdict, on its
-    /// own line. Mirrors `BacklogFullscreenView.blockHeader`'s urgent row so
-    /// inline и fullscreen режимы читаются одинаково: header — glanceable
-    /// facts and controls; capacity verdict — diagnosis; urgent — отдельный
-    /// информационный сигнал «N задач горят». Hidden when nothing urgent.
-    @ViewBuilder
-    private var urgentRow: some View {
-        let urgentCount = backlogService.urgent(withinDays: 2).count
-        if urgentCount > 0 {
-            urgentFilterButton(urgentCount: urgentCount)
-                .padding(.horizontal, DS.Spacing.sm)
-                .padding(.bottom, DS.Spacing.sm)
-        }
-    }
-
-    /// Fullscreen button — `arrow.up.left.and.arrow.down.right` это родная
-    /// macOS-идиома «развернуть на весь экран» (та же стрелка на зелёном
-    /// светофоре окна). Пользователь видит знакомый глиф вместо магической
-    /// двойной шевронной стрелки.
-    private var fullscreenButton: some View {
-        Button {
-            onEnterFullscreen?()
-        } label: {
-            Image(systemName: "arrow.up.left.and.arrow.down.right")
-                .font(.footnote.weight(.medium))
-                .foregroundStyle(skin.resolvedTextSecondary)
-                .frame(width: DS.Size.iconSmall, height: DS.Size.iconSmall)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help("Open tasks fullscreen")
-        .accessibilityLabel("Open tasks fullscreen")
-    }
-
-    /// Red «N urgent» pill — acts as a filter toggle. Selected state gets a
-    /// filled background so the user can see the filter is engaged; a
-    /// second click releases it. Hidden entirely when no urgent tasks exist.
-    @ViewBuilder
-    private func urgentFilterButton(urgentCount: Int) -> some View {
-        Button {
-            // `.levelChange` haptic — list narrows/opens, discrete state
-            // change. Mirrors `BacklogFullscreenView.urgentFilterButton`.
-            Haptics.impact()
-            withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
-                urgentOnlyFilter.toggle()
-                // Engaging the filter while the list is collapsed would hide
-                // everything — open to `.compact` so the filtered set is
-                // immediately visible.
-                if urgentOnlyFilter, expansion == .collapsed {
-                    expansion = .compact
-                }
-            }
-        } label: {
-            // `urgentColor` (desaturated red) sits in the same family as
-            // the over-capacity ring's saturated red but at lower
-            // intensity, so the two no longer fight for the same eye fix.
-            // The ring keeps the «something is broken» voice; this pill
-            // says «N items are time-sensitive» — informational urgency.
-            Text("\(urgentCount) urgent")
-                .font(.footnote.weight(.semibold).monospacedDigit())
-                .foregroundStyle(skin.resolvedUrgentColor)
-                .contentTransition(.numericText())
-                .padding(.horizontal, DS.Spacing.xs)
-                .padding(.vertical, DS.Spacing.xxs)
-                .background(
-                    Capsule().fill(
-                        skin.resolvedUrgentColor
-                            .opacity(urgentOnlyFilter ? DS.Opacity.lightFill : 0)
-                    )
-                )
-                .overlay(
-                    Capsule().strokeBorder(
-                        skin.resolvedDestructiveColor.opacity(urgentOnlyFilter ? DS.Opacity.softAccent : 0),
-                        lineWidth: DS.Border.thin
-                    )
-                )
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .help(urgentOnlyFilter ? "Show all tasks" : "Show only urgent tasks")
-        .accessibilityLabel(
-            urgentOnlyFilter
-                ? "Showing only urgent tasks — tap to clear filter"
-                : "\(urgentCount) urgent tasks — tap to filter"
-        )
     }
 
     // MARK: - Capacity ring helpers
