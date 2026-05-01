@@ -1561,9 +1561,20 @@ struct BacklogView: View {
         let title = parsed.cleaned
         guard !title.isEmpty else { return }
 
+        // Duration priority: explicit parse > machine verb-guess > user
+        // default. The guess only fires when neither the parser nor the
+        // user committed a value. If the guess landed and the user
+        // wanted the default, they edit the task in one tap; this just
+        // means «call mom» reaches the calendar as 30 min instead of
+        // a generic 60. Birman: «пусть потеет машина» — лучше угадать,
+        // чем штамповать 1 h на всё подряд.
+        let duration = parsed.durationMinutes
+            ?? BacklogTitleParser.guessDuration(for: title)
+            ?? optimizerService.defaultTaskDurationMinutes
+
         let task = BacklogTask(
             title: title,
-            durationMinutes: parsed.durationMinutes ?? optimizerService.defaultTaskDurationMinutes,
+            durationMinutes: duration,
             priority: .medium
         )
         withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {

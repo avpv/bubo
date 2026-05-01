@@ -911,9 +911,15 @@ struct BacklogFullscreenView: View {
         let title = parsed.cleaned
         guard !title.isEmpty else { return }
 
+        // Same duration priority as the inline `BacklogView`:
+        // explicit parse > machine verb-guess > user default.
+        let duration = parsed.durationMinutes
+            ?? BacklogTitleParser.guessDuration(for: title)
+            ?? optimizerService.defaultTaskDurationMinutes
+
         let task = BacklogTask(
             title: title,
-            durationMinutes: parsed.durationMinutes ?? optimizerService.defaultTaskDurationMinutes,
+            durationMinutes: duration,
             priority: .medium
         )
         withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
