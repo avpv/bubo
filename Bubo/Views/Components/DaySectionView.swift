@@ -4,6 +4,14 @@ import SwiftUI
 struct DaySectionHeader<Trailing: View>: View {
     let date: Date
     let count: Int
+    /// Optional working-hours range (e.g. `9...18`), rendered as a quiet
+    /// «9–18» badge next to the count for today only. Reifies the
+    /// `workingHours(start:end:)` intent at the surface where the user
+    /// notices it most — the day header — so the «what counts as my
+    /// work day» rule is visible, not buried in settings. Pass nil to
+    /// suppress (other days, or when the host doesn't have the
+    /// optimizer wired). Birman: «правила — это объекты на экране».
+    let workingHours: ClosedRange<Int>?
     /// Optional trailing accessory rendered after the count badge —
     /// used by the «Today» row to host the day-scope `Plan day ▾` menu
     /// next to its data. Other days pass `EmptyView` (default).
@@ -12,10 +20,12 @@ struct DaySectionHeader<Trailing: View>: View {
     init(
         date: Date,
         count: Int,
+        workingHours: ClosedRange<Int>? = nil,
         @ViewBuilder trailing: () -> Trailing = { EmptyView() }
     ) {
         self.date = date
         self.count = count
+        self.workingHours = workingHours
         self.trailing = trailing()
     }
 
@@ -44,6 +54,26 @@ struct DaySectionHeader<Trailing: View>: View {
                     .scaleEffect(appeared ? 1 : 0)
             }
             Spacer(minLength: DS.Spacing.xs)
+
+            // Working-hours badge — surfaces the optimizer's
+            // `workingHours(start:end:)` rule at the surface that the
+            // user reads first. Today only: other days share the same
+            // window and the repetition would just be visual noise.
+            // Hidden when `workingHours` is nil (preview surfaces, or
+            // simply when the host hasn't wired the optimizer in).
+            if isToday, let hours = workingHours {
+                Text(formattedHours(hours))
+                    .font(DS.Typography.machineHint)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                    .padding(.horizontal, DS.Spacing.xs)
+                    .padding(.vertical, DS.Spacing.xxs)
+                    .background(
+                        Capsule().fill(skin.resolvedTextTertiary.opacity(0.08))
+                    )
+                    .help("Working hours: \(hours.lowerBound):00–\(hours.upperBound):00")
+                    .accessibilityLabel("Working hours \(hours.lowerBound) to \(hours.upperBound)")
+            }
+
             Text("\(count)")
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(skin.resolvedTextSecondary)
@@ -75,6 +105,17 @@ struct DaySectionHeader<Trailing: View>: View {
 
     private var isToday: Bool {
         Calendar.current.isDateInToday(date)
+    }
+
+    /// Compact «9–18» form of the working-hours range. We strip the
+    /// `:00` minutes for the common case and only spell them out
+    /// when start/end land on a non-hour mark (which the current
+    /// settings don't allow, but the badge stays correct if they
+    /// later do).
+    private func formattedHours(_ hours: ClosedRange<Int>) -> String {
+        let start = hours.lowerBound
+        let end = hours.upperBound
+        return "\(start)\u{2013}\(end)"
     }
 
     private var dayTitle: String {

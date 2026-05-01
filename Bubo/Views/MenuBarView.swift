@@ -1581,8 +1581,15 @@ struct MenuBarView: View {
         // surface as the calm-state `Plan day…` popover (same six outcome-
         // named requests, single channel for the optimizer, no duplicate
         // entry next to the day title). `DaySectionHeader`'s trailing
-        // slot defaults to `EmptyView` so we omit it entirely.
-        DaySectionHeader(date: dayGroup.date, count: visibleCount)
+        // slot defaults to `EmptyView` so we omit it entirely. The
+        // `workingHours` argument surfaces today's «9–18» window as a
+        // quiet badge — reifies the optimizer's `workingHours` rule at
+        // the surface where the user already reads day metadata.
+        DaySectionHeader(
+            date: dayGroup.date,
+            count: visibleCount,
+            workingHours: optimizerService.workingHours
+        )
             // `sm` leading keeps the day title hanging 8pt out from the
             // first event's accent bar — same column as the free-slot
             // dashed guide. Level 1: top padding is now applied by the
