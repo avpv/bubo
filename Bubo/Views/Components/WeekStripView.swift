@@ -60,6 +60,7 @@ struct WeekStripView: View {
     private func dayDot(_ day: DayLoad) -> some View {
         let isActive = Calendar.current.isDate(day.date, inSameDayAs: selectedDay)
         let label = Self.dayLabelFormatter.string(from: day.date)
+        let isToday = Calendar.current.isDateInToday(day.date)
         Button {
             Haptics.tap()
             onSelectDay(day.date)
@@ -81,6 +82,21 @@ struct WeekStripView: View {
                         )
                         .frame(width: isActive ? 14 : 10, height: isActive ? 14 : 10)
                         .rotationEffect(.degrees(-90))
+                }
+                // Tiny dot below the day's load ring marks «today»
+                // even when today isn't the active filter, so the
+                // user always has a calibration point. Hidden when
+                // today IS the selected day (`isActive`) — the
+                // larger ring already conveys it.
+                if isToday && !isActive {
+                    Circle()
+                        .fill(skin.accentColor)
+                        .frame(width: 3, height: 3)
+                } else {
+                    // Reserved space so the strip's vertical rhythm
+                    // stays aligned across days regardless of which
+                    // one is today.
+                    Color.clear.frame(width: 3, height: 3)
                 }
             }
             .padding(.horizontal, DS.Spacing.xxs)
