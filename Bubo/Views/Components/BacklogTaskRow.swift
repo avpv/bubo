@@ -629,8 +629,15 @@ struct BacklogTaskRow: View {
                 }
 
                 if isHovered, !isDragging, let slotPreview {
+                    // Hover-preview keeps its accent tint (this is the
+                    // user-initiated «here's where it'd land» lookup,
+                    // not the always-on machine voice). But adopt the
+                    // `machineHint` font to match the always-on
+                    // ghost-slot rendering rhythm — the two voices share
+                    // typography and only differ in tint, so the eye
+                    // reads them as «same kind of fact, different state».
                     Text("→ \(slotPreview)")
-                        .font(.footnote)
+                        .font(DS.Typography.machineHint)
                         .foregroundStyle(skin.accentColor.opacity(DS.Opacity.accentMuted))
                         .lineLimit(1)
                         .transition(.opacity)
