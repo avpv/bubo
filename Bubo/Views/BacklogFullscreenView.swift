@@ -37,6 +37,10 @@ struct BacklogFullscreenView: View {
     var reminderService: ReminderService
     var onExit: () -> Void
     var onEditTask: (BacklogTask) -> Void
+    /// Same shape as `BacklogView.onCreateTaskWithDetails`: open the
+    /// compact creation form pre-filled with whatever the user typed.
+    /// Triggered by ⇧↩ / the trailing "›" affordance.
+    var onCreateTaskWithDetails: ((_ prefillTitle: String, _ prefillDuration: Int?) -> Void)? = nil
     var onUndoableAction: ((_ message: String, _ undo: @escaping () -> Void) -> Void)? = nil
     /// Schedule the unscheduled backlog onto the calendar via the optimizer.
     /// Async so the spill-over marker can show a loading spinner inline
@@ -837,6 +841,16 @@ struct BacklogFullscreenView: View {
                     .font(.callout)
                     .focused($isInputFocused)
                     .onSubmit { addTask() }
+                    .onKeyPress(keys: [.return]) { press in
+                        // ⇧↩ — open compact creation form. Mirrors the
+                        // inline BacklogView so muscle memory carries
+                        // between surfaces.
+                        guard press.modifiers.contains(.shift) else {
+                            return .ignored
+                        }
+                        openCreateWithDetails()
+                        return .handled
+                    }
                     .onExitCommand {
                         newTaskTitle = ""
                         parsedNewTaskTitle = ("", nil)
@@ -865,6 +879,21 @@ struct BacklogFullscreenView: View {
                         .foregroundStyle(skin.resolvedTextTertiary)
                         .transition(.opacity)
                         .accessibilityLabel("Guessed duration: about \(DS.formatMinutes(guess))")
+                }
+
+                // Trailing "›" — mouse equivalent of ⇧↩, shown only while
+                // the input is focused so it doesn't compete for attention
+                // when nobody's typing.
+                if isInputFocused, onCreateTaskWithDetails != nil {
+                    Button(action: openCreateWithDetails) {
+                        Image(systemName: "chevron.right.circle")
+                            .font(.callout)
+                            .foregroundStyle(skin.accentColor)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Add with details (\u{21E7}\u{23CE})")
+                    .accessibilityLabel("Add task with details")
+                    .transition(.opacity)
                 }
             }
             .padding(.horizontal, DS.Spacing.sm)
@@ -902,6 +931,10 @@ struct BacklogFullscreenView: View {
             if isInputFocused {
                 HStack(spacing: DS.Spacing.xs) {
                     Text("\u{23CE} Add")
+                    if onCreateTaskWithDetails != nil {
+                        Text("·").foregroundStyle(skin.resolvedTextTertiary.opacity(DS.Opacity.half))
+                        Text("\u{21E7}\u{23CE} Details")
+                    }
                     Text("·").foregroundStyle(skin.resolvedTextTertiary.opacity(DS.Opacity.half))
                     Text("\u{238B} Cancel")
                     Spacer(minLength: 0)
@@ -1051,6 +1084,24 @@ struct BacklogFullscreenView: View {
     }
 
     // MARK: - Actions
+
+    /// Open the compact creation form with whatever's been typed so far.
+    /// Mirrors `BacklogView.openCreateWithDetails` so both backlog modes
+    /// share the same ⇧↩ / "›" affordance behaviour.
+    private func openCreateWithDetails() {
+        let parsed = parsedNewTaskTitle
+        guard let onCreateTaskWithDetails else {
+            addTask()
+            return
+        }
+        let title = parsed.cleaned
+        let duration = parsed.durationMinutes
+            ?? BacklogTitleParser.guessDuration(for: title)
+        onCreateTaskWithDetails(title, duration)
+        newTaskTitle = ""
+        parsedNewTaskTitle = ("", nil)
+        isInputFocused = false
+    }
 
     private func addTask() {
         let parsed = parsedNewTaskTitle
