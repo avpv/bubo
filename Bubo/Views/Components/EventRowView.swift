@@ -404,23 +404,45 @@ struct EventRowView: View {
 
     @ViewBuilder
     private func urgencyBar(_ now: Date) -> some View {
-        if let tag = event.colorTag {
-            Capsule()
-                .fill(tag.color)
-                .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
-                .padding(.trailing, DS.Spacing.md)
-                .shadow(
-                    color: tag.color.opacity(event.isUpcoming ? 0.6 : skin.shadowOpacity * 4),
-                    radius: event.isUpcoming ? 4 : skin.shadowRadius * 0.5
-                )
-        } else {
-            // No user-assigned color: show an unfilled outline so the bar
-            // remains a visible shape without injecting a color accent.
-            Capsule()
-                .strokeBorder(skin.resolvedTextTertiary.opacity(0.5), lineWidth: 1)
-                .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
-                .padding(.trailing, DS.Spacing.md)
+        ZStack {
+            if let tag = event.colorTag {
+                Capsule()
+                    .fill(tag.color)
+                    .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
+                    .shadow(
+                        color: tag.color.opacity(event.isUpcoming ? 0.6 : skin.shadowOpacity * 4),
+                        radius: event.isUpcoming ? 4 : skin.shadowRadius * 0.5
+                    )
+            } else {
+                // No user-assigned color: show an unfilled outline so the bar
+                // remains a visible shape without injecting a color accent.
+                Capsule()
+                    .strokeBorder(skin.resolvedTextTertiary.opacity(0.5), lineWidth: 1)
+                    .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
+            }
+
+            // Pomodoro session marker — when this event is part of a
+            // pomodoro-driven session (`pomodoroConfig != nil`), overlay
+            // a tiny rounded-bracket motif on the urgency bar to suggest
+            // «this event is one segment of a larger structured block».
+            // Reifies the optimizer's `pomodoroSession` intent — the
+            // user sees the grouping as a visible affordance, not just
+            // an icon hidden in the title row.
+            if event.pomodoroConfig != nil {
+                VStack(spacing: 2) {
+                    Capsule()
+                        .stroke(skin.accentColor, lineWidth: 1.5)
+                        .frame(width: DS.Size.accentBarWidth + 3, height: 4)
+                    Spacer()
+                    Capsule()
+                        .stroke(skin.accentColor, lineWidth: 1.5)
+                        .frame(width: DS.Size.accentBarWidth + 3, height: 4)
+                }
+                .frame(width: DS.Size.accentBarWidth + 3, height: DS.Size.accentBarHeight)
+                .accessibilityHidden(true)
+            }
         }
+        .padding(.trailing, DS.Spacing.md)
     }
 
     // MARK: - Time Column
