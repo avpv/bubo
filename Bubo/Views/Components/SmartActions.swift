@@ -90,6 +90,8 @@ struct SmartActions: View {
     /// the quick-action is hidden from the calm-state popover.
     var onLockTodaysEvents: (() -> Void)? = nil
 
+    @Environment(\.activeSkin) private var skin
+
     @State private var showingPlanDayPopover = false
     @State private var showingReasoningPopover = false
 
