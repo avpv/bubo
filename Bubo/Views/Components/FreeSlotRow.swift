@@ -89,11 +89,15 @@ struct FreeSlotRow: View {
             .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 1) {
+                // `DS.Typography.metric` — duration is a numeric fact;
+                // adopting the same voice the backlog header verdict uses
+                // means the «Free · 4 h» reads as «another piece of the
+                // schedule's data», not a separate label kind.
                 Text("Free · \(durationLabel)")
-                    .font(.footnote.weight(.medium))
+                    .font(DS.Typography.metric(skin: skin))
                     .foregroundStyle(skin.resolvedTextSecondary)
                 Text(formattedRange)
-                    .font(.footnote.monospacedDigit())
+                    .font(DS.Typography.metric(skin: skin))
                     .foregroundStyle(skin.resolvedTextTertiary)
             }
 

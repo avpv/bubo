@@ -42,6 +42,12 @@ struct CommandPalette: View {
     @State private var conflicts: [IntentConflictDetector.Conflict] = []
     @State private var appliedNotice: String? = nil
     @State private var workingTask: Task<Void, Never>? = nil
+    /// Disclosure state for the «All intents» catch-all section. False
+    /// by default so the palette stays glanceable on first open; the
+    /// user expands it explicitly when they want the full preset
+    /// catalogue. Birman: «не показывайте 50 опций сразу там, где
+    /// шесть покрывают 90% случаев».
+    @State private var showAllIntents: Bool = false
     @FocusState private var isSearchFocused: Bool
 
     private enum Phase: Equatable {
@@ -332,54 +338,128 @@ struct CommandPalette: View {
 
     // MARK: - Picking (Simple Mode)
 
+    /// Picking-phase body — restructured into a clear vertical flow:
+    ///
+    ///   1. Burnout Rescue       (urgent, energy-driven, top of stack)
+    ///   2. RIGHT NOW            (dynamic ranker suggestions)
+    ///   3. PLAN TODAY           (6 outcome-named presets)
+    ///   4. ALL INTENTS          (collapsed-by-default catalogue)
+    ///   5. Power-mode composer  (when active)
+    ///
+    /// Each section is independently gated: search input collapses
+    /// 2-4 in favour of the search results / AI fallback; a seed
+    /// context (event/task/slot) drives only the focused suggestions
+    /// in section 2 since the user is already in a specific scope.
+    /// Power mode (5) replaces the «PLAN TODAY» section to keep the
+    /// surface area finite.
+    ///
+    /// Birman: «иерархия из природы данных» — urgent rescue is on
+    /// top, common day-scope recipes are visible by default, the
+    /// long tail of intents is one disclosure away.
     @ViewBuilder
     private var pickingContent: some View {
-        // Burnout Rescue
-        if let checkInService = optimizerService.energyCheckInService,
-           let energy = checkInService.predictEnergy(atHour: Calendar.current.component(.hour, from: Date())),
-           energy <= 2.5, searchText.isEmpty {
-            Button {
-                var newReq = OptimizationRequest()
-                newReq.add(.limitToTopTasks(count: 2))
-                newReq.add(.protectLunch(start: 12, end: 14))
-                newReq.add(.breakEvery(workMinutes: 45, breakMinutes: 15))
-                newReq.add(.noEventsAfter(hour: 18))
-                
-                composedRequest = newReq
-                showPowerMode = true
-                runRequest(newReq)
-            } label: {
-                HStack(spacing: DS.Spacing.sm) {
-                    Image(systemName: "lifepreserver.fill")
-                        .font(.body)
-                        .foregroundStyle(.red) // Highlight color
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Unload my day (Burnout Rescue)")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.red)
-                        Text("Energy level is low. Defer everything except the 2 top tasks.")
-                            .font(.footnote)
-                            .foregroundStyle(.red.opacity(0.8))
-                    }
-                }
-                .padding(.vertical, DS.Spacing.sm)
-                .padding(.horizontal, DS.Spacing.sm)
-                .background(Color.red.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-            }
-            .buttonStyle(.plain)
-            .padding(.horizontal, DS.Spacing.sm)
-            .padding(.bottom, DS.Spacing.xs)
+        if shouldShowBurnoutRescue {
+            burnoutRescueButton
         }
 
-        // Smart suggestions — the main UI
+        rightNowSection
+
+        if searchText.isEmpty,
+           seedEvent == nil, seedTask == nil, seedSlotMinutes == nil,
+           !showPowerMode {
+            SkinSeparator()
+            planTodayPresets
+
+            SkinSeparator()
+            allIntentsSection
+        }
+
+        // Power mode (intent composer) — replaces Plan today / All
+        // intents when active so we don't stack three full-width
+        // sections in one popover.
+        if showPowerMode, let request = composedRequest {
+            SkinSeparator()
+            powerModeComposer(request)
+        }
+    }
+
+    /// Whether the burnout-rescue card should appear at the top of the
+    /// picking content — surfaces when the energy-check-in service has
+    /// recent data showing a low energy reading at the current hour
+    /// AND the search field is empty (typing replaces the section).
+    private var shouldShowBurnoutRescue: Bool {
+        guard searchText.isEmpty,
+              let checkInService = optimizerService.energyCheckInService,
+              let energy = checkInService.predictEnergy(
+                atHour: Calendar.current.component(.hour, from: Date())
+              ) else { return false }
+        return energy <= 2.5
+    }
+
+    @ViewBuilder
+    private var burnoutRescueButton: some View {
+        Button {
+            var newReq = OptimizationRequest()
+            newReq.add(.limitToTopTasks(count: 2))
+            newReq.add(.protectLunch(start: 12, end: 14))
+            newReq.add(.breakEvery(workMinutes: 45, breakMinutes: 15))
+            newReq.add(.noEventsAfter(hour: 18))
+
+            composedRequest = newReq
+            showPowerMode = true
+            runRequest(newReq)
+        } label: {
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: "lifepreserver.fill")
+                    .font(.body)
+                    .foregroundStyle(.red)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Unload my day (Burnout Rescue)")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.red)
+                    Text("Energy level is low. Defer everything except the 2 top tasks.")
+                        .font(.footnote)
+                        .foregroundStyle(.red.opacity(0.8))
+                }
+            }
+            .padding(.vertical, DS.Spacing.sm)
+            .padding(.horizontal, DS.Spacing.sm)
+            .background(Color.red.opacity(0.1))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, DS.Spacing.sm)
+        .padding(.bottom, DS.Spacing.xs)
+    }
+
+    /// Dynamic ranker output (or search results, or AI fallback). The
+    /// «RIGHT NOW» section header is shown only when the section
+    /// reflects current-context suggestions (search empty, no seed
+    /// context, ranker produced items). Search results and AI
+    /// fallback render below the same `VStack` without the section
+    /// header so the user reads them as «direct response to my
+    /// query», not «system observation».
+    @ViewBuilder
+    private var rightNowSection: some View {
         VStack(alignment: .leading, spacing: 2) {
+            if searchText.isEmpty,
+               !visibleItems.isEmpty,
+               seedEvent == nil, seedTask == nil, seedSlotMinutes == nil {
+                Text("Right now")
+                    .font(DS.Typography.label(skin: skin))
+                    .tracking(0.5)
+                    .textCase(.uppercase)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.top, DS.Spacing.xxs)
+                    .padding(.bottom, DS.Spacing.xxs)
+            }
+
             ForEach(Array(visibleItems.enumerated()), id: \.element.id) { index, item in
                 suggestionRow(item, index: index)
             }
 
             if visibleItems.isEmpty && !searchText.isEmpty {
-                // No matches — will go to AI on Enter
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: "sparkles")
                         .font(.body)
@@ -394,12 +474,75 @@ struct CommandPalette: View {
             }
         }
         .padding(.horizontal, DS.Spacing.sm)
+    }
 
-        // Power mode (intent composer) — hidden by default
-        if showPowerMode, let request = composedRequest {
-            SkinSeparator()
-            powerModeComposer(request)
+    /// «ALL INTENTS» — the long-tail catalogue, collapsed by default.
+    /// The disclosure header carries a «Show ▾» / «Hide ▴» chevron
+    /// and the count so the user knows what they're hiding/revealing.
+    /// When expanded, every entry from `IntentPresets.all` renders as
+    /// a tappable row using the same suggestion-row visuals as the
+    /// «RIGHT NOW» section above. Birman: «не показывайте 50 опций
+    /// сразу» — power users find them, casual users don't trip over
+    /// them.
+    @ViewBuilder
+    private var allIntentsSection: some View {
+        let allRequests = IntentPresets.all
+        VStack(alignment: .leading, spacing: 2) {
+            Button {
+                Haptics.tap()
+                withAnimation(DS.Animation.quick) {
+                    showAllIntents.toggle()
+                }
+            } label: {
+                HStack(spacing: DS.Spacing.xs) {
+                    Text("All intents")
+                        .font(DS.Typography.label(skin: skin))
+                        .tracking(0.5)
+                        .textCase(.uppercase)
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                    Spacer(minLength: 0)
+                    Text("\(allRequests.count)")
+                        .font(DS.Typography.machineHint)
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                    Image(systemName: showAllIntents ? "chevron.up" : "chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                }
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.xs)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(showAllIntents
+                  ? "Hide the full preset catalogue"
+                  : "Show every preset (\(allRequests.count) total)")
+
+            if showAllIntents {
+                ForEach(Array(allRequests.enumerated()), id: \.offset) { _, request in
+                    Button {
+                        Haptics.tap()
+                        runRequest(request)
+                    } label: {
+                        HStack(spacing: DS.Spacing.sm) {
+                            Image(systemName: "circle.dotted")
+                                .font(.body)
+                                .foregroundStyle(skin.resolvedTextTertiary)
+                                .frame(width: 18)
+                            Text(request.name ?? "Optimize")
+                                .font(.subheadline)
+                                .foregroundStyle(skin.resolvedTextPrimary)
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.vertical, DS.Spacing.xxs)
+                        .padding(.horizontal, DS.Spacing.md)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
         }
+        .padding(.bottom, DS.Spacing.xs)
+    }
 
         // Footer — Birman: label describes the specific action, not a generic verb.
         HStack(spacing: DS.Spacing.md) {
@@ -421,6 +564,59 @@ struct CommandPalette: View {
         .padding(.horizontal, DS.Spacing.md)
         .padding(.top, DS.Spacing.sm)
         .padding(.bottom, DS.Spacing.xs)
+    }
+
+    // MARK: - Plan-today presets
+
+    /// The six outcome-named day-scope recipes from `IntentPresets`.
+    /// Mirrors the `SmartActions` calm-state popover so the canonical
+    /// «Plan day…» actions live both inline (next to the backlog) and
+    /// in the global ⌘K palette. Calling either path goes through the
+    /// same `runRequest` pipeline so toast / undo / reasoning surface
+    /// fire identically.
+    @ViewBuilder
+    private var planTodayPresets: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Plan today")
+                .font(DS.Typography.label(skin: skin))
+                .tracking(0.5)
+                .textCase(.uppercase)
+                .foregroundStyle(skin.resolvedTextTertiary)
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.top, DS.Spacing.xs)
+                .padding(.bottom, DS.Spacing.xxs)
+
+            presetButton(icon: "wand.and.stars",     label: "Organize today",        request: .organizeDay)
+            presetButton(icon: "brain.head.profile", label: "Find 2 h focus",        request: .findFocus(minutes: 120, period: .morning))
+            presetButton(icon: "leaf",               label: "Low energy day",        request: .lowEnergyDay)
+            presetButton(icon: "timer",              label: "Schedule pomodoro day", request: .pomodoroBlock)
+            presetButton(icon: "person.2",           label: "Batch meetings",        request: .batchMeetingsPreset)
+            presetButton(icon: "calendar",           label: "Plan whole week",       request: .planWeek)
+        }
+        .padding(.bottom, DS.Spacing.xs)
+    }
+
+    @ViewBuilder
+    private func presetButton(icon: String, label: String, request: OptimizationRequest) -> some View {
+        Button {
+            Haptics.tap()
+            runRequest(request)
+        } label: {
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: icon)
+                    .font(.body)
+                    .foregroundStyle(skin.accentColor)
+                    .frame(width: 18)
+                Text(label)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(skin.resolvedTextPrimary)
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, DS.Spacing.xs)
+            .padding(.horizontal, DS.Spacing.md)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Suggestion Row
@@ -931,8 +1127,13 @@ struct CommandPalette: View {
 
     private func hint(_ key: String, _ label: String) -> some View {
         HStack(spacing: DS.Spacing.xs) {
+            // The keyboard glyph chip uses `DS.Typography.machineHint`
+            // (the canonical voice for keyboard cues across the app —
+            // see SmartActions calm-state ⌘K hint). Same font in both
+            // surfaces means a user who learned the look in SmartActions
+            // recognises it instantly here.
             Text(key)
-                .font(.footnote.monospaced())
+                .font(DS.Typography.machineHint)
                 .foregroundStyle(skin.resolvedTextSecondary)
                 .padding(.horizontal, DS.Spacing.xs)
                 .padding(.vertical, DS.Spacing.xxs)

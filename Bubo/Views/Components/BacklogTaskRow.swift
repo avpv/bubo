@@ -44,6 +44,16 @@ struct BacklogTaskRow: View {
     /// The parent computes it the first time the cursor enters this row and
     /// caches the result. nil = not computed yet / no slot found.
     var slotPreview: String? = nil
+    /// «The machine has already worked out where this task would go» — a
+    /// proposed start time computed by the parent for tasks that don't fit
+    /// in today's remaining workday. Rendered in the trailing meta column
+    /// as `→ HH:MM` in the `DS.Typography.machineHint` voice. Tap-target
+    /// is currently passive (display only); when the shadow-optimizer
+    /// lands a follow-up commit promotes it to «tap to schedule one task».
+    /// nil = no proposal (the row fits in today, or no proposal computed).
+    /// Birman: «пусть потеет машина» — пользователь видит готовый слот, не
+    /// абстрактное «over capacity».
+    var proposedSlot: Date? = nil
     /// Side-channel hover notification — the parent uses it to trigger the
     /// slot-preview lookup. Mirrors the internal `isHovered` state but lets
     /// the owning view debounce the work without polluting row state.
@@ -54,6 +64,38 @@ struct BacklogTaskRow: View {
     /// this row — the case for inline BacklogView, where digit keys belong
     /// to the add-task field instead.
     var sprintHotKey: Int? = nil
+
+    /// «Find a slot for this task» — runs the optimizer in scope of this
+    /// single task and applies the result. Mirrors the SmartActions hard
+    /// path at the per-task level: instead of «schedule the whole
+    /// overflow», this is «schedule just this one row». Birman: «команды
+    /// живут рядом со своим объектом» — нет нужды открывать палитру и
+    /// формулировать запрос для одной задачи. nil = action hidden.
+    var onFindSlot: (() -> Void)? = nil
+
+    /// Set the task's `preferredPeriod` — surfaced as a sub-menu of
+    /// «Prefer morning / afternoon / evening / night / Clear». Reifies
+    /// the `preferPeriod(match:period:)` intent at the per-row level;
+    /// the optimizer reads `task.preferredPeriod` directly when
+    /// scheduling. nil = sub-menu hidden.
+    var onSetPreferredPeriod: ((Period?) -> Void)? = nil
+
+    /// «Split into shorter blocks» — runs the optimizer in scope of
+    /// this task with `.splitLong(maxMinutes:)` so the GA chunks it
+    /// into two or more sequential blocks. Surfaced only when the
+    /// task is long enough for splitting to make sense (≥ 90 min);
+    /// shorter tasks suppress the menu item to avoid silly proposals
+    /// like «split a 30-min call». Reifies the `splitLong` intent at
+    /// the per-row level. nil = action hidden.
+    var onSplitTask: (() -> Void)? = nil
+
+    /// «Snooze for…» — push the task's deadline forward by a fixed
+    /// number of days (1 / 3 / 7) from a sub-menu. Reifies the manual
+    /// «I can't get to this today, push it forward» action that the
+    /// AutoDeferService does automatically — but here the user owns
+    /// the timing. Mirrors the «Set deadline…» flow but is one-tap
+    /// for the common «push it back N days» case. nil = sub-menu hidden.
+    var onSnoozeByDays: ((Int) -> Void)? = nil
 
     /// Reschedule this task via the command palette (per-task scope optimizer
     /// entry point). Opens ⌘K seeded with the task so it lands on the
@@ -105,6 +147,29 @@ struct BacklogTaskRow: View {
     /// confirmation frame, short enough not to feel like lag.
     private static let completionAnimationDuration: TimeInterval = 0.28
 
+    /// HH:MM-only formatter for the always-on ghost-slot hint («→ 19:30»).
+    /// Locale-aware: 12-hour locales render «7:30 PM», 24-hour ones render
+    /// «19:30». Cached at the type level so the formatter isn't rebuilt on
+    /// every redraw of every overflowing row.
+    private static let proposedSlotFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.timeStyle = .short
+        f.dateStyle = .none
+        return f
+    }()
+
+    /// Compact uppercase tag for the `preferredPeriod` badge. Mirrors
+    /// the Period.displayLabel shape but in a tiny abbreviated form so
+    /// the badge can sit alongside other meta without crowding the row.
+    private static func periodBadgeLabel(_ period: Period) -> String {
+        switch period {
+        case .night:     return "NIGHT"
+        case .morning:   return "AM"
+        case .afternoon: return "PM"
+        case .evening:   return "EVE"
+        }
+    }
+
     /// True when the task has a deadline that's already passed. Drives the
     /// pulsing red dot in the meta row — overdue is a louder signal than
     /// «today», so it gets motion in addition to the red text colour.
@@ -127,11 +192,32 @@ struct BacklogTaskRow: View {
     /// "does this fit in my next slot?"
     private var metaText: Text {
         if let deadline = task.deadline {
+            // Mirror the `titleColor` urgency split for the deadline-
+            // relative text in the meta column: today/overdue inherits
+            // the destructive red; tomorrow inherits the urgent
+            // (desaturated) red; future deadlines stay calm secondary.
+            // Single colour family across title + meta means a glance
+            // down the row reads urgency consistently in both columns.
             return Text(deadlineLabel(deadline))
-                .foregroundStyle(skin.resolvedTextSecondary)
+                .foregroundStyle(deadlineMetaColor(deadline))
         }
         return Text(DS.formatMinutes(task.durationMinutes))
             .foregroundStyle(skin.resolvedTextSecondary)
+    }
+
+    /// Color for the deadline-relative meta text. Pairs with `titleColor`
+    /// so the title and the «in 2 days» label share the same urgency
+    /// language — the eye reads them as one signal, not two competing
+    /// tints.
+    private func deadlineMetaColor(_ deadline: Date) -> Color {
+        let cal = Calendar.current
+        if deadline < Date() || cal.isDateInToday(deadline) {
+            return skin.resolvedDestructiveColor
+        }
+        if cal.isDateInTomorrow(deadline) {
+            return skin.resolvedUrgentColor
+        }
+        return skin.resolvedTextSecondary
     }
 
     /// Whether the row carries any non-deadline trailing metadata that the
@@ -271,8 +357,15 @@ struct BacklogTaskRow: View {
             // baseline; vertical inset keeps it visually inside the
             // rounded corners.
             if isUrgent {
+                // `urgentColor` is the desaturated counterpart of
+                // `destructiveColor` — same hue family, lower intensity.
+                // The stripe says «due soon, prioritise», not «something
+                // is broken» (which the saturated red is reserved for —
+                // capacity overflow ring, overdue titles). One stripe in
+                // the saturated red would compete with the over-capacity
+                // ring; this split lets both coexist without crowding.
                 RoundedRectangle(cornerRadius: 1, style: .continuous)
-                    .fill(skin.resolvedDestructiveColor)
+                    .fill(skin.resolvedUrgentColor)
                     .frame(width: 2)
                     .padding(.vertical, DS.Spacing.xxs)
                     .accessibilityHidden(true)
@@ -357,12 +450,17 @@ struct BacklogTaskRow: View {
             Button("Edit details\u{2026}") { onEdit() }
 
             // Per-task scope optimizer actions — Birman: «команды живут
-            // рядом со своим объектом». «Reschedule» seeds ⌘K with this
+            // рядом со своим объектом». «Find a slot now» runs the
+            // optimizer in scope of this single task (per-task reification
+            // of `findSlotsForBacklog`); «Reschedule» seeds ⌘K with this
             // task; «Set deadline» opens an inline date picker; «Mark
             // urgent» toggles a today deadline (the same deadline that
             // drives the leading red stripe).
-            if onReschedule != nil || onSetDeadline != nil || canToggleUrgent {
+            if onFindSlot != nil || onReschedule != nil || onSetDeadline != nil || canToggleUrgent || onSetPreferredPeriod != nil {
                 Divider()
+                if let findSlot = onFindSlot {
+                    Button("Find a slot now") { findSlot() }
+                }
                 if let reschedule = onReschedule {
                     Button("Reschedule\u{2026}") { reschedule() }
                 }
@@ -371,6 +469,37 @@ struct BacklogTaskRow: View {
                 }
                 if canToggleUrgent, let toggle = onToggleUrgent {
                     Button(urgencyToggleLabel) { toggle() }
+                }
+                if let split = onSplitTask, task.durationMinutes >= 90 {
+                    Button("Split into shorter blocks") { split() }
+                        .help("Run the optimizer to chunk this task into 2+ sequential blocks")
+                }
+                if let snooze = onSnoozeByDays {
+                    Menu("Snooze for\u{2026}") {
+                        Button("1 day")  { snooze(1) }
+                        Button("3 days") { snooze(3) }
+                        Button("1 week") { snooze(7) }
+                    }
+                    .help("Push the deadline forward by a fixed number of days")
+                }
+                if let setPeriod = onSetPreferredPeriod {
+                    // Sub-menu — period preferences are infrequent edits
+                    // but cluster naturally as «when does this task fit
+                    // best?». Bunching them keeps the parent menu calm.
+                    Menu("Prefer time of day") {
+                        Button("Morning") { setPeriod(.morning) }
+                            .disabled(task.preferredPeriod == .morning)
+                        Button("Afternoon") { setPeriod(.afternoon) }
+                            .disabled(task.preferredPeriod == .afternoon)
+                        Button("Evening") { setPeriod(.evening) }
+                            .disabled(task.preferredPeriod == .evening)
+                        Button("Night") { setPeriod(.night) }
+                            .disabled(task.preferredPeriod == .night)
+                        if task.preferredPeriod != nil {
+                            Divider()
+                            Button("Clear preference") { setPeriod(nil) }
+                        }
+                    }
                 }
             }
 
@@ -491,7 +620,12 @@ struct BacklogTaskRow: View {
                 .foregroundStyle(
                     isCompleting
                         ? AnyShapeStyle(skin.accentColor)
-                        : AnyShapeStyle(isUrgent ? skin.resolvedDestructiveColor : skin.resolvedTextSecondary)
+                        // Same urgent-vs-destructive split as the left
+                        // stripe: the complete-button on an urgent row
+                        // shares the urgency family, but at the lower
+                        // intensity (`urgentColor`) so it doesn't shout
+                        // alongside truly destructive surfaces.
+                        : AnyShapeStyle(isUrgent ? skin.resolvedUrgentColor : skin.resolvedTextSecondary)
                 )
                 .frame(width: 24, height: 24)
                 .contentShape(Rectangle())
@@ -559,6 +693,36 @@ struct BacklogTaskRow: View {
                         .accessibilityLabel("Depends on \(task.dependsOn.count) task\(task.dependsOn.count == 1 ? "" : "s")")
                 }
 
+                // Preferred-period badge — reifies the `preferredPeriod`
+                // field that the optimizer already reads. «AM» / «PM» /
+                // «EVE» / «NIGHT» as a tiny uppercase tag in the
+                // machineHint voice; the user sees the constraint they
+                // set without opening the edit form. Birman: «правило
+                // должно быть видимо там, где оно действует».
+                if let period = task.preferredPeriod {
+                    Text(Self.periodBadgeLabel(period))
+                        .font(DS.Typography.machineHint)
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                        .padding(.horizontal, DS.Spacing.xxs)
+                        .background(
+                            Capsule().fill(skin.resolvedTextTertiary.opacity(0.08))
+                        )
+                        .accessibilityLabel("Prefers \(period.displayLabel)")
+                }
+
+                // Notes / link indicator — silent presence cue for tasks
+                // that carry context beyond the title. Single tertiary
+                // glyph matches the dependency arrow's visual weight,
+                // so the right-side meta strip stays a calm column of
+                // small symbols rather than a parade of competing
+                // icons. Edit form surfaces the actual content.
+                if (task.notes?.isEmpty == false) || task.url != nil {
+                    Image(systemName: task.url != nil ? "link" : "doc.text")
+                        .font(.footnote)
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                        .accessibilityLabel(task.url != nil ? "Has link" : "Has notes")
+                }
+
                 if task.priority == .high {
                     Circle()
                         .fill(skin.resolvedDestructiveColor)
@@ -577,8 +741,13 @@ struct BacklogTaskRow: View {
                         .accessibilityHidden(true)
                 }
                 if shouldShowMetaText {
+                    // `DS.Typography.metric` — meta text in this slot is
+                    // always a numeric/temporal fact («1 h», «in 2 days»,
+                    // «Today», «Overdue»). Single voice with the inline
+                    // header digits so a glance down the column sees one
+                    // rhythm of data, not a mix of font weights.
                     metaText
-                        .font(.footnote)
+                        .font(DS.Typography.metric(skin: skin))
                         .lineLimit(1)
                         .truncationMode(.tail)
                 }
@@ -591,12 +760,36 @@ struct BacklogTaskRow: View {
                 }
 
                 if isHovered, !isDragging, let slotPreview {
+                    // Hover-preview keeps its accent tint (this is the
+                    // user-initiated «here's where it'd land» lookup,
+                    // not the always-on machine voice). But adopt the
+                    // `machineHint` font to match the always-on
+                    // ghost-slot rendering rhythm — the two voices share
+                    // typography and only differ in tint, so the eye
+                    // reads them as «same kind of fact, different state».
                     Text("→ \(slotPreview)")
-                        .font(.footnote)
+                        .font(DS.Typography.machineHint)
                         .foregroundStyle(skin.accentColor.opacity(DS.Opacity.accentMuted))
                         .lineLimit(1)
                         .transition(.opacity)
                         .accessibilityLabel("Would land at \(slotPreview)")
+                }
+
+                // Always-on ghost-slot for overflowing tasks. Unlike
+                // `slotPreview` above (hover-only, accent-coloured, used as
+                // a one-off lookup), this is the «machine has already
+                // figured out where each overflowing task would go» voice
+                // — quiet, monospaced, tertiary, visible at rest. When the
+                // shadow optimizer lands in a follow-up, the source flips
+                // from the parent's naive greedy walk to the GA's actual
+                // proposal without any UI changes. Hidden when `slotPreview`
+                // is showing so they don't both render at once.
+                if !isHovered, !isDragging, let proposed = proposedSlot {
+                    Text("→ \(Self.proposedSlotFormatter.string(from: proposed))")
+                        .font(DS.Typography.machineHint)
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                        .lineLimit(1)
+                        .accessibilityLabel("Proposed slot \(Self.proposedSlotFormatter.string(from: proposed))")
                 }
             }
         }
@@ -612,10 +805,17 @@ struct BacklogTaskRow: View {
         guard let deadline = task.deadline else { return skin.resolvedTextPrimary }
         let cal = Calendar.current
         if deadline < Date() || cal.isDateInToday(deadline) {
+            // Today / overdue → saturated destructive red. The strongest
+            // urgency signal in the row's title.
             return skin.resolvedDestructiveColor
         }
         if cal.isDateInTomorrow(deadline) {
-            return .orange
+            // Tomorrow → desaturated red of the same family
+            // (`urgentColor`). Same hue as the row's left stripe and
+            // the «N urgent» pill, so all three signals read as «this
+            // task is time-sensitive» without competing for the same
+            // visual weight as truly destructive surfaces.
+            return skin.resolvedUrgentColor
         }
         return skin.resolvedTextPrimary
     }

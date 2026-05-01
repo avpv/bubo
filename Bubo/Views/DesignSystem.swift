@@ -31,6 +31,36 @@ enum DS {
         static let contentMargin: CGFloat = lg
     }
 
+    // MARK: Density
+
+    /// Vertical breathing-room mode for list rows. `comfortable` uses the
+    /// canonical `Spacing.sm` vertical padding (default for short lists);
+    /// `compact` halves it to `Spacing.xs`, used when the row count climbs
+    /// past ~10 so the user can sweep the whole queue without scrolling.
+    /// Birman: «больше задач — плотнее ритм»; bookkeeping density should
+    /// follow data density, not be a global toggle in settings.
+    enum Density {
+        case comfortable
+        case compact
+
+        /// Vertical padding inside a backlog/task row at this density.
+        /// Horizontal padding stays constant — only vertical breathing-room
+        /// changes — so the column edges don't shift when rows densify.
+        var rowVerticalPadding: CGFloat {
+            switch self {
+            case .comfortable: return Spacing.sm
+            case .compact:     return Spacing.xs
+            }
+        }
+
+        /// Pick density automatically from a row count. Threshold (10) is
+        /// the count at which the standard popover starts requiring scroll
+        /// at `comfortable` — densifying buys back the headroom.
+        static func auto(rowCount: Int, threshold: Int = 10) -> Density {
+            rowCount >= threshold ? .compact : .comfortable
+        }
+    }
+
     // MARK: Hero / Fullscreen Alert
 
     /// Dedicated spacing tokens for the fullscreen meeting alert.
@@ -130,6 +160,36 @@ enum DS {
             .system(.largeTitle, design: .rounded, weight: countdownWeight(for: secondsRemaining))
                 .monospacedDigit()
         }
+
+        // MARK: Inline numerics & quiet voices
+
+        /// Numeric facts inside running UI: «14 tasks», «Done by 17:30»,
+        /// «4 h 32 min», «1 h», «→ 15:30». Same size class as `subhead`
+        /// so it sits on the same baseline, but `.medium` weight and
+        /// `monospacedDigit()` so columns of digits read as *data* —
+        /// distinguishable at a glance from the prose around them.
+        ///
+        /// Birman: «цифры — это другая по природе категория», им нужен
+        /// собственный голос; иначе «14 tasks» неотличимо от «Don't fit».
+        static func metric(skin: SkinDefinition) -> Font {
+            .system(.footnote, design: skin.resolvedFontDesign, weight: .medium)
+                .monospacedDigit()
+        }
+
+        /// Section labels above grouped lists — «TODAY», «FREE», «BACKLOG».
+        /// Tracked uppercase caption, lighter than body, so the eye groups
+        /// the rows below it without the label competing with their content.
+        /// Pairs with macOS HIG's grouped-list section header treatment.
+        static func label(skin: SkinDefinition) -> Font {
+            .system(.caption2, design: skin.resolvedFontDesign, weight: .medium)
+        }
+
+        /// «Speech of the machine» — subtext under `SmartActions`, ghost-slot
+        /// hints («→ 15:30»), duration guesses («~30m»), keyboard-shortcut
+        /// hints («⌘K»). Monospaced footnote in tertiary so the user learns
+        /// «this voice is the computer thinking out loud», never the user's
+        /// own input.
+        static let machineHint: Font = .footnote.monospaced()
 
         /// Rounded, equal-width-digit face for the in-popover ring timer.
         /// Hero numerics share the SF Rounded face with the alert; weight is
@@ -379,6 +439,14 @@ enum DS {
         static func staggered(index: Int) -> SwiftUI.Animation {
             staggerBase.delay(Double(index) * 0.04)
         }
+
+        /// «Машина думает» — slow ease-out, no bounce. Used by `SmartActions`
+        /// when the shadow optimizer's result swaps in (state transitions
+        /// between hard / soft / calm) and by the upcoming ghost-preview
+        /// re-layout. Calmer than `smoothSpring` — bounce would read as
+        /// playful when the goal is «the system is reasoning, give it a
+        /// beat».
+        static let machineWork: SwiftUI.Animation = .easeOut(duration: 0.45)
 
         /// Returns `.identity` (no animation) when Reduce Motion is on,
         /// otherwise returns the provided animation.

@@ -316,6 +316,53 @@ struct AppliedSnapshot: Codable, Sendable {
     let createdEventIds: [String]
 }
 
+// MARK: - Applied Request Summary (for the Reasoning Surface)
+
+/// Lightweight «what was just applied» record kept on `OptimizerService`
+/// for the few seconds after a Run completes. The `SmartActions` row
+/// reads this to render its trailing «Done · why?» hint, where tap-on-
+/// «why?» reveals which intents the applied request carried.
+///
+/// Separate from `AppliedSnapshot` (which lives only as long as undo is
+/// possible and carries gene-level data) — this one is shorter-lived and
+/// purely advisory. Birman: «оптимизатор не магия — он явное правило»;
+/// surfacing the intents back to the user closes the loop between «I
+/// hit Run» and «I see what the machine actually did».
+struct AppliedRequestSummary: Sendable {
+    let request: OptimizationRequest
+    let label: String
+    let appliedAt: Date
+    /// Number of events the optimizer placed in this run — fed into
+    /// the human-readable summary («Moved 4 tasks»). Zero when the
+    /// applied scenario was an empty schedule.
+    let taskCount: Int
+    /// How many scenarios the optimizer returned for this request. The
+    /// applied one is at `appliedScenarioIndex`; the rest are
+    /// alternatives the user can swap into via the reasoning-row's
+    /// `· · ·` cycle indicator. Both default to 1 / 0 when scenarios
+    /// aren't relevant for the run.
+    let scenarioCount: Int
+    let appliedScenarioIndex: Int
+
+    /// Whether this summary is still recent enough to surface in the UI.
+    /// 8-second window matches the typical undo-toast lifetime — once
+    /// the toast is gone the «why?» hint should be too, so the user
+    /// isn't reading about an action they've already moved past.
+    var isFresh: Bool {
+        Date().timeIntervalSince(appliedAt) < 8
+    }
+
+    /// One-line human-readable summary of what just happened. Combines
+    /// the optimizer's `label` with the task count when meaningful.
+    var headline: String {
+        switch taskCount {
+        case 0:  return label
+        case 1:  return "\(label) · 1 task"
+        default: return "\(label) · \(taskCount) tasks"
+        }
+    }
+}
+
 // MARK: - Energy Adjustment
 
 /// Adjust energy cost based on story points.

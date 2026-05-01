@@ -13,6 +13,14 @@ struct MenuBarView: View {
 
     @State private var navigation: Navigation = .list
     @State private var hasStartedSync = false
+    /// Day-rollover timer for `AutoDeferService` — fires shortly past
+    /// midnight so the «left popover open overnight» case picks up the
+    /// new day's deferral pass without requiring the user to reopen
+    /// the popover. Stored as state so the lifecycle tracks the view's
+    /// — created in `onAppear`, invalidated in `onDisappear`. Without
+    /// this, AutoDefer only ran on popover-open, which missed users
+    /// who keep the menu bar pinned overnight.
+    @State private var dayRolloverTimer: Timer? = nil
     /// Becomes true 3\u{00A0}s after the first popover open, regardless of
     /// whether the EventKit sync has produced events yet. Used to escalate
     /// the «Syncing calendars…» panel into «Sync taking long» so the user
@@ -334,9 +342,81 @@ struct MenuBarView: View {
                             onFocusOnDeadlines: {
                                 await runQuickAction(.deadlineMode, label: "Focused on deadlines")
                             },
+                            onRunRequest: { request, label in
+                                await runQuickAction(request, label: label)
+                            },
+                            onOpenPalette: {
+                                Haptics.tap()
+                                withAnimation(DS.Animation.quick) {
+                                    paletteContext = PaletteContext()
+                                }
+                            },
+                            onSwitchScenario: { index in
+                                optimizerService.switchToAppliedScenario(
+                                    at: index,
+                                    to: reminderService
+                                )
+                            },
+                            onLockTodaysEvents: {
+                                // Same bulk-lock as the inline view; the
+                                // user gets the same toast on success and
+                                // the rows light up with solid lock icons
+                                // when they return to the main popover.
+                                let cal = Calendar.current
+                                let todaysIds = reminderService.allEvents
+                                    .filter { cal.isDateInToday($0.startTime) }
+                                    .map(\.id)
+                                let preCount = optimizerService.lockedEventIds.count
+                                for id in todaysIds {
+                                    if !optimizerService.isLocked(eventId: id) {
+                                        optimizerService.toggleLock(eventId: id)
+                                    }
+                                }
+                                let added = optimizerService.lockedEventIds.count - preCount
+                                if added > 0 {
+                                    toastState.showSuccess(
+                                        added == 1 ? "Locked 1 event" : "Locked \(added) events",
+                                        icon: "lock.fill"
+                                    ) {
+                                        for id in todaysIds where optimizerService.isLocked(eventId: id) {
+                                            optimizerService.toggleLock(eventId: id)
+                                        }
+                                    }
+                                } else {
+                                    toastState.showInfo("Today's events are already locked", icon: "lock.fill")
+                                }
+                            },
                             onRescheduleTask: { task in
                                 navigation = .list
                                 paletteContext = PaletteContext(seedTask: task)
+                            },
+                            onScheduleTask: { task in
+                                // Per-task scope: same pipe as the inline
+                                // BacklogView's `onScheduleTask`. We don't
+                                // pop back to .list here — the user is
+                                // working through the fullscreen list and
+                                // the optimizer applies in-place.
+                                Task {
+                                    var req = OptimizationRequest(name: "Find slot")
+                                    req.add(.includeBacklogTasks(ids: [task.id]))
+                                    req.add(.findSlotsForBacklog)
+                                    let trimmed = task.title.count > 24
+                                        ? String(task.title.prefix(24)) + "\u{2026}"
+                                        : task.title
+                                    await runQuickAction(req, label: "Found slot for \u{201C}\(trimmed)\u{201D}")
+                                }
+                            },
+                            onSplitTask: { task in
+                                Task {
+                                    var req = OptimizationRequest(name: "Split task")
+                                    req.add(.includeBacklogTasks(ids: [task.id]))
+                                    req.add(.splitLong(maxMinutes: max(30, task.durationMinutes / 2)))
+                                    req.add(.findSlotsForBacklog)
+                                    let trimmed = task.title.count > 24
+                                        ? String(task.title.prefix(24)) + "\u{2026}"
+                                        : task.title
+                                    await runQuickAction(req, label: "Split \u{201C}\(trimmed)\u{201D}")
+                                }
                             }
                         )
                         .transition(
@@ -389,7 +469,13 @@ struct MenuBarView: View {
                         )
                     }
                 )
-                .padding(.top, max(0, optimizerBottomY))
+                // The Backlog card now publishes `OptimizerBottomKey`
+                // (see its `.background(GeometryReader…)` modifier),
+                // so `optimizerBottomY` reflects the card's bottom
+                // edge. Fallback minimum (≈ height of WorldClock +
+                // filter bar) preserves a sensible position before the
+                // first preference reading lands.
+                .padding(.top, max(120, optimizerBottomY))
                 .transition(.opacity)
                 .zIndex(10)
             }
@@ -438,6 +524,15 @@ struct MenuBarView: View {
             // independent of the one-shot `hasStartedSync` guard below.
             refreshPermissionSnapshots()
 
+            // AutoDefer runs once per calendar day. Calling on every
+            // popover open is cheap (the service early-exits when
+            // `lastRunDate` is today) and covers the «opened a fresh
+            // morning» case automatically. Birman: «пусть потеет
+            // машина» — overdue rows are an artefact of the previous
+            // day, the user shouldn't have to scroll past them today.
+            runAutoDeferIfNeeded()
+            scheduleDayRolloverTimerIfNeeded()
+
             guard !hasStartedSync else { return }
             hasStartedSync = true
             reminderService.updateSettings(settings)
@@ -462,6 +557,14 @@ struct MenuBarView: View {
                 initialSyncTimeoutFired = true
             }
         }
+        .onDisappear {
+            // Tear down the day-rollover timer so we don't leak it
+            // when the popover is dismissed. `onAppear` will re-arm
+            // the timer on the next open if the day hasn't yet
+            // rolled.
+            dayRolloverTimer?.invalidate()
+            dayRolloverTimer = nil
+        }
         .onChange(of: reminderService.allEvents.isEmpty) { _, isEmpty in
             // Latch on the first non-empty event list — we treat that as
             // «sync produced something», which is enough to drop the
@@ -469,6 +572,17 @@ struct MenuBarView: View {
             // empty later (e.g. user filters everything out); the panel
             // is one-shot per app launch.
             if !isEmpty { initialSyncDataArrived = true }
+        }
+        .onChange(of: optimizerService.backlogService?.tasks.count ?? 0) { _, _ in
+            // Backlog mutated → kick a fresh shadowProposal compute so
+            // the per-task ghost-slots / SmartActions delta hints stay
+            // current. `previewRequest` is fire-and-cancel: a fresh
+            // call cancels the previous in-flight task, so back-to-back
+            // edits collapse to one run on the latest state. The
+            // request itself is the same `.scheduleBacklog` SmartActions
+            // would fire on Run, so the preview reflects what the user
+            // would actually see if they tapped Run right now.
+            optimizerService.previewRequest(.scheduleBacklog, reminderService: reminderService)
         }
         .onReceive(NotificationCenter.default.publisher(for: AppleCalendarService.authorizationDidChange)) { note in
             // Trust the grant result if the service posted one — the
@@ -770,8 +884,98 @@ struct MenuBarView: View {
                 onFocusOnDeadlines: {
                     await runQuickAction(.deadlineMode, label: "Focused on deadlines")
                 },
+                onRunRequest: { request, label in
+                    // Pipe arbitrary `OptimizationRequest`s coming from
+                    // `SmartActions` (soft-suggestion Run + Plan day…
+                    // presets) through the same `runQuickAction` helper
+                    // the hard-overflow path uses — toast + undo come for
+                    // free, identical semantics across all three states.
+                    await runQuickAction(request, label: label)
+                },
+                onOpenPalette: {
+                    Haptics.tap()
+                    withAnimation(DS.Animation.quick) {
+                        paletteContext = PaletteContext()
+                    }
+                },
+                onSwitchScenario: { index in
+                    // Hop the just-applied scenario to a different
+                    // index in the same `scenarios` array. The
+                    // service handles rollback + reapply atomically;
+                    // the toast pipe stays untouched (the user has
+                    // already seen the original toast and will see
+                    // the reasoning popover update in place).
+                    optimizerService.switchToAppliedScenario(
+                        at: index,
+                        to: reminderService
+                    )
+                },
+                onLockTodaysEvents: {
+                    // Bulk-lock every event currently on today's
+                    // schedule — same persistent set the per-row lock
+                    // affordance writes to, so the rows light up with
+                    // their solid lock icon immediately.
+                    let cal = Calendar.current
+                    let todaysIds = reminderService.allEvents
+                        .filter { cal.isDateInToday($0.startTime) }
+                        .map(\.id)
+                    let preCount = optimizerService.lockedEventIds.count
+                    for id in todaysIds {
+                        if !optimizerService.isLocked(eventId: id) {
+                            optimizerService.toggleLock(eventId: id)
+                        }
+                    }
+                    let added = optimizerService.lockedEventIds.count - preCount
+                    if added > 0 {
+                        toastState.showSuccess(
+                            added == 1 ? "Locked 1 event" : "Locked \(added) events",
+                            icon: "lock.fill"
+                        ) {
+                            // Undo: unlock everything we just locked.
+                            for id in todaysIds {
+                                if optimizerService.isLocked(eventId: id) {
+                                    optimizerService.toggleLock(eventId: id)
+                                }
+                            }
+                        }
+                    } else {
+                        toastState.showInfo("Today's events are already locked", icon: "lock.fill")
+                    }
+                },
                 onRescheduleTask: { task in
                     paletteContext = PaletteContext(seedTask: task)
+                },
+                onScheduleTask: { task in
+                    // Per-task `findSlotsForBacklog` — same async pipe as
+                    // the backlog-wide path, scoped to one task via
+                    // `includeBacklogTasks(ids:)`. The user gets the
+                    // standard undo toast on success.
+                    Task {
+                        var req = OptimizationRequest(name: "Find slot")
+                        req.add(.includeBacklogTasks(ids: [task.id]))
+                        req.add(.findSlotsForBacklog)
+                        let trimmed = task.title.count > 24
+                            ? String(task.title.prefix(24)) + "\u{2026}"
+                            : task.title
+                        await runQuickAction(req, label: "Found slot for \u{201C}\(trimmed)\u{201D}")
+                    }
+                },
+                onSplitTask: { task in
+                    // Per-task `splitLong` — chunks the task into 2+
+                    // sequential blocks of half-duration each. Same
+                    // pipe as findSlot above; toast labels the
+                    // operation so the user can recognise it in the
+                    // history.
+                    Task {
+                        var req = OptimizationRequest(name: "Split task")
+                        req.add(.includeBacklogTasks(ids: [task.id]))
+                        req.add(.splitLong(maxMinutes: max(30, task.durationMinutes / 2)))
+                        req.add(.findSlotsForBacklog)
+                        let trimmed = task.title.count > 24
+                            ? String(task.title.prefix(24)) + "\u{2026}"
+                            : task.title
+                        await runQuickAction(req, label: "Split \u{201C}\(trimmed)\u{201D}")
+                    }
                 },
                 focusRequested: $focusTaskInput,
                 autoExpand: autoExpand
@@ -919,48 +1123,20 @@ struct MenuBarView: View {
                 colorFilterBar
             }
 
-            // Quick actions card — chips live in their own platter so
-            // the main content area reads as a stack of grouped cards
-            // (iOS Settings / macOS System Settings pattern), every one
-            // of them at contentMargin from the popover edges.
-            if reminderService.nonDisintegratingEventCount > 0 {
-                QuickActions(
-                    optimizerService: optimizerService,
-                    reminderService: reminderService,
-                    onExecuted: { label, undo in
-                        toastState.showSuccess(label, icon: "sparkles", onUndo: undo)
-                        notifyScheduleChange()
-                    },
-                    onError: { message in
-                        toastState.showInfo(message, icon: "exclamationmark.triangle")
-                    },
-                    onOpenPalette: {
-                        Haptics.tap()
-                        withAnimation(DS.Animation.quick) {
-                            paletteContext = PaletteContext()
-                        }
-                    }
-                )
-                .padding(.vertical, DS.Spacing.sm)
-                .padding(.horizontal, DS.Spacing.sm)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .skinPlatter(activeSkin)
-                .skinPlatterDepth(skin)
-                // Preference key sits AFTER platter/depth but BEFORE the
-                // outer padding so the command palette anchors to the
-                // card's bottom edge (shadow included) rather than to
-                // the outer gap below it.
-                .background(
-                    GeometryReader { geo in
-                        Color.clear.preference(
-                            key: OptimizerBottomKey.self,
-                            value: geo.frame(in: .named(menuBarRootCoordinateSpace)).maxY
-                        )
-                    }
-                )
-                .padding(.horizontal, DS.Spacing.contentMargin)
-                .padding(.top, DS.Spacing.md)
-            }
+            // The standalone «Optimize ⌘K» chip card was removed: the
+            // optimizer is now woven into the Backlog card itself via the
+            // adaptive `SmartActions` row (hard-overflow fix / soft
+            // suggestion / `Plan day…` discovery), so a separate entry
+            // point above the timeline is redundant. The global ⌘K
+            // shortcut still opens the command palette — see the
+            // `paletteShortcutBinding` further down. Birman: «не плодь
+            // сущности на главном экране» — the optimizer lives next to
+            // the data it shapes.
+            //
+            // `OptimizerBottomKey` is intentionally not republished here.
+            // Anchored UI elements that used to attach to the QuickActions
+            // bottom edge (the `paletteContext` popover) now anchor to the
+            // Backlog card's chrome instead.
 
             // Backlog card — always rendered so the "+ Add task…" input
             // stays as a persistent visual anchor even when the backlog
@@ -971,6 +1147,23 @@ struct MenuBarView: View {
             inlineBacklog(autoExpand: reminderService.nonDisintegratingEventCount == 0)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .skinTasksBlockChrome(activeSkin)
+                // Re-publish `OptimizerBottomKey` from the Backlog
+                // card's bottom edge so the command palette popover
+                // anchors right below it. This used to be published
+                // by the deleted QuickActions card; in the redesigned
+                // layout the Backlog card is the closest natural anchor
+                // (and where SmartActions / SmartActions reasoning
+                // surface live, so the palette continues their visual
+                // axis). Same `.named(menuBarRootCoordinateSpace)`
+                // frame as the old key publisher used.
+                .background(
+                    GeometryReader { geo in
+                        Color.clear.preference(
+                            key: OptimizerBottomKey.self,
+                            value: geo.frame(in: .named(menuBarRootCoordinateSpace)).maxY
+                        )
+                    }
+                )
                 .padding(.horizontal, DS.Spacing.contentMargin)
                 .padding(.top, DS.Spacing.md)
 
@@ -1412,8 +1605,16 @@ struct MenuBarView: View {
             // space (row to row inside a day) — handled by the `lg`
             // sibling spacing plus a SkinSeparator between groups.
             LazyVStack(alignment: .leading, spacing: DS.Spacing.lg) {
-                // One banner at a time — energy check-in when pending,
-                // otherwise optimizer suggestion. §2: density, not stacking.
+                // Energy check-in banner stays here as a top-of-timeline
+                // surface — it's a wellness prompt, not an optimizer
+                // suggestion, and it has its own input affordance (level
+                // pills) that doesn't fit the `SmartActions` row's
+                // shape. The optimizer-suggestion banner that used to
+                // sit alongside has migrated into `SmartActions` inside
+                // the Backlog card so the user has a single contextual
+                // channel for "machine has something to offer". Birman:
+                // «один CTA, не три», иначе главный экран дублирует сам
+                // себя.
                 if optimizerService.energyCheckInService?.pendingCheckIn == true {
                     EnergyCheckInBanner(
                         onRecord: { level in
@@ -1427,19 +1628,6 @@ struct MenuBarView: View {
                         onDismiss: {
                             withAnimation(DS.Animation.quick) {
                                 optimizerService.energyCheckInService?.dismissCheckIn()
-                            }
-                        }
-                    )
-                } else if let suggestion = activeBannerSuggestion {
-                    SmartBanner(
-                        request: suggestion.request,
-                        reason: suggestion.reason,
-                        onRun: {
-                            Task { await runQuickAction(suggestion.request, label: suggestion.reason) }
-                        },
-                        onDismiss: {
-                            withAnimation(DS.Animation.quick) {
-                                optimizerService.suggestionEngine?.suggestion = nil
                             }
                         }
                     )
@@ -1494,24 +1682,21 @@ struct MenuBarView: View {
     ) -> some View {
         let visibleCount = visibleEventCount(for: dayGroup.events)
 
-        DaySectionHeader(date: dayGroup.date, count: visibleCount) {
-            // Day-scope optimizer entry — only renders on «Today» since the
-            // intents (Organize today, Find focus, Low energy day…) operate
-            // on the current day's schedule. Other days keep the plain
-            // header. Birman: «команды живут рядом со своим объектом».
-            if Calendar.current.isDateInToday(dayGroup.date) {
-                PlanDayMenu(
-                    runRequest: { request, label in
-                        await runQuickAction(request, label: label)
-                    },
-                    openMore: {
-                        paletteContext = PaletteContext()
-                    },
-                    isEmptyDay: dayGroup.events.isEmpty
-                        && (optimizerService.backlogService?.tasks.isEmpty ?? true)
-                )
-            }
-        }
+        // Day header trailing slot is empty now — the day-scope optimizer
+        // presets that used to live in `PlanDayMenu` here have migrated
+        // into the `SmartActions` row inside the Backlog card, where they
+        // surface as the calm-state `Plan day…` popover (same six outcome-
+        // named requests, single channel for the optimizer, no duplicate
+        // entry next to the day title). `DaySectionHeader`'s trailing
+        // slot defaults to `EmptyView` so we omit it entirely. The
+        // `workingHours` argument surfaces today's «9–18» window as a
+        // quiet badge — reifies the optimizer's `workingHours` rule at
+        // the surface where the user already reads day metadata.
+        DaySectionHeader(
+            date: dayGroup.date,
+            count: visibleCount,
+            workingHours: optimizerService.workingHours
+        )
             // `sm` leading keeps the day title hanging 8pt out from the
             // first event's accent bar — same column as the free-slot
             // dashed guide. Level 1: top padding is now applied by the
@@ -1558,9 +1743,46 @@ struct MenuBarView: View {
         // free slots (the real targets) and the expanded task list above
         // share the vertical space. One header > N thin slivers — Бирман:
         // «свернуть в строку-заголовок, а не уменьшать всё пропорционально».
+        // Working-hours start boundary — only on today, only when
+        // not dragging a task (the drag-mode collapse stands in for
+        // the day's contents and a draggable handle would compete
+        // with the drop targets). Renders directly under the day-
+        // section header, before any free slots / events.
+        if Calendar.current.isDateInToday(dayGroup.date), !backlogCoordinator.isDraggingTask {
+            WorkingHoursBoundaryRow(
+                kind: .start,
+                hour: optimizerService.workingHoursStart,
+                onStep: { delta in
+                    let proposed = optimizerService.workingHoursStart + delta
+                    optimizerService.workingHoursStart = max(0, min(22, proposed))
+                }
+            )
+        }
+
         if backlogCoordinator.isDraggingTask && !dayGroup.events.isEmpty && freeSlotFilter != .onlyFree {
             collapsedEventsHeader(for: dayGroup.events)
         }
+
+        // Pomodoro neighbour map for this day. Walk events in
+        // chronological order and record, for each event, whether its
+        // immediately previous / next neighbour (in the same `events`
+        // list) shares the same pomodoroSessionBaseId. The map drives
+        // `EventRowView`'s `hasPomodoroNeighbourBefore` /
+        // `hasPomodoroNeighbourAfter` props so consecutive same-session
+        // segments render with one shared bracketed container.
+        let pomoNeighbours: [String: (before: Bool, after: Bool)] = {
+            var result: [String: (before: Bool, after: Bool)] = [:]
+            let sorted = dayGroup.events.sorted { $0.startTime < $1.startTime }
+            for (idx, event) in sorted.enumerated() {
+                guard let base = event.pomodoroSessionBaseId else { continue }
+                let prevSame: Bool = idx > 0
+                    && sorted[idx - 1].pomodoroSessionBaseId == base
+                let nextSame: Bool = idx + 1 < sorted.count
+                    && sorted[idx + 1].pomodoroSessionBaseId == base
+                result[event.id] = (before: prevSame, after: nextSame)
+            }
+            return result
+        }()
 
         ForEach(interleaved, id: \.id) { item in
             switch item {
@@ -1652,10 +1874,62 @@ struct MenuBarView: View {
                             paletteContext = PaletteContext(seedEvent: event, seedRecipeId: "prep-meeting")
                         }
                     },
+                    onAddPrepQuick: { event, minutes in
+                        // One-tap meetingPrep: scope to this event,
+                        // fixed minutes, run through the same toast +
+                        // undo pipe as other quick-actions. Toast label
+                        // says «N min prep before <title>» so the user
+                        // sees what was just inserted.
+                        Task {
+                            var req = OptimizationRequest(name: "Add prep")
+                            req.add(.onlyOptimize(eventIds: [event.id]))
+                            req.add(.meetingPrep(minutes: minutes))
+                            let trimmed = event.title.count > 24
+                                ? String(event.title.prefix(24)) + "\u{2026}"
+                                : event.title
+                            await runQuickAction(req, label: "\(minutes) min prep before \u{201C}\(trimmed)\u{201D}")
+                        }
+                    },
                     onConvertToPomodoro: { event in
                         convertEventToPomodoro(event)
                     },
-                    isFreshlyCreated: optimizerService.freshlyCreatedEventIds.contains(event.id)
+                    isFreshlyCreated: optimizerService.freshlyCreatedEventIds.contains(event.id),
+                    isLocked: optimizerService.isLocked(eventId: event.id),
+                    onToggleLock: { event in
+                        // Persistent toggle in `OptimizerService`. Next
+                        // optimizer run reads `lockedEventIds` and
+                        // injects an implicit `.keepFixed(...)` so the
+                        // GA leaves this event alone. Local Bubo events
+                        // benefit the most — Apple-Calendar events the
+                        // user can't move from inside the app anyway.
+                        withAnimation(DS.Animation.quick) {
+                            optimizerService.toggleLock(eventId: event.id)
+                        }
+                    },
+                    isExcluded: optimizerService.isExcluded(eventId: event.id),
+                    onToggleExclude: { event in
+                        // Excluded events are absent from the optimizer's
+                        // input — useful when the user is planning around
+                        // a meeting they might cancel. Same persistent-
+                        // set + auto-inject pattern as lock.
+                        withAnimation(DS.Animation.quick) {
+                            optimizerService.toggleExclude(eventId: event.id)
+                        }
+                    },
+                    energyAtStartHour: optimizerService.energyCheckInService?
+                        .predictEnergy(atHour: Calendar.current.component(.hour, from: event.startTime)),
+                    flexPercent: optimizerService.flex(eventId: event.id),
+                    onSetFlex: { event, percent in
+                        // Persist the per-event flex preference. Doesn't
+                        // run the optimizer immediately — flex applies
+                        // when the user explicitly scopes a Run to this
+                        // event (Reschedule from the row's other menu
+                        // items, or via the palette). Birman: persist
+                        // intent here; act on it where the user runs.
+                        optimizerService.setFlex(percent: percent, eventId: event.id)
+                    },
+                    hasPomodoroNeighbourBefore: pomoNeighbours[event.id]?.before ?? false,
+                    hasPomodoroNeighbourAfter: pomoNeighbours[event.id]?.after ?? false
                 )
                 }
             case .slot(let start, let end):
@@ -1702,6 +1976,47 @@ struct MenuBarView: View {
                 GhostEventRow(start: start, end: end, title: title)
                     .transition(.opacity.combined(with: .scale(scale: 0.96)))
             }
+        }
+
+        // Working-hours end boundary — paired with the start handle
+        // above. Together they bracket the day's events so the user
+        // can see, drag, and step the working window directly on
+        // the timeline rather than burying it in settings. Birman:
+        // «правила — это объекты на экране».
+        if Calendar.current.isDateInToday(dayGroup.date), !backlogCoordinator.isDraggingTask {
+            WorkingHoursBoundaryRow(
+                kind: .end,
+                hour: optimizerService.workingHoursEnd,
+                onStep: { delta in
+                    let proposed = optimizerService.workingHoursEnd + delta
+                    optimizerService.workingHoursEnd = max(1, min(23, proposed))
+                }
+            )
+        }
+
+        // After-hours / wind-down marker for today: when the latest
+        // event ends past `workingHours.upperBound`, surface a quiet
+        // «After hours» caption BELOW the boundary handle (so the
+        // handle separates the inside-hours region from the after-
+        // hours one). Reifies the optimizer's `noEventsAfter` /
+        // `windDown` family at the surface where it actually matters —
+        // past the boundary, the user sees that the schedule has
+        // spilled into protected time. Today only.
+        if Calendar.current.isDateInToday(dayGroup.date),
+           let lastEvent = dayGroup.events.last,
+           Calendar.current.component(.hour, from: lastEvent.endDate) >= optimizerService.workingHours.upperBound {
+            HStack(spacing: DS.Spacing.xs) {
+                Image(systemName: "moon.zzz")
+                    .font(.footnote)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                Text("After hours")
+                    .font(DS.Typography.machineHint)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, DS.Spacing.sm)
+            .padding(.top, DS.Spacing.xxs)
+            .accessibilityLabel("After working hours")
         }
     }
 
@@ -1792,56 +2107,90 @@ struct MenuBarView: View {
 
     // MARK: - Smart Banner
 
-    /// Mapping from `SuggestionEngine.Signal.name` to the set of
-    /// `QuickActionCandidate.id`s that surface the same intent in the
-    /// QuickActions chip row. The two systems were named independently —
-    /// `pending-tasks` here is `schedule-tasks` there — so we keep an
-    /// explicit table rather than a brittle name-prefix match.
-    ///
-    /// Used by `activeBannerSuggestion` below to suppress the banner when
-    /// the dynamic ranker has already raised the same recipe to top-3:
-    /// otherwise the user sees «4 tasks to schedule [Run]» as both a
-    /// chip *and* a banner immediately below the Tasks card, which was
-    /// the original «тройной Schedule» complaint.
-    private static let suggestionToQuickActionIDs: [String: Set<String>] = [
-        "overdue": ["overdue"],
-        "urgent": ["deadlines"],
-        "meetings-heavy": ["batch-meetings"],
-        "pending-tasks": ["schedule-tasks"],
-        // Focus has two surface variants in the ranker — the user's own
-        // history picks one of them per `focusVariantCandidate()`. Either
-        // counts as the same suggestion being shown.
-        "no-focus": ["focus", "pomodoro"],
-        "organize-morning": ["organize"],
-    ]
-
-    /// Historically suppressed banner suggestions that were already visible
-    /// as floating QuickActions chips. With the chip strip collapsed to a
-    /// single `Optimize ⌘K` button (per-task, per-event, backlog and
-    /// day-scope intents migrated to their own surfaces), there's nothing
-    /// to dedupe — banners can always surface a contextual suggestion when
-    /// it qualifies. Returns `false` unconditionally now; kept around so
-    /// future changes can re-enable suppression without restructuring the
-    /// banner pipeline.
-    private func isSuggestionSurfacedInQuickActions(_ suggestion: SuggestionEngine.Suggestion) -> Bool {
-        return false
-    }
-
-    /// The first non-dismissed suggested recipe from the monitor, or nil
-    /// when nothing is worth suggesting. Returns nil also when the same
-    /// intent is already shown as a top-3 QuickAction — Бирман: «один
-    /// CTA, не три», иначе главный экран начинает дублировать сам себя.
-    private var activeBannerSuggestion: SuggestionEngine.Suggestion? {
-        guard let suggestion = optimizerService.suggestionEngine?.suggestion else { return nil }
-        if isSuggestionSurfacedInQuickActions(suggestion) { return nil }
-        return suggestion
-    }
+    // The `SmartBanner` deduplication helpers (`suggestionToQuickActionIDs`,
+    // `isSuggestionSurfacedInQuickActions`, `activeBannerSuggestion`) were
+    // removed along with the banner itself. The single ranked candidate
+    // from `optimizerService.suggestionEngine?.suggestion` is now consumed
+    // directly by the `SmartActions` row inside the Backlog card — there
+    // is no second optimizer surface to dedupe against, so the suppression
+    // table is moot.
 
     /// Execute a request immediately — no palette, no configuration.
     /// One tap → done → undo toast. Birman: "sequential magic."
     ///
     /// Async so callers (e.g. the spill-over marker action-link) can await
     /// and surface a loading spinner during the optimizer call. Fire-and-
+    // MARK: - Auto Defer
+
+    /// Schedule a one-shot Timer that fires ~1 minute past midnight to
+    /// re-run AutoDefer for users who leave the popover open overnight.
+    /// `runAutoDeferIfNeeded` is the only consumer; the timer reschedules
+    /// itself to the next midnight after each fire.
+    ///
+    /// Idempotent — calling twice doesn't stack timers; the second call
+    /// drops out because `dayRolloverTimer != nil`. Cleared by
+    /// `onDisappear` so a popover dismissal doesn't leak it.
+    @MainActor
+    private func scheduleDayRolloverTimerIfNeeded() {
+        guard dayRolloverTimer == nil else { return }
+        scheduleNextDayRollover()
+    }
+
+    @MainActor
+    private func scheduleNextDayRollover() {
+        let cal = Calendar.current
+        let now = Date()
+        let startOfTomorrow = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now)) ?? now
+        // Sleep ~60s past midnight so we cross the boundary cleanly,
+        // not at the exact second of rollover (where small clock drift
+        // could land us back on the previous day).
+        let fireDate = startOfTomorrow.addingTimeInterval(60)
+        let interval = max(60, fireDate.timeIntervalSinceNow)
+
+        dayRolloverTimer?.invalidate()
+        dayRolloverTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { _ in
+            // Hop to the main actor — Timer callbacks land on the run
+            // loop's actor (typically not @MainActor).
+            Task { @MainActor in
+                runAutoDeferIfNeeded()
+                // Reschedule for the next day. Recursive call is safe:
+                // each iteration creates one timer; the prior is
+                // invalidated by `dayRolloverTimer?.invalidate()` above.
+                scheduleNextDayRollover()
+            }
+        }
+    }
+
+    /// Run the once-per-day backlog deferral pass. Wired from `onAppear`
+    /// so every popover open during a fresh calendar day catches up the
+    /// overdue tasks; the service itself early-exits when today's run
+    /// already happened. The toast threading mirrors `runQuickAction`'s
+    /// undo channel — same `arrow.uturn.backward` icon language as the
+    /// optimizer's reversible operations.
+    @MainActor
+    private func runAutoDeferIfNeeded() {
+        guard let backlog = optimizerService.backlogService else { return }
+        // Take the same once-a-day hook to prune stale per-event
+        // constraints (locks / exclusions whose events have been
+        // deleted upstream). Keeps the persistent sets from
+        // accumulating dead ids — see `pruneStaleEventConstraints`.
+        optimizerService.pruneStaleEventConstraints(reminderService: reminderService)
+
+        let service = AutoDeferService(backlogService: backlog)
+        let report = service.runIfNeeded()
+        guard report.count > 0 else { return }
+        let headline = report.count == 1
+            ? "1 overdue task moved to tomorrow"
+            : "\(report.count) overdue tasks moved to tomorrow"
+        toastState.showSuccess(headline, icon: "arrow.uturn.backward") {
+            // Undo runs the captured restore closure on the main actor.
+            // Wrapping the call in `Task` lets us keep the toast's
+            // synchronous Undo signature without forcing AutoDefer to
+            // expose a sync rollback path.
+            Task { await report.undo() }
+        }
+    }
+
     /// forget callers wrap in `Task { ... }`.
     @MainActor
     private func runQuickAction(_ request: OptimizationRequest, label: String) async {

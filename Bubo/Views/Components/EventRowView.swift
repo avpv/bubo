@@ -27,11 +27,79 @@ struct EventRowView: View {
     var onSplitTask: ((CalendarEvent) -> Void)? = nil
     var onProtectBlock: ((CalendarEvent) -> Void)? = nil
     var onAddPrep: ((CalendarEvent) -> Void)? = nil
+    /// Quick-pick prep buffer minutes — 5/10/15/30 from a sub-menu.
+    /// Companion to `onAddPrep` (which routes through the palette);
+    /// when set, the context menu shows a sub-menu of fixed
+    /// durations for one-tap insertion. Reifies `meetingPrep(minutes:)`
+    /// at the per-event level without making the user type into
+    /// the palette. nil = sub-menu hidden, falls back to `onAddPrep`.
+    var onAddPrepQuick: ((CalendarEvent, Int) -> Void)? = nil
+
+    /// Current flex percent for this event (0 = rigid, 25 / 50 are
+    /// the canonical sub-menu options). Drives the sub-menu's
+    /// disabled state on the active option and the optional
+    /// «flex-on» indicator next to the lock icon.
+    var flexPercent: Int = 0
+    /// Set the per-event flex percent. Wired via
+    /// `OptimizerService.setFlex(percent:eventId:)`. nil = sub-menu
+    /// hidden.
+    var onSetFlex: ((CalendarEvent, Int) -> Void)? = nil
+
+    /// Pomodoro session neighbour signals — true when the
+    /// chronologically adjacent event in the same day belongs to the
+    /// SAME pomodoro session as this one (matched by
+    /// `event.pomodoroSessionBaseId`). Drives the bracket renderer
+    /// in `urgencyBar`: a session container draws ONE continuous
+    /// pair of brackets across all its segments rather than a
+    /// per-segment pair on each row.
+    ///
+    /// Birman: pomodoro is one object in the optimizer's input
+    /// (`.pomodoroSession`), so the timeline shouldn't read as N
+    /// disconnected segments. Hosts compute these from the day's
+    /// event list and pass them in.
+    var hasPomodoroNeighbourBefore: Bool = false
+    var hasPomodoroNeighbourAfter: Bool = false
     /// Convert a standard event into a Pomodoro session (work + break
     /// intervals). Routed through the edit form so the user can tune
     /// work/break/rounds before committing — Birman: explicit control on a
     /// non-trivial transformation, not a silent mutation.
     var onConvertToPomodoro: ((CalendarEvent) -> Void)? = nil
+
+    /// True when this event is in the user's locked set — the optimizer
+    /// will skip it on every run via the implicit `.keepFixed(eventIds:)`
+    /// intent the host service injects. Drives the on-row lock affordance:
+    /// solid lock when locked, hollow on hover when not. Reifies the
+    /// `keepFixed` / `stability` intents as a per-event surface, so
+    /// «protect this from the optimizer» is one tap, not a search through
+    /// the command palette. Birman: «правила — это объекты на экране».
+    var isLocked: Bool = false
+    /// Toggle this event's locked state. Wired from `MenuBarView` to
+    /// `OptimizerService.toggleLock(eventId:)`. nil = the affordance is
+    /// hidden (preview surfaces, read-only events).
+    var onToggleLock: ((CalendarEvent) -> Void)? = nil
+
+    /// True when this event is in the user's excluded set — the
+    /// optimizer skips it on every run via the implicit
+    /// `.exclude(eventIds:)` intent the host service injects. Different
+    /// from `isLocked`: locked events stay visible to the GA but are
+    /// pinned in place, excluded events are pretended-not-to-exist.
+    /// Useful for «I might cancel this, plan around its absence».
+    var isExcluded: Bool = false
+    /// Toggle this event's excluded state. Surfaced as a context-menu
+    /// item rather than a row icon — exclude is the rarer choice and
+    /// having a second leading icon next to lock would crowd the row.
+    /// nil = item hidden.
+    var onToggleExclude: ((CalendarEvent) -> Void)? = nil
+
+    /// Optional 0…1 energy prediction for this event's start hour,
+    /// sourced from `EnergyCheckInService.predictEnergy(atHour:)`.
+    /// When ≥ 0.7 the row surfaces a tiny ⚡ glyph next to the title
+    /// to flag «peak hour, good for focus». When ≤ 0.3 the glyph
+    /// turns into a leaf (low-energy hint). Otherwise hidden — calm
+    /// hours need no decoration. Reifies the `peakEnergy` /
+    /// `lowEnergy` / `matchEnergyCurve` intents without requiring
+    /// a separate energy column.
+    var energyAtStartHour: Double? = nil
 
     /// When true, the row plays a brief highlight glow to draw attention
     /// to newly created/changed events after recipe application.
@@ -249,6 +317,54 @@ struct EventRowView: View {
             if isLocal {
                 Divider()
 
+                // Optimizer-visibility toggle. Lock has a row affordance
+                // already (the inline icon next to the title); exclude is
+                // the rarer companion («planning around a maybe-cancelled
+                // event») so it lives only in the menu. Both flow through
+                // `OptimizerService.lockedEventIds` / `excludedEventIds`
+                // and inject the corresponding intents on every Run.
+                if let onToggleExclude {
+                    Button {
+                        Haptics.impact()
+                        onToggleExclude(event)
+                    } label: {
+                        Label(
+                            isExcluded
+                                ? "Include in optimization"
+                                : "Exclude from optimization",
+                            systemImage: isExcluded ? "eye" : "eye.slash"
+                        )
+                    }
+                    .help(isExcluded
+                          ? "Currently hidden from the optimizer — re-include to plan around it"
+                          : "Optimizer plans around this event as if it doesn't exist")
+                }
+
+                if let setFlex = onSetFlex {
+                    // Per-event flex sub-menu. `Rigid` = optimizer keeps
+                    // the duration as-is (the default). `Flex ±25%` /
+                    // `Flex ±50%` mean «GA may shrink or grow this
+                    // event by N% of its current duration» — scoped
+                    // via OptimizerService.flexIntent + onlyOptimize.
+                    // Reifies the per-event variant of the global
+                    // `flexDuration` intent without forcing the user
+                    // through the palette.
+                    Menu {
+                        Button("Rigid") { setFlex(event, 0) }
+                            .disabled(flexPercent == 0)
+                        Button("Flex \u{00b1}25%") { setFlex(event, 25) }
+                            .disabled(flexPercent == 25)
+                        Button("Flex \u{00b1}50%") { setFlex(event, 50) }
+                            .disabled(flexPercent == 50)
+                    } label: {
+                        Label(
+                            flexPercent > 0 ? "Flex (\u{00b1}\(flexPercent)%)" : "Flex duration",
+                            systemImage: "arrow.left.and.right"
+                        )
+                    }
+                    .help("Allow the optimizer to resize this event's duration when applying scope-this-event runs")
+                }
+
                 // Task actions
                 if event.isTask, event.taskStatus != .done, let onCompleteTask {
                     Button {
@@ -302,11 +418,30 @@ struct EventRowView: View {
                     }
                 }
 
-                if event.meetingLink != nil || event.calendarName != nil, let onAddPrep {
-                    Button {
-                        onAddPrep(event)
-                    } label: {
-                        Label("Add Prep Time", systemImage: "note.text")
+                if event.meetingLink != nil || event.calendarName != nil {
+                    if let quickHandler = onAddPrepQuick {
+                        // Quick-pick sub-menu — reifies meetingPrep at
+                        // the per-event level with one-tap durations.
+                        // Skips the palette round-trip the slower
+                        // `onAddPrep` path takes.
+                        Menu {
+                            Button("5 min") { quickHandler(event, 5) }
+                            Button("10 min") { quickHandler(event, 10) }
+                            Button("15 min") { quickHandler(event, 15) }
+                            Button("30 min") { quickHandler(event, 30) }
+                            if let onAddPrep {
+                                Divider()
+                                Button("Custom\u{2026}") { onAddPrep(event) }
+                            }
+                        } label: {
+                            Label("Add Prep Time", systemImage: "note.text")
+                        }
+                    } else if let onAddPrep {
+                        Button {
+                            onAddPrep(event)
+                        } label: {
+                            Label("Add Prep Time", systemImage: "note.text")
+                        }
                     }
                 }
 
@@ -345,22 +480,83 @@ struct EventRowView: View {
 
     @ViewBuilder
     private func urgencyBar(_ now: Date) -> some View {
-        if let tag = event.colorTag {
-            Capsule()
-                .fill(tag.color)
-                .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
-                .padding(.trailing, DS.Spacing.md)
-                .shadow(
-                    color: tag.color.opacity(event.isUpcoming ? 0.6 : skin.shadowOpacity * 4),
-                    radius: event.isUpcoming ? 4 : skin.shadowRadius * 0.5
-                )
-        } else {
-            // No user-assigned color: show an unfilled outline so the bar
-            // remains a visible shape without injecting a color accent.
-            Capsule()
-                .strokeBorder(skin.resolvedTextTertiary.opacity(0.5), lineWidth: 1)
-                .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
-                .padding(.trailing, DS.Spacing.md)
+        ZStack {
+            if let tag = event.colorTag {
+                Capsule()
+                    .fill(tag.color)
+                    .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
+                    .shadow(
+                        color: tag.color.opacity(event.isUpcoming ? 0.6 : skin.shadowOpacity * 4),
+                        radius: event.isUpcoming ? 4 : skin.shadowRadius * 0.5
+                    )
+            } else {
+                // No user-assigned color: show an unfilled outline so the bar
+                // remains a visible shape without injecting a color accent.
+                Capsule()
+                    .strokeBorder(skin.resolvedTextTertiary.opacity(0.5), lineWidth: 1)
+                    .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
+            }
+
+            // Pomodoro session container — only the head and tail of
+            // a contiguous run of same-session segments draw the
+            // capping brackets, while middle segments draw a vertical
+            // continuation stroke. The result reads as one bracketed
+            // group across the whole session, not N disjoint pairs.
+            // Reifies the optimizer's `pomodoroSession` intent: in the
+            // GA's input one session is one object, so the timeline
+            // should reflect that.
+            //
+            // Container rules:
+            //   - top bracket    if no neighbour before (head of run)
+            //   - bottom bracket if no neighbour after  (tail of run)
+            //   - vertical stroke spans the bar height when this row
+            //     has a neighbour either side (middle segment).
+            // A standalone session (single segment, both neighbours
+            // false) renders top + bottom brackets — same as the
+            // previous «pair on every row» behaviour.
+            if event.pomodoroConfig != nil || event.pomodoroSegment != nil {
+                pomodoroContainerOverlay
+                    .frame(width: DS.Size.accentBarWidth + 3, height: DS.Size.accentBarHeight)
+                    .accessibilityHidden(true)
+            }
+        }
+        .padding(.trailing, DS.Spacing.md)
+    }
+
+    /// The bracket / continuation chrome that overlays the urgency bar
+    /// when this event is part of a pomodoro session. Computed off
+    /// `hasPomodoroNeighbourBefore` / `hasPomodoroNeighbourAfter` so
+    /// adjacent same-session segments share one bracketed container.
+    @ViewBuilder
+    private var pomodoroContainerOverlay: some View {
+        VStack(spacing: 0) {
+            if hasPomodoroNeighbourBefore {
+                // Middle / tail position — continuation stroke at top
+                // so the bracket flows from the segment above.
+                Capsule()
+                    .fill(skin.accentColor)
+                    .frame(width: 1.5)
+                    .frame(height: 4)
+            } else {
+                // Head — top cap.
+                Capsule()
+                    .stroke(skin.accentColor, lineWidth: 1.5)
+                    .frame(width: DS.Size.accentBarWidth + 3, height: 4)
+            }
+            Spacer(minLength: 0)
+            if hasPomodoroNeighbourAfter {
+                // Middle / head position — continuation stroke at
+                // bottom so the bracket flows into the segment below.
+                Capsule()
+                    .fill(skin.accentColor)
+                    .frame(width: 1.5)
+                    .frame(height: 4)
+            } else {
+                // Tail — bottom cap.
+                Capsule()
+                    .stroke(skin.accentColor, lineWidth: 1.5)
+                    .frame(width: DS.Size.accentBarWidth + 3, height: 4)
+            }
         }
     }
 
@@ -415,6 +611,56 @@ struct EventRowView: View {
                         .foregroundStyle(pomodoroSegmentColor(segment))
                         .contentTransition(.symbolEffect(.replace))
                         .accessibilityLabel(segment.label)
+                }
+
+                // Energy hint glyph — shown only at the extremes (peak
+                // ⚡ / low 🍃) so calm-energy hours stay decoration-free.
+                // The threshold uses the same 0.7 / 0.3 split the
+                // EnergyCheckInService uses internally for «high» /
+                // «low» buckets, so the visual matches the service's
+                // own intent.
+                if let energy = energyAtStartHour, energy >= 0.7 || energy <= 0.3 {
+                    // Energy hint glyphs read from the new
+                    // `resolvedPeakEnergyColor` / `resolvedLowEnergyColor`
+                    // skin tokens (commit 5c51ef2) so the colours flow
+                    // from the same source the upcoming timeline-band
+                    // overlay will use. Default mappings preserve the
+                    // earlier accent / tertiary split exactly.
+                    Image(systemName: energy >= 0.7 ? "bolt.fill" : "leaf")
+                        .font(.system(size: DS.Size.iconSmall - 2, weight: .medium))
+                        .foregroundStyle(energy >= 0.7
+                                         ? skin.resolvedPeakEnergyColor
+                                         : skin.resolvedLowEnergyColor)
+                        .help(energy >= 0.7
+                              ? "Peak energy hour — good for focus work"
+                              : "Low energy hour — best for routine tasks")
+                        .accessibilityLabel(energy >= 0.7 ? "Peak energy" : "Low energy")
+                }
+
+                // Lock affordance — solid lock when this event is in
+                // the user's locked set (the optimizer skips it on
+                // every run via the implicit `.keepFixed` intent the
+                // host injects); hollow lock revealed on hover otherwise
+                // so the affordance is discoverable without ever shouting.
+                // Tap toggles the persistent set in `OptimizerService`.
+                if onToggleLock != nil, isLocked || isHovered {
+                    Button {
+                        Haptics.tap()
+                        onToggleLock?(event)
+                    } label: {
+                        Image(systemName: isLocked ? "lock.fill" : "lock.open")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(isLocked
+                                             ? skin.accentColor
+                                             : skin.resolvedTextTertiary)
+                            .contentTransition(.symbolEffect(.replace))
+                    }
+                    .buttonStyle(.plain)
+                    .help(isLocked
+                          ? "Locked — optimizer will not move this event"
+                          : "Lock to prevent the optimizer from moving this event")
+                    .accessibilityLabel(isLocked ? "Locked" : "Unlocked")
+                    .transition(.opacity)
                 }
             }
 

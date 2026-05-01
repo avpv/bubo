@@ -63,9 +63,14 @@ struct BacklogCapacityRing: View {
         case ..<1.0:
             return skin.accentColor
         case ..<1.2:
+            // Tight band: workload approaches but doesn't yet exceed
+            // the day. Light theme uses the skin's warning colour so
+            // the ramp respects per-skin overrides; dark theme keeps
+            // the higher-luminance amber for legibility against the
+            // popover's dark glass.
             return isDark
-                ? Color(red: 1.00, green: 0.72, blue: 0.18) // amber — higher luminance than system .orange
-                : .orange
+                ? Color(red: 1.00, green: 0.72, blue: 0.18)
+                : skin.resolvedWarningColor
         default:
             return skin.resolvedDestructiveColor
         }
@@ -259,8 +264,11 @@ struct BacklogCapacityPopover: View {
                 .font(.footnote)
                 .foregroundStyle(skin.resolvedTextSecondary)
             Spacer(minLength: DS.Spacing.sm)
+            // `DS.Typography.metric` — same voice as the inline header
+            // verdict, so the popover reads as a typographic continuation
+            // of the badge that opens it.
             Text(value)
-                .font(.footnote.monospacedDigit())
+                .font(DS.Typography.metric(skin: skin))
                 .foregroundStyle(skin.resolvedTextPrimary)
         }
     }
@@ -339,7 +347,12 @@ struct BacklogCapacityLabel: View {
                 + Text(Self.suffix(forecast: forecast, overflowingCount: overflowingCount))
                     .foregroundStyle(skin.resolvedTextTertiary)
             }
-            .font(.footnote.weight(.medium).monospacedDigit())
+            // `DS.Typography.metric` — the verdict carries the
+            // numeric facts of the day («Done by 17:30», «4 h 32 min
+            // over», «3 h 12 min queued»). Single voice for inline
+            // numerics across the backlog header so the prose («Done
+            // by») and the digits («17:30») share one rhythm.
+            .font(DS.Typography.metric(skin: skin))
             .contentTransition(.numericText())
             .help(verbose)
             .accessibilityElement(children: .combine)

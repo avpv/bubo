@@ -237,4 +237,100 @@ enum BacklogTitleParser {
         // both the title and the duration hint.
         return (cleaned.isEmpty ? trimmed : cleaned, clamped)
     }
+
+    // MARK: - Duration guess (machine sweats)
+
+    /// Coarse «what does this verb usually take?» table used by
+    /// `guessDuration(for:)` when the user hasn't provided an explicit
+    /// duration in the title. Birman: «пусть потеет машина» — даже без
+    /// явного 30m система предлагает разумный default по глаголу,
+    /// пользователь только поправляет, если не угадали.
+    ///
+    /// The keys are matched against the title's first whitespace-
+    /// delimited word, lowercased — so «Call mom», «call mom 5pm» and
+    /// «CALL Anna» all hit the «call» entry. A few nouns are included
+    /// for «meeting», «review», «sync» where the noun *is* the action.
+    ///
+    /// Numbers picked from typical office-work distributions, kept
+    /// short on purpose — overestimating is friendlier than under, but
+    /// 60-min defaults across the board crush calendars in tests.
+    private static let durationGuessTable: [String: Int] = [
+        // Communication
+        "call":      30,
+        "phone":     30,
+        "email":     15,
+        "reply":     10,
+        "respond":   10,
+        "message":   10,
+        "text":      5,
+        "ping":      5,
+        // Meetings (the noun *is* the action)
+        "meet":      60,
+        "meeting":   60,
+        "sync":      30,
+        "standup":   15,
+        "1:1":       30,
+        "interview": 45,
+        // Writing / making
+        "write":     90,
+        "draft":     60,
+        "design":    90,
+        "code":      120,
+        "build":     120,
+        "ship":      30,
+        "deploy":    30,
+        "fix":       45,
+        "debug":     60,
+        // Review / consume
+        "review":    45,
+        "read":      30,
+        "watch":     30,
+        "research":  60,
+        "study":     60,
+        // Errands / chores
+        "buy":       30,
+        "pick":      30,
+        "drop":      15,
+        "errand":    30,
+        // Admin
+        "plan":      30,
+        "schedule":  15,
+        "book":      10,
+        "file":      15,
+    ]
+
+    /// Default duration when the verb table doesn't fire — a 60-minute
+    /// «medium task» bucket. Caller can override with the user's
+    /// `defaultTaskDurationMinutes` setting if they prefer a different
+    /// fallback. Returns nil to mean «no guess at all»; this constant is
+    /// just the floor used by `guessDuration` when `useDefault: true`.
+    static let guessFallbackMinutes: Int = 60
+
+    /// «What does this task usually take?» — coarse machine guess based
+    /// on the first word of the title. Returns nil when no entry in the
+    /// `durationGuessTable` matches and `useDefault` is false.
+    ///
+    /// Caller convention: render the result with a leading tilde
+    /// («~30m») in `DS.Typography.machineHint` so the user reads it as
+    /// «the computer prepared a guess, fix it if you want» — never as a
+    /// committed duration. The guess is meant to be displayed alongside
+    /// (or instead of) the explicit-parser result; it does not modify
+    /// the title.
+    ///
+    /// Pure, locale-insensitive (lowercase ASCII match). Cap at 4h so a
+    /// stray «build the company» doesn't propose a half-day block.
+    static func guessDuration(for title: String, useDefault: Bool = false) -> Int? {
+        let trimmed = title.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !trimmed.isEmpty else { return nil }
+
+        // First whitespace-delimited word; falls back to the whole title
+        // when there's no whitespace («call» on its own).
+        let firstWord = trimmed.split(separator: " ", maxSplits: 1).first.map(String.init) ?? trimmed
+
+        if let table = durationGuessTable[firstWord] {
+            return min(4 * 60, max(5, table))
+        }
+
+        return useDefault ? guessFallbackMinutes : nil
+    }
 }

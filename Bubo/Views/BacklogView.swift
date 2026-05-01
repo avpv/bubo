@@ -44,6 +44,34 @@ struct BacklogView: View {
     /// action-link in the spill-over marker when overflow contains urgent
     /// tasks. Wired from `MenuBarView.runQuickAction(.deadlineMode,…)`.
     var onFocusOnDeadlines: (() async -> Void)? = nil
+    /// Run an arbitrary `OptimizationRequest` — used by `SmartActions` to
+    /// fire soft-suggestion candidates and `Plan day…` presets through the
+    /// same `runQuickAction` helper that drives the hard-overflow path.
+    /// Wired from `MenuBarView.runQuickAction(_:label:)`.
+    var onRunRequest: ((OptimizationRequest, String) async -> Void)? = nil
+    /// Per-task scope optimizer entry — context menu's «Find a slot now».
+    /// Builds an `OptimizationRequest` carrying `.includeBacklogTasks(ids:)`
+    /// + `.findSlotsForBacklog` so the GA only places the one task. Same
+    /// `runQuickAction` pipe as the backlog-wide path; user gets the
+    /// undo toast for free. nil = the menu item is hidden.
+    var onScheduleTask: ((BacklogTask) -> Void)? = nil
+    /// Per-task split — sends `.splitLong(maxMinutes:)` so the GA
+    /// chunks the task into 2+ sequential blocks. Surfaced only on
+    /// rows ≥ 90 min by the row's own gating. nil = hidden.
+    var onSplitTask: ((BacklogTask) -> Void)? = nil
+    /// Open the command palette — `SmartActions` calm-state `More…` and
+    /// the global `⌘K` shortcut both end up here. Replaces the standalone
+    /// `Optimize ⌘K` chip that used to live above the timeline.
+    var onOpenPalette: (() -> Void)? = nil
+    /// Cycle the just-applied scenario to a different index. Wired
+    /// from `MenuBarView` to `OptimizerService.switchToAppliedScenario(at:)`.
+    /// Surfaces only when the GA returned ≥2 scenarios; nil means the
+    /// scenario picker is rendered as static dots.
+    var onSwitchScenario: ((Int) -> Void)? = nil
+    /// Bulk-lock today's events — the SmartActions calm popover's
+    /// «Lock today's events» quick action calls into this. nil =
+    /// the action is hidden.
+    var onLockTodaysEvents: (() -> Void)? = nil
     /// Open the command palette seeded with a single task (per-task scope
     /// optimizer entry — context menu's «Reschedule…» on a row).
     var onRescheduleTask: ((BacklogTask) -> Void)? = nil
@@ -262,6 +290,19 @@ struct BacklogView: View {
         parsedNewTaskTitle.durationMinutes
     }
 
+    /// «What does this verb usually take?» — surfaced only when the
+    /// explicit parser found nothing AND the cleaned title's first word
+    /// is in `BacklogTitleParser.durationGuessTable`. Drives the quiet
+    /// `~30m` chip in `addTaskField`, in the `machineHint` voice. Returns
+    /// nil for both the «no input yet» case and «parser already caught
+    /// the duration» case so the two chips are mutually exclusive.
+    private var guessedDurationMinutes: Int? {
+        guard parsedNewTaskTitle.durationMinutes == nil else { return nil }
+        let cleaned = parsedNewTaskTitle.cleaned
+        guard !cleaned.isEmpty else { return nil }
+        return BacklogTitleParser.guessDuration(for: cleaned)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header + list stay visible as long as *any* bucket has tasks
@@ -277,6 +318,17 @@ struct BacklogView: View {
                 || !completedToday.isEmpty
                 || !backlogService.frozen.isEmpty {
                 backlogHeader
+                // SmartActions sits directly between the diagnosis (header
+                // verdict + capacity ring) and the evidence (task list).
+                // Birman: «прямое действие на месте проблемы». Renders one
+                // adaptive row — overflow fix when over capacity, ranked
+                // soft suggestion when nothing is wrong but the engine has
+                // something to offer, or quiet `Plan day…` discovery when
+                // the day is calm. Hidden in `.collapsed` so the user can
+                // truly fold the card to its header alone.
+                if expansion != .collapsed {
+                    smartActionsRow
+                }
                 // Task rows only appear when expanded (up to 4 visible
                 // with scroll); collapsed = header only.
                 taskList
@@ -473,9 +525,16 @@ struct BacklogView: View {
                 // «5h / 3h» numbers (which stay reachable through the ring's
                 // popover and tooltip) so the inline label is interpretation,
                 // not arithmetic the reader has to do themselves.
+                // The `· N don't fit` suffix is intentionally dropped here —
+                // the same fact now lives in the `SmartActions` row directly
+                // below the header (subtext on the overflow fix), and the
+                // pre-redesign duplicate ("· N don't fit" + "X h spill over")
+                // is what the new layout exists to eliminate. Birman: «не
+                // дублируй сигналы». The label keeps the verdict (Done by /
+                // over by / after hours) only.
                 BacklogCapacityLabel(
                     pendingMinutes: pendingWorkloadMinutes,
-                    overflowingCount: overflowingTaskCount,
+                    overflowingCount: 0,
                     optimizerService: optimizerService
                 )
 
@@ -508,7 +567,11 @@ struct BacklogView: View {
                         .contentTransition(.symbolEffect(.replace))
 
                     Text("\(totalCount) task\(totalCount == 1 ? "" : "s")")
-                        .font(.subheadline.weight(.medium).monospacedDigit())
+                        // `DS.Typography.metric` — single voice for inline
+                        // numeric facts. Matches the `Done by HH:MM` digits
+                        // in `BacklogCapacityLabel` so all numbers in the
+                        // header read as one row of data.
+                        .font(DS.Typography.metric(skin: skin))
                         .foregroundStyle(skin.resolvedTextPrimary)
                         .contentTransition(.numericText())
                         .lineLimit(1)
@@ -560,6 +623,43 @@ struct BacklogView: View {
         }
         .padding(.horizontal, DS.Spacing.sm)
         .padding(.vertical, DS.Spacing.sm)
+    }
+
+    /// Single contextual row directly under the header that absorbs the
+    /// four legacy optimizer entry points (SmartBanner, SpillOverMarker,
+    /// QuickActions chip, PlanDayMenu) into one adaptive surface. Reads
+    /// `BacklogLogic.capacityForecast` to pick hard / soft / calm rendering;
+    /// see `SmartActions` for the resolution rules.
+    @ViewBuilder
+    private var smartActionsRow: some View {
+        let plan = BacklogLogic.CapacitySectionPlan(
+            orderedTasks: allActiveTasks,
+            remainingWorkdayMinutes: remainingWorkdayMinutes
+        )
+        let forecast = BacklogLogic.capacityForecast(
+            pendingMinutes: pendingWorkloadMinutes,
+            workingHours: optimizerService.workingHours,
+            workingDays: optimizerService.workingDays
+        )
+
+        SmartActions(
+            forecast: forecast,
+            overflowingCount: plan.overflowing.count,
+            overflowMinutes: plan.overflowMinutes,
+            overflowHasUrgent: plan.overflowHasUrgent,
+            suggestion: optimizerService.suggestionEngine?.suggestion,
+            shadowProposal: optimizerService.shadowProposal,
+            recentApplied: optimizerService.lastAppliedRequest,
+            onScheduleBacklog: { await onScheduleBacklog?() },
+            onFocusOnDeadlines: { await onFocusOnDeadlines?() },
+            onRunRequest: { request, label in
+                await onRunRequest?(request, label)
+            },
+            onOpenPalette: { onOpenPalette?() },
+            onSwitchScenario: onSwitchScenario,
+            onLockTodaysEvents: onLockTodaysEvents
+        )
+        .padding(.horizontal, DS.Spacing.sm)
     }
 
     /// Tiny accent-coloured wand pill that lights up in the header whenever
@@ -659,15 +759,20 @@ struct BacklogView: View {
             // them. The natural HStack gap (`DS.Spacing.sm` from the
             // header) does the spacing job better, читая «count · pill»
             // как два самостоятельных объекта.
+            // `urgentColor` (desaturated red) sits in the same family as
+            // the over-capacity ring's saturated red but at lower
+            // intensity, so the two no longer fight for the same eye fix.
+            // The ring keeps the «something is broken» voice; this pill
+            // says «N items are time-sensitive» — informational urgency.
             Text("\(urgentCount) urgent")
                 .font(.footnote.weight(.semibold).monospacedDigit())
-                .foregroundStyle(skin.resolvedDestructiveColor)
+                .foregroundStyle(skin.resolvedUrgentColor)
                 .contentTransition(.numericText())
                 .padding(.horizontal, DS.Spacing.xs)
                 .padding(.vertical, DS.Spacing.xxs)
                 .background(
                     Capsule().fill(
-                        skin.resolvedDestructiveColor
+                        skin.resolvedUrgentColor
                             .opacity(urgentOnlyFilter ? DS.Opacity.lightFill : 0)
                     )
                 )
@@ -844,35 +949,43 @@ struct BacklogView: View {
             remainingWorkdayMinutes: remainingWorkdayMinutes
         )
 
+        // Proposed slots for the overflow set, surfaced as `→ HH:MM`
+        // ghost-hints in each overflowing row. Source priority:
+        //   1. `shadowProposal` (the GA's actual per-task assignments
+        //      from the background pre-compute) — preferred when fresh.
+        //   2. `naiveProposedSlots` — greedy fallback used when no
+        //      shadow proposal is cached yet, or when it doesn't cover
+        //      the overflow set.
+        // Result is unioned: any overflow task whose id isn't in the
+        // shadow map falls back to the naive slot, so the user always
+        // sees a hint even before the GA's first preview lands.
+        let shadowSlots = BacklogLogic.proposedSlotsFromShadow(
+            optimizerService.shadowProposal
+        )
+        let naiveSlots = BacklogLogic.naiveProposedSlots(
+            overflowingTasks: plan.overflowing,
+            workingHours: optimizerService.workingHours,
+            workingDays: optimizerService.workingDays
+        )
+        let proposedSlots = naiveSlots.merging(shadowSlots) { _, shadow in shadow }
+
         ForEach(plan.fitting) { task in
             if ids.contains(task.id) {
-                taskRowBody(task)
+                taskRowBody(task, proposedSlot: nil)
             }
         }
 
-        if plan.hasOverflow {
-            // Fade the marker to half opacity while a row is being dragged
-            // so the user sees the boundaries are recomputing — they're
-            // about to re-bucket when the drop lands. `reduceMotion`
-            // collapses the fade to a constant opacity (no transition).
-            // The plan called for fading section labels; we have only one
-            // marker now, but the principle is the same.
-            let isDragging = coordinator?.isDraggingTask == true
-            SpillOverMarker(
-                overflowMinutes: plan.overflowMinutes,
-                overflowCount: plan.overflowing.count,
-                onSchedule: { await onScheduleBacklog?() },
-                onFocusOnDeadlines: plan.overflowHasUrgent ? { await onFocusOnDeadlines?() } : nil
-            )
-            .padding(.horizontal, DS.Spacing.sm)
-            .opacity(isDragging ? DS.Opacity.half : 1)
-            .motionAwareAnimation(DS.Animation.quick, value: isDragging, reduceMotion: reduceMotion)
-            .transition(.opacity)
-        }
+        // The mid-list `SpillOverMarker` was removed in favour of the
+        // `smartActionsRow` rendered directly under the header (see `body`).
+        // The capacity boundary between fits/overflow stays implicit in the
+        // visual ordering — Birman: «не печатай очевидное» (the cutoff is
+        // already implied by which tasks visibly tip the ring red). The
+        // ghost-slot `→ HH:MM` on each overflow row is the new, quieter
+        // cue: a per-task fact rather than a section header.
 
         ForEach(plan.overflowing) { task in
             if ids.contains(task.id) {
-                taskRowBody(task)
+                taskRowBody(task, proposedSlot: proposedSlots[task.id])
             }
         }
     }
@@ -883,7 +996,7 @@ struct BacklogView: View {
     /// edit representation mid-list, and the editor isn't a detached
     /// modal floating above the list.
     @ViewBuilder
-    private func taskRowBody(_ task: BacklogTask) -> some View {
+    private func taskRowBody(_ task: BacklogTask, proposedSlot: Date? = nil) -> some View {
         BacklogTaskRow(
             task: task,
             isUrgent: isUrgent(task),
@@ -910,8 +1023,31 @@ struct BacklogView: View {
             onFocusPrev: { focusRow(offsetFrom: task.id, by: -1) },
             onFocusNext: { focusRow(offsetFrom: task.id, by: +1) },
             slotPreview: slotPreviewCache.cached(durationMinutes: task.durationMinutes),
+            proposedSlot: proposedSlot,
             onHoverChanged: { hovering in
                 handleRowHover(task: task, hovering: hovering)
+            },
+            onFindSlot: onScheduleTask.map { handler in { handler(task) } },
+            onSplitTask: onSplitTask.map { handler in { handler(task) } },
+            onSnoozeByDays: { days in
+                // Push the existing deadline forward (or seed today
+                // if there's none yet) by the chosen day count.
+                // Birman: the user owns timing — AutoDefer does this
+                // automatically for overdue tasks, but here it's a
+                // deliberate «not today» choice with no overdue
+                // detection in the way.
+                var updated = task
+                let cal = Calendar.current
+                let base = task.deadline ?? cal.startOfDay(for: Date())
+                if let pushed = cal.date(byAdding: .day, value: days, to: base) {
+                    updated.deadline = pushed
+                    backlogService.updateTask(updated)
+                }
+            },
+            onSetPreferredPeriod: { period in
+                var updated = task
+                updated.preferredPeriod = period
+                backlogService.updateTask(updated)
             },
             onReschedule: onRescheduleTask.map { handler in { handler(task) } },
             onSetDeadline: { deadlinePickerTask = task },
@@ -1268,7 +1404,13 @@ struct BacklogView: View {
 
                 // Parsed-duration chip — появляется в тот момент, когда
                 // парсер распознаёт «30m», «1h30m» и т.п. Пользователь
-                // видит, что понято, до того как нажмёт Return.
+                // видит, что понято, до того как нажмёт Return. When the
+                // user *didn't* type a duration but the verb is in the
+                // guess table («call», «review», «write»…), surface the
+                // machine's prediction with a leading «~» in the
+                // `machineHint` voice — quietly, never as an accent
+                // capsule. Birman: «пусть потеет машина», но угадка
+                // должна выглядеть как угадка, не как введённое.
                 if let minutes = recognizedDurationMinutes {
                     Text(DS.formatMinutes(minutes))
                         .font(.footnote.weight(.medium).monospacedDigit())
@@ -1280,6 +1422,12 @@ struct BacklogView: View {
                         )
                         .transition(.opacity.combined(with: .scale(scale: 0.9)))
                         .accessibilityLabel("Parsed duration: \(DS.formatMinutes(minutes))")
+                } else if let guess = guessedDurationMinutes {
+                    Text("~\(DS.formatMinutes(guess))")
+                        .font(DS.Typography.machineHint)
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                        .transition(.opacity)
+                        .accessibilityLabel("Guessed duration: about \(DS.formatMinutes(guess))")
                 }
             }
             .padding(.horizontal, DS.Spacing.sm)
@@ -1466,9 +1614,20 @@ struct BacklogView: View {
         let title = parsed.cleaned
         guard !title.isEmpty else { return }
 
+        // Duration priority: explicit parse > machine verb-guess > user
+        // default. The guess only fires when neither the parser nor the
+        // user committed a value. If the guess landed and the user
+        // wanted the default, they edit the task in one tap; this just
+        // means «call mom» reaches the calendar as 30 min instead of
+        // a generic 60. Birman: «пусть потеет машина» — лучше угадать,
+        // чем штамповать 1 h на всё подряд.
+        let duration = parsed.durationMinutes
+            ?? BacklogTitleParser.guessDuration(for: title)
+            ?? optimizerService.defaultTaskDurationMinutes
+
         let task = BacklogTask(
             title: title,
-            durationMinutes: parsed.durationMinutes ?? optimizerService.defaultTaskDurationMinutes,
+            durationMinutes: duration,
             priority: .medium
         )
         withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {

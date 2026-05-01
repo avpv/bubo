@@ -46,6 +46,22 @@ struct BacklogFullscreenView: View {
     /// action-link in the spill-over marker when overflow contains urgent
     /// tasks. Wired from `MenuBarView.runQuickAction(.deadlineMode,…)`.
     var onFocusOnDeadlines: (() async -> Void)? = nil
+    /// Run an arbitrary `OptimizationRequest` — used by `SmartActions` to
+    /// fire soft-suggestion candidates and `Plan day…` presets through the
+    /// same `runQuickAction` helper that drives the hard-overflow path.
+    var onRunRequest: ((OptimizationRequest, String) async -> Void)? = nil
+    /// Per-task scope optimizer entry — see `BacklogView.onScheduleTask`.
+    /// Surfaces «Find a slot now» in the row context menu.
+    var onScheduleTask: ((BacklogTask) -> Void)? = nil
+    /// See `BacklogView.onSplitTask` — same handler routed through.
+    var onSplitTask: ((BacklogTask) -> Void)? = nil
+    /// Open the command palette — `SmartActions` calm-state `More…` and
+    /// the global `⌘K` shortcut both end up here.
+    var onOpenPalette: (() -> Void)? = nil
+    /// See `BacklogView.onSwitchScenario`.
+    var onSwitchScenario: ((Int) -> Void)? = nil
+    /// See `BacklogView.onLockTodaysEvents`.
+    var onLockTodaysEvents: (() -> Void)? = nil
     /// Open the command palette seeded with a single task (per-task scope
     /// optimizer entry — context menu's «Reschedule…» on a row).
     var onRescheduleTask: ((BacklogTask) -> Void)? = nil
@@ -73,6 +89,24 @@ struct BacklogFullscreenView: View {
     /// inside the urgency window. Session-local. Mirrors BacklogView's
     /// `urgentOnlyFilter` so users carry the same mental model across views.
     @State private var urgentOnlyFilter: Bool = false
+    /// Project / context filter chip. nil = «All projects». When set,
+    /// only tasks whose `context` matches are kept by `activeFiltered`.
+    /// Reifies the optimizer's `fromProject(name:)` intent at the UI
+    /// level — Birman: «правила — это объекты на экране». Session-local;
+    /// resets on every fullscreen open so the user doesn't get stuck in
+    /// a forgotten filter.
+    @State private var projectFilter: String? = nil
+    /// Same shape as `projectFilter` but for the task's optional
+    /// `colorTag`. Reifies what would otherwise be a colour-coded tag
+    /// search via `fromCalendar`/colour metadata.
+    @State private var colorFilter: EventColorTag? = nil
+    /// Selected day for the week-strip — when set, `activeFiltered`
+    /// further narrows to tasks whose deadline falls on that day. Tap
+    /// any other dot to switch; tap the same dot to clear (back to
+    /// «show every day»). Reifies the `horizon` / `todayOnly` /
+    /// `until` modifiers as a draggable surface.
+    @State private var selectedDay: Date = Date()
+    @State private var weekDayFilterEnabled: Bool = false
     /// Smart-sort toggle — re-orders the list by `BacklogLogic.smartScore`
     /// instead of user drag order. Session-local.
     @State private var useSmartSort: Bool = false
@@ -89,11 +123,44 @@ struct BacklogFullscreenView: View {
         BacklogLogic.activeTasks(backlogService.tasks)
     }
 
-    /// Active set after the urgent-only filter — common base for the visible
-    /// list and the auto-disengage rule when the urgent set dries up.
+    /// Active set after the urgent-only + project + color filters.
+    /// Three filter sources compose; an empty result triggers the
+    /// auto-disengage rule below so the user is never stranded in an
+    /// empty filtered view.
     private var activeFiltered: [BacklogTask] {
-        guard urgentOnlyFilter else { return activeTasks }
-        return activeTasks.filter { BacklogLogic.isUrgent($0) }
+        var result = activeTasks
+        if urgentOnlyFilter {
+            result = result.filter { BacklogLogic.isUrgent($0) }
+        }
+        if let project = projectFilter {
+            result = result.filter { $0.context == project }
+        }
+        if let color = colorFilter {
+            result = result.filter { $0.colorTag == color }
+        }
+        if weekDayFilterEnabled {
+            let cal = Calendar.current
+            result = result.filter { task in
+                guard let deadline = task.deadline else { return false }
+                return cal.isDate(deadline, inSameDayAs: selectedDay)
+            }
+        }
+        return result
+    }
+
+    /// Distinct, sorted list of project / context labels in the active
+    /// task set. Drives the project filter chip's picker. Empty when no
+    /// task carries a context — in that case the chip is suppressed.
+    private var availableProjects: [String] {
+        let raw = activeTasks.compactMap { $0.context?.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        return Array(Set(raw)).sorted()
+    }
+
+    /// Distinct color tags present in the active task set.
+    private var availableColorTags: [EventColorTag] {
+        let raw = activeTasks.compactMap { $0.colorTag }
+        return Array(Set(raw)).sorted { $0.rawValue < $1.rawValue }
     }
 
     /// Tasks rendered in the list. Пользовательский порядок (или smart-sort,
@@ -202,6 +269,24 @@ struct BacklogFullscreenView: View {
             // distended to popover height. Бирман: один объект — одна форма.
             VStack(spacing: 0) {
                 blockHeader
+                // Week strip — 7 mini capacity rings, one per day,
+                // showing relative load. Reifies `planWeek` / `horizon`
+                // as a tactile surface: the user sees the week shape
+                // without opening another view, and tapping a day
+                // narrows the list to deadlines on that day.
+                weekStrip
+                // Same `SmartActions` row as the inline `BacklogView` —
+                // diagnosis (header) + fix (this row) + evidence (list).
+                // Replaces the old mid-list `SpillOverMarker` so the user
+                // sees the action attached to the problem rather than at
+                // the tail of the list.
+                smartActionsRow
+                // Filter chips: project + colour tag. Reify the
+                // optimizer's `fromProject` / colour-cohesion intents
+                // as visible UI objects rather than command-palette
+                // queries. Chips only render when the underlying data
+                // exists (no projects → no project chip).
+                filterChipsRow
                 mainContent
                 addTaskField
             }
@@ -233,9 +318,16 @@ struct BacklogFullscreenView: View {
         .onChange(of: activeTasks.count) { _, _ in
             // Auto-disengage urgent filter if the urgent set dries up — same
             // safety net as in BacklogView, prevents stranding the user in
-            // an empty filtered view.
+            // an empty filtered view. Project / colour filters get the
+            // same treatment in the second onChange below.
             if urgentOnlyFilter, activeFiltered.isEmpty {
                 urgentOnlyFilter = false
+            }
+            if let project = projectFilter, !availableProjects.contains(project) {
+                projectFilter = nil
+            }
+            if let color = colorFilter, !availableColorTags.contains(color) {
+                colorFilter = nil
             }
         }
         .onChange(of: urgentCount) { _, newValue in
@@ -270,9 +362,12 @@ struct BacklogFullscreenView: View {
                 )
                 .help(capacityRingTooltip)
 
+                // Suffix `· N don't fit` dropped — the same fact lives in
+                // `smartActionsRow` directly below the header now. Birman:
+                // не дублируй сигналы.
                 BacklogCapacityLabel(
                     pendingMinutes: pendingWorkloadMinutes,
-                    overflowingCount: overflowingTaskCount,
+                    overflowingCount: 0,
                     optimizerService: optimizerService
                 )
 
@@ -280,7 +375,10 @@ struct BacklogFullscreenView: View {
                 // inline Backlog. Здесь нет disclosure (карточка и так во
                 // весь popover), поэтому это не button, а просто число.
                 Text("\(activeTasks.count)")
-                    .font(.subheadline.weight(.medium).monospacedDigit())
+                    // `DS.Typography.metric` — same voice as the inline
+                    // header's count, so collapsed-on-main and fullscreen
+                    // backlog read as one numeric rhythm.
+                    .font(DS.Typography.metric(skin: skin))
                     .foregroundStyle(skin.resolvedTextPrimary)
                     .contentTransition(.numericText())
                     .help("\(activeTasks.count) task\(activeTasks.count == 1 ? "" : "s") in backlog")
@@ -352,21 +450,25 @@ struct BacklogFullscreenView: View {
                 urgentOnlyFilter.toggle()
             }
         } label: {
+            // Mirror of the inline `BacklogView` urgent pill — same
+            // `urgentColor` (desaturated) so the over-capacity ring's
+            // saturated red stays the only «destructive» surface in the
+            // header and the urgent pill reads as informational.
             Text("\(urgentCount) urgent")
                 .font(.footnote.weight(.semibold).monospacedDigit())
-                .foregroundStyle(skin.resolvedDestructiveColor)
+                .foregroundStyle(skin.resolvedUrgentColor)
                 .contentTransition(.numericText())
                 .padding(.horizontal, DS.Spacing.xs)
                 .padding(.vertical, DS.Spacing.xxs)
                 .background(
                     Capsule().fill(
-                        skin.resolvedDestructiveColor
+                        skin.resolvedUrgentColor
                             .opacity(urgentOnlyFilter ? DS.Opacity.lightFill : 0)
                     )
                 )
                 .overlay(
                     Capsule().strokeBorder(
-                        skin.resolvedDestructiveColor.opacity(urgentOnlyFilter ? DS.Opacity.softAccent : 0),
+                        skin.resolvedUrgentColor.opacity(urgentOnlyFilter ? DS.Opacity.softAccent : 0),
                         lineWidth: DS.Border.thin
                     )
                 )
@@ -417,6 +519,165 @@ struct BacklogFullscreenView: View {
             : "Smart sort off — tap to enable")
     }
 
+    // MARK: - Smart Actions
+
+    /// Single contextual row directly under the fullscreen header — same
+    /// component the inline `BacklogView` mounts in the same position.
+    /// Replaces the mid-list `SpillOverMarker` so the action attaches to
+    /// the diagnosis (header) rather than the tail of the evidence (list).
+    @ViewBuilder
+    private var smartActionsRow: some View {
+        let plan = BacklogLogic.CapacitySectionPlan(
+            orderedTasks: activeTasks,
+            remainingWorkdayMinutes: remainingWorkdayMinutes
+        )
+        let forecast = BacklogLogic.capacityForecast(
+            pendingMinutes: pendingWorkloadMinutes,
+            workingHours: optimizerService.workingHours,
+            workingDays: optimizerService.workingDays
+        )
+
+        SmartActions(
+            forecast: forecast,
+            overflowingCount: plan.overflowing.count,
+            overflowMinutes: plan.overflowMinutes,
+            overflowHasUrgent: plan.overflowHasUrgent,
+            suggestion: optimizerService.suggestionEngine?.suggestion,
+            shadowProposal: optimizerService.shadowProposal,
+            recentApplied: optimizerService.lastAppliedRequest,
+            onScheduleBacklog: { await onScheduleBacklog?() },
+            onFocusOnDeadlines: { await onFocusOnDeadlines?() },
+            onRunRequest: { request, label in
+                await onRunRequest?(request, label)
+            },
+            onOpenPalette: { onOpenPalette?() },
+            onSwitchScenario: onSwitchScenario,
+            onLockTodaysEvents: onLockTodaysEvents
+        )
+        .padding(.horizontal, DS.Spacing.sm)
+    }
+
+    // MARK: - Week strip
+
+    /// Horizontal seven-day load preview. Pure derived state; tapping
+    /// a dot calls back into `selectedDay` and toggles the per-day
+    /// filter. Tapping the same dot twice clears the filter (visible
+    /// the rest of the week again).
+    @ViewBuilder
+    private var weekStrip: some View {
+        let days = WeekStripView.DayLoad.week(
+            for: activeTasks,
+            events: reminderService.allEvents,
+            workingHours: optimizerService.workingHours,
+            workingDays: optimizerService.workingDays
+        )
+        WeekStripView(
+            days: days,
+            selectedDay: weekDayFilterEnabled ? selectedDay : Date.distantFuture,
+            onSelectDay: { day in
+                withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
+                    if weekDayFilterEnabled, Calendar.current.isDate(selectedDay, inSameDayAs: day) {
+                        // Tapping the active day again clears the filter
+                        weekDayFilterEnabled = false
+                    } else {
+                        selectedDay = day
+                        weekDayFilterEnabled = true
+                    }
+                }
+            }
+        )
+    }
+
+    // MARK: - Filter chips
+
+    /// Project + colour-tag filter chips. Renders as a horizontal scroll
+    /// row only when the active set has at least one project context or
+    /// at least one colour-tagged task — empty data ⇒ no row, so the
+    /// header stays calm on simple backlogs. Each chip toggles a
+    /// session-local filter; the underlying `activeFiltered` recomposes
+    /// on every render. Birman: «правила — это объекты на экране».
+    @ViewBuilder
+    private var filterChipsRow: some View {
+        let projects = availableProjects
+        let colors = availableColorTags
+        if !projects.isEmpty || !colors.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: DS.Spacing.xs) {
+                    ForEach(projects, id: \.self) { project in
+                        projectChip(project)
+                    }
+                    if !projects.isEmpty && !colors.isEmpty {
+                        Divider()
+                            .frame(height: 16)
+                            .padding(.horizontal, DS.Spacing.xxs)
+                    }
+                    ForEach(colors, id: \.rawValue) { color in
+                        colorChip(color)
+                    }
+                }
+                .padding(.horizontal, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xxs)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func projectChip(_ project: String) -> some View {
+        let isOn = projectFilter == project
+        Button {
+            Haptics.tap()
+            withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
+                projectFilter = isOn ? nil : project
+            }
+        } label: {
+            Text(project)
+                .font(.footnote.weight(isOn ? .semibold : .regular))
+                .foregroundStyle(isOn ? skin.accentColor : skin.resolvedTextSecondary)
+                .padding(.horizontal, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xxs)
+                .background(
+                    Capsule().fill(skin.accentColor.opacity(isOn ? DS.Opacity.lightFill : 0))
+                )
+                .overlay(
+                    Capsule().strokeBorder(
+                        skin.accentColor.opacity(isOn ? DS.Opacity.softAccent : DS.Opacity.borderIdle),
+                        lineWidth: DS.Border.thin
+                    )
+                )
+        }
+        .buttonStyle(.plain)
+        .help(isOn ? "Showing tasks in \u{201C}\(project)\u{201D} — tap to clear" : "Filter to \u{201C}\(project)\u{201D}")
+    }
+
+    @ViewBuilder
+    private func colorChip(_ color: EventColorTag) -> some View {
+        let isOn = colorFilter == color
+        Button {
+            Haptics.tap()
+            withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
+                colorFilter = isOn ? nil : color
+            }
+        } label: {
+            Circle()
+                .fill(color.color)
+                .frame(width: 12, height: 12)
+                .padding(.horizontal, DS.Spacing.xxs)
+                .padding(.vertical, DS.Spacing.xxs)
+                .overlay(
+                    Capsule().strokeBorder(
+                        skin.accentColor.opacity(isOn ? DS.Opacity.softAccent : 0),
+                        lineWidth: DS.Border.thin
+                    )
+                )
+                .padding(.horizontal, DS.Spacing.xxs)
+                .background(
+                    Capsule().fill(color.color.opacity(isOn ? DS.Opacity.subtleFill : 0))
+                )
+        }
+        .buttonStyle(.plain)
+        .help(isOn ? "Showing only \(color.rawValue) tasks — tap to clear" : "Filter to \(color.rawValue) tasks")
+    }
+
     // MARK: - Main content
 
     @ViewBuilder
@@ -436,30 +697,42 @@ struct BacklogFullscreenView: View {
             )
             let fittingCount = plan.fitting.count
 
+            // Same shadow-first / naive-fallback merge as the inline
+            // BacklogView. Once the shadowProposal lands in either
+            // place, both surfaces inherit the GA's actual per-task
+            // slots without further wiring.
+            let shadowSlots = BacklogLogic.proposedSlotsFromShadow(
+                optimizerService.shadowProposal
+            )
+            let naiveSlots = BacklogLogic.naiveProposedSlots(
+                overflowingTasks: plan.overflowing,
+                workingHours: optimizerService.workingHours,
+                workingDays: optimizerService.workingDays
+            )
+            let proposedSlots = naiveSlots.merging(shadowSlots) { _, shadow in shadow }
+
             ScrollView {
                 VStack(spacing: DS.Spacing.xs) {
                     ForEach(Array(plan.fitting.enumerated()), id: \.element.id) { index, task in
                         row(
                             for: task,
-                            hotKey: index < Self.maxHotKeyTasks ? index + 1 : nil
+                            hotKey: index < Self.maxHotKeyTasks ? index + 1 : nil,
+                            proposedSlot: nil
                         )
                     }
 
-                    if plan.hasOverflow {
-                        SpillOverMarker(
-                            overflowMinutes: plan.overflowMinutes,
-                            overflowCount: plan.overflowing.count,
-                            onSchedule: { await onScheduleBacklog?() },
-                            onFocusOnDeadlines: plan.overflowHasUrgent ? { await onFocusOnDeadlines?() } : nil
-                        )
-                        .transition(.opacity)
-                    }
+                    // Mid-list `SpillOverMarker` removed — its role is now
+                    // covered by the `smartActionsRow` rendered above the
+                    // ScrollView (between header and list). Birman: один
+                    // сигнал, одно место. Each overflow row carries its own
+                    // `→ HH:MM` ghost-slot in the trailing meta column.
 
                     ForEach(Array(plan.overflowing.enumerated()), id: \.element.id) { index, task in
                         let absoluteIndex = fittingCount + index
                         row(
                             for: task,
-                            hotKey: absoluteIndex < Self.maxHotKeyTasks ? absoluteIndex + 1 : nil
+                            hotKey: absoluteIndex < Self.maxHotKeyTasks ? absoluteIndex + 1 : nil,
+                            proposedSlot: proposedSlots[task.id]
                         )
                     }
 
@@ -544,7 +817,7 @@ struct BacklogFullscreenView: View {
     /// меню. Все строки равноценны, порядок диктует пользовательский drag
     /// (или smart-sort, если включён).
     @ViewBuilder
-    private func row(for task: BacklogTask, hotKey: Int?) -> some View {
+    private func row(for task: BacklogTask, hotKey: Int?, proposedSlot: Date? = nil) -> some View {
         BacklogTaskRow(
             task: task,
             isUrgent: BacklogLogic.isUrgent(task),
@@ -565,6 +838,23 @@ struct BacklogFullscreenView: View {
             onFocusPrev: { focusRow(offsetFrom: task.id, by: -1) },
             onFocusNext: { focusRow(offsetFrom: task.id, by: +1) },
             sprintHotKey: hotKey,
+            proposedSlot: proposedSlot,
+            onFindSlot: onScheduleTask.map { handler in { handler(task) } },
+            onSplitTask: onSplitTask.map { handler in { handler(task) } },
+            onSnoozeByDays: { days in
+                var updated = task
+                let cal = Calendar.current
+                let base = task.deadline ?? cal.startOfDay(for: Date())
+                if let pushed = cal.date(byAdding: .day, value: days, to: base) {
+                    updated.deadline = pushed
+                    backlogService.updateTask(updated)
+                }
+            },
+            onSetPreferredPeriod: { period in
+                var updated = task
+                updated.preferredPeriod = period
+                backlogService.updateTask(updated)
+            },
             onReschedule: onRescheduleTask.map { handler in { handler(task) } },
             onSetDeadline: { deadlinePickerTask = task },
             onToggleUrgent: { toggleUrgent(task) },
@@ -643,6 +933,10 @@ struct BacklogFullscreenView: View {
                         isInputFocused = false
                     }
 
+                // Mirrors the inline `BacklogView` chip pair: explicit
+                // parse → accent capsule (committed-looking), verb guess
+                // → quiet `~30m` in machineHint voice (advisory). One
+                // visual rhythm across both backlog surfaces.
                 if let minutes = parsedNewTaskTitle.durationMinutes {
                     Text(DS.formatMinutes(minutes))
                         .font(.footnote.weight(.medium).monospacedDigit())
@@ -654,6 +948,13 @@ struct BacklogFullscreenView: View {
                         )
                         .transition(.opacity.combined(with: .scale(scale: 0.9)))
                         .accessibilityLabel("Parsed duration: \(DS.formatMinutes(minutes))")
+                } else if !parsedNewTaskTitle.cleaned.isEmpty,
+                          let guess = BacklogTitleParser.guessDuration(for: parsedNewTaskTitle.cleaned) {
+                    Text("~\(DS.formatMinutes(guess))")
+                        .font(DS.Typography.machineHint)
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                        .transition(.opacity)
+                        .accessibilityLabel("Guessed duration: about \(DS.formatMinutes(guess))")
                 }
             }
             .padding(.horizontal, DS.Spacing.sm)
@@ -846,9 +1147,15 @@ struct BacklogFullscreenView: View {
         let title = parsed.cleaned
         guard !title.isEmpty else { return }
 
+        // Same duration priority as the inline `BacklogView`:
+        // explicit parse > machine verb-guess > user default.
+        let duration = parsed.durationMinutes
+            ?? BacklogTitleParser.guessDuration(for: title)
+            ?? optimizerService.defaultTaskDurationMinutes
+
         let task = BacklogTask(
             title: title,
-            durationMinutes: parsed.durationMinutes ?? optimizerService.defaultTaskDurationMinutes,
+            durationMinutes: duration,
             priority: .medium
         )
         withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {

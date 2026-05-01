@@ -274,6 +274,32 @@ struct CalendarEvent: Identifiable, Codable, Hashable, Sendable {
         return .work
     }
 
+    /// Stable identifier shared by every event in the same pomodoro
+    /// session — the leading portion of `id` before the `_occ{N}` /
+    /// `_break{N}` / `_longbreak` segment suffix. Used by the timeline
+    /// rendering to group adjacent segments into one container with
+    /// shared brackets — the visual «one structured block» that the
+    /// `pomodoroSession` intent represents in the optimizer's input.
+    /// Returns nil for non-pomodoro events. Birman: «правила — это
+    /// объекты на экране» — the session is now a visible group, not
+    /// just a per-segment icon.
+    var pomodoroSessionBaseId: String? {
+        guard eventType == .pomodoro else { return nil }
+        // Strip every recognised segment suffix; whichever matches
+        // first produces the shared base. Order matters: `_longbreak`
+        // before `_break` so the longer suffix isn't truncated to
+        // «long».
+        for suffix in ["_longbreak", "_break", "_occ"] {
+            if let range = id.range(of: #"\#(suffix)\d*$"#, options: .regularExpression) {
+                return String(id[..<range.lowerBound])
+            }
+        }
+        // Standalone pomodoro events without a numbered suffix — the
+        // whole id is the base. Rare but supported (single-segment
+        // sessions).
+        return id
+    }
+
     /// The 1-based round number within a Pomodoro session, extracted from the event ID suffix.
     /// Work events use `_occ{N}` (0-based), breaks use `_break{N}` (0-based).
     var pomodoroRoundNumber: Int? {

@@ -19,8 +19,191 @@ final class OptimizerService {
     private(set) var lastOptimizationDate: Date? = nil
     private(set) var error: String? = nil
 
+    /// Background «what would the optimizer do right now?» proposal,
+    /// kept fresh by `previewRequest(_:reminderService:)`. Never applied
+    /// automatically — it's purely a read for UI surfaces that want to
+    /// show the user where things would go *before* they hit Run:
+    ///
+    /// - The per-task ghost-slot `→ HH:MM` in `BacklogTaskRow` (today
+    ///   filled by a naive greedy walk; this slot lets it use the GA's
+    ///   real per-task `start` once a debounce wires `previewRequest` to
+    ///   backlog edits).
+    /// - The «would tip past 17:00» subtext in `SmartActions` Hard rows.
+    /// - The ghost-card overlay on the timeline (planned).
+    ///
+    /// Birman: «пусть потеет машина» — система постоянно держит
+    /// готовый план в фоне; пользователь видит исход, не команду.
+    /// Cleared by `previewRequest` itself when the run fails or
+    /// returns no scenarios. Distinct from `scenarios` so a
+    /// background pre-compute can't race a user-initiated apply.
+    private(set) var shadowProposal: ScheduleScenario? = nil
+    private(set) var shadowProposalUpdatedAt: Date? = nil
+    private var shadowProposalTask: Task<Void, Never>? = nil
+
     /// The last applied snapshot for undo support.
     private(set) var lastSnapshot: AppliedSnapshot? = nil
+
+    /// Lightweight summary of the most recently applied request, kept
+    /// alongside `lastSnapshot` for the «reasoning surface» — the tiny
+    /// «Done · why?» hint that briefly appears under `SmartActions`
+    /// after a Run completes. Birman: «оптимизатор не магия — он
+    /// явное правило», so the UI can read this back to show the user
+    /// which intents drove the change. Cleared by `undoLast`.
+    private(set) var lastAppliedRequest: AppliedRequestSummary? = nil
+
+    /// Set of event ids the user has explicitly locked via the per-row
+    /// lock affordance in `EventRowView`. Persisted in `UserDefaults`
+    /// so locks survive app relaunches. Read by `executeRequest` to
+    /// inject an implicit `.keepFixed(eventIds: ...)` intent into every
+    /// optimizer run, so the GA never moves these events on user-
+    /// triggered passes. Mirrors what would otherwise require typing
+    /// «keep this event fixed» into the command palette for each one.
+    /// Birman: «правила — это объекты на экране» — the lock icon IS
+    /// the intent.
+    private(set) var lockedEventIds: Set<String> = Self.loadIds(key: Self.lockedEventIdsKey)
+
+    /// Set of event ids the user has explicitly **excluded** from
+    /// optimization via the per-event context menu in `EventRowView`.
+    /// Persisted in `UserDefaults` like `lockedEventIds`. The two sets
+    /// are semantically distinct — locked = «pin in place», excluded =
+    /// «pretend it doesn't exist» — so the GA receives both intents
+    /// when both are non-empty. An event in both sets behaves like
+    /// excluded (the stricter intent wins inside the IntentCompiler).
+    private(set) var excludedEventIds: Set<String> = Self.loadIds(key: Self.excludedEventIdsKey)
+
+    private static let lockedEventIdsKey = "BuboOptimizerLockedEventIds"
+    private static let excludedEventIdsKey = "BuboOptimizerExcludedEventIds"
+
+    private static func loadIds(key: String) -> Set<String> {
+        guard let raw = UserDefaults.standard.array(forKey: key) as? [String] else {
+            return []
+        }
+        return Set(raw)
+    }
+
+    private func persist(_ ids: Set<String>, key: String) {
+        UserDefaults.standard.set(Array(ids), forKey: key)
+    }
+
+    /// Toggle this event's locked state. Source-of-truth for the per-
+    /// row lock affordance. Persists immediately so the next launch
+    /// reflects the user's choice.
+    func toggleLock(eventId: String) {
+        if lockedEventIds.contains(eventId) {
+            lockedEventIds.remove(eventId)
+        } else {
+            lockedEventIds.insert(eventId)
+        }
+        persist(lockedEventIds, key: Self.lockedEventIdsKey)
+    }
+
+    /// Toggle this event's excluded state. Companion to `toggleLock` for
+    /// the «exclude from optimization» context-menu item in EventRowView.
+    func toggleExclude(eventId: String) {
+        if excludedEventIds.contains(eventId) {
+            excludedEventIds.remove(eventId)
+        } else {
+            excludedEventIds.insert(eventId)
+        }
+        persist(excludedEventIds, key: Self.excludedEventIdsKey)
+    }
+
+    /// Whether this event is currently locked. Cheap O(1) lookup —
+    /// safe to call from `EventRowView` on every render.
+    func isLocked(eventId: String) -> Bool {
+        lockedEventIds.contains(eventId)
+    }
+
+    func isExcluded(eventId: String) -> Bool {
+        excludedEventIds.contains(eventId)
+    }
+
+    /// Per-event «flex» percentage (0/25/50). 0 = rigid (default — the
+    /// optimizer keeps the duration as-is). 25 / 50 mean «GA may shrink
+    /// or grow this event by ±N% of its current duration via a per-
+    /// event `.flexDuration(...)` injected when the user runs an
+    /// optimizer pass scoped to this event». UserDefaults-backed map
+    /// keyed by event id. Stored as `[String: Int]` — anything else
+    /// would require migration.
+    private(set) var flexPercentByEventId: [String: Int] = Self.loadFlexMap()
+
+    private static let flexMapKey = "BuboOptimizerFlexPercentByEventId"
+
+    private static func loadFlexMap() -> [String: Int] {
+        guard let raw = UserDefaults.standard.dictionary(forKey: flexMapKey) as? [String: Int] else {
+            return [:]
+        }
+        return raw
+    }
+
+    private func persistFlexMap() {
+        UserDefaults.standard.set(flexPercentByEventId, forKey: Self.flexMapKey)
+    }
+
+    /// Set the flex percentage for an event (0 / 25 / 50 are the
+    /// canonical UI values, but any 0…100 is accepted). 0 removes the
+    /// entry entirely so the persistent dict doesn't accumulate
+    /// «rigid» records.
+    func setFlex(percent: Int, eventId: String) {
+        let clamped = max(0, min(100, percent))
+        if clamped == 0 {
+            flexPercentByEventId.removeValue(forKey: eventId)
+        } else {
+            flexPercentByEventId[eventId] = clamped
+        }
+        persistFlexMap()
+    }
+
+    func flex(eventId: String) -> Int {
+        flexPercentByEventId[eventId] ?? 0
+    }
+
+    /// Build a per-event `.flexDuration(min, max)` intent for one
+    /// specific event using its stored flex percent and the event's
+    /// own duration. Returns nil when the event isn't flex-marked
+    /// (rigid is the default), so callers can `compactMap` over a
+    /// list of events to build a list of intents.
+    ///
+    /// Caller convention: the resulting intent should be combined
+    /// with `.onlyOptimize(eventIds: [event.id])` so the global
+    /// `flexDuration` semantics are scoped to just this event in the
+    /// resulting Run. The service does not auto-inject these on every
+    /// `executeRequest` (the global semantics would over-flex
+    /// everything else); callers explicitly opt in via per-event
+    /// flows like `runQuickAction`'s flex-this-event path.
+    func flexIntent(for event: CalendarEvent) -> ScheduleIntent? {
+        let percent = flex(eventId: event.id)
+        guard percent > 0 else { return nil }
+        let durationMinutes = max(1, Int(event.endTime.timeIntervalSince(event.startTime) / 60))
+        let lower = max(5, durationMinutes - durationMinutes * percent / 100)
+        let upper = durationMinutes + durationMinutes * percent / 100
+        return .flexDuration(minMinutes: lower, maxMinutes: upper)
+    }
+
+    /// Drop entries from `lockedEventIds` / `excludedEventIds` /
+    /// `flexPercentByEventId` whose underlying events no longer exist
+    /// in the reminder service. Keeps the persistent maps from
+    /// accumulating stale ids over time — otherwise a year-old
+    /// deleted event id stays in UserDefaults forever.
+    ///
+    /// Called from `MenuBarView.runAutoDeferIfNeeded` so the cleanup
+    /// runs at most once per calendar day, on the same trigger that
+    /// already does once-a-day backlog hygiene. No undo — these are
+    /// pure id-string removals; their absence has no observable effect
+    /// (the events are gone anyway).
+    func pruneStaleEventConstraints(reminderService: ReminderService) {
+        let liveIds = Set(reminderService.allEvents.map(\.id))
+        let staleLocked = lockedEventIds.subtracting(liveIds)
+        let staleExcluded = excludedEventIds.subtracting(liveIds)
+        let staleFlex = Set(flexPercentByEventId.keys).subtracting(liveIds)
+        guard !staleLocked.isEmpty || !staleExcluded.isEmpty || !staleFlex.isEmpty else { return }
+        lockedEventIds.subtract(staleLocked)
+        excludedEventIds.subtract(staleExcluded)
+        for id in staleFlex { flexPercentByEventId.removeValue(forKey: id) }
+        persist(lockedEventIds, key: Self.lockedEventIdsKey)
+        persist(excludedEventIds, key: Self.excludedEventIdsKey)
+        persistFlexMap()
+    }
 
     /// IDs of events created in the most recent application.
     /// Used by EventRowView to highlight freshly created events.
@@ -181,6 +364,23 @@ final class OptimizerService {
         isOptimizing = true
         defer { isOptimizing = false }
         error = nil
+
+        // Inject the user's locked event ids as an implicit
+        // `.keepFixed(...)` so every optimizer pass respects the
+        // per-event lock affordance set in `EventRowView`. Original
+        // `request` is captured for `activeRequest` (used by the
+        // reasoning surface) before mutation, so the user-visible
+        // intent list stays clean — locks are infrastructure, not a
+        // narrative bullet point. Birman: «правила, которые видны на
+        // экране, не должны звучать в повторе».
+        var effectiveRequest = request
+        if !lockedEventIds.isEmpty {
+            effectiveRequest.add(.keepFixed(eventIds: Array(lockedEventIds)))
+        }
+        if !excludedEventIds.isEmpty {
+            effectiveRequest.add(.exclude(eventIds: Array(excludedEventIds)))
+        }
+
         activeRequestName = request.name
         activeRequest = request
 
@@ -192,7 +392,7 @@ final class OptimizerService {
         compiler.subgraphRegistry = subgraphRegistry
         compiler.energyCheckInService = energyCheckInService
         compiler.pomodoroHistory = pomodoroHistory
-        let result = await compiler.execute(request, defaultWorkingHours: workingHours)
+        let result = await compiler.execute(effectiveRequest, defaultWorkingHours: workingHours)
 
         switch result {
         case .success(let optimizerResult):
@@ -444,6 +644,22 @@ final class OptimizerService {
             createdEventIds: createdEventIds
         )
 
+        // Record what was just applied for the «reasoning surface» (the
+        // tiny "Done · why?" hint in `SmartActions`). The request's
+        // intents drive the human-readable breakdown, the timestamp lets
+        // the UI auto-fade after ~8 s. Mirrors `lastSnapshot` (used by
+        // undo) but is purely advisory — no behaviour depends on it.
+        if let request = activeRequest {
+            lastAppliedRequest = AppliedRequestSummary(
+                request: request,
+                label: activeRequestName ?? request.name ?? "Optimization",
+                appliedAt: Date(),
+                taskCount: scenario.activeGenes.count,
+                scenarioCount: scenarios.count,
+                appliedScenarioIndex: index
+            )
+        }
+
         freshlyCreatedEventIds = Set(createdEventIds)
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(2))
@@ -481,8 +697,156 @@ final class OptimizerService {
         }
         optimizer.currentSchedule = snapshot.previousGenes
         lastSnapshot = nil
+        // Drop the reasoning-surface record too — the user just undid
+        // the change, so the «Done · why?» hint pointing to it is now
+        // misleading. Keeping it would describe a state that no longer
+        // exists.
+        lastAppliedRequest = nil
         scenarios = []
         selectedScenarioIndex = nil
+    }
+
+    // MARK: - Shadow proposal (background pre-compute)
+
+    /// Run an `OptimizationRequest` in the background and stash the
+    /// best scenario into `shadowProposal` without applying it. Cancels
+    /// any previously-pending preview, so callers can fire-and-forget on
+    /// every backlog edit without a debouncer (the GA itself absorbs
+    /// the cost via internal early-out heuristics on identical input).
+    ///
+    /// The compute runs through the same `IntentCompiler` path as
+    /// `executeRequest`, so locks, exclusions, working-hours and every
+    /// other persistent setting apply identically. Only the result
+    /// path differs — instead of writing to `scenarios` and flipping
+    /// `lastOptimizationDate`, it writes to `shadowProposal` and
+    /// `shadowProposalUpdatedAt` and never touches `lastSnapshot` /
+    /// `lastAppliedRequest` (those drive undo + the reasoning surface,
+    /// neither of which a background preview should perturb).
+    ///
+    /// Use sparingly — the full GA path is not free. Callers should
+    /// debounce upstream (e.g. on a 600 ms timer past the last backlog
+    /// keystroke). The simple implementation here is a fire-and-cancel
+    /// queue: a fresh call cancels the previous task, so back-to-back
+    /// calls collapse to one run on the latest input.
+    ///
+    /// Birman: «пусть потеет машина» — the optimizer is always one beat
+    /// ahead, so when the user *does* hit Run it confirms what's already
+    /// visible rather than waiting for fresh thinking.
+    func previewRequest(
+        _ request: OptimizationRequest,
+        reminderService: ReminderService
+    ) {
+        // Cancel any pending preview so the queue depth stays at 1.
+        // Last-writer-wins is the right semantics for a UI-driven
+        // pre-compute — earlier inputs are stale by the time a new one
+        // lands.
+        shadowProposalTask?.cancel()
+
+        guard let backlogSvc = backlogService else { return }
+
+        // Inject the same persistent constraints `executeRequest` adds —
+        // a preview that ignores user locks would propose moves the
+        // real run won't make, defeating the whole «accurate ghost»
+        // purpose.
+        var effectiveRequest = request
+        if !lockedEventIds.isEmpty {
+            effectiveRequest.add(.keepFixed(eventIds: Array(lockedEventIds)))
+        }
+        if !excludedEventIds.isEmpty {
+            effectiveRequest.add(.exclude(eventIds: Array(excludedEventIds)))
+        }
+
+        let captured = effectiveRequest
+        shadowProposalTask = Task { [weak self] in
+            guard let self else { return }
+            var compiler = IntentCompiler(
+                optimizer: self.optimizer,
+                reminderService: reminderService,
+                backlogService: backlogSvc
+            )
+            compiler.subgraphRegistry = self.subgraphRegistry
+            compiler.energyCheckInService = self.energyCheckInService
+            compiler.pomodoroHistory = self.pomodoroHistory
+            let result = await compiler.execute(captured, defaultWorkingHours: self.workingHours)
+
+            // Preview ran during a Task; drop the result if cancelled
+            // (a newer preview is already in flight or the caller went
+            // away). MainActor hop because `shadowProposal` is on a
+            // @MainActor service.
+            if Task.isCancelled { return }
+            await MainActor.run {
+                switch result {
+                case .success(let opt), .partialSuccess(let opt, _, _):
+                    self.shadowProposal = opt.scenarios.first
+                case .noEventsToOptimize, .infeasible:
+                    self.shadowProposal = nil
+                }
+                self.shadowProposalUpdatedAt = Date()
+            }
+        }
+    }
+
+    /// Drop the current shadow proposal — used when the user starts
+    /// editing in a way that invalidates it (e.g. major backlog
+    /// reorder). Cheap; the preview will re-fill on the next call.
+    func clearShadowProposal() {
+        shadowProposalTask?.cancel()
+        shadowProposalTask = nil
+        shadowProposal = nil
+        shadowProposalUpdatedAt = nil
+    }
+
+    // MARK: - Scenario switching (post-apply)
+
+    /// Swap the currently-applied scenario for a different one in the
+    /// same `scenarios` array, without losing the array (and without
+    /// the user having to undo + re-run from scratch). Used by
+    /// `SmartActions`'s reasoning-row scenario cycle: the GA returned
+    /// 2-3 alternatives, the user wants to flip between them.
+    ///
+    /// Implementation rolls back the previously-applied scenario the
+    /// same way `undoLast` does (delete created events, restore
+    /// `previousGenes`, unschedule linked backlog rows), then applies
+    /// the new scenario through the regular `applyScenario(at:to:)`
+    /// path. The new run captures its own `lastSnapshot` whose
+    /// `previousGenes` matches the *original* baseline — so a single
+    /// undo from this state still rolls all the way back to before any
+    /// scenario was applied, regardless of how many times the user
+    /// cycled.
+    ///
+    /// Returns true on success, false when the inputs are out of
+    /// bounds or no snapshot exists to roll back from.
+    @discardableResult
+    func switchToAppliedScenario(
+        at index: Int,
+        to reminderService: ReminderService
+    ) -> Bool {
+        guard let snapshot = lastSnapshot else { return false }
+        guard index >= 0, index < scenarios.count else { return false }
+        guard index != selectedScenarioIndex else { return true }
+
+        // Roll back the existing apply. Identical surface area to
+        // `undoLast` minus the state-clearing — we want to preserve
+        // `scenarios` and `activeRequest` so the second `applyScenario`
+        // below has the context it needs.
+        for eventId in snapshot.createdEventIds {
+            reminderService.removeLocalEvent(id: eventId)
+        }
+        for gene in snapshot.appliedGenes {
+            backlogService?.unschedule(id: gene.eventId)
+        }
+        optimizer.currentSchedule = snapshot.previousGenes
+
+        // Snapshot the scenarios array because `applyScenario` would
+        // otherwise overwrite `previousGenes` with the just-restored
+        // state — which we want — but downstream observers might race.
+        let preservedScenarios = scenarios
+        applyScenario(at: index, to: reminderService)
+        if scenarios.isEmpty {
+            scenarios = preservedScenarios
+        }
+
+        return true
     }
 
     // MARK: - Scenario Info
