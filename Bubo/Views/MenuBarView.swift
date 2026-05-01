@@ -1743,6 +1743,22 @@ struct MenuBarView: View {
         // free slots (the real targets) and the expanded task list above
         // share the vertical space. One header > N thin slivers — Бирман:
         // «свернуть в строку-заголовок, а не уменьшать всё пропорционально».
+        // Working-hours start boundary — only on today, only when
+        // not dragging a task (the drag-mode collapse stands in for
+        // the day's contents and a draggable handle would compete
+        // with the drop targets). Renders directly under the day-
+        // section header, before any free slots / events.
+        if Calendar.current.isDateInToday(dayGroup.date), !backlogCoordinator.isDraggingTask {
+            WorkingHoursBoundaryRow(
+                kind: .start,
+                hour: optimizerService.workingHoursStart,
+                onStep: { delta in
+                    let proposed = optimizerService.workingHoursStart + delta
+                    optimizerService.workingHoursStart = max(0, min(22, proposed))
+                }
+            )
+        }
+
         if backlogCoordinator.isDraggingTask && !dayGroup.events.isEmpty && freeSlotFilter != .onlyFree {
             collapsedEventsHeader(for: dayGroup.events)
         }
@@ -1962,14 +1978,30 @@ struct MenuBarView: View {
             }
         }
 
+        // Working-hours end boundary — paired with the start handle
+        // above. Together they bracket the day's events so the user
+        // can see, drag, and step the working window directly on
+        // the timeline rather than burying it in settings. Birman:
+        // «правила — это объекты на экране».
+        if Calendar.current.isDateInToday(dayGroup.date), !backlogCoordinator.isDraggingTask {
+            WorkingHoursBoundaryRow(
+                kind: .end,
+                hour: optimizerService.workingHoursEnd,
+                onStep: { delta in
+                    let proposed = optimizerService.workingHoursEnd + delta
+                    optimizerService.workingHoursEnd = max(1, min(23, proposed))
+                }
+            )
+        }
+
         // After-hours / wind-down marker for today: when the latest
         // event ends past `workingHours.upperBound`, surface a quiet
-        // «After hours» caption below the day's events. Reifies the
-        // optimizer's `noEventsAfter` / `windDown` family at the
-        // surface where it actually matters — past the boundary, the
-        // user sees that the schedule has spilled into protected time.
-        // Today only: future days share the rule and the repetition
-        // would just be visual noise.
+        // «After hours» caption BELOW the boundary handle (so the
+        // handle separates the inside-hours region from the after-
+        // hours one). Reifies the optimizer's `noEventsAfter` /
+        // `windDown` family at the surface where it actually matters —
+        // past the boundary, the user sees that the schedule has
+        // spilled into protected time. Today only.
         if Calendar.current.isDateInToday(dayGroup.date),
            let lastEvent = dayGroup.events.last,
            Calendar.current.component(.hour, from: lastEvent.endDate) >= optimizerService.workingHours.upperBound {
