@@ -96,6 +96,13 @@ struct BacklogFullscreenView: View {
     /// `colorTag`. Reifies what would otherwise be a colour-coded tag
     /// search via `fromCalendar`/colour metadata.
     @State private var colorFilter: EventColorTag? = nil
+    /// Selected day for the week-strip — when set, `activeFiltered`
+    /// further narrows to tasks whose deadline falls on that day. Tap
+    /// any other dot to switch; tap the same dot to clear (back to
+    /// «show every day»). Reifies the `horizon` / `todayOnly` /
+    /// `until` modifiers as a draggable surface.
+    @State private var selectedDay: Date = Date()
+    @State private var weekDayFilterEnabled: Bool = false
     /// Smart-sort toggle — re-orders the list by `BacklogLogic.smartScore`
     /// instead of user drag order. Session-local.
     @State private var useSmartSort: Bool = false
@@ -126,6 +133,13 @@ struct BacklogFullscreenView: View {
         }
         if let color = colorFilter {
             result = result.filter { $0.colorTag == color }
+        }
+        if weekDayFilterEnabled {
+            let cal = Calendar.current
+            result = result.filter { task in
+                guard let deadline = task.deadline else { return false }
+                return cal.isDate(deadline, inSameDayAs: selectedDay)
+            }
         }
         return result
     }
@@ -251,6 +265,12 @@ struct BacklogFullscreenView: View {
             // distended to popover height. Бирман: один объект — одна форма.
             VStack(spacing: 0) {
                 blockHeader
+                // Week strip — 7 mini capacity rings, one per day,
+                // showing relative load. Reifies `planWeek` / `horizon`
+                // as a tactile surface: the user sees the week shape
+                // without opening another view, and tapping a day
+                // narrows the list to deadlines on that day.
+                weekStrip
                 // Same `SmartActions` row as the inline `BacklogView` —
                 // diagnosis (header) + fix (this row) + evidence (list).
                 // Replaces the old mid-list `SpillOverMarker` so the user
@@ -529,6 +549,36 @@ struct BacklogFullscreenView: View {
             onSwitchScenario: onSwitchScenario
         )
         .padding(.horizontal, DS.Spacing.sm)
+    }
+
+    // MARK: - Week strip
+
+    /// Horizontal seven-day load preview. Pure derived state; tapping
+    /// a dot calls back into `selectedDay` and toggles the per-day
+    /// filter. Tapping the same dot twice clears the filter (visible
+    /// the rest of the week again).
+    @ViewBuilder
+    private var weekStrip: some View {
+        let days = WeekStripView.DayLoad.week(
+            for: activeTasks,
+            workingHours: optimizerService.workingHours,
+            workingDays: optimizerService.workingDays
+        )
+        WeekStripView(
+            days: days,
+            selectedDay: weekDayFilterEnabled ? selectedDay : Date.distantFuture,
+            onSelectDay: { day in
+                withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
+                    if weekDayFilterEnabled, Calendar.current.isDate(selectedDay, inSameDayAs: day) {
+                        // Tapping the active day again clears the filter
+                        weekDayFilterEnabled = false
+                    } else {
+                        selectedDay = day
+                        weekDayFilterEnabled = true
+                    }
+                }
+            }
+        )
     }
 
     // MARK: - Filter chips
