@@ -45,13 +45,20 @@ struct WeekStripView: View {
     @Environment(\.activeSkin) private var skin
 
     var body: some View {
-        HStack(spacing: DS.Spacing.xs) {
-            ForEach(days) { day in
-                dayDot(day)
+        // Three-letter labels (Mon/Tue/…) plus the dots can outgrow
+        // narrow hosts. Mirror `WorkingDaysPicker` and fall back to
+        // a horizontal scroll so the strip never compresses or wraps;
+        // on wider hosts the row already fits and the scroll is
+        // invisible.
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: DS.Spacing.xs) {
+                ForEach(days) { day in
+                    dayDot(day)
+                }
             }
+            .padding(.horizontal, DS.Spacing.sm)
+            .padding(.vertical, DS.Spacing.xxs)
         }
-        .padding(.horizontal, DS.Spacing.sm)
-        .padding(.vertical, DS.Spacing.xxs)
     }
 
     // MARK: - Dot
@@ -69,6 +76,8 @@ struct WeekStripView: View {
                 Text(label)
                     .font(.caption2.weight(isActive ? .semibold : .regular))
                     .foregroundStyle(isActive ? skin.accentColor : skin.resolvedTextTertiary)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
                 ZStack {
                     Circle()
                         .stroke(skin.resolvedTextTertiary.opacity(0.3), lineWidth: 1)
