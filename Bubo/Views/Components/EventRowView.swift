@@ -531,11 +531,17 @@ struct EventRowView: View {
                 // «low» buckets, so the visual matches the service's
                 // own intent.
                 if let energy = energyAtStartHour, energy >= 0.7 || energy <= 0.3 {
+                    // Energy hint glyphs read from the new
+                    // `resolvedPeakEnergyColor` / `resolvedLowEnergyColor`
+                    // skin tokens (commit 5c51ef2) so the colours flow
+                    // from the same source the upcoming timeline-band
+                    // overlay will use. Default mappings preserve the
+                    // earlier accent / tertiary split exactly.
                     Image(systemName: energy >= 0.7 ? "bolt.fill" : "leaf")
                         .font(.system(size: DS.Size.iconSmall - 2, weight: .medium))
                         .foregroundStyle(energy >= 0.7
-                                         ? skin.accentColor
-                                         : skin.resolvedTextTertiary)
+                                         ? skin.resolvedPeakEnergyColor
+                                         : skin.resolvedLowEnergyColor)
                         .help(energy >= 0.7
                               ? "Peak energy hour — good for focus work"
                               : "Low energy hour — best for routine tasks")
