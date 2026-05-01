@@ -493,25 +493,37 @@ struct BacklogFullscreenView: View {
             )
             let fittingCount = plan.fitting.count
 
+            // Naive proposed slots for the overflow set — same per-task
+            // ghost-hint as the inline `BacklogView`; the fullscreen
+            // surface gets the same «machine has worked it out» voice.
+            let proposedSlots = BacklogLogic.naiveProposedSlots(
+                overflowingTasks: plan.overflowing,
+                workingHours: optimizerService.workingHours,
+                workingDays: optimizerService.workingDays
+            )
+
             ScrollView {
                 VStack(spacing: DS.Spacing.xs) {
                     ForEach(Array(plan.fitting.enumerated()), id: \.element.id) { index, task in
                         row(
                             for: task,
-                            hotKey: index < Self.maxHotKeyTasks ? index + 1 : nil
+                            hotKey: index < Self.maxHotKeyTasks ? index + 1 : nil,
+                            proposedSlot: nil
                         )
                     }
 
                     // Mid-list `SpillOverMarker` removed — its role is now
                     // covered by the `smartActionsRow` rendered above the
                     // ScrollView (between header and list). Birman: один
-                    // сигнал, одно место.
+                    // сигнал, одно место. Each overflow row carries its own
+                    // `→ HH:MM` ghost-slot in the trailing meta column.
 
                     ForEach(Array(plan.overflowing.enumerated()), id: \.element.id) { index, task in
                         let absoluteIndex = fittingCount + index
                         row(
                             for: task,
-                            hotKey: absoluteIndex < Self.maxHotKeyTasks ? absoluteIndex + 1 : nil
+                            hotKey: absoluteIndex < Self.maxHotKeyTasks ? absoluteIndex + 1 : nil,
+                            proposedSlot: proposedSlots[task.id]
                         )
                     }
 
@@ -596,7 +608,7 @@ struct BacklogFullscreenView: View {
     /// меню. Все строки равноценны, порядок диктует пользовательский drag
     /// (или smart-sort, если включён).
     @ViewBuilder
-    private func row(for task: BacklogTask, hotKey: Int?) -> some View {
+    private func row(for task: BacklogTask, hotKey: Int?, proposedSlot: Date? = nil) -> some View {
         BacklogTaskRow(
             task: task,
             isUrgent: BacklogLogic.isUrgent(task),
@@ -617,6 +629,7 @@ struct BacklogFullscreenView: View {
             onFocusPrev: { focusRow(offsetFrom: task.id, by: -1) },
             onFocusNext: { focusRow(offsetFrom: task.id, by: +1) },
             sprintHotKey: hotKey,
+            proposedSlot: proposedSlot,
             onReschedule: onRescheduleTask.map { handler in { handler(task) } },
             onSetDeadline: { deadlinePickerTask = task },
             onToggleUrgent: { toggleUrgent(task) },

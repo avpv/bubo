@@ -913,9 +913,21 @@ struct BacklogView: View {
             remainingWorkdayMinutes: remainingWorkdayMinutes
         )
 
+        // Naive proposed slots for the overflow set — populates the
+        // `→ HH:MM` ghost-hint in each overflowing row's trailing meta
+        // column. Cheap greedy walk; the shadow optimizer (planned)
+        // replaces this with the GA's real per-task `start`. Empty for
+        // the fitting set (those rows already say «when» implicitly by
+        // sitting before the boundary).
+        let proposedSlots = BacklogLogic.naiveProposedSlots(
+            overflowingTasks: plan.overflowing,
+            workingHours: optimizerService.workingHours,
+            workingDays: optimizerService.workingDays
+        )
+
         ForEach(plan.fitting) { task in
             if ids.contains(task.id) {
-                taskRowBody(task)
+                taskRowBody(task, proposedSlot: nil)
             }
         }
 
@@ -923,11 +935,13 @@ struct BacklogView: View {
         // `smartActionsRow` rendered directly under the header (see `body`).
         // The capacity boundary between fits/overflow stays implicit in the
         // visual ordering — Birman: «не печатай очевидное» (the cutoff is
-        // already implied by which tasks visibly tip the ring red).
+        // already implied by which tasks visibly tip the ring red). The
+        // ghost-slot `→ HH:MM` on each overflow row is the new, quieter
+        // cue: a per-task fact rather than a section header.
 
         ForEach(plan.overflowing) { task in
             if ids.contains(task.id) {
-                taskRowBody(task)
+                taskRowBody(task, proposedSlot: proposedSlots[task.id])
             }
         }
     }
@@ -938,7 +952,7 @@ struct BacklogView: View {
     /// edit representation mid-list, and the editor isn't a detached
     /// modal floating above the list.
     @ViewBuilder
-    private func taskRowBody(_ task: BacklogTask) -> some View {
+    private func taskRowBody(_ task: BacklogTask, proposedSlot: Date? = nil) -> some View {
         BacklogTaskRow(
             task: task,
             isUrgent: isUrgent(task),
@@ -965,6 +979,7 @@ struct BacklogView: View {
             onFocusPrev: { focusRow(offsetFrom: task.id, by: -1) },
             onFocusNext: { focusRow(offsetFrom: task.id, by: +1) },
             slotPreview: slotPreviewCache.cached(durationMinutes: task.durationMinutes),
+            proposedSlot: proposedSlot,
             onHoverChanged: { hovering in
                 handleRowHover(task: task, hovering: hovering)
             },

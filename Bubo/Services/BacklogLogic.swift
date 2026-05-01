@@ -230,6 +230,66 @@ enum BacklogLogic {
         }
     }
 
+    /// Naive «where would each overflowing task go?» map.
+    ///
+    /// The shadow optimizer (planned in
+    /// `/root/.claude/plans/soft-scribbling-dragonfly.md`) will replace this
+    /// with the GA's actual per-task `start` from a debounced background
+    /// proposal — that proposal respects all 60 intents (working hours,
+    /// energy curve, focus protection, …). Until that lands, this greedy
+    /// walk gives the user a visible «the machine has already worked it
+    /// out» voice: each overflowing task gets the next `nextDayStart +
+    /// runningOffset` slot, in queue order.
+    ///
+    /// Returns a `[String: Date]` keyed by task id. Tasks that fit today
+    /// get no entry; only the overflowing tail does. The walk skips the
+    /// rest of today (the queue already overflowed it) and starts the
+    /// next available `workingHours.lowerBound`. Pure — no environment
+    /// reads beyond the `now` parameter.
+    ///
+    /// Birman: «пусть потеет машина» — пользователь видит готовый слот
+    /// рядом с каждой задачей, а не абстрактный «over capacity».
+    static func naiveProposedSlots(
+        overflowingTasks: [BacklogTask],
+        workingHours: ClosedRange<Int>,
+        workingDays: Set<Int> = [],
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> [String: Date] {
+        guard !overflowingTasks.isEmpty else { return [:] }
+
+        // Find the next start-of-workday strictly after today's window.
+        // Walk up to 14 days forward to skip weekends / opt-out days, so
+        // the function still terminates on heavily-restricted schedules.
+        let startHour = workingHours.lowerBound
+        guard let todayStart = calendar.date(
+            bySettingHour: startHour, minute: 0, second: 0, of: now
+        ) else { return [:] }
+
+        var cursor: Date = calendar.date(byAdding: .day, value: 1, to: todayStart) ?? todayStart
+        for _ in 0..<14 {
+            let weekday = calendar.component(.weekday, from: cursor)
+            if workingDays.isEmpty || workingDays.contains(weekday) { break }
+            cursor = calendar.date(byAdding: .day, value: 1, to: cursor) ?? cursor
+        }
+
+        // Walk the overflow set in queue order, advancing cursor by each
+        // task's duration. We don't roll past the day's `workingHours.upperBound`
+        // here — the user sees `→ 09:30, → 10:00, → 11:00…` as a sequence
+        // even if some tasks would tip past the end-of-day. The shadow
+        // optimizer will respect that boundary properly.
+        var result: [String: Date] = [:]
+        for task in overflowingTasks {
+            result[task.id] = cursor
+            cursor = calendar.date(
+                byAdding: .minute,
+                value: max(0, task.durationMinutes),
+                to: cursor
+            ) ?? cursor
+        }
+        return result
+    }
+
     /// Minutes left between `now` and the end of the working day, clamped
     /// to zero once the window has closed. Shares its `workingHours`
     /// definition with `OptimizerService` so the ring and the free-slot

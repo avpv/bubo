@@ -44,6 +44,16 @@ struct BacklogTaskRow: View {
     /// The parent computes it the first time the cursor enters this row and
     /// caches the result. nil = not computed yet / no slot found.
     var slotPreview: String? = nil
+    /// «The machine has already worked out where this task would go» — a
+    /// proposed start time computed by the parent for tasks that don't fit
+    /// in today's remaining workday. Rendered in the trailing meta column
+    /// as `→ HH:MM` in the `DS.Typography.machineHint` voice. Tap-target
+    /// is currently passive (display only); when the shadow-optimizer
+    /// lands a follow-up commit promotes it to «tap to schedule one task».
+    /// nil = no proposal (the row fits in today, or no proposal computed).
+    /// Birman: «пусть потеет машина» — пользователь видит готовый слот, не
+    /// абстрактное «over capacity».
+    var proposedSlot: Date? = nil
     /// Side-channel hover notification — the parent uses it to trigger the
     /// slot-preview lookup. Mirrors the internal `isHovered` state but lets
     /// the owning view debounce the work without polluting row state.
@@ -104,6 +114,17 @@ struct BacklogTaskRow: View {
     /// (which removes the row from the list). Long enough to register as a
     /// confirmation frame, short enough not to feel like lag.
     private static let completionAnimationDuration: TimeInterval = 0.28
+
+    /// HH:MM-only formatter for the always-on ghost-slot hint («→ 19:30»).
+    /// Locale-aware: 12-hour locales render «7:30 PM», 24-hour ones render
+    /// «19:30». Cached at the type level so the formatter isn't rebuilt on
+    /// every redraw of every overflowing row.
+    private static let proposedSlotFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.timeStyle = .short
+        f.dateStyle = .none
+        return f
+    }()
 
     /// True when the task has a deadline that's already passed. Drives the
     /// pulsing red dot in the meta row — overdue is a louder signal than
@@ -614,6 +635,23 @@ struct BacklogTaskRow: View {
                         .lineLimit(1)
                         .transition(.opacity)
                         .accessibilityLabel("Would land at \(slotPreview)")
+                }
+
+                // Always-on ghost-slot for overflowing tasks. Unlike
+                // `slotPreview` above (hover-only, accent-coloured, used as
+                // a one-off lookup), this is the «machine has already
+                // figured out where each overflowing task would go» voice
+                // — quiet, monospaced, tertiary, visible at rest. When the
+                // shadow optimizer lands in a follow-up, the source flips
+                // from the parent's naive greedy walk to the GA's actual
+                // proposal without any UI changes. Hidden when `slotPreview`
+                // is showing so they don't both render at once.
+                if !isHovered, !isDragging, let proposed = proposedSlot {
+                    Text("→ \(Self.proposedSlotFormatter.string(from: proposed))")
+                        .font(DS.Typography.machineHint)
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                        .lineLimit(1)
+                        .accessibilityLabel("Proposed slot \(Self.proposedSlotFormatter.string(from: proposed))")
                 }
             }
         }
