@@ -334,6 +334,15 @@ struct MenuBarView: View {
                             onFocusOnDeadlines: {
                                 await runQuickAction(.deadlineMode, label: "Focused on deadlines")
                             },
+                            onRunRequest: { request, label in
+                                await runQuickAction(request, label: label)
+                            },
+                            onOpenPalette: {
+                                Haptics.tap()
+                                withAnimation(DS.Animation.quick) {
+                                    paletteContext = PaletteContext()
+                                }
+                            },
                             onRescheduleTask: { task in
                                 navigation = .list
                                 paletteContext = PaletteContext(seedTask: task)
@@ -389,7 +398,12 @@ struct MenuBarView: View {
                         )
                     }
                 )
-                .padding(.top, max(0, optimizerBottomY))
+                // Fallback minimum (≈ height of WorldClock + filter bar +
+                // backlog header) keeps the palette visible even when the
+                // (now deleted) QuickActions card is no longer publishing
+                // `OptimizerBottomKey`. The palette can still drift down
+                // when other surfaces above re-publish the key in future.
+                .padding(.top, max(120, optimizerBottomY))
                 .transition(.opacity)
                 .zIndex(10)
             }
@@ -770,6 +784,20 @@ struct MenuBarView: View {
                 onFocusOnDeadlines: {
                     await runQuickAction(.deadlineMode, label: "Focused on deadlines")
                 },
+                onRunRequest: { request, label in
+                    // Pipe arbitrary `OptimizationRequest`s coming from
+                    // `SmartActions` (soft-suggestion Run + Plan day…
+                    // presets) through the same `runQuickAction` helper
+                    // the hard-overflow path uses — toast + undo come for
+                    // free, identical semantics across all three states.
+                    await runQuickAction(request, label: label)
+                },
+                onOpenPalette: {
+                    Haptics.tap()
+                    withAnimation(DS.Animation.quick) {
+                        paletteContext = PaletteContext()
+                    }
+                },
                 onRescheduleTask: { task in
                     paletteContext = PaletteContext(seedTask: task)
                 },
@@ -919,48 +947,20 @@ struct MenuBarView: View {
                 colorFilterBar
             }
 
-            // Quick actions card — chips live in their own platter so
-            // the main content area reads as a stack of grouped cards
-            // (iOS Settings / macOS System Settings pattern), every one
-            // of them at contentMargin from the popover edges.
-            if reminderService.nonDisintegratingEventCount > 0 {
-                QuickActions(
-                    optimizerService: optimizerService,
-                    reminderService: reminderService,
-                    onExecuted: { label, undo in
-                        toastState.showSuccess(label, icon: "sparkles", onUndo: undo)
-                        notifyScheduleChange()
-                    },
-                    onError: { message in
-                        toastState.showInfo(message, icon: "exclamationmark.triangle")
-                    },
-                    onOpenPalette: {
-                        Haptics.tap()
-                        withAnimation(DS.Animation.quick) {
-                            paletteContext = PaletteContext()
-                        }
-                    }
-                )
-                .padding(.vertical, DS.Spacing.sm)
-                .padding(.horizontal, DS.Spacing.sm)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .skinPlatter(activeSkin)
-                .skinPlatterDepth(skin)
-                // Preference key sits AFTER platter/depth but BEFORE the
-                // outer padding so the command palette anchors to the
-                // card's bottom edge (shadow included) rather than to
-                // the outer gap below it.
-                .background(
-                    GeometryReader { geo in
-                        Color.clear.preference(
-                            key: OptimizerBottomKey.self,
-                            value: geo.frame(in: .named(menuBarRootCoordinateSpace)).maxY
-                        )
-                    }
-                )
-                .padding(.horizontal, DS.Spacing.contentMargin)
-                .padding(.top, DS.Spacing.md)
-            }
+            // The standalone «Optimize ⌘K» chip card was removed: the
+            // optimizer is now woven into the Backlog card itself via the
+            // adaptive `SmartActions` row (hard-overflow fix / soft
+            // suggestion / `Plan day…` discovery), so a separate entry
+            // point above the timeline is redundant. The global ⌘K
+            // shortcut still opens the command palette — see the
+            // `paletteShortcutBinding` further down. Birman: «не плодь
+            // сущности на главном экране» — the optimizer lives next to
+            // the data it shapes.
+            //
+            // `OptimizerBottomKey` is intentionally not republished here.
+            // Anchored UI elements that used to attach to the QuickActions
+            // bottom edge (the `paletteContext` popover) now anchor to the
+            // Backlog card's chrome instead.
 
             // Backlog card — always rendered so the "+ Add task…" input
             // stays as a persistent visual anchor even when the backlog
@@ -1412,8 +1412,16 @@ struct MenuBarView: View {
             // space (row to row inside a day) — handled by the `lg`
             // sibling spacing plus a SkinSeparator between groups.
             LazyVStack(alignment: .leading, spacing: DS.Spacing.lg) {
-                // One banner at a time — energy check-in when pending,
-                // otherwise optimizer suggestion. §2: density, not stacking.
+                // Energy check-in banner stays here as a top-of-timeline
+                // surface — it's a wellness prompt, not an optimizer
+                // suggestion, and it has its own input affordance (level
+                // pills) that doesn't fit the `SmartActions` row's
+                // shape. The optimizer-suggestion banner that used to
+                // sit alongside has migrated into `SmartActions` inside
+                // the Backlog card so the user has a single contextual
+                // channel for "machine has something to offer". Birman:
+                // «один CTA, не три», иначе главный экран дублирует сам
+                // себя.
                 if optimizerService.energyCheckInService?.pendingCheckIn == true {
                     EnergyCheckInBanner(
                         onRecord: { level in
@@ -1427,19 +1435,6 @@ struct MenuBarView: View {
                         onDismiss: {
                             withAnimation(DS.Animation.quick) {
                                 optimizerService.energyCheckInService?.dismissCheckIn()
-                            }
-                        }
-                    )
-                } else if let suggestion = activeBannerSuggestion {
-                    SmartBanner(
-                        request: suggestion.request,
-                        reason: suggestion.reason,
-                        onRun: {
-                            Task { await runQuickAction(suggestion.request, label: suggestion.reason) }
-                        },
-                        onDismiss: {
-                            withAnimation(DS.Animation.quick) {
-                                optimizerService.suggestionEngine?.suggestion = nil
                             }
                         }
                     )
@@ -1494,24 +1489,14 @@ struct MenuBarView: View {
     ) -> some View {
         let visibleCount = visibleEventCount(for: dayGroup.events)
 
-        DaySectionHeader(date: dayGroup.date, count: visibleCount) {
-            // Day-scope optimizer entry — only renders on «Today» since the
-            // intents (Organize today, Find focus, Low energy day…) operate
-            // on the current day's schedule. Other days keep the plain
-            // header. Birman: «команды живут рядом со своим объектом».
-            if Calendar.current.isDateInToday(dayGroup.date) {
-                PlanDayMenu(
-                    runRequest: { request, label in
-                        await runQuickAction(request, label: label)
-                    },
-                    openMore: {
-                        paletteContext = PaletteContext()
-                    },
-                    isEmptyDay: dayGroup.events.isEmpty
-                        && (optimizerService.backlogService?.tasks.isEmpty ?? true)
-                )
-            }
-        }
+        // Day header trailing slot is empty now — the day-scope optimizer
+        // presets that used to live in `PlanDayMenu` here have migrated
+        // into the `SmartActions` row inside the Backlog card, where they
+        // surface as the calm-state `Plan day…` popover (same six outcome-
+        // named requests, single channel for the optimizer, no duplicate
+        // entry next to the day title). `DaySectionHeader`'s trailing
+        // slot defaults to `EmptyView` so we omit it entirely.
+        DaySectionHeader(date: dayGroup.date, count: visibleCount)
             // `sm` leading keeps the day title hanging 8pt out from the
             // first event's accent bar — same column as the free-slot
             // dashed guide. Level 1: top padding is now applied by the
@@ -1792,50 +1777,13 @@ struct MenuBarView: View {
 
     // MARK: - Smart Banner
 
-    /// Mapping from `SuggestionEngine.Signal.name` to the set of
-    /// `QuickActionCandidate.id`s that surface the same intent in the
-    /// QuickActions chip row. The two systems were named independently —
-    /// `pending-tasks` here is `schedule-tasks` there — so we keep an
-    /// explicit table rather than a brittle name-prefix match.
-    ///
-    /// Used by `activeBannerSuggestion` below to suppress the banner when
-    /// the dynamic ranker has already raised the same recipe to top-3:
-    /// otherwise the user sees «4 tasks to schedule [Run]» as both a
-    /// chip *and* a banner immediately below the Tasks card, which was
-    /// the original «тройной Schedule» complaint.
-    private static let suggestionToQuickActionIDs: [String: Set<String>] = [
-        "overdue": ["overdue"],
-        "urgent": ["deadlines"],
-        "meetings-heavy": ["batch-meetings"],
-        "pending-tasks": ["schedule-tasks"],
-        // Focus has two surface variants in the ranker — the user's own
-        // history picks one of them per `focusVariantCandidate()`. Either
-        // counts as the same suggestion being shown.
-        "no-focus": ["focus", "pomodoro"],
-        "organize-morning": ["organize"],
-    ]
-
-    /// Historically suppressed banner suggestions that were already visible
-    /// as floating QuickActions chips. With the chip strip collapsed to a
-    /// single `Optimize ⌘K` button (per-task, per-event, backlog and
-    /// day-scope intents migrated to their own surfaces), there's nothing
-    /// to dedupe — banners can always surface a contextual suggestion when
-    /// it qualifies. Returns `false` unconditionally now; kept around so
-    /// future changes can re-enable suppression without restructuring the
-    /// banner pipeline.
-    private func isSuggestionSurfacedInQuickActions(_ suggestion: SuggestionEngine.Suggestion) -> Bool {
-        return false
-    }
-
-    /// The first non-dismissed suggested recipe from the monitor, or nil
-    /// when nothing is worth suggesting. Returns nil also when the same
-    /// intent is already shown as a top-3 QuickAction — Бирман: «один
-    /// CTA, не три», иначе главный экран начинает дублировать сам себя.
-    private var activeBannerSuggestion: SuggestionEngine.Suggestion? {
-        guard let suggestion = optimizerService.suggestionEngine?.suggestion else { return nil }
-        if isSuggestionSurfacedInQuickActions(suggestion) { return nil }
-        return suggestion
-    }
+    // The `SmartBanner` deduplication helpers (`suggestionToQuickActionIDs`,
+    // `isSuggestionSurfacedInQuickActions`, `activeBannerSuggestion`) were
+    // removed along with the banner itself. The single ranked candidate
+    // from `optimizerService.suggestionEngine?.suggestion` is now consumed
+    // directly by the `SmartActions` row inside the Backlog card — there
+    // is no second optimizer surface to dedupe against, so the suppression
+    // table is moot.
 
     /// Execute a request immediately — no palette, no configuration.
     /// One tap → done → undo toast. Birman: "sequential magic."

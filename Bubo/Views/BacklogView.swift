@@ -44,6 +44,15 @@ struct BacklogView: View {
     /// action-link in the spill-over marker when overflow contains urgent
     /// tasks. Wired from `MenuBarView.runQuickAction(.deadlineMode,…)`.
     var onFocusOnDeadlines: (() async -> Void)? = nil
+    /// Run an arbitrary `OptimizationRequest` — used by `SmartActions` to
+    /// fire soft-suggestion candidates and `Plan day…` presets through the
+    /// same `runQuickAction` helper that drives the hard-overflow path.
+    /// Wired from `MenuBarView.runQuickAction(_:label:)`.
+    var onRunRequest: ((OptimizationRequest, String) async -> Void)? = nil
+    /// Open the command palette — `SmartActions` calm-state `More…` and
+    /// the global `⌘K` shortcut both end up here. Replaces the standalone
+    /// `Optimize ⌘K` chip that used to live above the timeline.
+    var onOpenPalette: (() -> Void)? = nil
     /// Open the command palette seeded with a single task (per-task scope
     /// optimizer entry — context menu's «Reschedule…» on a row).
     var onRescheduleTask: ((BacklogTask) -> Void)? = nil
@@ -277,6 +286,17 @@ struct BacklogView: View {
                 || !completedToday.isEmpty
                 || !backlogService.frozen.isEmpty {
                 backlogHeader
+                // SmartActions sits directly between the diagnosis (header
+                // verdict + capacity ring) and the evidence (task list).
+                // Birman: «прямое действие на месте проблемы». Renders one
+                // adaptive row — overflow fix when over capacity, ranked
+                // soft suggestion when nothing is wrong but the engine has
+                // something to offer, or quiet `Plan day…` discovery when
+                // the day is calm. Hidden in `.collapsed` so the user can
+                // truly fold the card to its header alone.
+                if expansion != .collapsed {
+                    smartActionsRow
+                }
                 // Task rows only appear when expanded (up to 4 visible
                 // with scroll); collapsed = header only.
                 taskList
@@ -473,9 +493,16 @@ struct BacklogView: View {
                 // «5h / 3h» numbers (which stay reachable through the ring's
                 // popover and tooltip) so the inline label is interpretation,
                 // not arithmetic the reader has to do themselves.
+                // The `· N don't fit` suffix is intentionally dropped here —
+                // the same fact now lives in the `SmartActions` row directly
+                // below the header (subtext on the overflow fix), and the
+                // pre-redesign duplicate ("· N don't fit" + "X h spill over")
+                // is what the new layout exists to eliminate. Birman: «не
+                // дублируй сигналы». The label keeps the verdict (Done by /
+                // over by / after hours) only.
                 BacklogCapacityLabel(
                     pendingMinutes: pendingWorkloadMinutes,
-                    overflowingCount: overflowingTaskCount,
+                    overflowingCount: 0,
                     optimizerService: optimizerService
                 )
 
@@ -560,6 +587,39 @@ struct BacklogView: View {
         }
         .padding(.horizontal, DS.Spacing.sm)
         .padding(.vertical, DS.Spacing.sm)
+    }
+
+    /// Single contextual row directly under the header that absorbs the
+    /// four legacy optimizer entry points (SmartBanner, SpillOverMarker,
+    /// QuickActions chip, PlanDayMenu) into one adaptive surface. Reads
+    /// `BacklogLogic.capacityForecast` to pick hard / soft / calm rendering;
+    /// see `SmartActions` for the resolution rules.
+    @ViewBuilder
+    private var smartActionsRow: some View {
+        let plan = BacklogLogic.CapacitySectionPlan(
+            orderedTasks: allActiveTasks,
+            remainingWorkdayMinutes: remainingWorkdayMinutes
+        )
+        let forecast = BacklogLogic.capacityForecast(
+            pendingMinutes: pendingWorkloadMinutes,
+            workingHours: optimizerService.workingHours,
+            workingDays: optimizerService.workingDays
+        )
+
+        SmartActions(
+            forecast: forecast,
+            overflowingCount: plan.overflowing.count,
+            overflowMinutes: plan.overflowMinutes,
+            overflowHasUrgent: plan.overflowHasUrgent,
+            suggestion: optimizerService.suggestionEngine?.suggestion,
+            onScheduleBacklog: { await onScheduleBacklog?() },
+            onFocusOnDeadlines: { await onFocusOnDeadlines?() },
+            onRunRequest: { request, label in
+                await onRunRequest?(request, label)
+            },
+            onOpenPalette: { onOpenPalette?() }
+        )
+        .padding(.horizontal, DS.Spacing.sm)
     }
 
     /// Tiny accent-coloured wand pill that lights up in the header whenever
@@ -850,25 +910,11 @@ struct BacklogView: View {
             }
         }
 
-        if plan.hasOverflow {
-            // Fade the marker to half opacity while a row is being dragged
-            // so the user sees the boundaries are recomputing — they're
-            // about to re-bucket when the drop lands. `reduceMotion`
-            // collapses the fade to a constant opacity (no transition).
-            // The plan called for fading section labels; we have only one
-            // marker now, but the principle is the same.
-            let isDragging = coordinator?.isDraggingTask == true
-            SpillOverMarker(
-                overflowMinutes: plan.overflowMinutes,
-                overflowCount: plan.overflowing.count,
-                onSchedule: { await onScheduleBacklog?() },
-                onFocusOnDeadlines: plan.overflowHasUrgent ? { await onFocusOnDeadlines?() } : nil
-            )
-            .padding(.horizontal, DS.Spacing.sm)
-            .opacity(isDragging ? DS.Opacity.half : 1)
-            .motionAwareAnimation(DS.Animation.quick, value: isDragging, reduceMotion: reduceMotion)
-            .transition(.opacity)
-        }
+        // The mid-list `SpillOverMarker` was removed in favour of the
+        // `smartActionsRow` rendered directly under the header (see `body`).
+        // The capacity boundary between fits/overflow stays implicit in the
+        // visual ordering — Birman: «не печатай очевидное» (the cutoff is
+        // already implied by which tasks visibly tip the ring red).
 
         ForEach(plan.overflowing) { task in
             if ids.contains(task.id) {

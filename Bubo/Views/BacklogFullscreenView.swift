@@ -46,6 +46,13 @@ struct BacklogFullscreenView: View {
     /// action-link in the spill-over marker when overflow contains urgent
     /// tasks. Wired from `MenuBarView.runQuickAction(.deadlineMode,…)`.
     var onFocusOnDeadlines: (() async -> Void)? = nil
+    /// Run an arbitrary `OptimizationRequest` — used by `SmartActions` to
+    /// fire soft-suggestion candidates and `Plan day…` presets through the
+    /// same `runQuickAction` helper that drives the hard-overflow path.
+    var onRunRequest: ((OptimizationRequest, String) async -> Void)? = nil
+    /// Open the command palette — `SmartActions` calm-state `More…` and
+    /// the global `⌘K` shortcut both end up here.
+    var onOpenPalette: (() -> Void)? = nil
     /// Open the command palette seeded with a single task (per-task scope
     /// optimizer entry — context menu's «Reschedule…» on a row).
     var onRescheduleTask: ((BacklogTask) -> Void)? = nil
@@ -202,6 +209,12 @@ struct BacklogFullscreenView: View {
             // distended to popover height. Бирман: один объект — одна форма.
             VStack(spacing: 0) {
                 blockHeader
+                // Same `SmartActions` row as the inline `BacklogView` —
+                // diagnosis (header) + fix (this row) + evidence (list).
+                // Replaces the old mid-list `SpillOverMarker` so the user
+                // sees the action attached to the problem rather than at
+                // the tail of the list.
+                smartActionsRow
                 mainContent
                 addTaskField
             }
@@ -270,9 +283,12 @@ struct BacklogFullscreenView: View {
                 )
                 .help(capacityRingTooltip)
 
+                // Suffix `· N don't fit` dropped — the same fact lives in
+                // `smartActionsRow` directly below the header now. Birman:
+                // не дублируй сигналы.
                 BacklogCapacityLabel(
                     pendingMinutes: pendingWorkloadMinutes,
-                    overflowingCount: overflowingTaskCount,
+                    overflowingCount: 0,
                     optimizerService: optimizerService
                 )
 
@@ -417,6 +433,40 @@ struct BacklogFullscreenView: View {
             : "Smart sort off — tap to enable")
     }
 
+    // MARK: - Smart Actions
+
+    /// Single contextual row directly under the fullscreen header — same
+    /// component the inline `BacklogView` mounts in the same position.
+    /// Replaces the mid-list `SpillOverMarker` so the action attaches to
+    /// the diagnosis (header) rather than the tail of the evidence (list).
+    @ViewBuilder
+    private var smartActionsRow: some View {
+        let plan = BacklogLogic.CapacitySectionPlan(
+            orderedTasks: activeTasks,
+            remainingWorkdayMinutes: remainingWorkdayMinutes
+        )
+        let forecast = BacklogLogic.capacityForecast(
+            pendingMinutes: pendingWorkloadMinutes,
+            workingHours: optimizerService.workingHours,
+            workingDays: optimizerService.workingDays
+        )
+
+        SmartActions(
+            forecast: forecast,
+            overflowingCount: plan.overflowing.count,
+            overflowMinutes: plan.overflowMinutes,
+            overflowHasUrgent: plan.overflowHasUrgent,
+            suggestion: optimizerService.suggestionEngine?.suggestion,
+            onScheduleBacklog: { await onScheduleBacklog?() },
+            onFocusOnDeadlines: { await onFocusOnDeadlines?() },
+            onRunRequest: { request, label in
+                await onRunRequest?(request, label)
+            },
+            onOpenPalette: { onOpenPalette?() }
+        )
+        .padding(.horizontal, DS.Spacing.sm)
+    }
+
     // MARK: - Main content
 
     @ViewBuilder
@@ -445,15 +495,10 @@ struct BacklogFullscreenView: View {
                         )
                     }
 
-                    if plan.hasOverflow {
-                        SpillOverMarker(
-                            overflowMinutes: plan.overflowMinutes,
-                            overflowCount: plan.overflowing.count,
-                            onSchedule: { await onScheduleBacklog?() },
-                            onFocusOnDeadlines: plan.overflowHasUrgent ? { await onFocusOnDeadlines?() } : nil
-                        )
-                        .transition(.opacity)
-                    }
+                    // Mid-list `SpillOverMarker` removed — its role is now
+                    // covered by the `smartActionsRow` rendered above the
+                    // ScrollView (between header and list). Birman: один
+                    // сигнал, одно место.
 
                     ForEach(Array(plan.overflowing.enumerated()), id: \.element.id) { index, task in
                         let absoluteIndex = fittingCount + index
