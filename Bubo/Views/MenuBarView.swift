@@ -515,6 +515,17 @@ struct MenuBarView: View {
             // is one-shot per app launch.
             if !isEmpty { initialSyncDataArrived = true }
         }
+        .onChange(of: optimizerService.backlogService?.tasks.count ?? 0) { _, _ in
+            // Backlog mutated → kick a fresh shadowProposal compute so
+            // the per-task ghost-slots / SmartActions delta hints stay
+            // current. `previewRequest` is fire-and-cancel: a fresh
+            // call cancels the previous in-flight task, so back-to-back
+            // edits collapse to one run on the latest state. The
+            // request itself is the same `.scheduleBacklog` SmartActions
+            // would fire on Run, so the preview reflects what the user
+            // would actually see if they tapped Run right now.
+            optimizerService.previewRequest(.scheduleBacklog, reminderService: reminderService)
+        }
         .onReceive(NotificationCenter.default.publisher(for: AppleCalendarService.authorizationDidChange)) { note in
             // Trust the grant result if the service posted one — the
             // static EKEventStore query can still return `.notDetermined`
