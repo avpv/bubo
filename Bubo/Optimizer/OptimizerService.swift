@@ -22,6 +22,14 @@ final class OptimizerService {
     /// The last applied snapshot for undo support.
     private(set) var lastSnapshot: AppliedSnapshot? = nil
 
+    /// Lightweight summary of the most recently applied request, kept
+    /// alongside `lastSnapshot` for the «reasoning surface» — the tiny
+    /// «Done · why?» hint that briefly appears under `SmartActions`
+    /// after a Run completes. Birman: «оптимизатор не магия — он
+    /// явное правило», so the UI can read this back to show the user
+    /// which intents drove the change. Cleared by `undoLast`.
+    private(set) var lastAppliedRequest: AppliedRequestSummary? = nil
+
     /// IDs of events created in the most recent application.
     /// Used by EventRowView to highlight freshly created events.
     private(set) var freshlyCreatedEventIds: Set<String> = []
@@ -444,6 +452,20 @@ final class OptimizerService {
             createdEventIds: createdEventIds
         )
 
+        // Record what was just applied for the «reasoning surface» (the
+        // tiny "Done · why?" hint in `SmartActions`). The request's
+        // intents drive the human-readable breakdown, the timestamp lets
+        // the UI auto-fade after ~8 s. Mirrors `lastSnapshot` (used by
+        // undo) but is purely advisory — no behaviour depends on it.
+        if let request = activeRequest {
+            lastAppliedRequest = AppliedRequestSummary(
+                request: request,
+                label: activeRequestName ?? request.name ?? "Optimization",
+                appliedAt: Date(),
+                taskCount: scenario.activeGenes.count
+            )
+        }
+
         freshlyCreatedEventIds = Set(createdEventIds)
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(2))
@@ -481,6 +503,11 @@ final class OptimizerService {
         }
         optimizer.currentSchedule = snapshot.previousGenes
         lastSnapshot = nil
+        // Drop the reasoning-surface record too — the user just undid
+        // the change, so the «Done · why?» hint pointing to it is now
+        // misleading. Keeping it would describe a state that no longer
+        // exists.
+        lastAppliedRequest = nil
         scenarios = []
         selectedScenarioIndex = nil
     }

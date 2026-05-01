@@ -44,6 +44,13 @@ struct SmartActions: View {
     /// is suggested.
     let suggestion: SuggestionEngine.Suggestion?
 
+    /// Lightweight summary of the most recently applied optimization,
+    /// kept fresh for ~8 s by `OptimizerService.lastAppliedRequest`. When
+    /// set and `isFresh`, the row swaps from its three regular states
+    /// (hard / soft / calm) to a transient «Done · why?» reasoning hint.
+    /// Pass `nil` to suppress entirely.
+    let recentApplied: AppliedRequestSummary?
+
     /// Schedule the overflow set onto the calendar via the optimizer.
     /// Mirrors the old `SpillOverMarker.onSchedule` signature.
     let onScheduleBacklog: () async -> Void
@@ -62,16 +69,26 @@ struct SmartActions: View {
     let onOpenPalette: () -> Void
 
     @State private var showingPlanDayPopover = false
+    @State private var showingReasoningPopover = false
 
     var body: some View {
         Group {
-            switch resolvedState {
-            case .hard:
-                hardRow
-            case .soft(let s):
-                softRow(s)
-            case .calm:
-                calmRow
+            // A fresh «just applied» record beats the regular three
+            // states for ~8 s — the user has just hit Run and benefits
+            // from a beat of «here's what happened» before the row
+            // resumes its normal duty. After the freshness window
+            // expires, `resolvedState` takes over again.
+            if let applied = recentApplied, applied.isFresh {
+                reasoningRow(applied)
+            } else {
+                switch resolvedState {
+                case .hard:
+                    hardRow
+                case .soft(let s):
+                    softRow(s)
+                case .calm:
+                    calmRow
+                }
             }
         }
         // `DS.Animation.machineWork` — slow ease-out, no bounce. State
@@ -143,6 +160,150 @@ struct SmartActions: View {
         case 0:  return nil
         case 1:  return "1 task · \(volume) over"
         default: return "\(overflowingCount) tasks · \(volume) over"
+        }
+    }
+
+    // MARK: - Reasoning surface (Done · why?)
+
+    /// Transient row that briefly replaces the regular hard/soft/calm
+    /// states after a Run completes. Surfaces «Done · headline» as the
+    /// primary verb (no Run button), with a «why?» tap-target on the
+    /// trailing slot that opens a popover listing the human-readable
+    /// intent breakdown. Auto-fades when the underlying
+    /// `AppliedRequestSummary.isFresh` flips to false.
+    ///
+    /// Birman: «оптимизатор не магия — он явное правило». Showing the
+    /// intents back to the user closes the loop between «I hit Run»
+    /// and «I see what the machine actually did».
+    @ViewBuilder
+    private func reasoningRow(_ applied: AppliedRequestSummary) -> some View {
+        HStack(alignment: .top, spacing: DS.Spacing.sm) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.green)
+                .frame(width: DS.Size.iconSmall, alignment: .center)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(applied.headline)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(skin.resolvedTextPrimary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+
+            Spacer(minLength: DS.Spacing.sm)
+
+            Button {
+                Haptics.tap()
+                showingReasoningPopover = true
+            } label: {
+                Text("why?")
+                    .font(DS.Typography.machineHint)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                    .underline()
+            }
+            .buttonStyle(.plain)
+            .help("Show which optimizer intents drove this run")
+            .popover(isPresented: $showingReasoningPopover, arrowEdge: .trailing) {
+                reasoningPopover(applied)
+                    .frame(minWidth: 220, idealWidth: 260)
+                    .padding(.vertical, DS.Spacing.sm)
+            }
+        }
+        .padding(.horizontal, DS.Spacing.sm)
+        .padding(.vertical, DS.Spacing.xs)
+        .transition(.opacity)
+    }
+
+    @ViewBuilder
+    private func reasoningPopover(_ applied: AppliedRequestSummary) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            Text("Applied")
+                .font(.caption2.weight(.medium))
+                .tracking(0.5)
+                .textCase(.uppercase)
+                .foregroundStyle(skin.resolvedTextTertiary)
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.bottom, DS.Spacing.xxs)
+
+            // Render the request's intents as human-readable bullets.
+            // `intentDescription(_:)` strips `case` syntax and returns
+            // a calm verb-form; technical/parameter intents
+            // (`.speed`, `.scenarios`, `.autoApply`, `.notify`) return
+            // an empty string and are filtered out — those are tuning
+            // knobs the user shouldn't have to read about. Limited to
+            // first 6 of the remaining set to keep the popover glanceable.
+            let descriptions = applied.request.intents
+                .map(intentDescription)
+                .filter { !$0.isEmpty }
+            let visible = Array(descriptions.prefix(6))
+            ForEach(Array(visible.enumerated()), id: \.offset) { _, line in
+                HStack(spacing: DS.Spacing.sm) {
+                    Image(systemName: "circle.fill")
+                        .font(.system(size: 4))
+                        .foregroundStyle(skin.accentColor)
+                    Text(line)
+                        .font(.footnote)
+                        .foregroundStyle(skin.resolvedTextPrimary)
+                }
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, 1)
+            }
+
+            if descriptions.count > 6 {
+                Text("\u{2026} and \(descriptions.count - 6) more")
+                    .font(DS.Typography.machineHint)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.top, DS.Spacing.xxs)
+            }
+        }
+    }
+
+    /// Coarse human-readable rendering of a `ScheduleIntent`. Doesn't
+    /// have to enumerate every case — the popover is informative, not
+    /// exhaustive. Unknown cases fall back to a sanitised reflection
+    /// of the case name so we never silently drop signals.
+    private func intentDescription(_ intent: ScheduleIntent) -> String {
+        switch intent {
+        case .findSlotsForBacklog, .includeBacklog, .includeBacklogTasks:
+            return "Schedule backlog into free slots"
+        case .prioritizeDeadlines:
+            return "Prioritise tasks with deadlines"
+        case .prioritizeFocus:
+            return "Pack focus work first"
+        case .minimizeContextSwitching:
+            return "Minimise context switching"
+        case .groupByProject:
+            return "Group tasks by project"
+        case .batchMeetings:
+            return "Batch meetings into a window"
+        case .lowEnergy:
+            return "Treat today as low-energy"
+        case .protectLunch:
+            return "Protect the lunch slot"
+        case .breakEvery:
+            return "Insert breaks between blocks"
+        case .focusBlock:
+            return "Carve out a focus block"
+        case .pomodoroSession:
+            return "Stack tasks into a pomodoro"
+        case .stability:
+            return "Keep existing events stable"
+        case .keepFixed:
+            return "Pin selected events"
+        case .speed, .scenarios, .autoApply, .notify:
+            return ""
+        default:
+            // Strip Swift's `caseName(args)` reflection to a flat verb.
+            let raw = String(describing: intent)
+            let firstWord = raw.split(separator: "(").first.map(String.init) ?? raw
+            return firstWord
+                .replacingOccurrences(of: "([A-Z])", with: " $1", options: .regularExpression)
+                .lowercased()
+                .trimmingCharacters(in: .whitespaces)
+                .capitalized
         }
     }
 

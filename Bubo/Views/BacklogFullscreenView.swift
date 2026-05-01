@@ -464,6 +464,7 @@ struct BacklogFullscreenView: View {
             overflowMinutes: plan.overflowMinutes,
             overflowHasUrgent: plan.overflowHasUrgent,
             suggestion: optimizerService.suggestionEngine?.suggestion,
+            recentApplied: optimizerService.lastAppliedRequest,
             onScheduleBacklog: { await onScheduleBacklog?() },
             onFocusOnDeadlines: { await onFocusOnDeadlines?() },
             onRunRequest: { request, label in
