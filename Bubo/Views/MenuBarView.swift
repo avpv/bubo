@@ -1974,6 +1974,12 @@ struct MenuBarView: View {
     @MainActor
     private func runAutoDeferIfNeeded() {
         guard let backlog = optimizerService.backlogService else { return }
+        // Take the same once-a-day hook to prune stale per-event
+        // constraints (locks / exclusions whose events have been
+        // deleted upstream). Keeps the persistent sets from
+        // accumulating dead ids — see `pruneStaleEventConstraints`.
+        optimizerService.pruneStaleEventConstraints(reminderService: reminderService)
+
         let service = AutoDeferService(backlogService: backlog)
         let report = service.runIfNeeded()
         guard report.count > 0 else { return }

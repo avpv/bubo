@@ -118,6 +118,29 @@ final class OptimizerService {
         excludedEventIds.contains(eventId)
     }
 
+    /// Drop entries from `lockedEventIds` / `excludedEventIds` whose
+    /// underlying events no longer exist in the reminder service. Keeps
+    /// the persistent sets from accumulating stale ids over time —
+    /// otherwise a year-old deleted event id stays in UserDefaults
+    /// forever, and the auto-injected `.keepFixed(...)` / `.exclude(...)`
+    /// intents grow without bound.
+    ///
+    /// Called from `MenuBarView.runAutoDeferIfNeeded` so the cleanup
+    /// runs at most once per calendar day, on the same trigger that
+    /// already does once-a-day backlog hygiene. No undo — these are
+    /// pure id-string removals; their absence has no observable effect
+    /// (the events are gone anyway).
+    func pruneStaleEventConstraints(reminderService: ReminderService) {
+        let liveIds = Set(reminderService.allEvents.map(\.id))
+        let staleLocked = lockedEventIds.subtracting(liveIds)
+        let staleExcluded = excludedEventIds.subtracting(liveIds)
+        guard !staleLocked.isEmpty || !staleExcluded.isEmpty else { return }
+        lockedEventIds.subtract(staleLocked)
+        excludedEventIds.subtract(staleExcluded)
+        persist(lockedEventIds, key: Self.lockedEventIdsKey)
+        persist(excludedEventIds, key: Self.excludedEventIdsKey)
+    }
+
     /// IDs of events created in the most recent application.
     /// Used by EventRowView to highlight freshly created events.
     private(set) var freshlyCreatedEventIds: Set<String> = []
