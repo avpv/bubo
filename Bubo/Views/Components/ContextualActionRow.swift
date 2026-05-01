@@ -30,6 +30,12 @@ struct ContextualActionRow: View {
 
     @Environment(\.activeSkin) private var skin
     @State private var isRunning = false
+    /// Hover state — used to paint a quiet accent-tinted row background
+    /// so the user reads the *whole* row as one tap target (Fitts: the
+    /// hit area is the row, not just the trailing label). Without this,
+    /// the only affordance was the leading icon/text colour matching
+    /// `skin.accentColor`, which is easy to miss against a calm palette.
+    @State private var isHovered = false
 
     var body: some View {
         Button {
@@ -82,10 +88,23 @@ struct ContextualActionRow: View {
             }
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, DS.Spacing.xs)
+            .background(
+                // Quiet accent fill on hover. Same `subtleFill` opacity
+                // the add-task field uses for its idle state — keeps
+                // the hover read «active surface» without shouting.
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(skin.accentColor.opacity(isHovered ? DS.Opacity.subtleFill : 0))
+            )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(isRunning)
+        .onHover { hovering in
+            // `withAnimation` hop on hover to soften the colour swap;
+            // SwiftUI's default for state changes inside `onHover` is
+            // a hard cut, which feels twitchy on macOS.
+            withAnimation(DS.Animation.quick) { isHovered = hovering }
+        }
         .accessibilityLabel(accessibilityLabel)
     }
 
