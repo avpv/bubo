@@ -420,11 +420,12 @@ struct MenuBarView: View {
                         )
                     }
                 )
-                // Fallback minimum (≈ height of WorldClock + filter bar +
-                // backlog header) keeps the palette visible even when the
-                // (now deleted) QuickActions card is no longer publishing
-                // `OptimizerBottomKey`. The palette can still drift down
-                // when other surfaces above re-publish the key in future.
+                // The Backlog card now publishes `OptimizerBottomKey`
+                // (see its `.background(GeometryReader…)` modifier),
+                // so `optimizerBottomY` reflects the card's bottom
+                // edge. Fallback minimum (≈ height of WorldClock +
+                // filter bar) preserves a sensible position before the
+                // first preference reading lands.
                 .padding(.top, max(120, optimizerBottomY))
                 .transition(.opacity)
                 .zIndex(10)
@@ -1028,6 +1029,23 @@ struct MenuBarView: View {
             inlineBacklog(autoExpand: reminderService.nonDisintegratingEventCount == 0)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .skinTasksBlockChrome(activeSkin)
+                // Re-publish `OptimizerBottomKey` from the Backlog
+                // card's bottom edge so the command palette popover
+                // anchors right below it. This used to be published
+                // by the deleted QuickActions card; in the redesigned
+                // layout the Backlog card is the closest natural anchor
+                // (and where SmartActions / SmartActions reasoning
+                // surface live, so the palette continues their visual
+                // axis). Same `.named(menuBarRootCoordinateSpace)`
+                // frame as the old key publisher used.
+                .background(
+                    GeometryReader { geo in
+                        Color.clear.preference(
+                            key: OptimizerBottomKey.self,
+                            value: geo.frame(in: .named(menuBarRootCoordinateSpace)).maxY
+                        )
+                    }
+                )
                 .padding(.horizontal, DS.Spacing.contentMargin)
                 .padding(.top, DS.Spacing.md)
 
