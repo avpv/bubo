@@ -342,61 +342,76 @@ struct BacklogFullscreenView: View {
 
     // MARK: - Block header
     //
-    // Один ряд внутри карточки, зеркало BacklogView'овского `backlogHeader`:
+    // Двухрядный блок внутри карточки, зеркало BacklogView'овского `backlogHeader`:
     //
-    //   [ring] [Done by 6:18] [count] [→ ETA] [urgent] [smart] [⊕]
+    //   [ring] [Done by 6:18] [N tasks] [→ ETA] [smart] [⊕]
+    //   [urgent]
     //
     // Capacity ring + verdict — общий груз очереди. Total count — то же
     // число, что в inline-карточке (без чеврона: здесь раскрытие/свёртка
     // не нужны — это и есть полная карточка). ETA показывает, во сколько
     // закончится backlog, если взяться прямо сейчас, и обновляется через
-    // TimelineView. Schedule-иконка открывает палитру.
+    // TimelineView. Schedule-иконка открывает палитру. Urgent pill вынесен
+    // на свою строку — красный канал не спорит с over-capacity warning'ом.
 
     private var blockHeader: some View {
-        HStack(spacing: DS.Spacing.sm) {
-            if !activeTasks.isEmpty {
-                BacklogCapacityRing(
-                    pendingMinutes: pendingWorkloadMinutes,
-                    remainingWorkdayMinutes: remainingWorkdayMinutes,
-                    optimizerService: optimizerService
-                )
-                .help(capacityRingTooltip)
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            HStack(spacing: DS.Spacing.sm) {
+                if !activeTasks.isEmpty {
+                    BacklogCapacityRing(
+                        pendingMinutes: pendingWorkloadMinutes,
+                        remainingWorkdayMinutes: remainingWorkdayMinutes,
+                        optimizerService: optimizerService
+                    )
+                    .help(capacityRingTooltip)
 
-                // Suffix `· N don't fit` dropped — the same fact lives in
-                // `smartActionsRow` directly below the header now. Birman:
-                // не дублируй сигналы.
-                BacklogCapacityLabel(
-                    pendingMinutes: pendingWorkloadMinutes,
-                    overflowingCount: 0,
-                    optimizerService: optimizerService
-                )
+                    // Suffix `· N don't fit` dropped — the same fact lives in
+                    // `smartActionsRow` directly below the header now. Birman:
+                    // не дублируй сигналы.
+                    BacklogCapacityLabel(
+                        pendingMinutes: pendingWorkloadMinutes,
+                        overflowingCount: 0,
+                        optimizerService: optimizerService
+                    )
 
-                // Total count — same role as the chevron+count button in
-                // inline Backlog. Здесь нет disclosure (карточка и так во
-                // весь popover), поэтому это не button, а просто число.
-                Text("\(activeTasks.count)")
-                    // `DS.Typography.metric` — same voice as the inline
-                    // header's count, so collapsed-on-main and fullscreen
-                    // backlog read as one numeric rhythm.
-                    .font(DS.Typography.metric(skin: skin))
-                    .foregroundStyle(skin.resolvedTextPrimary)
-                    .contentTransition(.numericText())
-                    .help("\(activeTasks.count) task\(activeTasks.count == 1 ? "" : "s") in backlog")
-                    .accessibilityLabel("\(activeTasks.count) tasks")
+                    // Count + plural «task/tasks» word — matches the inline
+                    // BacklogView header так, что `18 tasks` читается одним и
+                    // тем же фактом в обоих режимах. Раньше тут было голое
+                    // число — оно опиралось на verdict, чтобы подразумевать
+                    // «это про задачи», и теряло существительное, когда
+                    // verdict был временем («Done by 17:30»).
+                    Text("\(activeTasks.count) task\(activeTasks.count == 1 ? "" : "s")")
+                        // `DS.Typography.metric` — same voice as the inline
+                        // header's count, so collapsed-on-main and fullscreen
+                        // backlog read as one numeric rhythm.
+                        .font(DS.Typography.metric(skin: skin))
+                        .foregroundStyle(skin.resolvedTextPrimary)
+                        .contentTransition(.numericText())
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .help("\(activeTasks.count) task\(activeTasks.count == 1 ? "" : "s") in backlog")
+                        .accessibilityLabel("\(activeTasks.count) tasks")
+                }
+
+                if !visibleTasks.isEmpty {
+                    etaChip
+                }
+
+                if activeTasks.count > 1 {
+                    smartSortButton
+                }
+
+                Spacer(minLength: 0)
             }
 
-            if !visibleTasks.isEmpty {
-                etaChip
-            }
-
+            // Urgent pill переехал на отдельную строку под header'ом. В одном
+            // ряду с verdict + count + ETA red «N urgent» зажимал ряд и
+            // спорил с over-capacity warning'ом за один и тот же красный
+            // канал. Своя строка даёт ему дыхание и явное визуальное
+            // отделение «информационная срочность» от «диагноз ёмкости».
             if urgentCount > 0 {
                 urgentFilterButton
             }
-            if activeTasks.count > 1 {
-                smartSortButton
-            }
-
-            Spacer(minLength: 0)
         }
         .padding(.horizontal, DS.Spacing.sm)
         .padding(.vertical, DS.Spacing.sm)
