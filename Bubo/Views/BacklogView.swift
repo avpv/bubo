@@ -578,15 +578,12 @@ struct BacklogView: View {
             .accessibilityLabel("\(totalCount) tasks")
             .accessibilityHint(expansion.accessibilityHint)
 
-            // Smart-sort indicator — видимое состояние «список не в моём
-            // порядке». Раньше тоггл жил только в overflow, и пользователь
-            // мог часами пытаться понять, почему задачи переставлены: ON
-            // включал, а UI не сигналил. Теперь когда сортировка активна —
-            // в header'е появляется аккуратный wand.and.stars; клик на нём
-            // выключает обратно. Включать всё ещё через overflow (это редкое
-            // действие, не достойно постоянного места в header'е).
-            if useSmartSort {
-                smartSortIndicator
+            // Smart-sort toggle — always visible when there's more than one
+            // task to sort. Зеркало `BacklogFullscreenView.smartSortButton`:
+            // один контрол на оба направления toggle'а вместо рассинхрона
+            // «indicator only when ON + overflow item to turn ON».
+            if totalCount > 1 {
+                smartSortButton
             }
 
             // Urgent pill переехал на свою строку под capacity verdict'ом —
@@ -595,18 +592,15 @@ struct BacklogView: View {
 
             Spacer()
 
-            if totalCount > 0 {
-                // Fullscreen affordance — пушит fullscreen Backlog в
-                // навигационный стек popover'а. Раньше эту роль играл
-                // третий клик шеврона (`chevron.down.2`), но двойная
-                // стрелка не считывалась как «другое состояние». Теперь
-                // — отдельная кнопка с понятной macOS-идиомой «развернуть».
-                if onEnterFullscreen != nil {
-                    fullscreenButton
-                }
-                // Overflow menu holds smart-sort. HIG: secondary actions
-                // without a clear glyph belong in a menu with labels.
-                headerOverflowMenu
+            // Fullscreen affordance — пушит fullscreen Backlog в
+            // навигационный стек popover'а. Раньше эту роль играл
+            // третий клик шеврона (`chevron.down.2`), но двойная
+            // стрелка не считывалась как «другое состояние». Теперь
+            // — отдельная кнопка с понятной macOS-идиомой «развернуть».
+            // Overflow-menu здесь больше нет: его единственный пункт
+            // (smart-sort) переехал в видимый button рядом с count.
+            if totalCount > 0, onEnterFullscreen != nil {
+                fullscreenButton
             }
         }
         .padding(.horizontal, DS.Spacing.sm)
@@ -650,45 +644,50 @@ struct BacklogView: View {
         .padding(.horizontal, DS.Spacing.sm)
     }
 
-    /// Tiny accent-coloured wand pill that lights up in the header whenever
-    /// smart-sort is engaged. Clicking it disables smart-sort and returns
-    /// the list to user drag order. Only rendered when `useSmartSort == true`
-    /// — а когда выключено, контрол не нужен (включается через overflow,
-    /// и пустота в header'е лучше украшения).
-    private var smartSortIndicator: some View {
+    /// Smart-sort toggle — always-visible button mirroring
+    /// `BacklogFullscreenView.smartSortButton`. Раньше тут жил indicator,
+    /// который появлялся только когда smart-sort уже включён, и включали его
+    /// через overflow-меню — два контрола для одного toggle, режимы
+    /// рассинхронились. Теперь один и тот же button в обоих режимах:
+    /// `arrow.up.arrow.down` когда выключено, `wand.and.stars` когда активно.
+    private var smartSortButton: some View {
         Button {
-            // Same `.levelChange` for the inverse path — turn smart-sort
-            // off via the active-state pill. Both directions of the
-            // smart-sort toggle now haptic identically.
+            // `.levelChange` for sort-order switch — list reorders, discrete
+            // state change. Same haptic on both directions of the toggle.
             Haptics.impact()
             withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-                useSmartSort = false
+                useSmartSort.toggle()
+                // Engaging smart-sort while collapsed would hide the
+                // reordered list — open to `.compact` so the new order is
+                // immediately visible.
+                if useSmartSort, expansion == .collapsed {
+                    expansion = .compact
+                }
             }
         } label: {
-            Image(systemName: "wand.and.stars")
+            Image(systemName: useSmartSort ? "wand.and.stars" : "arrow.up.arrow.down")
                 .font(.footnote.weight(.medium))
-                .foregroundStyle(skin.accentColor)
-                .padding(.horizontal, DS.Spacing.xs)
-                .padding(.vertical, DS.Spacing.xxs)
+                .foregroundStyle(useSmartSort ? skin.accentColor : skin.resolvedTextSecondary)
+                .frame(width: DS.Size.iconLarge, height: DS.Size.iconLarge)
                 .background(
-                    Capsule().fill(skin.accentColor.opacity(DS.Opacity.lightFill))
-                )
-                .overlay(
-                    Capsule().strokeBorder(
-                        skin.accentColor.opacity(DS.Opacity.softAccent),
-                        lineWidth: DS.Border.thin
+                    Circle().fill(
+                        skin.accentColor.opacity(useSmartSort ? DS.Opacity.lightFill : 0)
                     )
                 )
-                .contentShape(Capsule())
+                .contentShape(Circle())
+                .contentTransition(.symbolEffect(.replace))
         }
         .buttonStyle(.plain)
-        // The capacity sections (FITS / spill-over) are computed AFTER
-        // smart-sort runs, so within each group the rows are smart-sorted
-        // and across groups the boundary marks the capacity cutoff. The
-        // tooltip names that interaction so the user understands the «two
-        // tops of priority» they see when both signals are active.
-        .help("Smart sort active — sorted by priority within each capacity group. Tap to show in user order.")
-        .accessibilityLabel("Smart sort active, ordered by priority within capacity groups — tap to disable")
+        // Capacity sections (FITS / spill-over) compose on top of sort, so
+        // when smart-sort is active each group reads priority-first within
+        // itself. Tooltip explains the interaction so the user understands
+        // the «two tops of priority» they see when both signals are active.
+        .help(useSmartSort
+            ? "Sorted by priority within each capacity group. Tap to show in user order."
+            : "Smart sort by deadline + priority")
+        .accessibilityLabel(useSmartSort
+            ? "Smart sort on, ordered by priority within capacity groups — tap for user order"
+            : "Smart sort off — tap to enable")
     }
 
     /// Urgent pill row — sits directly under the capacity verdict, on its
@@ -776,44 +775,6 @@ struct BacklogView: View {
                 ? "Showing only urgent tasks — tap to clear filter"
                 : "\(urgentCount) urgent tasks — tap to filter"
         )
-    }
-
-    /// Overflow menu — secondary view controls. Fullscreen-режим переехал
-    /// в отдельную кнопку рядом с шевроном — Бирман: умный layer должен
-    /// быть единственной точкой, не дублироваться в overflow.
-    private var headerOverflowMenu: some View {
-        Menu {
-            Button {
-                // `.levelChange` for sort-order switch — list reorders,
-                // discrete state change. Mirrors `BacklogFullscreenView.smartSortButton`.
-                Haptics.impact()
-                withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
-                    useSmartSort.toggle()
-                    if useSmartSort, expansion == .collapsed {
-                        expansion = .compact
-                    }
-                }
-            } label: {
-                Label(
-                    useSmartSort ? "Show in user order" : "Smart sort",
-                    systemImage: useSmartSort ? "wand.and.stars" : "arrow.up.arrow.down"
-                )
-            }
-        } label: {
-            Image(systemName: "ellipsis")
-                .font(.footnote)
-                .foregroundStyle(skin.resolvedTextSecondary)
-        }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        // Specific to what the menu contains — sort options. The generic
-        // «More options» wording invited curiosity without delivering on
-        // it; users hovered, opened, and only saw a single toggle. HIG:
-        // tooltips should describe what the control does, not where it
-        // sits in the layout.
-        .help(useSmartSort ? "Sort: smart (deadline + priority)" : "Sort options")
-        .accessibilityLabel("Task list sort options")
     }
 
     // MARK: - Capacity ring helpers
