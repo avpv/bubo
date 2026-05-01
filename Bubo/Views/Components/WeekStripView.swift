@@ -45,13 +45,20 @@ struct WeekStripView: View {
     @Environment(\.activeSkin) private var skin
 
     var body: some View {
-        HStack(spacing: DS.Spacing.xs) {
-            ForEach(days) { day in
-                dayDot(day)
+        // Three-letter labels (Mon/Tue/…) plus the dots can outgrow
+        // narrow hosts. Mirror `WorkingDaysPicker` and fall back to
+        // a horizontal scroll so the strip never compresses or wraps;
+        // on wider hosts the row already fits and the scroll is
+        // invisible.
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: DS.Spacing.xs) {
+                ForEach(days) { day in
+                    dayDot(day)
+                }
             }
+            .padding(.horizontal, DS.Spacing.sm)
+            .padding(.vertical, DS.Spacing.xxs)
         }
-        .padding(.horizontal, DS.Spacing.sm)
-        .padding(.vertical, DS.Spacing.xxs)
     }
 
     // MARK: - Dot
@@ -59,7 +66,7 @@ struct WeekStripView: View {
     @ViewBuilder
     private func dayDot(_ day: DayLoad) -> some View {
         let isActive = Calendar.current.isDate(day.date, inSameDayAs: selectedDay)
-        let label = Self.dayLabelFormatter.string(from: day.date)
+        let label = Self.label(for: day.date)
         let isToday = Calendar.current.isDateInToday(day.date)
         Button {
             Haptics.tap()
@@ -69,6 +76,8 @@ struct WeekStripView: View {
                 Text(label)
                     .font(.caption2.weight(isActive ? .semibold : .regular))
                     .foregroundStyle(isActive ? skin.accentColor : skin.resolvedTextTertiary)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
                 ZStack {
                     Circle()
                         .stroke(skin.resolvedTextTertiary.opacity(0.3), lineWidth: 1)
@@ -109,11 +118,18 @@ struct WeekStripView: View {
 
     // MARK: - Strings
 
-    private static let dayLabelFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "EEEEE"  // single-letter weekday, locale-aware
-        return f
-    }()
+    /// Three-letter English weekday labels, indexed by Foundation's
+    /// 1…7 weekday convention (1 = Sun). Matches `WorkingDaysPicker`
+    /// so the same chips read identically across the popover and the
+    /// week strip.
+    private static let weekdayLabels: [String] = [
+        "", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
+    ]
+
+    private static func label(for date: Date) -> String {
+        let weekday = Calendar.current.component(.weekday, from: date)
+        return weekdayLabels[weekday]
+    }
 
     private func tooltip(for day: DayLoad, isActive: Bool) -> String {
         let workload = DS.formatMinutes(day.workloadMinutes)
