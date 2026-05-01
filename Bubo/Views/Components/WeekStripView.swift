@@ -111,7 +111,11 @@ struct WeekStripView: View {
 
     private static let dayLabelFormatter: DateFormatter = {
         let f = DateFormatter()
-        f.dateFormat = "EEEEE"  // single-letter weekday, locale-aware
+        // Two-letter short weekday (Mo, Tu, We, Th, Fr, Sa, Su) per
+        // Unicode TR35. The narrow "EEEEE" form collapses Tue/Thu
+        // and Sat/Sun to the same letter, which left the strip
+        // ambiguous at a glance.
+        f.dateFormat = "EEEEEE"
         return f
     }()
 
