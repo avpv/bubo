@@ -84,6 +84,7 @@ struct BacklogView: View {
 
     @Environment(\.activeSkin) private var skin
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(ReminderSettings.self) private var settings
     /// Shared drag + ghost-preview state, injected by `MenuBarView` via the
     /// environment. May be nil in previews / settings panes, in which case
     /// the ghost-block and drag-highlighting features silently degrade to
@@ -214,13 +215,46 @@ struct BacklogView: View {
     }
 
     /// Tasks visible in the list. Equals `allActiveTasks` unless the
-    /// urgent-only filter is engaged, in which case only tasks whose
-    /// deadline falls inside the urgency window survive. Keeping the
-    /// filter here (not in the service) means the storage order stays
-    /// the user's canonical sequence.
+    /// urgent-only filter or the active-project picker is engaged. Both
+    /// are display-level filters — they do **not** scope the capacity
+    /// ring (`pendingWorkloadMinutes` keeps reading `allActiveTasks`),
+    /// so «one day vs the whole queue» остаётся главным сигналом, а
+    /// проектный фокус работает поверх. Keeping the filters here
+    /// (not in the service) means the storage order stays the user's
+    /// canonical sequence.
     private var activeTasks: [BacklogTask] {
-        guard urgentOnlyFilter else { return allActiveTasks }
-        return allActiveTasks.filter { isUrgent($0) }
+        var result = allActiveTasks
+        if let project = activeProjectName {
+            result = result.filter { ($0.context ?? "") == project }
+        }
+        if urgentOnlyFilter {
+            result = result.filter { isUrgent($0) }
+        }
+        return result
+    }
+
+    /// Title of the Reminders list the user is currently focused on, or
+    /// `nil` if «All Tasks» (no project filter). Resolved at read time
+    /// so a rename in Reminders.app picks up on the next sync without a
+    /// stale cached name.
+    private var activeProjectName: String? {
+        guard let id = settings.activeProjectListId else { return nil }
+        return AppleRemindersService.shared.listRemindersLists()
+            .first(where: { $0.id == id })?.title
+    }
+
+    /// Urgent count shown in the header pill. Project-scoped: when picker
+    /// has an active project, count only urgent tasks IN that project,
+    /// иначе pill читался бы как «3 urgent», но клик уводил бы в пустой
+    /// список (urgent живут в другом проекте). При «All Tasks» считаем
+    /// глобально, как раньше.
+    private var headerUrgentCount: Int {
+        if let project = activeProjectName {
+            return allActiveTasks.filter {
+                ($0.context ?? "") == project && BacklogLogic.isUrgent($0)
+            }.count
+        }
+        return backlogService.urgent(withinDays: 2).count
     }
 
     /// Active tasks as a flat list ordered by `BacklogLogic.smartScore`.
@@ -323,7 +357,7 @@ struct BacklogView: View {
                         onEnterFullscreen: onEnterFullscreen
                     ),
                     totalCount: allActiveTasks.count,
-                    urgentCount: backlogService.urgent(withinDays: 2).count,
+                    urgentCount: headerUrgentCount,
                     pendingMinutes: pendingWorkloadMinutes,
                     remainingWorkdayMinutes: remainingWorkdayMinutes,
                     optimizerService: optimizerService,

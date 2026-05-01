@@ -455,9 +455,16 @@ final class RemindersSyncService {
 
         markSelfWrite()
         do {
+            // Prefer the user's currently-active project list (set via the
+            // backlog header's project picker) over the global default
+            // export list. Это совпадает с UX Reminders.app: «новая задача
+            // идёт туда, куда я смотрю». Когда no active project выбран,
+            // падаем на глобальный `remindersExportListId` из Settings.
+            let targetListId = settings.activeProjectListId
+                ?? settings.remindersExportListId
             let calendarItemId = try remindersSource.createReminder(
                 from: task,
-                inListId: settings.remindersExportListId
+                inListId: targetListId
             )
             // Persist the linkage so later syncs can dedupe and so completion
             // / scheduling writeback can find the right reminder.

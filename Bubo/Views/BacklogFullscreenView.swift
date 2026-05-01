@@ -68,6 +68,7 @@ struct BacklogFullscreenView: View {
 
     @Environment(\.activeSkin) private var skin
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(ReminderSettings.self) private var settings
 
     /// Hot-keys are bound to the first N visible rows. 9 covers the digit
     /// keyboard 1…9; tasks beyond that need scrolling and a click. Same
@@ -123,12 +124,16 @@ struct BacklogFullscreenView: View {
         BacklogLogic.activeTasks(backlogService.tasks)
     }
 
-    /// Active set after the urgent-only + project + color filters.
-    /// Three filter sources compose; an empty result triggers the
-    /// auto-disengage rule below so the user is never stranded in an
-    /// empty filtered view.
+    /// Active set after all display filters. Composes (in order):
+    /// active-project picker → urgent toggle → project chip → color chip
+    /// → week-day chip. Capacity (`pendingWorkloadMinutes`) keeps reading
+    /// the unfiltered `activeTasks`, so «фокус на проекте» сужает то,
+    /// что показано, но не размер дня.
     private var activeFiltered: [BacklogTask] {
         var result = activeTasks
+        if let project = activeProjectName {
+            result = result.filter { ($0.context ?? "") == project }
+        }
         if urgentOnlyFilter {
             result = result.filter { BacklogLogic.isUrgent($0) }
         }
@@ -146,6 +151,17 @@ struct BacklogFullscreenView: View {
             }
         }
         return result
+    }
+
+    /// Title of the Reminders list the user is currently focused on via
+    /// the header's project picker, or `nil` if «All Tasks». Same helper
+    /// as in inline `BacklogView` — оба режима читают активный проект
+    /// одной формулой, settings-driven, чтобы переключение синхронно
+    /// влияло на оба.
+    private var activeProjectName: String? {
+        guard let id = settings.activeProjectListId else { return nil }
+        return AppleRemindersService.shared.listRemindersLists()
+            .first(where: { $0.id == id })?.title
     }
 
     /// Distinct, sorted list of project / context labels in the active
@@ -217,7 +233,15 @@ struct BacklogFullscreenView: View {
     /// filter pill (visibility + label) and the auto-disengage rule when
     /// the set dries up.
     private var urgentCount: Int {
-        backlogService.urgent(withinDays: 2).count
+        // Project-scoped: при выбранном active project'е pill читается
+        // как «срочное в этом проекте», а не глобально, иначе клик уводил
+        // бы в пустой список (urgent тогда живут в другом проекте).
+        if let project = activeProjectName {
+            return activeTasks.filter {
+                ($0.context ?? "") == project && BacklogLogic.isUrgent($0)
+            }.count
+        }
+        return backlogService.urgent(withinDays: 2).count
     }
 
     /// Total scheduled minutes across the entire active queue — workload
@@ -475,9 +499,16 @@ struct BacklogFullscreenView: View {
     /// header stays calm on simple backlogs. Each chip toggles a
     /// session-local filter; the underlying `activeFiltered` recomposes
     /// on every render. Birman: «правила — это объекты на экране».
+    ///
+    /// Project chips прячутся, когда picker уже выбрал активный проект:
+    /// в этом состоянии backlog уже отфильтрован одним контекстом, и
+    /// chip-ряд показал бы либо одну избыточную «Personal»-таблетку,
+    /// либо чужие чипы, клик по которым пересекался бы с picker'ом и
+    /// давал пустой результат. Color-chip'ы остаются — они работают
+    /// поверх проекта и не дублируют его.
     @ViewBuilder
     private var filterChipsRow: some View {
-        let projects = availableProjects
+        let projects = settings.activeProjectListId == nil ? availableProjects : []
         let colors = availableColorTags
         if !projects.isEmpty || !colors.isEmpty {
             ScrollView(.horizontal, showsIndicators: false) {

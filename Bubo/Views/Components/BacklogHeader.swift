@@ -66,6 +66,7 @@ struct BacklogHeader<EtaContent: View>: View {
 
     @Environment(\.activeSkin) private var skin
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(ReminderSettings.self) private var settings
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
@@ -119,6 +120,17 @@ struct BacklogHeader<EtaContent: View>: View {
             }
 
             Spacer(minLength: 0)
+
+            // Project picker — Reminders.app-style switcher между листами.
+            // Видим только когда sync с Apple Reminders включён и есть
+            // EventKit-доступ; в противном случае проектов в Bubo физически
+            // не существует (см. `BacklogProjectPicker`). Стоит у правого
+            // края рядом с fullscreen-кнопкой, чтобы читался как «context
+            // навигация», а не как часть числового header'а слева.
+            BacklogProjectPicker(
+                settings: settings,
+                remindersService: AppleRemindersService.shared
+            )
 
             if case .inline(_, let onEnterFullscreen) = mode,
                totalCount > 0,
