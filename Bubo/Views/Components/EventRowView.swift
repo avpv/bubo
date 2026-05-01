@@ -44,6 +44,21 @@ struct EventRowView: View {
     /// `OptimizerService.setFlex(percent:eventId:)`. nil = sub-menu
     /// hidden.
     var onSetFlex: ((CalendarEvent, Int) -> Void)? = nil
+
+    /// Pomodoro session neighbour signals — true when the
+    /// chronologically adjacent event in the same day belongs to the
+    /// SAME pomodoro session as this one (matched by
+    /// `event.pomodoroSessionBaseId`). Drives the bracket renderer
+    /// in `urgencyBar`: a session container draws ONE continuous
+    /// pair of brackets across all its segments rather than a
+    /// per-segment pair on each row.
+    ///
+    /// Birman: pomodoro is one object in the optimizer's input
+    /// (`.pomodoroSession`), so the timeline shouldn't read as N
+    /// disconnected segments. Hosts compute these from the day's
+    /// event list and pass them in.
+    var hasPomodoroNeighbourBefore: Bool = false
+    var hasPomodoroNeighbourAfter: Bool = false
     /// Convert a standard event into a Pomodoro session (work + break
     /// intervals). Routed through the edit form so the user can tune
     /// work/break/rounds before committing — Birman: explicit control on a
@@ -482,28 +497,67 @@ struct EventRowView: View {
                     .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
             }
 
-            // Pomodoro session marker — when this event is part of a
-            // pomodoro-driven session (`pomodoroConfig != nil`), overlay
-            // a tiny rounded-bracket motif on the urgency bar to suggest
-            // «this event is one segment of a larger structured block».
-            // Reifies the optimizer's `pomodoroSession` intent — the
-            // user sees the grouping as a visible affordance, not just
-            // an icon hidden in the title row.
-            if event.pomodoroConfig != nil {
-                VStack(spacing: 2) {
-                    Capsule()
-                        .stroke(skin.accentColor, lineWidth: 1.5)
-                        .frame(width: DS.Size.accentBarWidth + 3, height: 4)
-                    Spacer()
-                    Capsule()
-                        .stroke(skin.accentColor, lineWidth: 1.5)
-                        .frame(width: DS.Size.accentBarWidth + 3, height: 4)
-                }
-                .frame(width: DS.Size.accentBarWidth + 3, height: DS.Size.accentBarHeight)
-                .accessibilityHidden(true)
+            // Pomodoro session container — only the head and tail of
+            // a contiguous run of same-session segments draw the
+            // capping brackets, while middle segments draw a vertical
+            // continuation stroke. The result reads as one bracketed
+            // group across the whole session, not N disjoint pairs.
+            // Reifies the optimizer's `pomodoroSession` intent: in the
+            // GA's input one session is one object, so the timeline
+            // should reflect that.
+            //
+            // Container rules:
+            //   - top bracket    if no neighbour before (head of run)
+            //   - bottom bracket if no neighbour after  (tail of run)
+            //   - vertical stroke spans the bar height when this row
+            //     has a neighbour either side (middle segment).
+            // A standalone session (single segment, both neighbours
+            // false) renders top + bottom brackets — same as the
+            // previous «pair on every row» behaviour.
+            if event.pomodoroConfig != nil || event.pomodoroSegment != nil {
+                pomodoroContainerOverlay
+                    .frame(width: DS.Size.accentBarWidth + 3, height: DS.Size.accentBarHeight)
+                    .accessibilityHidden(true)
             }
         }
         .padding(.trailing, DS.Spacing.md)
+    }
+
+    /// The bracket / continuation chrome that overlays the urgency bar
+    /// when this event is part of a pomodoro session. Computed off
+    /// `hasPomodoroNeighbourBefore` / `hasPomodoroNeighbourAfter` so
+    /// adjacent same-session segments share one bracketed container.
+    @ViewBuilder
+    private var pomodoroContainerOverlay: some View {
+        VStack(spacing: 0) {
+            if hasPomodoroNeighbourBefore {
+                // Middle / tail position — continuation stroke at top
+                // so the bracket flows from the segment above.
+                Capsule()
+                    .fill(skin.accentColor)
+                    .frame(width: 1.5)
+                    .frame(height: 4)
+            } else {
+                // Head — top cap.
+                Capsule()
+                    .stroke(skin.accentColor, lineWidth: 1.5)
+                    .frame(width: DS.Size.accentBarWidth + 3, height: 4)
+            }
+            Spacer(minLength: 0)
+            if hasPomodoroNeighbourAfter {
+                // Middle / head position — continuation stroke at
+                // bottom so the bracket flows into the segment below.
+                Capsule()
+                    .fill(skin.accentColor)
+                    .frame(width: 1.5)
+                    .frame(height: 4)
+            } else {
+                // Tail — bottom cap.
+                Capsule()
+                    .stroke(skin.accentColor, lineWidth: 1.5)
+                    .frame(width: DS.Size.accentBarWidth + 3, height: 4)
+            }
+        }
     }
 
     // MARK: - Time Column
