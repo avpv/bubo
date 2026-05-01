@@ -27,6 +27,13 @@ struct EventRowView: View {
     var onSplitTask: ((CalendarEvent) -> Void)? = nil
     var onProtectBlock: ((CalendarEvent) -> Void)? = nil
     var onAddPrep: ((CalendarEvent) -> Void)? = nil
+    /// Quick-pick prep buffer minutes — 5/10/15/30 from a sub-menu.
+    /// Companion to `onAddPrep` (which routes through the palette);
+    /// when set, the context menu shows a sub-menu of fixed
+    /// durations for one-tap insertion. Reifies `meetingPrep(minutes:)`
+    /// at the per-event level without making the user type into
+    /// the palette. nil = sub-menu hidden, falls back to `onAddPrep`.
+    var onAddPrepQuick: ((CalendarEvent, Int) -> Void)? = nil
     /// Convert a standard event into a Pomodoro session (work + break
     /// intervals). Routed through the edit form so the user can tune
     /// work/break/rounds before committing — Birman: explicit control on a
@@ -361,11 +368,30 @@ struct EventRowView: View {
                     }
                 }
 
-                if event.meetingLink != nil || event.calendarName != nil, let onAddPrep {
-                    Button {
-                        onAddPrep(event)
-                    } label: {
-                        Label("Add Prep Time", systemImage: "note.text")
+                if event.meetingLink != nil || event.calendarName != nil {
+                    if let quickHandler = onAddPrepQuick {
+                        // Quick-pick sub-menu — reifies meetingPrep at
+                        // the per-event level with one-tap durations.
+                        // Skips the palette round-trip the slower
+                        // `onAddPrep` path takes.
+                        Menu {
+                            Button("5 min") { quickHandler(event, 5) }
+                            Button("10 min") { quickHandler(event, 10) }
+                            Button("15 min") { quickHandler(event, 15) }
+                            Button("30 min") { quickHandler(event, 30) }
+                            if let onAddPrep {
+                                Divider()
+                                Button("Custom\u{2026}") { onAddPrep(event) }
+                            }
+                        } label: {
+                            Label("Add Prep Time", systemImage: "note.text")
+                        }
+                    } else if let onAddPrep {
+                        Button {
+                            onAddPrep(event)
+                        } label: {
+                            Label("Add Prep Time", systemImage: "note.text")
+                        }
                     }
                 }
 

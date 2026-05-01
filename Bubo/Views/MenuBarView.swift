@@ -1837,6 +1837,22 @@ struct MenuBarView: View {
                             paletteContext = PaletteContext(seedEvent: event, seedRecipeId: "prep-meeting")
                         }
                     },
+                    onAddPrepQuick: { event, minutes in
+                        // One-tap meetingPrep: scope to this event,
+                        // fixed minutes, run through the same toast +
+                        // undo pipe as other quick-actions. Toast label
+                        // says «N min prep before <title>» so the user
+                        // sees what was just inserted.
+                        Task {
+                            var req = OptimizationRequest(name: "Add prep")
+                            req.add(.onlyOptimize(eventIds: [event.id]))
+                            req.add(.meetingPrep(minutes: minutes))
+                            let trimmed = event.title.count > 24
+                                ? String(event.title.prefix(24)) + "\u{2026}"
+                                : event.title
+                            await runQuickAction(req, label: "\(minutes) min prep before \u{201C}\(trimmed)\u{201D}")
+                        }
+                    },
                     onConvertToPomodoro: { event in
                         convertEventToPomodoro(event)
                     },
