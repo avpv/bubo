@@ -468,6 +468,14 @@ struct MenuBarView: View {
             // independent of the one-shot `hasStartedSync` guard below.
             refreshPermissionSnapshots()
 
+            // AutoDefer runs once per calendar day. Calling on every
+            // popover open is cheap (the service early-exits when
+            // `lastRunDate` is today) and covers the «opened a fresh
+            // morning» case automatically. Birman: «пусть потеет
+            // машина» — overdue rows are an artefact of the previous
+            // day, the user shouldn't have to scroll past them today.
+            runAutoDeferIfNeeded()
+
             guard !hasStartedSync else { return }
             hasStartedSync = true
             reminderService.updateSettings(settings)
@@ -1821,6 +1829,32 @@ struct MenuBarView: View {
     ///
     /// Async so callers (e.g. the spill-over marker action-link) can await
     /// and surface a loading spinner during the optimizer call. Fire-and-
+    // MARK: - Auto Defer
+
+    /// Run the once-per-day backlog deferral pass. Wired from `onAppear`
+    /// so every popover open during a fresh calendar day catches up the
+    /// overdue tasks; the service itself early-exits when today's run
+    /// already happened. The toast threading mirrors `runQuickAction`'s
+    /// undo channel — same `arrow.uturn.backward` icon language as the
+    /// optimizer's reversible operations.
+    @MainActor
+    private func runAutoDeferIfNeeded() {
+        guard let backlog = optimizerService.backlogService else { return }
+        let service = AutoDeferService(backlogService: backlog)
+        let report = service.runIfNeeded()
+        guard report.count > 0 else { return }
+        let headline = report.count == 1
+            ? "1 overdue task moved to tomorrow"
+            : "\(report.count) overdue tasks moved to tomorrow"
+        toastState.showSuccess(headline, icon: "arrow.uturn.backward") {
+            // Undo runs the captured restore closure on the main actor.
+            // Wrapping the call in `Task` lets us keep the toast's
+            // synchronous Undo signature without forcing AutoDefer to
+            // expose a sync rollback path.
+            Task { await report.undo() }
+        }
+    }
+
     /// forget callers wrap in `Task { ... }`.
     @MainActor
     private func runQuickAction(_ request: OptimizationRequest, label: String) async {
