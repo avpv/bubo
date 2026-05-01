@@ -27,14 +27,14 @@ struct PlanDayMenu: View {
     var body: some View {
         Menu {
             Button {
-                Task { await runRequest(IntentPresets.organizeDay, "Organized today") }
+                Task { await runRequest(.organizeDay, "Organized today") }
             } label: {
                 Label("Organize today", systemImage: "wand.and.stars")
             }
 
             Button {
                 Task { await runRequest(
-                    IntentPresets.findFocus(minutes: 120, period: .morning),
+                    .findFocus(minutes: 120, period: .morning),
                     "Found 2\u{00A0}h focus"
                 ) }
             } label: {
@@ -42,25 +42,25 @@ struct PlanDayMenu: View {
             }
 
             Button {
-                Task { await runRequest(IntentPresets.lowEnergyDay, "Low energy day") }
+                Task { await runRequest(.lowEnergyDay, "Low energy day") }
             } label: {
                 Label("Low energy day", systemImage: "leaf")
             }
 
             Button {
-                Task { await runRequest(IntentPresets.pomodoroBlock, "Scheduled pomodoro day") }
+                Task { await runRequest(.pomodoroBlock, "Scheduled pomodoro day") }
             } label: {
                 Label("Schedule pomodoro day", systemImage: "timer")
             }
 
             Button {
-                Task { await runRequest(IntentPresets.batchMeetingsPreset, "Batched meetings") }
+                Task { await runRequest(.batchMeetingsPreset, "Batched meetings") }
             } label: {
                 Label("Batch meetings", systemImage: "person.2")
             }
 
             Button {
-                Task { await runRequest(IntentPresets.planWeek, "Planned the week") }
+                Task { await runRequest(.planWeek, "Planned the week") }
             } label: {
                 Label("Plan whole week", systemImage: "calendar")
             }

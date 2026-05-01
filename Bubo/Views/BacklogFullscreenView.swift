@@ -550,7 +550,6 @@ struct BacklogFullscreenView: View {
             isUrgent: BacklogLogic.isUrgent(task),
             canMoveUp: canMoveUp(task),
             canMoveDown: canMoveDown(task),
-            defaultTaskDurationMinutes: optimizerService.defaultTaskDurationMinutes,
             onComplete: { complete(task) },
             onEdit: { onEditTask(task) },
             onDelete: { delete(task) },
@@ -558,9 +557,6 @@ struct BacklogFullscreenView: View {
             onReorderDrop: { dropped in
                 handleReorderDrop(dropped: dropped, targetId: task.id)
             },
-            onReschedule: onRescheduleTask.map { handler in { handler(task) } },
-            onSetDeadline: { deadlinePickerTask = task },
-            onToggleUrgent: { toggleUrgent(task) },
             onMoveUp: { moveTask(task, by: -1) },
             onMoveDown: { moveTask(task, by: +1) },
             onMoveToTop: { moveTaskToEdge(task, toTop: true) },
@@ -568,7 +564,11 @@ struct BacklogFullscreenView: View {
             isFocused: focusedTaskId == task.id,
             onFocusPrev: { focusRow(offsetFrom: task.id, by: -1) },
             onFocusNext: { focusRow(offsetFrom: task.id, by: +1) },
-            sprintHotKey: hotKey
+            sprintHotKey: hotKey,
+            onReschedule: onRescheduleTask.map { handler in { handler(task) } },
+            onSetDeadline: { deadlinePickerTask = task },
+            onToggleUrgent: { toggleUrgent(task) },
+            defaultTaskDurationMinutes: optimizerService.defaultTaskDurationMinutes
         )
         .focusable()
         .focused($focusedTaskId, equals: task.id)

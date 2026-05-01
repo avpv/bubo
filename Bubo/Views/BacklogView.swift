@@ -894,8 +894,6 @@ struct BacklogView: View {
             isDragging: coordinator?.draggedTask?.taskId == task.id,
             canMoveUp: canMoveUp(task),
             canMoveDown: canMoveDown(task),
-            wasJustDropped: lastDroppedTaskId == task.id,
-            defaultTaskDurationMinutes: optimizerService.defaultTaskDurationMinutes,
             onComplete: { completeTaskWithUndo(task) },
             onEdit: { onEditTask?(task) },
             onDelete: { onDeleteTask?(task) },
@@ -908,9 +906,6 @@ struct BacklogView: View {
             onReorderDrop: { dropped in
                 handleReorderDrop(dropped: dropped, targetId: task.id)
             },
-            onReschedule: onRescheduleTask.map { handler in { handler(task) } },
-            onSetDeadline: { deadlinePickerTask = task },
-            onToggleUrgent: { toggleUrgent(task) },
             onMoveUp: { moveTask(task, by: -1) },
             onMoveDown: { moveTask(task, by: +1) },
             onMoveToTop: { moveTaskToEdge(task, toTop: true) },
@@ -921,7 +916,12 @@ struct BacklogView: View {
             slotPreview: slotPreviewCache.cached(durationMinutes: task.durationMinutes),
             onHoverChanged: { hovering in
                 handleRowHover(task: task, hovering: hovering)
-            }
+            },
+            onReschedule: onRescheduleTask.map { handler in { handler(task) } },
+            onSetDeadline: { deadlinePickerTask = task },
+            onToggleUrgent: { toggleUrgent(task) },
+            wasJustDropped: lastDroppedTaskId == task.id,
+            defaultTaskDurationMinutes: optimizerService.defaultTaskDurationMinutes
         )
         .focusable()
         .focused($focusedTaskId, equals: task.id)
