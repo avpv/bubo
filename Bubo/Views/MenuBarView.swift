@@ -1772,7 +1772,9 @@ struct MenuBarView: View {
                         withAnimation(DS.Animation.quick) {
                             optimizerService.toggleExclude(eventId: event.id)
                         }
-                    }
+                    },
+                    energyAtStartHour: optimizerService.energyCheckInService?
+                        .predictEnergy(atHour: Calendar.current.component(.hour, from: event.startTime))
                 )
                 }
             case .slot(let start, let end):

@@ -59,6 +59,16 @@ struct EventRowView: View {
     /// nil = item hidden.
     var onToggleExclude: ((CalendarEvent) -> Void)? = nil
 
+    /// Optional 0…1 energy prediction for this event's start hour,
+    /// sourced from `EnergyCheckInService.predictEnergy(atHour:)`.
+    /// When ≥ 0.7 the row surfaces a tiny ⚡ glyph next to the title
+    /// to flag «peak hour, good for focus». When ≤ 0.3 the glyph
+    /// turns into a leaf (low-energy hint). Otherwise hidden — calm
+    /// hours need no decoration. Reifies the `peakEnergy` /
+    /// `lowEnergy` / `matchEnergyCurve` intents without requiring
+    /// a separate energy column.
+    var energyAtStartHour: Double? = nil
+
     /// When true, the row plays a brief highlight glow to draw attention
     /// to newly created/changed events after recipe application.
     var isFreshlyCreated: Bool = false
@@ -464,6 +474,24 @@ struct EventRowView: View {
                         .foregroundStyle(pomodoroSegmentColor(segment))
                         .contentTransition(.symbolEffect(.replace))
                         .accessibilityLabel(segment.label)
+                }
+
+                // Energy hint glyph — shown only at the extremes (peak
+                // ⚡ / low 🍃) so calm-energy hours stay decoration-free.
+                // The threshold uses the same 0.7 / 0.3 split the
+                // EnergyCheckInService uses internally for «high» /
+                // «low» buckets, so the visual matches the service's
+                // own intent.
+                if let energy = energyAtStartHour, energy >= 0.7 || energy <= 0.3 {
+                    Image(systemName: energy >= 0.7 ? "bolt.fill" : "leaf")
+                        .font(.system(size: DS.Size.iconSmall - 2, weight: .medium))
+                        .foregroundStyle(energy >= 0.7
+                                         ? skin.accentColor
+                                         : skin.resolvedTextTertiary)
+                        .help(energy >= 0.7
+                              ? "Peak energy hour — good for focus work"
+                              : "Low energy hour — best for routine tasks")
+                        .accessibilityLabel(energy >= 0.7 ? "Peak energy" : "Low energy")
                 }
 
                 // Lock affordance — solid lock when this event is in
