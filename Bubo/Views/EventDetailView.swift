@@ -9,6 +9,13 @@ struct EventDetailView: View {
     var onDeleteSeries: ((CalendarEvent) -> Void)? = nil
     var onDeleteOccurrence: ((CalendarEvent) -> Void)? = nil
     var onTimer: ((CalendarEvent) -> Void)? = nil
+    /// Open the command palette seeded with this event (per-event scope
+    /// optimizer entry — header overflow menu's «Reschedule…» item).
+    var onReschedule: ((CalendarEvent) -> Void)? = nil
+    /// Run the optimizer's «extend to adjacent free slot» preset for this
+    /// event. Surfaces in the header overflow menu — disabled for read-only
+    /// external events (the optimizer can't move them).
+    var onExtend: ((CalendarEvent) -> Void)? = nil
 
     @State private var showDeleteConfirmation = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -32,6 +39,43 @@ struct EventDetailView: View {
         event.isLocalEvent
     }
 
+    /// Header overflow menu hosting optimizer-driven actions (Reschedule,
+    /// Extend). Lives in the trailing slot of `PopoverHeader` so the footer
+    /// can keep just two explicit affordances — Edit and Delete. Returns
+    /// `nil` when neither callback is wired so the header stays balanced.
+    /// Styling is left to the active skin — match the back button pattern
+    /// (.borderless) so the icon picks up skin foreground/tint via env.
+    private var optimizerOverflowMenu: AnyView? {
+        guard onReschedule != nil || onExtend != nil else { return nil }
+        let menu = Menu {
+            if onReschedule != nil {
+                Button {
+                    Haptics.tap()
+                    onReschedule?(event)
+                } label: {
+                    Label("Reschedule\u{2026}", systemImage: "calendar.badge.clock")
+                }
+            }
+            if onExtend != nil {
+                Button {
+                    Haptics.tap()
+                    onExtend?(event)
+                } label: {
+                    Label("Extend to next free slot", systemImage: "arrow.right.to.line")
+                }
+                .disabled(!isLocal)
+            }
+        } label: {
+            Label("More actions", systemImage: "ellipsis.circle")
+                .labelStyle(.iconOnly)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("More actions")
+        return AnyView(menu)
+    }
+
     var body: some View {
         // HIG: Use TimelineView for time-based UI updates instead of Timer.publish
         TimelineView(.periodic(from: .now, by: 1)) { context in
@@ -40,7 +84,8 @@ struct EventDetailView: View {
             PopoverHeader(
                 title: isLocal ? (event.eventType == .pomodoro ? "Pomodoro" : "Event") : nil,
                 showBack: true,
-                onBack: onBack
+                onBack: onBack,
+                trailing: optimizerOverflowMenu
             )
 
             ScrollView {
