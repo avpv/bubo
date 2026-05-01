@@ -181,24 +181,23 @@ struct EventDetailView: View {
             // Actions (only for local events)
             SkinSeparator()
 
-            // Single primary CTA: «Edit ▾» Menu hosts every per-event action
-            // (Edit details, Reschedule, Extend, Delete). Birman: «не плодь
-            // кнопки» — the existing chevron-button affordance reveals
-            // scope-appropriate items rather than crowding the footer with
-            // three primary buttons. Read-only external events get only the
-            // Reschedule path enabled — the optimizer can't move them, but
-            // the palette still composes a move via Apple-Calendar APIs.
+            // Split-button CTA: clicking «Edit» fires the primary action
+            // (open edit-details for local events, fall back to Reschedule
+            // for read-only external ones). The chevron disclosure reveals
+            // the secondary per-event actions (Reschedule, Extend, Delete).
             HStack {
                 Spacer()
 
                 Menu {
-                    Button {
-                        Haptics.tap()
-                        onEdit?(event)
-                    } label: {
-                        Label("Edit details\u{2026}", systemImage: "pencil")
+                    if !isLocal {
+                        Button {
+                            Haptics.tap()
+                            onEdit?(event)
+                        } label: {
+                            Label("Edit details\u{2026}", systemImage: "pencil")
+                        }
+                        .disabled(true)
                     }
-                    .disabled(!isLocal)
 
                     if onReschedule != nil {
                         Button {
@@ -234,6 +233,13 @@ struct EventDetailView: View {
                     }
                 } label: {
                     Label("Edit", systemImage: "pencil")
+                } primaryAction: {
+                    Haptics.tap()
+                    if isLocal {
+                        onEdit?(event)
+                    } else if onReschedule != nil {
+                        onReschedule?(event)
+                    }
                 }
                 .menuStyle(.button)
                 .buttonStyle(.action(role: .primary))
