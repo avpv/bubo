@@ -55,6 +55,10 @@ struct BacklogView: View {
     /// `runQuickAction` pipe as the backlog-wide path; user gets the
     /// undo toast for free. nil = the menu item is hidden.
     var onScheduleTask: ((BacklogTask) -> Void)? = nil
+    /// Per-task split — sends `.splitLong(maxMinutes:)` so the GA
+    /// chunks the task into 2+ sequential blocks. Surfaced only on
+    /// rows ≥ 90 min by the row's own gating. nil = hidden.
+    var onSplitTask: ((BacklogTask) -> Void)? = nil
     /// Open the command palette — `SmartActions` calm-state `More…` and
     /// the global `⌘K` shortcut both end up here. Replaces the standalone
     /// `Optimize ⌘K` chip that used to live above the timeline.
@@ -1019,6 +1023,7 @@ struct BacklogView: View {
                 handleRowHover(task: task, hovering: hovering)
             },
             onFindSlot: onScheduleTask.map { handler in { handler(task) } },
+            onSplitTask: onSplitTask.map { handler in { handler(task) } },
             onSetPreferredPeriod: { period in
                 var updated = task
                 updated.preferredPeriod = period

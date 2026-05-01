@@ -53,6 +53,8 @@ struct BacklogFullscreenView: View {
     /// Per-task scope optimizer entry — see `BacklogView.onScheduleTask`.
     /// Surfaces «Find a slot now» in the row context menu.
     var onScheduleTask: ((BacklogTask) -> Void)? = nil
+    /// See `BacklogView.onSplitTask` — same handler routed through.
+    var onSplitTask: ((BacklogTask) -> Void)? = nil
     /// Open the command palette — `SmartActions` calm-state `More…` and
     /// the global `⌘K` shortcut both end up here.
     var onOpenPalette: (() -> Void)? = nil
@@ -834,6 +836,7 @@ struct BacklogFullscreenView: View {
             sprintHotKey: hotKey,
             proposedSlot: proposedSlot,
             onFindSlot: onScheduleTask.map { handler in { handler(task) } },
+            onSplitTask: onSplitTask.map { handler in { handler(task) } },
             onSetPreferredPeriod: { period in
                 var updated = task
                 updated.preferredPeriod = period

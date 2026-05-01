@@ -80,6 +80,15 @@ struct BacklogTaskRow: View {
     /// scheduling. nil = sub-menu hidden.
     var onSetPreferredPeriod: ((Period?) -> Void)? = nil
 
+    /// «Split into shorter blocks» — runs the optimizer in scope of
+    /// this task with `.splitLong(maxMinutes:)` so the GA chunks it
+    /// into two or more sequential blocks. Surfaced only when the
+    /// task is long enough for splitting to make sense (≥ 90 min);
+    /// shorter tasks suppress the menu item to avoid silly proposals
+    /// like «split a 30-min call». Reifies the `splitLong` intent at
+    /// the per-row level. nil = action hidden.
+    var onSplitTask: (() -> Void)? = nil
+
     /// Reschedule this task via the command palette (per-task scope optimizer
     /// entry point). Opens ⌘K seeded with the task so it lands on the
     /// «Schedule "<title>"» / «Find best time» suggestions. nil = no
@@ -431,6 +440,10 @@ struct BacklogTaskRow: View {
                 }
                 if canToggleUrgent, let toggle = onToggleUrgent {
                     Button(urgencyToggleLabel) { toggle() }
+                }
+                if let split = onSplitTask, task.durationMinutes >= 90 {
+                    Button("Split into shorter blocks") { split() }
+                        .help("Run the optimizer to chunk this task into 2+ sequential blocks")
                 }
                 if let setPeriod = onSetPreferredPeriod {
                     // Sub-menu — period preferences are infrequent edits

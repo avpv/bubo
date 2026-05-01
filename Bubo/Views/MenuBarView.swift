@@ -376,6 +376,18 @@ struct MenuBarView: View {
                                         : task.title
                                     await runQuickAction(req, label: "Found slot for \u{201C}\(trimmed)\u{201D}")
                                 }
+                            },
+                            onSplitTask: { task in
+                                Task {
+                                    var req = OptimizationRequest(name: "Split task")
+                                    req.add(.includeBacklogTasks(ids: [task.id]))
+                                    req.add(.splitLong(maxMinutes: max(30, task.durationMinutes / 2)))
+                                    req.add(.findSlotsForBacklog)
+                                    let trimmed = task.title.count > 24
+                                        ? String(task.title.prefix(24)) + "\u{2026}"
+                                        : task.title
+                                    await runQuickAction(req, label: "Split \u{201C}\(trimmed)\u{201D}")
+                                }
                             }
                         )
                         .transition(
@@ -885,6 +897,23 @@ struct MenuBarView: View {
                             ? String(task.title.prefix(24)) + "\u{2026}"
                             : task.title
                         await runQuickAction(req, label: "Found slot for \u{201C}\(trimmed)\u{201D}")
+                    }
+                },
+                onSplitTask: { task in
+                    // Per-task `splitLong` — chunks the task into 2+
+                    // sequential blocks of half-duration each. Same
+                    // pipe as findSlot above; toast labels the
+                    // operation so the user can recognise it in the
+                    // history.
+                    Task {
+                        var req = OptimizationRequest(name: "Split task")
+                        req.add(.includeBacklogTasks(ids: [task.id]))
+                        req.add(.splitLong(maxMinutes: max(30, task.durationMinutes / 2)))
+                        req.add(.findSlotsForBacklog)
+                        let trimmed = task.title.count > 24
+                            ? String(task.title.prefix(24)) + "\u{2026}"
+                            : task.title
+                        await runQuickAction(req, label: "Split \u{201C}\(trimmed)\u{201D}")
                     }
                 },
                 focusRequested: $focusTaskInput,
