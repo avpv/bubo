@@ -346,6 +346,22 @@ struct MenuBarView: View {
                             onRescheduleTask: { task in
                                 navigation = .list
                                 paletteContext = PaletteContext(seedTask: task)
+                            },
+                            onScheduleTask: { task in
+                                // Per-task scope: same pipe as the inline
+                                // BacklogView's `onScheduleTask`. We don't
+                                // pop back to .list here — the user is
+                                // working through the fullscreen list and
+                                // the optimizer applies in-place.
+                                Task {
+                                    var req = OptimizationRequest(name: "Find slot")
+                                    req.add(.includeBacklogTasks(ids: [task.id]))
+                                    req.add(.findSlotsForBacklog)
+                                    let trimmed = task.title.count > 24
+                                        ? String(task.title.prefix(24)) + "\u{2026}"
+                                        : task.title
+                                    await runQuickAction(req, label: "Found slot for \u{201C}\(trimmed)\u{201D}")
+                                }
                             }
                         )
                         .transition(
@@ -800,6 +816,21 @@ struct MenuBarView: View {
                 },
                 onRescheduleTask: { task in
                     paletteContext = PaletteContext(seedTask: task)
+                },
+                onScheduleTask: { task in
+                    // Per-task `findSlotsForBacklog` — same async pipe as
+                    // the backlog-wide path, scoped to one task via
+                    // `includeBacklogTasks(ids:)`. The user gets the
+                    // standard undo toast on success.
+                    Task {
+                        var req = OptimizationRequest(name: "Find slot")
+                        req.add(.includeBacklogTasks(ids: [task.id]))
+                        req.add(.findSlotsForBacklog)
+                        let trimmed = task.title.count > 24
+                            ? String(task.title.prefix(24)) + "\u{2026}"
+                            : task.title
+                        await runQuickAction(req, label: "Found slot for \u{201C}\(trimmed)\u{201D}")
+                    }
                 },
                 focusRequested: $focusTaskInput,
                 autoExpand: autoExpand

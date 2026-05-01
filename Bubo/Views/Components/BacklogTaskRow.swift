@@ -65,6 +65,14 @@ struct BacklogTaskRow: View {
     /// to the add-task field instead.
     var sprintHotKey: Int? = nil
 
+    /// «Find a slot for this task» — runs the optimizer in scope of this
+    /// single task and applies the result. Mirrors the SmartActions hard
+    /// path at the per-task level: instead of «schedule the whole
+    /// overflow», this is «schedule just this one row». Birman: «команды
+    /// живут рядом со своим объектом» — нет нужды открывать палитру и
+    /// формулировать запрос для одной задачи. nil = action hidden.
+    var onFindSlot: (() -> Void)? = nil
+
     /// Reschedule this task via the command palette (per-task scope optimizer
     /// entry point). Opens ⌘K seeded with the task so it lands on the
     /// «Schedule "<title>"» / «Find best time» suggestions. nil = no
@@ -385,12 +393,17 @@ struct BacklogTaskRow: View {
             Button("Edit details\u{2026}") { onEdit() }
 
             // Per-task scope optimizer actions — Birman: «команды живут
-            // рядом со своим объектом». «Reschedule» seeds ⌘K with this
+            // рядом со своим объектом». «Find a slot now» runs the
+            // optimizer in scope of this single task (per-task reification
+            // of `findSlotsForBacklog`); «Reschedule» seeds ⌘K with this
             // task; «Set deadline» opens an inline date picker; «Mark
             // urgent» toggles a today deadline (the same deadline that
             // drives the leading red stripe).
-            if onReschedule != nil || onSetDeadline != nil || canToggleUrgent {
+            if onFindSlot != nil || onReschedule != nil || onSetDeadline != nil || canToggleUrgent {
                 Divider()
+                if let findSlot = onFindSlot {
+                    Button("Find a slot now") { findSlot() }
+                }
                 if let reschedule = onReschedule {
                     Button("Reschedule\u{2026}") { reschedule() }
                 }

@@ -49,6 +49,12 @@ struct BacklogView: View {
     /// same `runQuickAction` helper that drives the hard-overflow path.
     /// Wired from `MenuBarView.runQuickAction(_:label:)`.
     var onRunRequest: ((OptimizationRequest, String) async -> Void)? = nil
+    /// Per-task scope optimizer entry — context menu's «Find a slot now».
+    /// Builds an `OptimizationRequest` carrying `.includeBacklogTasks(ids:)`
+    /// + `.findSlotsForBacklog` so the GA only places the one task. Same
+    /// `runQuickAction` pipe as the backlog-wide path; user gets the
+    /// undo toast for free. nil = the menu item is hidden.
+    var onScheduleTask: ((BacklogTask) -> Void)? = nil
     /// Open the command palette — `SmartActions` calm-state `More…` and
     /// the global `⌘K` shortcut both end up here. Replaces the standalone
     /// `Optimize ⌘K` chip that used to live above the timeline.
@@ -997,6 +1003,7 @@ struct BacklogView: View {
             onHoverChanged: { hovering in
                 handleRowHover(task: task, hovering: hovering)
             },
+            onFindSlot: onScheduleTask.map { handler in { handler(task) } },
             onReschedule: onRescheduleTask.map { handler in { handler(task) } },
             onSetDeadline: { deadlinePickerTask = task },
             onToggleUrgent: { toggleUrgent(task) },

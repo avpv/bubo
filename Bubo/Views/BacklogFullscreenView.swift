@@ -50,6 +50,9 @@ struct BacklogFullscreenView: View {
     /// fire soft-suggestion candidates and `Plan day…` presets through the
     /// same `runQuickAction` helper that drives the hard-overflow path.
     var onRunRequest: ((OptimizationRequest, String) async -> Void)? = nil
+    /// Per-task scope optimizer entry — see `BacklogView.onScheduleTask`.
+    /// Surfaces «Find a slot now» in the row context menu.
+    var onScheduleTask: ((BacklogTask) -> Void)? = nil
     /// Open the command palette — `SmartActions` calm-state `More…` and
     /// the global `⌘K` shortcut both end up here.
     var onOpenPalette: (() -> Void)? = nil
@@ -631,6 +634,7 @@ struct BacklogFullscreenView: View {
             onFocusNext: { focusRow(offsetFrom: task.id, by: +1) },
             sprintHotKey: hotKey,
             proposedSlot: proposedSlot,
+            onFindSlot: onScheduleTask.map { handler in { handler(task) } },
             onReschedule: onRescheduleTask.map { handler in { handler(task) } },
             onSetDeadline: { deadlinePickerTask = task },
             onToggleUrgent: { toggleUrgent(task) },
