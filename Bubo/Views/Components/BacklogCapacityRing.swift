@@ -259,8 +259,11 @@ struct BacklogCapacityPopover: View {
                 .font(.footnote)
                 .foregroundStyle(skin.resolvedTextSecondary)
             Spacer(minLength: DS.Spacing.sm)
+            // `DS.Typography.metric` — same voice as the inline header
+            // verdict, so the popover reads as a typographic continuation
+            // of the badge that opens it.
             Text(value)
-                .font(.footnote.monospacedDigit())
+                .font(DS.Typography.metric(skin: skin))
                 .foregroundStyle(skin.resolvedTextPrimary)
         }
     }

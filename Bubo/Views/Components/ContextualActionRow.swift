@@ -73,11 +73,16 @@ struct ContextualActionRow: View {
                         // duration guesses, ⌘K). Single shared voice so the
                         // user learns to recognise «this is the computer
                         // thinking out loud», never their own input.
+                        // `numericText` transition keeps the digit columns
+                        // («4 tasks · 4 h 32 min over») smooth as the
+                        // forecast updates — without it, every overflow
+                        // delta swaps with a hard cut.
                         Text(subtext)
                             .font(DS.Typography.machineHint)
                             .foregroundStyle(skin.resolvedTextTertiary)
                             .lineLimit(1)
                             .truncationMode(.tail)
+                            .contentTransition(.numericText())
                     }
                 }
 
