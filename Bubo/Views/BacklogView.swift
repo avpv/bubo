@@ -322,9 +322,9 @@ struct BacklogView: View {
                 // «After hours · X queued» — lives on its own row directly
                 // under the header. Pulled out of the header HStack so the
                 // red «over capacity» warning no longer crowds the controls
-                // row (count, urgent pill, fullscreen, overflow); the
-                // diagnosis gets its own line of breathing room while the
-                // header stays a clean row of glanceable facts and actions.
+                // row (count, fullscreen, overflow); the diagnosis gets its
+                // own line of breathing room while the header stays a clean
+                // row of glanceable facts and actions.
                 if !allActiveTasks.isEmpty {
                     BacklogCapacityLabel(
                         pendingMinutes: pendingWorkloadMinutes,
@@ -334,6 +334,10 @@ struct BacklogView: View {
                     .padding(.horizontal, DS.Spacing.sm)
                     .padding(.bottom, DS.Spacing.sm)
                 }
+                // Urgent pill — own row, mirrors `BacklogFullscreenView`.
+                // Раньше жил внутри header'а с middot-сепаратором и спорил
+                // с over-capacity warning'ом за один и тот же красный канал.
+                urgentRow
                 // SmartActions sits directly between the diagnosis (header
                 // verdict + capacity ring) and the evidence (task list).
                 // Birman: «прямое действие на месте проблемы». Renders one
@@ -585,16 +589,9 @@ struct BacklogView: View {
                 smartSortIndicator
             }
 
-            // Urgent-count pill — now a real control. Clicking it toggles
-            // the urgent-only filter. The leading middot visually frames
-            // the pill as a third sibling fact next to the verdict and the
-            // count, so the row reads as «verdict · count · urgent» —
-            // three separable thoughts instead of one runny line.
-            // Birman: «информация — это кнопка», иначе это просто краска.
-            if urgentCount > 0 {
-                headerSeparator
-                urgentFilterButton(urgentCount: urgentCount)
-            }
+            // Urgent pill переехал на свою строку под capacity verdict'ом —
+            // см. `urgentRow` в body. Зеркалит fullscreen mode, где красный
+            // канал тоже отдельной строкой не спорит с over-capacity ring'ом.
 
             Spacer()
 
@@ -694,15 +691,19 @@ struct BacklogView: View {
         .accessibilityLabel("Smart sort active, ordered by priority within capacity groups — tap to disable")
     }
 
-    /// Middot divider used between the three header facts (verdict, count,
-    /// urgent). Tertiary tint so it reads as punctuation, not a sibling
-    /// piece of information. `accessibilityHidden` keeps VoiceOver from
-    /// announcing «middle dot» between every field.
-    private var headerSeparator: some View {
-        Text("\u{00B7}")
-            .font(.footnote)
-            .foregroundStyle(skin.resolvedTextTertiary)
-            .accessibilityHidden(true)
+    /// Urgent pill row — sits directly under the capacity verdict, on its
+    /// own line. Mirrors `BacklogFullscreenView.blockHeader`'s urgent row so
+    /// inline и fullscreen режимы читаются одинаково: header — glanceable
+    /// facts and controls; capacity verdict — diagnosis; urgent — отдельный
+    /// информационный сигнал «N задач горят». Hidden when nothing urgent.
+    @ViewBuilder
+    private var urgentRow: some View {
+        let urgentCount = backlogService.urgent(withinDays: 2).count
+        if urgentCount > 0 {
+            urgentFilterButton(urgentCount: urgentCount)
+                .padding(.horizontal, DS.Spacing.sm)
+                .padding(.bottom, DS.Spacing.sm)
+        }
     }
 
     /// Fullscreen button — `arrow.up.left.and.arrow.down.right` это родная
@@ -743,13 +744,6 @@ struct BacklogView: View {
                 }
             }
         } label: {
-            // Middot was a leftover from the «Tasks N · 1 urgent» layout —
-            // it visually attached the urgent pill to the count when both
-            // shared a label. With the «Tasks» word gone, the middot now
-            // glues two separate controls together instead of separating
-            // them. The natural HStack gap (`DS.Spacing.sm` from the
-            // header) does the spacing job better, читая «count · pill»
-            // как два самостоятельных объекта.
             // `urgentColor` (desaturated red) sits in the same family as
             // the over-capacity ring's saturated red but at lower
             // intensity, so the two no longer fight for the same eye fix.
