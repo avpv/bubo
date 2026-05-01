@@ -405,6 +405,30 @@ struct SkinDefinition: Identifiable, Equatable {
         Color(nsColor: .systemRed).opacity(0.7)
     }
 
+    // MARK: - Energy ramp (peak ↔ low tint)
+    //
+    // Two-stop gradient anchors the «peak energy» / «low energy» visual
+    // language across the app — the `EventRowView`'s ⚡/🍃 glyph reads
+    // accent vs. tertiary today, but a future timeline overlay (planned
+    // in /root/.claude/plans/soft-scribbling-dragonfly.md) tints the
+    // hourly band by predicted energy and reads from these two stops.
+    //
+    // Defaults derive from the skin's accent (peak) and a desaturated
+    // tertiary (low). Skin authors who want a cool-blue → warm-amber
+    // ramp can override per-skin once the overlay lands.
+
+    /// Tint for «peak energy» hours / contexts. Defaults to the skin's
+    /// own accent so the ⚡-marker reads as the user's own brand colour.
+    var resolvedPeakEnergyColor: Color { accentColor }
+
+    /// Tint for «low energy» hours / contexts. Defaults to a soft
+    /// tertiary-green family so it reads as «calm, low-output», not
+    /// «warning». The 🍃 glyph picks it up via `resolvedTextTertiary`
+    /// today; the future timeline overlay can use this stop directly.
+    var resolvedLowEnergyColor: Color {
+        Color(nsColor: .systemGreen).opacity(0.6)
+    }
+
     // MARK: - Text colors (system)
 
     var resolvedTextPrimary: Color { Color(nsColor: .labelColor) }
