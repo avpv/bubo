@@ -43,6 +43,8 @@ struct EditTaskView: View {
     @State private var notes: String
     @State private var urlString: String
     @State private var location: String
+    @State private var subtasks: [Subtask]
+    @State private var newSubtaskTitle: String = ""
     @State private var dependsOn: [String]
     @State private var newDependencyId: String? = nil
     @State private var dependencyQuery: String = ""
@@ -105,12 +107,14 @@ struct EditTaskView: View {
         _notes = State(initialValue: task.notes ?? "")
         _urlString = State(initialValue: task.url?.absoluteString ?? "")
         _location = State(initialValue: task.location ?? "")
+        _subtasks = State(initialValue: task.subtasks)
         _dependsOn = State(initialValue: task.dependsOn)
         // Open "More options" if the task already has values stored there,
         // so editing them doesn't require a second click to find them.
         let hasMoreState = !(task.notes ?? "").isEmpty
             || task.url != nil
             || !(task.location ?? "").isEmpty
+            || !task.subtasks.isEmpty
             || !task.dependsOn.isEmpty
             || task.isRecurring
         _showMoreOptions = State(initialValue: hasMoreState)
@@ -375,6 +379,16 @@ struct EditTaskView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
 
+                        // Subtasks — Apple-style nested checklist. Lives inside
+                        // the parent task (not a separate `BacklogTask`) so it
+                        // doesn't pollute the optimizer queue with a hundred
+                        // tiny rows.
+                        sectionBlock {
+                            subtasksSection
+                                .padding(DS.Spacing.md)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+
                         // Recurrence — toggle plus a free-form tag that
                         // becomes the human label («weekly review») on the
                         // backlog row.
@@ -486,6 +500,97 @@ struct EditTaskView: View {
                 )
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: - Subtasks
+
+    @ViewBuilder
+    private var subtasksSection: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            HStack(spacing: DS.Spacing.xs) {
+                sectionLabel("Subtasks")
+                if !subtasks.isEmpty {
+                    let progress = (done: subtasks.lazy.filter(\.isDone).count, total: subtasks.count)
+                    Text("\(progress.done)/\(progress.total)")
+                        .font(.footnote.weight(.medium).monospacedDigit())
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                }
+                Spacer()
+            }
+
+            if !subtasks.isEmpty {
+                VStack(spacing: DS.Spacing.xs) {
+                    ForEach(subtasks) { sub in
+                        subtaskRow(sub)
+                    }
+                }
+            }
+
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: "plus.circle")
+                    .font(.footnote)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                TextField(
+                    "Add subtask",
+                    text: $newSubtaskTitle,
+                    prompt: Text("Add subtask\u{2026}")
+                        .foregroundStyle(skin.resolvedTextSecondary)
+                )
+                .textFieldStyle(.plain)
+                .font(.callout)
+                .onSubmit { commitNewSubtask() }
+            }
+        }
+    }
+
+    private func subtaskRow(_ sub: Subtask) -> some View {
+        HStack(spacing: DS.Spacing.sm) {
+            Button {
+                Haptics.tap()
+                if let idx = subtasks.firstIndex(where: { $0.id == sub.id }) {
+                    subtasks[idx].isDone.toggle()
+                }
+            } label: {
+                Image(systemName: sub.isDone ? "checkmark.circle.fill" : "circle")
+                    .font(.callout)
+                    .foregroundStyle(sub.isDone ? skinAccent : skin.resolvedTextTertiary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(sub.isDone ? "Mark \"\(sub.title)\" not done" : "Mark \"\(sub.title)\" done")
+
+            TextField(
+                "Subtask",
+                text: Binding(
+                    get: { sub.title },
+                    set: { newValue in
+                        if let idx = subtasks.firstIndex(where: { $0.id == sub.id }) {
+                            subtasks[idx].title = newValue
+                        }
+                    }
+                )
+            )
+            .textFieldStyle(.plain)
+            .font(.callout)
+            .strikethrough(sub.isDone, color: skin.resolvedTextTertiary)
+            .foregroundStyle(sub.isDone ? skin.resolvedTextTertiary : skin.resolvedTextPrimary)
+
+            Button {
+                subtasks.removeAll { $0.id == sub.id }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.footnote)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Remove subtask \"\(sub.title)\"")
+        }
+    }
+
+    private func commitNewSubtask() {
+        let trimmed = newSubtaskTitle.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        subtasks.append(Subtask(title: trimmed))
+        newSubtaskTitle = ""
     }
 
     // MARK: - Dependencies
@@ -604,6 +709,16 @@ struct EditTaskView: View {
         updated.url = Self.parseURL(urlString)
         let trimmedLocation = location.trimmingCharacters(in: .whitespaces)
         updated.location = trimmedLocation.isEmpty ? nil : trimmedLocation
+        // Drop subtasks whose title was emptied by inline editing — keeping
+        // them would round-trip a `- [ ]` line with no content through the
+        // Apple Reminders codec, which the parser skips anyway.
+        updated.subtasks = subtasks.compactMap { sub in
+            let trimmed = sub.title.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty else { return nil }
+            var s = sub
+            s.title = trimmed
+            return s
+        }
         updated.dependsOn = dependsOn
 
         backlogService.updateTask(updated)

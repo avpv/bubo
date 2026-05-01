@@ -202,8 +202,9 @@ final class AppleRemindersService {
         // EKReminder doesn't expose a dedicated URL slot, so we carry the
         // link in `notes` using a leading `URL:` sentinel line. Round-trips
         // cleanly with Reminders.app: the sentinel text is visible there and
-        // stays intact when users edit the notes body below it.
-        let (parsedURL, strippedNotes) = Self.extractURL(fromNotes: reminder.notes)
+        // stays intact when users edit the notes body below it. Subtasks
+        // ride alongside as a `Subtasks:` markdown checklist block.
+        let parsed = Self.extractAttachments(fromNotes: reminder.notes)
 
         return BacklogTask(
             id: "reminder_\(reminder.calendarItemIdentifier)",
@@ -212,9 +213,10 @@ final class AppleRemindersService {
             priority: priority,
             deadline: deadline,
             context: reminder.calendar.title,
-            notes: strippedNotes,
-            url: parsedURL,
+            notes: parsed.notes,
+            url: parsed.url,
             location: reminder.location,
+            subtasks: parsed.subtasks,
             createdAt: reminder.creationDate ?? Date()
         )
     }
@@ -251,7 +253,11 @@ final class AppleRemindersService {
         let reminder = EKReminder(eventStore: store)
         reminder.title = task.title
         reminder.priority = Self.appleRemindersPriority(from: task.priority)
-        reminder.notes = Self.composeNotes(notes: task.notes, url: task.url)
+        reminder.notes = Self.composeNotes(
+            notes: task.notes,
+            url: task.url,
+            subtasks: task.subtasks
+        )
         if let loc = task.location, !loc.isEmpty {
             reminder.location = loc
         }
@@ -294,7 +300,11 @@ final class AppleRemindersService {
         let newPriority = Self.appleRemindersPriority(from: task.priority)
         let newDueComponents: DateComponents? = task.deadline.map(Self.dueDateComponents(from:))
         let shouldBeDone = task.status == .done
-        let newNotes = Self.composeNotes(notes: task.notes, url: task.url)
+        let newNotes = Self.composeNotes(
+            notes: task.notes,
+            url: task.url,
+            subtasks: task.subtasks
+        )
         let newLocation = task.location.flatMap { $0.isEmpty ? nil : $0 }
 
         // Field-by-field diff — skip the save if nothing actually changed.
@@ -417,45 +427,129 @@ final class AppleRemindersService {
     /// below without disturbing it.
     private static let urlNotesPrefix = "URL: "
 
-    /// Combine a task's notes + url into a single `EKReminder.notes` string.
-    /// `nil` when neither field is populated so reminders without rich data
-    /// keep an empty notes slot instead of a stray blank line.
-    static func composeNotes(notes: String?, url: URL?) -> String? {
+    /// Sentinel header that opens a markdown checklist block carrying
+    /// `BacklogTask.subtasks`. Placed after the optional `URL:` line; each
+    /// subsequent `- [ ]` / `- [x]` line is one subtask. The block ends at
+    /// the first non-checkbox line so the user-authored body underneath
+    /// stays free-form.
+    private static let subtasksHeader = "Subtasks:"
+
+    /// Combine notes + url + subtasks into a single `EKReminder.notes` string.
+    /// `nil` when nothing is populated so reminders without rich data keep an
+    /// empty notes slot instead of a stray blank line.
+    static func composeNotes(
+        notes: String?,
+        url: URL?,
+        subtasks: [Subtask] = []
+    ) -> String? {
         let body = notes?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        var sections: [String] = []
         if let url {
-            let header = "\(urlNotesPrefix)\(url.absoluteString)"
-            if let body, !body.isEmpty {
-                return "\(header)\n\n\(body)"
-            }
-            return header
+            sections.append("\(urlNotesPrefix)\(url.absoluteString)")
         }
-        guard let body, !body.isEmpty else { return nil }
-        return body
+        if !subtasks.isEmpty {
+            var lines: [String] = [subtasksHeader]
+            for sub in subtasks {
+                let mark = sub.isDone ? "x" : " "
+                lines.append("- [\(mark)] \(sub.title)")
+            }
+            sections.append(lines.joined(separator: "\n"))
+        }
+        if let body, !body.isEmpty {
+            sections.append(body)
+        }
+        guard !sections.isEmpty else { return nil }
+        return sections.joined(separator: "\n\n")
     }
 
-    /// Inverse of `composeNotes`. Splits the leading `URL:` sentinel (when
-    /// present) from the remaining body. Returns `(nil, original)` when the
-    /// notes don't contain a parseable sentinel so user-authored text never
-    /// gets misclassified as a link.
+    /// Backward-compatible shim that drops parsed subtasks. New callers
+    /// should use `extractAttachments` to receive the full set.
     static func extractURL(fromNotes raw: String?) -> (url: URL?, notes: String?) {
-        guard let raw, !raw.isEmpty else { return (nil, nil) }
-        let lines = raw.split(separator: "\n", omittingEmptySubsequences: false)
-        guard let first = lines.first,
-              first.hasPrefix(urlNotesPrefix) else {
-            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            return (nil, trimmed.isEmpty ? nil : trimmed)
+        let parsed = extractAttachments(fromNotes: raw)
+        return (parsed.url, parsed.notes)
+    }
+
+    /// Inverse of `composeNotes`. Splits the leading `URL:` sentinel and the
+    /// `Subtasks:` checklist block (when present) from the user body.
+    /// Returns `(nil, original, [])` when the notes don't carry any
+    /// recognised sentinel so user-authored text never gets misclassified.
+    static func extractAttachments(
+        fromNotes raw: String?
+    ) -> (url: URL?, notes: String?, subtasks: [Subtask]) {
+        guard let raw, !raw.isEmpty else { return (nil, nil, []) }
+
+        var lines = raw.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+
+        // Track whether we consumed any sentinel; if we didn't, return the
+        // full raw text as notes so a malformed leading line stays readable.
+        var consumedAny = false
+
+        // 1. Optional `URL:` line.
+        var url: URL? = nil
+        if let first = lines.first, first.hasPrefix(urlNotesPrefix) {
+            let urlString = String(first.dropFirst(urlNotesPrefix.count))
+                .trimmingCharacters(in: .whitespaces)
+            if let parsed = URL(string: urlString) {
+                url = parsed
+                lines.removeFirst()
+                consumedAny = true
+            }
         }
-        let urlString = String(first.dropFirst(urlNotesPrefix.count))
-            .trimmingCharacters(in: .whitespaces)
-        let url = URL(string: urlString)
-        let remainder = lines.dropFirst()
-            .joined(separator: "\n")
+
+        // 2. Skip blank separator lines after the URL header.
+        while let first = lines.first,
+              first.trimmingCharacters(in: .whitespaces).isEmpty {
+            lines.removeFirst()
+        }
+
+        // 3. Optional `Subtasks:` checklist block.
+        var subtasks: [Subtask] = []
+        if let first = lines.first,
+           first.trimmingCharacters(in: .whitespaces) == subtasksHeader {
+            lines.removeFirst()
+            consumedAny = true
+            while let next = lines.first,
+                  let parsed = parseChecklistLine(next) {
+                subtasks.append(parsed)
+                lines.removeFirst()
+            }
+        }
+
+        // 4. Skip a single blank separator before the body.
+        while let first = lines.first,
+              first.trimmingCharacters(in: .whitespaces).isEmpty {
+            lines.removeFirst()
+        }
+
+        let bodyText = lines.joined(separator: "\n")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        // When parsing failed, keep the whole string in notes — we'd rather
-        // surface a bad link as readable text than silently discard it.
-        if url == nil {
-            return (nil, raw.trimmingCharacters(in: .whitespacesAndNewlines))
+
+        if !consumedAny {
+            // Nothing recognised — keep the original text intact in notes.
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            return (nil, trimmed.isEmpty ? nil : trimmed, [])
         }
-        return (url, remainder.isEmpty ? nil : remainder)
+
+        return (url, bodyText.isEmpty ? nil : bodyText, subtasks)
+    }
+
+    /// Parse a single `- [ ] foo` / `- [x] foo` line into a `Subtask`.
+    /// Returns nil for any other shape so the parser stops cleanly at the
+    /// first body line.
+    private static func parseChecklistLine(_ raw: String) -> Subtask? {
+        let trimmed = raw.trimmingCharacters(in: .whitespaces)
+        // Accept "- [ ] x", "- [x] x", "* [ ] x" — match Markdown variants.
+        let prefixes = ["- [ ] ", "- [x] ", "- [X] ", "* [ ] ", "* [x] ", "* [X] "]
+        for p in prefixes {
+            if trimmed.hasPrefix(p) {
+                let title = String(trimmed.dropFirst(p.count))
+                    .trimmingCharacters(in: .whitespaces)
+                guard !title.isEmpty else { return nil }
+                let isDone = p.contains("x") || p.contains("X")
+                return Subtask(title: title, isDone: isDone)
+            }
+        }
+        return nil
     }
 }

@@ -47,6 +47,13 @@ struct BacklogTask: Identifiable, Codable, Hashable, Sendable {
     /// can fire arrival alerts.
     var location: String?
 
+    /// Ordered checklist nested inside the task. Distinct from `dependsOn`
+    /// (which links *separate* top-level tasks): subtasks are just
+    /// chunks of the parent's work, not independently scheduled. Round-trips
+    /// through the Apple Reminders `notes` field via a sentinel block,
+    /// alongside the existing `URL:` line.
+    var subtasks: [Subtask] = []
+
     /// Last mutation timestamp — used by iCloud sync to resolve conflicts
     /// when the same task was edited on two devices.  Optional for backward
     /// compatibility with data serialized before this field existed.
@@ -90,6 +97,7 @@ struct BacklogTask: Identifiable, Codable, Hashable, Sendable {
         notes: String? = nil,
         url: URL? = nil,
         location: String? = nil,
+        subtasks: [Subtask] = [],
         createdAt: Date = Date()
     ) {
         self.id = id
@@ -107,7 +115,37 @@ struct BacklogTask: Identifiable, Codable, Hashable, Sendable {
         self.notes = notes
         self.url = url
         self.location = location
+        self.subtasks = subtasks
         self.createdAt = createdAt
+    }
+}
+
+// MARK: - Subtask
+
+/// Single checklist item under a `BacklogTask`. Intentionally minimal:
+/// title + done flag is enough to model the "собрать чемодан → 5 пунктов"
+/// case. Promotion to a full top-level task isn't supported yet — that's
+/// what `dependsOn` is for between independent tasks.
+struct Subtask: Identifiable, Codable, Hashable, Sendable {
+    let id: String
+    var title: String
+    var isDone: Bool
+
+    init(id: String = UUID().uuidString, title: String, isDone: Bool = false) {
+        self.id = id
+        self.title = title
+        self.isDone = isDone
+    }
+}
+
+extension BacklogTask {
+    /// `(done, total)` count over `subtasks`. Used by row UI to render
+    /// "2/5" progress and by completion logic to suggest finishing the
+    /// parent once every checklist item is checked.
+    var subtaskProgress: (done: Int, total: Int) {
+        let total = subtasks.count
+        let done = subtasks.lazy.filter(\.isDone).count
+        return (done, total)
     }
 }
 

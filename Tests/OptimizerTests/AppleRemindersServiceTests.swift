@@ -197,4 +197,119 @@ final class AppleRemindersServiceTests: XCTestCase {
         XCTAssertEqual(url, original.url)
         XCTAssertEqual(notes, original.notes)
     }
+
+    // MARK: - Subtasks Codec
+
+    func testComposeNotesWithSubtasksOnly() {
+        let composed = AppleRemindersService.composeNotes(
+            notes: nil,
+            url: nil,
+            subtasks: [
+                Subtask(title: "Buy charger"),
+                Subtask(title: "Pack laptop", isDone: true),
+            ]
+        )
+        XCTAssertEqual(
+            composed,
+            "Subtasks:\n- [ ] Buy charger\n- [x] Pack laptop"
+        )
+    }
+
+    func testComposeNotesWithURLSubtasksAndBody() {
+        let composed = AppleRemindersService.composeNotes(
+            notes: "Don't forget passport",
+            url: URL(string: "https://example.com/trip"),
+            subtasks: [Subtask(title: "Book hotel")]
+        )
+        XCTAssertEqual(
+            composed,
+            "URL: https://example.com/trip\n\nSubtasks:\n- [ ] Book hotel\n\nDon't forget passport"
+        )
+    }
+
+    func testExtractAttachmentsParsesChecklist() {
+        let parsed = AppleRemindersService.extractAttachments(
+            fromNotes: "Subtasks:\n- [ ] First\n- [x] Second\n\nbody text"
+        )
+        XCTAssertNil(parsed.url)
+        XCTAssertEqual(parsed.notes, "body text")
+        XCTAssertEqual(parsed.subtasks.count, 2)
+        XCTAssertEqual(parsed.subtasks[0].title, "First")
+        XCTAssertFalse(parsed.subtasks[0].isDone)
+        XCTAssertEqual(parsed.subtasks[1].title, "Second")
+        XCTAssertTrue(parsed.subtasks[1].isDone)
+    }
+
+    func testExtractAttachmentsHandlesURLAndChecklist() {
+        let parsed = AppleRemindersService.extractAttachments(
+            fromNotes: "URL: https://example.com/trip\n\nSubtasks:\n- [ ] One\n\nbody"
+        )
+        XCTAssertEqual(parsed.url, URL(string: "https://example.com/trip"))
+        XCTAssertEqual(parsed.notes, "body")
+        XCTAssertEqual(parsed.subtasks.map(\.title), ["One"])
+    }
+
+    func testExtractAttachmentsLeavesPlainNotesIntact() {
+        // No sentinels at all → original text stays in notes verbatim, not
+        // misinterpreted as an empty subtask block or partial URL line.
+        let parsed = AppleRemindersService.extractAttachments(
+            fromNotes: "- [ ] looks like a subtask but no header"
+        )
+        XCTAssertNil(parsed.url)
+        XCTAssertEqual(parsed.notes, "- [ ] looks like a subtask but no header")
+        XCTAssertTrue(parsed.subtasks.isEmpty)
+    }
+
+    func testSubtasksRoundTripPreservesOrderAndDoneFlags() {
+        let original = [
+            Subtask(title: "alpha", isDone: false),
+            Subtask(title: "beta", isDone: true),
+            Subtask(title: "gamma", isDone: false),
+        ]
+        let composed = AppleRemindersService.composeNotes(
+            notes: "context",
+            url: URL(string: "https://example.com"),
+            subtasks: original
+        )
+        let parsed = AppleRemindersService.extractAttachments(fromNotes: composed)
+        XCTAssertEqual(parsed.url, URL(string: "https://example.com"))
+        XCTAssertEqual(parsed.notes, "context")
+        XCTAssertEqual(parsed.subtasks.map(\.title), original.map(\.title))
+        XCTAssertEqual(parsed.subtasks.map(\.isDone), original.map(\.isDone))
+    }
+
+    func testExtractURLBackwardCompatibilityShimDropsSubtasks() {
+        // The legacy two-tuple API must keep working — callers that haven't
+        // migrated to `extractAttachments` see only url + notes, with the
+        // subtasks block treated as part of the structured prefix and
+        // therefore stripped from the notes body.
+        let (url, notes) = AppleRemindersService.extractURL(
+            fromNotes: "Subtasks:\n- [ ] x\n\nbody"
+        )
+        XCTAssertNil(url)
+        XCTAssertEqual(notes, "body")
+    }
+
+    // MARK: - Subtask Progress
+
+    func testSubtaskProgressEmpty() {
+        let task = BacklogTask(title: "no subs")
+        let progress = task.subtaskProgress
+        XCTAssertEqual(progress.done, 0)
+        XCTAssertEqual(progress.total, 0)
+    }
+
+    func testSubtaskProgressPartial() {
+        let task = BacklogTask(
+            title: "with subs",
+            subtasks: [
+                Subtask(title: "a", isDone: true),
+                Subtask(title: "b", isDone: false),
+                Subtask(title: "c", isDone: true),
+            ]
+        )
+        let progress = task.subtaskProgress
+        XCTAssertEqual(progress.done, 2)
+        XCTAssertEqual(progress.total, 3)
+    }
 }
