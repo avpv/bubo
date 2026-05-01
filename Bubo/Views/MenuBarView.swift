@@ -601,6 +601,14 @@ struct MenuBarView: View {
             // independent of the one-shot `hasStartedSync` guard below.
             refreshPermissionSnapshots()
 
+            // Drain any ⇧↩ quick-capture prefill that was buffered while
+            // this view wasn't in the tree. The bridge clears itself on
+            // read, so a hot popover (notification path) and a cold
+            // popover (this path) never both navigate.
+            if let pending = QuickCaptureBridge.shared.take() {
+                navigation = .newTask(prefillTitle: pending, prefillDuration: nil)
+            }
+
             // AutoDefer runs once per calendar day. Calling on every
             // popover open is cheap (the service early-exits when
             // `lastRunDate` is today) and covers the «opened a fresh
@@ -700,6 +708,18 @@ struct MenuBarView: View {
             ) {
                 _ = backlog.removeTask(id: task.id)
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .didCaptureBacklogTaskWithDetails)) { notification in
+            // ⇧↩ from quick-capture: route to the compact creation form
+            // pre-filled with the typed text. The prefill was also
+            // dropped into `QuickCaptureBridge.shared` so a closed-popover
+            // race still lands the user on the form via `.onAppear`.
+            guard let text = notification.userInfo?["text"] as? String else { return }
+            // Drain the bridge slot too — the notification path beat the
+            // .onAppear consumer to it, and we don't want a duplicate
+            // navigation when the popover finishes opening.
+            _ = QuickCaptureBridge.shared.take()
+            navigation = .newTask(prefillTitle: text, prefillDuration: nil)
         }
         .onReceive(NotificationCenter.default.publisher(for: BacklogService.taskCompleted)) { notification in
             // Fires only for user-initiated completions in Bubo (the external-

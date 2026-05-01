@@ -16,6 +16,12 @@ struct QuickCaptureView: View {
     /// Return. The host translates this into a `BacklogTask.addTask`
     /// via the menu-bar listener so we never bind a service to a view.
     let onSubmit: (String) -> Void
+    /// Called on Shift+Return: the user wants the compact creation form
+    /// instead of a one-shot add. Host dismisses this panel, opens the
+    /// menu-bar popover, and routes to `NewTaskView` with the typed text
+    /// pre-filled. Optional so call-sites that haven't wired it up keep
+    /// working — when nil, ⇧↩ falls back to the regular submit path.
+    var onSubmitWithDetails: ((String) -> Void)? = nil
     /// Called on Esc or click-outside; the host tears down the panel.
     let onCancel: () -> Void
 
@@ -36,6 +42,17 @@ struct QuickCaptureView: View {
                     .foregroundStyle(skin.resolvedTextPrimary)
                     .focused($isFocused)
                     .onSubmit { commit() }
+                    .onKeyPress(keys: [.return]) { press in
+                        // ⇧↩ — pivot to the detailed creation form. Mirrors
+                        // the inline backlog field so muscle memory carries
+                        // between surfaces. Plain Return keeps falling
+                        // through to `.onSubmit { commit() }` above.
+                        guard press.modifiers.contains(.shift) else {
+                            return .ignored
+                        }
+                        commitWithDetails()
+                        return .handled
+                    }
                     .onKeyPress(.escape) {
                         onCancel()
                         return .handled
@@ -46,6 +63,13 @@ struct QuickCaptureView: View {
                 Text("\u{21A9} Add")
                     .font(DS.Typography.machineHint)
                     .foregroundStyle(skin.resolvedTextTertiary)
+                if onSubmitWithDetails != nil {
+                    Text("\u{00B7}")
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                    Text("\u{21E7}\u{21A9} Details")
+                        .font(DS.Typography.machineHint)
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                }
                 Text("\u{00B7}")
                     .foregroundStyle(skin.resolvedTextTertiary)
                 Text("Esc to cancel")
@@ -80,5 +104,18 @@ struct QuickCaptureView: View {
             return
         }
         onSubmit(trimmed)
+    }
+
+    /// ⇧↩ path. Forwards the trimmed text (which can be empty —
+    /// `NewTaskView` is happy to start blank) to the host so it can pivot
+    /// to the detailed form. Falls back to the regular submit path when
+    /// no host wired the callback or the text is empty.
+    private func commitWithDetails() {
+        guard let onSubmitWithDetails else {
+            commit()
+            return
+        }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        onSubmitWithDetails(trimmed)
     }
 }
