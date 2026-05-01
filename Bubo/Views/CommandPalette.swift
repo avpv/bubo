@@ -931,8 +931,13 @@ struct CommandPalette: View {
 
     private func hint(_ key: String, _ label: String) -> some View {
         HStack(spacing: DS.Spacing.xs) {
+            // The keyboard glyph chip uses `DS.Typography.machineHint`
+            // (the canonical voice for keyboard cues across the app —
+            // see SmartActions calm-state ⌘K hint). Same font in both
+            // surfaces means a user who learned the look in SmartActions
+            // recognises it instantly here.
             Text(key)
-                .font(.footnote.monospaced())
+                .font(DS.Typography.machineHint)
                 .foregroundStyle(skin.resolvedTextSecondary)
                 .padding(.horizontal, DS.Spacing.xs)
                 .padding(.vertical, DS.Spacing.xxs)
