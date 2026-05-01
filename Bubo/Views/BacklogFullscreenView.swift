@@ -83,6 +83,17 @@ struct BacklogFullscreenView: View {
     /// inside the urgency window. Session-local. Mirrors BacklogView's
     /// `urgentOnlyFilter` so users carry the same mental model across views.
     @State private var urgentOnlyFilter: Bool = false
+    /// Project / context filter chip. nil = «All projects». When set,
+    /// only tasks whose `context` matches are kept by `activeFiltered`.
+    /// Reifies the optimizer's `fromProject(name:)` intent at the UI
+    /// level — Birman: «правила — это объекты на экране». Session-local;
+    /// resets on every fullscreen open so the user doesn't get stuck in
+    /// a forgotten filter.
+    @State private var projectFilter: String? = nil
+    /// Same shape as `projectFilter` but for the task's optional
+    /// `colorTag`. Reifies what would otherwise be a colour-coded tag
+    /// search via `fromCalendar`/colour metadata.
+    @State private var colorFilter: EventColorTag? = nil
     /// Smart-sort toggle — re-orders the list by `BacklogLogic.smartScore`
     /// instead of user drag order. Session-local.
     @State private var useSmartSort: Bool = false
@@ -99,11 +110,37 @@ struct BacklogFullscreenView: View {
         BacklogLogic.activeTasks(backlogService.tasks)
     }
 
-    /// Active set after the urgent-only filter — common base for the visible
-    /// list and the auto-disengage rule when the urgent set dries up.
+    /// Active set after the urgent-only + project + color filters.
+    /// Three filter sources compose; an empty result triggers the
+    /// auto-disengage rule below so the user is never stranded in an
+    /// empty filtered view.
     private var activeFiltered: [BacklogTask] {
-        guard urgentOnlyFilter else { return activeTasks }
-        return activeTasks.filter { BacklogLogic.isUrgent($0) }
+        var result = activeTasks
+        if urgentOnlyFilter {
+            result = result.filter { BacklogLogic.isUrgent($0) }
+        }
+        if let project = projectFilter {
+            result = result.filter { $0.context == project }
+        }
+        if let color = colorFilter {
+            result = result.filter { $0.colorTag == color }
+        }
+        return result
+    }
+
+    /// Distinct, sorted list of project / context labels in the active
+    /// task set. Drives the project filter chip's picker. Empty when no
+    /// task carries a context — in that case the chip is suppressed.
+    private var availableProjects: [String] {
+        let raw = activeTasks.compactMap { $0.context?.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        return Array(Set(raw)).sorted()
+    }
+
+    /// Distinct color tags present in the active task set.
+    private var availableColorTags: [EventColorTag] {
+        let raw = activeTasks.compactMap { $0.colorTag }
+        return Array(Set(raw)).sorted { $0.rawValue < $1.rawValue }
     }
 
     /// Tasks rendered in the list. Пользовательский порядок (или smart-sort,
@@ -218,6 +255,12 @@ struct BacklogFullscreenView: View {
                 // sees the action attached to the problem rather than at
                 // the tail of the list.
                 smartActionsRow
+                // Filter chips: project + colour tag. Reify the
+                // optimizer's `fromProject` / colour-cohesion intents
+                // as visible UI objects rather than command-palette
+                // queries. Chips only render when the underlying data
+                // exists (no projects → no project chip).
+                filterChipsRow
                 mainContent
                 addTaskField
             }
@@ -249,9 +292,16 @@ struct BacklogFullscreenView: View {
         .onChange(of: activeTasks.count) { _, _ in
             // Auto-disengage urgent filter if the urgent set dries up — same
             // safety net as in BacklogView, prevents stranding the user in
-            // an empty filtered view.
+            // an empty filtered view. Project / colour filters get the
+            // same treatment in the second onChange below.
             if urgentOnlyFilter, activeFiltered.isEmpty {
                 urgentOnlyFilter = false
+            }
+            if let project = projectFilter, !availableProjects.contains(project) {
+                projectFilter = nil
+            }
+            if let color = colorFilter, !availableColorTags.contains(color) {
+                colorFilter = nil
             }
         }
         .onChange(of: urgentCount) { _, newValue in
@@ -476,6 +526,96 @@ struct BacklogFullscreenView: View {
             onOpenPalette: { onOpenPalette?() }
         )
         .padding(.horizontal, DS.Spacing.sm)
+    }
+
+    // MARK: - Filter chips
+
+    /// Project + colour-tag filter chips. Renders as a horizontal scroll
+    /// row only when the active set has at least one project context or
+    /// at least one colour-tagged task — empty data ⇒ no row, so the
+    /// header stays calm on simple backlogs. Each chip toggles a
+    /// session-local filter; the underlying `activeFiltered` recomposes
+    /// on every render. Birman: «правила — это объекты на экране».
+    @ViewBuilder
+    private var filterChipsRow: some View {
+        let projects = availableProjects
+        let colors = availableColorTags
+        if !projects.isEmpty || !colors.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: DS.Spacing.xs) {
+                    ForEach(projects, id: \.self) { project in
+                        projectChip(project)
+                    }
+                    if !projects.isEmpty && !colors.isEmpty {
+                        Divider()
+                            .frame(height: 16)
+                            .padding(.horizontal, DS.Spacing.xxs)
+                    }
+                    ForEach(colors, id: \.rawValue) { color in
+                        colorChip(color)
+                    }
+                }
+                .padding(.horizontal, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xxs)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func projectChip(_ project: String) -> some View {
+        let isOn = projectFilter == project
+        Button {
+            Haptics.tap()
+            withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
+                projectFilter = isOn ? nil : project
+            }
+        } label: {
+            Text(project)
+                .font(.footnote.weight(isOn ? .semibold : .regular))
+                .foregroundStyle(isOn ? skin.accentColor : skin.resolvedTextSecondary)
+                .padding(.horizontal, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xxs)
+                .background(
+                    Capsule().fill(skin.accentColor.opacity(isOn ? DS.Opacity.lightFill : 0))
+                )
+                .overlay(
+                    Capsule().strokeBorder(
+                        skin.accentColor.opacity(isOn ? DS.Opacity.softAccent : DS.Opacity.borderIdle),
+                        lineWidth: DS.Border.thin
+                    )
+                )
+        }
+        .buttonStyle(.plain)
+        .help(isOn ? "Showing tasks in \u{201C}\(project)\u{201D} — tap to clear" : "Filter to \u{201C}\(project)\u{201D}")
+    }
+
+    @ViewBuilder
+    private func colorChip(_ color: EventColorTag) -> some View {
+        let isOn = colorFilter == color
+        Button {
+            Haptics.tap()
+            withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
+                colorFilter = isOn ? nil : color
+            }
+        } label: {
+            Circle()
+                .fill(color.color)
+                .frame(width: 12, height: 12)
+                .padding(.horizontal, DS.Spacing.xxs)
+                .padding(.vertical, DS.Spacing.xxs)
+                .overlay(
+                    Capsule().strokeBorder(
+                        skin.accentColor.opacity(isOn ? DS.Opacity.softAccent : 0),
+                        lineWidth: DS.Border.thin
+                    )
+                )
+                .padding(.horizontal, DS.Spacing.xxs)
+                .background(
+                    Capsule().fill(color.color.opacity(isOn ? DS.Opacity.subtleFill : 0))
+                )
+        }
+        .buttonStyle(.plain)
+        .help(isOn ? "Showing only \(color.rawValue) tasks — tap to clear" : "Filter to \(color.rawValue) tasks")
     }
 
     // MARK: - Main content
