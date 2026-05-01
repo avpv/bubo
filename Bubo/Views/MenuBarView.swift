@@ -13,6 +13,14 @@ struct MenuBarView: View {
 
     @State private var navigation: Navigation = .list
     @State private var hasStartedSync = false
+    /// Day-rollover timer for `AutoDeferService` — fires shortly past
+    /// midnight so the «left popover open overnight» case picks up the
+    /// new day's deferral pass without requiring the user to reopen
+    /// the popover. Stored as state so the lifecycle tracks the view's
+    /// — created in `onAppear`, invalidated in `onDisappear`. Without
+    /// this, AutoDefer only ran on popover-open, which missed users
+    /// who keep the menu bar pinned overnight.
+    @State private var dayRolloverTimer: Timer? = nil
     /// Becomes true 3\u{00A0}s after the first popover open, regardless of
     /// whether the EventKit sync has produced events yet. Used to escalate
     /// the «Syncing calendars…» panel into «Sync taking long» so the user
@@ -482,6 +490,7 @@ struct MenuBarView: View {
             // машина» — overdue rows are an artefact of the previous
             // day, the user shouldn't have to scroll past them today.
             runAutoDeferIfNeeded()
+            scheduleDayRolloverTimerIfNeeded()
 
             guard !hasStartedSync else { return }
             hasStartedSync = true
@@ -506,6 +515,14 @@ struct MenuBarView: View {
                 try? await Task.sleep(for: .seconds(3))
                 initialSyncTimeoutFired = true
             }
+        }
+        .onDisappear {
+            // Tear down the day-rollover timer so we don't leak it
+            // when the popover is dismissed. `onAppear` will re-arm
+            // the timer on the next open if the day hasn't yet
+            // rolled.
+            dayRolloverTimer?.invalidate()
+            dayRolloverTimer = nil
         }
         .onChange(of: reminderService.allEvents.isEmpty) { _, isEmpty in
             // Latch on the first non-empty event list — we treat that as
@@ -1906,6 +1923,45 @@ struct MenuBarView: View {
     /// Async so callers (e.g. the spill-over marker action-link) can await
     /// and surface a loading spinner during the optimizer call. Fire-and-
     // MARK: - Auto Defer
+
+    /// Schedule a one-shot Timer that fires ~1 minute past midnight to
+    /// re-run AutoDefer for users who leave the popover open overnight.
+    /// `runAutoDeferIfNeeded` is the only consumer; the timer reschedules
+    /// itself to the next midnight after each fire.
+    ///
+    /// Idempotent — calling twice doesn't stack timers; the second call
+    /// drops out because `dayRolloverTimer != nil`. Cleared by
+    /// `onDisappear` so a popover dismissal doesn't leak it.
+    @MainActor
+    private func scheduleDayRolloverTimerIfNeeded() {
+        guard dayRolloverTimer == nil else { return }
+        scheduleNextDayRollover()
+    }
+
+    @MainActor
+    private func scheduleNextDayRollover() {
+        let cal = Calendar.current
+        let now = Date()
+        let startOfTomorrow = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now)) ?? now
+        // Sleep ~60s past midnight so we cross the boundary cleanly,
+        // not at the exact second of rollover (where small clock drift
+        // could land us back on the previous day).
+        let fireDate = startOfTomorrow.addingTimeInterval(60)
+        let interval = max(60, fireDate.timeIntervalSinceNow)
+
+        dayRolloverTimer?.invalidate()
+        dayRolloverTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { _ in
+            // Hop to the main actor — Timer callbacks land on the run
+            // loop's actor (typically not @MainActor).
+            Task { @MainActor in
+                runAutoDeferIfNeeded()
+                // Reschedule for the next day. Recursive call is safe:
+                // each iteration creates one timer; the prior is
+                // invalidated by `dayRolloverTimer?.invalidate()` above.
+                scheduleNextDayRollover()
+            }
+        }
+    }
 
     /// Run the once-per-day backlog deferral pass. Wired from `onAppear`
     /// so every popover open during a fresh calendar day catches up the
