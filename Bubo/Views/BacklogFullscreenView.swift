@@ -60,6 +60,8 @@ struct BacklogFullscreenView: View {
     var onOpenPalette: (() -> Void)? = nil
     /// See `BacklogView.onSwitchScenario`.
     var onSwitchScenario: ((Int) -> Void)? = nil
+    /// See `BacklogView.onLockTodaysEvents`.
+    var onLockTodaysEvents: (() -> Void)? = nil
     /// Open the command palette seeded with a single task (per-task scope
     /// optimizer entry — context menu's «Reschedule…» on a row).
     var onRescheduleTask: ((BacklogTask) -> Void)? = nil
@@ -549,7 +551,8 @@ struct BacklogFullscreenView: View {
                 await onRunRequest?(request, label)
             },
             onOpenPalette: { onOpenPalette?() },
-            onSwitchScenario: onSwitchScenario
+            onSwitchScenario: onSwitchScenario,
+            onLockTodaysEvents: onLockTodaysEvents
         )
         .padding(.horizontal, DS.Spacing.sm)
     }

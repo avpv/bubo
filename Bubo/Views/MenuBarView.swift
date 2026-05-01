@@ -357,6 +357,35 @@ struct MenuBarView: View {
                                     to: reminderService
                                 )
                             },
+                            onLockTodaysEvents: {
+                                // Same bulk-lock as the inline view; the
+                                // user gets the same toast on success and
+                                // the rows light up with solid lock icons
+                                // when they return to the main popover.
+                                let cal = Calendar.current
+                                let todaysIds = reminderService.allEvents
+                                    .filter { cal.isDateInToday($0.startTime) }
+                                    .map(\.id)
+                                let preCount = optimizerService.lockedEventIds.count
+                                for id in todaysIds {
+                                    if !optimizerService.isLocked(eventId: id) {
+                                        optimizerService.toggleLock(eventId: id)
+                                    }
+                                }
+                                let added = optimizerService.lockedEventIds.count - preCount
+                                if added > 0 {
+                                    toastState.showSuccess(
+                                        added == 1 ? "Locked 1 event" : "Locked \(added) events",
+                                        icon: "lock.fill"
+                                    ) {
+                                        for id in todaysIds where optimizerService.isLocked(eventId: id) {
+                                            optimizerService.toggleLock(eventId: id)
+                                        }
+                                    }
+                                } else {
+                                    toastState.showInfo("Today's events are already locked", icon: "lock.fill")
+                                }
+                            },
                             onRescheduleTask: { task in
                                 navigation = .list
                                 paletteContext = PaletteContext(seedTask: task)
@@ -880,6 +909,38 @@ struct MenuBarView: View {
                         at: index,
                         to: reminderService
                     )
+                },
+                onLockTodaysEvents: {
+                    // Bulk-lock every event currently on today's
+                    // schedule — same persistent set the per-row lock
+                    // affordance writes to, so the rows light up with
+                    // their solid lock icon immediately.
+                    let cal = Calendar.current
+                    let todaysIds = reminderService.allEvents
+                        .filter { cal.isDateInToday($0.startTime) }
+                        .map(\.id)
+                    let preCount = optimizerService.lockedEventIds.count
+                    for id in todaysIds {
+                        if !optimizerService.isLocked(eventId: id) {
+                            optimizerService.toggleLock(eventId: id)
+                        }
+                    }
+                    let added = optimizerService.lockedEventIds.count - preCount
+                    if added > 0 {
+                        toastState.showSuccess(
+                            added == 1 ? "Locked 1 event" : "Locked \(added) events",
+                            icon: "lock.fill"
+                        ) {
+                            // Undo: unlock everything we just locked.
+                            for id in todaysIds {
+                                if optimizerService.isLocked(eventId: id) {
+                                    optimizerService.toggleLock(eventId: id)
+                                }
+                            }
+                        }
+                    } else {
+                        toastState.showInfo("Today's events are already locked", icon: "lock.fill")
+                    }
                 },
                 onRescheduleTask: { task in
                     paletteContext = PaletteContext(seedTask: task)

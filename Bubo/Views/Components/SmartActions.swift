@@ -83,6 +83,13 @@ struct SmartActions: View {
     /// is disabled (preview surfaces without an optimizer service).
     var onSwitchScenario: ((Int) -> Void)? = nil
 
+    /// Bulk-lock today's events — adds every event currently rendered
+    /// on today's section to `OptimizerService.lockedEventIds`. Useful
+    /// before running the optimizer to ensure nothing already on the
+    /// calendar moves; the GA only places overflow / new tasks. nil =
+    /// the quick-action is hidden from the calm-state popover.
+    var onLockTodaysEvents: (() -> Void)? = nil
+
     @State private var showingPlanDayPopover = false
     @State private var showingReasoningPopover = false
 
@@ -441,6 +448,33 @@ struct SmartActions: View {
             presetButton(icon: "timer",                  label: "Schedule pomodoro day", request: .pomodoroBlock,          successLabel: "Scheduled pomodoro day")
             presetButton(icon: "person.2",               label: "Batch meetings",        request: .batchMeetingsPreset,    successLabel: "Batched meetings")
             presetButton(icon: "calendar",               label: "Plan whole week",       request: .planWeek,               successLabel: "Planned the week")
+
+            // Bulk-lock today's events. Sits below the six recipe
+            // presets because it's a per-event constraint operation,
+            // not a scheduling recipe — the divider keeps the two
+            // categories visually separate. Hidden when the host
+            // doesn't expose `onLockTodaysEvents` (preview surfaces).
+            if let lockHandler = onLockTodaysEvents {
+                Divider()
+                    .padding(.vertical, DS.Spacing.xxs)
+                Button {
+                    Haptics.tap()
+                    showingPlanDayPopover = false
+                    lockHandler()
+                } label: {
+                    HStack(spacing: DS.Spacing.sm) {
+                        Image(systemName: "lock.fill")
+                            .frame(width: DS.Size.iconSmall)
+                        Text("Lock today's events")
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, DS.Spacing.sm)
+                    .padding(.vertical, DS.Spacing.xs)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Pin every event already on today's schedule so the optimizer doesn't move them")
+            }
 
             Divider()
                 .padding(.vertical, DS.Spacing.xxs)

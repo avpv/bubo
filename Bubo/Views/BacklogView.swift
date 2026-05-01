@@ -68,6 +68,10 @@ struct BacklogView: View {
     /// Surfaces only when the GA returned ≥2 scenarios; nil means the
     /// scenario picker is rendered as static dots.
     var onSwitchScenario: ((Int) -> Void)? = nil
+    /// Bulk-lock today's events — the SmartActions calm popover's
+    /// «Lock today's events» quick action calls into this. nil =
+    /// the action is hidden.
+    var onLockTodaysEvents: (() -> Void)? = nil
     /// Open the command palette seeded with a single task (per-task scope
     /// optimizer entry — context menu's «Reschedule…» on a row).
     var onRescheduleTask: ((BacklogTask) -> Void)? = nil
@@ -652,7 +656,8 @@ struct BacklogView: View {
                 await onRunRequest?(request, label)
             },
             onOpenPalette: { onOpenPalette?() },
-            onSwitchScenario: onSwitchScenario
+            onSwitchScenario: onSwitchScenario,
+            onLockTodaysEvents: onLockTodaysEvents
         )
         .padding(.horizontal, DS.Spacing.sm)
     }
