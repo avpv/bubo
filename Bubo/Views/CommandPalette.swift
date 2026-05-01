@@ -381,6 +381,33 @@ struct CommandPalette: View {
             SkinSeparator()
             powerModeComposer(request)
         }
+
+        footer
+    }
+
+    /// Footer with keyboard hints. Birman: label describes the specific
+    /// action, not a generic verb.
+    @ViewBuilder
+    private var footer: some View {
+        HStack(spacing: DS.Spacing.md) {
+            hint("↵", selectedIndex < visibleItems.count
+                 ? visibleItems[selectedIndex].label
+                 : (searchText.isEmpty ? "run" : "Ask AI"))
+            if visibleItems.count > 1 {
+                hint("↑↓", "select")
+            }
+            if !showPowerMode {
+                hint("⌥", "customize")
+            }
+            Spacer()
+            Button { onDismiss() } label: {
+                hint("esc", "close")
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.top, DS.Spacing.sm)
+        .padding(.bottom, DS.Spacing.xs)
     }
 
     /// Whether the burnout-rescue card should appear at the top of the
@@ -541,28 +568,6 @@ struct CommandPalette: View {
                 }
             }
         }
-        .padding(.bottom, DS.Spacing.xs)
-    }
-
-        // Footer — Birman: label describes the specific action, not a generic verb.
-        HStack(spacing: DS.Spacing.md) {
-            hint("↵", selectedIndex < visibleItems.count
-                 ? visibleItems[selectedIndex].label
-                 : (searchText.isEmpty ? "run" : "Ask AI"))
-            if visibleItems.count > 1 {
-                hint("↑↓", "select")
-            }
-            if !showPowerMode {
-                hint("⌥", "customize")
-            }
-            Spacer()
-            Button { onDismiss() } label: {
-                hint("esc", "close")
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, DS.Spacing.md)
-        .padding(.top, DS.Spacing.sm)
         .padding(.bottom, DS.Spacing.xs)
     }
 

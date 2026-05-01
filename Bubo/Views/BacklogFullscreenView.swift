@@ -837,9 +837,14 @@ struct BacklogFullscreenView: View {
             isFocused: focusedTaskId == task.id,
             onFocusPrev: { focusRow(offsetFrom: task.id, by: -1) },
             onFocusNext: { focusRow(offsetFrom: task.id, by: +1) },
-            sprintHotKey: hotKey,
             proposedSlot: proposedSlot,
+            sprintHotKey: hotKey,
             onFindSlot: onScheduleTask.map { handler in { handler(task) } },
+            onSetPreferredPeriod: { period in
+                var updated = task
+                updated.preferredPeriod = period
+                backlogService.updateTask(updated)
+            },
             onSplitTask: onSplitTask.map { handler in { handler(task) } },
             onSnoozeByDays: { days in
                 var updated = task
@@ -849,11 +854,6 @@ struct BacklogFullscreenView: View {
                     updated.deadline = pushed
                     backlogService.updateTask(updated)
                 }
-            },
-            onSetPreferredPeriod: { period in
-                var updated = task
-                updated.preferredPeriod = period
-                backlogService.updateTask(updated)
             },
             onReschedule: onRescheduleTask.map { handler in { handler(task) } },
             onSetDeadline: { deadlinePickerTask = task },

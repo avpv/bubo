@@ -60,7 +60,7 @@ final class OptimizerService {
     /// «keep this event fixed» into the command palette for each one.
     /// Birman: «правила — это объекты на экране» — the lock icon IS
     /// the intent.
-    private(set) var lockedEventIds: Set<String> = Self.loadIds(key: Self.lockedEventIdsKey)
+    private(set) var lockedEventIds: Set<String> = OptimizerService.loadIds(key: OptimizerService.lockedEventIdsKey)
 
     /// Set of event ids the user has explicitly **excluded** from
     /// optimization via the per-event context menu in `EventRowView`.
@@ -69,7 +69,7 @@ final class OptimizerService {
     /// «pretend it doesn't exist» — so the GA receives both intents
     /// when both are non-empty. An event in both sets behaves like
     /// excluded (the stricter intent wins inside the IntentCompiler).
-    private(set) var excludedEventIds: Set<String> = Self.loadIds(key: Self.excludedEventIdsKey)
+    private(set) var excludedEventIds: Set<String> = OptimizerService.loadIds(key: OptimizerService.excludedEventIdsKey)
 
     private static let lockedEventIdsKey = "BuboOptimizerLockedEventIds"
     private static let excludedEventIdsKey = "BuboOptimizerExcludedEventIds"
@@ -125,7 +125,7 @@ final class OptimizerService {
     /// optimizer pass scoped to this event». UserDefaults-backed map
     /// keyed by event id. Stored as `[String: Int]` — anything else
     /// would require migration.
-    private(set) var flexPercentByEventId: [String: Int] = Self.loadFlexMap()
+    private(set) var flexPercentByEventId: [String: Int] = OptimizerService.loadFlexMap()
 
     private static let flexMapKey = "BuboOptimizerFlexPercentByEventId"
 
@@ -174,7 +174,7 @@ final class OptimizerService {
     func flexIntent(for event: CalendarEvent) -> ScheduleIntent? {
         let percent = flex(eventId: event.id)
         guard percent > 0 else { return nil }
-        let durationMinutes = max(1, Int(event.endTime.timeIntervalSince(event.startTime) / 60))
+        let durationMinutes = max(1, Int(event.endDate.timeIntervalSince(event.startDate) / 60))
         let lower = max(5, durationMinutes - durationMinutes * percent / 100)
         let upper = durationMinutes + durationMinutes * percent / 100
         return .flexDuration(minMinutes: lower, maxMinutes: upper)
