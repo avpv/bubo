@@ -708,6 +708,10 @@ struct BacklogFullscreenView: View {
                         isInputFocused = false
                     }
 
+                // Mirrors the inline `BacklogView` chip pair: explicit
+                // parse → accent capsule (committed-looking), verb guess
+                // → quiet `~30m` in machineHint voice (advisory). One
+                // visual rhythm across both backlog surfaces.
                 if let minutes = parsedNewTaskTitle.durationMinutes {
                     Text(DS.formatMinutes(minutes))
                         .font(.footnote.weight(.medium).monospacedDigit())
@@ -719,6 +723,13 @@ struct BacklogFullscreenView: View {
                         )
                         .transition(.opacity.combined(with: .scale(scale: 0.9)))
                         .accessibilityLabel("Parsed duration: \(DS.formatMinutes(minutes))")
+                } else if !parsedNewTaskTitle.cleaned.isEmpty,
+                          let guess = BacklogTitleParser.guessDuration(for: parsedNewTaskTitle.cleaned) {
+                    Text("~\(DS.formatMinutes(guess))")
+                        .font(DS.Typography.machineHint)
+                        .foregroundStyle(skin.resolvedTextTertiary)
+                        .transition(.opacity)
+                        .accessibilityLabel("Guessed duration: about \(DS.formatMinutes(guess))")
                 }
             }
             .padding(.horizontal, DS.Spacing.sm)
