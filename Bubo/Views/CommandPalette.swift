@@ -372,8 +372,26 @@ struct CommandPalette: View {
             .padding(.bottom, DS.Spacing.xs)
         }
 
-        // Smart suggestions — the main UI
+        // Smart suggestions — the main UI. When search is empty and the
+        // ranker has produced something, label the section as «RIGHT
+        // NOW» so the user reads them as «context-aware suggestions
+        // for this moment», not generic recipes. Mirrors the
+        // `DS.Typography.label` voice the SmartActions reasoning popover
+        // and other section headers across the app already use.
         VStack(alignment: .leading, spacing: 2) {
+            if searchText.isEmpty,
+               !visibleItems.isEmpty,
+               seedEvent == nil, seedTask == nil, seedSlotMinutes == nil {
+                Text("Right now")
+                    .font(DS.Typography.label(skin: skin))
+                    .tracking(0.5)
+                    .textCase(.uppercase)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.top, DS.Spacing.xxs)
+                    .padding(.bottom, DS.Spacing.xxs)
+            }
+
             ForEach(Array(visibleItems.enumerated()), id: \.element.id) { index, item in
                 suggestionRow(item, index: index)
             }
