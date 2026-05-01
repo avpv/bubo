@@ -318,6 +318,22 @@ struct BacklogView: View {
                 || !completedToday.isEmpty
                 || !backlogService.frozen.isEmpty {
                 backlogHeader
+                // Capacity verdict — «Done by 17:30» / «X h over capacity» /
+                // «After hours · X queued» — lives on its own row directly
+                // under the header. Pulled out of the header HStack so the
+                // red «over capacity» warning no longer crowds the controls
+                // row (count, urgent pill, fullscreen, overflow); the
+                // diagnosis gets its own line of breathing room while the
+                // header stays a clean row of glanceable facts and actions.
+                if !allActiveTasks.isEmpty {
+                    BacklogCapacityLabel(
+                        pendingMinutes: pendingWorkloadMinutes,
+                        overflowingCount: 0,
+                        optimizerService: optimizerService
+                    )
+                    .padding(.horizontal, DS.Spacing.sm)
+                    .padding(.bottom, DS.Spacing.sm)
+                }
                 // SmartActions sits directly between the diagnosis (header
                 // verdict + capacity ring) and the evidence (task list).
                 // Birman: «прямое действие на месте проблемы». Renders one
@@ -519,31 +535,6 @@ struct BacklogView: View {
                     optimizerService: optimizerService
                 )
                 .help(capacityRingTooltip)
-
-                // Verdict next to the ring — «Done by 17:30» / «1h over
-                // capacity» / «After hours · 3h queued». Replaces the older
-                // «5h / 3h» numbers (which stay reachable through the ring's
-                // popover and tooltip) so the inline label is interpretation,
-                // not arithmetic the reader has to do themselves.
-                // The `· N don't fit` suffix is intentionally dropped here —
-                // the same fact now lives in the `SmartActions` row directly
-                // below the header (subtext on the overflow fix), and the
-                // pre-redesign duplicate ("· N don't fit" + "X h spill over")
-                // is what the new layout exists to eliminate. Birman: «не
-                // дублируй сигналы». The label keeps the verdict (Done by /
-                // over by / after hours) only.
-                BacklogCapacityLabel(
-                    pendingMinutes: pendingWorkloadMinutes,
-                    overflowingCount: 0,
-                    optimizerService: optimizerService
-                )
-
-                // Middot separator between the verdict and the count —
-                // turns the run-on «9h over capacity 14 1 urgent» into three
-                // visually-separated facts. Birman: middot is the standard
-                // Russian/Mac typographic glue between commensurate items;
-                // the eye reads each side as its own object.
-                headerSeparator
             }
 
             Button {
