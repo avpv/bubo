@@ -39,43 +39,6 @@ struct EventDetailView: View {
         event.isLocalEvent
     }
 
-    /// Header overflow menu hosting optimizer-driven actions (Reschedule,
-    /// Extend). Lives in the trailing slot of `PopoverHeader` so the footer
-    /// can keep just two explicit affordances — Edit and Delete. Returns
-    /// `nil` when neither callback is wired so the header stays balanced.
-    /// Styling is left to the active skin — match the back button pattern
-    /// (.borderless) so the icon picks up skin foreground/tint via env.
-    private var optimizerOverflowMenu: AnyView? {
-        guard onReschedule != nil || onExtend != nil else { return nil }
-        let menu = Menu {
-            if onReschedule != nil {
-                Button {
-                    Haptics.tap()
-                    onReschedule?(event)
-                } label: {
-                    Label("Reschedule\u{2026}", systemImage: "calendar.badge.clock")
-                }
-            }
-            if onExtend != nil {
-                Button {
-                    Haptics.tap()
-                    onExtend?(event)
-                } label: {
-                    Label("Extend to next free slot", systemImage: "arrow.right.to.line")
-                }
-                .disabled(!isLocal)
-            }
-        } label: {
-            Label("More actions", systemImage: "ellipsis.circle")
-                .labelStyle(.iconOnly)
-        }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .help("More actions")
-        return AnyView(menu)
-    }
-
     var body: some View {
         // HIG: Use TimelineView for time-based UI updates instead of Timer.publish
         TimelineView(.periodic(from: .now, by: 1)) { context in
@@ -84,8 +47,7 @@ struct EventDetailView: View {
             PopoverHeader(
                 title: isLocal ? (event.eventType == .pomodoro ? "Pomodoro" : "Event") : nil,
                 showBack: true,
-                onBack: onBack,
-                trailing: optimizerOverflowMenu
+                onBack: onBack
             )
 
             ScrollView {
@@ -118,6 +80,35 @@ struct EventDetailView: View {
                                 .font(.subheadline)
                                 .foregroundStyle(skin.resolvedTextSecondary)
                                 .accessibilityLabel("Time: \(event.formattedTimeRange)")
+
+                            // Optimizer-driven time actions live inside the
+                            // time platter — contextual home for «Reschedule»
+                            // and «Extend» since both manipulate when the
+                            // event lives, not what it is. Compact secondary
+                            // buttons keep visual weight subordinate to the
+                            // time facts they sit beneath.
+                            if onReschedule != nil || (onExtend != nil && isLocal) {
+                                HStack(spacing: DS.Spacing.sm) {
+                                    if onReschedule != nil {
+                                        Button {
+                                            Haptics.tap()
+                                            onReschedule?(event)
+                                        } label: {
+                                            Label("Reschedule", systemImage: "calendar.badge.clock")
+                                        }
+                                        .buttonStyle(.action(role: .secondary, size: .compact))
+                                    }
+                                    if onExtend != nil && isLocal {
+                                        Button {
+                                            Haptics.tap()
+                                            onExtend?(event)
+                                        } label: {
+                                            Label("Extend", systemImage: "arrow.right.to.line")
+                                        }
+                                        .buttonStyle(.action(role: .secondary, size: .compact))
+                                    }
+                                }
+                            }
                         }
 
                         // Live countdown with seconds — tap to open timer screen
