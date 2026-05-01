@@ -395,6 +395,20 @@ struct CommandPalette: View {
         }
         .padding(.horizontal, DS.Spacing.sm)
 
+        // «Plan today» outcome-named presets — always visible when the
+        // search field is empty and we're not in a seed context (a
+        // specific event/task/slot drives its own focused suggestions
+        // above instead). Mirrors the SmartActions calm-state popover
+        // so users have one canonical surface for the six day-scope
+        // recipes regardless of whether they got there via the row or
+        // via ⌘K. Birman: «один путь к одному действию».
+        if searchText.isEmpty,
+           seedEvent == nil, seedTask == nil, seedSlotMinutes == nil,
+           !showPowerMode {
+            SkinSeparator()
+            planTodayPresets
+        }
+
         // Power mode (intent composer) — hidden by default
         if showPowerMode, let request = composedRequest {
             SkinSeparator()
@@ -421,6 +435,59 @@ struct CommandPalette: View {
         .padding(.horizontal, DS.Spacing.md)
         .padding(.top, DS.Spacing.sm)
         .padding(.bottom, DS.Spacing.xs)
+    }
+
+    // MARK: - Plan-today presets
+
+    /// The six outcome-named day-scope recipes from `IntentPresets`.
+    /// Mirrors the `SmartActions` calm-state popover so the canonical
+    /// «Plan day…» actions live both inline (next to the backlog) and
+    /// in the global ⌘K palette. Calling either path goes through the
+    /// same `runRequest` pipeline so toast / undo / reasoning surface
+    /// fire identically.
+    @ViewBuilder
+    private var planTodayPresets: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Plan today")
+                .font(DS.Typography.label(skin: skin))
+                .tracking(0.5)
+                .textCase(.uppercase)
+                .foregroundStyle(skin.resolvedTextTertiary)
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.top, DS.Spacing.xs)
+                .padding(.bottom, DS.Spacing.xxs)
+
+            presetButton(icon: "wand.and.stars",     label: "Organize today",        request: .organizeDay)
+            presetButton(icon: "brain.head.profile", label: "Find 2 h focus",        request: .findFocus(minutes: 120, period: .morning))
+            presetButton(icon: "leaf",               label: "Low energy day",        request: .lowEnergyDay)
+            presetButton(icon: "timer",              label: "Schedule pomodoro day", request: .pomodoroBlock)
+            presetButton(icon: "person.2",           label: "Batch meetings",        request: .batchMeetingsPreset)
+            presetButton(icon: "calendar",           label: "Plan whole week",       request: .planWeek)
+        }
+        .padding(.bottom, DS.Spacing.xs)
+    }
+
+    @ViewBuilder
+    private func presetButton(icon: String, label: String, request: OptimizationRequest) -> some View {
+        Button {
+            Haptics.tap()
+            runRequest(request)
+        } label: {
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: icon)
+                    .font(.body)
+                    .foregroundStyle(skin.accentColor)
+                    .frame(width: 18)
+                Text(label)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(skin.resolvedTextPrimary)
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, DS.Spacing.xs)
+            .padding(.horizontal, DS.Spacing.md)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Suggestion Row
