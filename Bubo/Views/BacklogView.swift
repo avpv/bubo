@@ -1010,6 +1010,11 @@ struct BacklogView: View {
                 handleRowHover(task: task, hovering: hovering)
             },
             onFindSlot: onScheduleTask.map { handler in { handler(task) } },
+            onSetPreferredPeriod: { period in
+                var updated = task
+                updated.preferredPeriod = period
+                backlogService.updateTask(updated)
+            },
             onReschedule: onRescheduleTask.map { handler in { handler(task) } },
             onSetDeadline: { deadlinePickerTask = task },
             onToggleUrgent: { toggleUrgent(task) },

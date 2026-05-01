@@ -73,6 +73,13 @@ struct BacklogTaskRow: View {
     /// формулировать запрос для одной задачи. nil = action hidden.
     var onFindSlot: (() -> Void)? = nil
 
+    /// Set the task's `preferredPeriod` — surfaced as a sub-menu of
+    /// «Prefer morning / afternoon / evening / night / Clear». Reifies
+    /// the `preferPeriod(match:period:)` intent at the per-row level;
+    /// the optimizer reads `task.preferredPeriod` directly when
+    /// scheduling. nil = sub-menu hidden.
+    var onSetPreferredPeriod: ((Period?) -> Void)? = nil
+
     /// Reschedule this task via the command palette (per-task scope optimizer
     /// entry point). Opens ⌘K seeded with the task so it lands on the
     /// «Schedule "<title>"» / «Find best time» suggestions. nil = no
@@ -411,7 +418,7 @@ struct BacklogTaskRow: View {
             // task; «Set deadline» opens an inline date picker; «Mark
             // urgent» toggles a today deadline (the same deadline that
             // drives the leading red stripe).
-            if onFindSlot != nil || onReschedule != nil || onSetDeadline != nil || canToggleUrgent {
+            if onFindSlot != nil || onReschedule != nil || onSetDeadline != nil || canToggleUrgent || onSetPreferredPeriod != nil {
                 Divider()
                 if let findSlot = onFindSlot {
                     Button("Find a slot now") { findSlot() }
@@ -424,6 +431,25 @@ struct BacklogTaskRow: View {
                 }
                 if canToggleUrgent, let toggle = onToggleUrgent {
                     Button(urgencyToggleLabel) { toggle() }
+                }
+                if let setPeriod = onSetPreferredPeriod {
+                    // Sub-menu — period preferences are infrequent edits
+                    // but cluster naturally as «when does this task fit
+                    // best?». Bunching them keeps the parent menu calm.
+                    Menu("Prefer time of day") {
+                        Button("Morning") { setPeriod(.morning) }
+                            .disabled(task.preferredPeriod == .morning)
+                        Button("Afternoon") { setPeriod(.afternoon) }
+                            .disabled(task.preferredPeriod == .afternoon)
+                        Button("Evening") { setPeriod(.evening) }
+                            .disabled(task.preferredPeriod == .evening)
+                        Button("Night") { setPeriod(.night) }
+                            .disabled(task.preferredPeriod == .night)
+                        if task.preferredPeriod != nil {
+                            Divider()
+                            Button("Clear preference") { setPeriod(nil) }
+                        }
+                    }
                 }
             }
 
