@@ -39,6 +39,27 @@ struct EventDetailView: View {
         event.isLocalEvent
     }
 
+    /// J8: auto-expand the Prep scratchpad as the event approaches.
+    /// 10-min window matches the existing reminder-default cadence. Past
+    /// the start we keep it collapsed by default — the user is in the
+    /// meeting, not preparing for it.
+    private func prepShouldAutoExpand(now: Date) -> Bool {
+        let secondsUntilStart = event.startDate.timeIntervalSince(now)
+        return secondsUntilStart > 0 && secondsUntilStart <= 600
+    }
+
+    /// J7: surface the Focus-Filters tip for events the user is most
+    /// likely to want to defend (Pomodoros + locally-titled focus blocks).
+    /// External meetings already carry their own etiquette; we don't
+    /// suggest engaging Do Not Disturb during someone else's stand-up.
+    private var shouldShowFocusTip: Bool {
+        guard isLocal else { return false }
+        let isPomodoro = event.eventType == .pomodoro
+        let titleSignalsFocus = event.title.localizedCaseInsensitiveContains("focus")
+            || event.title.localizedCaseInsensitiveContains("deep work")
+        return isPomodoro || titleSignalsFocus
+    }
+
     var body: some View {
         // HIG: Use TimelineView for time-based UI updates instead of Timer.publish
         TimelineView(.periodic(from: .now, by: 1)) { context in
@@ -175,6 +196,30 @@ struct EventDetailView: View {
                         .padding(DS.Spacing.lg)
                         .skinPlatter(skin)
                         .skinPlatterDepth(skin)
+                    }
+
+                    // J8: Prep — local-only markdown scratchpad keyed by
+                    // event id. Round-trips through `EventPrepStore`
+                    // (UserDefaults + iCloud KV mirror), so notes survive
+                    // app restarts and propagate to other devices logged
+                    // into the same iCloud account, but never touch the
+                    // shared calendar — colleagues invited to the meeting
+                    // see nothing. Auto-expanded when start is < 10 min
+                    // away so the user gets a heads-up nudge.
+                    PrepNotesSection(
+                        eventId: event.id,
+                        autoExpand: prepShouldAutoExpand(now: now)
+                    )
+
+                    // J7: macOS Focus tip — surfaced once per event id for
+                    // local Pomodoro / Focus events that benefit from
+                    // pairing with a system Focus filter. The system path
+                    // is genuinely separate (Focus Filters / Intents
+                    // entitlement), so we recommend rather than wire it
+                    // automatically. Quiet, dismissible, never re-shows
+                    // for the same event.
+                    if shouldShowFocusTip {
+                        FocusTipBanner(eventId: event.id)
                     }
 
                     // Calendar name
@@ -382,6 +427,180 @@ struct EventDetailView: View {
                             .accessibilityLabel(day.fullName)
                     }
                 }
+            }
+        }
+    }
+
+    // MARK: - Prep Notes Section
+
+    /// J8: per-event markdown scratchpad. Auto-expanded when start is
+    /// less than 10 min away (passed in via `autoExpand`); otherwise
+    /// stays collapsed behind a one-line summary so the detail view
+    /// stays scannable at calmer moments.
+    private struct PrepNotesSection: View {
+        let eventId: String
+        let autoExpand: Bool
+
+        @Environment(\.activeSkin) private var skin
+        @State private var draft: String = EventPrepStore.text(for: "")
+        @State private var isExpanded: Bool = false
+        @State private var hasLoaded: Bool = false
+        @FocusState private var editorFocused: Bool
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                Button {
+                    Haptics.tap()
+                    withAnimation(skin.resolvedMicroAnimation) {
+                        isExpanded.toggle()
+                    }
+                    if isExpanded {
+                        editorFocused = true
+                    }
+                } label: {
+                    HStack(spacing: DS.Spacing.sm) {
+                        Image(systemName: "square.and.pencil")
+                            .font(.footnote)
+                            .foregroundStyle(skin.resolvedTextTertiary)
+                        Text("Prep")
+                            .font(.footnote.weight(.medium))
+                            .foregroundStyle(skin.resolvedTextTertiary)
+                        if !draft.isEmpty {
+                            Text("\u{00B7} private")
+                                .font(DS.Typography.machineHint)
+                                .foregroundStyle(skin.resolvedTextTertiary)
+                        }
+                        Spacer(minLength: DS.Spacing.sm)
+                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                            .font(.system(size: DS.Size.iconSmall, weight: .medium))
+                            .foregroundStyle(skin.resolvedTextTertiary)
+                            .contentTransition(.symbolEffect(.replace))
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(isExpanded ? "Collapse prep notes" : "Expand prep notes")
+
+                if isExpanded {
+                    // Local-only label — explicit signal that the notes
+                    // never leave the device chain. Same micro-typography
+                    // as the «Event will be stored locally in Bubo only»
+                    // line in AddEventView's local-event hint.
+                    Text("Stored locally on your devices · not visible to invitees")
+                        .font(DS.Typography.machineHint)
+                        .foregroundStyle(skin.resolvedTextTertiary)
+
+                    TextEditor(text: $draft)
+                        .font(.subheadline)
+                        .foregroundStyle(skin.resolvedTextPrimary)
+                        .scrollContentBackground(.hidden)
+                        .focused($editorFocused)
+                        .frame(minHeight: 80, maxHeight: 200)
+                        .padding(DS.Spacing.sm)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(skin.resolvedTextTertiary.opacity(DS.Opacity.subtleFill))
+                        )
+                        .onChange(of: draft) { _, newValue in
+                            // Skip the first onChange that fires when we
+                            // load the saved draft into state; only user
+                            // edits should hit the store.
+                            guard hasLoaded else { return }
+                            EventPrepStore.setText(newValue, for: eventId)
+                        }
+                } else if !draft.isEmpty {
+                    // Collapsed preview — first non-empty line, truncated.
+                    // Lets the user see a hint without expanding.
+                    let preview = draft
+                        .components(separatedBy: .newlines)
+                        .first(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }) ?? ""
+                    Text(preview)
+                        .font(.subheadline)
+                        .foregroundStyle(skin.resolvedTextSecondary)
+                        .lineLimit(2)
+                        .truncationMode(.tail)
+                }
+            }
+            .padding(DS.Spacing.lg)
+            .skinPlatter(skin)
+            .skinPlatterDepth(skin)
+            .onAppear {
+                draft = EventPrepStore.text(for: eventId)
+                isExpanded = autoExpand || !draft.isEmpty
+                hasLoaded = true
+            }
+        }
+    }
+
+    // MARK: - Focus Tip
+
+    /// J7: one-shot tip that nudges the user to pair this event with a
+    /// macOS Focus Filter. Surfaced for local Pomodoros and titled
+    /// «focus / deep work» blocks. Dismissed-per-event via UserDefaults
+    /// so the same tip never re-appears for the same id.
+    private struct FocusTipBanner: View {
+        let eventId: String
+
+        @Environment(\.activeSkin) private var skin
+        @State private var isVisible: Bool = false
+
+        private static let dismissedKey = "BuboFocusTipDismissedEventIds"
+
+        var body: some View {
+            Group {
+                if isVisible {
+                    HStack(alignment: .top, spacing: DS.Spacing.sm) {
+                        Image(systemName: "moon.stars.fill")
+                            .font(.subheadline)
+                            .foregroundStyle(skin.accentColor)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Tip · pair with macOS Focus")
+                                .font(.footnote.weight(.medium))
+                                .foregroundStyle(skin.resolvedTextPrimary)
+                            // Concrete instruction — the user can act on
+                            // it without us reaching into Focus Filters
+                            // through Intents (a separate entitlement).
+                            Text("Control Center \u{2192} Focus \u{2192} Work to mute notifications during this block.")
+                                .font(.footnote)
+                                .foregroundStyle(skin.resolvedTextSecondary)
+                        }
+                        Spacer(minLength: DS.Spacing.sm)
+                        Button {
+                            Haptics.tap()
+                            dismissPermanently()
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: DS.Size.iconSmall, weight: .medium))
+                                .foregroundStyle(skin.resolvedTextTertiary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Don't show this tip again for this event")
+                        .accessibilityLabel("Dismiss tip")
+                    }
+                    .padding(DS.Spacing.md)
+                    .skinPlatter(skin)
+                    .transition(.opacity)
+                }
+            }
+            .onAppear {
+                let dismissed = Set(UserDefaults.standard.stringArray(forKey: Self.dismissedKey) ?? [])
+                isVisible = !dismissed.contains(eventId)
+            }
+        }
+
+        private func dismissPermanently() {
+            var dismissed = Set(UserDefaults.standard.stringArray(forKey: Self.dismissedKey) ?? [])
+            dismissed.insert(eventId)
+            // Cap at 500 ids so the array doesn't grow unbounded for
+            // long-lived users; we drop the oldest by intersecting with
+            // a sorted prefix. Order isn't observable past membership,
+            // so a deterministic-but-arbitrary trim is fine.
+            if dismissed.count > 500 {
+                dismissed = Set(dismissed.sorted().prefix(500))
+            }
+            UserDefaults.standard.set(Array(dismissed), forKey: Self.dismissedKey)
+            withAnimation(skin.resolvedMicroAnimation) {
+                isVisible = false
             }
         }
     }

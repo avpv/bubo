@@ -28,6 +28,12 @@ struct CommandPalette: View {
 
     var onDismiss: () -> Void
     var onApplied: (_ request: OptimizationRequest, _ undo: @escaping () -> Void) -> Void
+    /// Cross-cutting #2: open the event detail for a search result. nil
+    /// = the palette never surfaces event matches. Wired from
+    /// `MenuBarView` to `navigation = .detail(event)` so the palette
+    /// doubles as Bubo's spotlight for events without a separate
+    /// search bar (§4 — don't add modes).
+    var onOpenEvent: ((CalendarEvent) -> Void)? = nil
 
     // MARK: - State
 
@@ -364,6 +370,17 @@ struct CommandPalette: View {
 
         rightNowSection
 
+        // Cross-cutting #2: Events search. Matches today + future
+        // events by title / location while the user types, surfacing
+        // them as a separate section below the dynamic ranker
+        // suggestions. Selecting a row opens the event detail —
+        // turning ⌘K into Bubo's spotlight without adding a
+        // dedicated search bar (§4 — don't add modes).
+        if !matchingEvents.isEmpty, onOpenEvent != nil {
+            SkinSeparator()
+            eventsSection
+        }
+
         if searchText.isEmpty,
            seedEvent == nil, seedTask == nil, seedSlotMinutes == nil,
            !showPowerMode {
@@ -498,6 +515,88 @@ struct CommandPalette: View {
                 }
                 .padding(.vertical, DS.Spacing.sm)
                 .padding(.horizontal, DS.Spacing.md)
+            }
+        }
+        .padding(.horizontal, DS.Spacing.sm)
+    }
+
+    // MARK: - Events Search (Cross-cutting #2)
+
+    /// Cross-cutting #2 cap. Surfacing more than 5 events would crowd
+    /// the picker; the ones that don't fit teach the user to refine
+    /// the query.
+    private static let maxEventResults = 5
+
+    /// Cross-cutting #2: case-insensitive substring match on title +
+    /// location. Limited to upcoming + today's events so we don't
+    /// turn the palette into an archive search. Returns up to
+    /// `maxEventResults` items, sorted chronologically.
+    private var matchingEvents: [CalendarEvent] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !query.isEmpty, query.count >= 2 else { return [] }
+
+        let cal = Calendar.current
+        let startOfToday = cal.startOfDay(for: Date())
+
+        return reminderService.allEvents
+            .filter { event in
+                guard event.endDate >= startOfToday else { return false }
+                if event.title.lowercased().contains(query) { return true }
+                if let location = event.location, location.lowercased().contains(query) { return true }
+                return false
+            }
+            .sorted { $0.startDate < $1.startDate }
+            .prefix(Self.maxEventResults)
+            .map { $0 }
+    }
+
+    @ViewBuilder
+    private var eventsSection: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: DS.Spacing.xs) {
+                Text("Events")
+                    .font(DS.Typography.label(skin: skin))
+                    .tracking(0.5)
+                    .textCase(.uppercase)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                Spacer(minLength: 0)
+                Text("\(matchingEvents.count)")
+                    .font(DS.Typography.machineHint)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+            }
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.top, DS.Spacing.xxs)
+            .padding(.bottom, DS.Spacing.xxs)
+
+            ForEach(matchingEvents) { event in
+                Button {
+                    Haptics.tap()
+                    onOpenEvent?(event)
+                    onDismiss()
+                } label: {
+                    HStack(alignment: .top, spacing: DS.Spacing.sm) {
+                        Image(systemName: "calendar")
+                            .font(.body)
+                            .foregroundStyle(skin.accentColor)
+                            .frame(width: 18)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(event.title)
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(skin.resolvedTextPrimary)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                            Text("\(event.formattedDate) \u{00B7} \(event.formattedTimeRange)")
+                                .font(DS.Typography.machineHint)
+                                .foregroundStyle(skin.resolvedTextTertiary)
+                                .lineLimit(1)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.vertical, DS.Spacing.xxs)
+                    .padding(.horizontal, DS.Spacing.md)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, DS.Spacing.sm)

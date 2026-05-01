@@ -11,6 +11,27 @@ class SettingsViewModel {
     /// Posted when a deep-link navigation to a specific pane is requested.
     static let navigateToPaneNotification = Notification.Name("SettingsViewModel.navigateToPane")
 
+    /// UserDefaults key for the most-recently-viewed settings pane. Restored
+    /// on next `⌘,` so the user lands on the surface they were last in
+    /// instead of always General — settings are 3 clicks deep otherwise.
+    private static let lastPaneKey = "BuboSettingsLastPane"
+
+    /// Last pane the user actually selected (read in `SettingsView.onAppear`
+    /// when there's no `pendingPane` deep-link). Falls back to `.general`
+    /// when no value is stored or when the stored raw value no longer
+    /// matches a known case.
+    static var lastViewedPane: SettingsView.SettingsPane {
+        get {
+            guard let raw = UserDefaults.standard.string(forKey: lastPaneKey),
+                  let pane = SettingsView.SettingsPane(rawValue: raw)
+            else { return .general }
+            return pane
+        }
+        set {
+            UserDefaults.standard.set(newValue.rawValue, forKey: lastPaneKey)
+        }
+    }
+
     // MARK: - Reminders Tab
     var newIntervalMinutes = 10
 

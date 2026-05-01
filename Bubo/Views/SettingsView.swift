@@ -7,7 +7,7 @@ struct SettingsView: View {
     @Environment(OptimizerService.self) var optimizerService
     @Environment(AgentService.self) var agentService
     @State private var viewModel = SettingsViewModel()
-    @State private var selectedPane: SettingsPane = .general
+    @State private var selectedPane: SettingsPane = SettingsViewModel.lastViewedPane
 
     enum SettingsPane: String, CaseIterable, Hashable, Identifiable {
         case general = "General"
@@ -81,6 +81,12 @@ struct SettingsView: View {
                 selectedPane = pending
                 SettingsViewModel.pendingPane = nil
             }
+        }
+        .onChange(of: selectedPane) { _, newPane in
+            // Persist the user's choice so next `⌘,` opens here directly.
+            // Skipped while a deep-link is being applied — `pendingPane`
+            // overrides the saved value but shouldn't pollute it.
+            SettingsViewModel.lastViewedPane = newPane
         }
         .onReceive(NotificationCenter.default.publisher(for: SettingsViewModel.navigateToPaneNotification)) { notification in
             if let pane = notification.object as? SettingsPane {

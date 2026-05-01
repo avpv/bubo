@@ -36,6 +36,12 @@ final class NotificationScheduler {
     /// from a post-sync follow-up fetch.
     private var firedReminders: Set<String> = []
 
+    /// J4: snapshot of the most recent `schedule(_:)` input — used at
+    /// fire time to look up «what's the next event after this one» so
+    /// the full-screen alert can show a heads-up for back-to-back
+    /// meetings. Sorted by `startDate` lazily on lookup.
+    private var lastScheduledEvents: [CalendarEvent] = []
+
     init(settings: ReminderSettings) {
         self.settings = settings
         requestNotificationPermission()
@@ -79,6 +85,10 @@ final class NotificationScheduler {
     /// idempotent — callers can pass the same set multiple times per
     /// sync cycle without leaking timers.
     func schedule(_ events: [CalendarEvent]) {
+        // J4: keep the input snapshot for next-event lookup at fire time.
+        // Sorted lazily on demand so we don't pay the cost on every
+        // sync cycle when the alert never fires.
+        lastScheduledEvents = events
         for event in events where event.isUpcoming {
             cancel(eventId: event.id)
             var timers: [Timer] = []
@@ -311,14 +321,34 @@ final class NotificationScheduler {
     }
 
     private func postFullScreenAlert(for event: CalendarEvent, minutesBefore: Int) {
+        var userInfo: [String: Any] = [
+            "event": event,
+            "minutesBefore": minutesBefore,
+        ]
+        if let next = nextBackToBackEvent(after: event) {
+            userInfo["nextEvent"] = next
+        }
         NotificationCenter.default.post(
             name: .showFullScreenAlert,
             object: nil,
-            userInfo: [
-                "event": event,
-                "minutesBefore": minutesBefore,
-            ]
+            userInfo: userInfo
         )
+    }
+
+    /// J4: find the next event starting within `J4MaxGapSeconds` after
+    /// `event.endDate`. Returns nil when nothing qualifies — most alerts
+    /// won't surface a heads-up, which is the right default. Excludes
+    /// the same event id (recurring expansions can repeat ids in some
+    /// degenerate states) and the trivial case of overlapping events
+    /// already in progress.
+    private func nextBackToBackEvent(after event: CalendarEvent) -> CalendarEvent? {
+        let gap: TimeInterval = 10 * 60
+        let candidates = lastScheduledEvents
+            .filter { $0.id != event.id }
+            .filter { $0.startDate >= event.endDate }
+            .filter { $0.startDate.timeIntervalSince(event.endDate) <= gap }
+            .sorted { $0.startDate < $1.startDate }
+        return candidates.first
     }
 
     private func requestNotificationPermission() {

@@ -2,6 +2,13 @@ import SwiftUI
 import AppKit
 
 struct AddEventView: View {
+    /// Cross-cutting #4: when non-nil and `editingEvent == nil`, prefill
+    /// the form from this event's shape (title, duration, location,
+    /// reminders, color, Pomodoro config). Treated as a brand-new draft
+    /// — saving creates a fresh event, not an edit. Distinct from
+    /// `editingEvent` so the save path knows to insert rather than
+    /// update.
+    var prefillFromEvent: CalendarEvent? = nil
     var reminderService: ReminderService
     var editingEvent: CalendarEvent? = nil
     var initialEventType: EventType = .standard
@@ -485,6 +492,36 @@ struct AddEventView: View {
                 contextTag = event.context ?? ""
                 // Load Pomodoro parameters when editing a Pomodoro event
                 if event.eventType == .pomodoro, let rule = event.recurrenceRule, rule.pomodoroMode {
+                    if case .afterCount(let rounds) = rule.end {
+                        pomodoroRounds = rounds
+                    }
+                    pomodoroWork = max(Int(duration), 5)
+                    pomodoroBreak = max(rule.interval - Int(duration), 1)
+                    if rule.pomodoroLongBreak > 0 {
+                        pomodoroLongBreakEnabled = true
+                        pomodoroLongBreak = rule.pomodoroLongBreak
+                    }
+                }
+            } else if let source = prefillFromEvent {
+                // Cross-cutting #4: «Repeat from this event…» path.
+                // Inherit shape, drop identity. Same shape-handling as
+                // the editing branch above, minus the id/series/state
+                // we deliberately reset in `cloneAsDraft(_:)` upstream.
+                showMoreOptions = true
+                title = source.title
+                date = source.startDate
+                duration = source.endDate.timeIntervalSince(source.startDate) / 60
+                location = source.location ?? ""
+                description = source.description ?? ""
+                if let custom = source.customReminderMinutes, !custom.isEmpty {
+                    useCustomReminders = true
+                    reminderMinutes = custom
+                }
+                recurrenceRule = nil
+                selectedEventType = source.eventType
+                selectedColorTag = source.colorTag
+                contextTag = source.context ?? ""
+                if source.eventType == .pomodoro, let rule = source.recurrenceRule, rule.pomodoroMode {
                     if case .afterCount(let rounds) = rule.end {
                         pomodoroRounds = rounds
                     }
