@@ -483,7 +483,7 @@ struct EventRowView: View {
         ZStack {
             if let tag = event.colorTag {
                 Capsule()
-                    .fill(tag.color.opacity(event.isUpcoming ? 0.85 : 0.6))
+                    .fill(tag.color.opacity(event.isUpcoming ? 0.5 : 0.3))
                     .frame(width: DS.Size.accentBarWidth, height: DS.Size.accentBarHeight)
             } else {
                 // No user-assigned color: show an unfilled outline so the bar
