@@ -140,13 +140,13 @@ struct SmartActions: View {
 
     // MARK: - State resolution
 
-    private enum State {
+    private enum Resolution {
         case hard
         case soft(SuggestionEngine.Suggestion)
         case calm
     }
 
-    private var resolvedState: State {
+    private var resolvedState: Resolution {
         switch forecast {
         case .over, .afterHours:
             return .hard
