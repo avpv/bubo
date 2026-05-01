@@ -826,21 +826,17 @@ struct BacklogView: View {
         // capacity math; nothing to label as «FITS» (that's the obvious
         // default). Only the overflow gets a printed marker line because
         // that's the surprise the reader needs to see.
-        let baseOrder: [BacklogTask]
-        if useSmartSort {
-            baseOrder = smartSortedActiveTasks
-        } else {
+        let baseOrder: [BacklogTask] = {
+            if useSmartSort {
+                return smartSortedActiveTasks
+            }
             // Honour `groupedByContext` ordering, but respect the urgent-only
             // filter so the partition doesn't include rows the user has
             // hidden — otherwise the marker would read «9h spill over» while
             // showing a list that doesn't contain those 9h.
             let grouped = backlogService.groupedByContext.flatMap(\.tasks)
-            if urgentOnlyFilter {
-                baseOrder = grouped.filter { isUrgent($0) }
-            } else {
-                baseOrder = grouped
-            }
-        }
+            return urgentOnlyFilter ? grouped.filter { isUrgent($0) } : grouped
+        }()
         let ids: Set<String> = visibleIDs ?? Set(baseOrder.map(\.id))
 
         let plan = BacklogLogic.CapacitySectionPlan(
