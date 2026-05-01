@@ -137,15 +137,20 @@ struct WeekStripView: View {
 
 extension WeekStripView.DayLoad {
     /// Build a 7-day load array starting at the calendar week containing
-    /// `now`. Each day's `workloadMinutes` is the sum of durations of
-    /// `tasks` whose `deadline` falls on that day; `budgetMinutes` is the
-    /// `workingHours` window in minutes (or zero for non-working days
-    /// when `workingDays` is set, so the dot renders empty).
+    /// `now`. Each day's `workloadMinutes` sums:
+    ///   - durations of `tasks` whose `deadline` falls on that day
+    ///     (deadline pressure the user has set on the backlog);
+    ///   - durations of `events` whose `startTime` falls on that day
+    ///     (already-scheduled commitments).
+    /// `budgetMinutes` is the `workingHours` window in minutes (or zero
+    /// for non-working days when `workingDays` is set, so the dot
+    /// renders empty).
     ///
     /// Pure — no Date() reads beyond the `now` parameter — so it tests
     /// cleanly. Used by `BacklogFullscreenView` to seed `WeekStripView`.
     static func week(
         for tasks: [BacklogTask],
+        events: [CalendarEvent] = [],
         workingHours: ClosedRange<Int>,
         workingDays: Set<Int> = [],
         now: Date = Date(),
@@ -167,17 +172,23 @@ extension WeekStripView.DayLoad {
             }()
             let dayMinutes = isWorkingDay ? dailyMinutes : 0
 
-            let workload = tasks
+            let taskMinutes = tasks
                 .filter { task in
                     guard let deadline = task.deadline else { return false }
                     return calendar.isDate(deadline, inSameDayAs: day)
                 }
                 .reduce(0) { $0 + $1.durationMinutes }
 
+            let eventMinutes = events
+                .filter { calendar.isDate($0.startTime, inSameDayAs: day) }
+                .reduce(0) { acc, ev in
+                    acc + max(0, Int(ev.endTime.timeIntervalSince(ev.startTime) / 60))
+                }
+
             return WeekStripView.DayLoad(
                 id: calendar.startOfDay(for: day),
                 date: day,
-                workloadMinutes: workload,
+                workloadMinutes: taskMinutes + eventMinutes,
                 budgetMinutes: dayMinutes
             )
         }

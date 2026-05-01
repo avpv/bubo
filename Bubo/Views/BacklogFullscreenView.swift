@@ -567,6 +567,7 @@ struct BacklogFullscreenView: View {
     private var weekStrip: some View {
         let days = WeekStripView.DayLoad.week(
             for: activeTasks,
+            events: reminderService.allEvents,
             workingHours: optimizerService.workingHours,
             workingDays: optimizerService.workingDays
         )
