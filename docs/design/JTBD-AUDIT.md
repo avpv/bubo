@@ -296,18 +296,18 @@ recommendations*.
      user who dismisses by accident loses the path.
 - **Recommendations**:
   - Rewrite permission copy as
-    "Bubo needs Calendar access to show today's blocks. Open
-    Settings → Privacy → Calendar." *HIG · Privacy*.
+    “Bubo needs Calendar access to show today’s blocks. Open
+    Settings → Privacy → Calendar.” *HIG · Privacy*.
   - Expose "Carry to tomorrow" as an item in the `More ⌄` menu so
     the path survives banner dismissal.
 
 ### 3.10 · `ToastView`
 
 - **Job**: cross‑cutting — every reversible action.
-- **Current**: 2.5 s dismiss, 6 s when an `Undo` button is present.
-  Used by refresh, by destructive task actions.
+- **Current**: 2.5\u{00A0}s dismiss, 6\u{00A0}s when an `Undo` button
+  is present. Used by refresh, by destructive task actions.
 - **Frictions**:
-  1. 6 s is short for a deliberate undo, especially for users on
+  1. 6\u{00A0}s is short for a deliberate undo, especially for users on
      screen readers (*HIG · Accessibility*: time‑limited UI must be
      extendable).
   2. Several destructive actions in the codebase still confirm
