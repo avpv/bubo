@@ -1155,27 +1155,13 @@ struct MenuBarView: View {
                 backlogService: backlog,
                 optimizerService: optimizerService,
                 reminderService: reminderService,
-                onDeleteTask: { task in
-                    let originalIndex = backlog.indexOfTask(id: task.id)
-                    _ = backlog.removeTask(id: task.id)
-                    toastState.showSuccess("\u{201C}\(task.title)\u{201D} deleted", icon: "trash.fill") {
-                        backlog.restoreTask(task, at: originalIndex)
-                    }
-                },
-                onEditTask: { task in
-                    navigation = .editTask(task)
-                },
-                onCreateTaskWithDetails: { prefillTitle, prefillDuration in
-                    navigation = .newTask(prefillTitle: prefillTitle, prefillDuration: prefillDuration)
-                },
                 onEnterFullscreen: {
                     navigation = .backlog
                 },
                 onUndoableAction: { message, undo in
-                    // Unified undo pipe for reorder / complete / context
-                    // moves. Icon stays neutral ("arrow.uturn.backward") so
-                    // the same toast reads as "you can undo this" across
-                    // different action kinds.
+                    // Unified undo pipe for tombstone restores. Icon stays
+                    // neutral ("arrow.uturn.backward") so the toast reads
+                    // as "you can undo this" across action kinds.
                     toastState.showSuccess(message, icon: "arrow.uturn.backward", onUndo: undo)
                 },
                 onScheduleBacklog: {
@@ -1187,42 +1173,8 @@ struct MenuBarView: View {
                 onRunRequest: { request, label in
                     // Pipe arbitrary `OptimizationRequest`s coming from
                     // `SmartActions` (soft-suggestion Run + Plan day…
-                    // presets) through the same `runQuickAction` helper
-                    // the hard-overflow path uses — toast + undo come for
-                    // free, identical semantics across all three states.
+                    // presets) through the same `runQuickAction` helper.
                     await runQuickAction(request, label: label)
-                },
-                onScheduleTask: { task in
-                    // Per-task `findSlotsForBacklog` — same async pipe as
-                    // the backlog-wide path, scoped to one task via
-                    // `includeBacklogTasks(ids:)`. The user gets the
-                    // standard undo toast on success.
-                    Task {
-                        var req = OptimizationRequest(name: "Find slot")
-                        req.add(.includeBacklogTasks(ids: [task.id]))
-                        req.add(.findSlotsForBacklog)
-                        let trimmed = task.title.count > 24
-                            ? String(task.title.prefix(24)) + "\u{2026}"
-                            : task.title
-                        await runQuickAction(req, label: "Found slot for \u{201C}\(trimmed)\u{201D}")
-                    }
-                },
-                onSplitTask: { task in
-                    // Per-task `splitLong` — chunks the task into 2+
-                    // sequential blocks of half-duration each. Same
-                    // pipe as findSlot above; toast labels the
-                    // operation so the user can recognise it in the
-                    // history.
-                    Task {
-                        var req = OptimizationRequest(name: "Split task")
-                        req.add(.includeBacklogTasks(ids: [task.id]))
-                        req.add(.splitLong(maxMinutes: max(30, task.durationMinutes / 2)))
-                        req.add(.findSlotsForBacklog)
-                        let trimmed = task.title.count > 24
-                            ? String(task.title.prefix(24)) + "\u{2026}"
-                            : task.title
-                        await runQuickAction(req, label: "Split \u{201C}\(trimmed)\u{201D}")
-                    }
                 },
                 onOpenPalette: {
                     Haptics.tap()
@@ -1231,12 +1183,6 @@ struct MenuBarView: View {
                     }
                 },
                 onSwitchScenario: { index in
-                    // Hop the just-applied scenario to a different
-                    // index in the same `scenarios` array. The
-                    // service handles rollback + reapply atomically;
-                    // the toast pipe stays untouched (the user has
-                    // already seen the original toast and will see
-                    // the reasoning popover update in place).
                     optimizerService.switchToAppliedScenario(
                         at: index,
                         to: reminderService
@@ -1245,8 +1191,7 @@ struct MenuBarView: View {
                 onLockTodaysEvents: {
                     // Bulk-lock every event currently on today's
                     // schedule — same persistent set the per-row lock
-                    // affordance writes to, so the rows light up with
-                    // their solid lock icon immediately.
+                    // affordance writes to.
                     let cal = Calendar.current
                     let todaysIds = reminderService.allEvents
                         .filter { cal.isDateInToday($0.startDate) }
@@ -1263,7 +1208,6 @@ struct MenuBarView: View {
                             added == 1 ? "Locked 1 event" : "Locked \(added) events",
                             icon: "lock.fill"
                         ) {
-                            // Undo: unlock everything we just locked.
                             for id in todaysIds {
                                 if optimizerService.isLocked(eventId: id) {
                                     optimizerService.toggleLock(eventId: id)
@@ -1274,10 +1218,6 @@ struct MenuBarView: View {
                         toastState.showInfo("Today's events are already locked", icon: "lock.fill")
                     }
                 },
-                onRescheduleTask: { task in
-                    paletteContext = PaletteContext(seedTask: task)
-                },
-                focusRequested: $focusTaskInput,
                 autoExpand: autoExpand
             )
         }
