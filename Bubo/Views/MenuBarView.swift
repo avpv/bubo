@@ -1920,19 +1920,23 @@ struct MenuBarView: View {
             // space (row to row inside a day) — handled by the `lg`
             // sibling spacing plus a SkinSeparator between groups.
             LazyVStack(alignment: .leading, spacing: DS.Spacing.lg) {
-                // Quick optimizer actions — one-tap presets that live
-                // above the timeline so the user can ask the optimizer
-                // for help (find focus, pomodoro day, organize today,
-                // plan week) without diving into the inline backlog
-                // card or the command palette. Replaces the legacy
-                // standalone `QuickActions` card that the SmartActions
-                // row used to absorb when the inline backlog was the
-                // dominant surface.
-                QuickActionsRow(
-                    onRunRequest: { request, label in
-                        await runQuickAction(request, label: label)
-                    }
-                )
+                // Quick optimizer actions — context-ranked chips above
+                // the timeline so the user has a one-tap path to «ask
+                // the GA for help». Backed by `QuickActionRanker`:
+                // surfaces the chip set most relevant to right-now
+                // schedule state (overdue tasks, no focus today,
+                // morning planning window, etc.), refined over time
+                // by the user's accept/reject history.
+                if let backlog = optimizerService.backlogService {
+                    QuickActionsRow(
+                        backlogService: backlog,
+                        reminderService: reminderService,
+                        intentLearner: optimizerService.intentLearner,
+                        onRunRequest: { request, label in
+                            await runQuickAction(request, label: label)
+                        }
+                    )
+                }
 
                 // Energy check-in banner — wellness prompt with its own
                 // 1–5 input affordance. Surfaces only when a check-in
