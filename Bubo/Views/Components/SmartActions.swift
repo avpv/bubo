@@ -90,6 +90,12 @@ struct SmartActions: View {
     /// the quick-action is hidden from the calm-state popover.
     var onLockTodaysEvents: (() -> Void)? = nil
 
+    /// Render the contextual rows in single-line compact form. Used by
+    /// the inline backlog where vertical space is at a premium and the
+    /// list itself needs every pixel below the header. Default `false`
+    /// keeps the canonical 2-line stacked layout for fullscreen.
+    var compact: Bool = false
+
     @Environment(\.activeSkin) private var skin
 
     @State private var showingPlanDayPopover = false
@@ -174,7 +180,8 @@ struct SmartActions: View {
             action: {
                 if useDeadlineMode { await onFocusOnDeadlines() }
                 else               { await onScheduleBacklog() }
-            }
+            },
+            compact: compact
         )
     }
 
@@ -417,7 +424,8 @@ struct SmartActions: View {
             kind: .run,
             action: {
                 await onRunRequest(suggestion.request, suggestion.reason)
-            }
+            },
+            compact: compact
         )
     }
 
@@ -432,7 +440,8 @@ struct SmartActions: View {
             kind: .discover,
             action: {
                 await MainActor.run { showingPlanDayPopover = true }
-            }
+            },
+            compact: compact
         )
         .popover(isPresented: $showingPlanDayPopover, arrowEdge: .top) {
             planDayPopover

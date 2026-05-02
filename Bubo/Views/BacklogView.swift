@@ -614,14 +614,15 @@ struct BacklogView: View {
             },
             onOpenPalette: { onOpenPalette?() },
             onSwitchScenario: onSwitchScenario,
-            onLockTodaysEvents: onLockTodaysEvents
+            onLockTodaysEvents: onLockTodaysEvents,
+            compact: true
         )
         .padding(.horizontal, DS.Spacing.sm)
-        // Vertical air on both sides — same `Spacing.xs` beat the
-        // fullscreen backlog uses, so the diagnosis row sits as its
-        // own beat instead of fusing with the header above and the
-        // task list below. PRINCIPLES.md §2 — rhythm via whitespace.
-        .padding(.vertical, DS.Spacing.xs)
+        // Inline backlog is height-constrained — the row already pads
+        // itself internally (`Spacing.xxs` in compact mode), so we add
+        // no extra vertical air here. Was `Spacing.xs` on each side,
+        // which doubled with the row's own padding and pushed the
+        // task list out of view.
     }
 
     // MARK: - Capacity ring helpers
