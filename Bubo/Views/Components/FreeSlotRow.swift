@@ -22,6 +22,28 @@ struct FreeSlotRow: View {
     let onFillTapped: (_ minutes: Int) -> Void
     /// Called when a backlog task is dropped onto this slot.
     var onTaskDropped: ((_ drag: BacklogTaskDrag) -> Void)? = nil
+
+    // MARK: - Slot picker (replaces legacy CommandPalette seeding on tap)
+    //
+    // Tapping the «+» on a free slot opens an inline `SlotPickerPopover`
+    // anchored on the row. From there the user can either pick an
+    // existing backlog task or type a new one — both paths schedule
+    // straight into this slot. The legacy `onFillTapped` closure is
+    // kept as a fallback for hosts that don't wire the picker (preview
+    // surfaces, future calm-state empty paths).
+
+    /// Backlog candidates surfaced inside the picker. Caller is
+    /// responsible for filtering down to the schedulable subset
+    /// (typically `BacklogService.pending`). Empty list = picker still
+    /// opens, just shows the input + a creation hint.
+    var pickerTasks: [BacklogTask] = []
+    /// Place an existing backlog task into this slot. Same path as drop.
+    var onPickTask: ((BacklogTask) -> Void)? = nil
+    /// Create a new backlog task with the typed title and place it
+    /// straight into this slot.
+    var onCreateAndPlaceTask: ((_ title: String, _ durationMinutes: Int) -> Void)? = nil
+    /// Open the fullscreen backlog from the picker's «Show all» footer.
+    var onOpenFullscreenBacklog: (() -> Void)? = nil
     /// Caller-provided permission to display the one-time «drag tasks here»
     /// hint for this slot. The caller decides which slots are eligible
     /// (usually: the first free slot on the earliest day with backlog tasks)
@@ -56,6 +78,9 @@ struct FreeSlotRow: View {
 
     @State private var isHovered: Bool = false
     @State private var isDropTargeted: Bool = false
+    /// Drives the inline `SlotPickerPopover` anchored on the «+» button.
+    /// Toggled by `onFillTapped` when the host has wired picker callbacks.
+    @State private var showingSlotPicker: Bool = false
     /// Mirrors `BuboBacklogHasDragged` used by `BacklogView`. Sharing the key
     /// means "user dragged a task" flips off both the old inline hint and
     /// the new in-slot example at the same moment.
@@ -63,6 +88,13 @@ struct FreeSlotRow: View {
 
     private var isAwaitingDrop: Bool {
         coordinator?.isDraggingTask == true
+    }
+
+    /// True when the host has provided at least one picker callback —
+    /// the «+» tap opens `SlotPickerPopover` instead of falling through
+    /// to the legacy `onFillTapped` closure.
+    private var hasPickerWiring: Bool {
+        onPickTask != nil || onCreateAndPlaceTask != nil
     }
 
     /// Final gate for the drag-onboarding hint. Permission from the caller
@@ -145,7 +177,16 @@ struct FreeSlotRow: View {
 
             Button {
                 Haptics.tap()
-                onFillTapped(durationMinutes)
+                // Picker is the new canonical entry point — one verb
+                // (Add to slot) instead of three legacy branches. When
+                // the host hasn't wired it (preview surfaces, etc.),
+                // fall back to the original `onFillTapped` closure so
+                // those hosts keep working.
+                if hasPickerWiring {
+                    showingSlotPicker = true
+                } else {
+                    onFillTapped(durationMinutes)
+                }
             } label: {
                 Image(systemName: "plus.circle.fill")
                     .font(.body)
@@ -153,8 +194,30 @@ struct FreeSlotRow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help("Fill this slot")
-            .accessibilityLabel("Fill this \(durationLabel) free slot")
+            .help("Add to this slot")
+            .accessibilityLabel("Add a task to this \(durationLabel) free slot")
+            .popover(isPresented: $showingSlotPicker, arrowEdge: .trailing) {
+                SlotPickerPopover(
+                    slotStart: start,
+                    slotEnd: end,
+                    tasks: pickerTasks,
+                    onPick: { task in
+                        showingSlotPicker = false
+                        onPickTask?(task)
+                    },
+                    onCreate: { title, duration in
+                        showingSlotPicker = false
+                        onCreateAndPlaceTask?(title, duration)
+                    },
+                    onOpenFullscreenBacklog: onOpenFullscreenBacklog.map { handler in
+                        {
+                            showingSlotPicker = false
+                            handler()
+                        }
+                    },
+                    onCancel: { showingSlotPicker = false }
+                )
+            }
         }
         .frame(minHeight: DS.Size.eventRowMinHeight)
         .padding(.vertical, DS.Spacing.xxs)

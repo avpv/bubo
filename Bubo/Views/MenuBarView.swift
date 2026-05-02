@@ -1284,7 +1284,8 @@ struct MenuBarView: View {
     }
 
     /// Handle a backlog task being dropped onto a free slot.
-    /// Creates a calendar event at the slot time and marks the task as scheduled.
+    /// Resolves the drag payload, ends the drag session, and delegates
+    /// to the shared `scheduleBacklogTask(_:slotStart:slotEnd:)` helper.
     private func handleTaskDrop(drag: BacklogTaskDrag, slotStart: Date, slotEnd: Date) {
         guard let backlog = optimizerService.backlogService,
               let task = backlog.tasks.first(where: { $0.id == drag.taskId }) else { return }
@@ -1298,11 +1299,21 @@ struct MenuBarView: View {
         // — even if the drag-preview lifecycle callback hasn't fired yet.
         backlogCoordinator.endDrag()
 
-        // Full pre-drop snapshot — `unschedule` sets status=.pending and
-        // drops both scheduledEventId/scheduledDate. If the task was
-        // already `.scheduled` against a *different* event (re-scheduling
-        // via drag), straight unschedule would lose that prior binding.
-        // `updateTask(snapshot)` restores every field exactly.
+        scheduleBacklogTask(task, slotStart: slotStart, slotEnd: slotEnd)
+    }
+
+    /// Place an existing backlog task into the calendar at the given slot.
+    /// Shared path for drag-drop, the slot picker's «pick existing» row,
+    /// and the right-click «Start top here» context menu — all three end
+    /// up creating a calendar event, marking the task as scheduled, and
+    /// surfacing a unified undo toast.
+    ///
+    /// Undo restores the task's full pre-schedule snapshot via
+    /// `updateTask(snapshot)`, which cleanly reverses `markScheduled`
+    /// because every mutable field returns to its pre-call value.
+    private func scheduleBacklogTask(_ task: BacklogTask, slotStart: Date, slotEnd: Date) {
+        guard let backlog = optimizerService.backlogService else { return }
+
         let taskSnapshot = task
 
         let duration = min(
@@ -1321,8 +1332,9 @@ struct MenuBarView: View {
             eventType: .standard,
             colorTag: .green
         )
-        // Clean up any prior chunks so the drag collapses a multi-slot
-        // layout into the single new slot rather than leaving orphans.
+        // Clean up any prior chunks so a re-schedule collapses a
+        // multi-slot layout into the single new slot rather than
+        // leaving orphans.
         for eid in task.scheduledEventIds where eid != eventId {
             reminderService.removeLocalEvent(id: eid)
         }
@@ -1335,15 +1347,62 @@ struct MenuBarView: View {
             "\(task.title) → \(fmt.string(from: slotStart))",
             icon: "calendar.badge.plus"
         ) {
-            // Undo: remove the event we just created and restore the
-            // task's full pre-drop state (status, scheduledEventId,
-            // scheduledDate, etc.). `updateTask(snapshot)` is a clean
-            // reverse of `markScheduled` because every mutable field is
-            // set back to its pre-drop value. notifyScheduleChange with
-            // the event id poke the optimizer's trigger engine so it
-            // sees the rollback.
             reminderService.removeLocalEvent(id: eventId)
             backlog.updateTask(taskSnapshot)
+            notifyScheduleChange(deleted: eventId)
+        }
+        notifyScheduleChange()
+    }
+
+    /// Slot-picker entry — the user typed a brand-new title and pressed
+    /// Return. We create the task in the backlog first (so it persists
+    /// even if the placement is later undone — actually no, see undo
+    /// below) and then schedule it into the slot. Undo here yanks both
+    /// halves of the action because the user's mental model is «I just
+    /// added X at 14:00»; leaving the orphan task in the backlog after
+    /// undo would feel like the gesture half-failed.
+    private func createAndPlaceTaskAtSlot(
+        title: String,
+        durationMinutes: Int,
+        slotStart: Date,
+        slotEnd: Date
+    ) {
+        guard let backlog = optimizerService.backlogService else { return }
+
+        let task = BacklogTask(
+            title: title,
+            durationMinutes: durationMinutes,
+            priority: .medium
+        )
+        backlog.addTask(task)
+
+        let duration = min(
+            TimeInterval(durationMinutes * 60),
+            slotEnd.timeIntervalSince(slotStart)
+        )
+        let eventId = "task-\(task.id)"
+        let event = CalendarEvent(
+            id: eventId,
+            title: title,
+            startDate: slotStart,
+            endDate: slotStart.addingTimeInterval(duration),
+            location: nil,
+            description: nil,
+            calendarName: nil,
+            eventType: .standard,
+            colorTag: .green
+        )
+        reminderService.addLocalEvent(event)
+        backlog.markScheduled(id: task.id, eventId: eventId, date: slotStart)
+
+        let fmt = DateFormatter()
+        fmt.setLocalizedDateFormatFromTemplate("H:mm")
+        toastState.showSuccess(
+            "Added \(title) → \(fmt.string(from: slotStart))",
+            icon: "calendar.badge.plus"
+        ) {
+            reminderService.removeLocalEvent(id: eventId)
+            _ = backlog.removeTask(id: task.id)
             notifyScheduleChange(deleted: eventId)
         }
         notifyScheduleChange()
@@ -2277,30 +2336,35 @@ struct MenuBarView: View {
                     FreeSlotRow(
                         start: start,
                         end: end,
-                        onFillTapped: { _ in
-                            let backlog = optimizerService.backlogService
-                            let hasPending = !(backlog?.pending.isEmpty ?? true)
-                            let hasOverdue = !(backlog?.overdue.isEmpty ?? true)
-
-                            if !hasPending && !hasOverdue {
-                                // No tasks at all → direct focus fill.
-                                fillSlotWithFocus(start: start, end: end)
-                            } else if !hasPending && hasOverdue {
-                                // Only overdue → reschedule directly, no palette.
-                                rescheduleOverdue(into: start, end: end)
-                            } else {
-                                // Pending tasks (maybe overdue too) → show palette for choice.
-                                withAnimation(DS.Animation.quick) {
-                                    paletteContext = PaletteContext(
-                                        seedSlotMinutes: Int(end.timeIntervalSince(start) / 60),
-                                        seedSlotStart: start,
-                                        seedSlotEnd: end
-                                    )
-                                }
-                            }
-                        },
+                        // Legacy fallback — `FreeSlotRow` skips this
+                        // when picker callbacks below are wired (which
+                        // they are here). Kept as no-op so the API
+                        // stays satisfied without dead branches.
+                        onFillTapped: { _ in },
                         onTaskDropped: { drag in
                             handleTaskDrop(drag: drag, slotStart: start, slotEnd: end)
+                        },
+                        // Slot picker — primary entry point for the «+»
+                        // tap. Replaces the legacy command-palette
+                        // seeding flow with an inline pick-or-create
+                        // surface anchored on the slot itself. Birman:
+                        // «прямое действие на месте проблемы».
+                        pickerTasks: optimizerService.backlogService?.pending ?? [],
+                        onPickTask: { task in
+                            scheduleBacklogTask(task, slotStart: start, slotEnd: end)
+                        },
+                        onCreateAndPlaceTask: { title, durationMinutes in
+                            createAndPlaceTaskAtSlot(
+                                title: title,
+                                durationMinutes: durationMinutes,
+                                slotStart: start,
+                                slotEnd: end
+                            )
+                        },
+                        onOpenFullscreenBacklog: {
+                            withAnimation(DS.Animation.quick) {
+                                navigation = .backlog
+                            }
                         },
                         canShowDragHint: item.id == hintSlotId,
                         topBacklogCandidate: topBacklogCandidate(forSlotMinutes: Int(end.timeIntervalSince(start) / 60)),
