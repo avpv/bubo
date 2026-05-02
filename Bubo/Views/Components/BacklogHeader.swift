@@ -3,26 +3,21 @@ import SwiftUI
 // MARK: - Mode
 
 /// Чтение режима, в котором рендерится `BacklogHeader`. Inline-карточка
-/// и fullscreen-popover делят один компонент, но различаются в трёх
+/// и fullscreen-popover делят один компонент, но различаются в двух
 /// деталях: можно ли свернуть список (chevron + count → button vs plain
-/// text), куда ложится capacity verdict (отдельной строкой под header'ом
-/// vs внутри HStack рядом с count), и есть ли кнопка «развернуть на
-/// весь экран». Всё остальное — ring, smart-sort toggle, urgent pill —
-/// одинаково в обоих режимах.
+/// text) и есть ли кнопка «развернуть на весь экран». Всё остальное —
+/// ring, capacity verdict, smart-sort toggle, urgent pill — одинаково
+/// в обоих режимах.
 enum BacklogHeaderMode {
     /// Inline в карточке Tasks на главном popover'е. Header умеет
     /// сворачиваться/разворачиваться (chevron + кнопка переключения),
-    /// и предлагает кнопку «развернуть на весь экран». Capacity verdict
-    /// получает отдельную строку под header'ом — иначе красный warning
-    /// зажимал бы header в спорный за внимание ряд.
+    /// и предлагает кнопку «развернуть на весь экран».
     case inline(
         expansion: Binding<TaskListExpansion>,
         onEnterFullscreen: (() -> Void)?
     )
     /// Fullscreen-карточка backlog'а во весь popover. Без chevron'а —
-    /// сворачивать некуда: это и есть полная карточка. Capacity verdict
-    /// встаёт прямо в header рядом с count, а ETA-чип «→ HH:MM» — по
-    /// правому краю того же ряда.
+    /// сворачивать некуда: это и есть полная карточка.
     case fullscreen
 }
 
@@ -41,9 +36,8 @@ enum BacklogHeaderMode {
 /// нужно ровно в одном месте.
 ///
 /// Внутри:
-///   - Header HStack: ring, [verdict для fullscreen], count, eta, sort,
-///     spacer, [fullscreen-btn для inline]
-///   - Capacity verdict отдельной строкой (только в `.inline`)
+///   - Header HStack: ring, count, eta, sort, spacer, [fullscreen-btn для inline]
+///   - Capacity verdict отдельной строкой под header'ом (в обоих режимах)
 ///   - Urgent pill отдельной строкой (когда `urgentCount > 0`, в обоих режимах)
 ///
 /// Inline-режим прокидывает `expansion` и `onEnterFullscreen` через
@@ -71,9 +65,12 @@ struct BacklogHeader<EtaContent: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             headerRow
-            // Capacity verdict под header'ом — только в inline. В fullscreen
-            // verdict живёт прямо в header'е (см. headerRow).
-            if case .inline = mode, totalCount > 0 {
+            // Capacity verdict отдельной строкой под header'ом в обоих
+            // режимах: иначе красный warning зажимал бы header в спорный за
+            // внимание ряд. Раньше fullscreen клал verdict внутрь headerRow
+            // рядом с count'ом, и inline/fullscreen верстались по-разному —
+            // теперь оба читаются одинаково.
+            if totalCount > 0 {
                 BacklogCapacityLabel(
                     pendingMinutes: pendingMinutes,
                     overflowingCount: 0,
@@ -101,14 +98,6 @@ struct BacklogHeader<EtaContent: View>: View {
                     optimizerService: optimizerService
                 )
                 .help(capacityRingTooltip)
-
-                if case .fullscreen = mode {
-                    BacklogCapacityLabel(
-                        pendingMinutes: pendingMinutes,
-                        overflowingCount: 0,
-                        optimizerService: optimizerService
-                    )
-                }
             }
 
             countLabel
