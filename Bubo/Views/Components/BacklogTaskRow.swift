@@ -313,6 +313,9 @@ struct BacklogTaskRow: View {
             let progress = task.subtaskProgress
             parts.append("\(progress.done) of \(progress.total) subtasks done")
         }
+        if !task.tags.isEmpty {
+            parts.append("tagged " + task.tags.map { "#\($0)" }.joined(separator: " "))
+        }
         if let deadline = task.deadline {
             parts.append("due \(deadlineLabel(deadline))")
         }
@@ -712,6 +715,29 @@ struct BacklogTaskRow: View {
                             Capsule().fill(skin.resolvedTextTertiary.opacity(0.08))
                         )
                         .accessibilityLabel("Prefers \(period.displayLabel)")
+                }
+
+                // Tags — first up to two as compact "#tag" labels in the
+                // tertiary voice. Many-per-task by design, but the row only
+                // surfaces a teaser to keep the right-side meta strip
+                // calm; the rest live in the editor / search. Birman:
+                // «не показывать всё, что есть, — показывать достаточно».
+                if !task.tags.isEmpty {
+                    HStack(spacing: DS.Spacing.xxs) {
+                        ForEach(task.tags.prefix(2), id: \.self) { tag in
+                            Text("#\(tag)")
+                                .font(.footnote)
+                                .lineLimit(1)
+                                .foregroundStyle(skin.resolvedTextTertiary)
+                        }
+                        if task.tags.count > 2 {
+                            Text("+\(task.tags.count - 2)")
+                                .font(DS.Typography.machineHint)
+                                .foregroundStyle(skin.resolvedTextTertiary)
+                        }
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Tags: " + task.tags.map { "#\($0)" }.joined(separator: ", "))
                 }
 
                 // Subtasks progress — "2/5" chip when the task carries a

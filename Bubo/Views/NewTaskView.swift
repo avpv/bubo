@@ -44,6 +44,8 @@ struct NewTaskView: View {
     @State private var preferredPeriod: Period? = nil
     @State private var subtasks: [Subtask] = []
     @State private var newSubtaskTitle: String = ""
+    @State private var tags: [String] = []
+    @State private var newTagInput: String = ""
     @State private var showMoreOptions: Bool = false
 
     @FocusState private var isTitleFocused: Bool
@@ -306,6 +308,13 @@ struct NewTaskView: View {
                                 .padding(DS.Spacing.md)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
+
+                        // Tags — same shape as the editor's pill row.
+                        sectionBlock {
+                            tagsSection
+                                .padding(DS.Spacing.md)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                     }
                 }
                 .padding(.horizontal, DS.Spacing.lg)
@@ -436,6 +445,72 @@ struct NewTaskView: View {
         newSubtaskTitle = ""
     }
 
+    // MARK: - Tags
+
+    @ViewBuilder
+    private var tagsSection: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            sectionLabel("Tags")
+
+            if !tags.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: DS.Spacing.xs) {
+                        ForEach(tags, id: \.self) { tag in
+                            tagPill(tag)
+                        }
+                    }
+                }
+            }
+
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: "number")
+                    .font(.footnote)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                TextField(
+                    "Add tag",
+                    text: $newTagInput,
+                    prompt: Text("Add tag\u{2026} (press Return)")
+                        .foregroundStyle(skin.resolvedTextSecondary)
+                )
+                .textFieldStyle(.plain)
+                .font(.callout)
+                .onSubmit { commitNewTag() }
+            }
+        }
+    }
+
+    private func tagPill(_ tag: String) -> some View {
+        HStack(spacing: DS.Spacing.xxs) {
+            Text("#\(tag)")
+                .font(.footnote)
+                .lineLimit(1)
+                .foregroundStyle(skin.resolvedTextPrimary)
+            Button {
+                tags.removeAll { $0 == tag }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.footnote)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, DS.Spacing.sm)
+        .padding(.vertical, DS.Spacing.xxs)
+        .background(
+            Capsule().fill(skin.accentColor.opacity(DS.Opacity.subtleFill))
+        )
+    }
+
+    private func commitNewTag() {
+        let parts = newTagInput.split(whereSeparator: { $0.isWhitespace })
+        for raw in parts {
+            guard let normalized = BacklogTask.normalizeTag(String(raw)),
+                  !tags.contains(normalized) else { continue }
+            tags.append(normalized)
+        }
+        newTagInput = ""
+    }
+
     // MARK: - Section helpers
 
     private func sectionLabel(_ text: String) -> some View {
@@ -478,6 +553,8 @@ struct NewTaskView: View {
             return s
         }
 
+        let cleanedTags = tags.compactMap(BacklogTask.normalizeTag)
+
         let task = BacklogTask(
             title: trimmedTitle,
             durationMinutes: durationMinutes,
@@ -488,7 +565,8 @@ struct NewTaskView: View {
             preferredPeriod: preferredPeriod,
             notes: trimmedNotes.isEmpty ? nil : trimmedNotes,
             url: EditTaskView.parseURL(urlString),
-            subtasks: cleanedSubtasks
+            subtasks: cleanedSubtasks,
+            tags: cleanedTags
         )
 
         backlogService.addTask(task)

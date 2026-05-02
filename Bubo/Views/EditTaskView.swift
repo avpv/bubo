@@ -45,6 +45,8 @@ struct EditTaskView: View {
     @State private var location: String
     @State private var subtasks: [Subtask]
     @State private var newSubtaskTitle: String = ""
+    @State private var tags: [String]
+    @State private var newTagInput: String = ""
     @State private var dependsOn: [String]
     @State private var newDependencyId: String? = nil
     @State private var dependencyQuery: String = ""
@@ -108,6 +110,7 @@ struct EditTaskView: View {
         _urlString = State(initialValue: task.url?.absoluteString ?? "")
         _location = State(initialValue: task.location ?? "")
         _subtasks = State(initialValue: task.subtasks)
+        _tags = State(initialValue: task.tags)
         _dependsOn = State(initialValue: task.dependsOn)
         // Open "More options" if the task already has values stored there,
         // so editing them doesn't require a second click to find them.
@@ -115,6 +118,7 @@ struct EditTaskView: View {
             || task.url != nil
             || !(task.location ?? "").isEmpty
             || !task.subtasks.isEmpty
+            || !task.tags.isEmpty
             || !task.dependsOn.isEmpty
             || task.isRecurring
         _showMoreOptions = State(initialValue: hasMoreState)
@@ -389,6 +393,17 @@ struct EditTaskView: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
 
+                        // Tags — many-per-task free-form text labels.
+                        // Distinct from `colorTag` (a categorical hue) and
+                        // `context` (the single project label). Stored
+                        // lowercased without the "#" prefix; the `#` is a
+                        // typography choice in display, not data.
+                        sectionBlock {
+                            tagsSection
+                                .padding(DS.Spacing.md)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+
                         // Recurrence — toggle plus a free-form tag that
                         // becomes the human label («weekly review») on the
                         // backlog row.
@@ -593,6 +608,76 @@ struct EditTaskView: View {
         newSubtaskTitle = ""
     }
 
+    // MARK: - Tags
+
+    @ViewBuilder
+    private var tagsSection: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            sectionLabel("Tags")
+
+            if !tags.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: DS.Spacing.xs) {
+                        ForEach(tags, id: \.self) { tag in
+                            tagPill(tag)
+                        }
+                    }
+                }
+            }
+
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: "number")
+                    .font(.footnote)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                TextField(
+                    "Add tag",
+                    text: $newTagInput,
+                    prompt: Text("Add tag\u{2026} (press Return)")
+                        .foregroundStyle(skin.resolvedTextSecondary)
+                )
+                .textFieldStyle(.plain)
+                .font(.callout)
+                .onSubmit { commitNewTag() }
+            }
+        }
+    }
+
+    private func tagPill(_ tag: String) -> some View {
+        HStack(spacing: DS.Spacing.xxs) {
+            Text("#\(tag)")
+                .font(.footnote)
+                .lineLimit(1)
+                .foregroundStyle(skin.resolvedTextPrimary)
+            Button {
+                tags.removeAll { $0 == tag }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.footnote)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Remove tag #\(tag)")
+        }
+        .padding(.horizontal, DS.Spacing.sm)
+        .padding(.vertical, DS.Spacing.xxs)
+        .background(
+            Capsule().fill(skin.accentColor.opacity(DS.Opacity.subtleFill))
+        )
+    }
+
+    private func commitNewTag() {
+        // Accept space-separated batches: "#design urgent backend" → 3
+        // tags in one keystroke. Mirrors Apple Reminders' title parser
+        // even though we keep tags out of the title.
+        let parts = newTagInput.split(whereSeparator: { $0.isWhitespace })
+        for raw in parts {
+            guard let normalized = BacklogTask.normalizeTag(String(raw)),
+                  !tags.contains(normalized) else { continue }
+            tags.append(normalized)
+        }
+        newTagInput = ""
+    }
+
     // MARK: - Dependencies
 
     @ViewBuilder
@@ -719,6 +804,10 @@ struct EditTaskView: View {
             s.title = trimmed
             return s
         }
+        // Re-normalise on save so any half-typed input that slipped past
+        // the inline `commitNewTag` (focus-stolen submit, paste of mixed
+        // case) lands in the canonical lowercase form.
+        updated.tags = tags.compactMap(BacklogTask.normalizeTag)
         updated.dependsOn = dependsOn
 
         backlogService.updateTask(updated)

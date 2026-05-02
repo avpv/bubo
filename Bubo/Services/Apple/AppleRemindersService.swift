@@ -203,7 +203,8 @@ final class AppleRemindersService {
         // link in `notes` using a leading `URL:` sentinel line. Round-trips
         // cleanly with Reminders.app: the sentinel text is visible there and
         // stays intact when users edit the notes body below it. Subtasks
-        // ride alongside as a `Subtasks:` markdown checklist block.
+        // ride alongside as a `Subtasks:` markdown checklist block; tags as
+        // a single `Tags: #foo #bar` line.
         let parsed = Self.extractAttachments(fromNotes: reminder.notes)
 
         return BacklogTask(
@@ -217,6 +218,7 @@ final class AppleRemindersService {
             url: parsed.url,
             location: reminder.location,
             subtasks: parsed.subtasks,
+            tags: parsed.tags,
             createdAt: reminder.creationDate ?? Date()
         )
     }
@@ -256,7 +258,8 @@ final class AppleRemindersService {
         reminder.notes = Self.composeNotes(
             notes: task.notes,
             url: task.url,
-            subtasks: task.subtasks
+            subtasks: task.subtasks,
+            tags: task.tags
         )
         if let loc = task.location, !loc.isEmpty {
             reminder.location = loc
@@ -303,7 +306,8 @@ final class AppleRemindersService {
         let newNotes = Self.composeNotes(
             notes: task.notes,
             url: task.url,
-            subtasks: task.subtasks
+            subtasks: task.subtasks,
+            tags: task.tags
         )
         let newLocation = task.location.flatMap { $0.isEmpty ? nil : $0 }
 
@@ -434,13 +438,19 @@ final class AppleRemindersService {
     /// stays free-form.
     private static let subtasksHeader = "Subtasks:"
 
-    /// Combine notes + url + subtasks into a single `EKReminder.notes` string.
-    /// `nil` when nothing is populated so reminders without rich data keep an
-    /// empty notes slot instead of a stray blank line.
+    /// Sentinel prefix for the single-line tag sentinel
+    /// (`Tags: #foo #bar`). Same shape as `URL:` — one line, parseable
+    /// as a unit, easy for users to read in Reminders.app.
+    private static let tagsNotesPrefix = "Tags: "
+
+    /// Combine notes + url + subtasks + tags into a single `EKReminder.notes`
+    /// string. `nil` when nothing is populated so reminders without rich
+    /// data keep an empty notes slot instead of a stray blank line.
     static func composeNotes(
         notes: String?,
         url: URL?,
-        subtasks: [Subtask] = []
+        subtasks: [Subtask] = [],
+        tags: [String] = []
     ) -> String? {
         let body = notes?.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -456,6 +466,10 @@ final class AppleRemindersService {
             }
             sections.append(lines.joined(separator: "\n"))
         }
+        if !tags.isEmpty {
+            let formatted = tags.map { "#\($0)" }.joined(separator: " ")
+            sections.append("\(tagsNotesPrefix)\(formatted)")
+        }
         if let body, !body.isEmpty {
             sections.append(body)
         }
@@ -463,21 +477,22 @@ final class AppleRemindersService {
         return sections.joined(separator: "\n\n")
     }
 
-    /// Backward-compatible shim that drops parsed subtasks. New callers
-    /// should use `extractAttachments` to receive the full set.
+    /// Backward-compatible shim that drops parsed subtasks and tags. New
+    /// callers should use `extractAttachments` to receive the full set.
     static func extractURL(fromNotes raw: String?) -> (url: URL?, notes: String?) {
         let parsed = extractAttachments(fromNotes: raw)
         return (parsed.url, parsed.notes)
     }
 
-    /// Inverse of `composeNotes`. Splits the leading `URL:` sentinel and the
-    /// `Subtasks:` checklist block (when present) from the user body.
-    /// Returns `(nil, original, [])` when the notes don't carry any
-    /// recognised sentinel so user-authored text never gets misclassified.
+    /// Inverse of `composeNotes`. Splits the `URL:` sentinel, the
+    /// `Subtasks:` checklist block, and the `Tags:` line (each optional)
+    /// from the user body. Returns `(nil, original, [], [])` when the
+    /// notes don't carry any recognised sentinel so user-authored text
+    /// never gets misclassified.
     static func extractAttachments(
         fromNotes raw: String?
-    ) -> (url: URL?, notes: String?, subtasks: [Subtask]) {
-        guard let raw, !raw.isEmpty else { return (nil, nil, []) }
+    ) -> (url: URL?, notes: String?, subtasks: [Subtask], tags: [String]) {
+        guard let raw, !raw.isEmpty else { return (nil, nil, [], []) }
 
         var lines = raw.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
 
@@ -516,7 +531,22 @@ final class AppleRemindersService {
             }
         }
 
-        // 4. Skip a single blank separator before the body.
+        // 4. Skip blank lines before the next sentinel.
+        while let first = lines.first,
+              first.trimmingCharacters(in: .whitespaces).isEmpty {
+            lines.removeFirst()
+        }
+
+        // 5. Optional `Tags:` single line.
+        var tags: [String] = []
+        if let first = lines.first, first.hasPrefix(tagsNotesPrefix) {
+            let payload = String(first.dropFirst(tagsNotesPrefix.count))
+            tags = parseTagsLine(payload)
+            lines.removeFirst()
+            consumedAny = true
+        }
+
+        // 6. Skip a single blank separator before the body.
         while let first = lines.first,
               first.trimmingCharacters(in: .whitespaces).isEmpty {
             lines.removeFirst()
@@ -528,10 +558,23 @@ final class AppleRemindersService {
         if !consumedAny {
             // Nothing recognised — keep the original text intact in notes.
             let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            return (nil, trimmed.isEmpty ? nil : trimmed, [])
+            return (nil, trimmed.isEmpty ? nil : trimmed, [], [])
         }
 
-        return (url, bodyText.isEmpty ? nil : bodyText, subtasks)
+        return (url, bodyText.isEmpty ? nil : bodyText, subtasks, tags)
+    }
+
+    /// Parse the payload of a `Tags:` line — a whitespace-separated list
+    /// of `#tag` tokens. Tokens lacking the `#` prefix or normalising to
+    /// empty strings are dropped silently.
+    private static func parseTagsLine(_ payload: String) -> [String] {
+        payload
+            .split(whereSeparator: { $0.isWhitespace })
+            .compactMap { token -> String? in
+                let s = String(token)
+                guard s.hasPrefix("#") else { return nil }
+                return BacklogTask.normalizeTag(s)
+            }
     }
 
     /// Parse a single `- [ ] foo` / `- [x] foo` line into a `Subtask`.

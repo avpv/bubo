@@ -290,6 +290,97 @@ final class AppleRemindersServiceTests: XCTestCase {
         XCTAssertEqual(notes, "body")
     }
 
+    // MARK: - Tag Normalization
+
+    func testNormalizeTagStripsHashAndLowercases() {
+        XCTAssertEqual(BacklogTask.normalizeTag("#Design"), "design")
+        XCTAssertEqual(BacklogTask.normalizeTag("urgent"), "urgent")
+        XCTAssertEqual(BacklogTask.normalizeTag("  #Backend  "), "backend")
+    }
+
+    func testNormalizeTagJoinsInternalWhitespace() {
+        XCTAssertEqual(BacklogTask.normalizeTag("home assistant"), "home-assistant")
+        XCTAssertEqual(BacklogTask.normalizeTag("#multi  word  tag"), "multi-word-tag")
+    }
+
+    func testNormalizeTagReturnsNilForEmpty() {
+        XCTAssertNil(BacklogTask.normalizeTag(""))
+        XCTAssertNil(BacklogTask.normalizeTag("   "))
+        XCTAssertNil(BacklogTask.normalizeTag("#"))
+        XCTAssertNil(BacklogTask.normalizeTag("# "))
+    }
+
+    // MARK: - Tags Codec
+
+    func testComposeNotesWithTagsOnly() {
+        let composed = AppleRemindersService.composeNotes(
+            notes: nil, url: nil,
+            tags: ["design", "urgent"]
+        )
+        XCTAssertEqual(composed, "Tags: #design #urgent")
+    }
+
+    func testComposeNotesURLAndTagsAndBody() {
+        let composed = AppleRemindersService.composeNotes(
+            notes: "do it",
+            url: URL(string: "https://example.com"),
+            tags: ["work"]
+        )
+        XCTAssertEqual(
+            composed,
+            "URL: https://example.com\n\nTags: #work\n\ndo it"
+        )
+    }
+
+    func testExtractAttachmentsParsesTags() {
+        let parsed = AppleRemindersService.extractAttachments(
+            fromNotes: "Tags: #design #urgent\n\nbody"
+        )
+        XCTAssertNil(parsed.url)
+        XCTAssertEqual(parsed.notes, "body")
+        XCTAssertEqual(parsed.tags, ["design", "urgent"])
+        XCTAssertTrue(parsed.subtasks.isEmpty)
+    }
+
+    func testExtractAttachmentsHandlesAllSentinelsTogether() {
+        let composed = AppleRemindersService.composeNotes(
+            notes: "context line",
+            url: URL(string: "https://example.com/doc"),
+            subtasks: [
+                Subtask(title: "first", isDone: true),
+                Subtask(title: "second"),
+            ],
+            tags: ["alpha", "beta"]
+        )
+        let parsed = AppleRemindersService.extractAttachments(fromNotes: composed)
+        XCTAssertEqual(parsed.url, URL(string: "https://example.com/doc"))
+        XCTAssertEqual(parsed.notes, "context line")
+        XCTAssertEqual(parsed.subtasks.map(\.title), ["first", "second"])
+        XCTAssertEqual(parsed.subtasks.map(\.isDone), [true, false])
+        XCTAssertEqual(parsed.tags, ["alpha", "beta"])
+    }
+
+    func testExtractAttachmentsTagsLineDropsBareTokens() {
+        // Tokens without "#" prefix are user-typed words, not tags —
+        // dropping them silently keeps the parser narrow and the
+        // sentinel meaning unambiguous.
+        let parsed = AppleRemindersService.extractAttachments(
+            fromNotes: "Tags: #real word #other"
+        )
+        XCTAssertEqual(parsed.tags, ["real", "other"])
+    }
+
+    func testTagsRoundTripPreservesOrderAndCase() {
+        // Stored canonical form is lowercase; once normalised on the
+        // way in, round-trips keep the same shape.
+        let original = ["design", "p1", "home-assistant"]
+        let composed = AppleRemindersService.composeNotes(
+            notes: nil, url: nil, tags: original
+        )
+        let parsed = AppleRemindersService.extractAttachments(fromNotes: composed)
+        XCTAssertEqual(parsed.tags, original)
+    }
+
     // MARK: - Subtask Progress
 
     func testSubtaskProgressEmpty() {
