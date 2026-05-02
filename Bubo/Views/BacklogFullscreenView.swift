@@ -175,15 +175,13 @@ struct BacklogFullscreenView: View {
         BacklogLogic.smartFilterCounts(activeTasks)
     }
 
-    /// Title of the Reminders list the user is currently focused on via
-    /// the header's project picker, or `nil` if «All Tasks». Same helper
-    /// as in inline `BacklogView` — оба режима читают активный проект
-    /// одной формулой, settings-driven, чтобы переключение синхронно
-    /// влияло на оба.
+    /// Display name of the project the user is currently focused on via
+    /// the header's project picker — local Bubo project or Apple Reminders
+    /// list, `nil` for «All Tasks». Same helper as in inline `BacklogView`
+    /// — оба режима читают активный проект одной формулой, settings-driven,
+    /// чтобы переключение синхронно влияло на оба.
     private var activeProjectName: String? {
-        guard let id = settings.activeProjectListId else { return nil }
-        return AppleRemindersService.shared.listRemindersLists()
-            .first(where: { $0.id == id })?.title
+        settings.activeProjectTitle(remindersService: AppleRemindersService.shared)
     }
 
     /// Distinct, sorted list of project / context labels in the active
@@ -630,7 +628,7 @@ struct BacklogFullscreenView: View {
     /// поверх проекта и не дублируют его.
     @ViewBuilder
     private var filterChipsRow: some View {
-        let projects = settings.activeProjectListId == nil ? availableProjects : []
+        let projects = settings.activeProject == .all ? availableProjects : []
         let colors = availableColorTags
         if !projects.isEmpty || !colors.isEmpty {
             ScrollView(.horizontal, showsIndicators: false) {
@@ -1232,10 +1230,15 @@ struct BacklogFullscreenView: View {
             ?? BacklogTitleParser.guessDuration(for: title)
             ?? optimizerService.defaultTaskDurationMinutes
 
+        // Match inline `BacklogView`: stamp the active project's name on
+        // `context` so the task lands in the user's current view (local
+        // Bubo projects need this — EK lists historically got it from
+        // the Reminders round-trip).
         let task = BacklogTask(
             title: title,
             durationMinutes: duration,
-            priority: .medium
+            priority: .medium,
+            context: activeProjectName
         )
         withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
             backlogService.addTask(task)

@@ -239,14 +239,13 @@ struct BacklogView: View {
         return result
     }
 
-    /// Title of the Reminders list the user is currently focused on, or
-    /// `nil` if «All Tasks» (no project filter). Resolved at read time
-    /// so a rename in Reminders.app picks up on the next sync without a
-    /// stale cached name.
+    /// Display name of the project the user is currently focused on (local
+    /// Bubo project or Apple Reminders list), or `nil` for «All Tasks» /
+    /// when the active project no longer exists. Resolved at read time so
+    /// a rename in Reminders.app picks up on the next sync without a stale
+    /// cached name.
     private var activeProjectName: String? {
-        guard let id = settings.activeProjectListId else { return nil }
-        return AppleRemindersService.shared.listRemindersLists()
-            .first(where: { $0.id == id })?.title
+        settings.activeProjectTitle(remindersService: AppleRemindersService.shared)
     }
 
     /// Urgent count shown in the header pill. Project-scoped: when picker
@@ -1442,10 +1441,18 @@ struct BacklogView: View {
             ?? BacklogTitleParser.guessDuration(for: title)
             ?? optimizerService.defaultTaskDurationMinutes
 
+        // Stamp the active project's name onto `context` so the new task
+        // immediately matches the picker's filter — without this, tasks
+        // typed while focused on a project would land in «All Tasks» and
+        // disappear from the user's current view. EK-backed projects
+        // historically got this for free via the Reminders round-trip
+        // (export → import sets `context` from the list title); local
+        // Bubo projects need it stamped at creation time.
         let task = BacklogTask(
             title: title,
             durationMinutes: duration,
-            priority: .medium
+            priority: .medium,
+            context: activeProjectName
         )
         withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
             backlogService.addTask(task)

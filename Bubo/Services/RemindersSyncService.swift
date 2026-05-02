@@ -458,9 +458,11 @@ final class RemindersSyncService {
             // Prefer the user's currently-active project list (set via the
             // backlog header's project picker) over the global default
             // export list. Это совпадает с UX Reminders.app: «новая задача
-            // идёт туда, куда я смотрю». Когда no active project выбран,
-            // падаем на глобальный `remindersExportListId` из Settings.
-            let targetListId = settings.activeProjectListId
+            // идёт туда, куда я смотрю». `activeRemindersListId` returns
+            // nil for `.all` and for local Bubo projects — local projects
+            // don't map to any EK list, so the export falls through to the
+            // user's global `remindersExportListId`.
+            let targetListId = settings.activeRemindersListId
                 ?? settings.remindersExportListId
             let calendarItemId = try remindersSource.createReminder(
                 from: task,
