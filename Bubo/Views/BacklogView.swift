@@ -169,6 +169,12 @@ struct BacklogView: View {
     /// onboarding hint once the affordance has been discovered.
     @AppStorage("BuboBacklogHasDragged") private var hasDragged: Bool = false
 
+    /// Persisted disclosure state for the task list. Only the user-facing
+    /// `.collapsed` / `.compact` distinction survives across app launches —
+    /// `.expanded` is a drag-time internal state and is intentionally not
+    /// written back here.
+    @AppStorage("BuboBacklogExpansionExpanded") private var persistedExpansionExpanded: Bool = false
+
     /// Maximum number of task rows visible in the compact expansion state.
     /// A height-capped ScrollView keeps the timeline reachable.
     private static let maxExpandedTasks = 4
@@ -449,6 +455,8 @@ struct BacklogView: View {
             }
         }
         .onAppear {
+            // Restore the user's last disclosure choice.
+            expansion = persistedExpansionExpanded ? .compact : .collapsed
             if autoExpand && !allActiveTasks.isEmpty {
                 expansion = .compact
             }
@@ -482,6 +490,16 @@ struct BacklogView: View {
             // so the filter doesn't strand the user in an empty view.
             if urgentOnlyFilter, activeTasks.isEmpty {
                 urgentOnlyFilter = false
+            }
+        }
+        .onChange(of: expansion) { _, newValue in
+            // `.expanded` is a transient drag-time state — don't persist it,
+            // or reopening the app after a drag would land in fully-open mode
+            // the user never asked for.
+            switch newValue {
+            case .collapsed: persistedExpansionExpanded = false
+            case .compact:   persistedExpansionExpanded = true
+            case .expanded:  break
             }
         }
         .onDisappear {
