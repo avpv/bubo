@@ -309,6 +309,13 @@ struct BacklogTaskRow: View {
         var parts: [String] = [task.title, DS.formatMinutes(task.durationMinutes)]
         if task.priority == .high { parts.append("high priority") }
         if let sp = task.storyPoints { parts.append("\(sp) story points") }
+        if !task.subtasks.isEmpty {
+            let progress = task.subtaskProgress
+            parts.append("\(progress.done) of \(progress.total) subtasks done")
+        }
+        if !task.tags.isEmpty {
+            parts.append("tagged " + task.tags.map { "#\($0)" }.joined(separator: " "))
+        }
         if let deadline = task.deadline {
             parts.append("due \(deadlineLabel(deadline))")
         }
@@ -708,6 +715,48 @@ struct BacklogTaskRow: View {
                             Capsule().fill(skin.resolvedTextTertiary.opacity(0.08))
                         )
                         .accessibilityLabel("Prefers \(period.displayLabel)")
+                }
+
+                // Tags — first up to two as compact "#tag" labels in the
+                // tertiary voice. Many-per-task by design, but the row only
+                // surfaces a teaser to keep the right-side meta strip
+                // calm; the rest live in the editor / search. Birman:
+                // «не показывать всё, что есть, — показывать достаточно».
+                if !task.tags.isEmpty {
+                    HStack(spacing: DS.Spacing.xxs) {
+                        ForEach(task.tags.prefix(2), id: \.self) { tag in
+                            Text("#\(tag)")
+                                .font(.footnote)
+                                .lineLimit(1)
+                                .foregroundStyle(skin.resolvedTextTertiary)
+                        }
+                        if task.tags.count > 2 {
+                            Text("+\(task.tags.count - 2)")
+                                .font(DS.Typography.machineHint)
+                                .foregroundStyle(skin.resolvedTextTertiary)
+                        }
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Tags: " + task.tags.map { "#\($0)" }.joined(separator: ", "))
+                }
+
+                // Subtasks progress — "2/5" chip when the task carries a
+                // checklist. Done count + total + a checklist glyph; mirrors
+                // Apple Reminders' inline progress so the parent row already
+                // hints at how much is left without expanding.
+                if !task.subtasks.isEmpty {
+                    let progress = task.subtaskProgress
+                    let allDone = progress.done == progress.total
+                    HStack(spacing: DS.Spacing.xxs) {
+                        Image(systemName: allDone ? "checklist.checked" : "checklist")
+                            .font(.footnote)
+                        Text("\(progress.done)/\(progress.total)")
+                            .font(DS.Typography.metric(skin: skin))
+                            .monospacedDigit()
+                    }
+                    .foregroundStyle(skin.resolvedTextTertiary)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(progress.done) of \(progress.total) subtasks done")
                 }
 
                 // Notes / link indicator — silent presence cue for tasks

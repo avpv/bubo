@@ -25,6 +25,12 @@ struct BacklogView: View {
     /// as event editing — so the editor opens as a full-screen sibling
     /// surface instead of a detached sheet floating above the list.
     var onEditTask: ((BacklogTask) -> Void)? = nil
+    /// Fired when the user wants to add a task with details (Apple-style
+    /// "New Reminder" form) instead of dropping a one-liner via Return.
+    /// Triggered by Shift+Return in the add-task field or by tapping the
+    /// trailing "›" affordance. Parent pushes `NewTaskView` with the
+    /// already-typed title + parsed duration pre-filled.
+    var onCreateTaskWithDetails: ((_ prefillTitle: String, _ prefillDuration: Int?) -> Void)? = nil
     /// Fired when the user taps the fullscreen-affordance in the Tasks
     /// header. The parent owns navigation state and pushes the fullscreen
     /// Backlog onto the popover stack — same pattern as `onEditTask`.
@@ -1142,6 +1148,19 @@ struct BacklogView: View {
                     .font(.callout)
                     .focused($isInputFocused)
                     .onSubmit { addTask() }
+                    // Shift+Return — open the detailed creation form
+                    // instead of one-shot adding. Apple Reminders keeps
+                    // creation light by default but lets you "Show details"
+                    // before save; we keep Return as the lightweight path
+                    // and reserve ⇧↩ for the form pivot. Birman: «два
+                    // действия — две клавиши», без модального переключателя.
+                    .onKeyPress(keys: [.return]) { press in
+                        guard press.modifiers.contains(.shift) else {
+                            return .ignored
+                        }
+                        openCreateWithDetails()
+                        return .handled
+                    }
                     .onExitCommand {
                         // HIG: Escape cancels out of the field. Clears any
                         // draft + ghost so the next ⌘K / tab lands on a
@@ -1181,6 +1200,22 @@ struct BacklogView: View {
                         .foregroundStyle(skin.resolvedTextTertiary)
                         .transition(.opacity)
                         .accessibilityLabel("Guessed duration: about \(DS.formatMinutes(guess))")
+                }
+
+                // Trailing "›" — opens the compact creation form. Mouse
+                // path equivalent of ⇧↩; surfaces only while the field is
+                // focused and the host wired the callback. Birman:
+                // «клавиатурный ярлык должен иметь видимый аналог».
+                if isInputFocused, onCreateTaskWithDetails != nil {
+                    Button(action: openCreateWithDetails) {
+                        Image(systemName: "chevron.right.circle")
+                            .font(.callout)
+                            .foregroundStyle(skin.accentColor)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Add with details (\u{21E7}\u{23CE})")
+                    .accessibilityLabel("Add task with details")
+                    .transition(.opacity)
                 }
             }
             .padding(.horizontal, DS.Spacing.sm)
@@ -1229,6 +1264,10 @@ struct BacklogView: View {
             if isInputFocused {
                 HStack(spacing: DS.Spacing.xs) {
                     Text("\u{23CE} Add")
+                    if onCreateTaskWithDetails != nil {
+                        Text("·").foregroundStyle(skin.resolvedTextTertiary.opacity(DS.Opacity.half))
+                        Text("\u{21E7}\u{23CE} Details")
+                    }
                     Text("·").foregroundStyle(skin.resolvedTextTertiary.opacity(DS.Opacity.half))
                     Text("\u{238B} Cancel")
                     Spacer(minLength: 0)
@@ -1360,6 +1399,31 @@ struct BacklogView: View {
     /// Used by the ghost preview — keep it short so it fits on one line.
     static func dayLabel(for date: Date, calendar cal: Calendar = .current) -> String {
         SlotPreviewCache.dayLabel(for: date, calendar: cal)
+    }
+
+    /// Open the compact creation form with whatever's been typed so far —
+    /// title + parsed duration are forwarded so the user doesn't retype.
+    /// Falls back to addTask() when the host hasn't wired the callback,
+    /// preserving Return-only ergonomics on hosts that don't surface a
+    /// detailed form.
+    private func openCreateWithDetails() {
+        let parsed = parsedNewTaskTitle
+        guard let onCreateTaskWithDetails else {
+            addTask()
+            return
+        }
+        // Allow opening with an empty title — the form lets the user type
+        // there. The parsed-duration prefill is preserved when present.
+        let title = parsed.cleaned
+        let duration = parsed.durationMinutes
+            ?? BacklogTitleParser.guessDuration(for: title)
+        onCreateTaskWithDetails(title, duration)
+        newTaskTitle = ""
+        parsedNewTaskTitle = ("", nil)
+        ghostPreviewText = nil
+        ghostPreviewTask?.cancel()
+        coordinator?.clearGhost()
+        isInputFocused = false
     }
 
     private func addTask() {

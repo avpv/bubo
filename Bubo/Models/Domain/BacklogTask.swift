@@ -47,6 +47,21 @@ struct BacklogTask: Identifiable, Codable, Hashable, Sendable {
     /// can fire arrival alerts.
     var location: String?
 
+    /// Ordered checklist nested inside the task. Distinct from `dependsOn`
+    /// (which links *separate* top-level tasks): subtasks are just
+    /// chunks of the parent's work, not independently scheduled. Round-trips
+    /// through the Apple Reminders `notes` field via a sentinel block,
+    /// alongside the existing `URL:` line.
+    var subtasks: [Subtask] = []
+
+    /// Free-form text tags. Distinct from `colorTag` (a categorical hue
+    /// dot) and from `context` (the single project label): tags are
+    /// many-per-task, lowercased, "#"-shaped on the way in but stored
+    /// without the prefix. Round-trips through `EKReminder.notes` via
+    /// a `Tags:` sentinel line so iOS Reminders preserves them as
+    /// human-readable text.
+    var tags: [String] = []
+
     /// Last mutation timestamp — used by iCloud sync to resolve conflicts
     /// when the same task was edited on two devices.  Optional for backward
     /// compatibility with data serialized before this field existed.
@@ -90,6 +105,8 @@ struct BacklogTask: Identifiable, Codable, Hashable, Sendable {
         notes: String? = nil,
         url: URL? = nil,
         location: String? = nil,
+        subtasks: [Subtask] = [],
+        tags: [String] = [],
         createdAt: Date = Date()
     ) {
         self.id = id
@@ -107,7 +124,60 @@ struct BacklogTask: Identifiable, Codable, Hashable, Sendable {
         self.notes = notes
         self.url = url
         self.location = location
+        self.subtasks = subtasks
+        self.tags = tags
         self.createdAt = createdAt
+    }
+}
+
+// MARK: - Tag Normalization
+
+extension BacklogTask {
+    /// Pure helper: clean a single user-typed tag down to the canonical
+    /// stored form. Trims, drops a leading "#", lowercases, and replaces
+    /// internal whitespace with hyphens. Returns nil for empty input
+    /// after stripping. Centralised so the editor field, the title
+    /// parser, and the round-trip codec all agree on what counts as
+    /// the "same" tag.
+    static func normalizeTag(_ raw: String) -> String? {
+        var s = raw.trimmingCharacters(in: .whitespaces)
+        if s.hasPrefix("#") { s.removeFirst() }
+        s = s.trimmingCharacters(in: .whitespaces)
+        guard !s.isEmpty else { return nil }
+        s = s.lowercased()
+        s = s.components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: "-")
+        return s.isEmpty ? nil : s
+    }
+}
+
+// MARK: - Subtask
+
+/// Single checklist item under a `BacklogTask`. Intentionally minimal:
+/// title + done flag is enough to model the "собрать чемодан → 5 пунктов"
+/// case. Promotion to a full top-level task isn't supported yet — that's
+/// what `dependsOn` is for between independent tasks.
+struct Subtask: Identifiable, Codable, Hashable, Sendable {
+    let id: String
+    var title: String
+    var isDone: Bool
+
+    init(id: String = UUID().uuidString, title: String, isDone: Bool = false) {
+        self.id = id
+        self.title = title
+        self.isDone = isDone
+    }
+}
+
+extension BacklogTask {
+    /// `(done, total)` count over `subtasks`. Used by row UI to render
+    /// "2/5" progress and by completion logic to suggest finishing the
+    /// parent once every checklist item is checked.
+    var subtaskProgress: (done: Int, total: Int) {
+        let total = subtasks.count
+        let done = subtasks.lazy.filter(\.isDone).count
+        return (done, total)
     }
 }
 

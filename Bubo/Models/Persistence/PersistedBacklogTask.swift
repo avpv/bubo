@@ -54,6 +54,18 @@ final class PersistedBacklogTask {
     var urlString: String?
     var location: String?
 
+    /// JSON-encoded `[Subtask]`. nil on legacy rows (decoded as empty list).
+    /// Stored as a blob rather than a CloudKit relationship because the
+    /// nested model is intentionally lightweight (id/title/done) and lives
+    /// only inside its parent — no cross-row queries needed.
+    var subtasksData: Data?
+
+    /// JSON-encoded `[String]`. Free-form text tags; nil on legacy rows
+    /// decodes as an empty list. Stored as a blob (vs. one row per tag)
+    /// for the same reason as `subtasksData` — tags live inside their
+    /// parent task and aren't queried independently.
+    var tagsData: Data?
+
     /// Plain integer position.  `BacklogService` rewrites `sortOrder` on
     /// every save in line with the in-memory array index — the incremental
     /// diff touches only rows whose position actually moved, but the
@@ -99,11 +111,25 @@ final class PersistedBacklogTask {
         self.notes = task.notes
         self.urlString = task.url?.absoluteString
         self.location = task.location
+        self.subtasksData = task.subtasks.isEmpty
+            ? nil
+            : (try? JSONEncoder().encode(task.subtasks))
+        self.tagsData = task.tags.isEmpty
+            ? nil
+            : (try? JSONEncoder().encode(task.tags))
         if let sortOrder { self.sortOrder = sortOrder }
     }
 
     func toBacklogTask() -> BacklogTask {
         let deps: [String] = dependsOnData.flatMap {
+            try? JSONDecoder().decode([String].self, from: $0)
+        } ?? []
+
+        let subs: [Subtask] = subtasksData.flatMap {
+            try? JSONDecoder().decode([Subtask].self, from: $0)
+        } ?? []
+
+        let tags: [String] = tagsData.flatMap {
             try? JSONDecoder().decode([String].self, from: $0)
         } ?? []
 
@@ -123,6 +149,8 @@ final class PersistedBacklogTask {
             notes: notes,
             url: urlString.flatMap(URL.init(string:)),
             location: location,
+            subtasks: subs,
+            tags: tags,
             createdAt: createdAt
         )
         task.status = BacklogStatus(rawValue: statusRaw) ?? .pending

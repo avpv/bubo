@@ -95,6 +95,10 @@ struct MenuBarView: View {
         case detail(CalendarEvent)
         case addEvent(editing: CalendarEvent? = nil, initialType: EventType = .standard, prefillFrom: CalendarEvent? = nil)
         case editTask(BacklogTask)
+        /// Compact creation form, opened from `+ Add task…` via Shift+Return
+        /// or the trailing Details affordance. Pre-fills title + parsed
+        /// duration so the user doesn't retype what they already typed.
+        case newTask(prefillTitle: String, prefillDuration: Int?)
         case timer(CalendarEvent)
         case quickAddTasks
         case backlog
@@ -111,6 +115,8 @@ struct MenuBarView: View {
             case (.addEvent(let a, let t1, let p1), .addEvent(let b, let t2, let p2)):
                 return a?.id == b?.id && t1 == t2 && p1?.id == p2?.id
             case (.editTask(let a), .editTask(let b)): return a.id == b.id
+            case (.newTask(let t1, let d1), .newTask(let t2, let d2)):
+                return t1 == t2 && d1 == d2
             case (.timer(let a), .timer(let b)): return a.id == b.id
             case (.quickAddTasks, .quickAddTasks): return true
             case (.backlog, .backlog): return true
@@ -332,6 +338,30 @@ struct MenuBarView: View {
                         )
                     )
 
+                case .newTask(let prefillTitle, let prefillDuration):
+                    if let backlog = optimizerService.backlogService {
+                        NewTaskView(
+                            prefillTitle: prefillTitle,
+                            prefillDuration: prefillDuration,
+                            defaultDuration: optimizerService.defaultTaskDurationMinutes,
+                            backlogService: backlog,
+                            onDismiss: { navigation = .list },
+                            onSave: { _ in
+                                navigation = .list
+                                toastState.showSuccess("Task added", icon: "checkmark.circle.fill")
+                            }
+                        )
+                        .transition(
+                            reduceMotion ? .opacity : .asymmetric(
+                                insertion: .move(edge: .trailing).combined(with: .opacity),
+                                removal: .move(edge: .trailing).combined(with: .opacity).combined(with: .scale(scale: 0.98))
+                            )
+                        )
+                    } else {
+                        EmptyView()
+                            .onAppear { navigation = .list }
+                    }
+
                 case .editTask(let task):
                     if let backlog = optimizerService.backlogService {
                         // Pull the live task by id every render so external
@@ -366,6 +396,9 @@ struct MenuBarView: View {
                             reminderService: reminderService,
                             onExit: { navigation = .list },
                             onEditTask: { task in navigation = .editTask(task) },
+                            onCreateTaskWithDetails: { prefillTitle, prefillDuration in
+                                navigation = .newTask(prefillTitle: prefillTitle, prefillDuration: prefillDuration)
+                            },
                             onUndoableAction: { message, undo in
                                 toastState.showSuccess(message, icon: "arrow.uturn.backward", onUndo: undo)
                             },
@@ -568,6 +601,14 @@ struct MenuBarView: View {
             // independent of the one-shot `hasStartedSync` guard below.
             refreshPermissionSnapshots()
 
+            // Drain any ⇧↩ quick-capture prefill that was buffered while
+            // this view wasn't in the tree. The bridge clears itself on
+            // read, so a hot popover (notification path) and a cold
+            // popover (this path) never both navigate.
+            if let pending = QuickCaptureBridge.shared.take() {
+                navigation = .newTask(prefillTitle: pending, prefillDuration: nil)
+            }
+
             // AutoDefer runs once per calendar day. Calling on every
             // popover open is cheap (the service early-exits when
             // `lastRunDate` is today) and covers the «opened a fresh
@@ -667,6 +708,18 @@ struct MenuBarView: View {
             ) {
                 _ = backlog.removeTask(id: task.id)
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .didCaptureBacklogTaskWithDetails)) { notification in
+            // ⇧↩ from quick-capture: route to the compact creation form
+            // pre-filled with the typed text. The prefill was also
+            // dropped into `QuickCaptureBridge.shared` so a closed-popover
+            // race still lands the user on the form via `.onAppear`.
+            guard let text = notification.userInfo?["text"] as? String else { return }
+            // Drain the bridge slot too — the notification path beat the
+            // .onAppear consumer to it, and we don't want a duplicate
+            // navigation when the popover finishes opening.
+            _ = QuickCaptureBridge.shared.take()
+            navigation = .newTask(prefillTitle: text, prefillDuration: nil)
         }
         .onReceive(NotificationCenter.default.publisher(for: BacklogService.taskCompleted)) { notification in
             // Fires only for user-initiated completions in Bubo (the external-
@@ -1111,6 +1164,9 @@ struct MenuBarView: View {
                 },
                 onEditTask: { task in
                     navigation = .editTask(task)
+                },
+                onCreateTaskWithDetails: { prefillTitle, prefillDuration in
+                    navigation = .newTask(prefillTitle: prefillTitle, prefillDuration: prefillDuration)
                 },
                 onEnterFullscreen: {
                     navigation = .backlog

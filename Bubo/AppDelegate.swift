@@ -348,6 +348,27 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     self?.dismissQuickCapture()
                 }
             },
+            onSubmitWithDetails: { [weak self] text in
+                MainActor.assumeIsolated {
+                    // Two paths here, run in parallel so the form lands
+                    // whether or not the popover is currently open:
+                    //  - Notification: the fast path. `MenuBarView` is in
+                    //    the view tree if the popover is open and routes
+                    //    straight to `.newTask(...)`.
+                    //  - `QuickCaptureBridge.shared`: the slow path.
+                    //    Survives until the next time `MenuBarView`
+                    //    appears, so a closed popover doesn't drop the
+                    //    prefill on the floor.
+                    QuickCaptureBridge.shared.setPending(text)
+                    NotificationCenter.default.post(
+                        name: .didCaptureBacklogTaskWithDetails,
+                        object: nil,
+                        userInfo: ["text": text]
+                    )
+                    self?.dismissQuickCapture()
+                    self?.tryOpenMenuBarPopover()
+                }
+            },
             onCancel: { [weak self] in
                 MainActor.assumeIsolated { self?.dismissQuickCapture() }
             }
@@ -419,6 +440,30 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         quickCaptureWindow = nil
         panel.orderOut(nil)
         panel.close()
+    }
+
+    /// Best-effort attempt to open the `MenuBarExtra` popover so a
+    /// `⇧↩` quick-capture pivot can mount `NewTaskView` immediately.
+    /// SwiftUI doesn't expose programmatic control over `MenuBarExtra`,
+    /// so we fish for its status-item button via `NSStatusBar` and click
+    /// it. Failures are silent — the prefill is already buffered in
+    /// `QuickCaptureBridge.shared`, so the user just opens the popover
+    /// manually next and lands on the form anyway.
+    private func tryOpenMenuBarPopover() {
+        // `NSStatusBar.system` returns every status item registered
+        // by the app, including the one `MenuBarExtra` adds. Clicking
+        // its button is the same code path the user takes by hand.
+        let bar = NSStatusBar.system
+        for item in bar.value(forKey: "items") as? [NSStatusItem] ?? [] {
+            guard let button = item.button else { continue }
+            // Defer to the next runloop tick — clicking before the
+            // quick-capture panel has finished tearing down can leave
+            // the popover anchored to the wrong key window.
+            DispatchQueue.main.async {
+                button.performClick(nil)
+            }
+            return
+        }
     }
 
     // MARK: - Post-Join Ribbon (J1)
@@ -707,4 +752,11 @@ extension Notification.Name {
     /// trimmed task title. Listened for in `MenuBarView`, which calls
     /// `BacklogService.addTask(...)` and surfaces an undo toast.
     static let didCaptureBacklogTask = Notification.Name("didCaptureBacklogTask")
+    /// Posted on `⇧↩` from quick-capture: the user wants the compact
+    /// `NewTaskView` instead of a one-shot add. `userInfo["text"]` carries
+    /// the typed prefill (possibly empty). `MenuBarView` reacts by
+    /// pushing `.newTask(...)` onto the popover stack; the prefill is
+    /// also buffered in `QuickCaptureBridge.shared` for the case where
+    /// the popover wasn't open at the moment the notification fired.
+    static let didCaptureBacklogTaskWithDetails = Notification.Name("didCaptureBacklogTaskWithDetails")
 }
