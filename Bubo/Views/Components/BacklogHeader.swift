@@ -129,6 +129,20 @@ struct BacklogHeader<EtaContent: View>: View {
         }
     }
 
+    // MARK: Inline expansion side-effect
+
+    /// Engaging smart-sort or urgent-only filter while the inline list is
+    /// collapsed would hide the reordered/filtered set behind a closed
+    /// header — open to `.compact` so the new state is immediately visible.
+    /// No-op in fullscreen (no collapsed state) and when the toggle is
+    /// being turned off (no need to spring the list open on disengage).
+    private func expandIfCollapsed(whenEnabled enabled: Bool) {
+        guard enabled,
+              case .inline(let expansion, _) = mode,
+              expansion.wrappedValue == .collapsed else { return }
+        expansion.wrappedValue = .compact
+    }
+
     // MARK: Count
 
     /// Inline режим оборачивает count в кнопку с chevron'ом
@@ -187,15 +201,7 @@ struct BacklogHeader<EtaContent: View>: View {
             Haptics.impact()
             withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
                 useSmartSort.toggle()
-                // Engaging smart-sort while collapsed would hide the
-                // reordered list — open to `.compact` so the new order is
-                // visible. Fullscreen режим не имеет collapsed-состояния и
-                // на этот side-effect не реагирует.
-                if useSmartSort,
-                   case .inline(let expansion, _) = mode,
-                   expansion.wrappedValue == .collapsed {
-                    expansion.wrappedValue = .compact
-                }
+                expandIfCollapsed(whenEnabled: useSmartSort)
             }
         } label: {
             Image(systemName: useSmartSort ? "wand.and.stars" : "arrow.up.arrow.down")
@@ -253,15 +259,7 @@ struct BacklogHeader<EtaContent: View>: View {
             Haptics.impact()
             withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
                 urgentOnlyFilter.toggle()
-                // Engaging the filter while the list is collapsed would
-                // hide everything — open to `.compact` so the filtered set
-                // is immediately visible. Fullscreen-режим не имеет
-                // collapsed-состояния и на этот side-effect не реагирует.
-                if urgentOnlyFilter,
-                   case .inline(let expansion, _) = mode,
-                   expansion.wrappedValue == .collapsed {
-                    expansion.wrappedValue = .compact
-                }
+                expandIfCollapsed(whenEnabled: urgentOnlyFilter)
             }
         } label: {
             Text("\(urgentCount) urgent")
