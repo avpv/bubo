@@ -321,6 +321,12 @@ struct BuboApp: App {
                 agentService: agentService,
                 remindersSyncService: remindersSyncService
             )
+            .environment(settings)
+            .environment(reminderService)
+            .environment(optimizerService)
+            .environment(agentService)
+            .environment(remindersSyncService)
+            .environment(cloudServices)
         } label: {
             Image(nsImage: menuBarIconWithBadge(count: badgeCount))
         }
