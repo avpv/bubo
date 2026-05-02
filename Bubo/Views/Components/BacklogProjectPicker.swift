@@ -25,11 +25,13 @@ import SwiftUI
 ///     backlog отфильтрован `task.context == list.title`, новые задачи
 ///     приземляются в этот лист.
 ///
-/// «New Project…» открывает in-app popover с формой ввода имени; по
-/// умолчанию создаёт local-проект, и (если включён EK-доступ + sync)
-/// предлагает галочку «Also create list in Apple Reminders», чтобы
-/// одновременно с Bubo-проектом завести EKCalendar и связать активный
-/// проект с ним. Без галочки — только local-проект.
+/// «New Project…» **не открывает модальное окно** — pill сам превращается
+/// в инлайн text-field прямо в шапке backlog'а, как переименование item'а
+/// в Reminders.app-сайдбаре. Enter создаёт проект, Esc отменяет. Это
+/// держит фокус пользователя в backlog'е без сноса контекста модалкой.
+/// Когда EK-sync активен, новый проект автоматически создаётся и как
+/// EKCalendar (чтобы он появился на iPhone/iPad); без sync'а — только
+/// local-проект.
 ///
 /// Picker виден всегда: даже без EventKit-доступа local-проекты —
 /// полноценная проектная сущность, и спрятанная кнопка отнимала бы у
@@ -51,12 +53,20 @@ struct BacklogProjectPicker: View {
     @State private var hasRemindersAccess: Bool = AppleRemindersService.hasAccess
 
     /// Re-render trigger for EK list changes (creation, rename, deletion
-    /// in Reminders.app or via iCloud sync). The `lists` computed property
-    /// reads EventKit fresh; we just need a state value SwiftUI sees
-    /// change to schedule a body re-evaluation.
+    /// in Reminders.app or via iCloud sync). Computed properties read
+    /// EventKit fresh; we just need a state value SwiftUI sees change to
+    /// schedule a body re-evaluation.
     @State private var dataChangeTick: Int = 0
 
-    @State private var showingNewProjectPopover: Bool = false
+    /// Inline-create mode: when `true`, the pill renders an editable
+    /// TextField in place of its label. No modal — Enter commits, Esc
+    /// (or focus loss with empty input) cancels. This is the "Birman:
+    /// объекты, а не диалоги" path: creating a project doesn't yank the
+    /// user out of the backlog into a separate sheet.
+    @State private var isCreating: Bool = false
+    @State private var draftName: String = ""
+    @FocusState private var isDraftFocused: Bool
+
     @State private var creationErrorMessage: String?
 
     private var ekListsByAccount: [(account: String, lists: [AppleRemindersService.RemindersList])] {
@@ -78,25 +88,12 @@ struct BacklogProjectPicker: View {
     }
 
     var body: some View {
-        Menu {
-            menuContent
-        } label: {
-            pillLabel
-        }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .help(activeTitle.map { "Active project: \u{201C}\($0)\u{201D} — tap to switch" }
-              ?? "All tasks across every project — tap to focus on one")
-        .accessibilityLabel(activeTitle.map { "Active project \($0)" } ?? "All tasks")
-        .popover(isPresented: $showingNewProjectPopover, arrowEdge: .top) {
-            NewProjectForm(
-                canExportToReminders: showsEKSection,
-                onCancel: { showingNewProjectPopover = false },
-                onCreate: { name, alsoExport in
-                    createNewProject(name: name, alsoExportToReminders: alsoExport)
-                }
-            )
+        Group {
+            if isCreating {
+                inlineCreateField
+            } else {
+                projectMenu
+            }
         }
         .alert(
             "Couldn't create project",
@@ -123,7 +120,21 @@ struct BacklogProjectPicker: View {
         }
     }
 
-    // MARK: Menu
+    // MARK: Menu (default state)
+
+    private var projectMenu: some View {
+        Menu {
+            menuContent
+        } label: {
+            pillLabel
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help(activeTitle.map { "Active project: \u{201C}\($0)\u{201D} — tap to switch" }
+              ?? "All tasks across every project — tap to focus on one")
+        .accessibilityLabel(activeTitle.map { "Active project \($0)" } ?? "All tasks")
+    }
 
     @ViewBuilder
     private var menuContent: some View {
@@ -180,7 +191,7 @@ struct BacklogProjectPicker: View {
 
         Button {
             Haptics.tap()
-            showingNewProjectPopover = true
+            beginInlineCreate()
         } label: {
             Label("New Project…", systemImage: "folder.badge.plus")
         }
@@ -227,107 +238,99 @@ struct BacklogProjectPicker: View {
         }
     }
 
-    // MARK: Create
+    // MARK: Inline create
 
-    private func createNewProject(name: String, alsoExportToReminders: Bool) {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+    /// Pill в режиме создания: вместо лейбла рисует TextField в той же
+    /// капсуле и тех же spacing'ах, чтобы переход «нажал → печатаешь»
+    /// читался как изменение состояния одного и того же элемента, а не
+    /// как появление новой панели. Иконка папки слева — affordance того,
+    /// что мы создаём проект; цветной accent-stroke вокруг капсулы
+    /// сигналит «активный input».
+    private var inlineCreateField: some View {
+        HStack(spacing: DS.Spacing.xxs) {
+            Image(systemName: "folder.badge.plus")
+                .font(.footnote)
+                .foregroundStyle(skin.accentColor)
+            TextField("New project name", text: $draftName)
+                .textFieldStyle(.plain)
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(skin.resolvedTextPrimary)
+                .focused($isDraftFocused)
+                .onSubmit { commitInlineCreate() }
+                .onExitCommand { cancelInlineCreate() }
+                .frame(minWidth: 120, maxWidth: 200)
+            Button {
+                cancelInlineCreate()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.footnote)
+                    .foregroundStyle(skin.resolvedTextTertiary)
+            }
+            .buttonStyle(.plain)
+            .help("Cancel")
+        }
+        .padding(.horizontal, DS.Spacing.xs)
+        .padding(.vertical, DS.Spacing.xxs)
+        .background(
+            Capsule().fill(skin.accentColor.opacity(DS.Opacity.lightFill))
+        )
+        .overlay(
+            Capsule().strokeBorder(
+                skin.accentColor.opacity(DS.Opacity.softAccent),
+                lineWidth: DS.Border.thin
+            )
+        )
+        .contentShape(Capsule())
+        .accessibilityLabel("New project name")
+    }
 
-        // Local project always created — that's the canonical Bubo
-        // representation, independent of whether EK is also involved.
-        guard settings.addLocalProject(name: trimmed) != nil else {
-            creationErrorMessage = "Project name can't be empty."
+    private func beginInlineCreate() {
+        draftName = ""
+        isCreating = true
+        // Defer focus to next runloop — TextField hasn't been mounted
+        // yet at the moment the user taps the menu item, and focusing a
+        // not-yet-visible field is a no-op.
+        DispatchQueue.main.async { isDraftFocused = true }
+    }
+
+    private func cancelInlineCreate() {
+        isCreating = false
+        draftName = ""
+    }
+
+    private func commitInlineCreate() {
+        let trimmed = draftName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            // Empty input on Enter = cancel, не создавать пустой проект
+            // и не показывать алерт — пользователь явно ничего не ввёл.
+            cancelInlineCreate()
             return
         }
 
-        // Optional EK companion list. When the user opted in *and* sync is
-        // available, also create a Reminders list with the same name —
-        // tasks tagged with this project will then export to that list via
-        // `RemindersSyncService` once the active project is switched to
-        // the EK side. We don't auto-switch the active project to EK on
-        // success — local stays the source of truth; the user can flip if
-        // they want EK-backed behaviour.
-        if alsoExportToReminders, showsEKSection {
+        // Local project always created — это каноничный Bubo-источник
+        // правды независимо от того, есть ли EK-зеркало.
+        guard settings.addLocalProject(name: trimmed) != nil else {
+            creationErrorMessage = "Project name can't be empty."
+            cancelInlineCreate()
+            return
+        }
+
+        // EK-зеркало: при включённом sync'е автоматически создаём ещё и
+        // EKCalendar с тем же именем — чтобы новый проект сразу появился
+        // на iPhone/iPad. Сам активный проект остаётся local: dual-source
+        // не нужен пользователю как когнитивная нагрузка, а export всё
+        // равно подхватит EK-лист по совпадению имени через
+        // `RemindersSyncService` (target = `remindersExportListId` /
+        // default-list, который теперь содержит наш свежий лист).
+        if showsEKSection {
             do {
                 _ = try remindersService.createList(name: trimmed)
             } catch {
-                creationErrorMessage = "Local project created, but couldn't add to Apple Reminders: \(error.localizedDescription)"
+                creationErrorMessage = "Project created locally, but couldn't add to Apple Reminders: \(error.localizedDescription)"
             }
         }
 
-        showingNewProjectPopover = false
         Haptics.tap()
-    }
-}
-
-// MARK: - New project form
-
-/// In-app popover form for «New Project…», used in place of the system
-/// `.alert()` so the creation surface lives inside Bubo's window, in
-/// Bubo's design system. Trades the system alert's «sheet of paper»
-/// affordance for: focus on the title field on appear, a Cancel/Create
-/// pair that matches `EditTaskView`/`NewTaskView`, and an opt-in
-/// «mirror to Reminders» toggle that the system alert couldn't host.
-private struct NewProjectForm: View {
-    let canExportToReminders: Bool
-    let onCancel: () -> Void
-    let onCreate: (_ name: String, _ alsoExport: Bool) -> Void
-
-    @Environment(\.activeSkin) private var skin
-
-    @State private var name: String = ""
-    @State private var alsoExport: Bool = false
-    @FocusState private var isNameFocused: Bool
-
-    private var isValid: Bool {
-        !name.trimmingCharacters(in: .whitespaces).isEmpty
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            Text("New Project")
-                .font(DS.Typography.headline(skin: skin))
-                .foregroundStyle(skin.resolvedTextPrimary)
-
-            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                TextField("Project name", text: $name)
-                    .textFieldStyle(.roundedBorder)
-                    .focused($isNameFocused)
-                    .onSubmit { submit() }
-                Text("Tasks tagged with this project will be grouped together in the backlog.")
-                    .font(.caption)
-                    .foregroundStyle(skin.resolvedTextSecondary)
-            }
-
-            if canExportToReminders {
-                Toggle(isOn: $alsoExport) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Also create list in Apple Reminders")
-                            .font(.footnote.weight(.medium))
-                        Text("So new tasks also appear on iPhone / iPad.")
-                            .font(.caption)
-                            .foregroundStyle(skin.resolvedTextSecondary)
-                    }
-                }
-                .toggleStyle(.switch)
-            }
-
-            HStack {
-                Spacer()
-                Button("Cancel", role: .cancel) { onCancel() }
-                    .keyboardShortcut(.cancelAction)
-                Button("Create") { submit() }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(!isValid)
-            }
-        }
-        .padding(DS.Spacing.md)
-        .frame(width: 320)
-        .onAppear { isNameFocused = true }
-    }
-
-    private func submit() {
-        guard isValid else { return }
-        onCreate(name, alsoExport)
+        cancelInlineCreate()
     }
 }
