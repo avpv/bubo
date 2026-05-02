@@ -1920,16 +1920,24 @@ struct MenuBarView: View {
             // space (row to row inside a day) — handled by the `lg`
             // sibling spacing plus a SkinSeparator between groups.
             LazyVStack(alignment: .leading, spacing: DS.Spacing.lg) {
-                // Energy check-in banner stays here as a top-of-timeline
-                // surface — it's a wellness prompt, not an optimizer
-                // suggestion, and it has its own input affordance (level
-                // pills) that doesn't fit the `SmartActions` row's
-                // shape. The optimizer-suggestion banner that used to
-                // sit alongside has migrated into `SmartActions` inside
-                // the Backlog card so the user has a single contextual
-                // channel for "machine has something to offer". Birman:
-                // «один CTA, не три», иначе главный экран дублирует сам
-                // себя.
+                // Quick optimizer actions — one-tap presets that live
+                // above the timeline so the user can ask the optimizer
+                // for help (find focus, pomodoro day, organize today,
+                // plan week) without diving into the inline backlog
+                // card or the command palette. Replaces the legacy
+                // standalone `QuickActions` card that the SmartActions
+                // row used to absorb when the inline backlog was the
+                // dominant surface.
+                QuickActionsRow(
+                    onRunRequest: { request, label in
+                        await runQuickAction(request, label: label)
+                    }
+                )
+
+                // Energy check-in banner — wellness prompt with its own
+                // 1–5 input affordance. Surfaces only when a check-in
+                // is due so the calm timeline isn't constantly
+                // capturing attention.
                 if optimizerService.energyCheckInService?.pendingCheckIn == true {
                     EnergyCheckInBanner(
                         onRecord: { level in
