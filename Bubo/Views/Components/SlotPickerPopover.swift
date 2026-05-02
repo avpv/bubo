@@ -21,6 +21,12 @@ struct SlotPickerPopover: View {
     /// Backlog tasks the user might want to pull into this slot.
     /// Caller filters to the `pending` set; the picker ranks and renders.
     let tasks: [BacklogTask]
+    /// Events near the slot on the same day — used by
+    /// `TimelineSlotRanker` for context-match scoring («I'm bracketed
+    /// by Project X, surface Project X tasks first»). Empty list =
+    /// context signal effectively zero, ranker falls back on the
+    /// other signals.
+    var adjacentEvents: [CalendarEvent] = []
     /// Place an existing backlog task into the slot.
     let onPick: (BacklogTask) -> Void
     /// Create a new backlog task with this title + duration and place
@@ -130,21 +136,17 @@ struct SlotPickerPopover: View {
         return result
     }
 
-    /// Coarse Phase-1 ranking applied AFTER the filter chips: urgent
-    /// first, then duration-fit, then by most recently created.
-    /// Replaced by `TimelineSlotRanker` in Phase 2 with proper signals
-    /// (context match, energy, etc.).
+    /// Filter-narrowed pool ranked by `TimelineSlotRanker` — applies
+    /// urgency / fit / context-match / period-preference / recency
+    /// in one pass. Filters compose AND with the ranker: chips
+    /// narrow, the ranker orders.
     private var rankedCandidates: [BacklogTask] {
-        let now = Date()
-        return filteredPool.sorted { lhs, rhs in
-            let lu = BacklogLogic.isUrgent(lhs, now: now)
-            let ru = BacklogLogic.isUrgent(rhs, now: now)
-            if lu != ru { return lu }
-            let lf = lhs.durationMinutes <= slotMinutes
-            let rf = rhs.durationMinutes <= slotMinutes
-            if lf != rf { return lf }
-            return lhs.createdAt > rhs.createdAt
-        }
+        let context = TimelineSlotRanker.SlotContext(
+            start: slotStart,
+            end: slotEnd,
+            adjacentEvents: adjacentEvents
+        )
+        return TimelineSlotRanker.rank(tasks: filteredPool, slot: context)
     }
 
     /// True when at least one filter is engaged — drives the empty-state

@@ -37,6 +37,10 @@ struct FreeSlotRow: View {
     /// (typically `BacklogService.pending`). Empty list = picker still
     /// opens, just shows the input + a creation hint.
     var pickerTasks: [BacklogTask] = []
+    /// Same-day events used by `TimelineSlotRanker` for context-match
+    /// scoring inside the picker. Caller passes the day's full event
+    /// list; the ranker filters internally to within ±2h of the slot.
+    var pickerAdjacentEvents: [CalendarEvent] = []
     /// Place an existing backlog task into this slot. Same path as drop.
     var onPickTask: ((BacklogTask) -> Void)? = nil
     /// Create a new backlog task with the typed title and place it
@@ -201,6 +205,7 @@ struct FreeSlotRow: View {
                     slotStart: start,
                     slotEnd: end,
                     tasks: pickerTasks,
+                    adjacentEvents: pickerAdjacentEvents,
                     onPick: { task in
                         showingSlotPicker = false
                         onPickTask?(task)

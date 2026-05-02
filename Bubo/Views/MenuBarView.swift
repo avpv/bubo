@@ -2350,6 +2350,7 @@ struct MenuBarView: View {
                         // surface anchored on the slot itself. Birman:
                         // «прямое действие на месте проблемы».
                         pickerTasks: optimizerService.backlogService?.pending ?? [],
+                        pickerAdjacentEvents: dayGroup.events,
                         onPickTask: { task in
                             scheduleBacklogTask(task, slotStart: start, slotEnd: end)
                         },
