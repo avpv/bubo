@@ -532,20 +532,6 @@ struct BacklogFullscreenView: View {
 
     // MARK: - Filter chips
 
-    /// Project + colour-tag filter chips. Renders as a horizontal scroll
-    /// row only when the active set has at least one project context or
-    /// at least one colour-tagged task — empty data ⇒ no row, so the
-    /// header stays calm on simple backlogs. Each chip toggles a
-    /// session-local filter; the underlying `activeFiltered` recomposes
-    /// on every render. Birman: «правила — это объекты на экране».
-    ///
-    /// Project chips прячутся, когда picker уже выбрал активный проект:
-    /// в этом состоянии backlog уже отфильтрован одним контекстом, и
-    /// chip-ряд показал бы либо одну избыточную «Personal»-таблетку,
-    /// либо чужие чипы, клик по которым пересекался бы с picker'ом и
-    /// давал пустой результат. Color-chip'ы остаются — они работают
-    /// поверх проекта и не дублируют его.
-    @ViewBuilder
     /// Apple Reminders' Today / Scheduled / Flagged cards adapted to
     /// Bubo's tighter menu-bar geometry: one horizontal row of chips
     /// with leading icon + label + trailing count badge. "All" is the
@@ -629,6 +615,20 @@ struct BacklogFullscreenView: View {
         )
     }
 
+    /// Project + colour-tag filter chips. Renders as a horizontal scroll
+    /// row only when the active set has at least one project context or
+    /// at least one colour-tagged task — empty data ⇒ no row, so the
+    /// header stays calm on simple backlogs. Each chip toggles a
+    /// session-local filter; the underlying `activeFiltered` recomposes
+    /// on every render. Birman: «правила — это объекты на экране».
+    ///
+    /// Project chips прячутся, когда picker уже выбрал активный проект:
+    /// в этом состоянии backlog уже отфильтрован одним контекстом, и
+    /// chip-ряд показал бы либо одну избыточную «Personal»-таблетку,
+    /// либо чужие чипы, клик по которым пересекался бы с picker'ом и
+    /// давал пустой результат. Color-chip'ы остаются — они работают
+    /// поверх проекта и не дублируют его.
+    @ViewBuilder
     private var filterChipsRow: some View {
         let projects = settings.activeProjectListId == nil ? availableProjects : []
         let colors = availableColorTags
