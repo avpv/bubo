@@ -218,6 +218,19 @@ struct BacklogView: View {
     /// of a two-line stack.
     static let compactRowHeight: CGFloat = 40
 
+    /// Maximum height of the tombstone scroll area in the stripped
+    /// inline panel. Big enough to surface 4–5 completed/frozen rows
+    /// without scrolling, small enough that a long history can't
+    /// push the timeline off-screen.
+    static let inlineTombstonesMaxHeight: CGFloat = 180
+
+    /// True when there's anything in the «recently undone» buckets to
+    /// display. Drives both the panel-visibility gate and the
+    /// tombstones section inside the panel.
+    private var hasTombstones: Bool {
+        !completedToday.isEmpty || !backlogService.frozen.isEmpty
+    }
+
     /// All non-done, non-frozen tasks — the "real" active set used for
     /// totals, capacity math and onAppear heuristics. Not subject to the
     /// urgent-only UI filter, so the header counter doesn't lie about
@@ -350,18 +363,15 @@ struct BacklogView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header + list stay visible as long as *any* bucket has tasks
-            // (active, completed-today, or frozen). Otherwise the user's
-            // last completion would make the tombstone unreachable — it
-            // would render inside a hidden subtree, and "undo by clicking
-            // the checkmark" would be gone.
-            // Use `allActiveTasks` so the urgent-only filter can't hide the
-            // header — the user needs a way to flip the filter back off even
-            // when no urgent tasks match.
-            if !allActiveTasks.isEmpty
-                || isInputFocused
-                || !completedToday.isEmpty
-                || !backlogService.frozen.isEmpty {
+            // Inline backlog is now a status-panel: counts + capacity
+            // ring + adaptive SmartActions row + tombstones for undo.
+            // Active task rows, the add-task input, and the drag
+            // source all moved out — task creation lives on the
+            // timeline (`SlotPickerPopover`) and editing/reordering
+            // lives in the fullscreen backlog. Birman: «один экран
+            // — одна работа», and the work this panel is hired for
+            // is reading status, not editing tasks.
+            if !allActiveTasks.isEmpty || hasTombstones {
                 BacklogHeader(
                     mode: .inline(
                         expansion: $expansion,
@@ -376,35 +386,30 @@ struct BacklogView: View {
                     useSmartSort: $useSmartSort,
                     urgentOnlyFilter: $urgentOnlyFilter
                 )
-                // SmartActions sits directly between the diagnosis (header
-                // verdict + capacity ring) and the evidence (task list).
-                // Birman: «прямое действие на месте проблемы». Renders one
-                // adaptive row — overflow fix when over capacity, ranked
-                // soft suggestion when nothing is wrong but the engine has
-                // something to offer, or quiet `Plan day…` discovery when
-                // the day is calm. Hidden in `.collapsed` so the user can
-                // truly fold the card to its header alone.
                 if expansion != .collapsed {
+                    // SmartActions: overflow fix when over capacity,
+                    // ranked soft suggestion when nothing is wrong
+                    // but the engine has something to offer, or quiet
+                    // `Plan day…` discovery when the day is calm.
                     smartActionsRow
-                    // Single skin-aware hairline at the meta → content
-                    // seam — same role as the separator in
-                    // `BacklogFullscreenView` so both backlog surfaces
-                    // share the same rhythm. Hidden when the active set
-                    // is empty (input may be focused, but there's no
-                    // list to separate from). PRINCIPLES.md §10: line
-                    // style delegated to the skin; never a hard `Divider()`.
-                    if !allActiveTasks.isEmpty {
+
+                    // Tombstones (completed today / frozen) — kept in
+                    // the inline panel so the user can undo a misclick
+                    // without bouncing into fullscreen. Wrapped in a
+                    // bounded scroll view so a long completed-today
+                    // pile can't push the timeline off-screen.
+                    if hasTombstones {
                         SkinSeparator()
                             .padding(.horizontal, DS.Spacing.sm)
                             .padding(.top, DS.Spacing.xs)
+                        ScrollView(.vertical, showsIndicators: true) {
+                            tombstones
+                        }
+                        .frame(maxHeight: Self.inlineTombstonesMaxHeight)
+                        .padding(.horizontal, DS.Spacing.sm)
                     }
                 }
-                // Task rows only appear when expanded (up to 4 visible
-                // with scroll); collapsed = header only.
-                taskList
             }
-            addTaskField
-            ghostPreviewRow
         }
         // Measure the hosting popover height so the fully-expanded list can
         // grow on big screens instead of being pinned to 480pt. We sample
