@@ -38,6 +38,54 @@ struct ReminderInterval: Identifiable, Codable, Hashable {
     }
 }
 
+/// Bubo-native project. Lives independently from Apple Reminders so users
+/// who don't sync with Reminders.app still have a way to group backlog
+/// tasks by project. `BacklogTask.context` carries the project name (same
+/// vocabulary as for Reminders-list-backed projects), so filtering and
+/// "active project" semantics are identical regardless of source.
+struct LocalProject: Identifiable, Codable, Hashable, Sendable {
+    let id: UUID
+    var name: String
+    var createdAt: Date
+
+    init(id: UUID = UUID(), name: String, createdAt: Date = Date()) {
+        self.id = id
+        self.name = name
+        self.createdAt = createdAt
+    }
+}
+
+/// Discriminated view of `ReminderSettings.activeProjectListId`. The raw
+/// storage stays a single optional string for back-compat with serialized
+/// settings; this enum decodes it into "all tasks" / local Bubo project /
+/// Apple Reminders list. Local ids are persisted as `"local:<UUID>"` so a
+/// device without EventKit access still round-trips them through CloudKit.
+enum ActiveProject: Equatable, Sendable {
+    case all
+    case local(UUID)
+    case remindersList(String)
+
+    static let localPrefix = "local:"
+
+    init(rawValue: String?) {
+        guard let raw = rawValue, !raw.isEmpty else { self = .all; return }
+        if raw.hasPrefix(Self.localPrefix),
+           let uuid = UUID(uuidString: String(raw.dropFirst(Self.localPrefix.count))) {
+            self = .local(uuid)
+        } else {
+            self = .remindersList(raw)
+        }
+    }
+
+    var rawValue: String? {
+        switch self {
+        case .all: return nil
+        case .local(let id): return Self.localPrefix + id.uuidString
+        case .remindersList(let id): return id
+        }
+    }
+}
+
 
 
 @Observable
@@ -91,14 +139,24 @@ class ReminderSettings: Codable {
     /// Opt-in for safety — imported tasks get added to `dismissedReminderIds` instead.
     var remindersDeletionSync: Bool { didSet { scheduleSave() } }
 
-    /// The Reminders list the user is currently focused on, drawn from the
-    /// backlog header's project picker. `nil` = «All Tasks» (no filter).
-    /// When set, the backlog filters its rows to that list's tasks and new
-    /// tasks created from the inline add-field land in this list (overriding
-    /// the global `remindersExportListId` for the duration of the focus).
-    /// Persisted so the user's «which list am I working in?» state survives
-    /// app restarts — same idea as Reminders.app's selected sidebar item.
+    /// Active project the user is focused on, drawn from the backlog
+    /// header's project picker. Stored as a single string for back-compat
+    /// with previously-serialized settings, but decoded through
+    /// `ActiveProject` (see helper below):
+    ///   - `nil`            → `.all`              (no filter)
+    ///   - `"local:<UUID>"` → `.local(id)`        (Bubo-native project)
+    ///   - any other value  → `.remindersList(id)` (EK calendar id)
+    /// When non-`.all`, the backlog filters rows to that project and new
+    /// tasks created from the inline add-field land there (overriding the
+    /// global export list for the duration of the focus).
     var activeProjectListId: String? { didSet { scheduleSave() } }
+
+    /// Bubo-native projects that live independently of Apple Reminders.
+    /// Visible in the backlog project picker even when EventKit sync is
+    /// off / not granted, so users can group tasks without needing the
+    /// Reminders.app at all. Persisted through CloudKit alongside the
+    /// rest of `ReminderSettings`.
+    var localProjects: [LocalProject] { didSet { scheduleSave() } }
 
     // World Clock
     var isWorldClockEnabled: Bool { didSet { scheduleSave() } }
@@ -119,7 +177,7 @@ class ReminderSettings: Codable {
         case showBadgeCount, badgeCountMode, badgeTimeWindowHours
         case isRemindersSyncEnabled, selectedRemindersListIds, remindersCompletionSync, remindersDefaultDurationMinutes
         case remindersExportEnabled, remindersExportListId, remindersDeletionSync
-        case activeProjectListId
+        case activeProjectListId, localProjects
         case isWorldClockEnabled, worldClockCityIDs
     }
 
@@ -151,6 +209,7 @@ class ReminderSettings: Codable {
         self.remindersExportListId = nil
         self.remindersDeletionSync = false
         self.activeProjectListId = nil
+        self.localProjects = []
         self.isWorldClockEnabled = false
         self.worldClockCityIDs = []
     }
@@ -181,6 +240,7 @@ class ReminderSettings: Codable {
         remindersExportListId = try container.decodeIfPresent(String.self, forKey: .remindersExportListId)
         remindersDeletionSync = try container.decodeIfPresent(Bool.self, forKey: .remindersDeletionSync) ?? false
         activeProjectListId = try container.decodeIfPresent(String.self, forKey: .activeProjectListId)
+        localProjects = try container.decodeIfPresent([LocalProject].self, forKey: .localProjects) ?? []
         isWorldClockEnabled = try container.decodeIfPresent(Bool.self, forKey: .isWorldClockEnabled) ?? false
         worldClockCityIDs = try container.decodeIfPresent([String].self, forKey: .worldClockCityIDs) ?? []
     }
@@ -210,6 +270,7 @@ class ReminderSettings: Codable {
         try container.encodeIfPresent(remindersExportListId, forKey: .remindersExportListId)
         try container.encode(remindersDeletionSync, forKey: .remindersDeletionSync)
         try container.encodeIfPresent(activeProjectListId, forKey: .activeProjectListId)
+        try container.encode(localProjects, forKey: .localProjects)
         try container.encode(isWorldClockEnabled, forKey: .isWorldClockEnabled)
         try container.encode(worldClockCityIDs, forKey: .worldClockCityIDs)
     }
@@ -289,9 +350,67 @@ class ReminderSettings: Codable {
         remindersExportListId = fresh.remindersExportListId
         remindersDeletionSync = fresh.remindersDeletionSync
         activeProjectListId = fresh.activeProjectListId
+        localProjects = fresh.localProjects
         isWorldClockEnabled = fresh.isWorldClockEnabled
         worldClockCityIDs = fresh.worldClockCityIDs
 
         NotificationCenter.default.post(name: Self.settingsDidChange, object: nil)
+    }
+}
+
+// MARK: - Active project helpers
+
+extension ReminderSettings {
+    /// Typed view of `activeProjectListId`. Reading decodes the raw string;
+    /// writing re-encodes it (which triggers the usual `didSet`-driven save).
+    var activeProject: ActiveProject {
+        get { ActiveProject(rawValue: activeProjectListId) }
+        set { activeProjectListId = newValue.rawValue }
+    }
+
+    /// Apple Reminders calendar id of the active project, or `nil` for
+    /// `.all` and `.local`. Used by the export path to pick a target list:
+    /// local projects don't map to any EK list, so the caller falls back
+    /// to `remindersExportListId`.
+    var activeRemindersListId: String? {
+        if case .remindersList(let id) = activeProject { return id }
+        return nil
+    }
+
+    /// Display name for the currently-active project, used as the filter
+    /// key against `BacklogTask.context`. Returns `nil` for `.all` (no
+    /// filter) or when the referenced project no longer exists (e.g. EK
+    /// list deleted in Reminders.app, or stale local id).
+    @MainActor
+    func activeProjectTitle(remindersService: AppleRemindersService) -> String? {
+        switch activeProject {
+        case .all:
+            return nil
+        case .local(let id):
+            return localProjects.first(where: { $0.id == id })?.name
+        case .remindersList(let id):
+            return remindersService.listRemindersLists().first(where: { $0.id == id })?.title
+        }
+    }
+
+    /// Adds a new local project with the trimmed name, makes it active,
+    /// and returns it. Empty / whitespace-only names are rejected.
+    /// Duplicate names (case-insensitive, against existing local projects)
+    /// are coalesced — we re-select the existing project instead of
+    /// creating a second one with the same `BacklogTask.context` value.
+    @discardableResult
+    func addLocalProject(name: String) -> LocalProject? {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if let existing = localProjects.first(where: {
+            $0.name.compare(trimmed, options: .caseInsensitive) == .orderedSame
+        }) {
+            activeProject = .local(existing.id)
+            return existing
+        }
+        let project = LocalProject(name: trimmed)
+        localProjects.append(project)
+        activeProject = .local(project.id)
+        return project
     }
 }

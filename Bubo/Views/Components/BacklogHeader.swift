@@ -110,11 +110,11 @@ struct BacklogHeader<EtaContent: View>: View {
 
             Spacer(minLength: 0)
 
-            // Project picker — Reminders.app-style switcher между листами.
-            // Видим только когда sync с Apple Reminders включён и есть
-            // EventKit-доступ; в противном случае проектов в Bubo физически
-            // не существует (см. `BacklogProjectPicker`). Стоит у правого
-            // края рядом с fullscreen-кнопкой, чтобы читался как «context
+            // Project picker — Reminders.app-style switcher между проектами.
+            // Виден всегда: показывает union из local Bubo-проектов
+            // (`settings.localProjects`) и Apple Reminders-листов (когда
+            // EventKit-доступ есть и sync включён). Стоит у правого края
+            // рядом с fullscreen-кнопкой, чтобы читался как «context
             // навигация», а не как часть числового header'а слева.
             BacklogProjectPicker(
                 settings: settings,
