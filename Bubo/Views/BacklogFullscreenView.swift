@@ -337,6 +337,19 @@ struct BacklogFullscreenView: View {
                 // queries. Chips only render when the underlying data
                 // exists (no projects → no project chip).
                 filterChipsRow
+                // Single skin-aware hairline at the only true semantic
+                // seam — meta-band (header + week-strip + smart-actions +
+                // filter chips) ends here, evidence (the task list) begins.
+                // PRINCIPLES.md §2: density is respect for attention —
+                // one boundary, not three. PRINCIPLES.md §10: line style
+                // delegated to the skin (`SkinSeparator`), never a hard
+                // `Divider()`. Hidden when the backlog is empty so a
+                // floating line never sits above the empty state.
+                if !activeTasks.isEmpty {
+                    SkinSeparator()
+                        .padding(.horizontal, DS.Spacing.sm)
+                        .padding(.top, DS.Spacing.xs)
+                }
                 mainContent
                 addTaskField
             }
@@ -495,6 +508,13 @@ struct BacklogFullscreenView: View {
             onLockTodaysEvents: onLockTodaysEvents
         )
         .padding(.horizontal, DS.Spacing.sm)
+        // Vertical air on both sides so the diagnosis row sits as its
+        // own beat between the week-strip above and the filter band
+        // below. Without it the «Pack urgent tasks first» / «Schedule
+        // overflow» message visually fuses with the week-strip dots
+        // and the smart-filter chips. PRINCIPLES.md §2 — rhythm via
+        // whitespace, not chrome.
+        .padding(.vertical, DS.Spacing.xs)
     }
 
     // MARK: - Week strip

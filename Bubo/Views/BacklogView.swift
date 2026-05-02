@@ -386,6 +386,18 @@ struct BacklogView: View {
                 // truly fold the card to its header alone.
                 if expansion != .collapsed {
                     smartActionsRow
+                    // Single skin-aware hairline at the meta → content
+                    // seam — same role as the separator in
+                    // `BacklogFullscreenView` so both backlog surfaces
+                    // share the same rhythm. Hidden when the active set
+                    // is empty (input may be focused, but there's no
+                    // list to separate from). PRINCIPLES.md §10: line
+                    // style delegated to the skin; never a hard `Divider()`.
+                    if !allActiveTasks.isEmpty {
+                        SkinSeparator()
+                            .padding(.horizontal, DS.Spacing.sm)
+                            .padding(.top, DS.Spacing.xs)
+                    }
                 }
                 // Task rows only appear when expanded (up to 4 visible
                 // with scroll); collapsed = header only.
@@ -605,6 +617,11 @@ struct BacklogView: View {
             onLockTodaysEvents: onLockTodaysEvents
         )
         .padding(.horizontal, DS.Spacing.sm)
+        // Vertical air on both sides — same `Spacing.xs` beat the
+        // fullscreen backlog uses, so the diagnosis row sits as its
+        // own beat instead of fusing with the header above and the
+        // task list below. PRINCIPLES.md §2 — rhythm via whitespace.
+        .padding(.vertical, DS.Spacing.xs)
     }
 
     // MARK: - Capacity ring helpers
