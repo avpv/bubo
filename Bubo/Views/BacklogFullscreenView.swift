@@ -508,6 +508,13 @@ struct BacklogFullscreenView: View {
             onLockTodaysEvents: onLockTodaysEvents
         )
         .padding(.horizontal, DS.Spacing.sm)
+        // Vertical air on both sides so the diagnosis row sits as its
+        // own beat between the week-strip above and the filter band
+        // below. Without it the «Pack urgent tasks first» / «Schedule
+        // overflow» message visually fuses with the week-strip dots
+        // and the smart-filter chips. PRINCIPLES.md §2 — rhythm via
+        // whitespace, not chrome.
+        .padding(.vertical, DS.Spacing.xs)
     }
 
     // MARK: - Week strip
