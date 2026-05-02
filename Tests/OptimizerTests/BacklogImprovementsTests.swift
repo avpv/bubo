@@ -100,6 +100,109 @@ final class BacklogLogicTests: XCTestCase {
         XCTAssertFalse(BacklogLogic.isUrgent(task("c"), now: n, calendar: cal))
     }
 
+    // MARK: smart filters
+
+    func testMatchesSmartFilterToday() {
+        let cal = Self.calendar()
+        let n = Self.now()
+        let today = cal.date(bySettingHour: 18, minute: 0, second: 0, of: n)!
+        let tomorrow = cal.date(byAdding: .day, value: 1, to: n)!
+        XCTAssertTrue(BacklogLogic.matchesSmartFilter(
+            task("a", deadline: today),
+            filter: .today, now: n, calendar: cal
+        ))
+        XCTAssertFalse(BacklogLogic.matchesSmartFilter(
+            task("b", deadline: tomorrow),
+            filter: .today, now: n, calendar: cal
+        ))
+        XCTAssertFalse(BacklogLogic.matchesSmartFilter(
+            task("c"),
+            filter: .today, now: n, calendar: cal
+        ))
+    }
+
+    func testMatchesSmartFilterOverdue() {
+        let cal = Self.calendar()
+        let n = Self.now()
+        let yesterday = cal.date(byAdding: .day, value: -1, to: n)!
+        let todayLate = cal.date(bySettingHour: 23, minute: 0, second: 0, of: n)!
+        XCTAssertTrue(BacklogLogic.matchesSmartFilter(
+            task("y", deadline: yesterday),
+            filter: .overdue, now: n, calendar: cal
+        ))
+        // "Today, but later in the day" is NOT overdue — overdue means
+        // strictly before today's start so the chip never claims things
+        // the user could still finish today.
+        XCTAssertFalse(BacklogLogic.matchesSmartFilter(
+            task("t", deadline: todayLate),
+            filter: .overdue, now: n, calendar: cal
+        ))
+    }
+
+    func testMatchesSmartFilterScheduled() {
+        let cal = Self.calendar()
+        let n = Self.now()
+        XCTAssertTrue(BacklogLogic.matchesSmartFilter(
+            task("a", status: .scheduled),
+            filter: .scheduled, now: n, calendar: cal
+        ))
+        XCTAssertFalse(BacklogLogic.matchesSmartFilter(
+            task("b", status: .pending),
+            filter: .scheduled, now: n, calendar: cal
+        ))
+    }
+
+    func testMatchesSmartFilterFlaggedMapsToHighPriority() {
+        let cal = Self.calendar()
+        let n = Self.now()
+        XCTAssertTrue(BacklogLogic.matchesSmartFilter(
+            task("a", priority: .high),
+            filter: .flagged, now: n, calendar: cal
+        ))
+        XCTAssertFalse(BacklogLogic.matchesSmartFilter(
+            task("b", priority: .medium),
+            filter: .flagged, now: n, calendar: cal
+        ))
+        XCTAssertFalse(BacklogLogic.matchesSmartFilter(
+            task("c", priority: .low),
+            filter: .flagged, now: n, calendar: cal
+        ))
+    }
+
+    func testMatchesSmartFilterExcludesDoneAndFrozen() {
+        let cal = Self.calendar()
+        let n = Self.now()
+        let tomorrow = cal.date(byAdding: .day, value: 1, to: n)!
+        XCTAssertFalse(BacklogLogic.matchesSmartFilter(
+            task("done", status: .done, deadline: n),
+            filter: .today, now: n, calendar: cal
+        ))
+        XCTAssertFalse(BacklogLogic.matchesSmartFilter(
+            task("frozen", status: .frozen, priority: .high, deadline: tomorrow),
+            filter: .flagged, now: n, calendar: cal
+        ))
+    }
+
+    func testSmartFilterCountsTallyEachBucket() {
+        let cal = Self.calendar()
+        let n = Self.now()
+        let today = cal.date(bySettingHour: 18, minute: 0, second: 0, of: n)!
+        let yesterday = cal.date(byAdding: .day, value: -1, to: n)!
+        let tasks = [
+            task("od", deadline: yesterday),
+            task("td", deadline: today),
+            task("sc", status: .scheduled),
+            task("fl", priority: .high),
+            task("fl-od", priority: .high, deadline: yesterday),
+            task("done-skip", status: .done, deadline: yesterday),
+        ]
+        let counts = BacklogLogic.smartFilterCounts(tasks, now: n, calendar: cal)
+        XCTAssertEqual(counts[.overdue], 2)   // od + fl-od
+        XCTAssertEqual(counts[.today], 1)     // td
+        XCTAssertEqual(counts[.scheduled], 1) // sc
+        XCTAssertEqual(counts[.flagged], 2)   // fl + fl-od
+    }
+
     // MARK: smart sort
 
     func testSmartSortDeadlineDominatesPriority() {

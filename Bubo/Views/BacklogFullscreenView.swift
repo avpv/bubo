@@ -105,6 +105,13 @@ struct BacklogFullscreenView: View {
     /// `colorTag`. Reifies what would otherwise be a colour-coded tag
     /// search via `fromCalendar`/colour metadata.
     @State private var colorFilter: EventColorTag? = nil
+
+    /// One-of-N "view as…" filter at the top of the fullscreen backlog,
+    /// borrowed from Apple Reminders' Today / Scheduled / Flagged cards.
+    /// nil = "All". Composes with the existing chips below — selecting
+    /// "Today" + a project narrows to deadline-today tasks in that
+    /// project, which is the natural reading.
+    @State private var smartFilter: BacklogLogic.SmartFilter? = nil
     /// Selected day for the week-strip — when set, `activeFiltered`
     /// further narrows to tasks whose deadline falls on that day. Tap
     /// any other dot to switch; tap the same dot to clear (back to
@@ -141,6 +148,11 @@ struct BacklogFullscreenView: View {
         if urgentOnlyFilter {
             result = result.filter { BacklogLogic.isUrgent($0) }
         }
+        if let smart = smartFilter {
+            result = result.filter {
+                BacklogLogic.matchesSmartFilter($0, filter: smart)
+            }
+        }
         if let project = projectFilter {
             result = result.filter { $0.context == project }
         }
@@ -155,6 +167,12 @@ struct BacklogFullscreenView: View {
             }
         }
         return result
+    }
+
+    /// Pre-computed badges for the smart-filter chip row. One scan over
+    /// the active set instead of one per chip.
+    private var smartFilterCounts: [BacklogLogic.SmartFilter: Int] {
+        BacklogLogic.smartFilterCounts(activeTasks)
     }
 
     /// Title of the Reminders list the user is currently focused on via
@@ -309,6 +327,12 @@ struct BacklogFullscreenView: View {
                 // sees the action attached to the problem rather than at
                 // the tail of the list.
                 smartActionsRow
+                // Smart-filter row: Apple Reminders-style "view as…"
+                // chips with badge counts. One-of-N status/deadline
+                // restriction layered ABOVE project / colour chips so
+                // the user can stack "Today" with "in #design" without
+                // either chip group claiming the whole filter slot.
+                smartFilterRow
                 // Filter chips: project + colour tag. Reify the
                 // optimizer's `fromProject` / colour-cohesion intents
                 // as visible UI objects rather than command-palette
@@ -357,6 +381,10 @@ struct BacklogFullscreenView: View {
             if let color = colorFilter, !availableColorTags.contains(color) {
                 colorFilter = nil
             }
+            if let smart = smartFilter,
+               (smartFilterCounts[smart] ?? 0) == 0 {
+                smartFilter = nil
+            }
         }
         .onChange(of: urgentCount) { _, newValue in
             // Same safety net for the case where active count is unchanged
@@ -365,6 +393,13 @@ struct BacklogFullscreenView: View {
             if urgentOnlyFilter, newValue == 0 {
                 urgentOnlyFilter = false
             }
+        }
+        .onChange(of: smartFilter) { _, _ in
+            // Reset the day-strip filter — selecting "Today" or
+            // "Scheduled" already implies a specific day shape, so
+            // leaving the week-strip pinned to last Tuesday would
+            // produce surprising empty states.
+            if smartFilter != nil { weekDayFilterEnabled = false }
         }
     }
 
@@ -511,6 +546,89 @@ struct BacklogFullscreenView: View {
     /// давал пустой результат. Color-chip'ы остаются — они работают
     /// поверх проекта и не дублируют его.
     @ViewBuilder
+    /// Apple Reminders' Today / Scheduled / Flagged cards adapted to
+    /// Bubo's tighter menu-bar geometry: one horizontal row of chips
+    /// with leading icon + label + trailing count badge. "All" is the
+    /// nil state — selecting it (or re-tapping the active chip)
+    /// clears the filter. Hidden when the active backlog is empty —
+    /// nothing to navigate, no need to show a row of zeros.
+    @ViewBuilder
+    private var smartFilterRow: some View {
+        let counts = smartFilterCounts
+        if !activeTasks.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: DS.Spacing.xs) {
+                    smartFilterChip(filter: nil, count: activeTasks.count)
+                    ForEach(BacklogLogic.SmartFilter.allCases, id: \.self) { filter in
+                        // Hide chips whose count is 0 *and* aren't the
+                        // currently-selected filter — Birman: "не показывать
+                        // ноль". The active chip stays visible even at zero
+                        // so the user can clear it; otherwise the empty
+                        // state would have nowhere to escape from.
+                        let count = counts[filter] ?? 0
+                        if count > 0 || smartFilter == filter {
+                            smartFilterChip(filter: filter, count: count)
+                        }
+                    }
+                }
+                .padding(.horizontal, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xxs)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func smartFilterChip(
+        filter: BacklogLogic.SmartFilter?,
+        count: Int
+    ) -> some View {
+        let isOn = smartFilter == filter
+        let label = filter?.label ?? "All"
+        let icon = filter?.systemImage ?? "tray.full"
+        Button {
+            Haptics.tap()
+            withAnimation(DS.Animation.motionAware(DS.Animation.quick, reduceMotion: reduceMotion)) {
+                // Tap the active chip to clear back to "All"; tap "All"
+                // when already on "All" is a no-op (no surprise toggle).
+                if isOn {
+                    smartFilter = nil
+                } else {
+                    smartFilter = filter
+                }
+            }
+        } label: {
+            HStack(spacing: DS.Spacing.xxs) {
+                Image(systemName: icon)
+                    .font(.footnote)
+                Text(label)
+                    .font(.footnote.weight(isOn ? .semibold : .regular))
+                Text("\(count)")
+                    .font(.footnote.monospacedDigit())
+                    .foregroundStyle(skin.resolvedTextTertiary)
+            }
+            .foregroundStyle(isOn ? skin.accentColor : skin.resolvedTextSecondary)
+            .padding(.horizontal, DS.Spacing.sm)
+            .padding(.vertical, DS.Spacing.xxs)
+            .background(
+                Capsule().fill(skin.accentColor.opacity(isOn ? DS.Opacity.lightFill : 0))
+            )
+            .overlay(
+                Capsule().strokeBorder(
+                    skin.accentColor.opacity(isOn ? DS.Opacity.softAccent : DS.Opacity.borderIdle),
+                    lineWidth: DS.Border.thin
+                )
+            )
+        }
+        .buttonStyle(.plain)
+        .help(
+            isOn
+                ? "Showing only \(label.lowercased()) — tap to clear"
+                : (filter == nil
+                    ? "Show all active tasks"
+                    : "Filter to \(label.lowercased()) tasks")
+        )
+    }
+
     private var filterChipsRow: some View {
         let projects = settings.activeProjectListId == nil ? availableProjects : []
         let colors = availableColorTags

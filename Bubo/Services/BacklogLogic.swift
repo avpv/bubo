@@ -54,6 +54,81 @@ enum BacklogLogic {
         return deadline <= cutoff
     }
 
+    // MARK: Smart filters
+
+    /// One-of-N status/deadline/priority view restriction surfaced as the
+    /// fullscreen backlog's chip row at the top. `nil` = no restriction.
+    /// Borrowed from Apple Reminders' Today / Scheduled / Flagged cards;
+    /// composes with the existing project / colour / urgent chips
+    /// orthogonally rather than replacing them.
+    enum SmartFilter: String, Hashable, CaseIterable, Sendable {
+        case overdue
+        case today
+        case scheduled
+        case flagged
+
+        var label: String {
+            switch self {
+            case .overdue: return "Overdue"
+            case .today: return "Today"
+            case .scheduled: return "Scheduled"
+            case .flagged: return "Flagged"
+            }
+        }
+
+        var systemImage: String {
+            switch self {
+            case .overdue: return "exclamationmark.circle"
+            case .today: return "calendar"
+            case .scheduled: return "calendar.badge.clock"
+            case .flagged: return "flag"
+            }
+        }
+    }
+
+    /// Pure predicate for `SmartFilter`. Excludes `.done` / `.frozen`
+    /// implicitly — the backlog's "active" set is the only thing the
+    /// filter cares about, completed-today tombstones live in their own
+    /// disclosure row already.
+    static func matchesSmartFilter(
+        _ task: BacklogTask,
+        filter: SmartFilter,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> Bool {
+        guard task.status != .done, task.status != .frozen else { return false }
+        switch filter {
+        case .overdue:
+            guard let deadline = task.deadline else { return false }
+            return deadline < calendar.startOfDay(for: now)
+        case .today:
+            guard let deadline = task.deadline else { return false }
+            return calendar.isDate(deadline, inSameDayAs: now)
+        case .scheduled:
+            return task.status == .scheduled
+        case .flagged:
+            return task.priority == .high
+        }
+    }
+
+    /// `(filter → count)` over the active subset. Pre-computed in one
+    /// pass so the chip row can render five badges without re-scanning
+    /// the backlog per chip. Excludes done/frozen for the same reason
+    /// as `matchesSmartFilter`.
+    static func smartFilterCounts(
+        _ tasks: [BacklogTask],
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> [SmartFilter: Int] {
+        var counts: [SmartFilter: Int] = [:]
+        for filter in SmartFilter.allCases {
+            counts[filter] = tasks.lazy.filter {
+                matchesSmartFilter($0, filter: filter, now: now, calendar: calendar)
+            }.count
+        }
+        return counts
+    }
+
     // MARK: Smart sort
 
     /// Deadline-urgency + priority score. Higher = more urgent.
