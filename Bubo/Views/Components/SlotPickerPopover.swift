@@ -153,8 +153,12 @@ struct SlotPickerPopover: View {
         smartFilter != nil || projectFilter != nil || colorFilter != nil
     }
 
+    /// Every filter-matching candidate, in ranked order. The popover
+    /// renders the full set inside a bounded scroll view so the user
+    /// can find any task that survives the chips, not just a top-N
+    /// preview — the chip row already does the narrowing job.
     private var visibleCandidates: [BacklogTask] {
-        Array(rankedCandidates.prefix(5))
+        rankedCandidates
     }
 
     private var canCreate: Bool {
@@ -192,36 +196,43 @@ struct SlotPickerPopover: View {
                 SkinSeparator()
             }
 
-            // Candidates: top N from `rankedCandidates`. Empty → gentle
-            // hint that this is also a creation surface; copy adapts to
-            // whether a filter is hiding the matches.
+            // Candidates: every task that survives the active chips,
+            // in ranked order. Bounded scroll view so a 100-task
+            // backlog doesn't grow the popover off-screen — user can
+            // scroll, or narrow further with the chips above.
             if visibleCandidates.isEmpty {
                 Text(emptyCandidateMessage)
                     .font(.footnote)
                     .foregroundStyle(skin.resolvedTextTertiary)
                     .padding(.vertical, DS.Spacing.xs)
             } else {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(visibleCandidates, id: \.id) { task in
-                        candidateRow(for: task)
+                ScrollView(.vertical, showsIndicators: true) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(visibleCandidates, id: \.id) { task in
+                            candidateRow(for: task)
+                        }
                     }
                 }
+                .frame(maxHeight: 280)
             }
 
-            // Footer — only when there's more to browse than the visible top-N.
-            if let onOpenFullscreenBacklog,
-               rankedCandidates.count > visibleCandidates.count {
+            // Fullscreen escape — for editing tasks (rename, deadline,
+            // context, reorder) that the picker deliberately doesn't
+            // expose. Always available when the host wired it; the
+            // copy is honest about what it does instead of pretending
+            // to widen the visible set.
+            if let onOpenFullscreenBacklog, !pendingPool.isEmpty {
                 SkinSeparator()
                 Button {
                     Haptics.tap()
                     onOpenFullscreenBacklog()
                 } label: {
                     HStack(spacing: DS.Spacing.xs) {
-                        Text("Show all \(rankedCandidates.count) tasks")
+                        Text("Open in fullscreen")
                             .font(.footnote)
                             .foregroundStyle(skin.resolvedTextSecondary)
                         Spacer()
-                        Image(systemName: "chevron.right")
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
                             .font(.caption)
                             .foregroundStyle(skin.resolvedTextTertiary)
                     }
@@ -229,6 +240,7 @@ struct SlotPickerPopover: View {
                     .padding(.vertical, DS.Spacing.xs)
                 }
                 .buttonStyle(.plain)
+                .help("Open the fullscreen backlog to edit, reorder, or set deadlines")
             }
         }
         .padding(DS.Spacing.md)
