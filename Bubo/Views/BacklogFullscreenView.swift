@@ -123,6 +123,12 @@ struct BacklogFullscreenView: View {
     /// Smart-sort toggle — re-orders the list by `BacklogLogic.smartScore`
     /// instead of user drag order. Session-local.
     @State private var useSmartSort: Bool = false
+    /// Collapse the meta-band (week-strip + smart-actions + filter chips)
+    /// inside the header card. The task list lives outside the card as a
+    /// timeline-style stream, so collapsing only quiets the chrome — the
+    /// rows themselves stay visible. Session-local: every fullscreen open
+    /// starts expanded so the filter set is discoverable.
+    @State private var filtersCollapsed: Bool = false
 
     /// Task whose deadline is currently being edited via the row's
     /// «Set deadline…» context-menu item. Mirrors `BacklogView` so both
@@ -308,58 +314,62 @@ struct BacklogFullscreenView: View {
                 onBack: onExit
             )
 
-            // Block container — same chrome as the inline Tasks card on the
-            // main view (`.skinTasksBlockChrome`). The whole fullscreen
-            // surface lives inside one rounded platter so it reads as the
-            // same object the user sees collapsed on the main screen, just
-            // distended to popover height. Birman: one object — one form.
+            // Meta-band block — header + diagnostics + filter chips live
+            // inside the rounded platter (`.skinTasksBlockChrome`). The
+            // task list sits OUTSIDE this block as a timeline-style stream
+            // (see `mainContent` below the chrome): rules read as one
+            // object, evidence flows below as another. Birman: «rules are
+            // objects on the screen», but the evidence isn't a rule.
+            //
+            // The meta-band is collapsible (`filtersCollapsed` toggle on
+            // the header) so once the user has narrowed the set the chips
+            // can step out of the way and the list takes the full height.
             VStack(spacing: 0) {
                 blockHeader
-                // Week strip — 7 mini capacity rings, one per day,
-                // showing relative load. Reifies `planWeek` / `horizon`
-                // as a tactile surface: the user sees the week shape
-                // without opening another view, and tapping a day
-                // narrows the list to deadlines on that day.
-                weekStrip
-                // Same `SmartActions` row as the inline `BacklogView` —
-                // diagnosis (header) + fix (this row) + evidence (list).
-                // Replaces the old mid-list `SpillOverMarker` so the user
-                // sees the action attached to the problem rather than at
-                // the tail of the list.
-                smartActionsRow
-                // Smart-filter row: Apple Reminders-style "view as…"
-                // chips with badge counts. One-of-N status/deadline
-                // restriction layered ABOVE project / colour chips so
-                // the user can stack "Today" with "in #design" without
-                // either chip group claiming the whole filter slot.
-                smartFilterRow
-                // Filter chips: project + colour tag. Reify the
-                // optimizer's `fromProject` / colour-cohesion intents
-                // as visible UI objects rather than command-palette
-                // queries. Chips only render when the underlying data
-                // exists (no projects → no project chip).
-                filterChipsRow
-                // Single skin-aware hairline at the only true semantic
-                // seam — meta-band (header + week-strip + smart-actions +
-                // filter chips) ends here, evidence (the task list) begins.
-                // PRINCIPLES.md §2: density is respect for attention —
-                // one boundary, not three. PRINCIPLES.md §10: line style
-                // delegated to the skin (`SkinSeparator`), never a hard
-                // `Divider()`. Hidden when the backlog is empty so a
-                // floating line never sits above the empty state.
-                if !activeTasks.isEmpty {
-                    SkinSeparator()
-                        .padding(.horizontal, DS.Spacing.sm)
-                        .padding(.top, DS.Spacing.xs)
+                if !filtersCollapsed {
+                    // Week strip — 7 mini capacity rings, one per day,
+                    // showing relative load. Reifies `planWeek` / `horizon`
+                    // as a tactile surface: the user sees the week shape
+                    // without opening another view, and tapping a day
+                    // narrows the list to deadlines on that day.
+                    weekStrip
+                    // Same `SmartActions` row as the inline `BacklogView` —
+                    // diagnosis (header) + fix (this row) + evidence (list).
+                    // Replaces the old mid-list `SpillOverMarker` so the user
+                    // sees the action attached to the problem rather than at
+                    // the tail of the list.
+                    smartActionsRow
+                    // Smart-filter row: Apple Reminders-style "view as…"
+                    // chips with badge counts. One-of-N status/deadline
+                    // restriction layered ABOVE project / colour chips so
+                    // the user can stack "Today" with "in #design" without
+                    // either chip group claiming the whole filter slot.
+                    smartFilterRow
+                    // Filter chips: project + colour tag. Reify the
+                    // optimizer's `fromProject` / colour-cohesion intents
+                    // as visible UI objects rather than command-palette
+                    // queries. Chips only render when the underlying data
+                    // exists (no projects → no project chip).
+                    filterChipsRow
                 }
-                mainContent
-                addTaskField
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .skinTasksBlockChrome(skin)
             .padding(.horizontal, DS.Spacing.contentMargin)
             .padding(.top, DS.Spacing.md)
-            .padding(.bottom, DS.Spacing.md)
+            .padding(.bottom, DS.Spacing.sm)
+            .motionAwareAnimation(DS.Animation.standard, value: filtersCollapsed, reduceMotion: reduceMotion)
+
+            // Tasks live OUTSIDE the meta-band block, like a timeline:
+            // the rounded chrome wraps only the rules (header + filters),
+            // and the evidence (rows) reads as a free-flowing list below.
+            // The `+ Add task…` field stays attached to the list so the
+            // empty state isn't a dead end. Horizontal margin matches the
+            // block above so rows align with the header card edges.
+            mainContent
+                .padding(.horizontal, DS.Spacing.contentMargin)
+            addTaskField
+                .padding(.horizontal, DS.Spacing.contentMargin)
+                .padding(.bottom, DS.Spacing.md)
         }
         .frame(width: DS.Popover.width, height: DS.Popover.height)
         .background(hotKeyBindings)
@@ -435,6 +445,7 @@ struct BacklogFullscreenView: View {
             capacityRingTooltip: capacityRingTooltip,
             useSmartSort: $useSmartSort,
             urgentOnlyFilter: $urgentOnlyFilter,
+            filtersCollapsed: $filtersCollapsed,
             etaChip: { etaChip }
         )
         // Publish the block header's bottom Y so the command palette (a

@@ -56,6 +56,13 @@ struct BacklogHeader<EtaContent: View>: View {
     @Binding var useSmartSort: Bool
     @Binding var urgentOnlyFilter: Bool
 
+    /// Optional binding to a "filters collapsed" flag. When non-nil the
+    /// header renders a trailing chevron toggle that hides/reveals the
+    /// meta-band (week-strip + smart actions + filter chips) sitting
+    /// below it. The fullscreen backlog uses this to free the user's eye
+    /// from the chips once they've focused on the task list.
+    var filtersCollapsed: Binding<Bool>? = nil
+
     @ViewBuilder let etaChip: () -> EtaContent
 
     @Environment(\.activeSkin) private var skin
@@ -127,7 +134,36 @@ struct BacklogHeader<EtaContent: View>: View {
                let action = onEnterFullscreen {
                 fullscreenButton(action: action)
             }
+
+            if let binding = filtersCollapsed {
+                filtersCollapseButton(binding: binding)
+            }
         }
+    }
+
+    // MARK: Filters collapse toggle
+
+    /// Chevron that hides/reveals the meta-band below the header (week-strip,
+    /// smart-actions row, smart-filter chips, project/colour chips). The
+    /// task list itself sits outside the block, so collapsing leaves the
+    /// rows fully visible — the chevron only quiets the chrome.
+    private func filtersCollapseButton(binding: Binding<Bool>) -> some View {
+        Button {
+            Haptics.impact()
+            withAnimation(DS.Animation.motionAware(DS.Animation.standard, reduceMotion: reduceMotion)) {
+                binding.wrappedValue.toggle()
+            }
+        } label: {
+            Image(systemName: binding.wrappedValue ? "chevron.down" : "chevron.up")
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(skin.resolvedTextSecondary)
+                .frame(width: DS.Size.iconSmall, height: DS.Size.iconSmall)
+                .contentShape(Rectangle())
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .buttonStyle(.plain)
+        .help(binding.wrappedValue ? "Show filters" : "Hide filters")
+        .accessibilityLabel(binding.wrappedValue ? "Show filters" : "Hide filters")
     }
 
     // MARK: Inline expansion side-effect
@@ -304,7 +340,8 @@ extension BacklogHeader where EtaContent == EmptyView {
         optimizerService: OptimizerService,
         capacityRingTooltip: String,
         useSmartSort: Binding<Bool>,
-        urgentOnlyFilter: Binding<Bool>
+        urgentOnlyFilter: Binding<Bool>,
+        filtersCollapsed: Binding<Bool>? = nil
     ) {
         self.init(
             mode: mode,
@@ -316,6 +353,7 @@ extension BacklogHeader where EtaContent == EmptyView {
             capacityRingTooltip: capacityRingTooltip,
             useSmartSort: useSmartSort,
             urgentOnlyFilter: urgentOnlyFilter,
+            filtersCollapsed: filtersCollapsed,
             etaChip: { EmptyView() }
         )
     }
