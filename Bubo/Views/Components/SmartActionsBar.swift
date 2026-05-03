@@ -279,9 +279,6 @@ struct SmartActionsBar: View {
                     Text("Open in fullscreen")
                         .font(.footnote)
                     Spacer()
-                    Text("\u{21E7}\u{2318}N")
-                        .font(DS.Typography.machineHint)
-                        .foregroundStyle(skin.resolvedTextTertiary)
                 }
                 .foregroundStyle(skin.resolvedTextSecondary)
                 .contentShape(Rectangle())

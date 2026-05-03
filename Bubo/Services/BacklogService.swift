@@ -392,6 +392,40 @@ final class BacklogService {
         }
     }
 
+    /// «Roll today forward» — unschedule every task scheduled for today
+    /// that hasn't been completed yet. Returns a snapshot of the
+    /// affected tasks (pre-mutation) so the caller can offer undo.
+    /// Different from `carryOverUnfinished`, which only fires once on
+    /// startup for past-day leftovers; this is the explicit
+    /// end-of-workday action surfaced via the «Roll forward» banner.
+    @discardableResult
+    func rollTodayForward(now: Date = Date()) -> [BacklogTask] {
+        let cal = Calendar.current
+        var snapshots: [BacklogTask] = []
+        var changedIndexes: [Int] = []
+        for i in tasks.indices {
+            guard tasks[i].status == .scheduled,
+                  let scheduled = tasks[i].scheduledDate,
+                  cal.isDate(scheduled, inSameDayAs: now)
+            else { continue }
+            snapshots.append(tasks[i])
+            tasks[i].status = .pending
+            tasks[i].scheduledEventId = nil
+            tasks[i].scheduledEventIds = []
+            tasks[i].scheduledDate = nil
+            changedIndexes.append(i)
+        }
+        for i in changedIndexes {
+            store.upsert(tasks[i], at: i)
+        }
+        if !changedIndexes.isEmpty {
+            for snapshot in snapshots {
+                NotificationCenter.default.post(name: Self.taskScheduleChanged, object: snapshot.id)
+            }
+        }
+        return snapshots
+    }
+
     func reorderTask(from: Int, to: Int) {
         let active = tasks.filter { $0.status != .done }
         guard from < active.count, to < active.count else { return }
